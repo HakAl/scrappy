@@ -371,6 +371,7 @@ class CLI:
                 return
 
         click.echo()
+        plan_summary = ""
         if isinstance(steps, list):
             for i, step in enumerate(steps, 1):
                 if isinstance(step, dict):
@@ -378,11 +379,20 @@ class CLI:
                     click.echo(f"   {step.get('description', '')}")
                     if 'provider_type' in step:
                         click.secho(f"   [Recommended: {step['provider_type']}]", fg="cyan")
+                    plan_summary += f"{i}. {step.get('step', 'Step')}\n"
                 else:
                     click.echo(f"{i}. {step}")
+                    plan_summary += f"{i}. {step}\n"
                 click.echo()
         else:
             click.echo(steps)
+            plan_summary = str(steps)
+
+        # Save plan to working memory
+        self.orchestrator.add_discovery(
+            f"Created plan for '{task}' with {len(steps) if isinstance(steps, list) else 1} steps",
+            "task_plan"
+        )
 
     def _reason(self, question: str):
         """Perform reasoning on a question."""
@@ -399,15 +409,24 @@ class CLI:
                 return
 
         click.echo()
+        conclusion = ""
         if isinstance(response, dict):
             click.echo(f"Question: {response.get('question', question)}")
             click.secho(f"\nAnalysis:", bold=True)
             click.echo(response.get('analysis', ''))
             click.secho(f"\nConclusion: ", bold=True, nl=False)
-            click.echo(response.get('conclusion', ''))
+            conclusion = response.get('conclusion', '')
+            click.echo(conclusion)
             click.echo(f"Confidence: {response.get('confidence', 'N/A')}")
         else:
             click.echo(response)
+            conclusion = str(response)[:200]
+
+        # Save reasoning result to working memory
+        self.orchestrator.add_discovery(
+            f"Reasoning on '{question[:50]}...': {conclusion[:100]}...",
+            "reasoning"
+        )
 
     def _synthesize_mode(self):
         """Interactive synthesis mode - gather responses from multiple providers."""
@@ -461,6 +480,12 @@ class CLI:
         click.echo("-" * 50)
         click.echo(synthesis)
 
+        # Save synthesis result to working memory
+        self.orchestrator.add_discovery(
+            f"Synthesized {len(results)} provider responses for '{prompt[:50]}...'",
+            "synthesis"
+        )
+
     def _delegate_mode(self, args: str):
         """Delegate a task to a specific provider."""
         if not args:
@@ -498,6 +523,12 @@ class CLI:
             click.secho(
                 f"\n[{response.model} | {response.tokens_used} tokens | {response.latency_ms:.0f}ms]",
                 fg="cyan"
+            )
+
+            # Save delegation result to working memory
+            self.orchestrator.add_discovery(
+                f"Delegated '{prompt[:40]}...' to {provider} ({response.tokens_used} tokens)",
+                "delegation"
             )
         except Exception as e:
             click.secho(f"Error: {e}", fg="red")
@@ -552,28 +583,62 @@ class CLI:
         click.secho(f"\nExploring: {path}", bold=True)
         click.echo("-" * 50)
 
-        # Collect codebase information
-        with click.progressbar(length=4, label="Scanning codebase") as bar:
-            # Step 1: Find all source files
-            source_files = self._find_source_files(path)
-            bar.update(1)
+        # Check if exploring current project or different directory
+        is_current_project = path == self.orchestrator.context.project_path
 
-            # Step 2: Analyze structure
-            structure = self._analyze_structure(path, source_files)
-            bar.update(1)
+        if is_current_project:
+            # Use orchestrator's context system for proper persistence
+            click.echo("Using context-aware exploration...")
+            with click.progressbar(length=2, label="Scanning codebase") as bar:
+                # Step 1: Explore and scan files
+                result = self.orchestrator.context.explore(force=True)
+                bar.update(1)
 
-            # Step 3: Read key files
-            key_contents = self._read_key_files(path, source_files)
-            bar.update(1)
+                # Step 2: Generate summary with LLM (this saves to context)
+                def llm_summary(prompt):
+                    response = self.orchestrator.delegate(
+                        self.orchestrator.brain,
+                        prompt,
+                        system_prompt="You are a code analysis expert. Analyze codebases and provide clear, actionable summaries. Be concise but thorough.",
+                        max_tokens=2000,
+                        temperature=0.3
+                    )
+                    return response.content
 
-            # Step 4: Generate summary with LLM
-            summary = self._generate_codebase_summary(path, structure, key_contents)
-            bar.update(1)
+                summary = self.orchestrator.context.generate_summary(llm_summary)
+                bar.update(1)
+
+            # Add discovery to working memory
+            self.orchestrator.add_discovery(
+                f"Explored codebase: {result.get('total_files', 0)} files, {', '.join(result.get('directories', [])[:5])}",
+                str(path)
+            )
+        else:
+            # For external directories, use standalone exploration (legacy behavior)
+            click.echo("Exploring external directory (not persisted to context)...")
+            with click.progressbar(length=4, label="Scanning codebase") as bar:
+                source_files = self._find_source_files(path)
+                bar.update(1)
+                structure = self._analyze_structure(path, source_files)
+                bar.update(1)
+                key_contents = self._read_key_files(path, source_files)
+                bar.update(1)
+                summary = self._generate_codebase_summary(path, structure, key_contents)
+                bar.update(1)
+
+            # Still add to working memory as a discovery
+            self.orchestrator.add_discovery(
+                f"Explored external codebase: {structure.get('total_files', 0)} files",
+                str(path)
+            )
 
         click.echo()
         click.secho("Codebase Summary:", bold=True)
         click.echo("-" * 50)
         click.echo(summary)
+
+        if is_current_project:
+            click.secho("\nContext saved! Use /context to view status.", fg="green")
 
         # Offer to save summary
         if click.confirm("\nSave summary to file?", default=False):
@@ -1037,6 +1102,17 @@ Provide a helpful, specific answer based on the research findings."""
             fg="cyan"
         )
 
+        # Save smart query research to working memory
+        if tools_used > 0:
+            self.orchestrator.remember_search(
+                f"smart_query: {query}",
+                research_results[:5]  # Save top 5 research results
+            )
+            self.orchestrator.add_discovery(
+                f"Smart query '{query[:50]}...' researched {tools_used} sources",
+                "smart_query"
+            )
+
         return response
 
     def _run_agent(self, task: str):
@@ -1107,10 +1183,24 @@ Provide a helpful, specific answer based on the research findings."""
                     else:
                         click.secho("Rollback failed", fg="red")
 
+            # Save agent task result to working memory
+            self.orchestrator.add_discovery(
+                f"Agent task '{task[:50]}...': {'completed' if result['success'] else 'incomplete'} in {result['iterations']} iterations",
+                "agent_task"
+            )
+
         except KeyboardInterrupt:
             click.echo("\n\nAgent interrupted by user.")
+            self.orchestrator.add_discovery(
+                f"Agent task '{task[:50]}...' interrupted by user",
+                "agent_task"
+            )
         except Exception as e:
             click.secho(f"\nAgent error: {e}", fg="red")
+            self.orchestrator.add_discovery(
+                f"Agent task '{task[:50]}...' failed: {str(e)[:50]}",
+                "agent_task"
+            )
 
 
 # Global CLI instance for commands
