@@ -11,6 +11,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Any
 
+try:
+    import click
+    HAS_CLICK = True
+except ImportError:
+    HAS_CLICK = False
+
 
 class CodeAgent:
     """
@@ -58,6 +64,7 @@ class CodeAgent:
             'read_file': self._tool_read_file,
             'write_file': self._tool_write_file,
             'list_files': self._tool_list_files,
+            'list_directory': self._tool_list_directory,
             'run_command': self._tool_run_command,
             'search_code': self._tool_search_code,
             'git_log': self._tool_git_log,
@@ -72,14 +79,15 @@ class CodeAgent:
 Available tools:
 1. read_file(path: str) - Read contents of a file
 2. write_file(path: str, content: str) - Write content to a file
-3. list_files(directory: str, pattern: str = "*") - List files in directory
-4. run_command(command: str) - Run a shell command
-5. search_code(pattern: str, file_pattern: str = "*.py") - Search for pattern in code
-6. git_log(n: int = 10, file: str = None) - View recent commits (optionally for specific file)
-7. git_diff(ref: str = None, file: str = None) - Show changes (unstaged, or vs ref like HEAD~1)
-8. git_blame(file: str, lines: str = None) - Show who changed each line (e.g., lines="10,20")
-9. git_show(commit: str) - Show details of a specific commit
-10. git_recent_changes(n: int = 3) - Show content of last N commits with full diffs
+3. list_files(directory: str, pattern: str = "*") - List files matching pattern recursively
+4. list_directory(path: str, depth: int = 2) - Show directory tree structure with files and subdirs
+5. run_command(command: str) - Run a shell command
+6. search_code(pattern: str, file_pattern: str = "*.py") - Search for pattern in code
+7. git_log(n: int = 10, file: str = None) - View recent commits (optionally for specific file)
+8. git_diff(ref: str = None, file: str = None) - Show changes (unstaged, or vs ref like HEAD~1)
+9. git_blame(file: str, lines: str = None) - Show who changed each line (e.g., lines="10,20")
+10. git_show(commit: str) - Show details of a specific commit
+11. git_recent_changes(n: int = 3) - Show content of last N commits with full diffs
 
 Response format (JSON):
 {
@@ -108,6 +116,85 @@ When task is complete:
             'approved': approved
         }
         self.audit_log.append(entry)
+
+    def _colorize_git_output(self, output: str, output_type: str = "log") -> str:
+        """Add colors to git output for better readability."""
+        if not HAS_CLICK:
+            return output
+
+        lines = output.split('\n')
+        colored_lines = []
+
+        for line in lines:
+            if output_type == "log":
+                # Color commit hashes and decorations
+                if line and len(line) > 7 and line[:7].replace(' ', '').isalnum():
+                    parts = line.split(' ', 1)
+                    if len(parts) >= 1:
+                        # Commit hash in yellow
+                        colored = click.style(parts[0], fg='yellow')
+                        if len(parts) > 1:
+                            colored += ' ' + parts[1]
+                        colored_lines.append(colored)
+                    else:
+                        colored_lines.append(line)
+                else:
+                    colored_lines.append(line)
+
+            elif output_type == "diff":
+                # Color diff lines
+                if line.startswith('+++') or line.startswith('---'):
+                    colored_lines.append(click.style(line, fg='cyan', bold=True))
+                elif line.startswith('+'):
+                    colored_lines.append(click.style(line, fg='green'))
+                elif line.startswith('-'):
+                    colored_lines.append(click.style(line, fg='red'))
+                elif line.startswith('@@'):
+                    colored_lines.append(click.style(line, fg='cyan'))
+                elif line.startswith('diff --git'):
+                    colored_lines.append(click.style(line, fg='bright_white', bold=True))
+                else:
+                    colored_lines.append(line)
+
+            elif output_type == "blame":
+                # Color blame output (hash at start)
+                if line and '^' in line or (len(line) > 8 and line[:8].replace(' ', '').isalnum()):
+                    parts = line.split(' ', 1)
+                    if len(parts) >= 1:
+                        colored = click.style(parts[0], fg='yellow')
+                        if len(parts) > 1:
+                            colored += ' ' + parts[1]
+                        colored_lines.append(colored)
+                    else:
+                        colored_lines.append(line)
+                else:
+                    colored_lines.append(line)
+
+            elif output_type == "show":
+                # Color commit show output
+                if line.startswith('commit '):
+                    colored_lines.append(click.style(line, fg='yellow', bold=True))
+                elif line.startswith('Author:'):
+                    colored_lines.append(click.style(line, fg='cyan'))
+                elif line.startswith('Date:'):
+                    colored_lines.append(click.style(line, fg='cyan'))
+                elif line.startswith('=== COMMIT'):
+                    colored_lines.append(click.style(line, fg='yellow', bold=True))
+                elif line.startswith('Message:'):
+                    colored_lines.append(click.style(line, fg='bright_white', bold=True))
+                elif '|' in line and ('+' in line or '-' in line):
+                    # File stat lines
+                    colored_lines.append(click.style(line, fg='cyan'))
+                elif line.startswith('+'):
+                    colored_lines.append(click.style(line, fg='green'))
+                elif line.startswith('-'):
+                    colored_lines.append(click.style(line, fg='red'))
+                else:
+                    colored_lines.append(line)
+            else:
+                colored_lines.append(line)
+
+        return '\n'.join(colored_lines)
 
     def _is_safe_path(self, path: str) -> bool:
         """Check if path is within project sandbox."""
@@ -184,6 +271,100 @@ When task is complete:
             return output
         except Exception as e:
             return f"Error listing files: {str(e)}"
+
+    def _tool_list_directory(self, path: str = ".", depth: int = 2) -> str:
+        """Show directory tree structure."""
+        if not self._is_safe_path(path):
+            return f"Error: Path '{path}' is outside project directory"
+
+        target = self.project_root / path
+        if not target.exists():
+            return f"Error: Path '{path}' does not exist"
+        if not target.is_dir():
+            return f"Error: '{path}' is not a directory"
+
+        try:
+            lines = []
+            skip_dirs = {'.git', '__pycache__', 'node_modules', '.venv', 'venv', 'env', '.tox', '.pytest_cache'}
+
+            def build_tree(dir_path: Path, prefix: str = "", current_depth: int = 0):
+                if current_depth > depth:
+                    return
+
+                try:
+                    items = sorted(dir_path.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower()))
+                except PermissionError:
+                    lines.append(f"{prefix}[Permission Denied]")
+                    return
+
+                # Filter out hidden and skip directories
+                items = [i for i in items if not i.name.startswith('.') or i.name in ['.env', '.gitignore']]
+                items = [i for i in items if i.name not in skip_dirs]
+
+                for i, item in enumerate(items):
+                    is_last = i == len(items) - 1
+                    connector = "`-- " if is_last else "|-- "
+
+                    if item.is_dir():
+                        # Directory - show in cyan
+                        if HAS_CLICK:
+                            dir_name = click.style(f"{item.name}/", fg='cyan', bold=True)
+                        else:
+                            dir_name = f"{item.name}/"
+                        lines.append(f"{prefix}{connector}{dir_name}")
+
+                        # Recurse into subdirectory
+                        if current_depth < depth:
+                            extension = "    " if is_last else "|   "
+                            build_tree(item, prefix + extension, current_depth + 1)
+                    else:
+                        # File - show with size
+                        try:
+                            size = item.stat().st_size
+                            if size < 1024:
+                                size_str = f"{size}B"
+                            elif size < 1024 * 1024:
+                                size_str = f"{size/1024:.1f}KB"
+                            else:
+                                size_str = f"{size/(1024*1024):.1f}MB"
+                        except:
+                            size_str = "?"
+
+                        # Color by file type
+                        if HAS_CLICK:
+                            if item.suffix in ['.py']:
+                                file_name = click.style(item.name, fg='green')
+                            elif item.suffix in ['.js', '.ts', '.jsx', '.tsx']:
+                                file_name = click.style(item.name, fg='yellow')
+                            elif item.suffix in ['.md', '.txt', '.rst']:
+                                file_name = click.style(item.name, fg='white')
+                            elif item.suffix in ['.json', '.yaml', '.yml', '.toml']:
+                                file_name = click.style(item.name, fg='magenta')
+                            else:
+                                file_name = item.name
+                            size_display = click.style(f"({size_str})", fg='bright_black')
+                        else:
+                            file_name = item.name
+                            size_display = f"({size_str})"
+
+                        lines.append(f"{prefix}{connector}{file_name} {size_display}")
+
+            # Start with the directory name
+            if HAS_CLICK:
+                root_name = click.style(str(target.relative_to(self.project_root)), fg='cyan', bold=True)
+            else:
+                root_name = str(target.relative_to(self.project_root))
+            lines.append(f"{root_name}/")
+
+            build_tree(target)
+
+            if len(lines) > 200:
+                lines = lines[:200]
+                lines.append("... [truncated to 200 items]")
+
+            return "\n".join(lines)
+        except Exception as e:
+            return f"Error listing directory: {str(e)}"
 
     def _tool_run_command(self, command: str) -> str:
         """Run a shell command."""
@@ -274,7 +455,7 @@ When task is complete:
             output = result.stdout.strip()
             if not output:
                 return "No commits found"
-            return output
+            return self._colorize_git_output(output, "log")
         except subprocess.TimeoutExpired:
             return "Error: git log timed out"
         except Exception as e:
@@ -309,7 +490,7 @@ When task is complete:
             # Truncate if too long
             if len(output) > 5000:
                 output = output[:5000] + "\n... [truncated]"
-            return output
+            return self._colorize_git_output(output, "diff")
         except subprocess.TimeoutExpired:
             return "Error: git diff timed out"
         except Exception as e:
@@ -347,7 +528,7 @@ When task is complete:
             # Truncate if too long
             if len(output) > 5000:
                 output = output[:5000] + "\n... [truncated]"
-            return output
+            return self._colorize_git_output(output, "blame")
         except subprocess.TimeoutExpired:
             return "Error: git blame timed out"
         except Exception as e:
@@ -379,7 +560,7 @@ When task is complete:
             # Truncate if too long
             if len(output) > 5000:
                 output = output[:5000] + "\n... [truncated]"
-            return output
+            return self._colorize_git_output(output, "show")
         except subprocess.TimeoutExpired:
             return "Error: git show timed out"
         except Exception as e:
@@ -409,7 +590,7 @@ When task is complete:
             # Truncate if too long (diffs can be very large)
             if len(output) > 15000:
                 output = output[:15000] + "\n\n... [truncated - showing first 15000 chars]"
-            return output
+            return self._colorize_git_output(output, "show")
         except subprocess.TimeoutExpired:
             return "Error: git recent changes timed out (diffs too large)"
         except Exception as e:
