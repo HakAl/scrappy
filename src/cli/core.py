@@ -49,6 +49,12 @@ class CLI:
         self.conversation_history = []  # Store conversation for session persistence
         self.auto_save = True  # Auto-save session on exit (can be toggled)
 
+        # Task tracking state
+        self.active_plan = []  # List of plan steps
+        self.current_task_index = 0  # Current task being worked on
+        self.plan_active = False  # Whether we're actively tracking a plan
+        self.auto_execute_tasks = False  # Feature flag: auto-execute tasks (disabled for now)
+
         # Initialize component handlers
         self.display = CLIDisplay(self.orchestrator, self.session_start)
         self.session_mgr = CLISessionManager(self.orchestrator)
@@ -95,6 +101,137 @@ class CLI:
                 return ""
 
         return "\n".join(lines)
+
+    def _show_current_task(self):
+        """Display the current task being worked on."""
+        if not self.plan_active or not self.active_plan:
+            return
+
+        total = len(self.active_plan)
+        current = self.current_task_index + 1
+
+        click.secho("━" * 60, fg="cyan")
+        click.secho(f"[{current}/{total}] ", fg="cyan", bold=True, nl=False)
+
+        task = self.active_plan[self.current_task_index]
+        if isinstance(task, dict):
+            click.secho(task.get('step', task.get('description', 'Task')), bold=True)
+            if 'description' in task and 'step' in task:
+                click.echo(f"    {task['description']}")
+        else:
+            click.secho(str(task), bold=True)
+
+        click.secho("━" * 60, fg="cyan")
+        click.echo()
+
+    def _prompt_task_progression(self) -> bool:
+        """
+        Prompt user for next action after completing work.
+        Returns True to continue loop, False if plan is finished.
+        """
+        if not self.plan_active:
+            return True
+
+        click.echo()
+        click.secho("What next?", fg="cyan", bold=True)
+        click.echo("  1. Mark complete & continue")
+        click.echo("  2. Stay on this task")
+        click.echo("  3. Skip this task")
+        click.echo("  4. Finish planning session")
+        click.echo()
+
+        choice = click.prompt("Choice", default="1", show_default=True).strip()
+
+        if choice == "1":
+            # Mark complete and advance
+            task = self.active_plan[self.current_task_index]
+            task_name = task.get('step', str(task)) if isinstance(task, dict) else str(task)
+            click.secho(f"✓ Task {self.current_task_index + 1} complete", fg="green", bold=True)
+            click.echo()
+
+            self.current_task_index += 1
+            if self.current_task_index >= len(self.active_plan):
+                click.secho("🎉 All tasks complete!", fg="green", bold=True)
+                self._show_plan_summary()
+                self.plan_active = False
+                return True
+
+            self._show_current_task()
+            # Auto-execute the next task (if enabled)
+            if self.auto_execute_tasks:
+                self._execute_current_task()
+
+        elif choice == "2":
+            # Stay on current task
+            click.secho("Continuing with current task...", fg="yellow")
+            click.echo()
+
+        elif choice == "3":
+            # Skip task
+            click.secho(f"⏭ Skipped task {self.current_task_index + 1}", fg="yellow")
+            click.echo()
+
+            self.current_task_index += 1
+            if self.current_task_index >= len(self.active_plan):
+                click.secho("Plan complete (some tasks skipped)", fg="yellow", bold=True)
+                self._show_plan_summary()
+                self.plan_active = False
+                return True
+
+            self._show_current_task()
+            # Auto-execute the next task (if enabled)
+            if self.auto_execute_tasks:
+                self._execute_current_task()
+
+        elif choice == "4":
+            # End planning session
+            click.secho("Ending planning session...", fg="yellow")
+            self._show_plan_summary()
+            self.plan_active = False
+
+        return True
+
+    def _show_plan_summary(self):
+        """Show summary of plan progress."""
+        if not self.active_plan:
+            return
+
+        total = len(self.active_plan)
+        completed = self.current_task_index
+
+        click.echo()
+        click.secho("Plan Summary:", fg="cyan", bold=True)
+        click.echo(f"  Completed: {completed}/{total} tasks")
+
+        # Progress bar
+        progress = int((completed / total) * 20)
+        bar = "█" * progress + "░" * (20 - progress)
+        percentage = int((completed / total) * 100)
+        click.echo(f"  Progress: [{bar}] {percentage}%")
+        click.echo()
+
+    def _execute_current_task(self):
+        """Automatically execute the current task using the code agent."""
+        if not self.plan_active or not self.active_plan:
+            return
+
+        task = self.active_plan[self.current_task_index]
+
+        # Build task description
+        if isinstance(task, dict):
+            task_name = task.get('step', 'Task')
+            task_desc = task.get('description', task_name)
+            full_task = f"{task_name}: {task_desc}"
+        else:
+            full_task = str(task)
+
+        click.secho(f"\nExecuting task...", fg="cyan", bold=True)
+
+        # Run the agent on this task
+        self.agent_mgr.run_agent(full_task)
+
+        # After agent completes, prompt for next action
+        self._prompt_task_progression()
 
     def interactive_mode(self):
         """Run interactive chat mode."""
@@ -191,6 +328,10 @@ class CLI:
                     "content": response.content
                 })
 
+                # Prompt for task progression if plan is active
+                if self.plan_active:
+                    self._prompt_task_progression()
+
             except click.Abort:
                 click.echo("\n\nInterrupted. Type /quit to exit.")
                 continue
@@ -243,7 +384,18 @@ class CLI:
             if not args:
                 click.echo("Usage: /plan <task description>")
             else:
-                self.tasks.plan_task(args)
+                steps = self.tasks.plan_task(args)
+                if steps and len(steps) > 0:
+                    # Prompt to start tracking
+                    if click.confirm("Start working on this plan?", default=True):
+                        self.active_plan = steps
+                        self.current_task_index = 0
+                        self.plan_active = True
+                        click.echo()
+                        self._show_current_task()
+                        # Auto-execute the first task (if enabled)
+                        if self.auto_execute_tasks:
+                            self._execute_current_task()
 
         elif cmd == "/reason":
             if not args:
@@ -275,6 +427,9 @@ class CLI:
                 click.echo("Usage: /agent <task description>")
             else:
                 self.agent_mgr.run_agent(args)
+                # Prompt for task progression if plan is active
+                if self.plan_active:
+                    self._prompt_task_progression()
 
         elif cmd == "/smart":
             if not args:
@@ -304,6 +459,32 @@ class CLI:
 
         elif cmd == "/limits":
             self.session_mgr.show_rate_limits(args)
+
+        elif cmd == "/tasks":
+            if not self.plan_active or not self.active_plan:
+                click.secho("No active plan. Use /plan <task> to create one.", fg="yellow")
+            else:
+                click.secho("\nCurrent Plan:", fg="cyan", bold=True)
+                click.secho("-" * 50, fg="cyan")
+                for i, task in enumerate(self.active_plan):
+                    if i < self.current_task_index:
+                        # Completed
+                        status = click.style("✓", fg="green")
+                    elif i == self.current_task_index:
+                        # Current
+                        status = click.style("→", fg="yellow", bold=True)
+                    else:
+                        # Pending
+                        status = click.style("○", fg="white")
+
+                    if isinstance(task, dict):
+                        task_name = task.get('step', task.get('description', 'Task'))
+                    else:
+                        task_name = str(task)
+
+                    click.echo(f"  {status} {i+1}. {task_name}")
+                click.echo()
+                self._show_plan_summary()
 
         elif cmd in ["/paste", "/ml", "/multiline"]:
             # Toggle multiline input mode

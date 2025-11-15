@@ -96,13 +96,44 @@ Maximum {max_steps} steps. Be specific and actionable."""
 
         # Parse the response
         try:
-            # Extract JSON from response (handle markdown code blocks)
+            # Extract JSON from response (handle markdown code blocks and embedded JSON)
             content = response.content.strip()
-            if content.startswith('```'):
-                # Remove markdown code block
-                lines = content.split('\n')
-                content = '\n'.join(lines[1:-1])
-            steps = json.loads(content)
+
+            # Try to extract JSON array from content
+            json_content = None
+
+            # Method 1: Check for markdown code blocks
+            if '```' in content:
+                # Find code block content
+                import re
+                code_block_match = re.search(r'```(?:json)?\s*\n?([\s\S]*?)\n?```', content)
+                if code_block_match:
+                    json_content = code_block_match.group(1).strip()
+
+            # Method 2: Find JSON array anywhere in the content
+            if json_content is None:
+                # Look for [ ... ] pattern (JSON array)
+                start_idx = content.find('[')
+                if start_idx != -1:
+                    # Find matching closing bracket
+                    bracket_count = 0
+                    end_idx = start_idx
+                    for i in range(start_idx, len(content)):
+                        if content[i] == '[':
+                            bracket_count += 1
+                        elif content[i] == ']':
+                            bracket_count -= 1
+                            if bracket_count == 0:
+                                end_idx = i + 1
+                                break
+                    if end_idx > start_idx:
+                        json_content = content[start_idx:end_idx]
+
+            # Method 3: Try entire content as JSON
+            if json_content is None:
+                json_content = content
+
+            steps = json.loads(json_content)
             # Validate return type - must be list of dicts
             if not isinstance(steps, list):
                 steps = [steps]

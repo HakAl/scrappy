@@ -18,7 +18,7 @@ class CLITaskExecution:
         self.orchestrator = orchestrator
 
     def plan_task(self, task: str):
-        """Create a task plan."""
+        """Create a task plan. Returns the list of steps for tracking."""
         click.secho(f"\nPlanning: {task}", bold=True)
         click.echo("-" * 50)
 
@@ -29,7 +29,7 @@ class CLITaskExecution:
             except Exception as e:
                 bar.update(1)
                 click.secho(f"Error during planning: {e}", fg="red")
-                return
+                return []
 
         click.echo()
         plan_summary = ""
@@ -48,12 +48,15 @@ class CLITaskExecution:
         else:
             click.echo(steps)
             plan_summary = str(steps)
+            steps = [steps]  # Convert to list for tracking
 
         # Save plan to working memory
         self.orchestrator.add_discovery(
             f"Created plan for '{task}' with {len(steps) if isinstance(steps, list) else 1} steps",
             "task_plan"
         )
+
+        return steps if isinstance(steps, list) else []
 
     def reason(self, question: str):
         """Perform reasoning on a question."""

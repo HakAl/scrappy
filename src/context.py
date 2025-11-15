@@ -527,3 +527,14 @@ Be concise and technical. No fluff."""
             status['git_recently_changed'] = len(self.git_history.get('recently_changed_files', []))
 
         return status
+
+    def get_summary(self) -> str:
+        """Get the project summary text."""
+        if self.summary:
+            return self.summary
+
+        # If no summary, return basic info
+        if self.is_explored():
+            return f"Project: {self.project_path.name}, {self.structure.get('total_files', 0)} files"
+
+        return "Project not explored yet"
