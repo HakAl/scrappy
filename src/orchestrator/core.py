@@ -64,6 +64,10 @@ class AgentOrchestrator:
         self.context_aware = context_aware
         self.caching_enabled = enable_cache
 
+        # Background task management (for fire-and-forget operations)
+        self._background_tasks: set = set()
+        self._background_errors: list = []
+
         # Initialize codebase context
         self.context = CodebaseContext(project_path)
 
@@ -568,24 +572,30 @@ class AgentOrchestrator:
             **kwargs
         )
 
-        # Store in cache (async file I/O)
+        # Store in cache (background - fire and forget)
         if should_use_cache:
-            await self.cache.put_async(response, final_prompt, model, system_prompt, max_tokens, temperature)
+            self._schedule_background_task(
+                self.cache.put_async(response, final_prompt, model, system_prompt, max_tokens, temperature)
+            )
             if intent_classification:
-                await self.cache.put_by_intent_async(
-                    response,
-                    intent_classification.get('intent', ''),
-                    intent_classification.get('entities', {}),
-                    intent_classification.get('keywords', [])
+                self._schedule_background_task(
+                    self.cache.put_by_intent_async(
+                        response,
+                        intent_classification.get('intent', ''),
+                        intent_classification.get('entities', {}),
+                        intent_classification.get('keywords', [])
+                    )
                 )
 
-        # Track rate limits (async file I/O)
-        await self.rate_tracker.record_request_async(
-            provider=provider_name,
-            model=response.model,
-            input_tokens=response.input_tokens,
-            output_tokens=response.output_tokens,
-            success=True
+        # Track rate limits (background - fire and forget)
+        self._schedule_background_task(
+            self.rate_tracker.record_request_async(
+                provider=provider_name,
+                model=response.model,
+                input_tokens=response.input_tokens,
+                output_tokens=response.output_tokens,
+                success=True
+            )
         )
 
         # Check for approaching limits
@@ -752,6 +762,96 @@ class AgentOrchestrator:
         """Toggle caching on/off. Returns new state."""
         self.caching_enabled = not self.caching_enabled
         return self.caching_enabled
+
+    # Background Task Management
+
+    def _schedule_background_task(self, coro):
+        """
+        Schedule a coroutine as a background task (fire-and-forget).
+
+        The task will run without blocking the caller. Errors are captured
+        but don't affect the main flow.
+
+        Args:
+            coro: Coroutine to execute in background
+        """
+        task = asyncio.create_task(coro)
+
+        # Add to tracking set (prevents garbage collection)
+        self._background_tasks.add(task)
+
+        # Remove from set when done and capture any errors
+        def on_done(t):
+            self._background_tasks.discard(t)
+            if t.exception():
+                self._background_errors.append({
+                    'timestamp': datetime.now().isoformat(),
+                    'error': str(t.exception()),
+                    'type': type(t.exception()).__name__
+                })
+                # Keep only last 50 errors
+                self._background_errors = self._background_errors[-50:]
+
+        task.add_done_callback(on_done)
+
+    async def wait_for_background_tasks(self, timeout: float = 5.0) -> dict:
+        """
+        Wait for all pending background tasks to complete.
+
+        Useful for testing or graceful shutdown.
+
+        Args:
+            timeout: Maximum seconds to wait
+
+        Returns:
+            Dict with completion status
+        """
+        if not self._background_tasks:
+            return {
+                'status': 'no_pending',
+                'completed': 0,
+                'errors': len(self._background_errors)
+            }
+
+        pending_count = len(self._background_tasks)
+
+        try:
+            # Wait for all tasks with timeout
+            done, pending = await asyncio.wait(
+                self._background_tasks,
+                timeout=timeout,
+                return_when=asyncio.ALL_COMPLETED
+            )
+
+            return {
+                'status': 'completed' if not pending else 'timeout',
+                'completed': len(done),
+                'pending': len(pending),
+                'errors': len(self._background_errors)
+            }
+        except Exception as e:
+            return {
+                'status': 'error',
+                'error': str(e),
+                'pending': pending_count
+            }
+
+    def get_background_task_status(self) -> dict:
+        """
+        Get status of background task processing.
+
+        Returns:
+            Dict with pending task count and recent errors
+        """
+        return {
+            'pending_tasks': len(self._background_tasks),
+            'recent_errors': self._background_errors[-10:],
+            'total_errors': len(self._background_errors)
+        }
+
+    def clear_background_errors(self):
+        """Clear the background error log."""
+        self._background_errors.clear()
 
     # Rate Limit Management
 
