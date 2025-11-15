@@ -23,10 +23,202 @@ The orchestrator:
 """
 
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timedelta
+from pathlib import Path
+import json
+import hashlib
 
 from .providers import ProviderRegistry, GroqProvider, CohereProvider, GeminiProvider, CerebrasProvider, LLMResponse
 from .context import CodebaseContext
+
+
+class ResponseCache:
+    """
+    Cache for LLM responses to avoid duplicate API calls.
+
+    Features:
+    - In-memory cache with optional disk persistence
+    - TTL-based expiration
+    - Hash-based key generation
+    - Cache statistics
+    """
+
+    def __init__(self, cache_file: Optional[str] = None, default_ttl_hours: int = 24):
+        """
+        Initialize response cache.
+
+        Args:
+            cache_file: Path to persistent cache file (optional)
+            default_ttl_hours: Default time-to-live for cache entries in hours
+        """
+        self._cache: dict = {}
+        self._stats = {
+            'hits': 0,
+            'misses': 0,
+            'saves': 0
+        }
+        self.default_ttl = timedelta(hours=default_ttl_hours)
+        self.cache_file = Path(cache_file) if cache_file else None
+
+        # Load persistent cache if available
+        if self.cache_file and self.cache_file.exists():
+            self._load_cache()
+
+    def _generate_key(
+        self,
+        provider: str,
+        prompt: str,
+        model: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        max_tokens: int = 1000,
+        temperature: float = 0.7
+    ) -> str:
+        """Generate a unique cache key from request parameters."""
+        # Create a deterministic string representation
+        key_data = f"{provider}|{model or 'default'}|{system_prompt or ''}|{prompt}|{max_tokens}|{temperature:.2f}"
+        # Hash it for consistent key length
+        return hashlib.sha256(key_data.encode()).hexdigest()
+
+    def get(
+        self,
+        provider: str,
+        prompt: str,
+        model: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        max_tokens: int = 1000,
+        temperature: float = 0.7
+    ) -> Optional[LLMResponse]:
+        """
+        Get cached response if available and not expired.
+
+        Returns:
+            LLMResponse if found and valid, None otherwise
+        """
+        key = self._generate_key(provider, prompt, model, system_prompt, max_tokens, temperature)
+
+        if key not in self._cache:
+            self._stats['misses'] += 1
+            return None
+
+        entry = self._cache[key]
+
+        # Check expiration
+        cached_at = datetime.fromisoformat(entry['cached_at'])
+        if datetime.now() - cached_at > self.default_ttl:
+            # Expired
+            del self._cache[key]
+            self._stats['misses'] += 1
+            return None
+
+        self._stats['hits'] += 1
+
+        # Reconstruct LLMResponse
+        return LLMResponse(
+            content=entry['content'],
+            model=entry['model'],
+            provider=entry['provider'],
+            tokens_used=entry['tokens_used'],
+            input_tokens=entry.get('input_tokens', 0),
+            output_tokens=entry.get('output_tokens', 0),
+            latency_ms=0.0,  # Cached response has no latency
+            timestamp=cached_at
+        )
+
+    def put(
+        self,
+        response: LLMResponse,
+        prompt: str,
+        model: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        max_tokens: int = 1000,
+        temperature: float = 0.7
+    ):
+        """Store a response in cache."""
+        key = self._generate_key(response.provider, prompt, model, system_prompt, max_tokens, temperature)
+
+        self._cache[key] = {
+            'content': response.content,
+            'model': response.model,
+            'provider': response.provider,
+            'tokens_used': response.tokens_used,
+            'input_tokens': response.input_tokens,
+            'output_tokens': response.output_tokens,
+            'cached_at': datetime.now().isoformat()
+        }
+
+        self._stats['saves'] += 1
+
+        # Persist if configured
+        if self.cache_file:
+            self._save_cache()
+
+    def _save_cache(self):
+        """Save cache to disk."""
+        try:
+            with open(self.cache_file, 'w', encoding='utf-8') as f:
+                json.dump(self._cache, f, indent=2)
+        except Exception:
+            pass  # Silently fail on write errors
+
+    def _load_cache(self):
+        """Load cache from disk."""
+        try:
+            with open(self.cache_file, 'r', encoding='utf-8') as f:
+                self._cache = json.load(f)
+
+            # Clean expired entries on load
+            self._cleanup_expired()
+        except Exception:
+            self._cache = {}
+
+    def _cleanup_expired(self):
+        """Remove expired entries from cache."""
+        now = datetime.now()
+        expired_keys = []
+
+        for key, entry in self._cache.items():
+            try:
+                cached_at = datetime.fromisoformat(entry['cached_at'])
+                if now - cached_at > self.default_ttl:
+                    expired_keys.append(key)
+            except Exception:
+                expired_keys.append(key)
+
+        for key in expired_keys:
+            del self._cache[key]
+
+    def clear(self):
+        """Clear all cache entries."""
+        self._cache = {}
+        if self.cache_file and self.cache_file.exists():
+            self.cache_file.unlink()
+        self._stats = {'hits': 0, 'misses': 0, 'saves': 0}
+
+    def get_stats(self) -> dict:
+        """Get cache statistics."""
+        total_requests = self._stats['hits'] + self._stats['misses']
+        hit_rate = (self._stats['hits'] / total_requests * 100) if total_requests > 0 else 0
+
+        return {
+            'total_entries': len(self._cache),
+            'hits': self._stats['hits'],
+            'misses': self._stats['misses'],
+            'saves': self._stats['saves'],
+            'hit_rate': f"{hit_rate:.1f}%",
+            'cache_file': str(self.cache_file) if self.cache_file else 'memory only'
+        }
+
+    def invalidate_provider(self, provider: str):
+        """Invalidate all cache entries for a specific provider."""
+        keys_to_remove = [
+            key for key, entry in self._cache.items()
+            if entry.get('provider') == provider
+        ]
+        for key in keys_to_remove:
+            del self._cache[key]
+
+        if self.cache_file:
+            self._save_cache()
 
 
 class AgentOrchestrator:
@@ -52,7 +244,9 @@ class AgentOrchestrator:
         orchestrator_provider: Optional[str] = None,
         project_path: Optional[str] = None,
         auto_explore: bool = False,
-        context_aware: bool = True
+        context_aware: bool = True,
+        enable_cache: bool = True,
+        cache_ttl_hours: int = 24
     ):
         """
         Initialize orchestrator.
@@ -64,6 +258,8 @@ class AgentOrchestrator:
             project_path: Path to project for context awareness (default: current dir)
             auto_explore: Automatically explore codebase on init
             context_aware: Enable context-augmented prompts
+            enable_cache: Enable response caching to avoid duplicate API calls
+            cache_ttl_hours: Time-to-live for cache entries in hours
         """
         self.registry = ProviderRegistry()
         self.task_history: list[dict] = []
@@ -71,9 +267,14 @@ class AgentOrchestrator:
         self._brain = None
         self._brain_name = orchestrator_provider
         self.context_aware = context_aware
+        self.caching_enabled = enable_cache
 
         # Initialize codebase context
         self.context = CodebaseContext(project_path)
+
+        # Initialize response cache
+        cache_file = str(self.context.project_path / ".llm_response_cache.json")
+        self.cache = ResponseCache(cache_file=cache_file, default_ttl_hours=cache_ttl_hours)
 
         if auto_register:
             self._auto_register_providers()
@@ -502,6 +703,7 @@ Be thorough but concise. Do not repeat yourself. Provide unique insights in each
         max_tokens: int = 1000,
         temperature: float = 0.7,
         use_context: Optional[bool] = None,
+        use_cache: Optional[bool] = None,
         **kwargs
     ) -> LLMResponse:
         """
@@ -515,6 +717,7 @@ Be thorough but concise. Do not repeat yourself. Provide unique insights in each
             max_tokens: Max response tokens
             temperature: Sampling temperature
             use_context: Override context_aware setting for this call
+            use_cache: Override caching_enabled setting for this call
             **kwargs: Provider-specific parameters
 
         Returns:
@@ -533,6 +736,9 @@ Be thorough but concise. Do not repeat yourself. Provide unique insights in each
 
             # With context augmentation
             result = orch.delegate('groq', 'Fix the auth bug', use_context=True)
+
+            # Without caching (for non-deterministic tasks)
+            result = orch.delegate('groq', 'Generate random story', use_cache=False)
         """
         provider = self.registry.get(provider_name)
 
@@ -543,6 +749,34 @@ Be thorough but concise. Do not repeat yourself. Provide unique insights in each
         final_prompt = prompt
         if should_use_context and self.context.is_explored():
             final_prompt = self.context.augment_prompt(prompt)
+
+        # Determine if we should use cache
+        should_use_cache = use_cache if use_cache is not None else self.caching_enabled
+
+        # Check cache first (if enabled)
+        cached_response = None
+        if should_use_cache:
+            cached_response = self.cache.get(
+                provider_name,
+                final_prompt,
+                model=model,
+                system_prompt=system_prompt,
+                max_tokens=max_tokens,
+                temperature=temperature
+            )
+
+        if cached_response:
+            # Track cached hit
+            self.task_history.append({
+                'timestamp': datetime.now().isoformat(),
+                'provider': provider_name,
+                'model': cached_response.model,
+                'tokens_used': cached_response.tokens_used,
+                'latency_ms': 0.0,
+                'context_augmented': should_use_context and self.context.is_explored(),
+                'cached': True,
+            })
+            return cached_response
 
         # Build messages
         messages = []
@@ -559,6 +793,17 @@ Be thorough but concise. Do not repeat yourself. Provide unique insights in each
             **kwargs
         )
 
+        # Store in cache (if enabled)
+        if should_use_cache:
+            self.cache.put(
+                response,
+                final_prompt,
+                model=model,
+                system_prompt=system_prompt,
+                max_tokens=max_tokens,
+                temperature=temperature
+            )
+
         # Track
         self.task_history.append({
             'timestamp': datetime.now().isoformat(),
@@ -567,6 +812,7 @@ Be thorough but concise. Do not repeat yourself. Provide unique insights in each
             'tokens_used': response.tokens_used,
             'latency_ms': response.latency_ms,
             'context_augmented': should_use_context and self.context.is_explored(),
+            'cached': False,
         })
 
         return response
@@ -699,10 +945,14 @@ Be thorough but concise. Do not repeat yourself. Provide unique insights in each
             Dict with usage metrics by provider
         """
         if not self.task_history:
-            return {'message': 'No tasks executed yet'}
+            return {
+                'message': 'No tasks executed yet',
+                'cache_stats': self.cache.get_stats()
+            }
 
         # Aggregate by provider
         by_provider = {}
+        cached_hits = 0
         for task in self.task_history:
             provider = task['provider']
             if provider not in by_provider:
@@ -710,10 +960,16 @@ Be thorough but concise. Do not repeat yourself. Provide unique insights in each
                     'count': 0,
                     'total_tokens': 0,
                     'total_latency_ms': 0,
+                    'cached_hits': 0,
                 }
             by_provider[provider]['count'] += 1
             by_provider[provider]['total_tokens'] += task['tokens_used']
             by_provider[provider]['total_latency_ms'] += task['latency_ms']
+
+            # Count cached hits
+            if task.get('cached', False):
+                by_provider[provider]['cached_hits'] += 1
+                cached_hits += 1
 
         # Calculate averages
         for provider, stats in by_provider.items():
@@ -722,9 +978,25 @@ Be thorough but concise. Do not repeat yourself. Provide unique insights in each
 
         return {
             'total_tasks': len(self.task_history),
+            'cached_hits': cached_hits,
+            'api_calls': len(self.task_history) - cached_hits,
             'by_provider': by_provider,
             'session_duration': str(datetime.now() - self.created_at),
+            'cache_stats': self.cache.get_stats(),
         }
+
+    def get_cache_stats(self) -> dict:
+        """Get cache statistics."""
+        return self.cache.get_stats()
+
+    def clear_cache(self):
+        """Clear the response cache."""
+        self.cache.clear()
+
+    def toggle_cache(self) -> bool:
+        """Toggle caching on/off. Returns new state."""
+        self.caching_enabled = not self.caching_enabled
+        return self.caching_enabled
 
     def recommend_provider(self, requirements: dict) -> str:
         """

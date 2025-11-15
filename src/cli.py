@@ -178,6 +178,9 @@ class CLI:
             else:
                 self._run_agent(args)
 
+        elif cmd == "/cache":
+            self._manage_cache(args)
+
         else:
             click.secho(f"Unknown command: {cmd}", fg="yellow")
             click.echo("Type /help for available commands.")
@@ -213,6 +216,11 @@ class CLI:
         click.echo("  /context explore - Explore current project")
         click.echo("  /context clear   - Clear cached context")
         click.echo("  /context toggle  - Toggle context awareness")
+        click.echo()
+        click.secho("Cache Management:", bold=True)
+        click.echo("  /cache           - Show cache statistics")
+        click.echo("  /cache clear     - Clear response cache")
+        click.echo("  /cache toggle    - Toggle caching on/off")
         click.echo()
         click.secho("System:", bold=True)
         click.echo("  /help            - Show this help message")
@@ -280,17 +288,28 @@ class CLI:
 
         click.echo("\nUsage Statistics:")
         click.echo("-" * 50)
-        click.echo(f"Total Tasks: {report['total_tasks']}")
-        click.echo(f"Session Duration: {report['session_duration']}")
+        click.echo(f"Total Tasks: {report.get('total_tasks', 0)}")
+        if 'cached_hits' in report:
+            click.echo(f"Cache Hits: {report['cached_hits']}")
+            click.echo(f"API Calls: {report['api_calls']}")
+        click.echo(f"Session Duration: {report.get('session_duration', 'N/A')}")
 
-        if report['by_provider']:
+        if report.get('by_provider'):
             click.echo("\nBy Provider:")
             for provider, stats in report['by_provider'].items():
                 click.secho(f"  {provider}:", bold=True)
                 click.echo(f"    Requests: {stats['count']}")
+                if stats.get('cached_hits', 0) > 0:
+                    click.echo(f"    Cached Hits: {stats['cached_hits']}")
                 click.echo(f"    Total Tokens: {stats['total_tokens']:,}")
                 click.echo(f"    Avg Tokens/Request: {stats['avg_tokens']:.1f}")
                 click.echo(f"    Total Latency: {stats['total_latency_ms']:.0f}ms")
+
+        if 'cache_stats' in report:
+            cache_stats = report['cache_stats']
+            click.secho("\nCache:", bold=True)
+            click.echo(f"  Hit Rate: {cache_stats['hit_rate']}")
+            click.echo(f"  Entries: {cache_stats['total_entries']}")
 
     def _plan_task(self, task: str):
         """Create a task plan."""
@@ -754,6 +773,36 @@ Be concise but thorough. Focus on actionable insights."""
             click.echo("  refresh    - Force re-exploration")
             click.echo("  clear      - Clear cached context")
             click.echo("  toggle     - Toggle context-aware prompts")
+
+    def _manage_cache(self, args: str = ""):
+        """Manage response cache."""
+        if not args:
+            # Show cache status
+            stats = self.orchestrator.get_cache_stats()
+            click.secho("\nCache Statistics:", bold=True)
+            click.echo("-" * 50)
+            click.echo(f"Total Entries: {stats['total_entries']}")
+            click.echo(f"Cache Hits: {stats['hits']}")
+            click.echo(f"Cache Misses: {stats['misses']}")
+            click.echo(f"Cache Saves: {stats['saves']}")
+            click.secho(f"Hit Rate: {stats['hit_rate']}", fg="green" if float(stats['hit_rate'].rstrip('%')) > 50 else "yellow")
+            click.echo(f"Cache File: {stats['cache_file']}")
+            click.echo(f"Caching: {click.style('Enabled' if self.orchestrator.caching_enabled else 'Disabled', fg='green' if self.orchestrator.caching_enabled else 'red')}")
+
+        elif args.lower() == "clear":
+            self.orchestrator.clear_cache()
+            click.secho("Response cache cleared.", fg="green")
+
+        elif args.lower() == "toggle":
+            new_state = self.orchestrator.toggle_cache()
+            status = "enabled" if new_state else "disabled"
+            click.secho(f"Response caching {status}.", fg="green" if new_state else "yellow")
+
+        else:
+            click.echo("Usage: /cache [clear|toggle]")
+            click.echo("  (no args)  - Show cache statistics")
+            click.echo("  clear      - Clear all cached responses")
+            click.echo("  toggle     - Toggle caching on/off")
 
     def _run_agent(self, task: str):
         """Run the code agent on a task with human-in-the-loop approval."""

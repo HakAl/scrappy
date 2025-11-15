@@ -3,8 +3,9 @@
 A framework for orchestrating LLM agents across multiple free-tier providers with **swappable orchestrator brain** and **automatic codebase context awareness**.
 
 >"For Users Without Claude Subscription: Yes, Useful"
->
->Where it shines:
+
+
+**Where it shines:**
 
   1. 23K free requests/day - Real value for development without subscription costs
   2. Context augmentation - Makes weaker models more effective by injecting project knowledge they'd otherwise lack
@@ -16,6 +17,7 @@ A framework for orchestrating LLM agents across multiple free-tier providers wit
 ## Features
 
 - **23,000+ free requests/day** across providers
+- **Response Caching** - avoid duplicate API calls, save quota, instant responses for repeated queries
 - **Code Agent** - AI writes code with human-in-the-loop approval (uses Gemini for smart tasks)
 - **Swappable orchestrator** - use any provider as the "brain" (no Claude subscription required)
 - **Context-aware prompts** - automatically augments queries with project knowledge
@@ -24,7 +26,7 @@ A framework for orchestrating LLM agents across multiple free-tier providers wit
 - **Task planning** - AI-powered task breakdown with structured JSON output
 - **Multi-provider routing** - intelligent task delegation
 - **Interactive CLI** - full-featured command-line interface with Click
-- **Persistent caching** - context survives session restarts
+- **Persistent caching** - context and responses survive session restarts
 - **Safety features** - Git checkpoints, audit logging, sandboxing, dry-run mode
 
 ## Providers
@@ -173,6 +175,9 @@ You: /usage             # Show usage statistics
 You: /status            # System status
 You: /synthesize        # Multi-provider synthesis
 You: /delegate          # Direct provider delegation
+You: /cache             # View cache statistics
+You: /cache clear       # Clear response cache
+You: /cache toggle      # Enable/disable caching
 You: /quit              # Exit
 ```
 
@@ -444,17 +449,17 @@ MIT
 **Production-ready for prototyping**. Core features implemented:
 - Multi-provider orchestration
 - Swappable orchestrator brain
+- **Response caching** - avoid duplicate API calls, TTL-based expiration
 - **Context-aware prompts** with codebase exploration
 - **Interactive CLI** with Click
 - **Code Agent** with human-in-the-loop approval
 - Task planning and reasoning (structured JSON output)
-- Usage tracking with context tracking
+- Usage tracking with cache hit statistics
 - Auto-fallback (Gemini)
-- **Persistent context caching**
+- **Persistent caching** - both context and responses cached to disk
 - **Safety features**: Git checkpoints, audit logging, sandboxing
 
 **Future work**:
-- Response caching
 - Async/parallel execution
 - Persistent rate limit tracking
 - More provider integrations

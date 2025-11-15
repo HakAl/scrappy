@@ -413,6 +413,14 @@ When in interactive mode, use slash commands:
 | `/context clear` | Clear cached context |
 | `/context toggle` | Enable/disable context awareness |
 
+### Cache Management
+
+| Command | Description |
+|---------|-------------|
+| `/cache` | Show cache statistics (hits, misses, hit rate) |
+| `/cache clear` | Clear all cached responses |
+| `/cache toggle` | Enable/disable response caching |
+
 ### System Commands
 
 | Command | Description |
@@ -489,6 +497,73 @@ How should I implement the provider fallback?
 ```
 
 The LLM now understands your project architecture without explanation!
+
+## Response Caching System
+
+The CLI includes automatic response caching to avoid duplicate API calls and save quota.
+
+### How It Works
+
+1. **Request Hashing**: Each request is hashed based on provider, model, prompt, and parameters
+2. **Cache Lookup**: Before API call, cache is checked for matching response
+3. **TTL Expiration**: Cached responses expire after 24 hours (configurable)
+4. **Persistence**: Cache is saved to `.llm_response_cache.json`
+
+### Cache File
+
+Located at: `<project_root>/.llm_response_cache.json`
+
+Contains:
+- Cached responses with timestamps
+- Provider and model information
+- Token usage statistics
+- Auto-cleans expired entries on load
+
+### Managing Cache
+
+```
+You: /cache
+Cache Statistics:
+--------------------------------------------------
+Total Entries: 15
+Cache Hits: 23
+Cache Misses: 45
+Cache Saves: 15
+Hit Rate: 33.8%
+Cache File: .llm_response_cache.json
+Caching: Enabled
+
+You: /cache clear
+Response cache cleared.
+
+You: /cache toggle
+Response caching disabled.
+```
+
+### Benefits
+
+- **Save API quota**: Don't waste requests on duplicate queries
+- **Instant responses**: Cached hits return immediately (0ms latency)
+- **Persist across sessions**: Cache survives CLI restarts
+- **Automatic expiration**: Old entries cleaned up automatically
+- **Per-request control**: Override caching for specific calls
+
+### Programmatic Control
+
+```python
+# Disable caching for non-deterministic tasks
+result = orch.delegate('groq', 'Generate random story', use_cache=False)
+
+# Check cache stats
+stats = orch.get_cache_stats()
+print(f"Hit rate: {stats['hit_rate']}")
+
+# Clear cache
+orch.clear_cache()
+
+# Toggle caching
+orch.toggle_cache()
+```
 
 ## Provider Information
 
