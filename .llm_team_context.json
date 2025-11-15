@@ -1,0 +1,116 @@
+{
+  "explored_at": "2025-11-15T12:54:23.122168",
+  "summary": null,
+  "structure": {
+    "total_files": 30,
+    "by_type": {
+      "python": 17,
+      "javascript": 0,
+      "web": 0,
+      "config": 1,
+      "docs": 12,
+      "other": 0
+    },
+    "has_readme": true,
+    "has_requirements": true,
+    "has_package_json": false,
+    "has_pyproject": true,
+    "has_git": true,
+    "directories": [
+      "docs",
+      "examples",
+      "llm_team.egg-info",
+      "src"
+    ]
+  },
+  "file_index": {
+    "python": [
+      "llm_team.py",
+      "examples\\agent_demo.py",
+      "examples\\basic_usage.py",
+      "examples\\context_aware_demo.py",
+      "examples\\orchestrator_demo.py",
+      "examples\\test_orchestrator.py",
+      "src\\agent.py",
+      "src\\cli.py",
+      "src\\context.py",
+      "src\\orchestrator.py",
+      "src\\__init__.py",
+      "src\\providers\\base.py",
+      "src\\providers\\cerebras_provider.py",
+      "src\\providers\\cohere_provider.py",
+      "src\\providers\\gemini_provider.py",
+      "src\\providers\\groq_provider.py",
+      "src\\providers\\__init__.py"
+    ],
+    "javascript": [],
+    "web": [],
+    "config": [
+      "pyproject.toml"
+    ],
+    "docs": [
+      "LICENSE.md",
+      "README.md",
+      "requirements.txt",
+      "docs\\ARCHITECTURE.md",
+      "docs\\CLI.md",
+      "docs\\QUICKSTART.md",
+      "docs\\RATE_LIMITS.md",
+      "llm_team.egg-info\\dependency_links.txt",
+      "llm_team.egg-info\\entry_points.txt",
+      "llm_team.egg-info\\requires.txt",
+      "llm_team.egg-info\\SOURCES.txt",
+      "llm_team.egg-info\\top_level.txt"
+    ],
+    "other": []
+  },
+  "git_history": {
+    "recent_commits": [
+      "902cca1 (HEAD -> main, origin/main) add git history. add quickstart",
+      "eaea382 use team anyhere",
+      "b38f263 response cache",
+      "657bff8 Agent checkpoint 20251115_105235",
+      "90736e9 readme update",
+      "b858a47 bug fixes",
+      "870c229 add context. update docs",
+      "5a2c316 create cli. add explore command",
+      "c52e080 initial commit",
+      "a9800b3 docs: Add multi-agent LLM team plan",
+      "d19b279 docs: Add LLM provider research findings and free tier limitations"
+    ],
+    "branches": [
+      "main",
+      "remotes/origin/main"
+    ],
+    "current_branch": "main",
+    "top_contributors": [
+      {
+        "commits": 11,
+        "name": "Your Name"
+      }
+    ],
+    "recently_changed_files": [
+      "examples/basic_usage.py",
+      "src/agent.py",
+      "src/providers/groq_provider.py",
+      "src/providers/gemini_provider.py",
+      "LICENSE.md",
+      "examples/agent_demo.py",
+      "requirements.txt",
+      "src/cli.py",
+      "docs/RATE_LIMITS.md",
+      ".env.example",
+      "src/providers/__init__.py",
+      "llm_team.py",
+      "src/context.py",
+      "docs/QUICKSTART.md",
+      "examples/context_aware_demo.py",
+      "src/providers/cerebras_provider.py",
+      "pyproject.toml",
+      "src/providers/cohere_provider.py",
+      "examples/orchestrator_demo.py",
+      "llm_providers_research.md"
+    ],
+    "first_commit_date": "2025-11-15 12:48:32 -0500"
+  }
+}

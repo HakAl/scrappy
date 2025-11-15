@@ -6,6 +6,7 @@ Provides automatic project exploration and context augmentation for prompts.
 
 import json
 import os
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -35,6 +36,7 @@ class CodebaseContext:
         self.structure: dict = {}
         self.key_files: dict = {}
         self.file_index: dict = {}
+        self.git_history: dict = {}  # Git history info
         self.explored_at: Optional[datetime] = None
         self.cache_file = self.project_path / ".llm_team_context.json"
 
@@ -71,6 +73,10 @@ class CodebaseContext:
         # Read key files
         self.key_files = self._read_key_files()
 
+        # Get git history if available
+        if self.structure.get('has_git'):
+            self.git_history = self._get_git_history()
+
         # Mark exploration time (summary will be generated when needed)
         self.explored_at = datetime.now()
 
@@ -82,7 +88,8 @@ class CodebaseContext:
             'explored_at': self.explored_at.isoformat(),
             'total_files': self.structure.get('total_files', 0),
             'file_types': self.structure.get('by_type', {}),
-            'directories': self.structure.get('directories', [])
+            'directories': self.structure.get('directories', []),
+            'has_git_history': bool(self.git_history)
         }
 
     def generate_summary(self, llm_func) -> str:
@@ -115,6 +122,23 @@ class CodebaseContext:
             context_parts.append("Node.js project")
         if self.structure.get('has_pyproject'):
             context_parts.append("Modern Python (pyproject.toml)")
+        if self.structure.get('has_git'):
+            context_parts.append("Version controlled with Git")
+
+        # Add git history info
+        git_context = ""
+        if self.git_history:
+            git_parts = []
+            if self.git_history.get('current_branch'):
+                git_parts.append(f"Current branch: {self.git_history['current_branch']}")
+            if self.git_history.get('recent_commits'):
+                commits = self.git_history['recent_commits'][:5]
+                git_parts.append("Recent commits:\n" + "\n".join(f"  {c}" for c in commits))
+            if self.git_history.get('top_contributors'):
+                contribs = [f"{c['name']} ({c['commits']} commits)" for c in self.git_history['top_contributors'][:3]]
+                git_parts.append(f"Top contributors: {', '.join(contribs)}")
+            if git_parts:
+                git_context = "\n\nGit History:\n" + "\n".join(git_parts)
 
         # Build file contents section (limited)
         file_contents = ""
@@ -126,6 +150,7 @@ class CodebaseContext:
         prompt = f"""Analyze this codebase and provide a concise technical summary.
 
 {chr(10).join(context_parts)}
+{git_context}
 
 Key Files:
 {file_contents}
@@ -134,6 +159,7 @@ Provide a brief summary (3-5 sentences) covering:
 1. What this project does
 2. Main technologies/frameworks
 3. Code organization pattern
+4. Development activity (if git history available)
 
 Be concise and technical. No fluff."""
 
@@ -170,6 +196,20 @@ Be concise and technical. No fluff."""
                 f"Languages: {', '.join(k for k, v in self.structure.get('by_type', {}).items() if v > 0 and k != 'other')}",
             ]
             context_parts.append("Structure:\n" + "\n".join(structure_info))
+
+        # Add git history info
+        if self.git_history:
+            git_info = []
+            if self.git_history.get('current_branch'):
+                git_info.append(f"Branch: {self.git_history['current_branch']}")
+            if self.git_history.get('recent_commits'):
+                commits = self.git_history['recent_commits'][:5]
+                git_info.append(f"Recent commits:\n" + "\n".join(f"  {c}" for c in commits))
+            if self.git_history.get('recently_changed_files'):
+                changed = self.git_history['recently_changed_files'][:10]
+                git_info.append(f"Recently changed: {', '.join(changed)}")
+            if git_info:
+                context_parts.append("Git History:\n" + "\n".join(git_info))
 
         # Optionally include relevant file listings
         if include_files and self.file_index:
@@ -331,6 +371,91 @@ Be concise and technical. No fluff."""
 
         return key_contents
 
+    def _get_git_history(self) -> dict:
+        """Get git history information."""
+        git_info = {}
+
+        try:
+            # Get recent commits
+            result = subprocess.run(
+                ['git', 'log', '--oneline', '-20', '--decorate'],
+                cwd=self.project_path,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0:
+                git_info['recent_commits'] = result.stdout.strip().split('\n')[:20]
+
+            # Get active branches
+            result = subprocess.run(
+                ['git', 'branch', '-a', '--no-color'],
+                cwd=self.project_path,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0:
+                branches = [b.strip().lstrip('* ') for b in result.stdout.strip().split('\n')]
+                git_info['branches'] = branches[:10]
+
+            # Get current branch
+            result = subprocess.run(
+                ['git', 'branch', '--show-current'],
+                cwd=self.project_path,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0:
+                git_info['current_branch'] = result.stdout.strip()
+
+            # Get contributors (top 5)
+            result = subprocess.run(
+                ['git', 'shortlog', '-sn', '--no-merges', 'HEAD'],
+                cwd=self.project_path,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0:
+                contributors = []
+                for line in result.stdout.strip().split('\n')[:5]:
+                    line = line.strip()
+                    if line:
+                        parts = line.split('\t')
+                        if len(parts) >= 2:
+                            contributors.append({'commits': int(parts[0].strip()), 'name': parts[1].strip()})
+                git_info['top_contributors'] = contributors
+
+            # Get files changed in last 10 commits
+            result = subprocess.run(
+                ['git', 'diff', '--name-only', 'HEAD~10..HEAD'],
+                cwd=self.project_path,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0:
+                changed = list(set(result.stdout.strip().split('\n')))
+                git_info['recently_changed_files'] = changed[:20]
+
+            # Get repository age (first commit date)
+            result = subprocess.run(
+                ['git', 'log', '--reverse', '--format=%ci', '-1'],
+                cwd=self.project_path,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0:
+                git_info['first_commit_date'] = result.stdout.strip()
+
+        except (subprocess.TimeoutExpired, Exception):
+            pass  # Git info is optional
+
+        return git_info
+
     def _save_cache(self):
         """Save context to disk cache."""
         try:
@@ -339,6 +464,7 @@ Be concise and technical. No fluff."""
                 'summary': self.summary,
                 'structure': self.structure,
                 'file_index': self.file_index,
+                'git_history': self.git_history,
                 # Don't cache key_files content - too large
             }
 
@@ -361,6 +487,7 @@ Be concise and technical. No fluff."""
             self.summary = cache_data.get('summary')
             self.structure = cache_data.get('structure', {})
             self.file_index = cache_data.get('file_index', {})
+            self.git_history = cache_data.get('git_history', {})
 
             # Re-read key files if we have structure
             if self.structure:
@@ -377,16 +504,26 @@ Be concise and technical. No fluff."""
         self.structure = {}
         self.key_files = {}
         self.file_index = {}
+        self.git_history = {}
         self.explored_at = None
 
     def get_status(self) -> dict:
         """Get current context status."""
-        return {
+        status = {
             'project_path': str(self.project_path),
             'is_explored': self.is_explored(),
             'has_summary': self.summary is not None,
             'explored_at': self.explored_at.isoformat() if self.explored_at else None,
             'total_files': self.structure.get('total_files', 0),
             'cache_file': str(self.cache_file),
-            'cache_exists': self.cache_file.exists()
+            'cache_exists': self.cache_file.exists(),
+            'has_git_history': bool(self.git_history),
         }
+
+        # Add git history summary
+        if self.git_history:
+            status['git_branch'] = self.git_history.get('current_branch', 'unknown')
+            status['git_commits'] = len(self.git_history.get('recent_commits', []))
+            status['git_recently_changed'] = len(self.git_history.get('recently_changed_files', []))
+
+        return status
