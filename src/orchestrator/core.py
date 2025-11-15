@@ -1,0 +1,599 @@
+"""
+Core AgentOrchestrator implementation.
+
+Central coordinator for multi-provider LLM agent team using composition.
+"""
+
+from typing import Optional
+from datetime import datetime
+
+try:
+    from ..providers import ProviderRegistry, GroqProvider, CohereProvider, GeminiProvider, CerebrasProvider, LLMResponse
+    from ..context import CodebaseContext
+except ImportError:
+    from providers import ProviderRegistry, GroqProvider, CohereProvider, GeminiProvider, CerebrasProvider, LLMResponse
+    from context import CodebaseContext
+
+from .cache import ResponseCache
+from .rate_limiter import RateLimitTracker
+from .memory import WorkingMemory
+from .session import SessionManager
+from .task_executor import TaskExecutor
+from .provider_selector import ProviderSelector
+
+
+class AgentOrchestrator:
+    """
+    Central coordinator for multi-provider LLM agent team.
+
+    Usage with Claude Code as reasoning layer:
+        orch = AgentOrchestrator()
+        result = orch.delegate('groq', 'Summarize this text: ...')
+        embeddings = orch.providers.get('cohere').embed(['text1', 'text2'])
+    """
+
+    def __init__(
+        self,
+        auto_register: bool = True,
+        orchestrator_provider: Optional[str] = None,
+        project_path: Optional[str] = None,
+        auto_explore: bool = False,
+        context_aware: bool = True,
+        enable_cache: bool = True,
+        cache_ttl_hours: int = 24
+    ):
+        """
+        Initialize orchestrator.
+
+        Args:
+            auto_register: Automatically register available providers
+            orchestrator_provider: Provider to use as the "brain" for planning/reasoning
+            project_path: Path to project for context awareness
+            auto_explore: Automatically explore codebase on init
+            context_aware: Enable context-augmented prompts
+            enable_cache: Enable response caching
+            cache_ttl_hours: Time-to-live for cache entries in hours
+        """
+        # Core components
+        self.registry = ProviderRegistry()
+        self.task_history: list[dict] = []
+        self.created_at = datetime.now()
+        self._brain = None
+        self._brain_name = orchestrator_provider
+        self.context_aware = context_aware
+        self.caching_enabled = enable_cache
+
+        # Initialize codebase context
+        self.context = CodebaseContext(project_path)
+
+        # Initialize composed components
+        self.cache = ResponseCache(
+            cache_file=str(self.context.project_path / ".llm_response_cache.json"),
+            default_ttl_hours=cache_ttl_hours
+        )
+        self.rate_tracker = RateLimitTracker(
+            tracker_file=str(self.context.project_path / ".llm_rate_limits.json")
+        )
+        self.working_memory = WorkingMemory()
+        self.session_manager = SessionManager(self.context.project_path)
+        self.provider_selector = ProviderSelector(self.registry)
+
+        # Register providers and set up brain
+        if auto_register:
+            self._auto_register_providers()
+            self._setup_brain(orchestrator_provider)
+
+        # Initialize task executor after brain is set up
+        self.task_executor = TaskExecutor(
+            get_brain_provider=lambda: self._brain,
+            get_brain_name=lambda: self._brain_name,
+            record_task=lambda task: self.task_history.append(task)
+        )
+
+        # Auto-explore if requested
+        if auto_explore and self._brain:
+            self._auto_explore()
+
+    def _auto_register_providers(self):
+        """Attempt to register all known providers."""
+        # Try Cerebras (primary - highest quota)
+        try:
+            self.registry.register(CerebrasProvider())
+            print("[OK] Cerebras provider registered (14,400 RPD)")
+        except Exception as e:
+            print(f"[X] Cerebras provider unavailable: {e}")
+
+        # Try Groq (secondary)
+        try:
+            self.registry.register(GroqProvider())
+            print("[OK] Groq provider registered (7,000 RPD)")
+        except Exception as e:
+            print(f"[X] Groq provider unavailable: {e}")
+
+        # Try Gemini (with auto-fallback)
+        try:
+            self.registry.register(GeminiProvider())
+            print("[OK] Gemini provider registered (auto-fallback enabled)")
+        except Exception as e:
+            print(f"[X] Gemini provider unavailable: {e}")
+
+        # Try Cohere (limited - embeddings only)
+        try:
+            self.registry.register(CohereProvider())
+            print("[OK] Cohere provider registered (1,000/month - use sparingly)")
+        except Exception as e:
+            print(f"[X] Cohere provider unavailable: {e}")
+
+    def _setup_brain(self, preferred_provider: Optional[str] = None):
+        """Set up the orchestrator's reasoning brain."""
+        try:
+            self._brain_name, self._brain = self.provider_selector.setup_brain(preferred_provider)
+            print(f"[BRAIN] Using {self._brain_name} as orchestrator brain")
+        except RuntimeError as e:
+            print(f"[WARN] {e}")
+
+    def _auto_explore(self):
+        """Automatically explore the codebase if not already explored."""
+        if self.context.is_explored():
+            print(f"[CONTEXT] Loaded cached context for {self.context.project_path.name}")
+            return
+
+        print(f"[CONTEXT] Exploring codebase: {self.context.project_path}")
+        result = self.context.explore()
+
+        if result['status'] == 'explored':
+            print(f"[CONTEXT] Found {result['total_files']} files")
+            self.context.generate_summary(self.task_executor.generate_context_summary)
+            print(f"[CONTEXT] Generated project summary")
+
+    # Provider Management
+
+    @property
+    def providers(self) -> ProviderRegistry:
+        """Access the provider registry."""
+        return self.registry
+
+    @property
+    def brain(self):
+        """Access the orchestrator's reasoning brain provider name."""
+        if not self._brain_name:
+            raise RuntimeError("No orchestrator brain configured. No providers available?")
+        return self._brain_name
+
+    @brain.setter
+    def brain(self, provider_name: str):
+        """Set the orchestrator's reasoning brain."""
+        available = self.registry.list_available()
+        if provider_name not in available:
+            raise ValueError(f"Provider '{provider_name}' not available. Available: {available}")
+        self._brain = self.registry.get(provider_name)
+        self._brain_name = provider_name
+
+    @property
+    def brain_provider(self):
+        """Access the actual brain provider object."""
+        if not self._brain:
+            raise RuntimeError("No orchestrator brain configured. No providers available?")
+        return self._brain
+
+    def status(self) -> dict:
+        """Get current status of all providers."""
+        return {
+            'available_providers': self.registry.list_available(),
+            'all_providers': self.registry.list_all(),
+            'provider_details': self.registry.get_provider_info(),
+            'orchestrator_brain': self._brain_name,
+            'tasks_executed': len(self.task_history),
+            'session_start': self.created_at.isoformat(),
+        }
+
+    # Context Management
+
+    def explore_project(self, force: bool = False) -> dict:
+        """Manually trigger project exploration."""
+        if force:
+            self.context.clear_cache()
+
+        result = self.context.explore(force=force)
+
+        if result['status'] == 'explored' or force:
+            self.context.generate_summary(self.task_executor.generate_context_summary)
+
+        return result
+
+    def get_context_status(self) -> dict:
+        """Get current codebase context status."""
+        return self.context.get_status()
+
+    # Working Memory (delegates to WorkingMemory)
+
+    def remember_file_read(self, path: str, content: str, lines: int = 0):
+        """Store a file read in working memory."""
+        self.working_memory.remember_file_read(path, content, lines)
+
+    def remember_search(self, query: str, results: list):
+        """Store a search result in working memory."""
+        self.working_memory.remember_search(query, results)
+
+    def remember_git_operation(self, operation: str, output: str):
+        """Store a git operation result in working memory."""
+        self.working_memory.remember_git_operation(operation, output)
+
+    def add_discovery(self, finding: str, location: str = ""):
+        """Add a discovery/learning to working memory."""
+        self.working_memory.add_discovery(finding, location)
+
+    def get_working_memory_summary(self) -> dict:
+        """Get a summary of current working memory state."""
+        return self.working_memory.get_summary()
+
+    def get_working_memory_context(self) -> str:
+        """Build context string from working memory for LLM augmentation."""
+        return self.working_memory.get_context_string()
+
+    def clear_working_memory(self):
+        """Clear all working memory."""
+        self.working_memory.clear()
+
+    # Session Management (delegates to SessionManager)
+
+    def save_session(self, conversation_history: list = None) -> str:
+        """Save current session to disk."""
+        return self.session_manager.save_session(
+            self.working_memory,
+            self.task_history,
+            self.created_at,
+            conversation_history
+        )
+
+    def load_session(self) -> dict:
+        """Load previous session from disk."""
+        result = self.session_manager.load_session()
+
+        if result['status'] == 'loaded':
+            # Restore working memory
+            self.working_memory = result['working_memory']
+            # Restore task history
+            self.task_history = result['task_history']
+
+            # Return relevant info (remove internal working_memory object)
+            return {
+                'status': 'loaded',
+                'saved_at': result['saved_at'],
+                'files_restored': result['files_restored'],
+                'searches_restored': result['searches_restored'],
+                'git_ops_restored': result['git_ops_restored'],
+                'discoveries_restored': result['discoveries_restored'],
+                'tasks_restored': result['tasks_restored'],
+                'conversation_history': result['conversation_history'],
+            }
+
+        return result
+
+    def clear_session(self):
+        """Delete saved session file."""
+        self.session_manager.clear_session()
+
+    # Task Execution (delegates to TaskExecutor)
+
+    def plan(self, task: str, context: Optional[str] = None, max_steps: int = 10) -> list[dict]:
+        """Break down a complex task into steps."""
+        return self.task_executor.plan(task, context, max_steps)
+
+    def reason(self, question: str, context: Optional[str] = None, evidence: Optional[list[str]] = None) -> dict:
+        """Use the orchestrator brain for complex reasoning."""
+        return self.task_executor.reason(question, context, evidence)
+
+    def synthesize(self, results: list[LLMResponse], synthesis_prompt: str = "Synthesize these results into a coherent summary:") -> str:
+        """Synthesize multiple agent results."""
+        return self.task_executor.synthesize(results, synthesis_prompt)
+
+    # Delegation
+
+    def delegate(
+        self,
+        provider_name: str,
+        prompt: str,
+        model: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        max_tokens: int = 1000,
+        temperature: float = 0.7,
+        use_context: Optional[bool] = None,
+        use_cache: Optional[bool] = None,
+        intent_classification: Optional[dict] = None,
+        **kwargs
+    ) -> LLMResponse:
+        """Delegate a task to a specific provider."""
+        provider = self.registry.get(provider_name)
+
+        # Determine if we should use context
+        should_use_context = use_context if use_context is not None else self.context_aware
+
+        # Augment prompt with context if enabled
+        final_prompt = prompt
+        if should_use_context and self.context.is_explored():
+            final_prompt = self.context.augment_prompt(prompt)
+
+        # Add working memory context
+        if should_use_context:
+            working_memory_context = self.get_working_memory_context()
+            if working_memory_context:
+                final_prompt = working_memory_context + "\n\n" + final_prompt
+
+        # Determine if we should use cache
+        should_use_cache = use_cache if use_cache is not None else self.caching_enabled
+
+        # Check cache first
+        cached_response = None
+        intent_cache_hit = False
+        if should_use_cache:
+            cached_response = self.cache.get(
+                provider_name, final_prompt, model, system_prompt, max_tokens, temperature
+            )
+            if not cached_response and intent_classification:
+                cached_response = self.cache.get_by_intent(
+                    intent_classification.get('intent', ''),
+                    intent_classification.get('entities', {}),
+                    intent_classification.get('keywords', []),
+                    provider_name,
+                    model
+                )
+                if cached_response:
+                    intent_cache_hit = True
+
+        if cached_response:
+            self.task_history.append({
+                'timestamp': datetime.now().isoformat(),
+                'provider': provider_name,
+                'model': cached_response.model,
+                'tokens_used': cached_response.tokens_used,
+                'latency_ms': 0.0,
+                'context_augmented': should_use_context and self.context.is_explored(),
+                'cached': True,
+                'intent_cache_hit': intent_cache_hit,
+            })
+            return cached_response
+
+        # Build messages and execute
+        messages = []
+        if system_prompt:
+            messages.append({'role': 'system', 'content': system_prompt})
+        messages.append({'role': 'user', 'content': final_prompt})
+
+        response = provider.chat(
+            messages=messages,
+            model=model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            **kwargs
+        )
+
+        # Store in cache
+        if should_use_cache:
+            self.cache.put(response, final_prompt, model, system_prompt, max_tokens, temperature)
+            if intent_classification:
+                self.cache.put_by_intent(
+                    response,
+                    intent_classification.get('intent', ''),
+                    intent_classification.get('entities', {}),
+                    intent_classification.get('keywords', [])
+                )
+
+        # Track rate limits
+        self.rate_tracker.record_request(
+            provider=provider_name,
+            model=response.model,
+            input_tokens=response.input_tokens,
+            output_tokens=response.output_tokens,
+            success=True
+        )
+
+        # Check for approaching limits
+        provider_limits = provider.get_limits()
+        warnings = self.rate_tracker.is_limit_approaching(provider_name, response.model, provider_limits)
+        if warnings.get('message'):
+            response.metadata['rate_limit_warning'] = warnings['message']
+
+        # Track task
+        self.task_history.append({
+            'timestamp': datetime.now().isoformat(),
+            'provider': provider_name,
+            'model': response.model,
+            'tokens_used': response.tokens_used,
+            'latency_ms': response.latency_ms,
+            'context_augmented': should_use_context and self.context.is_explored(),
+            'cached': False,
+        })
+
+        return response
+
+    def delegate_with_intent(
+        self,
+        provider_name: str,
+        prompt: str,
+        model: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        max_tokens: int = 1000,
+        temperature: float = 0.7,
+        use_context: Optional[bool] = None,
+        use_cache: Optional[bool] = None,
+        **kwargs
+    ) -> LLMResponse:
+        """Delegate a task with automatic intent classification for semantic caching."""
+        from intent_classifier import IntentClassifier
+
+        classifier = IntentClassifier()
+        classification_result = classifier.classify(prompt)
+
+        intent_classification = {
+            'intent': classification_result.primary_intent.intent.value,
+            'entities': classification_result.entities,
+            'keywords': classification_result.keywords
+        }
+
+        return self.delegate(
+            provider_name=provider_name,
+            prompt=prompt,
+            model=model,
+            system_prompt=system_prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            use_context=use_context,
+            use_cache=use_cache,
+            intent_classification=intent_classification,
+            **kwargs
+        )
+
+    def delegate_smart(self, prompt: str, task_type: str = 'general', **kwargs) -> LLMResponse:
+        """Automatically select best provider for task type."""
+        if task_type == 'reasoning':
+            reasoning_result = self.reason(prompt)
+            if isinstance(reasoning_result, dict):
+                content = f"Analysis: {reasoning_result.get('analysis', '')}\n\nConclusion: {reasoning_result.get('conclusion', '')}"
+            else:
+                content = str(reasoning_result)
+            return LLMResponse(
+                content=content,
+                model=self.brain_provider.default_model,
+                provider=self._brain_name,
+                tokens_used=0,
+                input_tokens=0,
+                output_tokens=0,
+                latency_ms=0.0,
+                raw_response=reasoning_result,
+                metadata={'task_type': 'reasoning', 'via': 'orchestrator_brain'},
+                timestamp=datetime.now()
+            )
+
+        provider_name, model = self.provider_selector.select_for_task(task_type)
+        return self.delegate(provider_name, prompt, model=model, **kwargs)
+
+    def batch_delegate(self, tasks: list[dict], provider_name: str = 'groq') -> list[LLMResponse]:
+        """Process multiple tasks with same provider."""
+        results = []
+        for task in tasks:
+            result = self.delegate(
+                provider_name,
+                task['prompt'],
+                system_prompt=task.get('system_prompt'),
+                **task.get('kwargs', {})
+            )
+            results.append(result)
+        return results
+
+    # Usage and Cache Statistics
+
+    def get_usage_report(self) -> dict:
+        """Get usage statistics for current session."""
+        if not self.task_history:
+            return {'message': 'No tasks executed yet', 'cache_stats': self.cache.get_stats()}
+
+        by_provider = {}
+        cached_hits = 0
+        for task in self.task_history:
+            provider = task['provider']
+            if provider not in by_provider:
+                by_provider[provider] = {
+                    'count': 0,
+                    'total_tokens': 0,
+                    'total_latency_ms': 0,
+                    'cached_hits': 0,
+                }
+            by_provider[provider]['count'] += 1
+            by_provider[provider]['total_tokens'] += task['tokens_used']
+            by_provider[provider]['total_latency_ms'] += task['latency_ms']
+
+            if task.get('cached', False):
+                by_provider[provider]['cached_hits'] += 1
+                cached_hits += 1
+
+        for provider, stats in by_provider.items():
+            stats['avg_tokens'] = stats['total_tokens'] / stats['count']
+            stats['avg_latency_ms'] = stats['total_latency_ms'] / stats['count']
+
+        return {
+            'total_tasks': len(self.task_history),
+            'cached_hits': cached_hits,
+            'api_calls': len(self.task_history) - cached_hits,
+            'by_provider': by_provider,
+            'session_duration': str(datetime.now() - self.created_at),
+            'cache_stats': self.cache.get_stats(),
+        }
+
+    def get_cache_stats(self) -> dict:
+        """Get cache statistics."""
+        return self.cache.get_stats()
+
+    def clear_cache(self):
+        """Clear the response cache."""
+        self.cache.clear()
+
+    def toggle_cache(self) -> bool:
+        """Toggle caching on/off. Returns new state."""
+        self.caching_enabled = not self.caching_enabled
+        return self.caching_enabled
+
+    # Rate Limit Management
+
+    def get_rate_limit_status(self) -> dict:
+        """Get current rate limit usage for all providers."""
+        status = self.rate_tracker.get_all_usage_summary()
+
+        for provider_name in status.get('providers', {}):
+            try:
+                provider = self.registry.get(provider_name)
+                limits = provider.get_limits()
+                remaining = self.rate_tracker.get_remaining_quota(
+                    provider_name, provider.default_model, limits
+                )
+                status['providers'][provider_name]['limits'] = {
+                    'requests_per_day': limits.requests_per_day,
+                    'requests_per_month': limits.requests_per_month,
+                    'tokens_per_day': limits.tokens_per_day,
+                    'tokens_per_minute': limits.tokens_per_minute,
+                }
+                status['providers'][provider_name]['remaining'] = remaining
+            except Exception:
+                pass
+
+        return status
+
+    def get_remaining_quota(self, provider_name: str, model: Optional[str] = None) -> dict:
+        """Get remaining quota for a specific provider."""
+        provider = self.registry.get(provider_name)
+        limits = provider.get_limits()
+        if model is None:
+            model = provider.default_model
+        return self.rate_tracker.get_remaining_quota(provider_name, model, limits)
+
+    def check_rate_limit_warnings(self) -> list[str]:
+        """Check for any approaching rate limits across all providers."""
+        warnings = []
+        for provider_name in self.registry.list_available():
+            try:
+                provider = self.registry.get(provider_name)
+                limits = provider.get_limits()
+                usage = self.rate_tracker.get_usage(provider_name)
+                for model in usage.keys():
+                    warning_info = self.rate_tracker.is_limit_approaching(provider_name, model, limits)
+                    if warning_info.get('message'):
+                        warnings.append(warning_info['message'])
+            except Exception:
+                pass
+        return warnings
+
+    def reset_rate_tracking(self, provider_name: Optional[str] = None):
+        """Reset rate tracking data."""
+        if provider_name:
+            self.rate_tracker.reset_provider(provider_name)
+        else:
+            self.rate_tracker.clear()
+
+    def recommend_provider(self, requirements: dict) -> str:
+        """Recommend best provider based on requirements."""
+        return self.provider_selector.recommend(requirements)
+
+
+def create_orchestrator() -> AgentOrchestrator:
+    """Factory function to create an orchestrator."""
+    return AgentOrchestrator(auto_register=True)
