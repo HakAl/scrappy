@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llm-team"
+version = "0.1.0"
+description = "Multi-provider LLM orchestration with swappable brain and codebase context awareness"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Your Name", email = "your@email.com"}
+]
+keywords = ["llm", "ai", "orchestration", "multi-provider", "cli"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "groq>=0.4.0",
+    "cohere>=5.0.0",
+    "google-generativeai>=0.8.0",
+    "python-dotenv>=1.0.0",
+    "openai>=1.0.0",
+    "click>=8.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+llm-team = "src.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/yourusername/llm-team"
+Repository = "https://github.com/yourusername/llm-team"
+Issues = "https://github.com/yourusername/llm-team/issues"
+
+[tool.setuptools]
+packages = ["src", "src.providers"]
+
+[tool.setuptools.package-data]
+"*" = ["*.md", "*.json"]

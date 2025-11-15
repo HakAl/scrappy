@@ -25,6 +25,16 @@ python llm_team.py
 
 # Start with auto-exploration (recommended for new projects)
 python llm_team.py --auto-explore
+
+# One-time setup (from project directory)
+cd llm_agent_team
+pip install -e .
+
+# Now use from anywhere!
+cd ~/any-project
+llm-team --auto-explore    # Learns about current directory
+llm-team query "How do I add auth?"
+llm-team agent "Fix the login bug"
 ```
 
 ## Global Options

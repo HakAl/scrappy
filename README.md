@@ -40,10 +40,25 @@ A framework for orchestrating LLM agents across multiple free-tier providers wit
 
 ## Quick Start
 
-### 1. Install Dependencies
+### 1. Install
 
+**Option A: Install as package (recommended)**
+```bash
+# Clone or download the project
+cd llm_agent_team
+
+# Install in development mode (editable)
+pip install -e .
+
+# Now available anywhere!
+llm-team --help
+```
+
+**Option B: Install dependencies only**
 ```bash
 pip install -r requirements.txt
+# Run from project directory
+python llm_team.py
 ```
 
 ### 2. Set API Keys
@@ -110,51 +125,54 @@ Interactive command-line interface for users without Claude subscriptions:
 
 ```bash
 # Start interactive mode
-python llm_team.py
+llm-team
 
 # Auto-explore codebase on startup (recommended)
-python llm_team.py --auto-explore
+llm-team --auto-explore
 
 # Or specify brain provider
-python llm_team.py --brain groq
+llm-team --brain groq
+
+# Works from any directory!
+cd ~/my-project && llm-team --auto-explore
 ```
 
 **One-shot commands:**
 
 ```bash
 # Quick query
-python llm_team.py query "What is machine learning?"
+llm-team query "What is machine learning?"
 
 # Query with codebase context
-python llm_team.py query "How should I fix the auth bug?" --with-context
+llm-team query "How should I fix the auth bug?" --with-context
 
 # Query with specific provider
-python llm_team.py query "Explain Docker" --provider groq
+llm-team query "Explain Docker" --provider groq
 
 # Plan a task
-python llm_team.py plan "Build REST API with authentication"
+llm-team plan "Build REST API with authentication"
 
 # Reason about a question
-python llm_team.py reason "Redis vs PostgreSQL for caching?" \
+llm-team reason "Redis vs PostgreSQL for caching?" \
   --evidence "Need sub-ms latency" \
   --evidence "Data is temporary"
 
 # Explore a codebase
-python llm_team.py explore .
-python llm_team.py explore /path/to/project --save
+llm-team explore .
+llm-team explore /path/to/project --save
 
 # View context status
-python llm_team.py context
+llm-team context
 
 # Check system status
-python llm_team.py status
+llm-team status
 
 # List providers
-python llm_team.py providers
+llm-team providers
 
 # List models
-python llm_team.py models
-python llm_team.py models cerebras
+llm-team models
+llm-team models cerebras
 ```
 
 **Interactive mode commands:**
@@ -187,11 +205,11 @@ Let the AI write code with your approval for every action:
 
 ```bash
 # One-shot command
-python llm_team.py agent "Add a health check endpoint to the Flask app"
+llm-team agent "Add a health check endpoint to the Flask app"
 
 # With options
-python llm_team.py agent "Refactor auth module" --dry-run  # Preview only
-python llm_team.py agent "Fix login bug" --max-iterations 5
+llm-team agent "Refactor auth module" --dry-run  # Preview only
+llm-team agent "Fix login bug" --max-iterations 5
 ```
 
 **Interactive mode:**
@@ -411,6 +429,20 @@ python examples/orchestrator_demo.py
 
 # Code agent demo
 python examples/agent_demo.py
+```
+
+**Using the CLI from anywhere:**
+
+```bash
+# Navigate to any project
+cd ~/projects/my-app
+
+# Start LLM Team with auto-exploration
+llm-team --auto-explore
+
+# It automatically learns about my-app!
+You: How should I structure the database models?
+Assistant: [Context-aware response based on your project]
 ```
 
 ## Adding New Providers
