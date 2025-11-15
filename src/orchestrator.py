@@ -45,6 +45,8 @@ class ResponseCache:
     - In-memory cache with optional disk persistence
     - TTL-based expiration
     - Hash-based key generation
+    - Query normalization for better cache hits
+    - Intent-based caching for semantic similarity
     - Cache statistics
     """
 
@@ -57,10 +59,13 @@ class ResponseCache:
             default_ttl_hours: Default time-to-live for cache entries in hours
         """
         self._cache: dict = {}
+        self._intent_cache: dict = {}  # Separate cache for intent-based lookups
         self._stats = {
             'hits': 0,
             'misses': 0,
-            'saves': 0
+            'saves': 0,
+            'intent_hits': 0,
+            'intent_misses': 0
         }
         self.default_ttl = timedelta(hours=default_ttl_hours)
         self.cache_file = Path(cache_file) if cache_file else None
@@ -68,6 +73,26 @@ class ResponseCache:
         # Load persistent cache if available
         if self.cache_file and self.cache_file.exists():
             self._load_cache()
+
+    def _normalize_text(self, text: str) -> str:
+        """
+        Normalize text for better cache matching.
+
+        - Converts to lowercase
+        - Collapses multiple whitespace to single space
+        - Strips leading/trailing whitespace
+        - Removes extra punctuation spacing
+        """
+        import re
+        # Convert to lowercase
+        normalized = text.lower()
+        # Collapse multiple whitespace (including newlines, tabs) to single space
+        normalized = re.sub(r'\s+', ' ', normalized)
+        # Strip leading/trailing whitespace
+        normalized = normalized.strip()
+        # Normalize punctuation spacing (remove spaces before punctuation)
+        normalized = re.sub(r'\s+([.,!?;:])', r'\1', normalized)
+        return normalized
 
     def _generate_key(
         self,
@@ -78,10 +103,44 @@ class ResponseCache:
         max_tokens: int = 1000,
         temperature: float = 0.7
     ) -> str:
-        """Generate a unique cache key from request parameters."""
+        """Generate a unique cache key from request parameters with normalization."""
+        # Normalize the prompt and system prompt for better matching
+        normalized_prompt = self._normalize_text(prompt)
+        normalized_system = self._normalize_text(system_prompt) if system_prompt else ''
+
         # Create a deterministic string representation
-        key_data = f"{provider}|{model or 'default'}|{system_prompt or ''}|{prompt}|{max_tokens}|{temperature:.2f}"
+        key_data = f"{provider}|{model or 'default'}|{normalized_system}|{normalized_prompt}|{max_tokens}|{temperature:.2f}"
         # Hash it for consistent key length
+        return hashlib.sha256(key_data.encode()).hexdigest()
+
+    def _generate_intent_key(
+        self,
+        intent: str,
+        entities: dict,
+        keywords: list,
+        provider: str,
+        model: Optional[str] = None
+    ) -> str:
+        """
+        Generate a cache key based on intent classification.
+
+        This allows similar queries with the same intent and entities to share cached responses.
+        The key focuses on:
+        - Intent type (what the user wants to do)
+        - Specific entities (file names, function names, class names, etc.)
+        - NOT general keywords (too variable between similar queries)
+        """
+        # Sort entities for deterministic key - only include specific entities
+        # These are the entities that really matter for the query
+        important_entity_types = ['file_path', 'function_name', 'class_name', 'error_type', 'package_name']
+        sorted_entities = {}
+        for key in sorted(entities.keys()):
+            if key in important_entity_types:
+                sorted_entities[key] = sorted(entities[key]) if isinstance(entities[key], list) else entities[key]
+
+        # Create intent-based key (without general keywords for broader matching)
+        import json
+        key_data = f"{provider}|{model or 'default'}|{intent}|{json.dumps(sorted_entities, sort_keys=True)}"
         return hashlib.sha256(key_data.encode()).hexdigest()
 
     def get(
@@ -157,11 +216,105 @@ class ResponseCache:
         if self.cache_file:
             self._save_cache()
 
+    def get_by_intent(
+        self,
+        intent: str,
+        entities: dict,
+        keywords: list,
+        provider: str,
+        model: Optional[str] = None
+    ) -> Optional[LLMResponse]:
+        """
+        Get cached response by intent classification.
+
+        This provides semantic matching - queries with same intent and entities
+        can share cached responses even if exact wording differs.
+
+        Args:
+            intent: The classified intent (e.g., 'code_search', 'bug_investigation')
+            entities: Extracted entities (e.g., {'file_path': ['main.py'], 'function_name': ['foo']})
+            keywords: Important keywords from the query
+            provider: LLM provider name
+            model: Model name (optional)
+
+        Returns:
+            LLMResponse if found and valid, None otherwise
+        """
+        key = self._generate_intent_key(intent, entities, keywords, provider, model)
+
+        if key not in self._intent_cache:
+            self._stats['intent_misses'] += 1
+            return None
+
+        entry = self._intent_cache[key]
+
+        # Check expiration
+        cached_at = datetime.fromisoformat(entry['cached_at'])
+        if datetime.now() - cached_at > self.default_ttl:
+            # Expired
+            del self._intent_cache[key]
+            self._stats['intent_misses'] += 1
+            return None
+
+        self._stats['intent_hits'] += 1
+
+        # Reconstruct LLMResponse
+        return LLMResponse(
+            content=entry['content'],
+            model=entry['model'],
+            provider=entry['provider'],
+            tokens_used=entry['tokens_used'],
+            input_tokens=entry.get('input_tokens', 0),
+            output_tokens=entry.get('output_tokens', 0),
+            latency_ms=0.0,  # Cached response has no latency
+            timestamp=cached_at
+        )
+
+    def put_by_intent(
+        self,
+        response: LLMResponse,
+        intent: str,
+        entities: dict,
+        keywords: list
+    ):
+        """
+        Store a response in intent-based cache.
+
+        Args:
+            response: The LLM response to cache
+            intent: The classified intent
+            entities: Extracted entities from the query
+            keywords: Important keywords from the query
+        """
+        key = self._generate_intent_key(intent, entities, keywords, response.provider, response.model)
+
+        self._intent_cache[key] = {
+            'content': response.content,
+            'model': response.model,
+            'provider': response.provider,
+            'tokens_used': response.tokens_used,
+            'input_tokens': response.input_tokens,
+            'output_tokens': response.output_tokens,
+            'cached_at': datetime.now().isoformat(),
+            'intent': intent,
+            'entities': entities,
+            'keywords': keywords
+        }
+
+        # Persist if configured
+        if self.cache_file:
+            self._save_cache()
+
     def _save_cache(self):
         """Save cache to disk."""
         try:
+            # Save both exact match and intent caches
+            cache_data = {
+                'exact': self._cache,
+                'intent': self._intent_cache
+            }
             with open(self.cache_file, 'w', encoding='utf-8') as f:
-                json.dump(self._cache, f, indent=2)
+                json.dump(cache_data, f, indent=2)
         except Exception:
             pass  # Silently fail on write errors
 
@@ -169,18 +322,29 @@ class ResponseCache:
         """Load cache from disk."""
         try:
             with open(self.cache_file, 'r', encoding='utf-8') as f:
-                self._cache = json.load(f)
+                cache_data = json.load(f)
+
+            # Handle both old format (dict) and new format (nested dicts)
+            if isinstance(cache_data, dict) and 'exact' in cache_data:
+                self._cache = cache_data.get('exact', {})
+                self._intent_cache = cache_data.get('intent', {})
+            else:
+                # Old format - treat as exact cache only
+                self._cache = cache_data
+                self._intent_cache = {}
 
             # Clean expired entries on load
             self._cleanup_expired()
         except Exception:
             self._cache = {}
+            self._intent_cache = {}
 
     def _cleanup_expired(self):
         """Remove expired entries from cache."""
         now = datetime.now()
-        expired_keys = []
 
+        # Clean exact match cache
+        expired_keys = []
         for key, entry in self._cache.items():
             try:
                 cached_at = datetime.fromisoformat(entry['cached_at'])
@@ -192,35 +356,71 @@ class ResponseCache:
         for key in expired_keys:
             del self._cache[key]
 
+        # Clean intent cache
+        expired_intent_keys = []
+        for key, entry in self._intent_cache.items():
+            try:
+                cached_at = datetime.fromisoformat(entry['cached_at'])
+                if now - cached_at > self.default_ttl:
+                    expired_intent_keys.append(key)
+            except Exception:
+                expired_intent_keys.append(key)
+
+        for key in expired_intent_keys:
+            del self._intent_cache[key]
+
     def clear(self):
         """Clear all cache entries."""
         self._cache = {}
+        self._intent_cache = {}
         if self.cache_file and self.cache_file.exists():
             self.cache_file.unlink()
-        self._stats = {'hits': 0, 'misses': 0, 'saves': 0}
+        self._stats = {
+            'hits': 0,
+            'misses': 0,
+            'saves': 0,
+            'intent_hits': 0,
+            'intent_misses': 0
+        }
 
     def get_stats(self) -> dict:
         """Get cache statistics."""
-        total_requests = self._stats['hits'] + self._stats['misses']
-        hit_rate = (self._stats['hits'] / total_requests * 100) if total_requests > 0 else 0
+        total_exact = self._stats['hits'] + self._stats['misses']
+        exact_hit_rate = (self._stats['hits'] / total_exact * 100) if total_exact > 0 else 0
+
+        total_intent = self._stats['intent_hits'] + self._stats['intent_misses']
+        intent_hit_rate = (self._stats['intent_hits'] / total_intent * 100) if total_intent > 0 else 0
 
         return {
-            'total_entries': len(self._cache),
-            'hits': self._stats['hits'],
-            'misses': self._stats['misses'],
+            'exact_cache_entries': len(self._cache),
+            'intent_cache_entries': len(self._intent_cache),
+            'exact_hits': self._stats['hits'],
+            'exact_misses': self._stats['misses'],
+            'exact_hit_rate': f"{exact_hit_rate:.1f}%",
+            'intent_hits': self._stats['intent_hits'],
+            'intent_misses': self._stats['intent_misses'],
+            'intent_hit_rate': f"{intent_hit_rate:.1f}%",
             'saves': self._stats['saves'],
-            'hit_rate': f"{hit_rate:.1f}%",
             'cache_file': str(self.cache_file) if self.cache_file else 'memory only'
         }
 
     def invalidate_provider(self, provider: str):
         """Invalidate all cache entries for a specific provider."""
+        # Invalidate from exact cache
         keys_to_remove = [
             key for key, entry in self._cache.items()
             if entry.get('provider') == provider
         ]
         for key in keys_to_remove:
             del self._cache[key]
+
+        # Invalidate from intent cache
+        intent_keys_to_remove = [
+            key for key, entry in self._intent_cache.items()
+            if entry.get('provider') == provider
+        ]
+        for key in intent_keys_to_remove:
+            del self._intent_cache[key]
 
         if self.cache_file:
             self._save_cache()
@@ -1277,6 +1477,7 @@ Be thorough but concise. Do not repeat yourself. Provide unique insights in each
         temperature: float = 0.7,
         use_context: Optional[bool] = None,
         use_cache: Optional[bool] = None,
+        intent_classification: Optional[dict] = None,
         **kwargs
     ) -> LLMResponse:
         """
@@ -1291,6 +1492,8 @@ Be thorough but concise. Do not repeat yourself. Provide unique insights in each
             temperature: Sampling temperature
             use_context: Override context_aware setting for this call
             use_cache: Override caching_enabled setting for this call
+            intent_classification: Optional intent classification result for semantic caching
+                                   Dict with keys: 'intent', 'entities', 'keywords'
             **kwargs: Provider-specific parameters
 
         Returns:
@@ -1312,6 +1515,20 @@ Be thorough but concise. Do not repeat yourself. Provide unique insights in each
 
             # Without caching (for non-deterministic tasks)
             result = orch.delegate('groq', 'Generate random story', use_cache=False)
+
+            # With intent-based caching
+            from intent_classifier import IntentClassifier
+            classifier = IntentClassifier()
+            result = classifier.classify('how does caching work?')
+            response = orch.delegate(
+                'groq',
+                'how does caching work?',
+                intent_classification={
+                    'intent': result.primary_intent.intent.value,
+                    'entities': result.entities,
+                    'keywords': result.keywords
+                }
+            )
         """
         provider = self.registry.get(provider_name)
 
@@ -1334,7 +1551,9 @@ Be thorough but concise. Do not repeat yourself. Provide unique insights in each
 
         # Check cache first (if enabled)
         cached_response = None
+        intent_cache_hit = False
         if should_use_cache:
+            # Try exact match first (with normalization)
             cached_response = self.cache.get(
                 provider_name,
                 final_prompt,
@@ -1343,6 +1562,18 @@ Be thorough but concise. Do not repeat yourself. Provide unique insights in each
                 max_tokens=max_tokens,
                 temperature=temperature
             )
+
+            # If no exact match and intent classification provided, try intent cache
+            if not cached_response and intent_classification:
+                cached_response = self.cache.get_by_intent(
+                    intent_classification.get('intent', ''),
+                    intent_classification.get('entities', {}),
+                    intent_classification.get('keywords', []),
+                    provider_name,
+                    model
+                )
+                if cached_response:
+                    intent_cache_hit = True
 
         if cached_response:
             # Track cached hit
@@ -1354,6 +1585,7 @@ Be thorough but concise. Do not repeat yourself. Provide unique insights in each
                 'latency_ms': 0.0,
                 'context_augmented': should_use_context and self.context.is_explored(),
                 'cached': True,
+                'intent_cache_hit': intent_cache_hit,
             })
             return cached_response
 
@@ -1374,6 +1606,7 @@ Be thorough but concise. Do not repeat yourself. Provide unique insights in each
 
         # Store in cache (if enabled)
         if should_use_cache:
+            # Store in exact match cache (with normalization)
             self.cache.put(
                 response,
                 final_prompt,
@@ -1382,6 +1615,15 @@ Be thorough but concise. Do not repeat yourself. Provide unique insights in each
                 max_tokens=max_tokens,
                 temperature=temperature
             )
+
+            # Also store in intent cache if classification provided
+            if intent_classification:
+                self.cache.put_by_intent(
+                    response,
+                    intent_classification.get('intent', ''),
+                    intent_classification.get('entities', {}),
+                    intent_classification.get('keywords', [])
+                )
 
         # Track in rate limit tracker (persistent)
         self.rate_tracker.record_request(
@@ -1411,6 +1653,72 @@ Be thorough but concise. Do not repeat yourself. Provide unique insights in each
         })
 
         return response
+
+    def delegate_with_intent(
+        self,
+        provider_name: str,
+        prompt: str,
+        model: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        max_tokens: int = 1000,
+        temperature: float = 0.7,
+        use_context: Optional[bool] = None,
+        use_cache: Optional[bool] = None,
+        **kwargs
+    ) -> LLMResponse:
+        """
+        Delegate a task with automatic intent classification for semantic caching.
+
+        This method automatically classifies the user prompt's intent and uses it
+        for both exact match and intent-based caching. This increases cache hit rates
+        for semantically similar queries.
+
+        Args:
+            provider_name: Name of provider ('groq', 'cohere', etc.)
+            prompt: The user prompt/task
+            model: Specific model to use (optional)
+            system_prompt: System prompt for context (optional)
+            max_tokens: Max response tokens
+            temperature: Sampling temperature
+            use_context: Override context_aware setting for this call
+            use_cache: Override caching_enabled setting for this call
+            **kwargs: Provider-specific parameters
+
+        Returns:
+            LLMResponse with result
+
+        Example:
+            # Automatically classifies intent for better caching
+            result = orch.delegate_with_intent('groq', 'how does the cache work?')
+            # Later, this similar query may hit intent cache
+            result = orch.delegate_with_intent('groq', 'explain how caching works')
+        """
+        from intent_classifier import IntentClassifier
+
+        # Classify the prompt's intent
+        classifier = IntentClassifier()
+        classification_result = classifier.classify(prompt)
+
+        # Build intent classification dict for caching
+        intent_classification = {
+            'intent': classification_result.primary_intent.intent.value,
+            'entities': classification_result.entities,
+            'keywords': classification_result.keywords
+        }
+
+        # Delegate with intent classification
+        return self.delegate(
+            provider_name=provider_name,
+            prompt=prompt,
+            model=model,
+            system_prompt=system_prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            use_context=use_context,
+            use_cache=use_cache,
+            intent_classification=intent_classification,
+            **kwargs
+        )
 
     def delegate_smart(
         self,
