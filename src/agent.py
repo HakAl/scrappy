@@ -715,16 +715,31 @@ Current task: {task}
         ]
 
         iteration = 0
+        tools_executed = []  # Track which tools were actually executed
         while iteration < max_iterations:
             iteration += 1
             print(f"\n--- Iteration {iteration}/{max_iterations} ---")
 
             # Get agent's next action (use Gemini for reasoning)
             print(f"[{self.planner}] Thinking...")
+
+            # Build the prompt with conversation history for multi-turn
+            if len(messages) == 2:
+                # First iteration: just use the task
+                user_prompt = messages[-1]['content']
+            else:
+                # Subsequent iterations: include conversation history
+                history_parts = []
+                for msg in messages[2:]:  # Skip system prompt and initial task
+                    role = msg['role'].upper()
+                    history_parts.append(f"{role}: {msg['content']}")
+                history_text = "\n\n".join(history_parts)
+                user_prompt = f"Previous conversation:\n{history_text}\n\nBased on the above, continue with the task. Remember to respond with valid JSON."
+
             response = self.orch.delegate(
                 self.planner,
-                messages[-1]['content'] if len(messages) == 2 else "Continue with the task based on the previous result.",
-                system_prompt=system_prompt if len(messages) == 2 else None,
+                user_prompt,
+                system_prompt=system_prompt,  # Always include system prompt
                 max_tokens=1500,
                 temperature=0.3,
                 use_context=False  # Context already in system prompt
@@ -740,21 +755,9 @@ Current task: {task}
 
             print(f"\nThought: {thought}")
 
-            # Check if task is complete
-            if is_complete or action == 'complete':
-                result = action_data.get('result', 'Task completed')
-                print(f"\nResult: {result}")
-                self._log_action('complete', {}, result, True)
-
-                return {
-                    'success': True,
-                    'result': result,
-                    'iterations': iteration,
-                    'audit_log': self.audit_log
-                }
-
-            # Execute tool
-            if action in self.tools:
+            # Execute tool FIRST (even if is_complete is set, we may have an action to execute)
+            action_executed = False
+            if action in self.tools and action != 'complete':
                 # Get user confirmation (unless auto_confirm)
                 if auto_confirm:
                     approved = True
@@ -766,6 +769,8 @@ Current task: {task}
                     tool_result = self.tools[action](**params)
                     print(f"Result: {tool_result[:300]}..." if len(tool_result) > 300 else f"Result: {tool_result}")
                     self._log_action(action, params, tool_result, True)
+                    tools_executed.append(action)  # Track successful execution
+                    action_executed = True
 
                     # Add result to conversation
                     messages.append({
@@ -789,7 +794,7 @@ Current task: {task}
                         'role': 'user',
                         'content': f"User denied the {action} action. Please try a different approach or explain why this action is necessary."
                     })
-            else:
+            elif action not in self.tools and action != 'complete' and action != 'error':
                 print(f"Unknown action: {action}")
                 messages.append({
                     'role': 'assistant',
@@ -799,6 +804,35 @@ Current task: {task}
                     'role': 'user',
                     'content': f"Unknown action '{action}'. Available tools: {', '.join(self.tools.keys())}"
                 })
+
+            # Check if task is complete (AFTER executing any actions)
+            if is_complete or action == 'complete':
+                # Verify that at least one meaningful action was performed
+                meaningful_actions = [t for t in tools_executed if t in ['write_file', 'run_command', 'git_commit']]
+                if not meaningful_actions and not self.dry_run:
+                    print(f"\nWarning: Agent declared completion without performing any file operations.")
+                    print("Requesting agent to actually execute the task...")
+                    if not action_executed:
+                        messages.append({
+                            'role': 'assistant',
+                            'content': response.content
+                        })
+                        messages.append({
+                            'role': 'user',
+                            'content': "You declared the task complete but haven't actually created or modified any files. Please respond with a JSON object containing an action to execute. Use the write_file tool to actually create the requested code. Example format:\n{\n  \"thought\": \"your reasoning\",\n  \"action\": \"write_file\",\n  \"parameters\": {\"path\": \"filename\", \"content\": \"code here\"}\n}"
+                        })
+                    continue
+
+                result = action_data.get('result', 'Task completed')
+                print(f"\nResult: {result}")
+                self._log_action('complete', {}, result, True)
+
+                return {
+                    'success': True,
+                    'result': result,
+                    'iterations': iteration,
+                    'audit_log': self.audit_log
+                }
 
         # Max iterations reached
         return {
