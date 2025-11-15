@@ -33,6 +33,7 @@ class CLI:
             context_aware=context_aware
         )
         self.session_start = datetime.now()
+        self.smart_mode = False  # Smart query mode (uses tools for research)
         click.echo(f"Brain: {click.style(self.orchestrator.brain, fg='green', bold=True)}")
         providers_list = ', '.join(self.orchestrator.providers.list_available())
         click.echo(f"Available providers: {click.style(providers_list, fg='cyan')}")
@@ -55,6 +56,7 @@ class CLI:
         click.echo(f"  {click.style('/plan', fg='yellow')} <task>   - Create a task plan")
         click.echo(f"  {click.style('/reason', fg='yellow')} <q>    - Reason about a question")
         click.echo(f"  {click.style('/agent', fg='yellow')} <task>  - Run code agent (with human approval)")
+        click.echo(f"  {click.style('/smart', fg='yellow')} <q>     - Research-first query (uses tools)")
         click.echo(f"  {click.style('/context', fg='yellow')}       - Manage codebase context")
         click.echo(f"  {click.style('/status', fg='yellow')}        - Show system status")
         click.echo(f"  {click.style('/quit', fg='yellow')}          - Exit the CLI")
@@ -84,19 +86,23 @@ class CLI:
                     "content": user_input
                 })
 
-                click.secho("Assistant: ", fg="blue", bold=True, nl=False)
+                # Use smart mode if enabled
+                if self.smart_mode:
+                    response = self._smart_query(user_input)
+                else:
+                    click.secho("Assistant: ", fg="blue", bold=True, nl=False)
 
-                response = self.orchestrator.delegate(
-                    self.orchestrator.brain,
-                    user_input,
-                    system_prompt="You are a helpful AI assistant. Be concise and informative."
-                )
+                    response = self.orchestrator.delegate(
+                        self.orchestrator.brain,
+                        user_input,
+                        system_prompt="You are a helpful AI assistant. Be concise and informative."
+                    )
 
-                click.echo(response.content)
-                click.secho(
-                    f"[{response.provider}/{response.model} | {response.tokens_used} tokens | {response.latency_ms:.0f}ms]",
-                    fg="cyan"
-                )
+                    click.echo(response.content)
+                    click.secho(
+                        f"[{response.provider}/{response.model} | {response.tokens_used} tokens | {response.latency_ms:.0f}ms]",
+                        fg="cyan"
+                    )
                 click.echo()
 
                 conversation_history.append({
@@ -176,6 +182,21 @@ class CLI:
             else:
                 self._run_agent(args)
 
+        elif cmd == "/smart":
+            if not args:
+                # Show smart mode status
+                status = click.style("ON", fg="green") if self.smart_mode else click.style("OFF", fg="yellow")
+                click.echo(f"Smart query mode: {status}")
+                click.echo("Usage: /smart <query> or /smart toggle")
+            elif args.lower() == "toggle":
+                self.smart_mode = not self.smart_mode
+                status = "enabled" if self.smart_mode else "disabled"
+                click.secho(f"Smart query mode {status}.", fg="green" if self.smart_mode else "yellow")
+                if self.smart_mode:
+                    click.echo("All queries will now use tools for research (higher quota usage).")
+            else:
+                self._smart_query(args)
+
         elif cmd == "/cache":
             self._manage_cache(args)
 
@@ -198,6 +219,8 @@ class CLI:
         click.echo(f"  {click.style('/plan', fg='yellow')} <task>     - Break down task into steps")
         click.echo(f"  {click.style('/reason', fg='yellow')} <q>      - Analyze question with reasoning")
         click.echo(f"  {click.style('/agent', fg='yellow')} <task>    - Run code agent to complete task")
+        click.echo(f"  {click.style('/smart', fg='yellow')} <query>   - Research-first query (uses tools)")
+        click.echo(f"  {click.style('/smart toggle', fg='yellow')}    - Toggle smart mode always-on")
         click.echo(f"  {click.style('/synthesize', fg='yellow')}      - Combine multiple provider responses")
         click.echo(f"  {click.style('/delegate', fg='yellow')} <p>    - Send prompt to specific provider")
         click.echo(f"  {click.style('/explore', fg='yellow')} [path]  - Explore and learn about a codebase")
@@ -805,6 +828,91 @@ Be concise but thorough. Focus on actionable insights."""
             click.echo("  clear      - Clear all cached responses")
             click.echo("  toggle     - Toggle caching on/off")
 
+    def _smart_query(self, query: str):
+        """Perform a smart query using tools to gather context before answering."""
+        click.secho("\n[Smart Query] Researching...", fg="cyan", bold=True)
+
+        # Create a research agent (read-only)
+        agent = CodeAgent(self.orchestrator)
+
+        # Gather context using tools based on the query
+        research_results = []
+        tools_used = 0
+
+        # Analyze query to decide what to research
+        query_lower = query.lower()
+
+        # If asking about specific files/directories
+        if any(word in query_lower for word in ['file', 'folder', 'directory', 'structure', 'what files', 'show me']):
+            click.echo("  - Checking directory structure...")
+            result = agent._tool_list_directory(".", depth=1)
+            research_results.append(f"Directory Structure:\n{result}")
+            tools_used += 1
+
+        # If asking about specific code/functions/classes
+        if any(word in query_lower for word in ['function', 'class', 'method', 'implement', 'how does', 'where is']):
+            # Try to extract keywords to search for
+            for word in query.split():
+                if len(word) > 3 and word[0].isupper():  # Likely a class/function name
+                    click.echo(f"  - Searching for '{word}'...")
+                    result = agent._tool_search_code(word, "*.py")
+                    if "No matches" not in result:
+                        research_results.append(f"Code search for '{word}':\n{result[:1000]}")
+                        tools_used += 1
+                        break
+
+        # If asking about recent changes/history
+        if any(word in query_lower for word in ['recent', 'change', 'commit', 'history', 'what changed', 'update']):
+            click.echo("  - Checking git history...")
+            result = agent._tool_git_log(n=5)
+            research_results.append(f"Recent Commits:\n{result}")
+            tools_used += 1
+
+        # If asking about specific module/component
+        keywords = ['auth', 'api', 'database', 'config', 'test', 'model', 'view', 'controller', 'service', 'util']
+        for keyword in keywords:
+            if keyword in query_lower:
+                click.echo(f"  - Searching for '{keyword}' related code...")
+                result = agent._tool_search_code(keyword, "*.py")
+                if "No matches" not in result:
+                    research_results.append(f"Code containing '{keyword}':\n{result[:1500]}")
+                    tools_used += 1
+                break
+
+        # Always include project summary if available
+        if self.orchestrator.context.summary:
+            research_results.insert(0, f"Project Summary:\n{self.orchestrator.context.summary}")
+
+        click.echo(f"  - Gathered {tools_used} research results")
+
+        # Now answer with the gathered context
+        if research_results:
+            context = "\n\n---\n\n".join(research_results)
+            prompt = f"""Based on this research about the codebase:
+
+{context}
+
+Answer this question: {query}
+
+Provide a helpful, specific answer based on the research findings."""
+        else:
+            prompt = query
+
+        click.secho("\nAssistant: ", fg="blue", bold=True, nl=False)
+        response = self.orchestrator.delegate(
+            self.orchestrator.brain,
+            prompt,
+            system_prompt="You are a helpful AI assistant with access to codebase research. Use the provided research to give specific, accurate answers."
+        )
+
+        click.echo(response.content)
+        click.secho(
+            f"[{response.provider}/{response.model} | {response.tokens_used} tokens | {response.latency_ms:.0f}ms | {tools_used} tools used]",
+            fg="cyan"
+        )
+
+        return response
+
     def _run_agent(self, task: str):
         """Run the code agent on a task with human-in-the-loop approval."""
         click.secho(f"\nCode Agent - Task: {task}", bold=True)
@@ -988,6 +1096,17 @@ def reason(ctx, question, context, evidence):
     except Exception as e:
         click.secho(f"Error: {e}", fg="red")
         sys.exit(1)
+
+
+@cli.command()
+@click.argument("query")
+@click.pass_context
+def smart(ctx, query):
+    """Perform a research-first query using tools to gather context."""
+    auto_explore = ctx.obj.get('auto_explore', False)
+    context_aware = ctx.obj.get('context_aware', True)
+    cli_instance = CLI(brain=ctx.obj.get('brain'), auto_explore=auto_explore, context_aware=context_aware)
+    cli_instance._smart_query(query)
 
 
 @cli.command()

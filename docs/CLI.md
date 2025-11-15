@@ -11,6 +11,7 @@ Complete reference for the LLM Agent Team command-line interface.
 | `llm-team plan` | Break down task into steps | [plan](#plan---create-task-plans) |
 | `llm-team reason` | Analyze with evidence | [reason](#reason---complex-reasoning) |
 | `llm-team agent` | AI writes code with approval | [agent](#agent---code-agent-with-human-approval) |
+| `llm-team smart` | Research-first query with tools | [smart](#smart---research-first-query) |
 | `llm-team explore` | Analyze codebase structure | [explore](#explore---codebase-analysis) |
 | `llm-team context` | View context status | [context](#context---view-context-status) |
 | `llm-team status` | System status | [status](#status---system-status) |
@@ -361,6 +362,74 @@ The agent has access to these tools:
 - **Dangerous command blocking**: Blocks rm -rf, del /f, etc.
 - **Content preview**: Shows file content before writing
 
+#### `smart` - Research-First Query
+
+Perform intelligent queries that automatically gather context using tools before answering:
+
+```bash
+python llm_team.py smart "Your query here"
+```
+
+**Features:**
+- Automatically analyzes your query to determine what research is needed
+- Uses tools (directory listing, code search, file reading) to gather relevant context
+- Synthesizes findings with LLM response for more accurate answers
+- Higher quota usage but more informed responses
+
+**Examples:**
+```bash
+# Find project structure
+python llm_team.py smart "What files are in this project?"
+
+# Understand specific code
+python llm_team.py smart "How does the CodeAgent class work?"
+
+# Locate functionality
+python llm_team.py smart "Where is authentication implemented?"
+```
+
+**Output:**
+```
+[Smart Query] Researching...
+  - Checking directory structure...
+  - Searching for 'CodeAgent'...
+
+[Response based on actual code inspection]
+```
+
+**Interactive Mode:**
+```
+You: /smart What files are in this project?
+[Smart Query] Researching...
+  - Checking directory structure...
+[Response based on actual directory scan]
+```
+
+**Smart Mode Toggle (Interactive Only):**
+```
+You: /smart
+Smart query mode: OFF
+Usage: /smart <query> or /smart toggle
+
+You: /smart toggle
+Smart query mode enabled.
+All queries will now use tools for research (higher quota usage).
+```
+
+**When to Use:**
+- Questions about project structure or specific files
+- Finding where functionality is implemented
+- Understanding how specific classes/functions work
+- Any query that benefits from reading actual code
+
+**Smart Mode vs Regular Query:**
+| Aspect | Regular Query | Smart Query |
+|--------|--------------|-------------|
+| Context | Uses cached summary only | Actively researches codebase |
+| Accuracy | Based on general knowledge | Based on actual code inspection |
+| Speed | Faster | Slower (tool execution) |
+| Quota Usage | Lower | Higher |
+
 #### `context` - View Context Status
 
 Show current codebase context:
@@ -423,6 +492,8 @@ When in interactive mode, use slash commands:
 | `/plan <task>` | Create a task plan |
 | `/reason <question>` | Analyze with reasoning |
 | `/agent <task>` | Run code agent with human approval |
+| `/smart <query>` | Research-first query (uses tools to gather context) |
+| `/smart toggle` | Toggle smart mode always-on |
 | `/synthesize` | Query multiple providers and synthesize |
 | `/delegate <provider> <prompt>` | Direct provider query |
 | `/explore [path]` | Explore a codebase |
