@@ -10,6 +10,13 @@ User / CLI Interface
     ▼
 AgentOrchestrator
     │
+    ├─── CodeAgent (Tool-based Code Writing)
+    │     ├─ Planner: Gemini (smart reasoning)
+    │     ├─ Executor: Cerebras (fast operations)
+    │     ├─ Tools: read_file, write_file, run_command, etc.
+    │     ├─ Human-in-the-loop approval
+    │     └─ Safety: sandboxing, audit logging, git checkpoints
+    │
     ├─── CodebaseContext (Auto-Explore & Cache)
     │     └─ Project analysis, file index, summary generation
     │
@@ -31,7 +38,35 @@ AgentOrchestrator
 
 ## Key Innovations
 
-### 1. Swappable Orchestrator Brain
+### 1. Code Agent with Human-in-the-Loop
+
+The system includes an AI code agent that can read, write, and modify code with explicit human approval for every action:
+
+```python
+from src.agent import CodeAgent
+
+# Create agent with hybrid model approach
+agent = CodeAgent(orch)
+# Uses Gemini for planning (smart), Cerebras for execution (fast)
+
+# Run task with human approval at each step
+result = agent.run("Add input validation to API endpoints")
+
+# Every file operation requires explicit approval:
+# Agent wants to: read_file
+# Parameters: {"path": "src/api.py"}
+# Allow? [y/N]: y
+```
+
+**Key Safety Features:**
+- Human-in-the-loop approval for every action
+- Git checkpoint before changes (easy rollback)
+- Path sandboxing (can't escape project directory)
+- Dangerous command blocking (rm -rf, del /f, etc.)
+- Complete audit trail with timestamps
+- Dry-run mode for previewing
+
+### 2. Swappable Orchestrator Brain
 
 Unlike traditional setups that require a specific "master" LLM (like Claude Code), this system allows any registered provider to act as the orchestrator brain:
 
@@ -49,7 +84,7 @@ answer = orch.reason("Which database for this use case?")
 summary = orch.synthesize([result1, result2])
 ```
 
-### 2. Automatic Context Awareness
+### 3. Automatic Context Awareness
 
 The orchestrator can automatically learn about your codebase and inject relevant context into prompts:
 
@@ -121,7 +156,21 @@ Automatic project understanding:
 - Caches results to `.llm_team_context.json`
 - Augments prompts with relevant context
 
-### 4. Orchestrator (`src/orchestrator.py`)
+### 4. Code Agent (`src/agent.py`)
+
+AI-powered code writing with safety:
+- **Hybrid model approach**: Gemini for planning/reasoning, Cerebras for fast operations
+- **Tool-based execution**: read_file, write_file, list_files, run_command, search_code
+- **Human-in-the-loop**: Every action requires explicit approval
+- **Safety features**:
+  - Path sandboxing (restricted to project directory)
+  - Dangerous command blocking
+  - Git checkpoint creation/rollback
+  - Complete audit logging
+  - Dry-run mode for previewing
+- **Context-aware**: Uses project exploration for informed decisions
+
+### 5. Orchestrator (`src/orchestrator.py`)
 
 Central coordinator that:
 - Registers available providers automatically
@@ -132,11 +181,12 @@ Central coordinator that:
 - **Augments prompts with context** when enabled
 - Tracks usage across all providers (including context usage)
 
-### 5. CLI Interface (`src/cli.py`)
+### 6. CLI Interface (`src/cli.py`)
 
 Full-featured command-line interface:
 - Interactive chat mode with slash commands
-- One-shot commands (query, plan, reason, explore)
+- One-shot commands (query, plan, reason, explore, **agent**)
+- **Code agent** with human approval workflow
 - Provider management (switch brain, list models)
 - Context management (explore, refresh, clear, toggle)
 - Usage monitoring and status display
@@ -230,6 +280,44 @@ summary = orch.synthesize(
     [result1, result2, result3],
     "Identify common themes and key differences:"
 )
+```
+
+### Pattern 6: Code Agent with Human Approval
+
+```python
+from src.agent import CodeAgent, create_git_checkpoint
+
+# Setup
+orch = AgentOrchestrator(auto_explore=True)
+agent = CodeAgent(orch)
+
+# Create safety checkpoint
+checkpoint = create_git_checkpoint(".")
+
+# Run agent (human approves each action)
+result = agent.run(
+    task="Add error handling to all API endpoints",
+    max_iterations=10,
+    auto_confirm=False  # Human must approve each action
+)
+
+if result['success']:
+    print(f"Completed in {result['iterations']} iterations")
+    # Review audit log
+    for entry in result['audit_log']:
+        print(f"  {entry['action']} - {entry['approved']}")
+else:
+    # Rollback if needed
+    rollback_to_checkpoint(checkpoint)
+```
+
+**CLI Usage:**
+```bash
+# One-shot
+python llm_team.py agent "Add feature X"
+
+# Interactive
+You: /agent Add input validation
 ```
 
 ## Adding New Providers
@@ -334,6 +422,10 @@ The system handles:
 7. **Embedding-based context** - Use Cohere embeddings for semantic relevance
 8. **Conversation memory** - Persist chat history across sessions
 9. **Smart context selection** - Only inject relevant parts of context
+10. **Agent memory** - Learn from previous successful actions
+11. **Agent tool expansion** - Add git, testing, debugging tools
+12. **Multi-file agent operations** - Coordinate changes across multiple files
+13. **Agent rollback improvements** - Granular undo for specific actions
 
 ## Testing
 
@@ -360,6 +452,7 @@ src/
 ├── __init__.py
 ├── orchestrator.py           # Main orchestrator with swappable brain
 ├── context.py                # Codebase context management
+├── agent.py                  # Code agent with human-in-the-loop
 ├── cli.py                    # Click-based CLI interface
 └── providers/
     ├── __init__.py           # Provider exports
@@ -377,10 +470,12 @@ docs/
 examples/
 ├── basic_usage.py           # Basic orchestrator usage
 ├── orchestrator_demo.py     # Full orchestrator features
-└── test_orchestrator.py     # Swappable brain testing
+├── agent_demo.py            # Code agent safety features
+└── context_aware_demo.py    # Context-aware development
 
 llm_team.py                   # CLI entry point
 .llm_team_context.json        # Cached codebase context (auto-generated)
+.agent_audit.json             # Agent action audit log (auto-generated)
 ```
 
 ## Context Caching

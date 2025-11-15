@@ -6,9 +6,9 @@ Complete reference for the LLM Agent Team command-line interface.
 
 **Get API Keys**
 
-[Cerebras](https://cloud.cerebras.ai/platform)
-[Groq](https://console.groq.com/)
-[Gemini](https://aistudio.google.com/)
+[Cerebras](https://cloud.cerebras.ai/platform), 
+[Groq](https://console.groq.com/), 
+[Gemini](https://aistudio.google.com/), 
 [Cohere](https://dashboard.cohere.com/)
 
 
@@ -214,6 +214,119 @@ python llm_team.py explore . --save
 - Entry points and dependencies
 - Potential issues or improvements
 
+#### `agent` - Code Agent with Human Approval
+
+Run an AI code agent that can read, write, and modify files with your explicit approval:
+
+```bash
+python llm_team.py agent "Your task description" [OPTIONS]
+```
+
+**Options:**
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--dry-run` | `-d` | false | Preview without making actual changes |
+| `--no-checkpoint` | | false | Skip git checkpoint creation |
+| `--auto-confirm` | | false | Skip approval prompts (use with caution) |
+| `--max-iterations` | `-m` | 10 | Maximum agent iterations |
+
+**Examples:**
+```bash
+# Basic task
+python llm_team.py agent "Add a health check endpoint to the Flask app"
+
+# Preview changes without executing
+python llm_team.py agent "Refactor the auth module" --dry-run
+
+# Limit iterations
+python llm_team.py agent "Fix the login bug" --max-iterations 5
+
+# Skip git checkpoint (not recommended)
+python llm_team.py agent "Update docstrings" --no-checkpoint
+
+# Auto-confirm (dangerous - use only for trusted tasks)
+python llm_team.py agent "Format all Python files" --auto-confirm
+```
+
+**Output:**
+```
+Code Agent - Task: Add a health check endpoint
+------------------------------------------------------------
+Creating git checkpoint...
+Checkpoint created: a1b2c3d4
+
+Agent Configuration:
+  Planner (smart tasks): gemini
+  Executor (fast tasks): cerebras
+  Project root: /path/to/project
+  Max iterations: 10
+
+--- Iteration 1/10 ---
+[gemini] Thinking...
+
+Thought: I need to understand the current API structure first
+
+Agent wants to: read_file
+Parameters: {
+  "path": "src/app.py"
+}
+Allow? [y/N]: y
+Executing: read_file
+Result: [file contents...]
+
+--- Iteration 2/10 ---
+Thought: Now I'll add the health check endpoint
+
+Agent wants to: write_file
+Parameters: {
+  "path": "src/app.py",
+  "content": "..."
+}
+
+Content preview:
+@app.route('/health')
+def health_check():
+    return {'status': 'healthy', 'timestamp': datetime.now().isoformat()}
+...
+
+Allow? [y/N]: y
+Executing: write_file
+Result: Successfully wrote 1523 characters to src/app.py
+
+--- Iteration 3/10 ---
+Thought: Task completed successfully
+
+============================================================
+Task Completed Successfully!
+Result: Added /health endpoint that returns JSON status
+Iterations: 3
+
+Audit Log:
+  [2025-01-15T10:30:45] read_file - Approved
+  [2025-01-15T10:31:12] write_file - Approved
+  [2025-01-15T10:31:45] complete - Approved
+
+Audit log saved to: .agent_audit.json
+
+To rollback changes: git reset --hard a1b2c3d4
+```
+
+**Available Tools:**
+The agent has access to these tools:
+- `read_file(path)` - Read file contents
+- `write_file(path, content)` - Write to a file
+- `list_files(directory, pattern)` - List files in directory
+- `run_command(command)` - Execute shell command
+- `search_code(pattern, file_pattern)` - Search for code patterns
+
+**Safety Features:**
+- **Human-in-the-loop**: Every file operation requires your approval
+- **Git checkpoint**: Automatic backup before changes (easy rollback)
+- **Sandboxing**: All paths restricted to project directory
+- **Audit logging**: Complete trail of all actions
+- **Dangerous command blocking**: Blocks rm -rf, del /f, etc.
+- **Content preview**: Shows file content before writing
+
 #### `context` - View Context Status
 
 Show current codebase context:
@@ -275,6 +388,7 @@ When in interactive mode, use slash commands:
 |---------|-------------|
 | `/plan <task>` | Create a task plan |
 | `/reason <question>` | Analyze with reasoning |
+| `/agent <task>` | Run code agent with human approval |
 | `/synthesize` | Query multiple providers and synthesize |
 | `/delegate <provider> <prompt>` | Direct provider query |
 | `/explore [path]` | Explore a codebase |
@@ -457,6 +571,81 @@ python llm_team.py reason "Monolith vs microservices?" \
   --evidence "Expecting rapid growth"
 ```
 
+### Code Agent Workflow
+
+Let the AI write code with your approval:
+
+```
+You: /agent Add input validation to the user registration endpoint
+
+Code Agent - Task: Add input validation...
+------------------------------------------------------------
+Run in dry-run mode? [y/N]: n
+Create git checkpoint before running? [Y/n]: y
+Checkpoint created: f8e7d6c5
+
+Agent Configuration:
+  Planner (smart tasks): gemini
+  Executor (fast tasks): cerebras
+  Project root: /path/to/project
+
+Start agent? [Y/n]: y
+
+--- Iteration 1/10 ---
+[gemini] Thinking...
+
+Thought: First, I need to examine the current registration endpoint
+
+Agent wants to: read_file
+Parameters: {"path": "src/routes/auth.py"}
+Allow? [y/N]: y
+Executing: read_file
+Result: [current file contents...]
+
+--- Iteration 2/10 ---
+Thought: I'll add Pydantic validation for the user registration
+
+Agent wants to: write_file
+Parameters: {"path": "src/routes/auth.py", "content": "..."}
+
+Content preview:
+from pydantic import BaseModel, EmailStr, validator
+
+class UserRegistration(BaseModel):
+    email: EmailStr
+    password: str
+
+    @validator('password')
+    def password_strength(cls, v):
+        if len(v) < 8:
+            raise ValueError('Password must be at least 8 characters')
+        return v
+...
+
+Allow? [y/N]: y
+Executing: write_file
+Result: Successfully wrote 2847 characters to src/routes/auth.py
+
+============================================================
+Task Completed Successfully!
+Result: Added Pydantic validation with email and password checks
+Iterations: 2
+
+Save audit log to file? [y/N]: y
+Saved to: .agent_audit.json
+
+Rollback to checkpoint? [y/N]: n
+```
+
+**One-shot agent:**
+```bash
+# Dry run first to see what would happen
+python llm_team.py agent "Add logging to all API endpoints" --dry-run
+
+# Then run for real
+python llm_team.py agent "Add logging to all API endpoints"
+```
+
 ## Tips and Best Practices
 
 ### 1. Use Auto-Explore for New Projects
@@ -493,6 +682,27 @@ You: /brain cerebras  # For speed
 You: /context refresh
 ```
 Re-scan after adding new modules or restructuring.
+
+### 7. Use Code Agent for Complex Tasks
+```bash
+# Always dry-run first for safety
+python llm_team.py agent "Refactor auth module" --dry-run
+
+# Use git checkpoint (default) for easy rollback
+python llm_team.py agent "Add new feature"
+
+# Review audit logs after completion
+cat .agent_audit.json
+```
+
+### 8. Combine Agent with Context
+```bash
+# Explore first so agent understands project
+python llm_team.py --auto-explore
+
+# Then agent has full context
+You: /agent Add rate limiting middleware
+```
 
 ## Error Handling
 

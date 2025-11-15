@@ -2,28 +2,21 @@
 
 A framework for orchestrating LLM agents across multiple free-tier providers with **swappable orchestrator brain** and **automatic codebase context awareness**.
 
->For Users Without Claude Subscription: Yes, Useful
+>"For Users Without Claude Subscription: Yes, Useful"
 >
->  Where it shines:
->
->  1. 23K free requests/day - Real value for development without subscription costs
->  2. Context augmentation - Makes weaker models more effective by injecting project knowledge they'd otherwise lack
->  3. Structured workflows - /plan and /reason provide organized thinking patterns
->  4. Redundancy - Multiple providers mean no single point of failure
->  5. Interactive exploration - Good for learning codebases, brainstorming, getting quick answers
->
->  Better Use Cases
->
->  The team would be more useful if:
->  - Batch processing - Run overnight analysis jobs
->  - CI/CD integration - Automated code review, documentation generation
->  - RAG pipeline - Use Cohere embeddings for semantic search
->  - Human-in-the-loop - Interactive assistant for developers
+>Where it shines:
+
+  1. 23K free requests/day - Real value for development without subscription costs
+  2. Context augmentation - Makes weaker models more effective by injecting project knowledge they'd otherwise lack
+  3. Structured workflows - /plan and /reason provide organized thinking patterns
+  4. Redundancy - Multiple providers mean no single point of failure
+  5. Interactive exploration - Good for learning codebases, brainstorming, getting quick answers
 
 
 ## Features
 
 - **23,000+ free requests/day** across providers
+- **Code Agent** - AI writes code with human-in-the-loop approval (uses Gemini for smart tasks)
 - **Swappable orchestrator** - use any provider as the "brain" (no Claude subscription required)
 - **Context-aware prompts** - automatically augments queries with project knowledge
 - **Auto-exploration** - learns your codebase structure and purpose
@@ -32,6 +25,7 @@ A framework for orchestrating LLM agents across multiple free-tier providers wit
 - **Multi-provider routing** - intelligent task delegation
 - **Interactive CLI** - full-featured command-line interface with Click
 - **Persistent caching** - context survives session restarts
+- **Safety features** - Git checkpoints, audit logging, sandboxing, dry-run mode
 
 ## Providers
 
@@ -167,6 +161,7 @@ python llm_team.py models cerebras
 You: /help              # Show all commands
 You: /plan <task>       # Create task plan
 You: /reason <question> # Analyze with reasoning
+You: /agent <task>      # Run code agent with human approval
 You: /explore [path]    # Explore codebase
 You: /context           # View/manage context
 You: /context explore   # Explore current project
@@ -181,7 +176,87 @@ You: /delegate          # Direct provider delegation
 You: /quit              # Exit
 ```
 
-### 6. Context-Aware Development
+### 6. Code Agent (AI Writes Code)
+
+Let the AI write code with your approval for every action:
+
+```bash
+# One-shot command
+python llm_team.py agent "Add a health check endpoint to the Flask app"
+
+# With options
+python llm_team.py agent "Refactor auth module" --dry-run  # Preview only
+python llm_team.py agent "Fix login bug" --max-iterations 5
+```
+
+**Interactive mode:**
+```
+You: /agent Add rate limiting to the API
+
+Code Agent - Task: Add rate limiting to the API
+------------------------------------------------------------
+Run in dry-run mode? [y/N]: n
+Create git checkpoint before running? [Y/n]: y
+Checkpoint created: a1b2c3d4
+
+Agent Configuration:
+  Planner (smart tasks): gemini
+  Executor (fast tasks): cerebras
+  Project root: /path/to/project
+
+--- Iteration 1/10 ---
+[gemini] Thinking...
+
+Thought: I need to first understand the current API structure
+
+Agent wants to: read_file
+Parameters: {"path": "src/api.py"}
+Allow? [y/N]: y
+Executing: read_file
+Result: [file contents...]
+
+--- Iteration 2/10 ---
+Thought: Now I'll add rate limiting using flask-limiter
+
+Agent wants to: write_file
+Parameters: {"path": "src/api.py", "content": "..."}
+
+Content preview:
+from flask_limiter import Limiter
+...
+
+Allow? [y/N]: y
+Executing: write_file
+Result: Successfully wrote 2341 characters to src/api.py
+
+--- Iteration 3/10 ---
+Thought: Task completed successfully
+
+============================================================
+Task Completed Successfully!
+Result: Added rate limiting decorator using flask-limiter
+Iterations: 3
+
+Audit Log:
+  [2025-01-15T10:30:45] read_file - Approved
+  [2025-01-15T10:31:12] write_file - Approved
+  [2025-01-15T10:31:45] complete - Approved
+
+Save audit log to file? [y/N]: y
+Saved to: .agent_audit.json
+
+Rollback to checkpoint? [y/N]: n
+```
+
+**Key safety features:**
+- Human approval for every file operation
+- Git checkpoint before changes (easy rollback)
+- Sandboxed to project directory
+- Audit logging of all actions
+- Dry-run mode for previewing
+- Dangerous command blocking
+
+### 7. Context-Aware Development
 
 The orchestrator automatically learns about your codebase:
 
@@ -223,10 +298,16 @@ result = orch.delegate('groq', 'What is 2+2?', use_context=False)
 ## Architecture
 
 ```
-User (or Swappable Brain)
+User
     │
     ▼
 AgentOrchestrator
+    │
+    ├─── CodeAgent (Tool-based execution)
+    │     ├─ Planner: Gemini (smart tasks)
+    │     ├─ Executor: Cerebras (fast tasks)
+    │     ├─ Tools: read_file, write_file, run_command, etc.
+    │     └─ Human-in-the-loop approval
     │
     ├─── Brain Provider (Cerebras/Groq/Gemini)
     │     └─ Planning, reasoning, synthesis
@@ -293,6 +374,27 @@ orch.delegate_smart(prompt, task_type='quality')   # → Cerebras 70b
 orch.delegate_smart(prompt, task_type='reasoning') # → Brain
 ```
 
+### Code Agent
+
+```python
+from src.agent import CodeAgent
+
+# Create agent with hybrid model approach
+agent = CodeAgent(orch)
+# Uses Gemini for planning, Cerebras for fast tasks
+
+# Run a task with human approval
+result = agent.run("Add input validation to the API")
+
+# Check results
+print(f"Success: {result['success']}")
+print(f"Iterations: {result['iterations']}")
+print(f"Audit log: {result['audit_log']}")
+
+# Save audit trail
+agent.save_audit_log(".agent_audit.json")
+```
+
 ## Examples
 
 ```bash
@@ -300,7 +402,10 @@ orch.delegate_smart(prompt, task_type='reasoning') # → Brain
 python examples/basic_usage.py
 
 # Test swappable orchestrator
-python test_orchestrator.py
+python examples/orchestrator_demo.py
+
+# Code agent demo
+python examples/agent_demo.py
 ```
 
 ## Adding New Providers
@@ -341,10 +446,12 @@ MIT
 - Swappable orchestrator brain
 - **Context-aware prompts** with codebase exploration
 - **Interactive CLI** with Click
+- **Code Agent** with human-in-the-loop approval
 - Task planning and reasoning (structured JSON output)
 - Usage tracking with context tracking
 - Auto-fallback (Gemini)
 - **Persistent context caching**
+- **Safety features**: Git checkpoints, audit logging, sandboxing
 
 **Future work**:
 - Response caching
@@ -353,3 +460,4 @@ MIT
 - More provider integrations
 - Embedding-based context relevance
 - Conversation memory
+- Agent memory and learning

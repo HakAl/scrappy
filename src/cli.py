@@ -14,9 +14,11 @@ from typing import Optional
 
 try:
     from .orchestrator import AgentOrchestrator
+    from .agent import CodeAgent, create_git_checkpoint, rollback_to_checkpoint
 except ImportError:
     # Allow running as script
     from orchestrator import AgentOrchestrator
+    from agent import CodeAgent, create_git_checkpoint, rollback_to_checkpoint
 
 
 class CLI:
@@ -57,6 +59,7 @@ class CLI:
         click.echo("  /usage         - Show usage statistics")
         click.echo("  /quit or /exit - Exit the CLI")
         click.echo("  /context       - Manage codebase context")
+        click.echo("  /agent <task>  - Run code agent (with human approval)")
         click.echo("  (any text)     - Chat with current brain")
         click.echo("=" * 60)
         click.echo()
@@ -169,6 +172,12 @@ class CLI:
         elif cmd == "/context":
             self._manage_context(args)
 
+        elif cmd == "/agent":
+            if not args:
+                click.echo("Usage: /agent <task description>")
+            else:
+                self._run_agent(args)
+
         else:
             click.secho(f"Unknown command: {cmd}", fg="yellow")
             click.echo("Type /help for available commands.")
@@ -187,6 +196,7 @@ class CLI:
         click.secho("Task Operations:", bold=True)
         click.echo("  /plan <task>     - Break down task into steps")
         click.echo("  /reason <q>      - Analyze question with reasoning")
+        click.echo("  /agent <task>    - Run code agent to complete task")
         click.echo("  /synthesize      - Combine multiple provider responses")
         click.echo("  /delegate <p>    - Send prompt to specific provider")
         click.echo("  /explore [path]  - Explore and learn about a codebase")
@@ -745,6 +755,79 @@ Be concise but thorough. Focus on actionable insights."""
             click.echo("  clear      - Clear cached context")
             click.echo("  toggle     - Toggle context-aware prompts")
 
+    def _run_agent(self, task: str):
+        """Run the code agent on a task with human-in-the-loop approval."""
+        click.secho(f"\nCode Agent - Task: {task}", bold=True)
+        click.echo("-" * 60)
+
+        # Safety options
+        dry_run = click.confirm("Run in dry-run mode? (no actual changes)", default=False)
+        create_checkpoint = click.confirm("Create git checkpoint before running?", default=True)
+
+        checkpoint_hash = None
+        if create_checkpoint:
+            click.echo("Creating git checkpoint...")
+            checkpoint_hash = create_git_checkpoint(str(self.orchestrator.context.project_path))
+            if checkpoint_hash:
+                click.secho(f"Checkpoint created: {checkpoint_hash[:8]}", fg="green")
+            else:
+                click.secho("Could not create checkpoint (not a git repo?)", fg="yellow")
+
+        # Create agent
+        agent = CodeAgent(self.orchestrator)
+        agent.dry_run = dry_run
+
+        # Show agent configuration
+        click.echo(f"\nAgent Configuration:")
+        click.echo(f"  Planner (smart tasks): {agent.planner}")
+        click.echo(f"  Executor (fast tasks): {agent.executor}")
+        click.echo(f"  Project root: {agent.project_root}")
+        if dry_run:
+            click.secho("  Mode: DRY RUN (no actual changes)", fg="yellow")
+        click.echo()
+
+        if not click.confirm("Start agent?", default=True):
+            click.echo("Agent cancelled.")
+            return
+
+        # Run agent
+        try:
+            result = agent.run(task)
+
+            click.echo("\n" + "=" * 60)
+            if result['success']:
+                click.secho("Task Completed Successfully!", fg="green", bold=True)
+            else:
+                click.secho("Task Did Not Complete", fg="yellow", bold=True)
+
+            click.echo(f"Result: {result['result']}")
+            click.echo(f"Iterations: {result['iterations']}")
+
+            # Show audit log summary
+            if result['audit_log']:
+                click.secho("\nAudit Log:", bold=True)
+                for entry in result['audit_log']:
+                    approved = click.style("Approved", fg="green") if entry['approved'] else click.style("Denied", fg="red")
+                    click.echo(f"  [{entry['timestamp'][:19]}] {entry['action']} - {approved}")
+
+            # Offer to save audit log
+            if click.confirm("\nSave audit log to file?", default=False):
+                log_path = agent.save_audit_log()
+                click.secho(f"Saved to: {log_path}", fg="green")
+
+            # Offer rollback if checkpoint was created
+            if checkpoint_hash and not dry_run:
+                if click.confirm("\nRollback to checkpoint?", default=False):
+                    if rollback_to_checkpoint(checkpoint_hash, str(agent.project_root)):
+                        click.secho(f"Rolled back to {checkpoint_hash[:8]}", fg="green")
+                    else:
+                        click.secho("Rollback failed", fg="red")
+
+        except KeyboardInterrupt:
+            click.echo("\n\nAgent interrupted by user.")
+        except Exception as e:
+            click.secho(f"\nAgent error: {e}", fg="red")
+
 
 # Global CLI instance for commands
 pass_cli = click.make_pass_decorator(CLI, ensure=True)
@@ -966,6 +1049,92 @@ def explore(ctx, path, save):
             f.write(f"Generated: {datetime.now().isoformat()}\n\n")
             f.write(summary)
         click.secho(f"\nSaved to: {summary_file}", fg="green")
+
+
+@cli.command()
+@click.argument("task")
+@click.option("--dry-run", "-d", is_flag=True, help="Run in dry-run mode (no actual changes)")
+@click.option("--no-checkpoint", is_flag=True, help="Skip git checkpoint creation")
+@click.option("--auto-confirm", is_flag=True, help="Auto-confirm all actions (use with caution)")
+@click.option("--max-iterations", "-m", default=10, type=int, help="Maximum agent iterations")
+@click.pass_context
+def agent(ctx, task, dry_run, no_checkpoint, auto_confirm, max_iterations):
+    """Run code agent to complete a task with human approval.
+
+    The agent uses Gemini for planning/code generation (smart tasks)
+    and Cerebras for quick operations. All file modifications require
+    your explicit approval unless --auto-confirm is used.
+
+    Example:
+        python llm_team.py agent "Add a health check endpoint to the Flask app"
+    """
+    auto_explore = ctx.obj.get('auto_explore', False)
+    context_aware = ctx.obj.get('context_aware', True)
+    cli_instance = CLI(brain=ctx.obj.get('brain'), auto_explore=auto_explore, context_aware=context_aware)
+
+    click.secho(f"\nCode Agent - Task: {task}", bold=True)
+    click.echo("-" * 60)
+
+    # Create checkpoint if requested
+    checkpoint_hash = None
+    if not no_checkpoint:
+        click.echo("Creating git checkpoint...")
+        checkpoint_hash = create_git_checkpoint(str(cli_instance.orchestrator.context.project_path))
+        if checkpoint_hash:
+            click.secho(f"Checkpoint created: {checkpoint_hash[:8]}", fg="green")
+        else:
+            click.secho("Could not create checkpoint (not a git repo?)", fg="yellow")
+
+    # Create agent
+    code_agent = CodeAgent(cli_instance.orchestrator)
+    code_agent.dry_run = dry_run
+
+    # Show agent configuration
+    click.echo(f"\nAgent Configuration:")
+    click.echo(f"  Planner (smart tasks): {code_agent.planner}")
+    click.echo(f"  Executor (fast tasks): {code_agent.executor}")
+    click.echo(f"  Project root: {code_agent.project_root}")
+    click.echo(f"  Max iterations: {max_iterations}")
+    if dry_run:
+        click.secho("  Mode: DRY RUN (no actual changes)", fg="yellow")
+    if auto_confirm:
+        click.secho("  WARNING: Auto-confirm enabled - no approval prompts", fg="red", bold=True)
+    click.echo()
+
+    # Run agent
+    try:
+        result = code_agent.run(task, max_iterations=max_iterations, auto_confirm=auto_confirm)
+
+        click.echo("\n" + "=" * 60)
+        if result['success']:
+            click.secho("Task Completed Successfully!", fg="green", bold=True)
+        else:
+            click.secho("Task Did Not Complete", fg="yellow", bold=True)
+
+        click.echo(f"Result: {result['result']}")
+        click.echo(f"Iterations: {result['iterations']}")
+
+        # Show audit log summary
+        if result['audit_log']:
+            click.secho("\nAudit Log:", bold=True)
+            for entry in result['audit_log']:
+                approved = click.style("Approved", fg="green") if entry['approved'] else click.style("Denied", fg="red")
+                click.echo(f"  [{entry['timestamp'][:19]}] {entry['action']} - {approved}")
+
+        # Save audit log
+        log_path = code_agent.save_audit_log()
+        click.secho(f"\nAudit log saved to: {log_path}", fg="cyan")
+
+        # Show rollback option
+        if checkpoint_hash and not dry_run:
+            click.echo(f"\nTo rollback changes: git reset --hard {checkpoint_hash}")
+
+    except KeyboardInterrupt:
+        click.echo("\n\nAgent interrupted by user.")
+        sys.exit(1)
+    except Exception as e:
+        click.secho(f"\nAgent error: {e}", fg="red")
+        sys.exit(1)
 
 
 def main():
