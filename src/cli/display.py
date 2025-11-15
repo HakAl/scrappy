@@ -155,8 +155,10 @@ class CLIDisplay:
         if 'cache_stats' in report:
             cache_stats = report['cache_stats']
             click.secho("\nCache:", bold=True)
-            click.echo(f"  Hit Rate: {cache_stats['hit_rate']}")
-            click.echo(f"  Entries: {cache_stats['total_entries']}")
+            click.echo(f"  Exact Hit Rate: {cache_stats.get('exact_hit_rate', 'N/A')}")
+            click.echo(f"  Intent Hit Rate: {cache_stats.get('intent_hit_rate', 'N/A')}")
+            total_entries = cache_stats.get('exact_cache_entries', 0) + cache_stats.get('intent_cache_entries', 0)
+            click.echo(f"  Entries: {total_entries}")
 
     def list_models(self, provider_name: str = ""):
         """List available models."""
