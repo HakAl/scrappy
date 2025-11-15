@@ -8,6 +8,13 @@ from datetime import datetime
 from pathlib import Path
 import json
 
+try:
+    import aiofiles
+    AIOFILES_AVAILABLE = True
+except ImportError:
+    AIOFILES_AVAILABLE = False
+    aiofiles = None
+
 from .memory import WorkingMemory
 
 

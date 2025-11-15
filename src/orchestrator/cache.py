@@ -12,6 +12,13 @@ import hashlib
 import re
 
 try:
+    import aiofiles
+    AIOFILES_AVAILABLE = True
+except ImportError:
+    AIOFILES_AVAILABLE = False
+    aiofiles = None
+
+try:
     from ..providers import LLMResponse
 except ImportError:
     from providers import LLMResponse
@@ -194,6 +201,34 @@ class ResponseCache:
         if self.cache_file:
             self._save_cache()
 
+    async def put_async(
+        self,
+        response: LLMResponse,
+        prompt: str,
+        model: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        max_tokens: int = 1000,
+        temperature: float = 0.7
+    ):
+        """Store a response in cache asynchronously."""
+        key = self._generate_key(response.provider, prompt, model, system_prompt, max_tokens, temperature)
+
+        self._cache[key] = {
+            'content': response.content,
+            'model': response.model,
+            'provider': response.provider,
+            'tokens_used': response.tokens_used,
+            'input_tokens': response.input_tokens,
+            'output_tokens': response.output_tokens,
+            'cached_at': datetime.now().isoformat()
+        }
+
+        self._stats['saves'] += 1
+
+        # Persist if configured (non-blocking)
+        if self.cache_file:
+            await self._save_cache_async()
+
     def get_by_intent(
         self,
         intent: str,
@@ -283,6 +318,41 @@ class ResponseCache:
         if self.cache_file:
             self._save_cache()
 
+    async def put_by_intent_async(
+        self,
+        response: LLMResponse,
+        intent: str,
+        entities: dict,
+        keywords: list
+    ):
+        """
+        Store a response in intent-based cache asynchronously.
+
+        Args:
+            response: The LLM response to cache
+            intent: The classified intent
+            entities: Extracted entities from the query
+            keywords: Important keywords from the query
+        """
+        key = self._generate_intent_key(intent, entities, keywords, response.provider, response.model)
+
+        self._intent_cache[key] = {
+            'content': response.content,
+            'model': response.model,
+            'provider': response.provider,
+            'tokens_used': response.tokens_used,
+            'input_tokens': response.input_tokens,
+            'output_tokens': response.output_tokens,
+            'cached_at': datetime.now().isoformat(),
+            'intent': intent,
+            'entities': entities,
+            'keywords': keywords
+        }
+
+        # Persist if configured (non-blocking)
+        if self.cache_file:
+            await self._save_cache_async()
+
     def _save_cache(self):
         """Save cache to disk."""
         try:
@@ -296,11 +366,56 @@ class ResponseCache:
         except Exception:
             pass  # Silently fail on write errors
 
+    async def _save_cache_async(self):
+        """Save cache to disk asynchronously."""
+        if not AIOFILES_AVAILABLE:
+            # Fallback to sync version
+            self._save_cache()
+            return
+
+        try:
+            # Save both exact match and intent caches
+            cache_data = {
+                'exact': self._cache,
+                'intent': self._intent_cache
+            }
+            async with aiofiles.open(self.cache_file, 'w', encoding='utf-8') as f:
+                await f.write(json.dumps(cache_data, indent=2))
+        except Exception:
+            pass  # Silently fail on write errors
+
     def _load_cache(self):
         """Load cache from disk."""
         try:
             with open(self.cache_file, 'r', encoding='utf-8') as f:
                 cache_data = json.load(f)
+
+            # Handle both old format (dict) and new format (nested dicts)
+            if isinstance(cache_data, dict) and 'exact' in cache_data:
+                self._cache = cache_data.get('exact', {})
+                self._intent_cache = cache_data.get('intent', {})
+            else:
+                # Old format - treat as exact cache only
+                self._cache = cache_data
+                self._intent_cache = {}
+
+            # Clean expired entries on load
+            self._cleanup_expired()
+        except Exception:
+            self._cache = {}
+            self._intent_cache = {}
+
+    async def _load_cache_async(self):
+        """Load cache from disk asynchronously."""
+        if not AIOFILES_AVAILABLE:
+            # Fallback to sync version
+            self._load_cache()
+            return
+
+        try:
+            async with aiofiles.open(self.cache_file, 'r', encoding='utf-8') as f:
+                content = await f.read()
+                cache_data = json.loads(content)
 
             # Handle both old format (dict) and new format (nested dicts)
             if isinstance(cache_data, dict) and 'exact' in cache_data:

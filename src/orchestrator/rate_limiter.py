@@ -9,6 +9,13 @@ from datetime import datetime
 from pathlib import Path
 import json
 
+try:
+    import aiofiles
+    AIOFILES_AVAILABLE = True
+except ImportError:
+    AIOFILES_AVAILABLE = False
+    aiofiles = None
+
 if TYPE_CHECKING:
     from ..providers import ProviderLimits
 
@@ -72,6 +79,37 @@ class RateLimitTracker:
                 json.dump(self._usage, f, indent=2)
         except Exception:
             pass  # Silently fail on write errors
+
+    async def _save_tracker_async(self):
+        """Save tracker data to disk asynchronously."""
+        if not self.tracker_file:
+            return
+
+        if not AIOFILES_AVAILABLE:
+            self._save_tracker()
+            return
+
+        try:
+            async with aiofiles.open(self.tracker_file, 'w', encoding='utf-8') as f:
+                await f.write(json.dumps(self._usage, indent=2))
+        except Exception:
+            pass  # Silently fail on write errors
+
+    async def _load_tracker_async(self):
+        """Load tracker data from disk asynchronously."""
+        if not AIOFILES_AVAILABLE:
+            self._load_tracker()
+            return
+
+        try:
+            async with aiofiles.open(self.tracker_file, 'r', encoding='utf-8') as f:
+                content = await f.read()
+                self._usage = json.loads(content)
+
+            # Check for resets needed
+            self._check_and_reset()
+        except Exception:
+            self._initialize_empty()
 
     def _check_and_reset(self):
         """Check if daily or monthly resets are needed."""
@@ -185,6 +223,59 @@ class RateLimitTracker:
             model_data['errors'] = model_data['errors'][-10:]
 
         self._save_tracker()
+
+    async def record_request_async(
+        self,
+        provider: str,
+        model: str,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        success: bool = True,
+        error_message: Optional[str] = None
+    ):
+        """
+        Record a completed API request asynchronously.
+
+        Args:
+            provider: Provider name
+            model: Model used
+            input_tokens: Input tokens used
+            output_tokens: Output tokens used
+            success: Whether request succeeded
+            error_message: Error message if failed
+        """
+        # Check for resets first
+        self._check_and_reset()
+
+        self._ensure_provider_model(provider, model)
+        model_data = self._usage['providers'][provider][model]
+
+        total_tokens = input_tokens + output_tokens
+
+        # Update counters
+        model_data['requests_today'] += 1
+        model_data['requests_this_month'] += 1
+        model_data['total_requests'] += 1
+
+        model_data['tokens_today'] += total_tokens
+        model_data['tokens_this_month'] += total_tokens
+        model_data['total_tokens'] += total_tokens
+
+        model_data['input_tokens_today'] += input_tokens
+        model_data['output_tokens_today'] += output_tokens
+
+        model_data['last_request'] = datetime.now().isoformat()
+
+        # Track errors
+        if not success and error_message:
+            model_data['errors'].append({
+                'timestamp': datetime.now().isoformat(),
+                'message': error_message[:200]  # Truncate long errors
+            })
+            # Keep only last 10 errors
+            model_data['errors'] = model_data['errors'][-10:]
+
+        await self._save_tracker_async()
 
     def get_usage(self, provider: str, model: Optional[str] = None) -> dict:
         """

@@ -2,15 +2,15 @@
   "providers": {
     "cerebras": {
       "llama3.1-8b": {
-        "requests_today": 16,
-        "requests_this_month": 16,
-        "tokens_today": 880,
-        "tokens_this_month": 880,
-        "input_tokens_today": 741,
-        "output_tokens_today": 139,
-        "total_requests": 16,
-        "total_tokens": 880,
-        "last_request": "2025-11-15T16:20:59.151617",
+        "requests_today": 20,
+        "requests_this_month": 20,
+        "tokens_today": 1078,
+        "tokens_this_month": 1078,
+        "input_tokens_today": 931,
+        "output_tokens_today": 147,
+        "total_requests": 20,
+        "total_tokens": 1078,
+        "last_request": "2025-11-15T16:28:43.991862",
         "errors": []
       }
     },

@@ -568,19 +568,19 @@ class AgentOrchestrator:
             **kwargs
         )
 
-        # Store in cache
+        # Store in cache (async file I/O)
         if should_use_cache:
-            self.cache.put(response, final_prompt, model, system_prompt, max_tokens, temperature)
+            await self.cache.put_async(response, final_prompt, model, system_prompt, max_tokens, temperature)
             if intent_classification:
-                self.cache.put_by_intent(
+                await self.cache.put_by_intent_async(
                     response,
                     intent_classification.get('intent', ''),
                     intent_classification.get('entities', {}),
                     intent_classification.get('keywords', [])
                 )
 
-        # Track rate limits
-        self.rate_tracker.record_request(
+        # Track rate limits (async file I/O)
+        await self.rate_tracker.record_request_async(
             provider=provider_name,
             model=response.model,
             input_tokens=response.input_tokens,
