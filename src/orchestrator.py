@@ -26,6 +26,7 @@ from typing import Optional
 from datetime import datetime
 
 from .providers import ProviderRegistry, GroqProvider, CohereProvider, GeminiProvider, CerebrasProvider, LLMResponse
+from .context import CodebaseContext
 
 
 class AgentOrchestrator:
@@ -45,7 +46,14 @@ class AgentOrchestrator:
         # Claude (you) handles complex reasoning, then delegates sub-tasks
     """
 
-    def __init__(self, auto_register: bool = True, orchestrator_provider: Optional[str] = None):
+    def __init__(
+        self,
+        auto_register: bool = True,
+        orchestrator_provider: Optional[str] = None,
+        project_path: Optional[str] = None,
+        auto_explore: bool = False,
+        context_aware: bool = True
+    ):
         """
         Initialize orchestrator.
 
@@ -53,16 +61,27 @@ class AgentOrchestrator:
             auto_register: Automatically register available providers
             orchestrator_provider: Provider to use as the "brain" for planning/reasoning
                                   (default: 'cerebras' if available, else first available)
+            project_path: Path to project for context awareness (default: current dir)
+            auto_explore: Automatically explore codebase on init
+            context_aware: Enable context-augmented prompts
         """
         self.registry = ProviderRegistry()
         self.task_history: list[dict] = []
         self.created_at = datetime.now()
         self._brain = None
         self._brain_name = orchestrator_provider
+        self.context_aware = context_aware
+
+        # Initialize codebase context
+        self.context = CodebaseContext(project_path)
 
         if auto_register:
             self._auto_register_providers()
             self._setup_brain(orchestrator_provider)
+
+        # Auto-explore if requested and providers are available
+        if auto_explore and self._brain:
+            self._auto_explore()
 
     def _auto_register_providers(self):
         """Attempt to register all known providers."""
@@ -126,6 +145,85 @@ class AgentOrchestrator:
         self._brain_name = available[0]
         self._brain = self.registry.get(self._brain_name)
         print(f"[BRAIN] Using {self._brain_name} as orchestrator brain (fallback)")
+
+    def _auto_explore(self):
+        """Automatically explore the codebase if not already explored."""
+        if self.context.is_explored():
+            print(f"[CONTEXT] Loaded cached context for {self.context.project_path.name}")
+            return
+
+        print(f"[CONTEXT] Exploring codebase: {self.context.project_path}")
+        result = self.context.explore()
+
+        if result['status'] == 'explored':
+            print(f"[CONTEXT] Found {result['total_files']} files")
+
+            # Generate summary using brain
+            def llm_summary(prompt):
+                response = self.brain.chat(
+                    messages=[
+                        {'role': 'system', 'content': 'You are a code analyst. Provide concise technical summaries.'},
+                        {'role': 'user', 'content': prompt}
+                    ],
+                    max_tokens=500,
+                    temperature=0.3
+                )
+                self.task_history.append({
+                    'timestamp': datetime.now().isoformat(),
+                    'provider': self._brain_name,
+                    'model': response.model,
+                    'tokens_used': response.tokens_used,
+                    'latency_ms': response.latency_ms,
+                    'task_type': 'context_analysis',
+                })
+                return response.content
+
+            self.context.generate_summary(llm_summary)
+            print(f"[CONTEXT] Generated project summary")
+
+    def explore_project(self, force: bool = False) -> dict:
+        """
+        Manually trigger project exploration.
+
+        Args:
+            force: Force re-exploration even if cached
+
+        Returns:
+            Exploration result dict
+        """
+        if force:
+            self.context.clear_cache()
+
+        result = self.context.explore(force=force)
+
+        # Generate or regenerate summary
+        if result['status'] == 'explored' or force:
+            def llm_summary(prompt):
+                response = self.brain.chat(
+                    messages=[
+                        {'role': 'system', 'content': 'You are a code analyst. Provide concise technical summaries.'},
+                        {'role': 'user', 'content': prompt}
+                    ],
+                    max_tokens=500,
+                    temperature=0.3
+                )
+                self.task_history.append({
+                    'timestamp': datetime.now().isoformat(),
+                    'provider': self._brain_name,
+                    'model': response.model,
+                    'tokens_used': response.tokens_used,
+                    'latency_ms': response.latency_ms,
+                    'task_type': 'context_analysis',
+                })
+                return response.content
+
+            self.context.generate_summary(llm_summary)
+
+        return result
+
+    def get_context_status(self) -> dict:
+        """Get current codebase context status."""
+        return self.context.get_status()
 
     @property
     def providers(self) -> ProviderRegistry:
@@ -370,6 +468,7 @@ Be thorough but concise. Do not repeat yourself. Provide unique insights in each
         system_prompt: Optional[str] = None,
         max_tokens: int = 1000,
         temperature: float = 0.7,
+        use_context: Optional[bool] = None,
         **kwargs
     ) -> LLMResponse:
         """
@@ -382,6 +481,7 @@ Be thorough but concise. Do not repeat yourself. Provide unique insights in each
             system_prompt: System prompt for context (optional)
             max_tokens: Max response tokens
             temperature: Sampling temperature
+            use_context: Override context_aware setting for this call
             **kwargs: Provider-specific parameters
 
         Returns:
@@ -397,14 +497,25 @@ Be thorough but concise. Do not repeat yourself. Provide unique insights in each
                 'Review this code for bugs',
                 system_prompt='You are a code reviewer. Be concise.'
             )
+
+            # With context augmentation
+            result = orch.delegate('groq', 'Fix the auth bug', use_context=True)
         """
         provider = self.registry.get(provider_name)
+
+        # Determine if we should use context
+        should_use_context = use_context if use_context is not None else self.context_aware
+
+        # Augment prompt with context if enabled and context is available
+        final_prompt = prompt
+        if should_use_context and self.context.is_explored():
+            final_prompt = self.context.augment_prompt(prompt)
 
         # Build messages
         messages = []
         if system_prompt:
             messages.append({'role': 'system', 'content': system_prompt})
-        messages.append({'role': 'user', 'content': prompt})
+        messages.append({'role': 'user', 'content': final_prompt})
 
         # Execute
         response = provider.chat(
@@ -422,6 +533,7 @@ Be thorough but concise. Do not repeat yourself. Provide unique insights in each
             'model': response.model,
             'tokens_used': response.tokens_used,
             'latency_ms': response.latency_ms,
+            'context_augmented': should_use_context and self.context.is_explored(),
         })
 
         return response

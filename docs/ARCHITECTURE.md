@@ -2,13 +2,16 @@
 
 ## Overview
 
-This system creates a **swappable orchestrator** for multi-provider LLM coordination. The orchestrator brain can be any provider (Cerebras, Groq, Gemini), making the system usable without Claude Code or any specific subscription.
+This system creates a **swappable orchestrator** for multi-provider LLM coordination with **automatic codebase context awareness**. The orchestrator brain can be any provider (Cerebras, Groq, Gemini), making the system usable without Claude Code or any specific subscription.
 
 ```
-User / External System
+User / CLI Interface
     │
     ▼
 AgentOrchestrator
+    │
+    ├─── CodebaseContext (Auto-Explore & Cache)
+    │     └─ Project analysis, file index, summary generation
     │
     ├─── Brain (Swappable: Cerebras/Groq/Gemini)
     │     └─ Planning, reasoning, synthesis
@@ -26,7 +29,9 @@ AgentOrchestrator
           └─ command-r-08-2024, embed-english-v3.0
 ```
 
-## Key Innovation: Swappable Orchestrator Brain
+## Key Innovations
+
+### 1. Swappable Orchestrator Brain
 
 Unlike traditional setups that require a specific "master" LLM (like Claude Code), this system allows any registered provider to act as the orchestrator brain:
 
@@ -42,6 +47,36 @@ orch = AgentOrchestrator(orchestrator_provider='gemini')
 steps = orch.plan("Add authentication to API")
 answer = orch.reason("Which database for this use case?")
 summary = orch.synthesize([result1, result2])
+```
+
+### 2. Automatic Context Awareness
+
+The orchestrator can automatically learn about your codebase and inject relevant context into prompts:
+
+```python
+# Auto-explore codebase on startup
+orch = AgentOrchestrator(auto_explore=True, context_aware=True)
+
+# Context is automatically injected into prompts
+result = orch.delegate('cerebras', 'Fix the auth bug', use_context=True)
+
+# The LLM now knows:
+# - Project type (CLI tool, library, web app)
+# - Technologies used (Python, frameworks)
+# - File structure and organization
+# - Key dependencies
+```
+
+**Context Flow:**
+```
+User Prompt → CodebaseContext.augment_prompt() → Enhanced Prompt → LLM
+                        ↓
+              [Codebase Context]
+              Project: Multi-provider LLM orchestrator...
+              Structure: python=15, docs=8, config=3
+
+              [User Request]
+              Fix the auth bug
 ```
 
 ## Core Components
@@ -77,18 +112,60 @@ All providers implement a common interface:
 - Models: command-r-08-2024, embed-english-v3.0
 - Limits: **1,000 calls/month total** (CRITICAL - use sparingly)
 
-### 3. Orchestrator (`src/orchestrator.py`)
+### 3. Codebase Context (`src/context.py`)
+
+Automatic project understanding:
+- Scans project files and structure
+- Analyzes dependencies and configuration
+- Generates LLM summaries of the codebase
+- Caches results to `.llm_team_context.json`
+- Augments prompts with relevant context
+
+### 4. Orchestrator (`src/orchestrator.py`)
 
 Central coordinator that:
 - Registers available providers automatically
 - Sets up swappable brain (default: Cerebras)
+- **Manages codebase context** (auto-explore, caching)
 - Provides planning, reasoning, and synthesis via brain
 - Routes tasks to appropriate providers
-- Tracks usage across all providers
+- **Augments prompts with context** when enabled
+- Tracks usage across all providers (including context usage)
+
+### 5. CLI Interface (`src/cli.py`)
+
+Full-featured command-line interface:
+- Interactive chat mode with slash commands
+- One-shot commands (query, plan, reason, explore)
+- Provider management (switch brain, list models)
+- Context management (explore, refresh, clear, toggle)
+- Usage monitoring and status display
+- Built with Click for excellent UX
 
 ## Usage Patterns
 
-### Pattern 1: Autonomous Operation (No Claude Code)
+### Pattern 1: Context-Aware Development
+
+```python
+from src.orchestrator import AgentOrchestrator
+
+# Auto-explore codebase on startup
+orch = AgentOrchestrator(auto_explore=True, context_aware=True)
+
+# All queries now include project context
+result = orch.delegate(
+    'cerebras',
+    'How should I implement caching here?',
+    use_context=True  # Includes project knowledge
+)
+
+# The response will be informed by:
+# - Project architecture
+# - Existing patterns
+# - Dependencies available
+```
+
+### Pattern 2: Autonomous Operation (No Claude Code)
 
 ```python
 from src.orchestrator import AgentOrchestrator
@@ -254,6 +331,9 @@ The system handles:
 4. **Cost estimation** - Even for free tiers, track usage
 5. **Retry logic** - Automatic retry on transient failures
 6. **Provider health checks** - Monitor availability
+7. **Embedding-based context** - Use Cohere embeddings for semantic relevance
+8. **Conversation memory** - Persist chat history across sessions
+9. **Smart context selection** - Only inject relevant parts of context
 
 ## Testing
 
@@ -268,9 +348,10 @@ python examples/basic_usage.py
 ## Current Limitations
 
 1. **Synchronous only** - No async/parallel execution yet
-2. **Session-based tracking** - Rate limits reset on restart
-3. **No caching** - Every call hits the API
+2. **Session-based rate tracking** - Rate limits reset on restart (context is cached)
+3. **No response caching** - Every call hits the API
 4. **Limited error recovery** - Basic error handling only
+5. **Full context injection** - Context isn't filtered by relevance (yet)
 
 ## Project Structure
 
@@ -278,6 +359,8 @@ python examples/basic_usage.py
 src/
 ├── __init__.py
 ├── orchestrator.py           # Main orchestrator with swappable brain
+├── context.py                # Codebase context management
+├── cli.py                    # Click-based CLI interface
 └── providers/
     ├── __init__.py           # Provider exports
     ├── base.py               # Abstract base class
@@ -287,10 +370,42 @@ src/
     └── cohere_provider.py    # Cohere (embeddings)
 
 docs/
+├── CLI.md                    # CLI reference guide
 ├── ARCHITECTURE.md           # This file
 └── RATE_LIMITS.md           # Detailed rate limits
 
 examples/
 ├── basic_usage.py           # Basic orchestrator usage
-└── claude_orchestration.py  # Claude Code patterns
+├── orchestrator_demo.py     # Full orchestrator features
+└── test_orchestrator.py     # Swappable brain testing
+
+llm_team.py                   # CLI entry point
+.llm_team_context.json        # Cached codebase context (auto-generated)
 ```
+
+## Context Caching
+
+The system maintains a cache file (`.llm_team_context.json`) that stores:
+
+```json
+{
+  "explored_at": "2025-01-15T10:30:00",
+  "summary": "Multi-provider LLM orchestrator with...",
+  "structure": {
+    "total_files": 25,
+    "by_type": {"python": 15, "docs": 8, "config": 2},
+    "has_readme": true,
+    "directories": ["src", "docs", "examples"]
+  },
+  "file_index": {
+    "python": ["src/orchestrator.py", "src/cli.py", ...],
+    "docs": ["README.md", "docs/CLI.md", ...]
+  }
+}
+```
+
+This cache:
+- Survives session restarts
+- Auto-loads on orchestrator initialization
+- Can be refreshed with `orch.explore_project(force=True)`
+- Cleared with `orch.context.clear_cache()`

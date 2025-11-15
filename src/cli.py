@@ -22,13 +22,24 @@ except ImportError:
 class CLI:
     """Interactive CLI for the LLM Agent Team."""
 
-    def __init__(self, brain: Optional[str] = None):
+    def __init__(self, brain: Optional[str] = None, auto_explore: bool = False, context_aware: bool = True):
         """Initialize CLI with orchestrator."""
         click.echo("Initializing LLM Agent Team...")
-        self.orchestrator = AgentOrchestrator(orchestrator_provider=brain)
+        self.orchestrator = AgentOrchestrator(
+            orchestrator_provider=brain,
+            auto_explore=auto_explore,
+            context_aware=context_aware
+        )
         self.session_start = datetime.now()
         click.echo(f"Brain: {self.orchestrator.brain}")
         click.echo(f"Available providers: {', '.join(self.orchestrator.providers.list_available())}")
+
+        # Show context status
+        if self.orchestrator.context.is_explored():
+            click.secho(f"Context: {self.orchestrator.context.project_path.name} (cached)", fg="cyan")
+        elif context_aware:
+            click.secho("Context: Not explored (use /context to explore)", fg="yellow")
+
         click.echo()
 
     def interactive_mode(self):
@@ -45,6 +56,7 @@ class CLI:
         click.echo("  /brain <name>  - Switch orchestrator brain")
         click.echo("  /usage         - Show usage statistics")
         click.echo("  /quit or /exit - Exit the CLI")
+        click.echo("  /context       - Manage codebase context")
         click.echo("  (any text)     - Chat with current brain")
         click.echo("=" * 60)
         click.echo()
@@ -154,6 +166,9 @@ class CLI:
         elif cmd == "/explore":
             self._explore_codebase(args)
 
+        elif cmd == "/context":
+            self._manage_context(args)
+
         else:
             click.secho(f"Unknown command: {cmd}", fg="yellow")
             click.echo("Type /help for available commands.")
@@ -182,6 +197,12 @@ class CLI:
         click.echo("  /models [prov]   - List models (optionally for provider)")
         click.echo("  /status          - Show current system status")
         click.echo("  /usage           - Show usage statistics")
+        click.echo()
+        click.secho("Context Management:", bold=True)
+        click.echo("  /context         - Show context status")
+        click.echo("  /context explore - Explore current project")
+        click.echo("  /context clear   - Clear cached context")
+        click.echo("  /context toggle  - Toggle context awareness")
         click.echo()
         click.secho("System:", bold=True)
         click.echo("  /help            - Show this help message")
@@ -665,6 +686,65 @@ Be concise but thorough. Focus on actionable insights."""
         except Exception as e:
             return f"Error generating summary: {e}\n\nBasic structure:\n{context}"
 
+    def _manage_context(self, args: str = ""):
+        """Manage codebase context."""
+        if not args:
+            # Show context status
+            status = self.orchestrator.get_context_status()
+            click.secho("\nContext Status:", bold=True)
+            click.echo("-" * 50)
+            click.echo(f"Project: {status['project_path']}")
+            click.echo(f"Explored: {click.style('Yes' if status['is_explored'] else 'No', fg='green' if status['is_explored'] else 'yellow')}")
+            click.echo(f"Has Summary: {'Yes' if status['has_summary'] else 'No'}")
+            if status['explored_at']:
+                click.echo(f"Explored At: {status['explored_at']}")
+            click.echo(f"Total Files: {status['total_files']}")
+            click.echo(f"Context Aware: {click.style('Enabled' if self.orchestrator.context_aware else 'Disabled', fg='green' if self.orchestrator.context_aware else 'red')}")
+            click.echo(f"Cache File: {status['cache_file']}")
+            click.echo(f"Cache Exists: {'Yes' if status['cache_exists'] else 'No'}")
+
+            if status['has_summary']:
+                click.secho("\nProject Summary:", bold=True)
+                click.echo(self.orchestrator.context.summary)
+
+        elif args.lower() == "explore":
+            click.echo("Exploring current project...")
+            result = self.orchestrator.explore_project(force=False)
+            if result['status'] == 'cached':
+                click.secho("Using cached exploration.", fg="cyan")
+            else:
+                click.secho(f"Found {result['total_files']} files.", fg="green")
+
+            if self.orchestrator.context.summary:
+                click.secho("\nGenerated Summary:", bold=True)
+                click.echo(self.orchestrator.context.summary)
+
+        elif args.lower() == "refresh":
+            click.echo("Force re-exploring project...")
+            result = self.orchestrator.explore_project(force=True)
+            click.secho(f"Found {result['total_files']} files.", fg="green")
+
+            if self.orchestrator.context.summary:
+                click.secho("\nGenerated Summary:", bold=True)
+                click.echo(self.orchestrator.context.summary)
+
+        elif args.lower() == "clear":
+            self.orchestrator.context.clear_cache()
+            click.secho("Context cache cleared.", fg="green")
+
+        elif args.lower() == "toggle":
+            self.orchestrator.context_aware = not self.orchestrator.context_aware
+            status = "enabled" if self.orchestrator.context_aware else "disabled"
+            click.secho(f"Context awareness {status}.", fg="green" if self.orchestrator.context_aware else "yellow")
+
+        else:
+            click.echo("Usage: /context [explore|refresh|clear|toggle]")
+            click.echo("  (no args)  - Show context status")
+            click.echo("  explore    - Explore project (uses cache if available)")
+            click.echo("  refresh    - Force re-exploration")
+            click.echo("  clear      - Clear cached context")
+            click.echo("  toggle     - Toggle context-aware prompts")
+
 
 # Global CLI instance for commands
 pass_cli = click.make_pass_decorator(CLI, ensure=True)
@@ -672,8 +752,10 @@ pass_cli = click.make_pass_decorator(CLI, ensure=True)
 
 @click.group(invoke_without_command=True)
 @click.option("--brain", "-b", default=None, help="Orchestrator brain provider (cerebras, groq, gemini)")
+@click.option("--auto-explore", "-a", is_flag=True, help="Automatically explore codebase on startup")
+@click.option("--no-context", is_flag=True, help="Disable context-aware prompts")
 @click.pass_context
-def cli(ctx, brain):
+def cli(ctx, brain, auto_explore, no_context):
     """LLM Agent Team CLI - Multi-provider orchestrator interface.
 
     Start interactive mode by running without arguments, or use subcommands
@@ -681,12 +763,14 @@ def cli(ctx, brain):
     """
     ctx.ensure_object(dict)
 
-    # Store brain preference
+    # Store preferences
     ctx.obj['brain'] = brain
+    ctx.obj['auto_explore'] = auto_explore
+    ctx.obj['context_aware'] = not no_context
 
     # If no subcommand, start interactive mode
     if ctx.invoked_subcommand is None:
-        cli_instance = CLI(brain=brain)
+        cli_instance = CLI(brain=brain, auto_explore=auto_explore, context_aware=not no_context)
         cli_instance.interactive_mode()
 
 
@@ -696,10 +780,14 @@ def cli(ctx, brain):
 @click.option("--model", "-m", default=None, help="Specific model to use")
 @click.option("--temperature", "-t", default=0.7, type=float, help="Temperature (0-1)")
 @click.option("--max-tokens", default=1000, type=int, help="Max tokens in response")
+@click.option("--with-context", "-c", is_flag=True, help="Include codebase context in prompt")
 @click.pass_context
-def query(ctx, prompt, provider, model, temperature, max_tokens):
+def query(ctx, prompt, provider, model, temperature, max_tokens, with_context):
     """Send a one-shot query to the orchestrator."""
-    cli_instance = CLI(brain=ctx.obj.get('brain'))
+    auto_explore = ctx.obj.get('auto_explore', False)
+    context_aware = ctx.obj.get('context_aware', True)
+
+    cli_instance = CLI(brain=ctx.obj.get('brain'), auto_explore=auto_explore, context_aware=context_aware)
 
     target_provider = provider or cli_instance.orchestrator.brain
     click.echo(f"Querying {target_provider}...\n")
@@ -710,7 +798,8 @@ def query(ctx, prompt, provider, model, temperature, max_tokens):
             prompt,
             model=model,
             max_tokens=max_tokens,
-            temperature=temperature
+            temperature=temperature,
+            use_context=with_context if with_context else None
         )
 
         click.echo(response.content)
@@ -729,7 +818,9 @@ def query(ctx, prompt, provider, model, temperature, max_tokens):
 @click.pass_context
 def plan(ctx, task, max_steps):
     """Create a task plan."""
-    cli_instance = CLI(brain=ctx.obj.get('brain'))
+    auto_explore = ctx.obj.get('auto_explore', False)
+    context_aware = ctx.obj.get('context_aware', True)
+    cli_instance = CLI(brain=ctx.obj.get('brain'), auto_explore=auto_explore, context_aware=context_aware)
     click.echo(f"Planning: {task}\n")
     cli_instance._plan_task(task)
 
@@ -741,7 +832,9 @@ def plan(ctx, task, max_steps):
 @click.pass_context
 def reason(ctx, question, context, evidence):
     """Reason about a question with evidence."""
-    cli_instance = CLI(brain=ctx.obj.get('brain'))
+    auto_explore = ctx.obj.get('auto_explore', False)
+    context_aware = ctx.obj.get('context_aware', True)
+    cli_instance = CLI(brain=ctx.obj.get('brain'), auto_explore=auto_explore, context_aware=context_aware)
     click.echo(f"Reasoning: {question}\n")
 
     try:
@@ -768,7 +861,9 @@ def reason(ctx, question, context, evidence):
 @click.pass_context
 def status(ctx):
     """Show system status."""
-    cli_instance = CLI(brain=ctx.obj.get('brain'))
+    auto_explore = ctx.obj.get('auto_explore', False)
+    context_aware = ctx.obj.get('context_aware', True)
+    cli_instance = CLI(brain=ctx.obj.get('brain'), auto_explore=auto_explore, context_aware=context_aware)
     cli_instance._show_status()
 
 
@@ -776,7 +871,9 @@ def status(ctx):
 @click.pass_context
 def providers(ctx):
     """List available providers."""
-    cli_instance = CLI(brain=ctx.obj.get('brain'))
+    auto_explore = ctx.obj.get('auto_explore', False)
+    context_aware = ctx.obj.get('context_aware', True)
+    cli_instance = CLI(brain=ctx.obj.get('brain'), auto_explore=auto_explore, context_aware=context_aware)
     cli_instance._list_providers()
 
 
@@ -785,7 +882,9 @@ def providers(ctx):
 @click.pass_context
 def models(ctx, provider):
     """List available models."""
-    cli_instance = CLI(brain=ctx.obj.get('brain'))
+    auto_explore = ctx.obj.get('auto_explore', False)
+    context_aware = ctx.obj.get('context_aware', True)
+    cli_instance = CLI(brain=ctx.obj.get('brain'), auto_explore=auto_explore, context_aware=context_aware)
     cli_instance._list_models(provider or "")
 
 
@@ -793,7 +892,9 @@ def models(ctx, provider):
 @click.pass_context
 def usage(ctx):
     """Show usage statistics."""
-    cli_instance = CLI(brain=ctx.obj.get('brain'))
+    auto_explore = ctx.obj.get('auto_explore', False)
+    context_aware = ctx.obj.get('context_aware', True)
+    cli_instance = CLI(brain=ctx.obj.get('brain'), auto_explore=auto_explore, context_aware=context_aware)
     cli_instance._show_usage()
 
 
@@ -801,8 +902,20 @@ def usage(ctx):
 @click.pass_context
 def interactive(ctx):
     """Start interactive chat mode."""
-    cli_instance = CLI(brain=ctx.obj.get('brain'))
+    auto_explore = ctx.obj.get('auto_explore', False)
+    context_aware = ctx.obj.get('context_aware', True)
+    cli_instance = CLI(brain=ctx.obj.get('brain'), auto_explore=auto_explore, context_aware=context_aware)
     cli_instance.interactive_mode()
+
+
+@cli.command()
+@click.pass_context
+def context(ctx):
+    """Show and manage codebase context."""
+    auto_explore = ctx.obj.get('auto_explore', False)
+    context_aware = ctx.obj.get('context_aware', True)
+    cli_instance = CLI(brain=ctx.obj.get('brain'), auto_explore=auto_explore, context_aware=context_aware)
+    cli_instance._manage_context("")
 
 
 @cli.command()
@@ -811,7 +924,9 @@ def interactive(ctx):
 @click.pass_context
 def explore(ctx, path, save):
     """Explore and learn about a codebase."""
-    cli_instance = CLI(brain=ctx.obj.get('brain'))
+    auto_explore = ctx.obj.get('auto_explore', False)
+    context_aware = ctx.obj.get('context_aware', True)
+    cli_instance = CLI(brain=ctx.obj.get('brain'), auto_explore=auto_explore, context_aware=context_aware)
 
     path_obj = Path(path).resolve()
     if not path_obj.exists():

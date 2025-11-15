@@ -305,6 +305,13 @@ def main():
     print("- 23,000+ free requests/day available")
     print("=" * 60)
 
+    print("\nNEW FEATURES:")
+    print("- Context-aware prompts: python examples/context_aware_demo.py")
+    print("- Interactive CLI: python llm_team.py")
+    print("- Auto-explore: python llm_team.py --auto-explore")
+    print("- See docs/CLI.md for full CLI reference")
+    print("=" * 60)
+
 
 if __name__ == "__main__":
     main()
