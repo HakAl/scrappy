@@ -2,6 +2,25 @@
 
 A framework for orchestrating LLM agents across multiple free-tier providers with **swappable orchestrator brain** and **automatic codebase context awareness**.
 
+>For Users Without Claude Subscription: Yes, Useful
+>
+>  Where it shines:
+>
+>  1. 23K free requests/day - Real value for development without subscription costs
+>  2. Context augmentation - Makes weaker models more effective by injecting project knowledge they'd otherwise lack
+>  3. Structured workflows - /plan and /reason provide organized thinking patterns
+>  4. Redundancy - Multiple providers mean no single point of failure
+>  5. Interactive exploration - Good for learning codebases, brainstorming, getting quick answers
+>
+>  Better Use Cases
+>
+>  The team would be more useful if:
+>  - Batch processing - Run overnight analysis jobs
+>  - CI/CD integration - Automated code review, documentation generation
+>  - RAG pipeline - Use Cohere embeddings for semantic search
+>  - Human-in-the-loop - Interactive assistant for developers
+
+
 ## Features
 
 - **23,000+ free requests/day** across providers
