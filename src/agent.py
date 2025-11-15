@@ -215,9 +215,14 @@ When task is complete:
 
         try:
             content = target.read_text(encoding='utf-8')
+            lines = content.count('\n') + 1
             # Truncate if too long
             if len(content) > 10000:
                 content = content[:10000] + "\n... [truncated]"
+
+            # Store in working memory
+            self.orchestrator.remember_file_read(path, content, lines)
+
             return content
         except Exception as e:
             return f"Error reading file: {str(e)}"
@@ -428,6 +433,10 @@ When task is complete:
             output = "\n".join(results[:50])
             if len(results) > 50:
                 output += "\n... [truncated to 50 matches]"
+
+            # Store in working memory
+            self.orchestrator.remember_search(f"{pattern} ({file_pattern})", results[:50])
+
             return output
         except Exception as e:
             return f"Error searching: {str(e)}"
@@ -455,6 +464,11 @@ When task is complete:
             output = result.stdout.strip()
             if not output:
                 return "No commits found"
+
+            # Store in working memory
+            op_desc = f"git log -{n}" + (f" {file}" if file else "")
+            self.orchestrator.remember_git_operation(op_desc, output)
+
             return self._colorize_git_output(output, "log")
         except subprocess.TimeoutExpired:
             return "Error: git log timed out"
@@ -490,6 +504,11 @@ When task is complete:
             # Truncate if too long
             if len(output) > 5000:
                 output = output[:5000] + "\n... [truncated]"
+
+            # Store in working memory
+            op_desc = "git diff" + (f" {ref}" if ref else "") + (f" {file}" if file else "")
+            self.orchestrator.remember_git_operation(op_desc, output[:500])  # Store truncated version
+
             return self._colorize_git_output(output, "diff")
         except subprocess.TimeoutExpired:
             return "Error: git diff timed out"

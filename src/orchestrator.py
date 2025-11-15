@@ -276,6 +276,17 @@ class AgentOrchestrator:
         cache_file = str(self.context.project_path / ".llm_response_cache.json")
         self.cache = ResponseCache(cache_file=cache_file, default_ttl_hours=cache_ttl_hours)
 
+        # Initialize session working memory (ephemeral, not persisted)
+        self.working_memory = {
+            'file_reads': {},       # path -> {'content': str, 'timestamp': datetime, 'lines': int}
+            'search_results': [],   # list of {'query': str, 'results': list, 'timestamp': datetime}
+            'git_operations': [],   # list of {'operation': str, 'output': str, 'timestamp': datetime}
+            'discoveries': [],      # list of {'finding': str, 'location': str, 'timestamp': datetime}
+            'max_file_cache': 20,   # LRU cache size for file reads
+            'max_searches': 10,     # Keep last N searches
+            'max_git_ops': 10,      # Keep last N git operations
+        }
+
         if auto_register:
             self._auto_register_providers()
             self._setup_brain(orchestrator_provider)
@@ -425,6 +436,111 @@ class AgentOrchestrator:
     def get_context_status(self) -> dict:
         """Get current codebase context status."""
         return self.context.get_status()
+
+    # Working Memory Management Methods
+    def remember_file_read(self, path: str, content: str, lines: int = 0):
+        """Store a file read in working memory (LRU cache)."""
+        self.working_memory['file_reads'][path] = {
+            'content': content,
+            'timestamp': datetime.now(),
+            'lines': lines
+        }
+        # Enforce LRU cache size
+        max_cache = self.working_memory['max_file_cache']
+        if len(self.working_memory['file_reads']) > max_cache:
+            # Remove oldest entry
+            oldest_path = min(
+                self.working_memory['file_reads'].keys(),
+                key=lambda p: self.working_memory['file_reads'][p]['timestamp']
+            )
+            del self.working_memory['file_reads'][oldest_path]
+
+    def remember_search(self, query: str, results: list):
+        """Store a search result in working memory."""
+        self.working_memory['search_results'].append({
+            'query': query,
+            'results': results,
+            'timestamp': datetime.now()
+        })
+        # Keep only last N searches
+        max_searches = self.working_memory['max_searches']
+        if len(self.working_memory['search_results']) > max_searches:
+            self.working_memory['search_results'] = self.working_memory['search_results'][-max_searches:]
+
+    def remember_git_operation(self, operation: str, output: str):
+        """Store a git operation result in working memory."""
+        self.working_memory['git_operations'].append({
+            'operation': operation,
+            'output': output,
+            'timestamp': datetime.now()
+        })
+        # Keep only last N operations
+        max_ops = self.working_memory['max_git_ops']
+        if len(self.working_memory['git_operations']) > max_ops:
+            self.working_memory['git_operations'] = self.working_memory['git_operations'][-max_ops:]
+
+    def add_discovery(self, finding: str, location: str = ""):
+        """Add a discovery/learning to working memory."""
+        self.working_memory['discoveries'].append({
+            'finding': finding,
+            'location': location,
+            'timestamp': datetime.now()
+        })
+
+    def get_working_memory_summary(self) -> dict:
+        """Get a summary of current working memory state."""
+        return {
+            'files_cached': len(self.working_memory['file_reads']),
+            'cached_files': list(self.working_memory['file_reads'].keys()),
+            'recent_searches': len(self.working_memory['search_results']),
+            'git_operations': len(self.working_memory['git_operations']),
+            'discoveries': len(self.working_memory['discoveries']),
+        }
+
+    def get_working_memory_context(self) -> str:
+        """Build context string from working memory for LLM augmentation."""
+        parts = []
+
+        # Recent file reads (just paths and line counts, not full content)
+        if self.working_memory['file_reads']:
+            files_info = []
+            for path, info in self.working_memory['file_reads'].items():
+                files_info.append(f"  - {path} ({info['lines']} lines)")
+            parts.append("Recently accessed files:\n" + "\n".join(files_info))
+
+        # Recent searches
+        if self.working_memory['search_results']:
+            searches_info = []
+            for search in self.working_memory['search_results'][-3:]:  # Last 3 searches
+                result_count = len(search['results']) if isinstance(search['results'], list) else 0
+                searches_info.append(f"  - '{search['query']}' ({result_count} results)")
+            parts.append("Recent searches:\n" + "\n".join(searches_info))
+
+        # Recent git operations
+        if self.working_memory['git_operations']:
+            git_info = []
+            for op in self.working_memory['git_operations'][-3:]:  # Last 3 ops
+                git_info.append(f"  - {op['operation']}")
+            parts.append("Recent git operations:\n" + "\n".join(git_info))
+
+        # Discoveries
+        if self.working_memory['discoveries']:
+            disc_info = []
+            for disc in self.working_memory['discoveries'][-5:]:  # Last 5 discoveries
+                loc = f" at {disc['location']}" if disc['location'] else ""
+                disc_info.append(f"  - {disc['finding']}{loc}")
+            parts.append("Key discoveries:\n" + "\n".join(disc_info))
+
+        if parts:
+            return "[Session Working Memory]\n" + "\n\n".join(parts)
+        return ""
+
+    def clear_working_memory(self):
+        """Clear all working memory (useful for resetting session state)."""
+        self.working_memory['file_reads'] = {}
+        self.working_memory['search_results'] = []
+        self.working_memory['git_operations'] = []
+        self.working_memory['discoveries'] = []
 
     @property
     def providers(self) -> ProviderRegistry:
@@ -749,6 +865,12 @@ Be thorough but concise. Do not repeat yourself. Provide unique insights in each
         final_prompt = prompt
         if should_use_context and self.context.is_explored():
             final_prompt = self.context.augment_prompt(prompt)
+
+        # Add working memory context (session-scoped learnings)
+        if should_use_context:
+            working_memory_context = self.get_working_memory_context()
+            if working_memory_context:
+                final_prompt = working_memory_context + "\n\n" + final_prompt
 
         # Determine if we should use cache
         should_use_cache = use_cache if use_cache is not None else self.caching_enabled

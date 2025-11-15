@@ -756,6 +756,20 @@ Be concise but thorough. Focus on actionable insights."""
             click.echo(f"Cache File: {status['cache_file']}")
             click.echo(f"Cache Exists: {'Yes' if status['cache_exists'] else 'No'}")
 
+            # Show working memory status
+            mem_status = self.orchestrator.get_working_memory_summary()
+            click.secho("\nSession Working Memory:", fg="magenta", bold=True)
+            click.secho("-" * 50, fg="magenta")
+            click.echo(f"Files Cached: {click.style(str(mem_status['files_cached']), fg='cyan')}")
+            if mem_status['cached_files']:
+                for f in mem_status['cached_files'][-5:]:  # Show last 5
+                    click.echo(f"  - {f}")
+                if len(mem_status['cached_files']) > 5:
+                    click.echo(f"  ... and {len(mem_status['cached_files']) - 5} more")
+            click.echo(f"Recent Searches: {mem_status['recent_searches']}")
+            click.echo(f"Git Operations: {mem_status['git_operations']}")
+            click.echo(f"Discoveries: {mem_status['discoveries']}")
+
             if status['has_summary']:
                 click.secho("\nProject Summary:", bold=True)
                 click.echo(self.orchestrator.context.summary)
@@ -785,17 +799,22 @@ Be concise but thorough. Focus on actionable insights."""
             self.orchestrator.context.clear_cache()
             click.secho("Context cache cleared.", fg="green")
 
+        elif args.lower() == "clearmem":
+            self.orchestrator.clear_working_memory()
+            click.secho("Session working memory cleared.", fg="green")
+
         elif args.lower() == "toggle":
             self.orchestrator.context_aware = not self.orchestrator.context_aware
             status = "enabled" if self.orchestrator.context_aware else "disabled"
             click.secho(f"Context awareness {status}.", fg="green" if self.orchestrator.context_aware else "yellow")
 
         else:
-            click.echo("Usage: /context [explore|refresh|clear|toggle]")
-            click.echo("  (no args)  - Show context status")
+            click.echo("Usage: /context [explore|refresh|clear|clearmem|toggle]")
+            click.echo("  (no args)  - Show context status and working memory")
             click.echo("  explore    - Explore project (uses cache if available)")
             click.echo("  refresh    - Force re-exploration")
             click.echo("  clear      - Clear cached context")
+            click.echo("  clearmem   - Clear session working memory")
             click.echo("  toggle     - Toggle context-aware prompts")
 
     def _manage_cache(self, args: str = ""):
@@ -1201,19 +1220,20 @@ def explore(ctx, path, save):
     click.secho(f"\nExploring: {path_obj}", bold=True)
     click.echo("-" * 50)
 
-    # Collect codebase information
-    with click.progressbar(length=4, label="Scanning codebase") as bar:
-        source_files = cli_instance._find_source_files(path_obj)
-        bar.update(1)
+    # Change to the target directory for context-aware exploration
+    original_cwd = os.getcwd()
+    try:
+        os.chdir(path_obj)
 
-        structure = cli_instance._analyze_structure(path_obj, source_files)
-        bar.update(1)
+        # Use the orchestrator's explore_project method which properly updates context
+        click.echo("Scanning codebase...")
+        result = cli_instance.orchestrator.explore_project(force=True)
 
-        key_contents = cli_instance._read_key_files(path_obj, source_files)
-        bar.update(1)
+        # Get the summary from the context
+        summary = cli_instance.orchestrator.context.summary or "No summary generated"
 
-        summary = cli_instance._generate_codebase_summary(path_obj, structure, key_contents)
-        bar.update(1)
+    finally:
+        os.chdir(original_cwd)
 
     click.echo()
     click.secho("Codebase Summary:", bold=True)
