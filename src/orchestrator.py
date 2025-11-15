@@ -542,6 +542,135 @@ class AgentOrchestrator:
         self.working_memory['git_operations'] = []
         self.working_memory['discoveries'] = []
 
+    def save_session(self, conversation_history: list = None) -> str:
+        """Save current session (working memory + conversation) to disk for resume.
+
+        Args:
+            conversation_history: Optional list of conversation messages to save
+        """
+        session_file = str(self.context.project_path / ".llm_team_session.json")
+
+        # Convert datetime objects to ISO strings for JSON serialization
+        serializable_memory = {
+            'file_reads': {},
+            'search_results': [],
+            'git_operations': [],
+            'discoveries': [],
+            'conversation_history': conversation_history or [],
+            'saved_at': datetime.now().isoformat(),
+            'session_start': self.created_at.isoformat(),
+        }
+
+        # Serialize file reads
+        for path, info in self.working_memory['file_reads'].items():
+            serializable_memory['file_reads'][path] = {
+                'content': info['content'],
+                'timestamp': info['timestamp'].isoformat(),
+                'lines': info['lines']
+            }
+
+        # Serialize search results
+        for search in self.working_memory['search_results']:
+            serializable_memory['search_results'].append({
+                'query': search['query'],
+                'results': search['results'],
+                'timestamp': search['timestamp'].isoformat()
+            })
+
+        # Serialize git operations
+        for op in self.working_memory['git_operations']:
+            serializable_memory['git_operations'].append({
+                'operation': op['operation'],
+                'output': op['output'],
+                'timestamp': op['timestamp'].isoformat()
+            })
+
+        # Serialize discoveries
+        for disc in self.working_memory['discoveries']:
+            serializable_memory['discoveries'].append({
+                'finding': disc['finding'],
+                'location': disc['location'],
+                'timestamp': disc['timestamp'].isoformat()
+            })
+
+        # Save task history too
+        serializable_memory['task_history'] = self.task_history
+
+        try:
+            with open(session_file, 'w', encoding='utf-8') as f:
+                json.dump(serializable_memory, f, indent=2)
+            return session_file
+        except Exception as e:
+            raise RuntimeError(f"Failed to save session: {e}")
+
+    def load_session(self) -> dict:
+        """Load previous session from disk."""
+        session_file = self.context.project_path / ".llm_team_session.json"
+
+        if not session_file.exists():
+            return {'status': 'no_session', 'message': 'No previous session found'}
+
+        try:
+            with open(session_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+
+            # Restore file reads
+            for path, info in data.get('file_reads', {}).items():
+                self.working_memory['file_reads'][path] = {
+                    'content': info['content'],
+                    'timestamp': datetime.fromisoformat(info['timestamp']),
+                    'lines': info['lines']
+                }
+
+            # Restore search results
+            for search in data.get('search_results', []):
+                self.working_memory['search_results'].append({
+                    'query': search['query'],
+                    'results': search['results'],
+                    'timestamp': datetime.fromisoformat(search['timestamp'])
+                })
+
+            # Restore git operations
+            for op in data.get('git_operations', []):
+                self.working_memory['git_operations'].append({
+                    'operation': op['operation'],
+                    'output': op['output'],
+                    'timestamp': datetime.fromisoformat(op['timestamp'])
+                })
+
+            # Restore discoveries
+            for disc in data.get('discoveries', []):
+                self.working_memory['discoveries'].append({
+                    'finding': disc['finding'],
+                    'location': disc['location'],
+                    'timestamp': datetime.fromisoformat(disc['timestamp'])
+                })
+
+            # Restore task history
+            self.task_history = data.get('task_history', [])
+
+            # Get conversation history (will be returned to caller)
+            conversation_history = data.get('conversation_history', [])
+
+            return {
+                'status': 'loaded',
+                'saved_at': data.get('saved_at', 'unknown'),
+                'files_restored': len(self.working_memory['file_reads']),
+                'searches_restored': len(self.working_memory['search_results']),
+                'git_ops_restored': len(self.working_memory['git_operations']),
+                'discoveries_restored': len(self.working_memory['discoveries']),
+                'tasks_restored': len(self.task_history),
+                'conversation_history': conversation_history,
+            }
+        except Exception as e:
+            return {'status': 'error', 'message': str(e)}
+
+    def clear_session(self):
+        """Delete saved session file."""
+        session_file = self.context.project_path / ".llm_team_session.json"
+        if session_file.exists():
+            session_file.unlink()
+
     @property
     def providers(self) -> ProviderRegistry:
         """Access the provider registry."""

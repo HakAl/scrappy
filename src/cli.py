@@ -34,6 +34,8 @@ class CLI:
         )
         self.session_start = datetime.now()
         self.smart_mode = False  # Smart query mode (uses tools for research)
+        self.conversation_history = []  # Store conversation for session persistence
+        self.auto_save = True  # Auto-save session on exit (can be toggled)
         click.echo(f"Brain: {click.style(self.orchestrator.brain, fg='green', bold=True)}")
         providers_list = ', '.join(self.orchestrator.providers.list_available())
         click.echo(f"Available providers: {click.style(providers_list, fg='cyan')}")
@@ -64,8 +66,6 @@ class CLI:
         click.secho("=" * 60, fg="cyan")
         click.echo()
 
-        conversation_history = []
-
         while True:
             try:
                 user_input = click.prompt(click.style("You", fg="green", bold=True), default="", show_default=False).strip()
@@ -75,13 +75,13 @@ class CLI:
 
                 # Handle commands
                 if user_input.startswith("/"):
-                    if self._handle_command(user_input, conversation_history):
+                    if self._handle_command(user_input, self.conversation_history):
                         continue
                     else:
                         break
 
                 # Regular chat
-                conversation_history.append({
+                self.conversation_history.append({
                     "role": "user",
                     "content": user_input
                 })
@@ -105,7 +105,7 @@ class CLI:
                     )
                 click.echo()
 
-                conversation_history.append({
+                self.conversation_history.append({
                     "role": "assistant",
                     "content": response.content
                 })
@@ -126,6 +126,19 @@ class CLI:
         args = parts[1] if len(parts) > 1 else ""
 
         if cmd in ["/quit", "/exit", "/q"]:
+            # Auto-save session on exit if enabled
+            if self.auto_save:
+                try:
+                    session_file = self.orchestrator.save_session(self.conversation_history)
+                    click.secho(f"\nSession saved to: {session_file}", fg="green")
+                    click.echo(f"  Conversation: {len(self.conversation_history)} messages")
+                    click.echo("Use 'llm-team --resume' to continue later.")
+                except Exception as e:
+                    click.secho(f"Warning: Could not save session: {e}", fg="yellow")
+            else:
+                click.secho("\nSession not saved (auto-save disabled).", fg="yellow")
+                click.echo("Use '/session save' to manually save before quitting.")
+
             self._show_usage()
             click.secho("\nGoodbye!", fg="cyan", bold=True)
             return False
@@ -200,6 +213,9 @@ class CLI:
         elif cmd == "/cache":
             self._manage_cache(args)
 
+        elif cmd == "/session":
+            self._manage_session(args)
+
         else:
             click.secho(f"Unknown command: {cmd}", fg="yellow")
             click.echo("Type /help for available commands.")
@@ -242,6 +258,14 @@ class CLI:
         click.echo(f"  {click.style('/cache', fg='yellow')}           - Show cache statistics")
         click.echo("  /cache clear     - Clear response cache")
         click.echo("  /cache toggle    - Toggle caching on/off")
+        click.echo()
+        click.secho("Session Management:", bold=True)
+        click.echo(f"  {click.style('/session', fg='yellow')}         - Show session info")
+        click.echo("  /session save    - Save current session")
+        click.echo("  /session load    - Load previous session")
+        click.echo("  /session clear   - Delete saved session")
+        click.echo("  /session toggle  - Toggle auto-save on/off")
+        click.echo("  (auto-saves on /quit by default)")
         click.echo()
         click.secho("System:", bold=True)
         click.echo("  /help            - Show this help message")
@@ -847,6 +871,89 @@ Be concise but thorough. Focus on actionable insights."""
             click.echo("  clear      - Clear all cached responses")
             click.echo("  toggle     - Toggle caching on/off")
 
+    def _manage_session(self, args: str = ""):
+        """Manage session persistence."""
+        if not args:
+            # Show session info
+            session_file = self.orchestrator.context.project_path / ".llm_team_session.json"
+            click.secho("\nSession Management:", fg="magenta", bold=True)
+            click.secho("-" * 50, fg="magenta")
+            click.echo(f"Session File: {session_file}")
+            click.echo(f"Session Exists: {'Yes' if session_file.exists() else 'No'}")
+
+            if session_file.exists():
+                try:
+                    import json
+                    with open(session_file, 'r') as f:
+                        data = json.load(f)
+                    click.echo(f"Last Saved: {data.get('saved_at', 'unknown')}")
+                    click.echo(f"Files Cached: {len(data.get('file_reads', {}))}")
+                    click.echo(f"Searches: {len(data.get('search_results', []))}")
+                    click.echo(f"Git Ops: {len(data.get('git_operations', []))}")
+                    click.echo(f"Discoveries: {len(data.get('discoveries', []))}")
+                    click.echo(f"Conversation: {len(data.get('conversation_history', []))} messages")
+                except Exception as e:
+                    click.echo(f"Error reading session: {e}")
+
+            # Show current memory stats
+            mem = self.orchestrator.get_working_memory_summary()
+            click.secho("\nCurrent Session Memory:", bold=True)
+            click.echo(f"  Files in memory: {mem['files_cached']}")
+            click.echo(f"  Searches: {mem['recent_searches']}")
+            click.echo(f"  Git ops: {mem['git_operations']}")
+            click.echo(f"  Discoveries: {mem['discoveries']}")
+            click.echo(f"  Conversation: {len(self.conversation_history)} messages")
+            click.echo(f"  Auto-save: {click.style('ON' if self.auto_save else 'OFF', fg='green' if self.auto_save else 'yellow')}")
+
+        elif args.lower() == "save":
+            try:
+                session_file = self.orchestrator.save_session(self.conversation_history)
+                click.secho(f"Session saved to: {session_file}", fg="green")
+                click.echo(f"  Conversation: {len(self.conversation_history)} messages")
+            except Exception as e:
+                click.secho(f"Error saving session: {e}", fg="red")
+
+        elif args.lower() == "load":
+            result = self.orchestrator.load_session()
+            if result['status'] == 'loaded':
+                click.secho(f"Session loaded from {result['saved_at']}", fg="green")
+                click.echo(f"  Files: {result['files_restored']}")
+                click.echo(f"  Searches: {result['searches_restored']}")
+                click.echo(f"  Git ops: {result['git_ops_restored']}")
+                click.echo(f"  Discoveries: {result['discoveries_restored']}")
+
+                # Restore conversation
+                conversation = result.get('conversation_history', [])
+                if conversation:
+                    self.conversation_history = conversation
+                    click.echo(f"  Conversation: {len(conversation)} messages")
+            elif result['status'] == 'no_session':
+                click.secho("No saved session found.", fg="yellow")
+            else:
+                click.secho(f"Error: {result.get('message', 'unknown')}", fg="red")
+
+        elif args.lower() == "clear":
+            self.orchestrator.clear_session()
+            click.secho("Saved session cleared.", fg="green")
+
+        elif args.lower() == "toggle":
+            self.auto_save = not self.auto_save
+            status = click.style("ON", fg="green") if self.auto_save else click.style("OFF", fg="yellow")
+            click.echo(f"Auto-save on exit: {status}")
+            if self.auto_save:
+                click.echo("Session will be saved automatically on /quit")
+            else:
+                click.echo("Session will NOT be saved on /quit (use '/session save' manually)")
+
+        else:
+            click.echo("Usage: /session [save|load|clear|toggle]")
+            click.echo("  (no args)  - Show session info")
+            click.echo("  save       - Save current session to disk")
+            click.echo("  load       - Load saved session")
+            click.echo("  clear      - Delete saved session file")
+            click.echo("  toggle     - Toggle auto-save on/off")
+            click.echo(f"\nAuto-save: {click.style('ON' if self.auto_save else 'OFF', fg='green' if self.auto_save else 'yellow')}")
+
     def _smart_query(self, query: str):
         """Perform a smart query using tools to gather context before answering."""
         click.secho("\n[Smart Query] Researching...", fg="cyan", bold=True)
@@ -1014,12 +1121,16 @@ pass_cli = click.make_pass_decorator(CLI, ensure=True)
 @click.option("--brain", "-b", default=None, help="Orchestrator brain provider (cerebras, groq, gemini)")
 @click.option("--auto-explore", "-a", is_flag=True, help="Automatically explore codebase on startup")
 @click.option("--no-context", is_flag=True, help="Disable context-aware prompts")
+@click.option("--resume", "-r", is_flag=True, help="Resume from last saved session")
+@click.option("--no-save", is_flag=True, help="Disable auto-save on exit")
 @click.pass_context
-def cli(ctx, brain, auto_explore, no_context):
+def cli(ctx, brain, auto_explore, no_context, resume, no_save):
     """LLM Agent Team CLI - Multi-provider orchestrator interface.
 
     Start interactive mode by running without arguments, or use subcommands
     for one-shot operations.
+
+    Sessions are auto-saved on /quit by default. Use --resume to continue.
     """
     ctx.ensure_object(dict)
 
@@ -1027,10 +1138,47 @@ def cli(ctx, brain, auto_explore, no_context):
     ctx.obj['brain'] = brain
     ctx.obj['auto_explore'] = auto_explore
     ctx.obj['context_aware'] = not no_context
+    ctx.obj['resume'] = resume
+    ctx.obj['auto_save'] = not no_save
 
     # If no subcommand, start interactive mode
     if ctx.invoked_subcommand is None:
         cli_instance = CLI(brain=brain, auto_explore=auto_explore, context_aware=not no_context)
+        cli_instance.auto_save = not no_save  # Set auto-save preference
+
+        # Resume previous session if requested
+        if resume:
+            result = cli_instance.orchestrator.load_session()
+            if result['status'] == 'loaded':
+                click.secho(f"\nResumed session from {result['saved_at']}", fg="green", bold=True)
+                click.echo(f"  Files restored: {result['files_restored']}")
+                click.echo(f"  Searches restored: {result['searches_restored']}")
+                click.echo(f"  Git ops restored: {result['git_ops_restored']}")
+                click.echo(f"  Discoveries restored: {result['discoveries_restored']}")
+                click.echo(f"  Task history: {result['tasks_restored']} entries")
+
+                # Restore conversation history
+                conversation = result.get('conversation_history', [])
+                if conversation:
+                    cli_instance.conversation_history = conversation
+                    click.echo(f"  Conversation: {len(conversation)} messages restored")
+
+                    # Show last few exchanges
+                    click.secho("\nLast conversation:", fg="cyan")
+                    for msg in conversation[-4:]:  # Show last 2 exchanges
+                        role = msg.get('role', 'unknown')
+                        content = msg.get('content', '')[:100]
+                        if len(msg.get('content', '')) > 100:
+                            content += "..."
+                        if role == 'user':
+                            click.echo(f"  You: {content}")
+                        else:
+                            click.echo(f"  Assistant: {content}")
+            elif result['status'] == 'no_session':
+                click.secho("No previous session found. Starting fresh.", fg="yellow")
+            else:
+                click.secho(f"Error loading session: {result.get('message', 'unknown')}", fg="red")
+
         cli_instance.interactive_mode()
 
 
@@ -1170,12 +1318,47 @@ def usage(ctx):
 
 
 @cli.command()
+@click.option("--resume", "-r", is_flag=True, help="Resume from last session")
 @click.pass_context
-def interactive(ctx):
+def interactive(ctx, resume):
     """Start interactive chat mode."""
     auto_explore = ctx.obj.get('auto_explore', False)
     context_aware = ctx.obj.get('context_aware', True)
     cli_instance = CLI(brain=ctx.obj.get('brain'), auto_explore=auto_explore, context_aware=context_aware)
+
+    # Resume previous session if requested
+    if resume:
+        result = cli_instance.orchestrator.load_session()
+        if result['status'] == 'loaded':
+            click.secho(f"\nResumed session from {result['saved_at']}", fg="green", bold=True)
+            click.echo(f"  Files restored: {result['files_restored']}")
+            click.echo(f"  Searches restored: {result['searches_restored']}")
+            click.echo(f"  Git ops restored: {result['git_ops_restored']}")
+            click.echo(f"  Discoveries restored: {result['discoveries_restored']}")
+            click.echo(f"  Task history: {result['tasks_restored']} entries")
+
+            # Restore conversation history
+            conversation = result.get('conversation_history', [])
+            if conversation:
+                cli_instance.conversation_history = conversation
+                click.echo(f"  Conversation: {len(conversation)} messages restored")
+
+                # Show last few exchanges
+                click.secho("\nLast conversation:", fg="cyan")
+                for msg in conversation[-4:]:  # Show last 2 exchanges
+                    role = msg.get('role', 'unknown')
+                    content = msg.get('content', '')[:100]
+                    if len(msg.get('content', '')) > 100:
+                        content += "..."
+                    if role == 'user':
+                        click.echo(f"  You: {content}")
+                    else:
+                        click.echo(f"  Assistant: {content}")
+        elif result['status'] == 'no_session':
+            click.secho("No previous session found. Starting fresh.", fg="yellow")
+        else:
+            click.secho(f"Error loading session: {result.get('message', 'unknown')}", fg="red")
+
     cli_instance.interactive_mode()
 
 

@@ -17,10 +17,12 @@ A framework for orchestrating LLM agents across multiple free-tier providers wit
 ## Features
 
 - **23,000+ free requests/day** across providers
+- **Session Persistence** - save and resume sessions with conversation history, working memory, and context
 - **Response Caching** - avoid duplicate API calls, save quota, instant responses for repeated queries
 - **Code Agent** - AI writes code with human-in-the-loop approval (uses Gemini for smart tasks)
 - **Swappable orchestrator** - use any provider as the "brain" (no Claude subscription required)
 - **Context-aware prompts** - automatically augments queries with project knowledge
+- **Working Memory** - tracks file reads, searches, and discoveries within sessions
 - **Auto-exploration** - learns your codebase structure and purpose
 - **Auto-fallback** - automatically switches models on rate limits
 - **Task planning** - AI-powered task breakdown with structured JSON output
@@ -126,6 +128,9 @@ Interactive command-line interface for users without Claude subscriptions:
 ```bash
 # Start interactive mode
 llm-team
+
+# Resume from last session (conversation + context preserved)
+llm-team --resume
 
 # Auto-explore codebase on startup (recommended)
 llm-team --auto-explore

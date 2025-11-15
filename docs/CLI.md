@@ -19,7 +19,7 @@ Complete reference for the LLM Agent Team command-line interface.
 | `llm-team models` | List available models | [models](#models---list-models) |
 | `llm-team usage` | Show usage statistics | [usage](#usage---usage-statistics) |
 
-**Interactive Mode Commands:** [Slash Commands](#interactive-mode-commands) | [Context](#context-management) | [Cache](#cache-management)
+**Interactive Mode Commands:** [Slash Commands](#interactive-mode-commands) | [Context](#context-management) | [Cache](#cache-management) | [Session](#session-management)
 
 ---
 
@@ -69,6 +69,8 @@ python llm_team.py [OPTIONS] [COMMAND]
 | `--brain` | `-b` | Set orchestrator brain provider (cerebras, groq, gemini) |
 | `--auto-explore` | `-a` | Automatically explore codebase on startup |
 | `--no-context` | | Disable context-aware prompts |
+| `--resume` | `-r` | Resume from last saved session |
+| `--no-save` | | Disable auto-save on exit |
 
 **Examples:**
 ```bash
@@ -81,8 +83,16 @@ python llm_team.py --auto-explore
 # Disable context awareness
 python llm_team.py --no-context
 
+# Resume previous session
+python llm_team.py --resume
+# or
+llm-team -r
+
+# Start without auto-saving
+python llm_team.py --no-save
+
 # Combine options
-python llm_team.py -b groq -a
+python llm_team.py -b groq -a -r
 ```
 
 ## Commands
@@ -526,12 +536,24 @@ When in interactive mode, use slash commands:
 | `/cache clear` | Clear all cached responses |
 | `/cache toggle` | Enable/disable response caching |
 
+### Session Management
+
+| Command | Description |
+|---------|-------------|
+| `/session` | Show session info and status |
+| `/session save` | Save current session to disk |
+| `/session load` | Load saved session |
+| `/session clear` | Delete saved session file |
+| `/session toggle` | Toggle auto-save on/off |
+
+See [Session Management](SESSION_MANAGEMENT.md) for full documentation.
+
 ### System Commands
 
 | Command | Description |
 |---------|-------------|
 | `/help` | Show all commands |
-| `/quit` or `/exit` | Exit CLI |
+| `/quit` or `/exit` | Exit CLI (auto-saves session by default) |
 
 ## Context Awareness System
 
