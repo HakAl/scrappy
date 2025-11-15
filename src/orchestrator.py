@@ -28,8 +28,13 @@ from pathlib import Path
 import json
 import hashlib
 
-from .providers import ProviderRegistry, GroqProvider, CohereProvider, GeminiProvider, CerebrasProvider, LLMResponse
-from .context import CodebaseContext
+try:
+    from .providers import ProviderRegistry, GroqProvider, CohereProvider, GeminiProvider, CerebrasProvider, LLMResponse
+    from .context import CodebaseContext
+except ImportError:
+    # Allow running as script
+    from providers import ProviderRegistry, GroqProvider, CohereProvider, GeminiProvider, CerebrasProvider, LLMResponse
+    from context import CodebaseContext
 
 
 class ResponseCache:
