@@ -4,6 +4,7 @@ Main entry point and command routing for the LLM Agent Team CLI.
 """
 
 import click
+import sys
 from datetime import datetime
 from typing import Optional
 
@@ -44,6 +45,7 @@ class CLI:
         )
         self.session_start = datetime.now()
         self.smart_mode = False  # Smart query mode (uses tools for research)
+        self.multiline_mode = True  # Multiline input mode (enabled by default)
         self.conversation_history = []  # Store conversation for session persistence
         self.auto_save = True  # Auto-save session on exit (can be toggled)
 
@@ -69,6 +71,31 @@ class CLI:
 
         click.echo()
 
+    def _read_multiline_input(self, prompt_text: str = "... ") -> str:
+        """
+        Read multiline input from user until they enter a blank line or 'END'.
+
+        Returns:
+            The complete multiline string.
+        """
+        click.secho("Enter your multiline input (blank line or 'END' to finish):", fg="cyan")
+        lines = []
+
+        while True:
+            try:
+                line = click.prompt(prompt_text, default="", show_default=False, prompt_suffix="")
+
+                # Check for termination
+                if line.strip() == "" or line.strip().upper() == "END":
+                    break
+
+                lines.append(line)
+            except click.Abort:
+                click.echo("\nMultiline input cancelled.")
+                return ""
+
+        return "\n".join(lines)
+
     def interactive_mode(self):
         """Run interactive chat mode."""
         click.secho("=" * 60, fg="cyan")
@@ -85,11 +112,44 @@ class CLI:
         click.echo(f"  {click.style('/quit', fg='yellow')}          - Exit the CLI")
         click.echo(f"  {click.style('(any text)', fg='bright_white')}     - Chat with current brain")
         click.secho("=" * 60, fg="cyan")
+
+        # Show multiline mode status
+        if self.multiline_mode:
+            click.secho("Multiline input: ON (blank line to send, /ml to toggle)", fg="green")
+        else:
+            click.secho("Multiline input: OFF (/ml to toggle)", fg="yellow")
         click.echo()
 
         while True:
             try:
-                user_input = click.prompt(click.style("You", fg="green", bold=True), default="", show_default=False).strip()
+                if self.multiline_mode:
+                    # Multiline input mode - read until blank line
+                    click.secho("You> ", fg="green", bold=True, nl=False)
+                    lines = []
+                    first_line = True
+                    while True:
+                        if first_line:
+                            line = input()
+                            first_line = False
+
+                            # If first line is a command, process it immediately
+                            if line.strip().startswith("/"):
+                                lines.append(line)
+                                break
+                        else:
+                            click.secho("... ", fg="green", nl=False)
+                            line = input()
+
+                        # Blank line terminates input
+                        if line.strip() == "":
+                            break
+
+                        lines.append(line)
+
+                    user_input = "\n".join(lines).strip()
+                else:
+                    # Single-line input mode
+                    user_input = click.prompt(click.style("You", fg="green", bold=True), default="", show_default=False).strip()
 
                 if not user_input:
                     continue
@@ -244,6 +304,19 @@ class CLI:
 
         elif cmd == "/limits":
             self.session_mgr.show_rate_limits(args)
+
+        elif cmd in ["/paste", "/ml", "/multiline"]:
+            # Toggle multiline input mode
+            self.multiline_mode = not self.multiline_mode
+            if self.multiline_mode:
+                click.secho("Multiline input mode: ON", fg="green", bold=True)
+                click.echo("  - Type your message across multiple lines")
+                click.echo("  - Press Enter twice (blank line) to send")
+                click.echo("  - Commands still work on the first line")
+            else:
+                click.secho("Multiline input mode: OFF", fg="yellow", bold=True)
+                click.echo("  - Single line input (press Enter to send)")
+                click.echo("  - Each line is processed separately")
 
         else:
             click.secho(f"Unknown command: {cmd}", fg="yellow")

@@ -26,6 +26,7 @@ class CLIDisplay:
         click.secho("-" * 50, fg="cyan")
         click.secho("Chat & Conversation:", bold=True)
         click.echo(f"  {click.style('(text)', fg='yellow')}           - Send message to current brain")
+        click.echo(f"  {click.style('/ml', fg='yellow')}              - Toggle multiline input mode (ON by default)")
         click.echo(f"  {click.style('/clear', fg='yellow')}           - Clear conversation history")
         click.echo()
         click.secho("Task Operations:", bold=True)
