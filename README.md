@@ -85,6 +85,62 @@ result = orch.delegate('cerebras', 'Summarize this code: ...')
 result = orch.delegate_smart('Format this JSON', task_type='fast')
 ```
 
+### 5. CLI Interface (No Claude Subscription Required)
+
+Interactive command-line interface for users without Claude subscriptions:
+
+```bash
+# Start interactive mode
+python llm_team.py
+
+# Or specify brain provider
+python llm_team.py --brain groq
+```
+
+**One-shot commands:**
+
+```bash
+# Quick query
+python llm_team.py query "What is machine learning?"
+
+# Query with specific provider
+python llm_team.py query "Explain Docker" --provider groq
+
+# Plan a task
+python llm_team.py plan "Build REST API with authentication"
+
+# Reason about a question
+python llm_team.py reason "Redis vs PostgreSQL for caching?" \
+  --evidence "Need sub-ms latency" \
+  --evidence "Data is temporary"
+
+# Check system status
+python llm_team.py status
+
+# List providers
+python llm_team.py providers
+
+# List models
+python llm_team.py models
+python llm_team.py models cerebras
+```
+
+**Interactive mode commands:**
+
+```
+You: /help              # Show all commands
+You: /plan <task>       # Create task plan
+You: /reason <question> # Analyze with reasoning
+You: /providers         # List available providers
+You: /brain groq        # Switch brain provider
+You: /models            # List all models
+You: /usage             # Show usage statistics
+You: /status            # System status
+You: /synthesize        # Multi-provider synthesis
+You: /delegate          # Direct provider delegation
+You: /quit              # Exit
+```
+
 ## Architecture
 
 ```

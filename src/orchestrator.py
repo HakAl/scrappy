@@ -238,7 +238,7 @@ Maximum {max_steps} steps. Be specific and actionable."""
         question: str,
         context: Optional[str] = None,
         evidence: Optional[list[str]] = None
-    ) -> str:
+    ) -> dict:
         """
         Use the orchestrator brain for complex reasoning.
 
@@ -248,7 +248,7 @@ Maximum {max_steps} steps. Be specific and actionable."""
             evidence: Optional list of evidence/facts to consider
 
         Returns:
-            Reasoned response as string
+            Dict with 'question', 'analysis', 'conclusion', 'confidence' keys
 
         Example:
             answer = orch.reason(
@@ -259,10 +259,15 @@ Maximum {max_steps} steps. Be specific and actionable."""
         """
         system_prompt = """You are a reasoning assistant. Analyze the question carefully, consider all evidence, and provide a well-reasoned response.
 
-Structure your response:
-1. Key considerations
-2. Analysis of options/factors
-3. Conclusion with reasoning"""
+You MUST respond in this exact JSON format:
+{
+  "question": "the question being analyzed",
+  "analysis": "detailed analysis of the considerations and factors",
+  "conclusion": "your final recommendation or answer",
+  "confidence": "high|medium|low"
+}
+
+Be thorough but concise. Do not repeat yourself. Provide unique insights in each section."""
 
         user_prompt = question
         if context:
@@ -277,7 +282,7 @@ Structure your response:
                 {'role': 'user', 'content': user_prompt}
             ],
             max_tokens=1500,
-            temperature=0.5
+            temperature=0.3  # Lower temperature for structured output
         )
 
         # Track
@@ -290,7 +295,30 @@ Structure your response:
             'task_type': 'reasoning',
         })
 
-        return response.content
+        # Parse JSON response
+        try:
+            import json
+            content = response.content.strip()
+            # Handle markdown code blocks
+            if content.startswith('```'):
+                lines = content.split('\n')
+                content = '\n'.join(lines[1:-1])
+            result = json.loads(content)
+            # Ensure all expected keys exist
+            return {
+                'question': result.get('question', question),
+                'analysis': result.get('analysis', ''),
+                'conclusion': result.get('conclusion', ''),
+                'confidence': result.get('confidence', 'unknown')
+            }
+        except (json.JSONDecodeError, KeyError):
+            # Fallback: return raw content as analysis
+            return {
+                'question': question,
+                'analysis': response.content,
+                'conclusion': 'See analysis above',
+                'confidence': 'unknown'
+            }
 
     def synthesize(
         self,
@@ -440,11 +468,23 @@ Structure your response:
 
         elif task_type == 'reasoning':
             # Use the orchestrator brain for reasoning
+            reasoning_result = self.reason(prompt)
+            # Convert dict to string for LLMResponse content
+            if isinstance(reasoning_result, dict):
+                content = f"Analysis: {reasoning_result.get('analysis', '')}\n\nConclusion: {reasoning_result.get('conclusion', '')}"
+            else:
+                content = str(reasoning_result)
             return LLMResponse(
-                content=self.reason(prompt),
+                content=content,
                 model=self.brain.default_model,
                 provider=self._brain_name,
-                metadata={'task_type': 'reasoning', 'via': 'orchestrator_brain'}
+                tokens_used=0,
+                input_tokens=0,
+                output_tokens=0,
+                latency_ms=0.0,
+                raw_response=reasoning_result,
+                metadata={'task_type': 'reasoning', 'via': 'orchestrator_brain'},
+                timestamp=datetime.now()
             )
 
         elif task_type == 'quality':
