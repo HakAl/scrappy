@@ -64,6 +64,7 @@ class CodeAgent:
             'git_diff': self._tool_git_diff,
             'git_blame': self._tool_git_blame,
             'git_show': self._tool_git_show,
+            'git_recent_changes': self._tool_git_recent_changes,
         }
 
         # Tool descriptions for LLM
@@ -78,6 +79,7 @@ Available tools:
 7. git_diff(ref: str = None, file: str = None) - Show changes (unstaged, or vs ref like HEAD~1)
 8. git_blame(file: str, lines: str = None) - Show who changed each line (e.g., lines="10,20")
 9. git_show(commit: str) - Show details of a specific commit
+10. git_recent_changes(n: int = 3) - Show content of last N commits with full diffs
 
 Response format (JSON):
 {
@@ -382,6 +384,36 @@ When task is complete:
             return "Error: git show timed out"
         except Exception as e:
             return f"Error running git show: {str(e)}"
+
+    def _tool_git_recent_changes(self, n: int = 3) -> str:
+        """Show content of last N commits with full diffs."""
+        try:
+            # Limit to reasonable number
+            n = min(n, 10)
+
+            result = subprocess.run(
+                ['git', 'log', f'-{n}', '--patch', '--stat', '--pretty=format:=== COMMIT %h ===\nAuthor: %an\nDate: %ad\nMessage: %s\n'],
+                cwd=self.project_root,
+                capture_output=True,
+                text=True,
+                timeout=30  # Longer timeout for diffs
+            )
+
+            if result.returncode != 0:
+                return f"Git error: {result.stderr.strip()}"
+
+            output = result.stdout.strip()
+            if not output:
+                return "No recent changes found"
+
+            # Truncate if too long (diffs can be very large)
+            if len(output) > 15000:
+                output = output[:15000] + "\n\n... [truncated - showing first 15000 chars]"
+            return output
+        except subprocess.TimeoutExpired:
+            return "Error: git recent changes timed out (diffs too large)"
+        except Exception as e:
+            return f"Error getting recent changes: {str(e)}"
 
     def _get_user_confirmation(self, action: str, params: dict) -> bool:
         """Ask user for confirmation before executing action."""

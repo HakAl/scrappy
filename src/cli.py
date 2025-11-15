@@ -26,15 +26,16 @@ class CLI:
 
     def __init__(self, brain: Optional[str] = None, auto_explore: bool = False, context_aware: bool = True):
         """Initialize CLI with orchestrator."""
-        click.echo("Initializing LLM Agent Team...")
+        click.secho("Initializing LLM Agent Team...", fg="cyan")
         self.orchestrator = AgentOrchestrator(
             orchestrator_provider=brain,
             auto_explore=auto_explore,
             context_aware=context_aware
         )
         self.session_start = datetime.now()
-        click.echo(f"Brain: {self.orchestrator.brain}")
-        click.echo(f"Available providers: {', '.join(self.orchestrator.providers.list_available())}")
+        click.echo(f"Brain: {click.style(self.orchestrator.brain, fg='green', bold=True)}")
+        providers_list = ', '.join(self.orchestrator.providers.list_available())
+        click.echo(f"Available providers: {click.style(providers_list, fg='cyan')}")
 
         # Show context status
         if self.orchestrator.context.is_explored():
@@ -46,29 +47,26 @@ class CLI:
 
     def interactive_mode(self):
         """Run interactive chat mode."""
-        click.echo("=" * 60)
-        click.echo("LLM Agent Team - Interactive Mode")
-        click.echo("=" * 60)
+        click.secho("=" * 60, fg="cyan")
+        click.secho("LLM Agent Team - Interactive Mode", fg="cyan", bold=True)
+        click.secho("=" * 60, fg="cyan")
         click.echo("Commands:")
-        click.echo("  /help          - Show all commands")
-        click.echo("  /plan <task>   - Create a task plan")
-        click.echo("  /reason <q>    - Reason about a question")
-        click.echo("  /status        - Show system status")
-        click.echo("  /providers     - List available providers")
-        click.echo("  /brain <name>  - Switch orchestrator brain")
-        click.echo("  /usage         - Show usage statistics")
-        click.echo("  /quit or /exit - Exit the CLI")
-        click.echo("  /context       - Manage codebase context")
-        click.echo("  /agent <task>  - Run code agent (with human approval)")
-        click.echo("  (any text)     - Chat with current brain")
-        click.echo("=" * 60)
+        click.echo(f"  {click.style('/help', fg='yellow')}          - Show all commands")
+        click.echo(f"  {click.style('/plan', fg='yellow')} <task>   - Create a task plan")
+        click.echo(f"  {click.style('/reason', fg='yellow')} <q>    - Reason about a question")
+        click.echo(f"  {click.style('/agent', fg='yellow')} <task>  - Run code agent (with human approval)")
+        click.echo(f"  {click.style('/context', fg='yellow')}       - Manage codebase context")
+        click.echo(f"  {click.style('/status', fg='yellow')}        - Show system status")
+        click.echo(f"  {click.style('/quit', fg='yellow')}          - Exit the CLI")
+        click.echo(f"  {click.style('(any text)', fg='bright_white')}     - Chat with current brain")
+        click.secho("=" * 60, fg="cyan")
         click.echo()
 
         conversation_history = []
 
         while True:
             try:
-                user_input = click.prompt("You", default="", show_default=False).strip()
+                user_input = click.prompt(click.style("You", fg="green", bold=True), default="", show_default=False).strip()
 
                 if not user_input:
                     continue
@@ -86,7 +84,7 @@ class CLI:
                     "content": user_input
                 })
 
-                click.echo("Assistant: ", nl=False)
+                click.secho("Assistant: ", fg="blue", bold=True, nl=False)
 
                 response = self.orchestrator.delegate(
                     self.orchestrator.brain,
@@ -123,7 +121,7 @@ class CLI:
 
         if cmd in ["/quit", "/exit", "/q"]:
             self._show_usage()
-            click.echo("\nGoodbye!")
+            click.secho("\nGoodbye!", fg="cyan", bold=True)
             return False
 
         elif cmd == "/help":
@@ -190,35 +188,35 @@ class CLI:
 
     def _show_help(self):
         """Display help information."""
-        click.echo("\nAvailable Commands:")
-        click.echo("-" * 50)
+        click.secho("\nAvailable Commands:", fg="cyan", bold=True)
+        click.secho("-" * 50, fg="cyan")
         click.secho("Chat & Conversation:", bold=True)
-        click.echo("  (text)           - Send message to current brain")
-        click.echo("  /clear           - Clear conversation history")
+        click.echo(f"  {click.style('(text)', fg='yellow')}           - Send message to current brain")
+        click.echo(f"  {click.style('/clear', fg='yellow')}           - Clear conversation history")
         click.echo()
         click.secho("Task Operations:", bold=True)
-        click.echo("  /plan <task>     - Break down task into steps")
-        click.echo("  /reason <q>      - Analyze question with reasoning")
-        click.echo("  /agent <task>    - Run code agent to complete task")
-        click.echo("  /synthesize      - Combine multiple provider responses")
-        click.echo("  /delegate <p>    - Send prompt to specific provider")
-        click.echo("  /explore [path]  - Explore and learn about a codebase")
+        click.echo(f"  {click.style('/plan', fg='yellow')} <task>     - Break down task into steps")
+        click.echo(f"  {click.style('/reason', fg='yellow')} <q>      - Analyze question with reasoning")
+        click.echo(f"  {click.style('/agent', fg='yellow')} <task>    - Run code agent to complete task")
+        click.echo(f"  {click.style('/synthesize', fg='yellow')}      - Combine multiple provider responses")
+        click.echo(f"  {click.style('/delegate', fg='yellow')} <p>    - Send prompt to specific provider")
+        click.echo(f"  {click.style('/explore', fg='yellow')} [path]  - Explore and learn about a codebase")
         click.echo()
         click.secho("Provider Management:", bold=True)
-        click.echo("  /providers       - List all available providers")
-        click.echo("  /brain <name>    - Switch orchestrator brain")
-        click.echo("  /models [prov]   - List models (optionally for provider)")
-        click.echo("  /status          - Show current system status")
-        click.echo("  /usage           - Show usage statistics")
+        click.echo(f"  {click.style('/providers', fg='yellow')}       - List all available providers")
+        click.echo(f"  {click.style('/brain', fg='yellow')} <name>    - Switch orchestrator brain")
+        click.echo(f"  {click.style('/models', fg='yellow')} [prov]   - List models (optionally for provider)")
+        click.echo(f"  {click.style('/status', fg='yellow')}          - Show current system status")
+        click.echo(f"  {click.style('/usage', fg='yellow')}           - Show usage statistics")
         click.echo()
         click.secho("Context Management:", bold=True)
-        click.echo("  /context         - Show context status")
-        click.echo("  /context explore - Explore current project")
-        click.echo("  /context clear   - Clear cached context")
-        click.echo("  /context toggle  - Toggle context awareness")
+        click.echo(f"  {click.style('/context', fg='yellow')}         - Show context status")
+        click.echo(f"  {click.style('/context explore', fg='yellow')} - Explore current project")
+        click.echo(f"  {click.style('/context clear', fg='yellow')}   - Clear cached context")
+        click.echo(f"  {click.style('/context toggle', fg='yellow')}  - Toggle context awareness")
         click.echo()
         click.secho("Cache Management:", bold=True)
-        click.echo("  /cache           - Show cache statistics")
+        click.echo(f"  {click.style('/cache', fg='yellow')}           - Show cache statistics")
         click.echo("  /cache clear     - Clear response cache")
         click.echo("  /cache toggle    - Toggle caching on/off")
         click.echo()
@@ -230,19 +228,19 @@ class CLI:
         """Display current system status."""
         status = self.orchestrator.status()
 
-        click.echo("\nSystem Status:")
-        click.echo("-" * 50)
+        click.secho("\nSystem Status:", fg="cyan", bold=True)
+        click.secho("-" * 50, fg="cyan")
         brain = status.get('orchestrator_brain', status.get('brain', 'unknown'))
         click.echo(f"Current Brain: {click.style(brain, fg='green', bold=True)}")
         click.echo(f"Total Providers: {len(status.get('available_providers', []))}")
-        click.echo(f"Available: {', '.join(status['available_providers'])}")
+        click.echo(f"Available: {click.style(', '.join(status['available_providers']), fg='cyan')}")
         click.echo(f"Tasks Completed: {status.get('tasks_executed', 0)}")
         click.echo(f"Session Duration: {datetime.now() - self.session_start}")
 
     def _list_providers(self):
         """List all providers with their details."""
-        click.echo("\nAvailable Providers:")
-        click.echo("-" * 50)
+        click.secho("\nAvailable Providers:", fg="cyan", bold=True)
+        click.secho("-" * 50, fg="cyan")
 
         info = self.orchestrator.providers.get_provider_info()
 
@@ -286,21 +284,21 @@ class CLI:
         """Display usage statistics."""
         report = self.orchestrator.get_usage_report()
 
-        click.echo("\nUsage Statistics:")
-        click.echo("-" * 50)
-        click.echo(f"Total Tasks: {report.get('total_tasks', 0)}")
+        click.secho("\nUsage Statistics:", fg="cyan", bold=True)
+        click.secho("-" * 50, fg="cyan")
+        click.echo(f"Total Tasks: {click.style(str(report.get('total_tasks', 0)), fg='green', bold=True)}")
         if 'cached_hits' in report:
-            click.echo(f"Cache Hits: {report['cached_hits']}")
+            click.echo(f"Cache Hits: {click.style(str(report['cached_hits']), fg='green')}")
             click.echo(f"API Calls: {report['api_calls']}")
         click.echo(f"Session Duration: {report.get('session_duration', 'N/A')}")
 
         if report.get('by_provider'):
-            click.echo("\nBy Provider:")
+            click.secho("\nBy Provider:", bold=True)
             for provider, stats in report['by_provider'].items():
-                click.secho(f"  {provider}:", bold=True)
+                click.secho(f"  {provider}:", fg="cyan", bold=True)
                 click.echo(f"    Requests: {stats['count']}")
                 if stats.get('cached_hits', 0) > 0:
-                    click.echo(f"    Cached Hits: {stats['cached_hits']}")
+                    click.echo(f"    Cached Hits: {click.style(str(stats['cached_hits']), fg='green')}")
                 click.echo(f"    Total Tokens: {stats['total_tokens']:,}")
                 click.echo(f"    Avg Tokens/Request: {stats['avg_tokens']:.1f}")
                 click.echo(f"    Total Latency: {stats['total_latency_ms']:.0f}ms")
@@ -720,14 +718,17 @@ Be concise but thorough. Focus on actionable insights."""
         if not args:
             # Show context status
             status = self.orchestrator.get_context_status()
-            click.secho("\nContext Status:", bold=True)
-            click.echo("-" * 50)
-            click.echo(f"Project: {status['project_path']}")
+            click.secho("\nContext Status:", fg="cyan", bold=True)
+            click.secho("-" * 50, fg="cyan")
+            click.echo(f"Project: {click.style(str(status['project_path']), fg='bright_white')}")
             click.echo(f"Explored: {click.style('Yes' if status['is_explored'] else 'No', fg='green' if status['is_explored'] else 'yellow')}")
             click.echo(f"Has Summary: {'Yes' if status['has_summary'] else 'No'}")
             if status['explored_at']:
                 click.echo(f"Explored At: {status['explored_at']}")
             click.echo(f"Total Files: {status['total_files']}")
+            if status.get('has_git_history'):
+                click.echo(f"Git Branch: {click.style(status.get('git_branch', 'unknown'), fg='cyan')}")
+                click.echo(f"Git Commits: {status.get('git_commits', 0)}")
             click.echo(f"Context Aware: {click.style('Enabled' if self.orchestrator.context_aware else 'Disabled', fg='green' if self.orchestrator.context_aware else 'red')}")
             click.echo(f"Cache File: {status['cache_file']}")
             click.echo(f"Cache Exists: {'Yes' if status['cache_exists'] else 'No'}")
@@ -1041,13 +1042,22 @@ def interactive(ctx):
 
 
 @cli.command()
+@click.option("--clear", is_flag=True, help="Clear cached context")
+@click.option("--refresh", is_flag=True, help="Force re-exploration")
 @click.pass_context
-def context(ctx):
+def context(ctx, clear, refresh):
     """Show and manage codebase context."""
     auto_explore = ctx.obj.get('auto_explore', False)
     context_aware = ctx.obj.get('context_aware', True)
     cli_instance = CLI(brain=ctx.obj.get('brain'), auto_explore=auto_explore, context_aware=context_aware)
-    cli_instance._manage_context("")
+
+    if clear:
+        cli_instance.orchestrator.context.clear_cache()
+        click.secho("Context cache cleared.", fg="green")
+    elif refresh:
+        cli_instance._manage_context("refresh")
+    else:
+        cli_instance._manage_context("")
 
 
 @cli.command()
