@@ -1,0 +1,345 @@
+"""
+Google Gemini LLM Provider with automatic model fallback.
+
+Key feature: When a model hits rate limits, automatically falls back to other models.
+
+Current quotas (as of 2025-11-15):
+- gemini-2.0-flash-lite: 200 RPD, 1M TPD
+- gemini-2.0-flash: 200 RPD, 1M TPD
+- gemini-2.5-flash: 250 RPD, 250K TPD
+- gemini-2.5-flash-lite: 1000 RPD, 250K TPD (highest quota!)
+- gemini-2.0-flash-exp: 50 RPD
+"""
+
+import os
+import time
+from typing import Optional
+
+from .base import LLMProvider, LLMResponse, ProviderLimits
+
+try:
+    import google.generativeai as genai
+    from google.api_core import exceptions as google_exceptions
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
+    genai = None
+    google_exceptions = None
+
+
+class GeminiProvider(LLMProvider):
+    """
+    Google Gemini provider with automatic model fallback.
+
+    Environment variable required: GEMINI_API_KEY
+
+    Special feature: If a model hits rate limits, automatically tries the next model.
+    """
+
+    # Models ordered by preference (quality) with their limits
+    # Format: rpm_limit, rpd_limit, tpm_limit, tpd_limit
+    MODELS = {
+        'gemini-2.5-flash-lite': {
+            'rpm': 15, 'rpd': 1000, 'tpd': 250000,
+            'quality': 'good', 'speed': 'fast', 'priority': 1
+        },
+        'gemini-2.0-flash-lite': {
+            'rpm': 30, 'rpd': 200, 'tpd': 1000000,
+            'quality': 'moderate', 'speed': 'very_fast', 'priority': 2
+        },
+        'gemini-2.0-flash': {
+            'rpm': 15, 'rpd': 200, 'tpd': 1000000,
+            'quality': 'good', 'speed': 'fast', 'priority': 3
+        },
+        'gemini-2.5-flash': {
+            'rpm': 10, 'rpd': 250, 'tpd': 250000,
+            'quality': 'very_good', 'speed': 'moderate', 'priority': 4
+        },
+        'gemini-2.0-flash-exp': {
+            'rpm': 10, 'rpd': 50, 'tpd': None,
+            'quality': 'experimental', 'speed': 'fast', 'priority': 5
+        },
+    }
+
+    # Fallback order: try models with most remaining quota first
+    FALLBACK_ORDER = [
+        'gemini-2.5-flash-lite',  # 1000 RPD - highest quota
+        'gemini-2.0-flash-lite',  # 200 RPD, very fast
+        'gemini-2.0-flash',       # 200 RPD, good quality
+        'gemini-2.5-flash',       # 250 RPD, best quality
+        'gemini-2.0-flash-exp',   # 50 RPD, experimental
+    ]
+
+    def __init__(self, api_key: Optional[str] = None):
+        """
+        Initialize Gemini provider.
+
+        Args:
+            api_key: Gemini API key (defaults to GEMINI_API_KEY env var)
+        """
+        if not GEMINI_AVAILABLE:
+            raise ImportError("google-generativeai package not installed. Run: pip install google-generativeai")
+
+        self._api_key = api_key or os.environ.get('GEMINI_API_KEY')
+        if not self._api_key:
+            raise ValueError("GEMINI_API_KEY not found in environment")
+
+        genai.configure(api_key=self._api_key)
+
+        # Track which models have hit limits (reset periodically)
+        self._limited_models: set[str] = set()
+        self._model_usage: dict[str, int] = {model: 0 for model in self.MODELS}
+
+    @property
+    def name(self) -> str:
+        return 'gemini'
+
+    @property
+    def available_models(self) -> list[str]:
+        return list(self.MODELS.keys())
+
+    @property
+    def default_model(self) -> str:
+        # Use highest quota model by default
+        return 'gemini-2.5-flash-lite'
+
+    def chat(
+        self,
+        messages: list[dict[str, str]],
+        model: Optional[str] = None,
+        max_tokens: int = 1000,
+        temperature: float = 0.7,
+        auto_fallback: bool = True,
+        **kwargs
+    ) -> LLMResponse:
+        """
+        Send chat completion to Gemini with automatic fallback.
+
+        Args:
+            messages: List of message dicts with 'role' and 'content' keys
+            model: Model to use (defaults to highest quota model)
+            max_tokens: Maximum tokens in response
+            temperature: Sampling temperature
+            auto_fallback: If True, try other models on rate limit errors
+            **kwargs: Additional parameters
+
+        Returns:
+            LLMResponse with result and metadata about which model was used
+        """
+        model = model or self.default_model
+
+        if auto_fallback:
+            return self._chat_with_fallback(messages, model, max_tokens, temperature, **kwargs)
+        else:
+            return self._single_model_chat(messages, model, max_tokens, temperature, **kwargs)
+
+    def _single_model_chat(
+        self,
+        messages: list[dict[str, str]],
+        model: str,
+        max_tokens: int,
+        temperature: float,
+        **kwargs
+    ) -> LLMResponse:
+        """Execute chat with a single model (no fallback)."""
+        if model not in self.MODELS:
+            raise ValueError(f"Model '{model}' not supported. Available: {self.available_models}")
+
+        # Convert messages to Gemini format
+        gemini_messages = self._convert_messages(messages)
+
+        start_time = time.time()
+
+        # Create model instance
+        generation_config = {
+            'max_output_tokens': max_tokens,
+            'temperature': temperature,
+        }
+
+        gemini_model = genai.GenerativeModel(
+            model_name=model,
+            generation_config=generation_config
+        )
+
+        # Send request
+        response = gemini_model.generate_content(gemini_messages)
+
+        latency_ms = (time.time() - start_time) * 1000
+
+        # Track usage
+        self._model_usage[model] = self._model_usage.get(model, 0) + 1
+
+        # Extract token counts if available
+        input_tokens = 0
+        output_tokens = 0
+        if hasattr(response, 'usage_metadata') and response.usage_metadata:
+            input_tokens = getattr(response.usage_metadata, 'prompt_token_count', 0)
+            output_tokens = getattr(response.usage_metadata, 'candidates_token_count', 0)
+
+        return LLMResponse(
+            content=response.text,
+            model=model,
+            provider=self.name,
+            tokens_used=input_tokens + output_tokens,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            latency_ms=latency_ms,
+            raw_response=response,
+            metadata={
+                'model_config': self.MODELS.get(model, {}),
+                'session_usage': self._model_usage.copy(),
+                'fallback_used': False,
+            }
+        )
+
+    def _chat_with_fallback(
+        self,
+        messages: list[dict[str, str]],
+        preferred_model: str,
+        max_tokens: int,
+        temperature: float,
+        **kwargs
+    ) -> LLMResponse:
+        """
+        Try preferred model first, then fallback to others on rate limit.
+
+        This is the key feature - automatically finds a working model.
+        """
+        # Build fallback list: preferred model first, then others
+        models_to_try = [preferred_model]
+        for model in self.FALLBACK_ORDER:
+            if model != preferred_model and model not in self._limited_models:
+                models_to_try.append(model)
+
+        last_error = None
+        attempted_models = []
+
+        for model in models_to_try:
+            attempted_models.append(model)
+            try:
+                response = self._single_model_chat(messages, model, max_tokens, temperature, **kwargs)
+
+                # Success! Update metadata to show fallback path
+                response.metadata['fallback_used'] = (model != preferred_model)
+                response.metadata['attempted_models'] = attempted_models
+                response.metadata['original_model'] = preferred_model
+
+                if model != preferred_model:
+                    print(f"[Gemini] Fallback: {preferred_model} -> {model}")
+
+                return response
+
+            except Exception as e:
+                error_str = str(e).lower()
+
+                # Check if this is a rate limit error
+                if 'quota' in error_str or 'rate' in error_str or '429' in error_str or 'resource' in error_str:
+                    print(f"[Gemini] {model} rate limited, trying next...")
+                    self._limited_models.add(model)
+                    last_error = e
+                    continue
+                else:
+                    # Not a rate limit error, don't try other models
+                    raise
+
+        # All models failed
+        if last_error:
+            raise RuntimeError(
+                f"All Gemini models rate limited. Tried: {attempted_models}. "
+                f"Last error: {last_error}"
+            )
+        else:
+            raise RuntimeError("No Gemini models available")
+
+    def _convert_messages(self, messages: list[dict[str, str]]) -> list:
+        """
+        Convert standard message format to Gemini format.
+
+        Gemini expects a different format than OpenAI/Anthropic.
+        """
+        gemini_messages = []
+
+        for msg in messages:
+            role = msg['role']
+            content = msg['content']
+
+            # Map roles
+            if role == 'system':
+                # Gemini doesn't have system role, prepend to first user message
+                # or add as a "user" message
+                gemini_messages.append({
+                    'role': 'user',
+                    'parts': [f"System instruction: {content}"]
+                })
+                # Add a model acknowledgment
+                gemini_messages.append({
+                    'role': 'model',
+                    'parts': ['Understood. I will follow these instructions.']
+                })
+            elif role == 'user':
+                gemini_messages.append({
+                    'role': 'user',
+                    'parts': [content]
+                })
+            elif role == 'assistant':
+                gemini_messages.append({
+                    'role': 'model',
+                    'parts': [content]
+                })
+
+        # If only one message and it's user, just return the content
+        if len(gemini_messages) == 1 and gemini_messages[0]['role'] == 'user':
+            return gemini_messages[0]['parts'][0]
+
+        return gemini_messages
+
+    def get_limits(self) -> ProviderLimits:
+        """Get rate limit info for default model."""
+        model_limits = self.MODELS.get(self.default_model, {})
+        return ProviderLimits(
+            requests_per_minute=model_limits.get('rpm'),
+            requests_per_day=model_limits.get('rpd'),
+            tokens_per_day=model_limits.get('tpd'),
+        )
+
+    def get_model_for_task(self, task_type: str) -> str:
+        """
+        Recommend a model based on task type.
+
+        Args:
+            task_type: 'fast', 'quality', 'high_volume', 'balanced'
+
+        Returns:
+            Recommended model name
+        """
+        if task_type == 'fast':
+            return 'gemini-2.0-flash-lite'
+        elif task_type == 'quality':
+            return 'gemini-2.5-flash'
+        elif task_type == 'high_volume':
+            return 'gemini-2.5-flash-lite'  # 1000 RPD!
+        elif task_type == 'balanced':
+            return 'gemini-2.0-flash'
+        else:
+            return self.default_model
+
+    def is_available(self) -> bool:
+        """Check if Gemini is properly configured."""
+        return bool(self._api_key and GEMINI_AVAILABLE)
+
+    def reset_limited_models(self):
+        """
+        Reset the list of rate-limited models.
+
+        Call this at the start of a new day or when you know limits have reset.
+        """
+        self._limited_models.clear()
+        print("[Gemini] Rate limit tracking reset")
+
+    def get_usage_summary(self) -> dict:
+        """Get summary of model usage in this session."""
+        return {
+            'model_usage': self._model_usage.copy(),
+            'limited_models': list(self._limited_models),
+            'available_models': [m for m in self.MODELS if m not in self._limited_models],
+        }
