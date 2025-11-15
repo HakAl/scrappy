@@ -2,6 +2,26 @@
 
 Complete reference for the LLM Agent Team command-line interface.
 
+## Command Quick Reference
+
+| Command | Description | Section |
+|---------|-------------|---------|
+| `llm-team` | Start interactive chat mode | [Interactive Mode](#interactive-mode-default) |
+| `llm-team query` | Send one-shot query | [query](#query---send-a-single-query) |
+| `llm-team plan` | Break down task into steps | [plan](#plan---create-task-plans) |
+| `llm-team reason` | Analyze with evidence | [reason](#reason---complex-reasoning) |
+| `llm-team agent` | AI writes code with approval | [agent](#agent---code-agent-with-human-approval) |
+| `llm-team explore` | Analyze codebase structure | [explore](#explore---codebase-analysis) |
+| `llm-team context` | View context status | [context](#context---view-context-status) |
+| `llm-team status` | System status | [status](#status---system-status) |
+| `llm-team providers` | List available providers | [providers](#providers---list-providers) |
+| `llm-team models` | List available models | [models](#models---list-models) |
+| `llm-team usage` | Show usage statistics | [usage](#usage---usage-statistics) |
+
+**Interactive Mode Commands:** [Slash Commands](#interactive-mode-commands) | [Context](#context-management) | [Cache](#cache-management)
+
+---
+
 ## Quick Start
 
 **Get API Keys**
@@ -328,6 +348,10 @@ The agent has access to these tools:
 - `list_files(directory, pattern)` - List files in directory
 - `run_command(command)` - Execute shell command
 - `search_code(pattern, file_pattern)` - Search for code patterns
+- `git_log(n, file)` - View recent commits (optionally for specific file)
+- `git_diff(ref, file)` - Show changes (unstaged or vs ref like HEAD~1)
+- `git_blame(file, lines)` - Show who changed each line
+- `git_show(commit)` - Show details of a specific commit
 
 **Safety Features:**
 - **Human-in-the-loop**: Every file operation requires your approval

@@ -60,6 +60,10 @@ class CodeAgent:
             'list_files': self._tool_list_files,
             'run_command': self._tool_run_command,
             'search_code': self._tool_search_code,
+            'git_log': self._tool_git_log,
+            'git_diff': self._tool_git_diff,
+            'git_blame': self._tool_git_blame,
+            'git_show': self._tool_git_show,
         }
 
         # Tool descriptions for LLM
@@ -70,6 +74,10 @@ Available tools:
 3. list_files(directory: str, pattern: str = "*") - List files in directory
 4. run_command(command: str) - Run a shell command
 5. search_code(pattern: str, file_pattern: str = "*.py") - Search for pattern in code
+6. git_log(n: int = 10, file: str = None) - View recent commits (optionally for specific file)
+7. git_diff(ref: str = None, file: str = None) - Show changes (unstaged, or vs ref like HEAD~1)
+8. git_blame(file: str, lines: str = None) - Show who changed each line (e.g., lines="10,20")
+9. git_show(commit: str) - Show details of a specific commit
 
 Response format (JSON):
 {
@@ -240,6 +248,140 @@ When task is complete:
             return output
         except Exception as e:
             return f"Error searching: {str(e)}"
+
+    def _tool_git_log(self, n: int = 10, file: str = None) -> str:
+        """View recent git commits."""
+        try:
+            cmd = ['git', 'log', f'-{n}', '--oneline', '--decorate']
+            if file:
+                if not self._is_safe_path(file):
+                    return f"Error: Path '{file}' is outside project directory"
+                cmd.extend(['--', file])
+
+            result = subprocess.run(
+                cmd,
+                cwd=self.project_root,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+
+            if result.returncode != 0:
+                return f"Git error: {result.stderr.strip()}"
+
+            output = result.stdout.strip()
+            if not output:
+                return "No commits found"
+            return output
+        except subprocess.TimeoutExpired:
+            return "Error: git log timed out"
+        except Exception as e:
+            return f"Error running git log: {str(e)}"
+
+    def _tool_git_diff(self, ref: str = None, file: str = None) -> str:
+        """Show git diff (unstaged changes, or vs a ref like HEAD~1)."""
+        try:
+            cmd = ['git', 'diff']
+            if ref:
+                cmd.append(ref)
+            if file:
+                if not self._is_safe_path(file):
+                    return f"Error: Path '{file}' is outside project directory"
+                cmd.extend(['--', file])
+
+            result = subprocess.run(
+                cmd,
+                cwd=self.project_root,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+
+            if result.returncode != 0:
+                return f"Git error: {result.stderr.strip()}"
+
+            output = result.stdout.strip()
+            if not output:
+                return "No changes found"
+
+            # Truncate if too long
+            if len(output) > 5000:
+                output = output[:5000] + "\n... [truncated]"
+            return output
+        except subprocess.TimeoutExpired:
+            return "Error: git diff timed out"
+        except Exception as e:
+            return f"Error running git diff: {str(e)}"
+
+    def _tool_git_blame(self, file: str, lines: str = None) -> str:
+        """Show git blame for a file (who changed each line)."""
+        if not self._is_safe_path(file):
+            return f"Error: Path '{file}' is outside project directory"
+
+        try:
+            cmd = ['git', 'blame', '--date=short']
+
+            # Add line range if specified (e.g., "10,20" for lines 10-20)
+            if lines:
+                cmd.extend(['-L', lines])
+
+            cmd.append(file)
+
+            result = subprocess.run(
+                cmd,
+                cwd=self.project_root,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+
+            if result.returncode != 0:
+                return f"Git error: {result.stderr.strip()}"
+
+            output = result.stdout.strip()
+            if not output:
+                return "No blame information found"
+
+            # Truncate if too long
+            if len(output) > 5000:
+                output = output[:5000] + "\n... [truncated]"
+            return output
+        except subprocess.TimeoutExpired:
+            return "Error: git blame timed out"
+        except Exception as e:
+            return f"Error running git blame: {str(e)}"
+
+    def _tool_git_show(self, commit: str) -> str:
+        """Show details of a specific commit."""
+        try:
+            # Validate commit hash format (basic check)
+            if not commit.replace('-', '').replace('^', '').replace('~', '').replace('HEAD', '').isalnum():
+                if commit not in ['HEAD', 'HEAD~1', 'HEAD~2', 'HEAD^']:
+                    return f"Error: Invalid commit reference '{commit}'"
+
+            result = subprocess.run(
+                ['git', 'show', '--stat', commit],
+                cwd=self.project_root,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+
+            if result.returncode != 0:
+                return f"Git error: {result.stderr.strip()}"
+
+            output = result.stdout.strip()
+            if not output:
+                return "No commit information found"
+
+            # Truncate if too long
+            if len(output) > 5000:
+                output = output[:5000] + "\n... [truncated]"
+            return output
+        except subprocess.TimeoutExpired:
+            return "Error: git show timed out"
+        except Exception as e:
+            return f"Error running git show: {str(e)}"
 
     def _get_user_confirmation(self, action: str, params: dict) -> bool:
         """Ask user for confirmation before executing action."""

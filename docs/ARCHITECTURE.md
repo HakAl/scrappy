@@ -160,7 +160,8 @@ Automatic project understanding:
 
 AI-powered code writing with safety:
 - **Hybrid model approach**: Gemini for planning/reasoning, Cerebras for fast operations
-- **Tool-based execution**: read_file, write_file, list_files, run_command, search_code
+- **Tool-based execution**: read_file, write_file, list_files, run_command, search_code, git_log, git_diff, git_blame, git_show
+- **Git history awareness**: Agent can check commits, diffs, and blame to understand code evolution
 - **Human-in-the-loop**: Every action requires explicit approval
 - **Safety features**:
   - Path sandboxing (restricted to project directory)

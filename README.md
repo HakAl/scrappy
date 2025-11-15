@@ -274,6 +274,7 @@ Rollback to checkpoint? [y/N]: n
 **Key safety features:**
 - Human approval for every file operation
 - Git checkpoint before changes (easy rollback)
+- **Git history awareness** (checks commits, diffs, blame before changes)
 - Sandboxed to project directory
 - Audit logging of all actions
 - Dry-run mode for previewing
@@ -462,6 +463,7 @@ See [docs/RATE_LIMITS.md](docs/RATE_LIMITS.md) for detailed limits and usage str
 
 ## Documentation
 
+- **[5-Minute Quickstart](docs/QUICKSTART.md)** - Get running fast, no fluff
 - [CLI Reference](docs/CLI.md) - Complete CLI guide and commands
 - [Architecture](docs/ARCHITECTURE.md) - System design and patterns
 - [Rate Limits](docs/RATE_LIMITS.md) - Provider limits and usage strategy

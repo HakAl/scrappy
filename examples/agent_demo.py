@@ -110,6 +110,22 @@ def demo_tool_usage():
     for line in result.split('\n')[:5]:
         print(f"  {line}")
 
+    # Test git_log
+    print("\n--- Testing git_log ---")
+    result = agent._tool_git_log(n=5)
+    print(f"Recent commits:")
+    for line in result.split('\n')[:5]:
+        print(f"  {line}")
+
+    # Test git_diff
+    print("\n--- Testing git_diff ---")
+    result = agent._tool_git_diff()
+    if "No changes" in result:
+        print(f"  {result}")
+    else:
+        print(f"  Changes found: {len(result)} chars")
+        print(f"  First 200 chars: {result[:200]}...")
+
 
 def demo_safety_features():
     """Demo 3: Safety features."""
