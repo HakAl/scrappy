@@ -6,6 +6,7 @@ Central coordinator for multi-provider LLM agent team using composition.
 
 from typing import Optional
 from datetime import datetime
+import asyncio
 
 try:
     from ..providers import ProviderRegistry, GroqProvider, CohereProvider, GeminiProvider, CerebrasProvider, LLMResponse
@@ -480,6 +481,225 @@ class AgentOrchestrator:
             )
             results.append(result)
         return results
+
+    # Async Methods
+
+    async def delegate_async(
+        self,
+        provider_name: str,
+        prompt: str,
+        model: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        max_tokens: int = 1000,
+        temperature: float = 0.7,
+        use_context: Optional[bool] = None,
+        use_cache: Optional[bool] = None,
+        intent_classification: Optional[dict] = None,
+        **kwargs
+    ) -> LLMResponse:
+        """
+        Async version of delegate for non-blocking API calls.
+
+        Enables parallel execution of multiple LLM requests.
+        """
+        provider = self.registry.get(provider_name)
+
+        # Determine if we should use context
+        should_use_context = use_context if use_context is not None else self.context_aware
+
+        # Augment prompt with context if enabled
+        final_prompt = prompt
+        if should_use_context and self.context.is_explored():
+            final_prompt = self.context.augment_prompt(prompt)
+
+        # Add working memory context
+        if should_use_context:
+            working_memory_context = self.get_working_memory_context()
+            if working_memory_context:
+                final_prompt = working_memory_context + "\n\n" + final_prompt
+
+        # Determine if we should use cache
+        should_use_cache = use_cache if use_cache is not None else self.caching_enabled
+
+        # Check cache first
+        cached_response = None
+        intent_cache_hit = False
+        if should_use_cache:
+            cached_response = self.cache.get(
+                provider_name, final_prompt, model, system_prompt, max_tokens, temperature
+            )
+            if not cached_response and intent_classification:
+                cached_response = self.cache.get_by_intent(
+                    intent_classification.get('intent', ''),
+                    intent_classification.get('entities', {}),
+                    intent_classification.get('keywords', []),
+                    provider_name,
+                    model
+                )
+                if cached_response:
+                    intent_cache_hit = True
+
+        if cached_response:
+            self.task_history.append({
+                'timestamp': datetime.now().isoformat(),
+                'provider': provider_name,
+                'model': cached_response.model,
+                'tokens_used': cached_response.tokens_used,
+                'latency_ms': 0.0,
+                'context_augmented': should_use_context and self.context.is_explored(),
+                'cached': True,
+                'intent_cache_hit': intent_cache_hit,
+                'async': True,
+            })
+            return cached_response
+
+        # Build messages and execute asynchronously
+        messages = []
+        if system_prompt:
+            messages.append({'role': 'system', 'content': system_prompt})
+        messages.append({'role': 'user', 'content': final_prompt})
+
+        # Use async chat method
+        response = await provider.chat_async(
+            messages=messages,
+            model=model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            **kwargs
+        )
+
+        # Store in cache
+        if should_use_cache:
+            self.cache.put(response, final_prompt, model, system_prompt, max_tokens, temperature)
+            if intent_classification:
+                self.cache.put_by_intent(
+                    response,
+                    intent_classification.get('intent', ''),
+                    intent_classification.get('entities', {}),
+                    intent_classification.get('keywords', [])
+                )
+
+        # Track rate limits
+        self.rate_tracker.record_request(
+            provider=provider_name,
+            model=response.model,
+            input_tokens=response.input_tokens,
+            output_tokens=response.output_tokens,
+            success=True
+        )
+
+        # Check for approaching limits
+        provider_limits = provider.get_limits()
+        warnings = self.rate_tracker.is_limit_approaching(provider_name, response.model, provider_limits)
+        if warnings.get('message'):
+            response.metadata['rate_limit_warning'] = warnings['message']
+
+        # Track task
+        self.task_history.append({
+            'timestamp': datetime.now().isoformat(),
+            'provider': provider_name,
+            'model': response.model,
+            'tokens_used': response.tokens_used,
+            'latency_ms': response.latency_ms,
+            'context_augmented': should_use_context and self.context.is_explored(),
+            'cached': False,
+            'async': True,
+        })
+
+        return response
+
+    async def batch_delegate_async(
+        self,
+        tasks: list[dict],
+        provider_name: str = 'groq',
+        max_concurrent: int = 5
+    ) -> list[LLMResponse]:
+        """
+        Process multiple tasks in parallel using async.
+
+        Args:
+            tasks: List of task dicts with 'prompt' and optional 'system_prompt', 'kwargs'
+            provider_name: Provider to use for all tasks
+            max_concurrent: Maximum number of concurrent requests (to respect rate limits)
+
+        Returns:
+            List of LLMResponse objects in the same order as input tasks
+
+        Example:
+            tasks = [
+                {'prompt': 'Summarize this: ...'},
+                {'prompt': 'Analyze this: ...'},
+                {'prompt': 'Explain this: ...'}
+            ]
+            results = await orch.batch_delegate_async(tasks, 'cerebras', max_concurrent=3)
+        """
+        semaphore = asyncio.Semaphore(max_concurrent)
+
+        async def process_task(task):
+            async with semaphore:
+                return await self.delegate_async(
+                    provider_name,
+                    task['prompt'],
+                    system_prompt=task.get('system_prompt'),
+                    **task.get('kwargs', {})
+                )
+
+        # Execute all tasks concurrently (limited by semaphore)
+        results = await asyncio.gather(*[process_task(task) for task in tasks])
+        return list(results)
+
+    async def multi_provider_query_async(
+        self,
+        prompt: str,
+        providers: list[str] = None,
+        **kwargs
+    ) -> dict[str, LLMResponse]:
+        """
+        Query multiple providers in parallel for the same prompt.
+
+        Useful for getting different perspectives or comparing outputs.
+
+        Args:
+            prompt: The prompt to send to all providers
+            providers: List of provider names (defaults to all available)
+            **kwargs: Additional arguments passed to delegate_async
+
+        Returns:
+            Dict mapping provider name to LLMResponse
+        """
+        if providers is None:
+            providers = self.registry.list_available()
+
+        async def query_provider(provider_name):
+            try:
+                response = await self.delegate_async(provider_name, prompt, **kwargs)
+                return provider_name, response
+            except Exception as e:
+                print(f"[WARN] {provider_name} failed: {e}")
+                return provider_name, None
+
+        results = await asyncio.gather(*[query_provider(p) for p in providers])
+        return {name: response for name, response in results if response is not None}
+
+    def run_async(self, coro):
+        """
+        Helper to run async code from sync context.
+
+        Usage:
+            results = orch.run_async(orch.batch_delegate_async(tasks))
+        """
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # If we're already in an async context, create a new task
+                import nest_asyncio
+                nest_asyncio.apply()
+                return loop.run_until_complete(coro)
+            else:
+                return loop.run_until_complete(coro)
+        except RuntimeError:
+            # No event loop, create a new one
+            return asyncio.run(coro)
 
     # Usage and Cache Statistics
 

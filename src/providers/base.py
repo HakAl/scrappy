@@ -9,6 +9,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Optional
 from datetime import datetime
+import asyncio
 
 
 @dataclass
@@ -96,6 +97,37 @@ class LLMProvider(ABC):
     def get_limits(self) -> ProviderLimits:
         """Get current rate limit information."""
         pass
+
+    async def chat_async(
+        self,
+        messages: list[dict[str, str]],
+        model: Optional[str] = None,
+        max_tokens: int = 1000,
+        temperature: float = 0.7,
+        **kwargs
+    ) -> LLMResponse:
+        """
+        Async version of chat completion.
+
+        Default implementation wraps sync chat() in executor.
+        Override this method for true async HTTP calls.
+
+        Args:
+            messages: List of message dicts with 'role' and 'content' keys
+            model: Model ID to use (defaults to provider's default_model)
+            max_tokens: Maximum tokens in response
+            temperature: Sampling temperature (0.0 to 1.0)
+            **kwargs: Provider-specific parameters
+
+        Returns:
+            LLMResponse with standardized format
+        """
+        # Default: run sync version in thread pool
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None,
+            lambda: self.chat(messages, model, max_tokens, temperature, **kwargs)
+        )
 
     def is_available(self) -> bool:
         """Check if provider is configured and available."""

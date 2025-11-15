@@ -26,6 +26,13 @@ except ImportError:
     genai = None
     google_exceptions = None
 
+try:
+    import httpx
+    HTTPX_AVAILABLE = True
+except ImportError:
+    HTTPX_AVAILABLE = False
+    httpx = None
+
 
 class GeminiProvider(LLMProvider):
     """
@@ -343,3 +350,195 @@ class GeminiProvider(LLMProvider):
             'limited_models': list(self._limited_models),
             'available_models': [m for m in self.MODELS if m not in self._limited_models],
         }
+
+    async def chat_async(
+        self,
+        messages: list[dict[str, str]],
+        model: Optional[str] = None,
+        max_tokens: int = 1000,
+        temperature: float = 0.7,
+        auto_fallback: bool = True,
+        **kwargs
+    ) -> LLMResponse:
+        """
+        Async version using httpx for true non-blocking HTTP calls.
+        """
+        if not HTTPX_AVAILABLE:
+            # Fallback to default executor-based async
+            return await super().chat_async(messages, model, max_tokens, temperature, **kwargs)
+
+        model = model or self.default_model
+
+        if auto_fallback:
+            return await self._chat_with_fallback_async(messages, model, max_tokens, temperature, **kwargs)
+        else:
+            return await self._single_model_chat_async(messages, model, max_tokens, temperature, **kwargs)
+
+    async def _single_model_chat_async(
+        self,
+        messages: list[dict[str, str]],
+        model: str,
+        max_tokens: int,
+        temperature: float,
+        **kwargs
+    ) -> LLMResponse:
+        """Execute async chat with a single model (no fallback)."""
+        if model not in self.MODELS:
+            raise ValueError(f"Model '{model}' not supported. Available: {self.available_models}")
+
+        start_time = time.time()
+
+        # Convert messages to Gemini REST API format
+        contents = self._convert_messages_for_rest(messages)
+
+        # Build request payload
+        payload = {
+            'contents': contents,
+            'generationConfig': {
+                'maxOutputTokens': max_tokens,
+                'temperature': temperature,
+            }
+        }
+
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={self._api_key}"
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                url,
+                json=payload,
+                timeout=60.0
+            )
+
+            # Check for rate limit errors
+            if response.status_code == 429:
+                raise Exception(f"Rate limit exceeded (429) for {model}")
+
+            response.raise_for_status()
+            data = response.json()
+
+        latency_ms = (time.time() - start_time) * 1000
+
+        # Track usage
+        self._model_usage[model] = self._model_usage.get(model, 0) + 1
+
+        # Extract content from response
+        if 'candidates' not in data or not data['candidates']:
+            raise ValueError(f"No response candidates from Gemini: {data}")
+
+        content = data['candidates'][0]['content']['parts'][0]['text']
+
+        # Extract token counts if available
+        input_tokens = 0
+        output_tokens = 0
+        if 'usageMetadata' in data:
+            input_tokens = data['usageMetadata'].get('promptTokenCount', 0)
+            output_tokens = data['usageMetadata'].get('candidatesTokenCount', 0)
+
+        return LLMResponse(
+            content=content,
+            model=model,
+            provider=self.name,
+            tokens_used=input_tokens + output_tokens,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            latency_ms=latency_ms,
+            raw_response=data,
+            metadata={
+                'model_config': self.MODELS.get(model, {}),
+                'session_usage': self._model_usage.copy(),
+                'fallback_used': False,
+                'async': True,
+            }
+        )
+
+    async def _chat_with_fallback_async(
+        self,
+        messages: list[dict[str, str]],
+        preferred_model: str,
+        max_tokens: int,
+        temperature: float,
+        **kwargs
+    ) -> LLMResponse:
+        """
+        Async version: Try preferred model first, then fallback to others on rate limit.
+        """
+        # Build fallback list: preferred model first, then others
+        models_to_try = [preferred_model]
+        for model in self.FALLBACK_ORDER:
+            if model != preferred_model and model not in self._limited_models:
+                models_to_try.append(model)
+
+        last_error = None
+        attempted_models = []
+
+        for model in models_to_try:
+            attempted_models.append(model)
+            try:
+                response = await self._single_model_chat_async(messages, model, max_tokens, temperature, **kwargs)
+
+                # Success! Update metadata to show fallback path
+                response.metadata['fallback_used'] = (model != preferred_model)
+                response.metadata['attempted_models'] = attempted_models
+                response.metadata['original_model'] = preferred_model
+
+                if model != preferred_model:
+                    print(f"[Gemini] Fallback: {preferred_model} -> {model}")
+
+                return response
+
+            except Exception as e:
+                error_str = str(e).lower()
+
+                # Check if this is a rate limit error
+                if 'quota' in error_str or 'rate' in error_str or '429' in error_str or 'resource' in error_str:
+                    print(f"[Gemini] {model} rate limited, trying next...")
+                    self._limited_models.add(model)
+                    last_error = e
+                    continue
+                else:
+                    # Not a rate limit error, don't try other models
+                    raise
+
+        # All models failed
+        if last_error:
+            raise RuntimeError(
+                f"All Gemini models rate limited. Tried: {attempted_models}. "
+                f"Last error: {last_error}"
+            )
+        else:
+            raise RuntimeError("No Gemini models available")
+
+    def _convert_messages_for_rest(self, messages: list[dict[str, str]]) -> list:
+        """
+        Convert standard message format to Gemini REST API format.
+        """
+        contents = []
+
+        for msg in messages:
+            role = msg['role']
+            content = msg['content']
+
+            # Map roles
+            if role == 'system':
+                # Gemini doesn't have system role, prepend to first user message
+                contents.append({
+                    'role': 'user',
+                    'parts': [{'text': f"System instruction: {content}"}]
+                })
+                # Add a model acknowledgment
+                contents.append({
+                    'role': 'model',
+                    'parts': [{'text': 'Understood. I will follow these instructions.'}]
+                })
+            elif role == 'user':
+                contents.append({
+                    'role': 'user',
+                    'parts': [{'text': content}]
+                })
+            elif role == 'assistant':
+                contents.append({
+                    'role': 'model',
+                    'parts': [{'text': content}]
+                })
+
+        return contents

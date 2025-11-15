@@ -20,6 +20,13 @@ except ImportError:
     GROQ_AVAILABLE = False
     Groq = None
 
+try:
+    import httpx
+    HTTPX_AVAILABLE = True
+except ImportError:
+    HTTPX_AVAILABLE = False
+    httpx = None
+
 
 class GroqProvider(LLMProvider):
     """
@@ -173,6 +180,79 @@ class GroqProvider(LLMProvider):
             return 'mixtral-8x7b-32768'  # Highest RPD
         else:
             return self.default_model
+
+    async def chat_async(
+        self,
+        messages: list[dict[str, str]],
+        model: Optional[str] = None,
+        max_tokens: int = 1000,
+        temperature: float = 0.7,
+        **kwargs
+    ) -> LLMResponse:
+        """
+        Async version using httpx for true non-blocking HTTP calls.
+        """
+        if not HTTPX_AVAILABLE:
+            # Fallback to default executor-based async
+            return await super().chat_async(messages, model, max_tokens, temperature, **kwargs)
+
+        model = model or self.default_model
+
+        if model not in self.MODELS:
+            raise ValueError(f"Model '{model}' not supported. Available: {self.available_models}")
+
+        start_time = time.time()
+
+        # Build request payload
+        payload = {
+            'model': model,
+            'messages': messages,
+            'max_tokens': max_tokens,
+            'temperature': temperature,
+            **kwargs
+        }
+
+        headers = {
+            'Authorization': f'Bearer {self._api_key}',
+            'Content-Type': 'application/json',
+        }
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                json=payload,
+                headers=headers,
+                timeout=60.0
+            )
+            response.raise_for_status()
+            data = response.json()
+
+        latency_ms = (time.time() - start_time) * 1000
+
+        # Extract usage info
+        usage = data.get('usage', {})
+        input_tokens = usage.get('prompt_tokens', 0)
+        output_tokens = usage.get('completion_tokens', 0)
+
+        # Extract content
+        content = data['choices'][0]['message']['content']
+        finish_reason = data['choices'][0].get('finish_reason', 'unknown')
+
+        return LLMResponse(
+            content=content,
+            model=model,
+            provider=self.name,
+            tokens_used=input_tokens + output_tokens,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            latency_ms=latency_ms,
+            raw_response=data,
+            metadata={
+                'finish_reason': finish_reason,
+                'model_config': self.MODELS.get(model, {}),
+                'async': True,
+            }
+        )
 
     def is_available(self) -> bool:
         """Check if Groq is properly configured."""

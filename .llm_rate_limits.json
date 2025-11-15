@@ -1,0 +1,37 @@
+{
+  "providers": {
+    "cerebras": {
+      "llama3.1-8b": {
+        "requests_today": 16,
+        "requests_this_month": 16,
+        "tokens_today": 880,
+        "tokens_this_month": 880,
+        "input_tokens_today": 741,
+        "output_tokens_today": 139,
+        "total_requests": 16,
+        "total_tokens": 880,
+        "last_request": "2025-11-15T16:20:59.151617",
+        "errors": []
+      }
+    },
+    "groq": {
+      "llama-3.1-8b-instant": {
+        "requests_today": 1,
+        "requests_this_month": 1,
+        "tokens_today": 145,
+        "tokens_this_month": 145,
+        "input_tokens_today": 45,
+        "output_tokens_today": 100,
+        "total_requests": 1,
+        "total_tokens": 145,
+        "last_request": "2025-11-15T16:20:59.199650",
+        "errors": []
+      }
+    }
+  },
+  "last_reset": {
+    "daily": "2025-11-15",
+    "monthly": "2025-11"
+  },
+  "created_at": "2025-11-15T16:19:39.000585"
+}
