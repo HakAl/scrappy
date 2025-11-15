@@ -368,7 +368,7 @@ class CLI:
             click.echo(f"  Asking {provider}...", nl=False)
             try:
                 response = self.orchestrator.delegate(provider, prompt)
-                results.append(response.content)
+                results.append(response)  # Append LLMResponse object, not .content
                 click.secho(f" Done ({response.tokens_used} tokens)", fg="green")
             except Exception as e:
                 click.secho(f" Error: {e}", fg="red")

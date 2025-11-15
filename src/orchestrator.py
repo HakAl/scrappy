@@ -160,7 +160,7 @@ class AgentOrchestrator:
 
             # Generate summary using brain
             def llm_summary(prompt):
-                response = self.brain.chat(
+                response = self.brain_provider.chat(
                     messages=[
                         {'role': 'system', 'content': 'You are a code analyst. Provide concise technical summaries.'},
                         {'role': 'user', 'content': prompt}
@@ -199,7 +199,7 @@ class AgentOrchestrator:
         # Generate or regenerate summary
         if result['status'] == 'explored' or force:
             def llm_summary(prompt):
-                response = self.brain.chat(
+                response = self.brain_provider.chat(
                     messages=[
                         {'role': 'system', 'content': 'You are a code analyst. Provide concise technical summaries.'},
                         {'role': 'user', 'content': prompt}
@@ -248,7 +248,23 @@ class AgentOrchestrator:
 
     @property
     def brain(self):
-        """Access the orchestrator's reasoning brain."""
+        """Access the orchestrator's reasoning brain provider name."""
+        if not self._brain_name:
+            raise RuntimeError("No orchestrator brain configured. No providers available?")
+        return self._brain_name
+
+    @brain.setter
+    def brain(self, provider_name: str):
+        """Set the orchestrator's reasoning brain."""
+        available = self.registry.list_available()
+        if provider_name not in available:
+            raise ValueError(f"Provider '{provider_name}' not available. Available: {available}")
+        self._brain = self.registry.get(provider_name)
+        self._brain_name = provider_name
+
+    @property
+    def brain_provider(self):
+        """Access the actual brain provider object."""
         if not self._brain:
             raise RuntimeError("No orchestrator brain configured. No providers available?")
         return self._brain
@@ -293,7 +309,7 @@ Maximum {max_steps} steps. Be specific and actionable."""
         if context:
             user_prompt = f"Context:\n{context}\n\nTask:\n{task}"
 
-        response = self.brain.chat(
+        response = self.brain_provider.chat(
             messages=[
                 {'role': 'system', 'content': system_prompt},
                 {'role': 'user', 'content': user_prompt}
@@ -322,7 +338,21 @@ Maximum {max_steps} steps. Be specific and actionable."""
                 lines = content.split('\n')
                 content = '\n'.join(lines[1:-1])
             steps = json.loads(content)
-            return steps
+            # Validate return type - must be list of dicts
+            if not isinstance(steps, list):
+                steps = [steps]
+            # Ensure each item is a dict
+            validated_steps = []
+            for step in steps:
+                if isinstance(step, dict):
+                    validated_steps.append(step)
+                else:
+                    validated_steps.append({
+                        'step': 'execute_task',
+                        'description': str(step),
+                        'provider_type': 'quality'
+                    })
+            return validated_steps
         except json.JSONDecodeError:
             # If parsing fails, return raw response as single step
             return [{
@@ -374,7 +404,7 @@ Be thorough but concise. Do not repeat yourself. Provide unique insights in each
             evidence_str = "\n".join(f"- {e}" for e in evidence)
             user_prompt += f"\n\nEvidence to consider:\n{evidence_str}"
 
-        response = self.brain.chat(
+        response = self.brain_provider.chat(
             messages=[
                 {'role': 'system', 'content': system_prompt},
                 {'role': 'user', 'content': user_prompt}
@@ -402,6 +432,9 @@ Be thorough but concise. Do not repeat yourself. Provide unique insights in each
                 lines = content.split('\n')
                 content = '\n'.join(lines[1:-1])
             result = json.loads(content)
+            # Ensure result is a dict before calling .get()
+            if not isinstance(result, dict):
+                raise ValueError("Expected JSON object, got: " + type(result).__name__)
             # Ensure all expected keys exist
             return {
                 'question': result.get('question', question),
@@ -440,7 +473,7 @@ Be thorough but concise. Do not repeat yourself. Provide unique insights in each
 
         combined = "\n\n---\n\n".join(results_text)
 
-        response = self.brain.chat(
+        response = self.brain_provider.chat(
             messages=[
                 {'role': 'system', 'content': 'You are a synthesis assistant. Combine multiple perspectives into a coherent whole.'},
                 {'role': 'user', 'content': f"{synthesis_prompt}\n\n{combined}"}
@@ -588,7 +621,7 @@ Be thorough but concise. Do not repeat yourself. Provide unique insights in each
                 content = str(reasoning_result)
             return LLMResponse(
                 content=content,
-                model=self.brain.default_model,
+                model=self.brain_provider.default_model,
                 provider=self._brain_name,
                 tokens_used=0,
                 input_tokens=0,

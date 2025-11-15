@@ -4,6 +4,14 @@ Complete reference for the LLM Agent Team command-line interface.
 
 ## Quick Start
 
+**Get API Keys**
+
+[Cerebras](https://cloud.cerebras.ai/platform)
+[Groq](https://console.groq.com/)
+[Gemini](https://aistudio.google.com/)
+[Cohere](https://dashboard.cohere.com/)
+
+
 ```bash
 # Install dependencies
 pip install -r requirements.txt
