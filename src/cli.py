@@ -216,6 +216,9 @@ class CLI:
         elif cmd == "/session":
             self._manage_session(args)
 
+        elif cmd == "/limits":
+            self._show_rate_limits(args)
+
         else:
             click.secho(f"Unknown command: {cmd}", fg="yellow")
             click.echo("Type /help for available commands.")
@@ -258,6 +261,11 @@ class CLI:
         click.echo(f"  {click.style('/cache', fg='yellow')}           - Show cache statistics")
         click.echo("  /cache clear     - Clear response cache")
         click.echo("  /cache toggle    - Toggle caching on/off")
+        click.echo()
+        click.secho("Rate Limit Tracking:", bold=True)
+        click.echo(f"  {click.style('/limits', fg='yellow')}          - Show rate limit usage (persistent)")
+        click.echo("  /limits <provider> - Show specific provider usage")
+        click.echo("  /limits reset    - Reset rate limit tracking")
         click.echo()
         click.secho("Session Management:", bold=True)
         click.echo(f"  {click.style('/session', fg='yellow')}         - Show session info")
@@ -935,6 +943,113 @@ Be concise but thorough. Focus on actionable insights."""
             click.echo("  (no args)  - Show cache statistics")
             click.echo("  clear      - Clear all cached responses")
             click.echo("  toggle     - Toggle caching on/off")
+
+    def _show_rate_limits(self, args: str = ""):
+        """Show rate limit usage (persistent tracking)."""
+        if args.lower() == "reset":
+            if click.confirm("Reset all rate limit tracking data?", default=False):
+                self.orchestrator.reset_rate_tracking()
+                click.secho("Rate limit tracking data reset.", fg="green")
+            return
+
+        if args.lower().startswith("reset "):
+            provider_name = args[6:].strip()
+            if click.confirm(f"Reset rate limit tracking for {provider_name}?", default=False):
+                self.orchestrator.reset_rate_tracking(provider_name)
+                click.secho(f"Rate limit tracking for {provider_name} reset.", fg="green")
+            return
+
+        # Get rate limit status
+        status = self.orchestrator.get_rate_limit_status()
+
+        click.secho("\nRate Limit Usage (Persistent):", fg="cyan", bold=True)
+        click.secho("-" * 60, fg="cyan")
+
+        # Show last reset times
+        last_reset = status.get('last_reset', {})
+        click.echo(f"Last Daily Reset: {last_reset.get('daily', 'N/A')}")
+        click.echo(f"Last Monthly Reset: {last_reset.get('monthly', 'N/A')}")
+        click.echo()
+
+        # Filter by provider if specified
+        providers_to_show = status.get('providers', {})
+        if args and args.lower() not in ['reset']:
+            provider_filter = args.lower().strip()
+            if provider_filter in providers_to_show:
+                providers_to_show = {provider_filter: providers_to_show[provider_filter]}
+            else:
+                click.secho(f"Provider '{args}' not found in tracking data.", fg="yellow")
+                return
+
+        if not providers_to_show:
+            click.echo("No usage data recorded yet.")
+            click.echo("Rate limits will be tracked as you make API calls.")
+            return
+
+        # Check for warnings
+        warnings = self.orchestrator.check_rate_limit_warnings()
+        if warnings:
+            click.secho("⚠️  WARNINGS:", fg="red", bold=True)
+            for warning in warnings:
+                click.secho(f"  • {warning}", fg="red")
+            click.echo()
+
+        # Show usage by provider
+        for provider, data in providers_to_show.items():
+            click.secho(f"{provider.upper()}:", fg="green", bold=True)
+
+            # Show totals
+            click.echo(f"  Today: {data['total_requests_today']} requests, {data['total_tokens_today']:,} tokens")
+            click.echo(f"  This Month: {data['total_requests_month']} requests")
+
+            # Show limits and remaining
+            if 'limits' in data:
+                limits = data['limits']
+                remaining = data.get('remaining', {})
+
+                click.secho("  Quotas:", bold=True)
+                if limits.get('requests_per_day'):
+                    used = remaining.get('usage_today', 0)
+                    left = remaining.get('requests_remaining_today', 0)
+                    pct = (used / limits['requests_per_day'] * 100) if limits['requests_per_day'] else 0
+                    color = 'green' if pct < 75 else ('yellow' if pct < 90 else 'red')
+                    click.echo(f"    Daily Requests: ", nl=False)
+                    click.secho(f"{used:,}/{limits['requests_per_day']:,} ({pct:.1f}%)", fg=color)
+
+                if limits.get('requests_per_month'):
+                    used = remaining.get('usage_this_month', 0)
+                    left = remaining.get('requests_remaining_month', 0)
+                    pct = (used / limits['requests_per_month'] * 100) if limits['requests_per_month'] else 0
+                    color = 'green' if pct < 75 else ('yellow' if pct < 90 else 'red')
+                    click.echo(f"    Monthly Requests: ", nl=False)
+                    click.secho(f"{used:,}/{limits['requests_per_month']:,} ({pct:.1f}%)", fg=color)
+
+                if limits.get('tokens_per_day'):
+                    used = remaining.get('tokens_today', 0)
+                    pct = (used / limits['tokens_per_day'] * 100) if limits['tokens_per_day'] else 0
+                    color = 'green' if pct < 75 else ('yellow' if pct < 90 else 'red')
+                    click.echo(f"    Daily Tokens: ", nl=False)
+                    click.secho(f"{used:,}/{limits['tokens_per_day']:,} ({pct:.1f}%)", fg=color)
+
+                if limits.get('tokens_per_minute'):
+                    click.echo(f"    TPM Limit: {limits['tokens_per_minute']:,}")
+
+            # Show per-model breakdown
+            if data.get('by_model'):
+                click.secho("  By Model:", bold=True)
+                for model, model_data in data['by_model'].items():
+                    last_req = model_data.get('last_request', 'never')
+                    if last_req and last_req != 'never':
+                        # Format the timestamp nicely
+                        last_req = last_req.split('T')[1].split('.')[0] if 'T' in last_req else last_req
+                    click.echo(f"    {model}:")
+                    click.echo(f"      Today: {model_data['requests_today']} req, {model_data['tokens_today']:,} tok")
+                    click.echo(f"      Last: {last_req}")
+            click.echo()
+
+        # Show tracker file location
+        tracker_file = self.orchestrator.context.project_path / ".llm_rate_limits.json"
+        click.secho(f"Tracking File: {tracker_file}", fg="cyan")
 
     def _manage_session(self, args: str = ""):
         """Manage session persistence."""

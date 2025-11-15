@@ -156,24 +156,93 @@ Evening (wrap-up):
 
 ## Monitoring Usage
 
-### Cerebras
-Check response headers:
+### Persistent Rate Limit Tracking (NEW)
+
+The orchestrator now includes **persistent rate limit tracking** that survives restarts:
+
+**CLI Commands:**
+```bash
+# View all rate limit usage
+/limits
+
+# View specific provider
+/limits cerebras
+
+# Reset tracking data
+/limits reset
+```
+
+**Programmatic Access:**
+```python
+from src.orchestrator import AgentOrchestrator
+
+orch = AgentOrchestrator()
+
+# Get comprehensive rate limit status
+status = orch.get_rate_limit_status()
+# Returns: providers, usage today/month, remaining quotas, limits
+
+# Check remaining quota for specific provider
+remaining = orch.get_remaining_quota('cerebras')
+# Returns: requests_remaining_today, tokens_remaining_today, etc.
+
+# Get warnings for approaching limits
+warnings = orch.check_rate_limit_warnings()
+# Returns: List of warning messages when >90% of limit used
+
+# Reset tracking
+orch.reset_rate_tracking()  # Reset all
+orch.reset_rate_tracking('groq')  # Reset specific provider
+```
+
+**Features:**
+- Tracks requests and tokens per provider/model
+- Persists to `.llm_rate_limits.json`
+- Auto-resets daily limits at midnight
+- Auto-resets monthly limits on month change
+- Warns when approaching rate limits (90% threshold)
+- Color-coded usage display in CLI
+
+**Tracking File:**
+```json
+{
+  "providers": {
+    "cerebras": {
+      "llama3.1-8b": {
+        "requests_today": 150,
+        "tokens_today": 45000,
+        "requests_this_month": 2500,
+        "total_requests": 10000,
+        "last_request": "2025-11-15T14:30:00"
+      }
+    }
+  },
+  "last_reset": {
+    "daily": "2025-11-15",
+    "monthly": "2025-11"
+  }
+}
+```
+
+### Provider-Specific Headers
+
+**Cerebras:**
 - `x-ratelimit-remaining-requests-day`
 - `x-ratelimit-remaining-tokens-minute`
 
-### Groq
-Check response headers:
+**Groq:**
 - `x-ratelimit-remaining-requests`
 - `x-ratelimit-remaining-tokens`
 
-### Gemini
+**Gemini:**
 Auto-tracked internally:
 - `provider.get_usage_summary()` - shows model usage and limited models
 
-### Cohere
-Check response headers:
+**Cohere:**
 - `x-endpoint-monthly-call-limit`
 - `x-trial-endpoint-call-remaining`
+
+### Legacy Monitoring
 
 Monitor in code:
 ```python
@@ -181,7 +250,7 @@ from src.orchestrator import AgentOrchestrator
 
 orch = AgentOrchestrator()
 print(orch.status())          # Shows brain, available providers
-print(orch.get_usage_report()) # Shows usage by provider
+print(orch.get_usage_report()) # Shows session usage by provider
 ```
 
 ---
