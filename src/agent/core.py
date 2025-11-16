@@ -947,35 +947,16 @@ class CodeAgent:
                 final_result=final_result
             )
 
-        # Smart completion: Check if primary goal was achieved
-        if result.executed and state.iteration >= 2:
-            # Detect various completion patterns
-            completion_indicators = [
-                # File operations completed
-                result.action == 'write_file' and 'Successfully wrote' in result.output,
-                # Command ran successfully (tests pass, build succeeded, etc.)
-                result.action == 'run_command' and result.output and 'successfully' in result.output.lower(),
-                # Core deliverable created
-                result.action == 'write_file' and any(
-                    indicator in state.messages[-1].get('content', '').lower()
-                    for indicator in ['component', 'feature', 'implement', 'create', 'add']
-                ) if state.messages else False,
-            ]
-
-            # Check if we've done meaningful work and hit a completion indicator
-            meaningful_actions = [t for t in state.tools_executed if t in self.config.meaningful_actions]
-            if any(completion_indicators) and meaningful_actions:
-                # Verify this seems like final task completion, not intermediate step
-                recent_actions = state.tools_executed[-3:] if len(state.tools_executed) >= 3 else state.tools_executed
-                # If we've been doing write operations or running tests, likely complete
-                if 'write_file' in recent_actions or (result.action == 'run_command' and 'test' in result.output.lower()):
-                    print(f"\nTask goal achieved. Stopping execution.")
-                    return EvaluationResult(
-                        is_complete=True,
-                        should_continue=False,
-                        reason="Primary goal achieved",
-                        final_result=result.output
-                    )
+        # Smart completion: DISABLED - rely on explicit agent completion signals
+        # The heuristic approach was too aggressive, stopping after simple write operations
+        # even when the task had multiple components. Let the LLM decide when it's done.
+        #
+        # Previous logic checked for write_file operations and declared "done" prematurely.
+        # This caused issues with complex multi-part tasks (e.g., backend + frontend).
+        #
+        # Now the agent must explicitly call action='complete' or set is_complete=True.
+        # This gives the LLM control over task completion semantics.
+        pass  # Intentionally disabled heuristic completion
 
         # Check max iterations
         if state.iteration >= state.max_iterations:
@@ -1085,7 +1066,7 @@ class CodeAgent:
 
         # Concise header
         task_preview = task[:80] + "..." if len(task) > 80 else task
-        print(f"\n🤖 Agent: {task_preview}")
+        print(f"\n[Agent] {task_preview}")
         if self.dry_run:
             print("[DRY RUN MODE]")
 
