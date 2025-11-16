@@ -37,6 +37,8 @@ from .agent_tools.tools.git_tools import (
 )
 from .agent_tools.tools.search_tools import SearchCodeTool
 from .agent_tools.tools.web_tools import WebFetchTool, WebSearchTool
+from .agent_tools.tools.python_tools import AnalyzePythonDependenciesTool
+from .platform_utils import get_platform_name, is_windows, validate_command_for_platform
 
 
 @dataclass
@@ -283,6 +285,9 @@ class CodeAgent:
         registry.register(WebFetchTool())
         registry.register(WebSearchTool())
 
+        # Register Python tools
+        registry.register(AnalyzePythonDependenciesTool())
+
         return registry
 
     def _get_tool_descriptions(self) -> str:
@@ -319,6 +324,11 @@ class CodeAgent:
         for d in self.config.dangerous_commands:
             if d in command.lower():
                 return f"Error: Command contains dangerous pattern '{d}'"
+
+        # Validate command for current platform
+        is_valid, warning = validate_command_for_platform(command)
+        if not is_valid:
+            return f"Error: {warning}. Use platform-appropriate tools instead (read_file, search_code, list_files, etc.)"
 
         if self.dry_run:
             return f"[DRY RUN] Would run: {command}"
@@ -850,23 +860,30 @@ class CodeAgent:
 
         # Handle parse failure - provide feedback to LLM to retry with valid JSON
         if action.action == 'retry_parse':
-            print("⚠️ Response parsing failed. Requesting JSON format retry...")
+            # Show what the LLM actually returned for debugging
+            raw_response = action.parameters.get('raw_response', 'No response captured')
+            print(f"⚠️ Response parsing failed. LLM returned:\n{raw_response[:300]}...")
+            print("Requesting JSON format retry...")
             error_msg = (
                 "Your previous response could not be parsed as JSON. "
-                "Please respond with ONLY a valid JSON object in this exact format:\n"
+                "You MUST respond with ONLY a valid JSON object (no other text). "
+                "Use this exact format:\n"
                 '{\n'
                 '  "thought": "Your reasoning here",\n'
                 '  "action": "tool_name",\n'
                 '  "parameters": {"param": "value"},\n'
                 '  "is_complete": false\n'
                 '}\n'
-                "Make sure all strings are properly quoted with double quotes."
+                "Available tools: read_file, write_file, list_files, list_directory, search_code, run_command\n"
+                "Make sure all strings are properly quoted with double quotes. Do not include any text outside the JSON object."
             )
             return ActionResult(
                 success=False,
                 output=error_msg,
                 action=action.action,
-                approved=False
+                parameters=action.parameters,
+                approved=False,
+                executed=False
             )
 
         # Check if this is a valid tool action
@@ -1045,6 +1062,16 @@ class CodeAgent:
                 'role': 'user',
                 'content': f"User denied the {result.action} action. Please try a different approach or explain why this action is necessary."
             })
+        elif action.action == 'retry_parse':
+            # Parse failure - provide detailed JSON format instructions
+            state.messages.append({
+                'role': 'assistant',
+                'content': thought.raw_response
+            })
+            state.messages.append({
+                'role': 'user',
+                'content': result.output  # Contains the detailed JSON format instructions
+            })
         elif action.action not in self.tools and action.action != 'complete' and action.action != 'error':
             # Unknown action
             state.messages.append({
@@ -1102,19 +1129,46 @@ class CodeAgent:
 
         # System prompt for agent
         tool_descriptions = self._get_tool_descriptions()
+        platform_name = get_platform_name()
+        platform_guidance = ""
+        if is_windows():
+            platform_guidance = """
+IMPORTANT - Platform: Windows
+- Do NOT use Unix commands (grep, cat, sed, awk, find, xargs, etc.)
+- Use Python code or PowerShell equivalents instead
+- For searching files, use the search_code tool (not grep)
+- For reading files, use the read_file tool (not cat)
+- For listing files, use the list_files tool (not ls or find)
+- When running shell commands, use Windows commands (dir, type, etc.)
+"""
+        else:
+            platform_guidance = f"""
+Platform: {platform_name}
+- Unix commands (grep, cat, sed, etc.) are available
+"""
+
         system_prompt = f"""You are a code agent that helps with programming tasks.
 You have access to tools to read, write, and analyze code.
 
 {tool_descriptions}
 
 {context_info}
+{platform_guidance}
 
 Important:
 - Always explain your reasoning in the "thought" field
+- RESPOND WITH VALID JSON ONLY - use lowercase true/false/null, not Python's True/False/None
 - Use read_file to understand existing code before modifying
 - Make incremental changes, not massive rewrites
 - Test your changes when possible
 - Be careful with file paths (relative to project root)
+- For requirements.txt: Analyze actual import statements in *.py files, NOT pip freeze (which gives ALL installed packages)
+
+CRITICAL - write_file usage:
+- NEVER call write_file with empty content - this WILL fail
+- Always include the COMPLETE file content in one write_file call
+- Do NOT create empty files then fill them later
+- Plan your file content fully before calling write_file
 
 Current task: {task}
 """

@@ -103,6 +103,33 @@ class WriteFileTool(Tool):
                     f"Content too short ({len(content)} chars) for {path}. Expected meaningful code content."
                 )
 
+        # Special validation for requirements.txt
+        if path.endswith('requirements.txt'):
+            stdlib_modules = {
+                'json', 'os', 'sys', 're', 'datetime', 'pathlib', 'typing',
+                'subprocess', 'collections', 'itertools', 'functools', 'math',
+                'random', 'time', 'logging', 'argparse', 'abc', 'io', 'enum',
+                'dataclasses', 'contextlib', 'shutil', 'tempfile', 'unittest',
+                'copy', 'pickle', 'hashlib', 'base64', 'urllib', 'http', 'socket',
+                'threading', 'multiprocessing', 'asyncio', 'concurrent', 'queue'
+            }
+            found_stdlib = []
+            for line in content.strip().split('\n'):
+                line = line.strip()
+                if line and not line.startswith('#'):
+                    # Extract package name (before ==, >=, etc.)
+                    pkg_name = line.split('==')[0].split('>=')[0].split('<=')[0].split('~=')[0].strip()
+                    if pkg_name.lower() in stdlib_modules:
+                        found_stdlib.append(pkg_name)
+
+            if found_stdlib:
+                return ToolResult(
+                    False,
+                    "",
+                    f"Error: requirements.txt contains standard library modules which should NOT be included: {', '.join(found_stdlib)}. "
+                    f"Standard library modules are built into Python and don't need to be installed."
+                )
+
         if context.dry_run:
             return ToolResult(
                 True,
@@ -120,14 +147,19 @@ class WriteFileTool(Tool):
             if not target.exists():
                 return ToolResult(False, "", f"File {path} was not created after write")
 
-            actual_size = target.stat().st_size
-            expected_size = len(content.encode('utf-8'))
-            if actual_size != expected_size:
-                return ToolResult(
-                    False,
-                    "",
-                    f"Write verification failed: expected {expected_size} bytes, got {actual_size} bytes"
-                )
+            # Verify content matches (read back and compare)
+            # Note: Don't use byte size comparison because Windows converts \n to \r\n
+            written_content = target.read_text(encoding='utf-8')
+            if written_content != content:
+                # Check if it's just a newline difference (Windows \r\n vs Unix \n)
+                normalized_written = written_content.replace('\r\n', '\n')
+                normalized_content = content.replace('\r\n', '\n')
+                if normalized_written != normalized_content:
+                    return ToolResult(
+                        False,
+                        "",
+                        f"Write verification failed: content mismatch after writing to {path}"
+                    )
 
             return ToolResult(
                 True,

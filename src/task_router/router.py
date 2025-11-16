@@ -2,6 +2,7 @@
 Central task router that dispatches to appropriate execution strategies.
 """
 
+import json
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -73,6 +74,7 @@ class TaskRouter:
         self.clarify_on_low_confidence = True
         self.confidence_threshold = 0.65
         self.escalate_on_low_confidence = True
+        self.use_llm_classification = True  # Use LLM for low-confidence cases
 
         self._setup_strategies()
 
@@ -217,6 +219,145 @@ class TaskRouter:
 
         return task
 
+    def _classify_with_llm(self, task: ClassifiedTask) -> ClassifiedTask:
+        """
+        Use LLM to semantically classify ambiguous tasks.
+
+        Called when rule-based classification has low confidence.
+        Uses a fast provider for quick disambiguation.
+
+        Args:
+            task: Initially classified task with low confidence
+
+        Returns:
+            Task with potentially updated classification based on LLM analysis
+        """
+        if not self.orchestrator:
+            return task
+
+        if self.verbose:
+            print(f"  🤖 Using LLM for semantic classification...")
+
+        # Build a focused prompt for classification
+        system_prompt = """You are a task classifier. Analyze the user's request and classify it into ONE of these categories:
+
+1. RESEARCH - User wants information, explanation, or analysis (reading/learning)
+2. CODE_GENERATION - User wants you to create, modify, or write code/files (doing/acting)
+3. DIRECT_COMMAND - User wants to run a specific shell command
+4. CONVERSATION - Simple greeting or acknowledgment
+
+IMPORTANT: Focus on the user's PRIMARY INTENT:
+- "Explain X" or "How does X work?" = RESEARCH (they want to learn)
+- "Create X" or "Write X for me" = CODE_GENERATION (they want action)
+- "Explain how to create X" = RESEARCH (they want to learn how, not have you do it)
+- "Create X and explain it" = CODE_GENERATION (primary intent is creation)
+
+Respond with ONLY a JSON object:
+{
+  "task_type": "RESEARCH" | "CODE_GENERATION" | "DIRECT_COMMAND" | "CONVERSATION",
+  "confidence": 0.0-1.0,
+  "reasoning": "Brief explanation of why this classification"
+}"""
+
+        user_prompt = f"""Classify this user request:
+"{task.original_input}"
+
+Current rule-based classification: {task.task_type.value} (confidence: {task.confidence:.2f})
+Rule-based reasoning: {task.reasoning}
+
+What is the user's PRIMARY intent? Respond with JSON only."""
+
+        try:
+            # Use fast provider for quick classification
+            provider_to_use = None
+            if hasattr(self.orchestrator, 'providers'):
+                available = self.orchestrator.providers.list_available()
+                # Prefer fast providers
+                for pref in ['cerebras', 'groq', 'gemini']:
+                    if pref in available:
+                        provider_to_use = pref
+                        break
+
+            if not provider_to_use:
+                if self.verbose:
+                    print(f"    No provider available for LLM classification")
+                return task
+
+            # Make LLM call
+            response = self.orchestrator.delegate(
+                provider_to_use,
+                user_prompt,
+                system_prompt=system_prompt,
+                max_tokens=200,
+                temperature=0.1,  # Low temperature for consistent classification
+                use_context=False
+            )
+
+            # Parse response
+            response_text = response.content.strip()
+
+            # Extract JSON from response
+            if '```json' in response_text:
+                start = response_text.find('```json') + 7
+                end = response_text.find('```', start)
+                if end > start:
+                    response_text = response_text[start:end].strip()
+            elif '```' in response_text:
+                start = response_text.find('```') + 3
+                end = response_text.find('```', start)
+                if end > start:
+                    response_text = response_text[start:end].strip()
+
+            # Try to find JSON object
+            if '{' in response_text:
+                start = response_text.find('{')
+                end = response_text.rfind('}') + 1
+                if end > start:
+                    response_text = response_text[start:end]
+
+            result = json.loads(response_text)
+
+            # Update task based on LLM classification
+            llm_type_str = result.get('task_type', '').upper()
+            llm_confidence = float(result.get('confidence', 0.5))
+            llm_reasoning = result.get('reasoning', 'LLM classification')
+
+            # Map string to TaskType
+            type_map = {
+                'RESEARCH': TaskType.RESEARCH,
+                'CODE_GENERATION': TaskType.CODE_GENERATION,
+                'DIRECT_COMMAND': TaskType.DIRECT_COMMAND,
+                'CONVERSATION': TaskType.CONVERSATION,
+            }
+
+            if llm_type_str in type_map:
+                new_type = type_map[llm_type_str]
+
+                # Only accept LLM classification if it's confident
+                if llm_confidence >= 0.7:
+                    old_type = task.task_type.value
+                    task.task_type = new_type
+                    task.confidence = llm_confidence
+                    task.reasoning = f"LLM semantic classification: {llm_reasoning} (was {old_type}, confidence {task.confidence:.2f})"
+
+                    if self.verbose:
+                        if old_type != new_type.value:
+                            print(f"    ✓ LLM reclassified: {old_type} → {new_type.value} ({llm_confidence:.0%})")
+                        else:
+                            print(f"    ✓ LLM confirmed: {new_type.value} ({llm_confidence:.0%})")
+                else:
+                    if self.verbose:
+                        print(f"    ⚠️ LLM uncertain ({llm_confidence:.0%}), keeping rule-based classification")
+
+        except json.JSONDecodeError as e:
+            if self.verbose:
+                print(f"    ⚠️ Failed to parse LLM response: {e}")
+        except Exception as e:
+            if self.verbose:
+                print(f"    ⚠️ LLM classification failed: {e}")
+
+        return task
+
     def _resolve_provider(self, hint: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
         """
         Resolve provider hint to actual provider name and model.
@@ -283,11 +424,18 @@ class TaskRouter:
         # 2. Apply confidence escalation (auto-upgrade low-confidence tasks)
         classified = self._apply_confidence_escalation(classified)
 
-        # 3. Clarify intent if needed (ask user when ambiguous)
+        # 3. LLM fallback for low-confidence classifications
+        if self.use_llm_classification and classified.confidence < self.confidence_threshold:
+            if self.verbose:
+                print(f"  ⚠️ Low confidence ({classified.confidence:.0%}) - trying LLM classification")
+            classified = self._classify_with_llm(classified)
+
+        # 4. Clarify intent if still needed (ask user when ambiguous)
+        # Only ask user if LLM classification also has low confidence
         if self.clarify_on_low_confidence and self._needs_intent_clarification(classified):
             classified = self._clarify_intent(classified)
 
-        # 4. Resolve provider (override takes precedence over suggestion)
+        # 5. Resolve provider (override takes precedence over suggestion)
         provider_hint = classified.override_provider or classified.suggested_provider
         provider_name, model_name = self._resolve_provider(provider_hint)
 
@@ -346,7 +494,8 @@ class TaskRouter:
             "suggested_provider": classified.suggested_provider,
             "override_provider": classified.override_provider,
             "resolved_provider": provider_name,
-            "resolved_model": model_name
+            "resolved_model": model_name,
+            "used_llm_classification": "LLM semantic classification" in classified.reasoning
         }
 
         return result
@@ -378,6 +527,15 @@ class TaskRouter:
 
         if self.verbose:
             self._log_classification(classified)
+
+        # Apply confidence escalation
+        classified = self._apply_confidence_escalation(classified)
+
+        # LLM fallback for low-confidence classifications
+        if self.use_llm_classification and classified.confidence < self.confidence_threshold:
+            if self.verbose:
+                print(f"  ⚠️ Low confidence ({classified.confidence:.0%}) - trying LLM classification")
+            classified = self._classify_with_llm(classified)
 
         # Resolve provider (override takes precedence)
         provider_hint = classified.override_provider or classified.suggested_provider
@@ -437,7 +595,8 @@ class TaskRouter:
             "suggested_provider": classified.suggested_provider,
             "override_provider": classified.override_provider,
             "resolved_provider": provider_name,
-            "resolved_model": model_name
+            "resolved_model": model_name,
+            "used_llm_classification": "LLM semantic classification" in classified.reasoning
         }
 
         return result

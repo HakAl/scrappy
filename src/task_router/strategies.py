@@ -926,13 +926,23 @@ class AgentExecutor(ExecutionStrategy):
         # Requirements.txt creation
         if 'requirements' in input_lower and ('create' in input_lower or 'generate' in input_lower):
             guidance_parts.append("""
-IMPORTANT GUIDANCE for requirements.txt:
-- Do NOT use 'pip freeze' as it lists ALL installed packages in the environment
-- Instead, analyze the actual Python files in this project
-- Use search_code or read_file to find import statements
-- Extract only the third-party packages that are actually imported
-- Create a minimal requirements.txt with just those dependencies
-- Consider common package name mappings (e.g., 'cv2' -> 'opencv-python')
+CRITICAL GUIDANCE for requirements.txt:
+1. FIRST: Search ALL Python imports using: search_code with pattern="^import |^from " and file_pattern="**/*.py"
+2. THEN: Identify which packages are THIRD-PARTY (not standard library)
+   - STANDARD LIBRARY (DO NOT include): json, os, sys, re, datetime, pathlib, typing, subprocess, etc.
+   - THIRD-PARTY (DO include): requests, numpy, pandas, flask, django, etc.
+3. FINALLY: Write requirements.txt with ONLY third-party packages
+
+IMPORTANT:
+- Do NOT write an empty file first - gather all dependencies BEFORE writing
+- Use modern package names: beautifulsoup4 (not bs4), scikit-learn (not sklearn)
+- Include version specifiers if known, otherwise just package names
+- The 'json' module is STANDARD LIBRARY - do NOT include it
+
+Example format:
+requests>=2.28.0
+beautifulsoup4>=4.11.0
+numpy>=1.24.0
 """)
 
         # Config file creation
@@ -960,9 +970,11 @@ IMPORTANT GUIDANCE for code modification:
         if 'create' in input_lower or 'write' in input_lower:
             guidance_parts.append("""
 IMPORTANT GUIDANCE for file creation:
-- Check if the file already exists first
+- NEVER write an empty file first then fill it later - always include FULL content in one write_file call
+- Check if the file already exists first using list_files or read_file
 - Follow existing patterns in the project
 - Use consistent coding style with the rest of the codebase
+- When using write_file, the "content" parameter MUST contain the complete file content
 """)
 
         # Dockerfile creation
