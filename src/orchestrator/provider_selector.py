@@ -160,8 +160,10 @@ class ProviderSelector:
             provider = self.registry.get(preferred_provider)
             return (preferred_provider, provider)
 
-        # Default priority: cerebras > groq > gemini
-        priority = ['cerebras', 'groq', 'gemini']
+        # Default priority: github_models (best reasoning) > cerebras > groq > gemini
+        # Note: github_models rate limits unclear (docs: 50 RPD, headers: 10K)
+        # Testing as primary brain to gather empirical data
+        priority = ['github_models', 'cerebras', 'groq', 'gemini']
         for provider_name in priority:
             if provider_name in available:
                 provider = self.registry.get(provider_name)

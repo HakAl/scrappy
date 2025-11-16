@@ -1,6 +1,6 @@
 # Free Tier Rate Limits Reference
 
-Last updated: 2025-11-15
+Last updated: 2025-11-16
 
 ## Active Providers
 
@@ -29,6 +29,44 @@ Last updated: 2025-11-15
 | gemma2-9b-it | 30 | 14,400 | 15K | - |
 
 **Best for**: Backup to Cerebras, model variety
+
+### GitHub Models (NEW - UNDER INVESTIGATION)
+- **API Key**: GITHUB_API_KEY (Personal Access Token with `models` scope)
+- **Dashboard**: https://github.com/settings/tokens
+- **Endpoint**: `https://models.github.ai/inference`
+- **Special feature**: OpenAI-compatible API, access to GPT-4o and 40+ models
+
+**⚠️ RATE LIMITS UNCLEAR - Docs vs Reality mismatch!**
+
+| Model | Docs Say (Copilot Free) | Headers Show | Tier |
+|-------|-------------------------|--------------|------|
+| gpt-4o | 50 RPD, 10 RPM | 10,000 req limit | High |
+| gpt-4o-mini | 150 RPD, 15 RPM | 20,000 req limit | Low |
+| deepseek-r1 | 8 RPD, 1 RPM | Unknown | Custom |
+| grok-3-mini | 30 RPD, 2 RPM | Unknown | Custom |
+
+**Official docs**: https://docs.github.com/en/github-models/use-github-models/prototyping-with-ai-models
+- Limits are: RPM (requests/min), RPD (requests/day), tokens/request, concurrent
+- High tier: 50 RPD, Low tier: 150 RPD for Copilot Free
+- **"Subject to change without notice"**
+
+**API headers show** (observed 2025-11-16):
+- `x-ratelimit-limit-requests: 10000-20000`
+- `x-ratelimit-remaining-requests` decrements per request
+- No reset time header provided
+- Limits are 100-200x higher than docs suggest
+
+**Status**: Monitoring to see if limits reset daily. Will update after 24h observation.
+
+**Best for** (conservative):
+- Access to premium models (GPT-4o, DeepSeek R1, Grok-3)
+- High-quality reasoning tasks (limited quantity)
+- **NOT recommended as orchestrator brain until limits confirmed**
+
+**Tested capabilities** (GPT-4o):
+- Task decomposition: ~6s, 740 tokens, excellent structured output
+- Multi-step planning: ~10s, 932 tokens, smart agent allocation
+- Error recovery: ~8s, 616 tokens, comprehensive replanning
 
 ### Gemini (Auto-fallback)
 - **API Key**: GEMINI_API_KEY
@@ -98,7 +136,13 @@ Last updated: 2025-11-15
 
 ### Daily Budget (with current providers)
 
-**Cerebras** (primary workhorse):
+**GitHub Models GPT-4o** (UNDER INVESTIGATION):
+- Docs say: 50 requests/day
+- Headers show: 10,000 requests (reset timing unknown)
+- Use for: Premium model access, high-quality reasoning (limited quantity)
+- **NOT recommended as brain until limits confirmed**
+
+**Cerebras** (primary workhorse - RECOMMENDED BRAIN):
 - 14,400 requests/day with llama3.1-8b
 - 60,000 tokens/minute
 - Use for: High-volume tasks, fast inference needs
@@ -118,12 +162,14 @@ Last updated: 2025-11-15
 - Use for: Extra capacity when Cerebras/Groq hit limits
 - Auto-fallback handles rate limits automatically
 
-**Orchestrator Brain** (Cerebras/Groq/Gemini):
+**Orchestrator Brain** (Cerebras - RECOMMENDED):
 - Complex reasoning, planning, synthesis
 - Orchestrating the team
 - Can run autonomously without Claude Code
+- 14,400 requests/day with fast inference
 
-**Combined capacity**: ~23,000 requests/day (Cerebras + Groq + Gemini)
+**Combined capacity**: ~23,000+ requests/day (Cerebras + Groq + Gemini)
+- GitHub Models adds premium model access but unclear limits
 
 ### Example Daily Workflow
 
@@ -257,11 +303,12 @@ print(orch.get_usage_report()) # Shows session usage by provider
 
 ## When You Hit Limits
 
-1. **Cerebras daily limit**: Switch to Groq (7,000 RPD remaining)
-2. **Groq daily limit**: Switch to Gemini (auto-fallback)
-3. **Gemini limit**: Auto-fallback tries other Gemini models
-4. **All limits hit**: Wait for midnight reset (rare with 23K combined)
-5. **Cohere monthly limit**: Stop using Cohere entirely
+1. **GitHub Models limit**: Switch brain to Gemini or Groq-70b (unlikely with 10K/day)
+2. **Cerebras daily limit**: Switch to Groq (7,000 RPD remaining)
+3. **Groq daily limit**: Switch to Gemini (auto-fallback)
+4. **Gemini limit**: Auto-fallback tries other Gemini models
+5. **All limits hit**: Wait for midnight reset (very rare with 33K combined)
+6. **Cohere monthly limit**: Stop using Cohere entirely
 
 ---
 

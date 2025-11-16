@@ -9,10 +9,10 @@ from datetime import datetime
 import asyncio
 
 try:
-    from ..providers import ProviderRegistry, GroqProvider, CohereProvider, GeminiProvider, CerebrasProvider, LLMResponse
+    from ..providers import ProviderRegistry, GroqProvider, CohereProvider, GeminiProvider, CerebrasProvider, GitHubModelsProvider, LLMResponse
     from ..context import CodebaseContext
 except ImportError:
-    from providers import ProviderRegistry, GroqProvider, CohereProvider, GeminiProvider, CerebrasProvider, LLMResponse
+    from providers import ProviderRegistry, GroqProvider, CohereProvider, GeminiProvider, CerebrasProvider, GitHubModelsProvider, LLMResponse
     from context import CodebaseContext
 
 from .cache import ResponseCache
@@ -101,7 +101,14 @@ class AgentOrchestrator:
 
     def _auto_register_providers(self):
         """Attempt to register all known providers."""
-        # Try Cerebras (primary - highest quota)
+        # Try GitHub Models (RECOMMENDED BRAIN - GPT-4o with 10K RPD)
+        try:
+            self.registry.register(GitHubModelsProvider())
+            print("[OK] GitHub Models provider registered (GPT-4o: 10K RPD, 10M TPD)")
+        except Exception as e:
+            print(f"[X] GitHub Models provider unavailable: {e}")
+
+        # Try Cerebras (primary workhorse - highest quota)
         try:
             self.registry.register(CerebrasProvider())
             print("[OK] Cerebras provider registered (14,400 RPD)")

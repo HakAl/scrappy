@@ -56,3 +56,6 @@ Thumbs.db
 
 # All llm_team files (generated/temp files)
 .llm_team*
+.llm_*
+
+.env
