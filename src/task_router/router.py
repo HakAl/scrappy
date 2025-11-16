@@ -5,7 +5,7 @@ Central task router that dispatches to appropriate execution strategies.
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .classifier import ClassifiedTask, TaskClassifier, TaskType
 from .strategies import (
@@ -86,9 +86,9 @@ class TaskRouter:
 
         # AI-powered strategies (require orchestrator)
         if self.orchestrator:
+            # Provider will be resolved dynamically per task
             self.strategies[TaskType.RESEARCH] = ResearchExecutor(
-                orchestrator=self.orchestrator,
-                preferred_provider="cerebras"  # Fast provider for research
+                orchestrator=self.orchestrator
             )
 
             self.strategies[TaskType.CODE_GENERATION] = AgentExecutor(
@@ -97,6 +97,55 @@ class TaskRouter:
                 max_iterations=10,
                 require_approval=True
             )
+
+    def _resolve_provider(self, hint: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
+        """
+        Resolve provider hint to actual provider name and model.
+
+        Args:
+            hint: Provider hint ("fast", "quality", etc.) or None
+
+        Returns:
+            Tuple of (provider_name, model_name) or (None, None) if no resolution needed
+        """
+        if not hint or not self.orchestrator:
+            return (None, None)
+
+        try:
+            # Try to use ProviderSelector if available
+            if hasattr(self.orchestrator, 'providers'):
+                from ..orchestrator.provider_selector import ProviderSelector
+                selector = ProviderSelector(self.orchestrator.providers)
+                return selector.select_for_task(hint)
+        except Exception:
+            pass
+
+        # Fallback: simple mapping
+        available = []
+        try:
+            if hasattr(self.orchestrator, 'providers'):
+                available = self.orchestrator.providers.list_available()
+        except Exception:
+            pass
+
+        if hint in ['fast', 'high_volume', 'general']:
+            # Prefer Cerebras > Groq > Gemini
+            if 'cerebras' in available:
+                return ('cerebras', None)
+            elif 'groq' in available:
+                return ('groq', None)
+            elif 'gemini' in available:
+                return ('gemini', None)
+        elif hint == 'quality':
+            # Use 70B models
+            if 'cerebras' in available:
+                return ('cerebras', 'llama-3.3-70b')
+            elif 'groq' in available:
+                return ('groq', 'llama-3.3-70b-versatile')
+            elif 'gemini' in available:
+                return ('gemini', None)
+
+        return (None, None)
 
     def route(self, user_input: str) -> ExecutionResult:
         """
@@ -112,11 +161,20 @@ class TaskRouter:
         if self.verbose:
             self._log_classification(classified)
 
-        # 2. Apply pre-execution hooks
+        # 2. Resolve provider (override takes precedence over suggestion)
+        provider_hint = classified.override_provider or classified.suggested_provider
+        provider_name, model_name = self._resolve_provider(provider_hint)
+
+        if self.verbose and provider_name:
+            model_info = f" ({model_name})" if model_name else ""
+            source = "override" if classified.override_provider else "hint"
+            print(f"  Provider: {provider_name}{model_info} ({source}: {provider_hint})")
+
+        # 3. Apply pre-execution hooks
         for hook in self._pre_hooks:
             classified = hook(classified)
 
-        # 3. Get appropriate strategy
+        # 4. Get appropriate strategy
         strategy = self._get_strategy(classified)
 
         if not strategy:
@@ -127,7 +185,7 @@ class TaskRouter:
                 execution_time=time.time() - start_time
             )
 
-        # 4. Confirm execution if needed
+        # 5. Confirm execution if needed
         if not self._should_execute(classified, strategy):
             return ExecutionResult(
                 success=False,
@@ -136,25 +194,124 @@ class TaskRouter:
                 execution_time=time.time() - start_time
             )
 
-        # 5. Execute
+        # 6. Execute with resolved provider
         if self.verbose:
             print(f"  Executing with: {strategy.name}")
 
+        # Pass resolved provider info to strategy if it supports it
+        if hasattr(strategy, 'set_provider'):
+            strategy.set_provider(provider_name, model_name)
+
         result = strategy.execute(classified)
 
-        # 6. Apply post-execution hooks
+        # 7. Apply post-execution hooks
         for hook in self._post_hooks:
             result = hook(result)
 
-        # 7. Update metrics
+        # 8. Update metrics
         self._update_metrics(classified, result)
 
-        # 8. Add classification info to result
+        # 9. Add classification info to result
         result.metadata["classification"] = {
             "type": classified.task_type.value,
             "confidence": classified.confidence,
             "complexity": classified.complexity_score,
-            "reasoning": classified.reasoning
+            "reasoning": classified.reasoning,
+            "suggested_provider": classified.suggested_provider,
+            "override_provider": classified.override_provider,
+            "resolved_provider": provider_name,
+            "resolved_model": model_name
+        }
+
+        return result
+
+    def route_with_provider(
+        self,
+        user_input: str,
+        provider_override: Optional[str] = None
+    ) -> ExecutionResult:
+        """
+        Route user input with optional provider override.
+
+        Args:
+            user_input: User's task/query
+            provider_override: Force specific provider type ("fast", "quality", or provider name)
+
+        Returns:
+            ExecutionResult with output and metadata
+        """
+        # Classify first
+        classified = self.classifier.classify(user_input)
+
+        # Apply override if provided
+        if provider_override:
+            classified.override_provider = provider_override
+
+        # Now route with the modified classification
+        start_time = time.time()
+
+        if self.verbose:
+            self._log_classification(classified)
+
+        # Resolve provider (override takes precedence)
+        provider_hint = classified.override_provider or classified.suggested_provider
+        provider_name, model_name = self._resolve_provider(provider_hint)
+
+        if self.verbose and provider_name:
+            model_info = f" ({model_name})" if model_name else ""
+            source = "override" if classified.override_provider else "hint"
+            print(f"  Provider: {provider_name}{model_info} ({source}: {provider_hint})")
+
+        # Apply pre-execution hooks
+        for hook in self._pre_hooks:
+            classified = hook(classified)
+
+        # Get appropriate strategy
+        strategy = self._get_strategy(classified)
+
+        if not strategy:
+            return ExecutionResult(
+                success=False,
+                output="",
+                error=f"No strategy available for task type: {classified.task_type}",
+                execution_time=time.time() - start_time
+            )
+
+        # Confirm execution if needed
+        if not self._should_execute(classified, strategy):
+            return ExecutionResult(
+                success=False,
+                output="",
+                error="Execution cancelled by user",
+                execution_time=time.time() - start_time
+            )
+
+        # Execute with resolved provider
+        if self.verbose:
+            print(f"  Executing with: {strategy.name}")
+
+        if hasattr(strategy, 'set_provider'):
+            strategy.set_provider(provider_name, model_name)
+
+        result = strategy.execute(classified)
+
+        # Apply post-execution hooks
+        for hook in self._post_hooks:
+            result = hook(result)
+
+        # Update metrics
+        self._update_metrics(classified, result)
+
+        # Add classification info to result
+        result.metadata["classification"] = {
+            "type": classified.task_type.value,
+            "confidence": classified.confidence,
+            "complexity": classified.complexity_score,
+            "reasoning": classified.reasoning,
+            "suggested_provider": classified.suggested_provider,
+            "override_provider": classified.override_provider,
+            "resolved_provider": provider_name,
+            "resolved_model": model_name
         }
 
         return result

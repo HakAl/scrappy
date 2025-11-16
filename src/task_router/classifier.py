@@ -24,7 +24,8 @@ class ClassifiedTask:
     confidence: float  # 0.0 to 1.0
     reasoning: str
     extracted_command: Optional[str] = None  # For DIRECT_COMMAND
-    suggested_provider: Optional[str] = None  # Provider hint
+    suggested_provider: Optional[str] = None  # Provider hint (from classifier)
+    override_provider: Optional[str] = None  # Manual provider override (takes precedence)
     complexity_score: int = 1  # 1-10 scale
     requires_planning: bool = False
     requires_tools: bool = False
@@ -281,17 +282,19 @@ class TaskClassifier:
         """
         Suggest optimal provider for task type.
 
-        Returns provider name hint (actual selection done by orchestrator).
+        Returns provider hint that can be resolved by ProviderSelector:
+        - "fast": Quick response (Cerebras/Groq)
+        - "quality": High quality (70B models)
+        - None: No LLM needed
         """
         if task_type == TaskType.DIRECT_COMMAND:
             return None  # No LLM needed
 
         if task_type == TaskType.CONVERSATION:
-            return "fast"  # Cerebras - fastest
+            return "fast"  # Quick responses
 
         if task_type == TaskType.RESEARCH:
-            # Fast provider for research
-            return "fast"  # Cerebras
+            return "fast"  # Fast provider for research
 
         if task_type == TaskType.CODE_GENERATION:
             if complexity >= 7:

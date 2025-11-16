@@ -205,6 +205,7 @@ class ResearchExecutor(ExecutionStrategy):
     - No file modifications
     - Context-aware responses
     - Lightweight tool access (read-only)
+    - Dynamic provider selection per task
     """
 
     def __init__(
@@ -214,6 +215,17 @@ class ResearchExecutor(ExecutionStrategy):
     ):
         self.orchestrator = orchestrator
         self.preferred_provider = preferred_provider
+        self._resolved_provider: Optional[str] = None
+        self._resolved_model: Optional[str] = None
+
+    def set_provider(self, provider_name: Optional[str], model_name: Optional[str] = None):
+        """
+        Set the provider to use for the next execution.
+
+        Called by TaskRouter with resolved provider from classifier hints.
+        """
+        self._resolved_provider = provider_name
+        self._resolved_model = model_name
 
     @property
     def name(self) -> str:
@@ -230,8 +242,13 @@ class ResearchExecutor(ExecutionStrategy):
             # Build research prompt with context
             prompt = self._build_research_prompt(task)
 
-            # Get the provider to use (prefer fast provider, fallback to brain)
-            provider_to_use = self.preferred_provider
+            # Get the provider to use (priority: resolved > preferred > brain)
+            if self._resolved_provider:
+                provider_to_use = self._resolved_provider
+            else:
+                provider_to_use = self.preferred_provider
+
+            # Validate provider is available
             try:
                 available = self.orchestrator.providers.list_available()
                 if provider_to_use not in available:
@@ -248,6 +265,10 @@ class ResearchExecutor(ExecutionStrategy):
                 temperature=0.3,
                 use_context=True
             )
+
+            # Clear resolved provider after use (reset for next task)
+            self._resolved_provider = None
+            self._resolved_model = None
 
             execution_time = time.time() - start_time
 
@@ -317,6 +338,7 @@ class AgentExecutor(ExecutionStrategy):
     - Human-in-the-loop approval
     - Tool access (file, git, search)
     - Iterative execution
+    - Dynamic provider selection for complex tasks
     """
 
     def __init__(
@@ -330,6 +352,18 @@ class AgentExecutor(ExecutionStrategy):
         self.project_root = project_root or Path.cwd()
         self.max_iterations = max_iterations
         self.require_approval = require_approval
+        self._resolved_provider: Optional[str] = None
+        self._resolved_model: Optional[str] = None
+
+    def set_provider(self, provider_name: Optional[str], model_name: Optional[str] = None):
+        """
+        Set the provider to use for the next execution.
+
+        Called by TaskRouter with resolved provider from classifier hints.
+        For complex tasks (complexity >= 7), this will use quality models.
+        """
+        self._resolved_provider = provider_name
+        self._resolved_model = model_name
 
     @property
     def name(self) -> str:
@@ -347,8 +381,12 @@ class AgentExecutor(ExecutionStrategy):
             from ..agent import CodeAgent, ConversationState
             from ..orchestrator_adapter import AgentOrchestratorAdapter
 
-            # Create adapter for CodeAgent
+            # Create adapter for CodeAgent with provider hint
             adapter = AgentOrchestratorAdapter(self.orchestrator)
+
+            # Override adapter's provider if we have a resolved one
+            if self._resolved_provider:
+                adapter.set_preferred_provider(self._resolved_provider, self._resolved_model)
 
             # Initialize CodeAgent
             agent = CodeAgent(
@@ -357,6 +395,10 @@ class AgentExecutor(ExecutionStrategy):
                 max_iterations=self.max_iterations,
                 require_approval=self.require_approval
             )
+
+            # Clear resolved provider after use
+            self._resolved_provider = None
+            self._resolved_model = None
 
             # Run planning phase if needed
             if task.requires_planning:

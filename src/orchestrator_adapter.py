@@ -104,6 +104,35 @@ class AgentOrchestratorAdapter:
             orchestrator: AgentOrchestrator instance
         """
         self._orch = orchestrator
+        self._preferred_provider: Optional[str] = None
+        self._preferred_model: Optional[str] = None
+
+    def set_preferred_provider(
+        self,
+        provider_name: Optional[str],
+        model_name: Optional[str] = None
+    ):
+        """
+        Set preferred provider for this adapter.
+
+        This allows dynamic provider selection based on task requirements.
+        The CodeAgent can query this to adjust its planner/executor choices.
+
+        Args:
+            provider_name: Name of preferred provider (e.g., "cerebras", "gemini")
+            model_name: Optional specific model (e.g., "llama-3.3-70b")
+        """
+        self._preferred_provider = provider_name
+        self._preferred_model = model_name
+
+    def get_preferred_provider(self) -> tuple[Optional[str], Optional[str]]:
+        """
+        Get the preferred provider and model.
+
+        Returns:
+            Tuple of (provider_name, model_name) or (None, None) if not set
+        """
+        return (self._preferred_provider, self._preferred_model)
 
     @property
     def context(self) -> ContextProvider:

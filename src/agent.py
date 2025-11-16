@@ -155,21 +155,34 @@ class CodeAgent:
         # Hybrid approach: Use configured provider preferences
         available = self.adapter.list_providers()
 
-        # Select planner based on preferences
+        # Check if adapter has a preferred provider override (from task routing)
+        preferred_provider = None
+        if hasattr(self.adapter, 'get_preferred_provider'):
+            pref_provider, pref_model = self.adapter.get_preferred_provider()
+            if pref_provider and pref_provider in available:
+                preferred_provider = pref_provider
+
+        # Select planner based on preferences (prefer adapter override)
         self.planner = None
-        for pref in self.config.planner_preferences:
-            if pref in available:
-                self.planner = pref
-                break
+        if preferred_provider:
+            self.planner = preferred_provider
+        else:
+            for pref in self.config.planner_preferences:
+                if pref in available:
+                    self.planner = pref
+                    break
         if self.planner is None:
             self.planner = available[0] if available else None
 
-        # Select executor based on preferences
+        # Select executor based on preferences (prefer adapter override)
         self.executor = None
-        for pref in self.config.executor_preferences:
-            if pref in available:
-                self.executor = pref
-                break
+        if preferred_provider:
+            self.executor = preferred_provider
+        else:
+            for pref in self.config.executor_preferences:
+                if pref in available:
+                    self.executor = pref
+                    break
         if self.executor is None:
             self.executor = self.planner
 
