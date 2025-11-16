@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Optional, Set
 
+from ..platform_utils import is_windows, validate_command_for_platform
+
 
 class TaskType(Enum):
     """High-level task categories for execution routing."""
@@ -393,8 +395,14 @@ class TaskClassifier:
         """
         Check if a direct command is safe to execute.
 
-        Blocks potentially dangerous commands.
+        Blocks potentially dangerous commands and validates platform compatibility.
         """
+        # First check platform compatibility
+        is_valid, warning = validate_command_for_platform(command)
+        if not is_valid:
+            # Command is not valid for this platform
+            return False
+
         dangerous_patterns = [
             r'\brm\s+-rf\s+[/~]',  # rm -rf on root or home
             r'\brm\s+-rf\s+\*',    # rm -rf *
@@ -408,6 +416,16 @@ class TaskClassifier:
             r'\bwget.*\|\s*bash',  # download and execute
             r'\bcurl.*\|\s*bash',  # download and execute
         ]
+
+        # Add Windows-specific dangerous patterns
+        if is_windows():
+            dangerous_patterns.extend([
+                r'\bdel\s+/[fqs].*[/\\]\*',  # del /f /s with wildcards
+                r'\brmdir\s+/s\s+/q\s+[a-zA-Z]:\\',  # rmdir /s /q on drive root
+                r'\bformat\s+[a-zA-Z]:',  # format drive
+                r'\breg\s+delete\b',  # registry deletion
+                r'\bdiskpart\b',  # disk partitioning
+            ])
 
         cmd_lower = command.lower()
         for pattern in dangerous_patterns:

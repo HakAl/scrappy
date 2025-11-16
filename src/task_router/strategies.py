@@ -847,33 +847,48 @@ class AgentExecutor(ExecutionStrategy):
                 task_with_guidance = task_with_plan
 
             # Execute with agent loop
-            results = agent.run(task_with_guidance)
+            run_result = agent.run(task_with_guidance)
 
             execution_time = time.time() - start_time
 
-            # Format results
-            output_parts = []
-            total_tokens = 0
+            # run_result is a dict with 'success', 'result', 'iterations', 'audit_log'
+            if isinstance(run_result, dict):
+                success = run_result.get('success', False)
+                result_text = run_result.get('result', 'No result')
+                iterations = run_result.get('iterations', 0)
+                audit_log = run_result.get('audit_log', [])
 
-            for i, result in enumerate(results, 1):
-                output_parts.append(f"Step {i}: {result.action.action}")
-                if result.output:
-                    output_parts.append(f"  Output: {result.output[:500]}")
-                if not result.approved:
-                    output_parts.append("  [User declined]")
+                # Format output
+                output_parts = [f"Agent completed in {iterations} iterations"]
+                output_parts.append(f"Result: {result_text}")
 
-            return ExecutionResult(
-                success=all(r.approved for r in results),
-                output="\n".join(output_parts),
-                execution_time=execution_time,
-                tokens_used=total_tokens,
-                provider_used="agent_loop",
-                metadata={
-                    "iterations": len(results),
-                    "actions": [r.action.action for r in results],
-                    "all_approved": all(r.approved for r in results)
-                }
-            )
+                # Include audit log summary
+                if audit_log:
+                    output_parts.append(f"\nActions taken: {len(audit_log)}")
+                    for entry in audit_log[-3:]:  # Show last 3 actions
+                        action_name = entry.get('action', 'unknown')
+                        output_parts.append(f"  - {action_name}")
+
+                return ExecutionResult(
+                    success=success,
+                    output="\n".join(output_parts),
+                    execution_time=execution_time,
+                    tokens_used=0,
+                    provider_used="agent_loop",
+                    metadata={
+                        "iterations": iterations,
+                        "audit_log_size": len(audit_log),
+                        "final_result": result_text
+                    }
+                )
+            else:
+                # Fallback for unexpected return type
+                return ExecutionResult(
+                    success=False,
+                    output=str(run_result),
+                    error="Unexpected return type from agent.run()",
+                    execution_time=execution_time
+                )
 
         except ImportError as e:
             # Fallback if CodeAgent not available

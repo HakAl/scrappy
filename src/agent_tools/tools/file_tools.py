@@ -85,6 +85,24 @@ class WriteFileTool(Tool):
         if not context.is_safe_path(path):
             return ToolResult(False, "", f"Path '{path}' is outside project directory")
 
+        # Validate content is not empty (common LLM failure)
+        if not content or content.strip() == "":
+            return ToolResult(
+                False,
+                "",
+                f"Cannot write empty content to {path}. Content must not be empty."
+            )
+
+        # Warn if content is suspiciously short for certain file types
+        suspicious_extensions = ['.py', '.js', '.ts', '.java', '.cpp', '.go', '.rs']
+        if any(path.endswith(ext) for ext in suspicious_extensions):
+            if len(content.strip()) < 10:
+                return ToolResult(
+                    False,
+                    "",
+                    f"Content too short ({len(content)} chars) for {path}. Expected meaningful code content."
+                )
+
         if context.dry_run:
             return ToolResult(
                 True,
@@ -97,10 +115,24 @@ class WriteFileTool(Tool):
             # Create parent directories if needed
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(content, encoding='utf-8')
+
+            # Verify the write succeeded
+            if not target.exists():
+                return ToolResult(False, "", f"File {path} was not created after write")
+
+            actual_size = target.stat().st_size
+            expected_size = len(content.encode('utf-8'))
+            if actual_size != expected_size:
+                return ToolResult(
+                    False,
+                    "",
+                    f"Write verification failed: expected {expected_size} bytes, got {actual_size} bytes"
+                )
+
             return ToolResult(
                 True,
                 f"Successfully wrote {len(content)} characters to {path}",
-                metadata={"chars": len(content), "path": path}
+                metadata={"chars": len(content), "path": path, "verified": True}
             )
         except Exception as e:
             return ToolResult(False, "", f"Error writing file: {str(e)}")

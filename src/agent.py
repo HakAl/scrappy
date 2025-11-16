@@ -6,6 +6,7 @@ and Cerebras for quick operations (fast tasks).
 """
 
 import json
+import re
 import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -672,40 +673,99 @@ class CodeAgent:
             raise  # Re-raise to stop the agent loop
 
     def _parse_agent_response(self, response_text: str) -> dict:
-        """Parse the agent's JSON response."""
+        """Parse the agent's JSON response with robust error handling."""
         # Try to extract JSON from response
         text = response_text.strip()
+
+        def fix_json_string(s: str) -> str:
+            """Fix common JSON issues from LLM output."""
+            # Replace Python booleans with JSON booleans
+            s = re.sub(r'\bTrue\b', 'true', s)
+            s = re.sub(r'\bFalse\b', 'false', s)
+            s = re.sub(r'\bNone\b', 'null', s)
+            return s
 
         # Handle markdown code blocks
         if '```json' in text:
             start = text.find('```json') + 7
             end = text.find('```', start)
-            text = text[start:end].strip()
+            if end > start:
+                text = text[start:end].strip()
         elif '```' in text:
             start = text.find('```') + 3
             end = text.find('```', start)
-            text = text[start:end].strip()
+            if end > start:
+                text = text[start:end].strip()
 
+        # Try to parse as-is first
         try:
             return json.loads(text)
         except json.JSONDecodeError:
-            # Try to find JSON object in text
+            pass
+
+        # Try fixing Python-style booleans
+        try:
+            fixed_text = fix_json_string(text)
+            return json.loads(fixed_text)
+        except json.JSONDecodeError:
+            pass
+
+        # Try to find JSON object with proper brace matching
+        try:
             start = text.find('{')
-            end = text.rfind('}') + 1
-            if start != -1 and end > start:
+            if start != -1:
+                brace_count = 0
+                end = start
+                for i in range(start, len(text)):
+                    if text[i] == '{':
+                        brace_count += 1
+                    elif text[i] == '}':
+                        brace_count -= 1
+                        if brace_count == 0:
+                            end = i + 1
+                            break
+
+                if end > start:
+                    json_str = fix_json_string(text[start:end])
+                    return json.loads(json_str)
+        except (json.JSONDecodeError, IndexError):
+            pass
+
+        # Try to extract key fields using regex as last resort
+        thought_match = re.search(r'"thought"\s*:\s*"([^"]+)"', text)
+        action_match = re.search(r'"action"\s*:\s*"([^"]+)"', text)
+
+        if thought_match and action_match:
+            # Found at least thought and action, try to reconstruct
+            result = {
+                'thought': thought_match.group(1),
+                'action': action_match.group(1),
+                'parameters': {},
+                'is_complete': False
+            }
+
+            # Try to extract parameters
+            params_match = re.search(r'"parameters"\s*:\s*(\{[^}]+\})', text)
+            if params_match:
                 try:
-                    return json.loads(text[start:end])
+                    result['parameters'] = json.loads(fix_json_string(params_match.group(1)))
                 except:
                     pass
 
-            # Return error response
-            return {
-                'thought': 'Failed to parse response',
-                'action': 'error',
-                'parameters': {},
-                'is_complete': True,
-                'result': f'Parse error: {response_text[:200]}'
-            }
+            # Check for is_complete
+            if re.search(r'"is_complete"\s*:\s*true', text, re.IGNORECASE):
+                result['is_complete'] = True
+
+            return result
+
+        # Return error response - but don't mark as complete so agent retries
+        return {
+            'thought': 'Failed to parse LLM response as JSON',
+            'action': 'retry_parse',  # Special action indicating parse failure
+            'parameters': {'raw_response': response_text[:500]},
+            'is_complete': False,  # Don't complete on parse error - allow retry
+            'result': f'Parse error: {response_text[:200]}'
+        }
 
     # ========== Decoupled Agent Loop Methods ==========
 
@@ -787,6 +847,27 @@ class CodeAgent:
             ActionResult with execution details
         """
         print(f"\nThought: {action.thought}")
+
+        # Handle parse failure - provide feedback to LLM to retry with valid JSON
+        if action.action == 'retry_parse':
+            print("⚠️ Response parsing failed. Requesting JSON format retry...")
+            error_msg = (
+                "Your previous response could not be parsed as JSON. "
+                "Please respond with ONLY a valid JSON object in this exact format:\n"
+                '{\n'
+                '  "thought": "Your reasoning here",\n'
+                '  "action": "tool_name",\n'
+                '  "parameters": {"param": "value"},\n'
+                '  "is_complete": false\n'
+                '}\n'
+                "Make sure all strings are properly quoted with double quotes."
+            )
+            return ActionResult(
+                success=False,
+                output=error_msg,
+                action=action.action,
+                approved=False
+            )
 
         # Check if this is a valid tool action
         if action.action not in self.tools or action.action == 'complete':
