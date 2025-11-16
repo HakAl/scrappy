@@ -286,13 +286,16 @@ class TestCodeAgentInitialization:
         mock_orch.registry.list_available.return_value = ["cerebras"]
 
         with patch('src.agent.AgentOrchestratorAdapter') as mock_wrapper:
-            # Create adapter mock with explicit configuration
-            # Use configure_mock to ensure methods are set up before any access
-            mock_adapter_instance = MagicMock()
-            mock_adapter_instance.configure_mock(**{
-                'list_providers.return_value': ["cerebras"],
-                'get_preferred_provider.return_value': (None, None),
-            })
+            # Create a simple class that mimics the adapter interface
+            # This avoids Mock's attribute magic interfering with method returns
+            class FakeAdapter:
+                def list_providers(self):
+                    return ["cerebras"]
+
+                def get_preferred_provider(self):
+                    return (None, None)
+
+            mock_adapter_instance = FakeAdapter()
             mock_wrapper.return_value = mock_adapter_instance
 
             agent = CodeAgent(
