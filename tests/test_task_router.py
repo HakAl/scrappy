@@ -382,3 +382,880 @@ class TestMetricsAggregation:
         metrics = router.get_metrics()
         assert metrics.avg_execution_time >= 0
         assert isinstance(metrics.avg_execution_time, float)
+
+
+class TestLLMClassification:
+    """Tests for LLM-based classification fallback."""
+
+    @pytest.fixture
+    def mock_orchestrator(self):
+        """Create mock orchestrator with providers."""
+        orch = Mock()
+        orch.providers = Mock()
+        orch.providers.list_available.return_value = ['groq', 'gemini']
+        return orch
+
+    @pytest.mark.unit
+    def test_llm_classification_with_valid_response(self, mock_orchestrator):
+        """Test LLM classification with valid JSON response."""
+        mock_orchestrator.delegate.return_value = Mock(
+            content='{"task_type": "CODE_GENERATION", "confidence": 0.85, "reasoning": "User wants to create code"}'
+        )
+
+        router = TaskRouter(orchestrator=mock_orchestrator, verbose=False)
+
+        task = ClassifiedTask(
+            original_input="write a function",
+            task_type=TaskType.RESEARCH,
+            confidence=0.4,
+            reasoning="Low confidence"
+        )
+
+        result = router._classify_with_llm(task)
+        assert result.task_type == TaskType.CODE_GENERATION
+        assert result.confidence == 0.85
+        assert "LLM semantic classification" in result.reasoning
+
+    @pytest.mark.unit
+    def test_llm_classification_with_json_code_block(self, mock_orchestrator):
+        """Test LLM classification with JSON in code block."""
+        mock_orchestrator.delegate.return_value = Mock(
+            content='```json\n{"task_type": "RESEARCH", "confidence": 0.9, "reasoning": "Research task"}\n```'
+        )
+
+        router = TaskRouter(orchestrator=mock_orchestrator, verbose=False)
+
+        task = ClassifiedTask(
+            original_input="explain python",
+            task_type=TaskType.CONVERSATION,
+            confidence=0.3,
+            reasoning="Low confidence"
+        )
+
+        result = router._classify_with_llm(task)
+        assert result.task_type == TaskType.RESEARCH
+
+    @pytest.mark.unit
+    def test_llm_classification_with_low_llm_confidence(self, mock_orchestrator):
+        """Test that low LLM confidence doesn't override."""
+        mock_orchestrator.delegate.return_value = Mock(
+            content='{"task_type": "CODE_GENERATION", "confidence": 0.5, "reasoning": "Uncertain"}'
+        )
+
+        router = TaskRouter(orchestrator=mock_orchestrator, verbose=False)
+
+        task = ClassifiedTask(
+            original_input="something ambiguous",
+            task_type=TaskType.RESEARCH,
+            confidence=0.4,
+            reasoning="Original reasoning"
+        )
+
+        result = router._classify_with_llm(task)
+        # Should keep original since LLM confidence < 0.7
+        assert result.task_type == TaskType.RESEARCH
+
+    @pytest.mark.unit
+    def test_llm_classification_with_invalid_json(self, mock_orchestrator):
+        """Test LLM classification handles invalid JSON."""
+        mock_orchestrator.delegate.return_value = Mock(
+            content='This is not valid JSON at all'
+        )
+
+        router = TaskRouter(orchestrator=mock_orchestrator, verbose=False)
+
+        task = ClassifiedTask(
+            original_input="test",
+            task_type=TaskType.RESEARCH,
+            confidence=0.4,
+            reasoning="Original"
+        )
+
+        result = router._classify_with_llm(task)
+        # Should keep original classification
+        assert result.task_type == TaskType.RESEARCH
+
+    @pytest.mark.unit
+    def test_llm_classification_without_orchestrator(self):
+        """Test LLM classification without orchestrator returns original."""
+        router = TaskRouter(orchestrator=None, verbose=False)
+
+        task = ClassifiedTask(
+            original_input="test",
+            task_type=TaskType.RESEARCH,
+            confidence=0.4,
+            reasoning="Original"
+        )
+
+        result = router._classify_with_llm(task)
+        assert result.task_type == TaskType.RESEARCH
+
+    @pytest.mark.unit
+    def test_llm_classification_no_available_provider(self, mock_orchestrator):
+        """Test LLM classification when no providers available."""
+        mock_orchestrator.providers.list_available.return_value = []
+
+        router = TaskRouter(orchestrator=mock_orchestrator, verbose=False)
+
+        task = ClassifiedTask(
+            original_input="test",
+            task_type=TaskType.RESEARCH,
+            confidence=0.4,
+            reasoning="Original"
+        )
+
+        result = router._classify_with_llm(task)
+        # Should keep original since no provider available
+        assert result.task_type == TaskType.RESEARCH
+
+    @pytest.mark.unit
+    def test_llm_classification_with_exception(self, mock_orchestrator):
+        """Test LLM classification handles exceptions."""
+        mock_orchestrator.delegate.side_effect = Exception("API Error")
+
+        router = TaskRouter(orchestrator=mock_orchestrator, verbose=False)
+
+        task = ClassifiedTask(
+            original_input="test",
+            task_type=TaskType.RESEARCH,
+            confidence=0.4,
+            reasoning="Original"
+        )
+
+        result = router._classify_with_llm(task)
+        # Should keep original on exception
+        assert result.task_type == TaskType.RESEARCH
+
+    @pytest.mark.unit
+    def test_llm_classification_prefers_cerebras(self, mock_orchestrator):
+        """Test that LLM classification prefers cerebras provider."""
+        mock_orchestrator.providers.list_available.return_value = ['groq', 'cerebras', 'gemini']
+        mock_orchestrator.delegate.return_value = Mock(
+            content='{"task_type": "RESEARCH", "confidence": 0.9, "reasoning": "test"}'
+        )
+
+        router = TaskRouter(orchestrator=mock_orchestrator, verbose=False)
+        task = ClassifiedTask(
+            original_input="test",
+            task_type=TaskType.CONVERSATION,
+            confidence=0.3,
+            reasoning="Low"
+        )
+
+        router._classify_with_llm(task)
+
+        # Check that cerebras was used
+        call_args = mock_orchestrator.delegate.call_args
+        assert call_args[0][0] == 'cerebras'
+
+
+class TestProviderResolution:
+    """Tests for provider resolution logic."""
+
+    @pytest.fixture
+    def mock_orchestrator(self):
+        orch = Mock()
+        orch.providers = Mock()
+        return orch
+
+    @pytest.mark.unit
+    def test_resolve_provider_without_hint(self):
+        """Test provider resolution with no hint."""
+        router = TaskRouter(orchestrator=None, verbose=False)
+        provider, model = router._resolve_provider(None)
+        assert provider is None
+        assert model is None
+
+    @pytest.mark.unit
+    def test_resolve_provider_without_orchestrator(self):
+        """Test provider resolution without orchestrator."""
+        router = TaskRouter(orchestrator=None, verbose=False)
+        provider, model = router._resolve_provider("fast")
+        assert provider is None
+        assert model is None
+
+    @pytest.mark.unit
+    def test_resolve_provider_fast_prefers_cerebras(self, mock_orchestrator):
+        """Test fast hint prefers cerebras."""
+        mock_orchestrator.providers.list_available.return_value = ['groq', 'cerebras', 'gemini']
+
+        router = TaskRouter(orchestrator=mock_orchestrator, verbose=False)
+        provider, model = router._resolve_provider("fast")
+
+        assert provider == 'cerebras'
+
+    @pytest.mark.unit
+    def test_resolve_provider_fast_fallback_to_groq(self, mock_orchestrator):
+        """Test fast hint falls back to groq."""
+        mock_orchestrator.providers.list_available.return_value = ['groq', 'gemini']
+
+        router = TaskRouter(orchestrator=mock_orchestrator, verbose=False)
+        provider, model = router._resolve_provider("fast")
+
+        assert provider == 'groq'
+
+    @pytest.mark.unit
+    def test_resolve_provider_fast_fallback_to_gemini(self, mock_orchestrator):
+        """Test fast hint falls back to gemini."""
+        mock_orchestrator.providers.list_available.return_value = ['gemini']
+
+        router = TaskRouter(orchestrator=mock_orchestrator, verbose=False)
+        provider, model = router._resolve_provider("fast")
+
+        assert provider == 'gemini'
+
+    @pytest.mark.unit
+    def test_resolve_provider_high_volume(self, mock_orchestrator):
+        """Test high_volume hint uses fast providers."""
+        mock_orchestrator.providers.list_available.return_value = ['groq']
+
+        router = TaskRouter(orchestrator=mock_orchestrator, verbose=False)
+        provider, model = router._resolve_provider("high_volume")
+
+        assert provider == 'groq'
+
+    @pytest.mark.unit
+    def test_resolve_provider_quality_cerebras_70b(self, mock_orchestrator):
+        """Test quality hint uses 70B models."""
+        mock_orchestrator.providers.list_available.return_value = ['cerebras', 'groq']
+
+        router = TaskRouter(orchestrator=mock_orchestrator, verbose=False)
+        provider, model = router._resolve_provider("quality")
+
+        assert provider == 'cerebras'
+        assert model == 'llama-3.3-70b'
+
+    @pytest.mark.unit
+    def test_resolve_provider_quality_groq_70b(self, mock_orchestrator):
+        """Test quality hint uses groq 70B model."""
+        mock_orchestrator.providers.list_available.return_value = ['groq']
+
+        router = TaskRouter(orchestrator=mock_orchestrator, verbose=False)
+        provider, model = router._resolve_provider("quality")
+
+        assert provider == 'groq'
+        assert model == 'llama-3.3-70b-versatile'
+
+    @pytest.mark.unit
+    def test_resolve_provider_quality_gemini_fallback(self, mock_orchestrator):
+        """Test quality hint falls back to gemini."""
+        mock_orchestrator.providers.list_available.return_value = ['gemini']
+
+        router = TaskRouter(orchestrator=mock_orchestrator, verbose=False)
+        provider, model = router._resolve_provider("quality")
+
+        assert provider == 'gemini'
+        assert model is None
+
+    @pytest.mark.unit
+    def test_resolve_provider_general_hint(self, mock_orchestrator):
+        """Test general hint uses fast providers."""
+        mock_orchestrator.providers.list_available.return_value = ['gemini']
+
+        router = TaskRouter(orchestrator=mock_orchestrator, verbose=False)
+        provider, model = router._resolve_provider("general")
+
+        # 'general' is like 'fast', should return gemini
+        assert provider == 'gemini'
+
+    @pytest.mark.unit
+    def test_resolve_provider_empty_available_list(self, mock_orchestrator):
+        """Test resolution with no available providers."""
+        mock_orchestrator.providers.list_available.return_value = []
+
+        router = TaskRouter(orchestrator=mock_orchestrator, verbose=False)
+        provider, model = router._resolve_provider("fast")
+
+        assert provider is None
+        assert model is None
+
+
+class TestHooksAndExtensibility:
+    """Tests for pre/post execution hooks."""
+
+    @pytest.fixture
+    def router(self):
+        return TaskRouter(orchestrator=None, auto_confirm_direct=True, verbose=False)
+
+    @pytest.mark.unit
+    def test_add_pre_hook(self, router):
+        """Test adding a pre-execution hook."""
+
+        def modify_task(task):
+            task.reasoning = "Modified by hook"
+            return task
+
+        router.add_pre_hook(modify_task)
+        assert len(router._pre_hooks) == 1
+
+    @pytest.mark.unit
+    def test_add_post_hook(self, router):
+        """Test adding a post-execution hook."""
+
+        def modify_result(result):
+            result.tokens_used = 999
+            return result
+
+        router.add_post_hook(modify_result)
+        assert len(router._post_hooks) == 1
+
+    @pytest.mark.unit
+    def test_pre_hook_execution(self, router):
+        """Test that pre-hooks are executed."""
+        hook_called = []
+
+        def track_hook(task):
+            hook_called.append(True)
+            return task
+
+        router.add_pre_hook(track_hook)
+        router.route("hello")
+
+        assert len(hook_called) == 1
+
+    @pytest.mark.unit
+    def test_post_hook_execution(self, router):
+        """Test that post-hooks are executed."""
+        hook_called = []
+
+        def track_hook(result):
+            hook_called.append(True)
+            return result
+
+        router.add_post_hook(track_hook)
+        router.route("hello")
+
+        assert len(hook_called) == 1
+
+    @pytest.mark.unit
+    def test_pre_hook_modifies_task(self, router):
+        """Test that pre-hook can modify task."""
+
+        def force_conversation(task):
+            task.task_type = TaskType.CONVERSATION
+            task.confidence = 1.0
+            return task
+
+        router.add_pre_hook(force_conversation)
+        result = router.route("create a file")  # Would normally be CODE_GEN
+
+        # Should succeed because hook forced CONVERSATION
+        assert result.success is True
+
+    @pytest.mark.unit
+    def test_post_hook_modifies_result(self, router):
+        """Test that post-hook can modify result."""
+
+        def add_metadata(result):
+            result.metadata["hook_processed"] = True
+            return result
+
+        router.add_post_hook(add_metadata)
+        result = router.route("hello")
+
+        assert result.metadata.get("hook_processed") is True
+
+    @pytest.mark.unit
+    def test_multiple_pre_hooks_in_order(self, router):
+        """Test multiple pre-hooks execute in order."""
+        call_order = []
+
+        def hook1(task):
+            call_order.append(1)
+            return task
+
+        def hook2(task):
+            call_order.append(2)
+            return task
+
+        router.add_pre_hook(hook1)
+        router.add_pre_hook(hook2)
+        router.route("hello")
+
+        assert call_order == [1, 2]
+
+
+class TestStrategyManagement:
+    """Tests for strategy selection and management."""
+
+    @pytest.fixture
+    def router(self):
+        return TaskRouter(orchestrator=None, verbose=False)
+
+    @pytest.mark.unit
+    def test_classify_only(self, router):
+        """Test classification without execution."""
+        task = router.classify_only("create a python file")
+
+        assert isinstance(task, ClassifiedTask)
+        assert task.task_type in [TaskType.CODE_GENERATION, TaskType.RESEARCH, TaskType.DIRECT_COMMAND, TaskType.CONVERSATION]
+
+    @pytest.mark.unit
+    def test_set_strategy(self, router):
+        """Test overriding strategy for task type."""
+        custom_strategy = Mock()
+        custom_strategy.name = "CustomStrategy"
+        custom_strategy.can_handle.return_value = True
+
+        router.set_strategy(TaskType.CONVERSATION, custom_strategy)
+
+        assert router.strategies[TaskType.CONVERSATION] == custom_strategy
+
+    @pytest.mark.unit
+    def test_router_repr(self, router):
+        """Test router string representation."""
+        repr_str = repr(router)
+
+        assert "TaskRouter" in repr_str
+        assert "strategies" in repr_str
+
+    @pytest.mark.unit
+    def test_get_strategy_fallback_without_orchestrator(self):
+        """Test strategy fallback when orchestrator missing."""
+        router = TaskRouter(orchestrator=None, verbose=False)
+
+        task = ClassifiedTask(
+            original_input="explain something",
+            task_type=TaskType.RESEARCH,
+            confidence=0.9,
+            reasoning="Research task"
+        )
+
+        strategy = router._get_strategy(task)
+
+        # Should fallback to conversation when no orchestrator
+        assert strategy is not None
+        assert strategy.name == "ConversationExecutor"
+
+    @pytest.mark.unit
+    def test_get_strategy_returns_none_when_unavailable(self):
+        """Test strategy returns None for unavailable type."""
+        router = TaskRouter(orchestrator=None, verbose=False)
+
+        # Remove a strategy manually
+        del router.strategies[TaskType.CONVERSATION]
+
+        task = ClassifiedTask(
+            original_input="hello",
+            task_type=TaskType.CONVERSATION,
+            confidence=0.9,
+            reasoning="Conversation"
+        )
+
+        strategy = router._get_strategy(task)
+        assert strategy is None
+
+
+class TestClarifyIntent:
+    """Tests for intent clarification with user input."""
+
+    @pytest.fixture
+    def router(self):
+        return TaskRouter(orchestrator=None, verbose=False)
+
+    @pytest.mark.unit
+    def test_clarify_intent_choice_1_research(self, router):
+        """Test clarify intent with choice 1 (RESEARCH)."""
+        task = ClassifiedTask(
+            original_input="explain how to create",
+            task_type=TaskType.CODE_GENERATION,
+            confidence=0.5,
+            reasoning="Ambiguous"
+        )
+
+        with patch('builtins.input', return_value='1'):
+            result = router._clarify_intent(task)
+
+        assert result.task_type == TaskType.RESEARCH
+        assert result.confidence == 1.0
+        assert "User clarified" in result.reasoning
+
+    @pytest.mark.unit
+    def test_clarify_intent_choice_2_code_generation(self, router):
+        """Test clarify intent with choice 2 (CODE_GENERATION)."""
+        task = ClassifiedTask(
+            original_input="explain how to create",
+            task_type=TaskType.RESEARCH,
+            confidence=0.5,
+            reasoning="Ambiguous"
+        )
+
+        with patch('builtins.input', return_value='2'):
+            result = router._clarify_intent(task)
+
+        assert result.task_type == TaskType.CODE_GENERATION
+        assert result.confidence == 1.0
+
+    @pytest.mark.unit
+    def test_clarify_intent_choice_3_keep_original(self, router):
+        """Test clarify intent with choice 3 (keep original)."""
+        task = ClassifiedTask(
+            original_input="test",
+            task_type=TaskType.RESEARCH,
+            confidence=0.5,
+            reasoning="Original"
+        )
+
+        with patch('builtins.input', return_value='3'):
+            result = router._clarify_intent(task)
+
+        assert result.task_type == TaskType.RESEARCH
+        assert result.confidence == 0.5  # Unchanged
+
+    @pytest.mark.unit
+    def test_clarify_intent_eof_error(self, router):
+        """Test clarify intent handles EOF error."""
+        task = ClassifiedTask(
+            original_input="test",
+            task_type=TaskType.RESEARCH,
+            confidence=0.5,
+            reasoning="Original"
+        )
+
+        with patch('builtins.input', side_effect=EOFError):
+            result = router._clarify_intent(task)
+
+        # Should keep original on EOFError
+        assert result.task_type == TaskType.RESEARCH
+
+    @pytest.mark.unit
+    def test_clarify_intent_keyboard_interrupt(self, router):
+        """Test clarify intent handles keyboard interrupt."""
+        task = ClassifiedTask(
+            original_input="test",
+            task_type=TaskType.RESEARCH,
+            confidence=0.5,
+            reasoning="Original"
+        )
+
+        with patch('builtins.input', side_effect=KeyboardInterrupt):
+            result = router._clarify_intent(task)
+
+        # Should keep original on KeyboardInterrupt
+        assert result.task_type == TaskType.RESEARCH
+
+
+class TestRouteWithProvider:
+    """Tests for route_with_provider method."""
+
+    @pytest.fixture
+    def mock_orchestrator(self):
+        orch = Mock()
+        orch.providers = Mock()
+        orch.providers.list_available.return_value = ['groq']
+        return orch
+
+    @pytest.mark.unit
+    def test_route_with_provider_override(self, mock_orchestrator):
+        """Test routing with provider override."""
+        router = TaskRouter(
+            orchestrator=mock_orchestrator,
+            verbose=False,
+            auto_confirm_direct=True
+        )
+        router.use_llm_classification = False
+
+        result = router.route_with_provider("hello", provider_override="fast")
+
+        assert isinstance(result, ExecutionResult)
+        assert "override_provider" in result.metadata.get("classification", {})
+        assert result.metadata["classification"]["override_provider"] == "fast"
+
+    @pytest.mark.unit
+    def test_route_with_provider_no_override(self):
+        """Test routing without provider override."""
+        router = TaskRouter(orchestrator=None, verbose=False)
+        router.use_llm_classification = False
+
+        result = router.route_with_provider("hello")
+
+        assert isinstance(result, ExecutionResult)
+        assert result.metadata["classification"]["override_provider"] is None
+
+    @pytest.mark.unit
+    def test_route_with_provider_includes_classification_metadata(self):
+        """Test that result includes classification metadata."""
+        router = TaskRouter(orchestrator=None, verbose=False)
+        router.use_llm_classification = False
+
+        result = router.route_with_provider("hello")
+
+        metadata = result.metadata.get("classification", {})
+        assert "type" in metadata
+        assert "confidence" in metadata
+        assert "reasoning" in metadata
+        assert "resolved_provider" in metadata
+        assert "resolved_model" in metadata
+
+
+class TestShouldExecute:
+    """Tests for execution confirmation logic."""
+
+    @pytest.fixture
+    def router(self):
+        return TaskRouter(orchestrator=None, auto_confirm_direct=False, verbose=False)
+
+    @pytest.mark.unit
+    def test_conversation_always_executes(self, router):
+        """Test that conversation tasks always execute."""
+        task = ClassifiedTask(
+            original_input="hello",
+            task_type=TaskType.CONVERSATION,
+            confidence=0.9,
+            reasoning="Greeting"
+        )
+
+        strategy = router.strategies[TaskType.CONVERSATION]
+        should_exec = router._should_execute(task, strategy)
+
+        assert should_exec is True
+
+    @pytest.mark.unit
+    def test_research_always_executes(self, router):
+        """Test that research tasks always execute."""
+        task = ClassifiedTask(
+            original_input="explain python",
+            task_type=TaskType.RESEARCH,
+            confidence=0.9,
+            reasoning="Research"
+        )
+
+        strategy = Mock()
+        should_exec = router._should_execute(task, strategy)
+
+        assert should_exec is True
+
+    @pytest.mark.unit
+    def test_code_generation_always_executes(self, router):
+        """Test that code generation tasks always execute."""
+        task = ClassifiedTask(
+            original_input="create file",
+            task_type=TaskType.CODE_GENERATION,
+            confidence=0.9,
+            reasoning="Code gen"
+        )
+
+        strategy = Mock()
+        should_exec = router._should_execute(task, strategy)
+
+        assert should_exec is True
+
+    @pytest.mark.unit
+    def test_direct_command_auto_confirm(self):
+        """Test direct command with auto-confirm."""
+        router = TaskRouter(orchestrator=None, auto_confirm_direct=True, verbose=False)
+
+        task = ClassifiedTask(
+            original_input="echo test",
+            task_type=TaskType.DIRECT_COMMAND,
+            confidence=0.9,
+            reasoning="Direct",
+            extracted_command="echo test"
+        )
+
+        strategy = router.strategies[TaskType.DIRECT_COMMAND]
+        should_exec = router._should_execute(task, strategy)
+
+        assert should_exec is True
+
+    @pytest.mark.unit
+    def test_direct_command_dangerous_blocked(self):
+        """Test that dangerous direct commands are blocked."""
+        router = TaskRouter(orchestrator=None, auto_confirm_direct=False, verbose=False)
+
+        task = ClassifiedTask(
+            original_input="rm -rf /",
+            task_type=TaskType.DIRECT_COMMAND,
+            confidence=0.9,
+            reasoning="Direct",
+            extracted_command="rm -rf /"
+        )
+
+        strategy = router.strategies[TaskType.DIRECT_COMMAND]
+        should_exec = router._should_execute(task, strategy)
+
+        # Should be blocked as dangerous
+        assert should_exec is False
+
+
+class TestLogging:
+    """Tests for logging and output."""
+
+    @pytest.mark.unit
+    def test_log_classification_with_command(self, capsys):
+        """Test that classification logging includes command."""
+        router = TaskRouter(orchestrator=None, verbose=True)
+
+        task = ClassifiedTask(
+            original_input="echo test",
+            task_type=TaskType.DIRECT_COMMAND,
+            confidence=0.9,
+            reasoning="Direct command",
+            extracted_command="echo test"
+        )
+
+        router._log_classification(task)
+
+        captured = capsys.readouterr()
+        assert "direct_command" in captured.out  # TaskType.value is lowercase
+        assert "echo test" in captured.out
+
+    @pytest.mark.unit
+    def test_log_classification_with_planning(self, capsys):
+        """Test that classification logging includes planning flag."""
+        router = TaskRouter(orchestrator=None, verbose=True)
+
+        task = ClassifiedTask(
+            original_input="create complex app",
+            task_type=TaskType.CODE_GENERATION,
+            confidence=0.9,
+            reasoning="Code generation",
+            requires_planning=True
+        )
+
+        router._log_classification(task)
+
+        captured = capsys.readouterr()
+        assert "Requires planning" in captured.out
+
+    @pytest.mark.unit
+    def test_verbose_logging_in_route(self, capsys):
+        """Test that verbose mode produces output."""
+        router = TaskRouter(orchestrator=None, verbose=True)
+        router.use_llm_classification = False
+
+        router.route("hello")
+
+        captured = capsys.readouterr()
+        assert "Task Classification" in captured.out
+
+
+class TestAdditionalIntentClarification:
+    """Additional tests for intent clarification detection."""
+
+    @pytest.fixture
+    def router(self):
+        return TaskRouter(orchestrator=None, verbose=False)
+
+    @pytest.mark.unit
+    def test_low_confidence_needs_clarification(self, router):
+        """Test that low confidence always needs clarification."""
+        task = ClassifiedTask(
+            original_input="something",
+            task_type=TaskType.CONVERSATION,
+            confidence=0.3,  # Below threshold
+            reasoning="Low confidence"
+        )
+
+        needs = router._needs_intent_clarification(task)
+        assert needs is True
+
+    @pytest.mark.unit
+    def test_question_mark_with_action_verb_needs_clarification(self, router):
+        """Test question mark with action verb needs clarification."""
+        task = ClassifiedTask(
+            original_input="can you create this?",
+            task_type=TaskType.CODE_GENERATION,
+            confidence=0.8,
+            reasoning="High confidence"
+        )
+
+        needs = router._needs_intent_clarification(task)
+        assert needs is True
+
+    @pytest.mark.unit
+    def test_escalation_disabled_respects_setting(self, router):
+        """Test that escalation respects disabled setting."""
+        router.escalate_on_low_confidence = False
+
+        task = ClassifiedTask(
+            original_input="create something",
+            task_type=TaskType.RESEARCH,
+            confidence=0.3,
+            reasoning="Low confidence"
+        )
+
+        result = router._apply_confidence_escalation(task)
+        # Should not escalate when disabled
+        assert result.task_type == TaskType.RESEARCH
+
+    @pytest.mark.unit
+    def test_non_research_task_not_escalated(self, router):
+        """Test that non-RESEARCH tasks are not escalated."""
+        task = ClassifiedTask(
+            original_input="hello",
+            task_type=TaskType.CONVERSATION,
+            confidence=0.3,
+            reasoning="Low confidence"
+        )
+
+        result = router._apply_confidence_escalation(task)
+        # CONVERSATION should not escalate
+        assert result.task_type == TaskType.CONVERSATION
+
+
+class TestRouterResultMetadata:
+    """Tests for result metadata population."""
+
+    @pytest.mark.unit
+    def test_classification_metadata_complete(self):
+        """Test that classification metadata is complete."""
+        router = TaskRouter(orchestrator=None, verbose=False)
+        router.use_llm_classification = False
+
+        result = router.route("hello")
+
+        metadata = result.metadata.get("classification", {})
+        assert "type" in metadata
+        assert "confidence" in metadata
+        assert "complexity" in metadata
+        assert "reasoning" in metadata
+        assert "suggested_provider" in metadata
+        assert "override_provider" in metadata
+        assert "resolved_provider" in metadata
+        assert "resolved_model" in metadata
+        assert "used_llm_classification" in metadata
+
+    @pytest.mark.unit
+    def test_used_llm_classification_flag(self):
+        """Test that LLM classification flag is set correctly."""
+        router = TaskRouter(orchestrator=None, verbose=False)
+        router.use_llm_classification = False
+
+        result = router.route("hello")
+
+        metadata = result.metadata.get("classification", {})
+        # Should be False since LLM wasn't used
+        assert metadata["used_llm_classification"] is False
+
+
+class TestNoStrategyAvailable:
+    """Tests for handling missing strategies."""
+
+    @pytest.mark.unit
+    def test_route_returns_error_when_no_strategy(self):
+        """Test that route returns error when no strategy available."""
+        router = TaskRouter(orchestrator=None, verbose=False)
+        router.use_llm_classification = False
+
+        # Remove all strategies
+        router.strategies.clear()
+
+        result = router.route("hello")
+
+        assert result.success is False
+        assert "No strategy available" in result.error
+
+    @pytest.mark.unit
+    def test_route_with_provider_returns_error_when_no_strategy(self):
+        """Test route_with_provider returns error when no strategy."""
+        router = TaskRouter(orchestrator=None, verbose=False)
+        router.use_llm_classification = False
+
+        # Remove all strategies
+        router.strategies.clear()
+
+        result = router.route_with_provider("hello")
+
+        assert result.success is False
+        assert "No strategy available" in result.error

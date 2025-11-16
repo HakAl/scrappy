@@ -288,7 +288,8 @@ class TestCodeAgentInitialization:
         with patch('src.agent.AgentOrchestratorAdapter') as mock_wrapper:
             mock_adapter_instance = MagicMock()  # Use MagicMock to allow any attribute
             mock_adapter_instance.list_providers.return_value = ["cerebras"]
-            mock_adapter_instance.get_preferred_provider.return_value = (None, None)
+            # Use a lambda to ensure proper tuple return
+            mock_adapter_instance.get_preferred_provider = Mock(return_value=(None, None))
             mock_wrapper.return_value = mock_adapter_instance
 
             agent = CodeAgent(
