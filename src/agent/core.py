@@ -610,7 +610,7 @@ class CodeAgent:
     def _get_user_confirmation(self, action: str, params: dict) -> bool:
         """Ask user for confirmation before executing action."""
         # Auto-approve safe read-only operations
-        safe_actions = ['read_file', 'list_files', 'search_files', 'search_code', 'git_status', 'git_log', 'git_diff']
+        safe_actions = ['read_file', 'list_files', 'list_directory', 'search_files', 'search_code', 'git_status', 'git_log', 'git_diff']
         if action in safe_actions:
             print(f"Agent wants to: {action}")
             print(f"Parameters: {json.dumps(params, indent=2)}")
@@ -948,17 +948,32 @@ class CodeAgent:
             )
 
         # Smart completion: Check if primary goal was achieved
-        if result.executed and result.action in ['write_file', 'run_command']:
-            if 'Successfully wrote' in result.output or 'successfully' in result.output.lower():
-                # Check if this was likely the main task
-                write_actions = [t for t in state.tools_executed if t == 'write_file']
-                if len(write_actions) >= 1 and state.iteration >= 2:
-                    # File was written successfully - likely complete
+        if result.executed and state.iteration >= 2:
+            # Detect various completion patterns
+            completion_indicators = [
+                # File operations completed
+                result.action == 'write_file' and 'Successfully wrote' in result.output,
+                # Command ran successfully (tests pass, build succeeded, etc.)
+                result.action == 'run_command' and result.output and 'successfully' in result.output.lower(),
+                # Core deliverable created
+                result.action == 'write_file' and any(
+                    indicator in state.messages[-1].get('content', '').lower()
+                    for indicator in ['component', 'feature', 'implement', 'create', 'add']
+                ) if state.messages else False,
+            ]
+
+            # Check if we've done meaningful work and hit a completion indicator
+            meaningful_actions = [t for t in state.tools_executed if t in self.config.meaningful_actions]
+            if any(completion_indicators) and meaningful_actions:
+                # Verify this seems like final task completion, not intermediate step
+                recent_actions = state.tools_executed[-3:] if len(state.tools_executed) >= 3 else state.tools_executed
+                # If we've been doing write operations or running tests, likely complete
+                if 'write_file' in recent_actions or (result.action == 'run_command' and 'test' in result.output.lower()):
                     print(f"\nTask goal achieved. Stopping execution.")
                     return EvaluationResult(
                         is_complete=True,
                         should_continue=False,
-                        reason="Primary goal achieved (file written successfully)",
+                        reason="Primary goal achieved",
                         final_result=result.output
                     )
 
@@ -1115,6 +1130,19 @@ Important:
 - Test your changes when possible
 - Be careful with file paths (relative to project root)
 - For requirements.txt: Analyze actual import statements in *.py files, NOT pip freeze (which gives ALL installed packages)
+
+Efficiency - Skip redundant operations:
+- If you already have the information you need from previous steps, USE IT instead of re-querying
+- Skip listing directories if you can infer the structure from context or previous results
+- Don't repeat read_file on files you've already read in this conversation
+- Adapt your plan based on what you learn - not every planned step needs to be executed
+- When you have enough context to proceed, skip exploratory steps and take action directly
+
+Task Completion - Signal done when core goal is achieved:
+- Mark task complete once the PRIMARY deliverable is done (e.g., component created, bug fixed, feature added)
+- Don't continue with optional follow-up steps unless explicitly requested
+- If asked to "add X", you're done when X is added - don't add tests, docs, or extras unless asked
+- Be decisive: when the main goal is accomplished, set is_complete to true immediately
 
 CRITICAL - write_file usage:
 - NEVER call write_file with empty content - this WILL fail
