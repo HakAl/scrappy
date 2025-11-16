@@ -7,9 +7,10 @@ and Cerebras for quick operations (fast tasks).
 
 import json
 import subprocess
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Any
+from typing import Optional, Any, List, Dict
 
 from .agent_config import AgentConfig
 from .agent_tools.tools import ToolRegistry, ToolContext
@@ -27,6 +28,55 @@ from .agent_tools.tools.git_tools import (
     GitRecentChangesTool
 )
 from .agent_tools.tools.search_tools import SearchCodeTool
+
+
+@dataclass
+class AgentThought:
+    """Result from the thinking stage (LLM response)."""
+    raw_response: str
+    provider: str
+    iteration: int
+
+
+@dataclass
+class AgentAction:
+    """Parsed action from the planning stage."""
+    thought: str
+    action: str
+    parameters: Dict[str, Any]
+    is_complete: bool
+    result_text: str = ""  # For completion results
+
+
+@dataclass
+class ActionResult:
+    """Result from executing an action."""
+    success: bool
+    output: str
+    action: str
+    parameters: Dict[str, Any]
+    approved: bool
+    executed: bool = False
+
+
+@dataclass
+class EvaluationResult:
+    """Result from evaluating whether task is complete."""
+    is_complete: bool
+    should_continue: bool
+    reason: str
+    final_result: Optional[str] = None
+
+
+@dataclass
+class ConversationState:
+    """Encapsulates the conversation state for the agent loop."""
+    messages: List[Dict[str, str]] = field(default_factory=list)
+    system_prompt: str = ""
+    iteration: int = 0
+    max_iterations: int = 10
+    tools_executed: List[str] = field(default_factory=list)
+    auto_confirm: bool = False
 
 
 class CodeAgent:
@@ -243,9 +293,280 @@ class CodeAgent:
                 'result': f'Parse error: {response_text[:200]}'
             }
 
+    # ========== Decoupled Agent Loop Methods ==========
+
+    def _think(self, state: ConversationState) -> AgentThought:
+        """
+        Generate the next thought/action from the LLM.
+
+        This is the reasoning stage where the agent decides what to do next.
+
+        Args:
+            state: Current conversation state
+
+        Returns:
+            AgentThought containing raw LLM response
+        """
+        print(f"[{self.planner}] Thinking...")
+
+        # Build the prompt with conversation history for multi-turn
+        if len(state.messages) == 2:
+            # First iteration: just use the task
+            user_prompt = state.messages[-1]['content']
+        else:
+            # Subsequent iterations: include conversation history
+            history_parts = []
+            for msg in state.messages[2:]:  # Skip system prompt and initial task
+                role = msg['role'].upper()
+                history_parts.append(f"{role}: {msg['content']}")
+            history_text = "\n\n".join(history_parts)
+            user_prompt = f"Previous conversation:\n{history_text}\n\nBased on the above, continue with the task. Remember to respond with valid JSON."
+
+        response = self.orch.delegate(
+            self.planner,
+            user_prompt,
+            system_prompt=state.system_prompt,
+            max_tokens=self.config.default_max_tokens,
+            temperature=self.config.default_temperature,
+            use_context=False  # Context already in system prompt
+        )
+
+        return AgentThought(
+            raw_response=response.content,
+            provider=self.planner,
+            iteration=state.iteration
+        )
+
+    def _plan_action(self, thought: AgentThought) -> AgentAction:
+        """
+        Parse the LLM response into a structured action.
+
+        This is the planning stage where we extract the action to take.
+
+        Args:
+            thought: Raw thought from _think()
+
+        Returns:
+            AgentAction with parsed action details
+        """
+        action_data = self._parse_agent_response(thought.raw_response)
+
+        return AgentAction(
+            thought=action_data.get('thought', 'No thought provided'),
+            action=action_data.get('action', 'error'),
+            parameters=action_data.get('parameters', {}),
+            is_complete=action_data.get('is_complete', False),
+            result_text=action_data.get('result', '')
+        )
+
+    def _execute(self, action: AgentAction, state: ConversationState) -> ActionResult:
+        """
+        Execute the planned action (tool call).
+
+        This is the execution stage where the tool is actually run.
+
+        Args:
+            action: Parsed action from _plan_action()
+            state: Current conversation state (for auto_confirm)
+
+        Returns:
+            ActionResult with execution details
+        """
+        print(f"\nThought: {action.thought}")
+
+        # Check if this is a valid tool action
+        if action.action not in self.tools or action.action == 'complete':
+            return ActionResult(
+                success=True,  # Not a failure, just no execution
+                output="",
+                action=action.action,
+                parameters=action.parameters,
+                approved=True,
+                executed=False
+            )
+
+        # Handle unknown actions
+        if action.action not in self.tools and action.action != 'complete' and action.action != 'error':
+            print(f"Unknown action: {action.action}")
+            return ActionResult(
+                success=False,
+                output=f"Unknown action '{action.action}'. Available tools: {', '.join(self.tools.keys())}",
+                action=action.action,
+                parameters=action.parameters,
+                approved=False,
+                executed=False
+            )
+
+        # Get user confirmation (unless auto_confirm)
+        if state.auto_confirm:
+            approved = True
+        else:
+            approved = self._get_user_confirmation(action.action, action.parameters)
+
+        if not approved:
+            print("Action denied by user")
+            self._log_action(action.action, action.parameters, "Denied by user", False)
+            return ActionResult(
+                success=False,
+                output="Denied by user",
+                action=action.action,
+                parameters=action.parameters,
+                approved=False,
+                executed=False
+            )
+
+        # Execute the tool
+        print(f"Executing: {action.action}")
+        tool_result = self.tools[action.action](**action.parameters)
+
+        max_display = self.config.result_display_truncation
+        if len(tool_result) > max_display:
+            print(f"Result: {tool_result[:max_display]}...")
+        else:
+            print(f"Result: {tool_result}")
+
+        self._log_action(action.action, action.parameters, tool_result, True)
+
+        return ActionResult(
+            success=True,
+            output=tool_result,
+            action=action.action,
+            parameters=action.parameters,
+            approved=True,
+            executed=True
+        )
+
+    def _evaluate(
+        self,
+        action: AgentAction,
+        result: ActionResult,
+        state: ConversationState
+    ) -> EvaluationResult:
+        """
+        Evaluate whether the task is complete and if we should continue.
+
+        This is the evaluation stage where we check completion criteria.
+
+        Args:
+            action: The action that was planned
+            result: The result of executing the action
+            state: Current conversation state
+
+        Returns:
+            EvaluationResult indicating whether to continue or complete
+        """
+        # Check if task is complete (AFTER executing any actions)
+        if action.is_complete or action.action == 'complete':
+            # Verify that at least one meaningful action was performed
+            meaningful_actions = [
+                t for t in state.tools_executed
+                if t in self.config.meaningful_actions
+            ]
+
+            if not meaningful_actions and not self.dry_run:
+                print(f"\nWarning: Agent declared completion without performing any file operations.")
+                print("Requesting agent to actually execute the task...")
+                return EvaluationResult(
+                    is_complete=False,
+                    should_continue=True,
+                    reason="No meaningful actions performed yet"
+                )
+
+            final_result = action.result_text or 'Task completed'
+            print(f"\nResult: {final_result}")
+            self._log_action('complete', {}, final_result, True)
+
+            return EvaluationResult(
+                is_complete=True,
+                should_continue=False,
+                reason="Task marked as complete",
+                final_result=final_result
+            )
+
+        # Check max iterations
+        if state.iteration >= state.max_iterations:
+            return EvaluationResult(
+                is_complete=False,
+                should_continue=False,
+                reason=f"Max iterations ({state.max_iterations}) reached"
+            )
+
+        # Continue with more iterations
+        return EvaluationResult(
+            is_complete=False,
+            should_continue=True,
+            reason="Task not yet complete"
+        )
+
+    def _update_conversation(
+        self,
+        state: ConversationState,
+        thought: AgentThought,
+        action: AgentAction,
+        result: ActionResult
+    ) -> None:
+        """
+        Update the conversation history based on the action and result.
+
+        Args:
+            state: Conversation state to update
+            thought: The raw thought from LLM
+            action: The parsed action
+            result: The execution result
+        """
+        if result.executed:
+            # Tool was executed successfully
+            state.messages.append({
+                'role': 'assistant',
+                'content': thought.raw_response
+            })
+            state.messages.append({
+                'role': 'user',
+                'content': f"Tool result for {result.action}:\n{result.output}\n\nContinue with the task or mark as complete if done."
+            })
+            state.tools_executed.append(result.action)
+        elif not result.approved and result.action in self.tools:
+            # Tool was denied by user
+            state.messages.append({
+                'role': 'assistant',
+                'content': thought.raw_response
+            })
+            state.messages.append({
+                'role': 'user',
+                'content': f"User denied the {result.action} action. Please try a different approach or explain why this action is necessary."
+            })
+        elif action.action not in self.tools and action.action != 'complete' and action.action != 'error':
+            # Unknown action
+            state.messages.append({
+                'role': 'assistant',
+                'content': thought.raw_response
+            })
+            state.messages.append({
+                'role': 'user',
+                'content': f"Unknown action '{action.action}'. Available tools: {', '.join(self.tools.keys())}"
+            })
+        elif action.is_complete and not result.executed:
+            # Agent wants to complete but no action executed and no meaningful work done
+            meaningful_actions = [t for t in state.tools_executed if t in self.config.meaningful_actions]
+            if not meaningful_actions and not self.dry_run:
+                state.messages.append({
+                    'role': 'assistant',
+                    'content': thought.raw_response
+                })
+                state.messages.append({
+                    'role': 'user',
+                    'content': "You declared the task complete but haven't actually created or modified any files. Please respond with a JSON object containing an action to execute. Use the write_file tool to actually create the requested code. Example format:\n{\n  \"thought\": \"your reasoning\",\n  \"action\": \"write_file\",\n  \"parameters\": {\"path\": \"filename\", \"content\": \"code here\"}\n}"
+                })
+
     def run(self, task: str, max_iterations: int = 10, auto_confirm: bool = False) -> dict:
         """
-        Run the agent on a task.
+        Run the agent on a task using decoupled stages.
+
+        The agent loop follows clear stages:
+        1. Think - LLM generates next thought/action
+        2. Plan - Parse response into structured action
+        3. Execute - Run the tool
+        4. Evaluate - Check if task is complete
 
         Args:
             task: The task to accomplish
@@ -291,137 +612,62 @@ Important:
 Current task: {task}
 """
 
-        messages = [
-            {'role': 'system', 'content': system_prompt},
-            {'role': 'user', 'content': f"Please complete this task: {task}"}
-        ]
+        # Initialize conversation state
+        state = ConversationState(
+            messages=[
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': f"Please complete this task: {task}"}
+            ],
+            system_prompt=system_prompt,
+            iteration=0,
+            max_iterations=max_iterations,
+            tools_executed=[],
+            auto_confirm=auto_confirm
+        )
 
-        iteration = 0
-        tools_executed = []  # Track which tools were actually executed
-        while iteration < max_iterations:
-            iteration += 1
-            print(f"\n--- Iteration {iteration}/{max_iterations} ---")
+        # Main agent loop - decoupled stages
+        while state.iteration < state.max_iterations:
+            state.iteration += 1
+            print(f"\n--- Iteration {state.iteration}/{state.max_iterations} ---")
 
-            # Get agent's next action (use Gemini for reasoning)
-            print(f"[{self.planner}] Thinking...")
+            # Stage 1: Think - LLM generates next thought/action
+            thought = self._think(state)
 
-            # Build the prompt with conversation history for multi-turn
-            if len(messages) == 2:
-                # First iteration: just use the task
-                user_prompt = messages[-1]['content']
-            else:
-                # Subsequent iterations: include conversation history
-                history_parts = []
-                for msg in messages[2:]:  # Skip system prompt and initial task
-                    role = msg['role'].upper()
-                    history_parts.append(f"{role}: {msg['content']}")
-                history_text = "\n\n".join(history_parts)
-                user_prompt = f"Previous conversation:\n{history_text}\n\nBased on the above, continue with the task. Remember to respond with valid JSON."
+            # Stage 2: Plan - Parse response into structured action
+            action = self._plan_action(thought)
 
-            response = self.orch.delegate(
-                self.planner,
-                user_prompt,
-                system_prompt=system_prompt,  # Always include system prompt
-                max_tokens=self.config.default_max_tokens,
-                temperature=self.config.default_temperature,
-                use_context=False  # Context already in system prompt
-            )
+            # Stage 3: Execute - Run the tool
+            result = self._execute(action, state)
 
-            # Parse response
-            action_data = self._parse_agent_response(response.content)
+            # Stage 4: Evaluate - Check if task is complete
+            evaluation = self._evaluate(action, result, state)
 
-            thought = action_data.get('thought', 'No thought provided')
-            action = action_data.get('action', 'error')
-            params = action_data.get('parameters', {})
-            is_complete = action_data.get('is_complete', False)
+            # Update conversation history
+            self._update_conversation(state, thought, action, result)
 
-            print(f"\nThought: {thought}")
-
-            # Execute tool FIRST (even if is_complete is set, we may have an action to execute)
-            action_executed = False
-            if action in self.tools and action != 'complete':
-                # Get user confirmation (unless auto_confirm)
-                if auto_confirm:
-                    approved = True
-                else:
-                    approved = self._get_user_confirmation(action, params)
-
-                if approved:
-                    print(f"Executing: {action}")
-                    tool_result = self.tools[action](**params)
-                    max_display = self.config.result_display_truncation
-                    print(f"Result: {tool_result[:max_display]}..." if len(tool_result) > max_display else f"Result: {tool_result}")
-                    self._log_action(action, params, tool_result, True)
-                    tools_executed.append(action)  # Track successful execution
-                    action_executed = True
-
-                    # Add result to conversation
-                    messages.append({
-                        'role': 'assistant',
-                        'content': response.content
-                    })
-                    messages.append({
-                        'role': 'user',
-                        'content': f"Tool result for {action}:\n{tool_result}\n\nContinue with the task or mark as complete if done."
-                    })
-                else:
-                    print("Action denied by user")
-                    self._log_action(action, params, "Denied by user", False)
-
-                    # Let agent know action was denied
-                    messages.append({
-                        'role': 'assistant',
-                        'content': response.content
-                    })
-                    messages.append({
-                        'role': 'user',
-                        'content': f"User denied the {action} action. Please try a different approach or explain why this action is necessary."
-                    })
-            elif action not in self.tools and action != 'complete' and action != 'error':
-                print(f"Unknown action: {action}")
-                messages.append({
-                    'role': 'assistant',
-                    'content': response.content
-                })
-                messages.append({
-                    'role': 'user',
-                    'content': f"Unknown action '{action}'. Available tools: {', '.join(self.tools.keys())}"
-                })
-
-            # Check if task is complete (AFTER executing any actions)
-            if is_complete or action == 'complete':
-                # Verify that at least one meaningful action was performed
-                meaningful_actions = [t for t in tools_executed if t in self.config.meaningful_actions]
-                if not meaningful_actions and not self.dry_run:
-                    print(f"\nWarning: Agent declared completion without performing any file operations.")
-                    print("Requesting agent to actually execute the task...")
-                    if not action_executed:
-                        messages.append({
-                            'role': 'assistant',
-                            'content': response.content
-                        })
-                        messages.append({
-                            'role': 'user',
-                            'content': "You declared the task complete but haven't actually created or modified any files. Please respond with a JSON object containing an action to execute. Use the write_file tool to actually create the requested code. Example format:\n{\n  \"thought\": \"your reasoning\",\n  \"action\": \"write_file\",\n  \"parameters\": {\"path\": \"filename\", \"content\": \"code here\"}\n}"
-                        })
-                    continue
-
-                result = action_data.get('result', 'Task completed')
-                print(f"\nResult: {result}")
-                self._log_action('complete', {}, result, True)
-
+            # Check evaluation result
+            if evaluation.is_complete:
                 return {
                     'success': True,
-                    'result': result,
-                    'iterations': iteration,
+                    'result': evaluation.final_result,
+                    'iterations': state.iteration,
                     'audit_log': self.audit_log
                 }
 
-        # Max iterations reached
+            if not evaluation.should_continue:
+                # Max iterations or other stopping condition
+                return {
+                    'success': False,
+                    'result': evaluation.reason,
+                    'iterations': state.iteration,
+                    'audit_log': self.audit_log
+                }
+
+        # Max iterations reached (shouldn't get here but safety check)
         return {
             'success': False,
             'result': f'Max iterations ({max_iterations}) reached',
-            'iterations': iteration,
+            'iterations': state.iteration,
             'audit_log': self.audit_log
         }
 
