@@ -5,7 +5,14 @@ Using auto_confirm=True as requested by user.
 """
 import sys
 import time
+import io
 from pathlib import Path
+
+# Fix Windows unicode issue BEFORE any imports
+# Wrap stdout/stderr to handle unicode errors gracefully
+if sys.platform == 'win32':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 # Use same import pattern as llm_team.py entry point
 from src.orchestrator import AgentOrchestrator
