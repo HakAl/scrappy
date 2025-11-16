@@ -28,12 +28,31 @@ class ExecutionResult:
 class OrchestratorLike(Protocol):
     """Protocol for orchestrator dependency."""
 
-    def delegate(self, prompt: str, provider_name: Optional[str] = None) -> Any:
+    def delegate(
+        self,
+        provider: str,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        max_tokens: int = 1500,
+        temperature: float = 0.3,
+        use_context: bool = False
+    ) -> Any:
         """Delegate prompt to a provider."""
         ...
 
-    def get_context(self) -> Optional[Any]:
+    @property
+    def context(self) -> Any:
         """Get codebase context."""
+        ...
+
+    @property
+    def brain(self) -> str:
+        """Get the brain provider name."""
+        ...
+
+    @property
+    def providers(self) -> Any:
+        """Get provider registry."""
         ...
 
 
@@ -211,23 +230,36 @@ class ResearchExecutor(ExecutionStrategy):
             # Build research prompt with context
             prompt = self._build_research_prompt(task)
 
-            # Delegate to fast provider
+            # Get the provider to use (prefer fast provider, fallback to brain)
+            provider_to_use = self.preferred_provider
+            try:
+                available = self.orchestrator.providers.list_available()
+                if provider_to_use not in available:
+                    provider_to_use = self.orchestrator.brain
+            except Exception:
+                provider_to_use = self.orchestrator.brain
+
+            # Delegate to provider using correct signature
             response = self.orchestrator.delegate(
-                prompt=prompt,
-                provider_name=self.preferred_provider
+                provider_to_use,
+                prompt,
+                system_prompt="You are a helpful research assistant. Provide concise, accurate information.",
+                max_tokens=1500,
+                temperature=0.3,
+                use_context=True
             )
 
             execution_time = time.time() - start_time
 
             # Extract response details
-            if hasattr(response, 'text'):
-                output = response.text
+            if hasattr(response, 'content'):
+                output = response.content
                 tokens = getattr(response, 'tokens_used', 0)
-                provider = getattr(response, 'provider', self.preferred_provider)
+                provider = getattr(response, 'provider', provider_to_use)
             else:
                 output = str(response)
                 tokens = 0
-                provider = self.preferred_provider
+                provider = provider_to_use
 
             return ExecutionResult(
                 success=True,
@@ -254,9 +286,11 @@ class ResearchExecutor(ExecutionStrategy):
         # Get context if available
         context_info = ""
         try:
-            context = self.orchestrator.get_context()
-            if context and hasattr(context, 'get_summary'):
-                context_info = f"\n\nProject Context:\n{context.get_summary()}\n"
+            context = self.orchestrator.context
+            if context and hasattr(context, 'get_summary') and context.is_explored():
+                summary = context.get_summary()
+                if summary:
+                    context_info = f"\n\nProject Context:\n{summary}\n"
         except Exception:
             pass
 
@@ -404,10 +438,18 @@ Please provide the code implementation. Include:
 2. Any necessary imports
 3. Brief explanation of the approach
 """
-            response = self.orchestrator.delegate(prompt)
+            # Use orchestrator's brain provider with correct signature
+            response = self.orchestrator.delegate(
+                self.orchestrator.brain,
+                prompt,
+                system_prompt="You are an expert programmer. Write clean, well-documented code.",
+                max_tokens=2000,
+                temperature=0.3,
+                use_context=True
+            )
 
-            if hasattr(response, 'text'):
-                output = response.text
+            if hasattr(response, 'content'):
+                output = response.content
                 tokens = getattr(response, 'tokens_used', 0)
             else:
                 output = str(response)

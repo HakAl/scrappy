@@ -17,6 +17,7 @@ try:
     from .multiprovider import CLIMultiProvider
     from .smart_query import CLISmartQuery
     from .agent_manager import CLIAgentManager
+    from .task_router_handler import CLITaskRouterHandler
 except ImportError:
     # Allow running as script
     import sys
@@ -30,6 +31,7 @@ except ImportError:
     from cli.multiprovider import CLIMultiProvider
     from cli.smart_query import CLISmartQuery
     from cli.agent_manager import CLIAgentManager
+    from cli.task_router_handler import CLITaskRouterHandler
 
 
 class CLI:
@@ -46,6 +48,7 @@ class CLI:
         self.session_start = datetime.now()
         self.smart_mode = False  # Smart query mode (uses tools for research)
         self.multiline_mode = True  # Multiline input mode (enabled by default)
+        self.auto_route_mode = False  # Task-type aware routing (auto-select execution strategy)
         self.conversation_history = []  # Store conversation for session persistence
         self.auto_save = True  # Auto-save session on exit (can be toggled)
 
@@ -63,6 +66,7 @@ class CLI:
         self.multiprovider = CLIMultiProvider(self.orchestrator)
         self.smart = CLISmartQuery(self.orchestrator)
         self.agent_mgr = CLIAgentManager(self.orchestrator)
+        self.task_router = CLITaskRouterHandler(self.orchestrator)
 
         # Display initialization info
         click.echo(f"Brain: {click.style(self.orchestrator.brain, fg='green', bold=True)}")
@@ -240,6 +244,7 @@ class CLI:
         click.secho("=" * 60, fg="cyan")
         click.echo("Commands:")
         click.echo(f"  {click.style('/help', fg='yellow')}          - Show all commands")
+        click.echo(f"  {click.style('/auto', fg='yellow')}          - Toggle auto-routing (task-aware execution)")
         click.echo(f"  {click.style('/plan', fg='yellow')} <task>   - Create a task plan")
         click.echo(f"  {click.style('/reason', fg='yellow')} <q>    - Reason about a question")
         click.echo(f"  {click.style('/agent', fg='yellow')} <task>  - Run code agent (with human approval)")
@@ -250,11 +255,16 @@ class CLI:
         click.echo(f"  {click.style('(any text)', fg='bright_white')}     - Chat with current brain")
         click.secho("=" * 60, fg="cyan")
 
-        # Show multiline mode status
+        # Show mode statuses
         if self.multiline_mode:
             click.secho("Multiline input: ON (blank line to send, /ml to toggle)", fg="green")
         else:
             click.secho("Multiline input: OFF (/ml to toggle)", fg="yellow")
+
+        if self.auto_route_mode:
+            click.secho("Auto-routing: ON (task-aware execution)", fg="green")
+        else:
+            click.secho("Auto-routing: OFF (/auto to enable)", fg="yellow")
         click.echo()
 
         while True:
@@ -304,8 +314,14 @@ class CLI:
                     "content": user_input
                 })
 
+                # Use auto-routing if enabled (task-aware execution)
+                if self.auto_route_mode:
+                    result = self.task_router.handle_auto_route(user_input)
+                    # Store result as response for history
+                    response_content = result.output if result.success else f"Error: {result.error}"
+                    response = type('Response', (), {'content': response_content})()
                 # Use smart mode if enabled
-                if self.smart_mode:
+                elif self.smart_mode:
                     response = self.smart.smart_query(user_input)
                 else:
                     click.secho("Assistant: ", fg="blue", bold=True, nl=False)
@@ -498,6 +514,37 @@ class CLI:
                 click.secho("Multiline input mode: OFF", fg="yellow", bold=True)
                 click.echo("  - Single line input (press Enter to send)")
                 click.echo("  - Each line is processed separately")
+
+        elif cmd in ["/auto", "/route", "/autoroute"]:
+            if not args:
+                # Toggle auto-routing mode
+                self.auto_route_mode = not self.auto_route_mode
+                if self.auto_route_mode:
+                    click.secho("Auto-routing mode: ON", fg="green", bold=True)
+                    click.echo("  Tasks are automatically classified and routed:")
+                    click.echo("  - Direct commands (pip, git) → Shell execution")
+                    click.echo("  - Code generation → Full agent loop with planning")
+                    click.echo("  - Research queries → Fast provider (Cerebras)")
+                    click.echo("  - Simple chat → Instant responses")
+                else:
+                    click.secho("Auto-routing mode: OFF", fg="yellow", bold=True)
+                    click.echo("  All input goes to default chat mode.")
+            elif args.lower() == "status":
+                self.task_router.handle_route_status()
+            elif args.lower() == "history":
+                self.task_router.handle_route_history()
+            else:
+                click.echo("Usage: /auto [status|history]")
+                click.echo("  /auto         - Toggle auto-routing mode")
+                click.echo("  /auto status  - Show routing metrics")
+                click.echo("  /auto history - Show routing history")
+
+        elif cmd == "/classify":
+            if not args:
+                click.echo("Usage: /classify <task description>")
+                click.echo("  Preview how a task would be classified without executing.")
+            else:
+                self.task_router.handle_classify_only(args)
 
         else:
             click.secho(f"Unknown command: {cmd}", fg="yellow")

@@ -18,10 +18,46 @@ class AgentConfig:
     max_directory_tree_lines: int = 200
 
     # Command execution
-    command_timeout: int = 30
-    max_command_output: int = 5000
+    command_timeout: int = 300  # 5 minutes for long-running commands
+    max_command_output: int = 10000
     dangerous_commands: List[str] = field(
         default_factory=lambda: ['rm -rf', 'del /f', 'format', 'mkfs', '> /dev/', 'sudo']
+    )
+    # Commands known to be long-running (pattern matches)
+    long_running_commands: List[str] = field(
+        default_factory=lambda: [
+            'create-react-app', 'npm install', 'pip install', 'cargo build',
+            'docker build', 'npm run build', 'yarn install', 'pnpm install'
+        ]
+    )
+    # Commands that may prompt for input (should warn user)
+    interactive_commands: List[str] = field(
+        default_factory=lambda: [
+            # Package managers - init/create commands
+            'npm init', 'npm create', 'npx ', 'yarn init', 'yarn create',
+            'pnpm init', 'pnpm create', 'pnpm dlx', 'bun init', 'bun create', 'bunx ',
+            'poetry init', 'poetry new', 'pipenv --python',
+            'cargo init', 'cargo new', 'go mod init',
+            # Project scaffolding tools (these prompt for options)
+            'create-vite', 'create-next', 'create-nuxt', 'create-vue',
+            'vite@', 'next@', 'nuxt@',  # npm create vite@latest, etc.
+            'vue create', 'ng new', 'rails new', 'expo init',
+            'django-admin startproject', 'cookiecutter',
+            # Version control (interactive modes)
+            'git commit', 'git rebase -i', 'git merge', 'git stash',
+            'git add -p', 'git checkout -p', 'git reset -p',
+            # System/Auth (require password or confirmation)
+            'ssh ', 'scp ', 'sftp ', 'sudo ', 'passwd', 'su ',
+            # Database clients (open interactive shells)
+            'mysql ', 'psql ', 'mongo ', 'mongosh', 'redis-cli', 'sqlite3 ',
+            # Installers that may prompt
+            'apt install', 'apt-get install', 'dnf install', 'yum install',
+            'brew install', 'choco install', 'winget install', 'scoop install',
+            # Cloud/Deploy (login flows, config wizards)
+            'aws configure', 'gcloud init', 'gcloud auth', 'az login',
+            'heroku login', 'vercel login', 'netlify login', 'firebase login',
+            'docker login', 'gh auth login'
+        ]
     )
 
     # Code search

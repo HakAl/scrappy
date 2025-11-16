@@ -233,29 +233,216 @@ class CodeAgent:
         if self.dry_run:
             return f"[DRY RUN] Would run: {command}"
 
+        # Check for interactive commands
+        cmd_lower = command.lower()
+        interactive_warning = False
+        for pattern in self.config.interactive_commands:
+            if pattern in cmd_lower:
+                interactive_warning = True
+                print(f"⚠️  Warning: '{pattern}' may require interactive input")
+                # Suggest workarounds for common cases
+                if 'npx' in cmd_lower:
+                    print("   💡 Tip: Add '-y' flag to skip prompts: npx -y create-react-app ...")
+                # Ask if user wants interactive mode
+                try:
+                    use_interactive = input("   Run in interactive mode (you can respond to prompts)? [Y/n]: ").strip().lower()
+                    if use_interactive != 'n':
+                        return self._run_command_interactive(command)
+                except (KeyboardInterrupt, EOFError):
+                    print("\n   Skipping interactive mode, running with captured output...")
+                break
+
+        # Check for long-running commands
+        is_long_running = False
+        for pattern in self.config.long_running_commands:
+            if pattern in cmd_lower:
+                is_long_running = True
+                print(f"⏳ Long-running command detected: '{pattern}'")
+                print(f"   Timeout: {self.config.command_timeout}s | Streaming output enabled")
+                break
+
         try:
             timeout = self.config.command_timeout
+
+            if is_long_running:
+                # Use streaming output for long-running commands
+                return self._run_command_streaming(command, timeout)
+            else:
+                # Standard execution for quick commands
+                result = subprocess.run(
+                    command,
+                    shell=True,
+                    cwd=str(self.project_root),
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout
+                )
+
+                output = result.stdout
+                if result.stderr:
+                    output += f"\nSTDERR:\n{result.stderr}"
+
+                max_output = self.config.max_command_output
+                if len(output) > max_output:
+                    output = output[:max_output] + "\n... [truncated]"
+
+                return output if output else "(no output)"
+
+        except subprocess.TimeoutExpired:
+            return f"Error: Command timed out ({self.config.command_timeout}s limit)"
+        except Exception as e:
+            return f"Error running command: {str(e)}"
+
+    def _run_command_interactive(self, command: str) -> str:
+        """
+        Run a command in interactive mode - passes I/O directly to terminal.
+        User can respond to prompts directly.
+        """
+        import os
+
+        print(f"\n{'='*60}")
+        print(f"Running in INTERACTIVE MODE")
+        print(f"Command: {command}")
+        print(f"You can respond to any prompts. Output goes directly to terminal.")
+        print(f"{'='*60}\n")
+
+        try:
+            # Run command with direct terminal I/O (no capture)
+            # This allows the user to see output and respond to prompts
             result = subprocess.run(
                 command,
                 shell=True,
                 cwd=str(self.project_root),
-                capture_output=True,
-                text=True,
-                timeout=timeout
+                # Don't capture - let it go directly to terminal
+                # This allows interactive prompts to work
             )
 
-            output = result.stdout
-            if result.stderr:
-                output += f"\nSTDERR:\n{result.stderr}"
+            print(f"\n{'='*60}")
+            print(f"Command finished with exit code: {result.returncode}")
+            print(f"{'='*60}\n")
 
-            max_output = self.config.max_command_output
-            if len(output) > max_output:
-                output = output[:max_output] + "\n... [truncated]"
+            if result.returncode == 0:
+                return f"Command completed successfully (exit code 0). Output was displayed directly to terminal."
+            else:
+                return f"Command finished with exit code {result.returncode}. Check terminal output for details."
 
-            return output if output else "(no output)"
-        except subprocess.TimeoutExpired:
-            return f"Error: Command timed out ({self.config.command_timeout}s limit)"
+        except KeyboardInterrupt:
+            print(f"\n{'='*60}")
+            print(f"Command stopped by user (Ctrl+C)")
+            print(f"{'='*60}\n")
+
+            # Provide context-aware message based on command type
+            cmd_lower = command.lower()
+
+            # Check if this was likely a successful setup followed by a dev server
+            if any(pattern in cmd_lower for pattern in ['create', 'init', 'new', 'vite', 'next', 'nuxt']):
+                return (
+                    "Command was stopped by user (Ctrl+C). This is normal if a dev server was started. "
+                    "The project setup likely completed successfully before the server started. "
+                    "Check the terminal output above to confirm files were created, then use 'list_files' "
+                    "to verify the project structure. Do NOT re-run the create/init command."
+                )
+            elif any(pattern in cmd_lower for pattern in ['dev', 'start', 'serve', 'watch']):
+                return (
+                    "Dev server was stopped by user (Ctrl+C). This is expected behavior - "
+                    "the server was running successfully until stopped. No need to re-run."
+                )
+            else:
+                return (
+                    "Command was stopped by user (Ctrl+C). Check terminal output above to see "
+                    "what was accomplished before the interrupt. The command may have partially "
+                    "or fully completed its main task."
+                )
         except Exception as e:
+            return f"Error running interactive command: {str(e)}"
+
+    def _run_command_streaming(self, command: str, timeout: int) -> str:
+        """Run a command with streaming output (for long-running commands)."""
+        import threading
+        import time
+        import os
+
+        output_lines = []
+        process = None
+
+        try:
+            # Set environment to force unbuffered output
+            env = os.environ.copy()
+            env['PYTHONUNBUFFERED'] = '1'
+            env['NODE_ENV'] = 'development'
+            # Force npm/npx to be non-interactive
+            env['CI'] = 'true'  # Many tools check this to skip prompts
+            env['npm_config_yes'] = 'true'  # Skip npm prompts
+
+            # Start the process with pipes
+            process = subprocess.Popen(
+                command,
+                shell=True,
+                cwd=str(self.project_root),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,  # Line buffered
+                universal_newlines=True,
+                env=env
+            )
+
+            # Read output with timeout
+            start_time = time.time()
+            last_output_time = start_time
+
+            def read_output():
+                nonlocal last_output_time
+                try:
+                    for line in iter(process.stdout.readline, ''):
+                        if line:
+                            output_lines.append(line.rstrip())
+                            last_output_time = time.time()
+                            # Print progress indicator
+                            if len(output_lines) % 10 == 0:
+                                print(f"   ... {len(output_lines)} lines processed")
+                except Exception:
+                    pass  # Handle closed pipe
+
+            reader_thread = threading.Thread(target=read_output)
+            reader_thread.daemon = True
+            reader_thread.start()
+
+            # Wait for process with timeout
+            stall_warning_shown = False
+            while process.poll() is None:
+                elapsed = time.time() - start_time
+                stall_time = time.time() - last_output_time
+
+                if elapsed > timeout:
+                    process.kill()
+                    return f"Error: Command timed out after {timeout}s\nPartial output ({len(output_lines)} lines):\n" + "\n".join(output_lines[-50:])
+
+                # Warn if no output for 30 seconds (might be waiting for input)
+                if stall_time > 30 and not stall_warning_shown:
+                    print(f"   ⚠️  No output for 30s - command may be waiting for input")
+                    print(f"   Press Ctrl+C to interrupt if stuck")
+                    stall_warning_shown = True
+
+                time.sleep(0.5)
+
+            # Wait for reader to finish
+            reader_thread.join(timeout=5)
+
+            # Combine output
+            output = "\n".join(output_lines)
+            max_output = self.config.max_command_output
+
+            if len(output) > max_output:
+                # Show last part for long outputs
+                output = "... [truncated, showing last portion]\n" + output[-max_output:]
+
+            print(f"   ✓ Command completed ({len(output_lines)} lines)")
+            return output if output else "(no output)"
+
+        except Exception as e:
+            if process:
+                process.kill()
             return f"Error running command: {str(e)}"
 
     def _get_user_confirmation(self, action: str, params: dict) -> bool:
@@ -270,8 +457,12 @@ class CodeAgent:
             preview = content[:max_preview] + "..." if len(content) > max_preview else content
             print(f"\nContent preview:\n{preview}")
 
-        response = input("Allow? [y/N]: ").strip().lower()
-        return response in ('y', 'yes')
+        try:
+            response = input("Allow? [y/N]: ").strip().lower()
+            return response in ('y', 'yes')
+        except (KeyboardInterrupt, EOFError):
+            print("\nAction cancelled.")
+            raise  # Re-raise to stop the agent loop
 
     def _parse_agent_response(self, response_text: str) -> dict:
         """Parse the agent's JSON response."""
