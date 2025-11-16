@@ -839,8 +839,15 @@ class AgentExecutor(ExecutionStrategy):
             else:
                 task_with_plan = task.original_input
 
+            # Add task-specific guidance
+            guidance = self._get_task_specific_guidance(task)
+            if guidance:
+                task_with_guidance = f"{task_with_plan}\n{guidance}"
+            else:
+                task_with_guidance = task_with_plan
+
             # Execute with agent loop
-            results = agent.run(task_with_plan)
+            results = agent.run(task_with_guidance)
 
             execution_time = time.time() - start_time
 
@@ -890,6 +897,72 @@ class AgentExecutor(ExecutionStrategy):
         except Exception:
             pass
         return None
+
+    def _get_task_specific_guidance(self, task: ClassifiedTask) -> str:
+        """
+        Generate task-specific guidance to improve agent behavior.
+
+        This adds context and instructions based on the type of task,
+        helping the agent make better decisions.
+        """
+        input_lower = task.original_input.lower()
+        guidance_parts = []
+
+        # Requirements.txt creation
+        if 'requirements' in input_lower and ('create' in input_lower or 'generate' in input_lower):
+            guidance_parts.append("""
+IMPORTANT GUIDANCE for requirements.txt:
+- Do NOT use 'pip freeze' as it lists ALL installed packages in the environment
+- Instead, analyze the actual Python files in this project
+- Use search_code or read_file to find import statements
+- Extract only the third-party packages that are actually imported
+- Create a minimal requirements.txt with just those dependencies
+- Consider common package name mappings (e.g., 'cv2' -> 'opencv-python')
+""")
+
+        # Config file creation
+        if any(f in input_lower for f in ['config', '.env', 'settings', 'configuration']):
+            guidance_parts.append("""
+IMPORTANT GUIDANCE for config files:
+- First examine existing config patterns in the project
+- Use read_file to check for existing config files
+- Follow the project's existing configuration style
+- Don't include sensitive values, use placeholders
+""")
+
+        # Code modification/refactoring
+        if any(word in input_lower for word in ['refactor', 'modify', 'update', 'change']):
+            guidance_parts.append("""
+IMPORTANT GUIDANCE for code modification:
+- ALWAYS read the existing file first using read_file
+- Understand the current implementation before changing
+- Make incremental, targeted changes
+- Preserve existing functionality unless asked to remove it
+- Test if possible after changes
+""")
+
+        # File creation
+        if 'create' in input_lower or 'write' in input_lower:
+            guidance_parts.append("""
+IMPORTANT GUIDANCE for file creation:
+- Check if the file already exists first
+- Follow existing patterns in the project
+- Use consistent coding style with the rest of the codebase
+""")
+
+        # Dockerfile creation
+        if 'dockerfile' in input_lower:
+            guidance_parts.append("""
+IMPORTANT GUIDANCE for Dockerfile:
+- Analyze the project structure first
+- Check for requirements.txt, package.json, or other dependency files
+- Use appropriate base image for the project's language
+- Follow Docker best practices (multi-stage builds, minimal layers)
+""")
+
+        if guidance_parts:
+            return "\n".join(guidance_parts)
+        return ""
 
     def _fallback_execution(
         self,

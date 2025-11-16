@@ -94,6 +94,12 @@ class TaskClassifier:
             (r'\bupdate\s+.*(code|function|class|implementation)', 0.85, "update_code"),
             (r'\bchange\s+.*(implementation|behavior|logic)', 0.8, "change_code"),
 
+            # File creation patterns (any file type, not just code)
+            (r'\b(create|generate|write)\s+[\w\-]+\.\w+\b', 0.85, "create_any_file"),
+            (r'\b(create|generate)\s+(requirements|package\.json|setup\.py|config|\.gitignore|\.env|Makefile|Dockerfile)', 0.9, "create_config_file"),
+            (r'^please\s+(create|make|write|generate|add|build)\b', 0.8, "polite_action"),
+            (r'^(create|make|write|generate)\s+(?!a\s+list|an?\s+overview|a\s+summary)', 0.75, "imperative_action"),
+
             # Multi-step tasks
             (r'\bthen\s+', 0.7, "multi_step"),
             (r'\bafter\s+that\s+', 0.7, "multi_step"),
@@ -212,6 +218,11 @@ class TaskClassifier:
         # Suggest provider based on task type
         suggested_provider = self._suggest_provider(best_type, complexity)
 
+        # Override to quality provider if task requires codebase analysis
+        if best_type == TaskType.CODE_GENERATION and self._requires_analysis(input_stripped):
+            suggested_provider = "quality"
+            reasoning += " [Requires codebase analysis - using quality provider]"
+
         # Extract file and directory references
         extracted_files, extracted_dirs = self._extract_file_references(input_stripped)
 
@@ -316,6 +327,31 @@ class TaskClassifier:
                 return "fast"  # 8B model for simpler code tasks
 
         return "fast"
+
+    def _requires_analysis(self, input_text: str) -> bool:
+        """
+        Check if task requires codebase analysis, warranting a quality provider.
+
+        Some tasks look simple but require intelligent analysis of the codebase.
+        """
+        input_lower = input_text.lower()
+
+        # Tasks that require analyzing project structure
+        analysis_patterns = [
+            ('requirements', 'create'),  # Need to analyze imports
+            ('requirements', 'generate'),
+            ('dockerfile', 'create'),  # Need to analyze project structure
+            ('package.json', 'create'),  # Need to analyze dependencies
+            ('.gitignore', 'create'),  # Need to analyze file types
+            ('refactor', ''),  # Any refactoring requires understanding
+            ('migrate', ''),  # Migration requires analysis
+        ]
+
+        for pattern in analysis_patterns:
+            if all(word in input_lower for word in pattern if word):
+                return True
+
+        return False
 
     def _extract_file_references(self, input_text: str) -> tuple[List[str], List[str]]:
         """

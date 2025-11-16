@@ -69,6 +69,11 @@ class TaskRouter:
         self._pre_hooks: List[Callable[[ClassifiedTask], ClassifiedTask]] = []
         self._post_hooks: List[Callable[[ExecutionResult], ExecutionResult]] = []
 
+        # Intent clarification settings
+        self.clarify_on_low_confidence = True
+        self.confidence_threshold = 0.65
+        self.escalate_on_low_confidence = True
+
         self._setup_strategies()
 
     def _setup_strategies(self):
@@ -99,6 +104,118 @@ class TaskRouter:
                 max_iterations=10,
                 require_approval=True
             )
+
+    def _needs_intent_clarification(self, task: ClassifiedTask) -> bool:
+        """
+        Check if task needs user clarification due to ambiguity.
+
+        Returns True when:
+        - Confidence is below threshold
+        - Has conflicting signals (action verb + question pattern)
+        - Task type is RESEARCH but has strong action indicators
+        - Has both explanation words AND action words (ambiguous intent)
+        """
+        # Low confidence always needs clarification
+        if task.confidence < self.confidence_threshold:
+            return True
+
+        input_lower = task.original_input.lower()
+
+        # Conflicting signals: action verb but classified as research
+        if task.task_type == TaskType.RESEARCH:
+            action_verbs = ['create', 'write', 'make', 'add', 'build', 'generate', 'implement', 'fix', 'update']
+            has_strong_action = any(f' {verb} ' in f' {input_lower} ' or input_lower.startswith(verb)
+                                   for verb in action_verbs)
+            if has_strong_action:
+                return True
+
+        # Has question mark but also action verb (ambiguous)
+        has_question = '?' in task.original_input
+        has_action = any(verb in input_lower for verb in ['create', 'write', 'make', 'add', 'generate'])
+        if has_question and has_action:
+            return True
+
+        # NEW: Conflicting signals - has BOTH explanation AND action keywords
+        explanation_words = ['explain', 'describe', 'tell me', 'what is', 'how does', 'how to']
+        action_words = ['create', 'write', 'make', 'add', 'build', 'generate', 'implement']
+
+        has_explanation = any(word in input_lower for word in explanation_words)
+        has_action_word = any(word in input_lower for word in action_words)
+
+        if has_explanation and has_action_word:
+            return True
+
+        return False
+
+    def _clarify_intent(self, task: ClassifiedTask) -> ClassifiedTask:
+        """
+        Ask user to clarify their intent when classification is ambiguous.
+
+        Modifies task type based on user response.
+        """
+        print(f"\n🤔 Intent Clarification Needed")
+        print(f"   Classified as: {task.task_type.value} (confidence: {task.confidence:.0%})")
+        print(f"   Input: \"{task.original_input}\"")
+        print(f"\nDid you want me to:")
+        print(f"  [1] EXPLAIN how to do this (research/information only)")
+        print(f"  [2] Actually DO this for you (execute/create/modify)")
+        print(f"  [3] Keep current classification ({task.task_type.value})")
+
+        try:
+            choice = input("\nChoice [1/2/3]: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            choice = "3"
+
+        if choice == "1":
+            task.task_type = TaskType.RESEARCH
+            task.reasoning = f"User clarified: research/explain only. Original: {task.reasoning}"
+            task.confidence = 1.0  # User confirmed
+            if self.verbose:
+                print(f"  ✓ Switching to RESEARCH mode")
+        elif choice == "2":
+            task.task_type = TaskType.CODE_GENERATION
+            task.reasoning = f"User clarified: execute/create. Original: {task.reasoning}"
+            task.confidence = 1.0  # User confirmed
+            if self.verbose:
+                print(f"  ✓ Switching to CODE_GENERATION mode")
+        else:
+            if self.verbose:
+                print(f"  ✓ Keeping {task.task_type.value} classification")
+
+        return task
+
+    def _apply_confidence_escalation(self, task: ClassifiedTask) -> ClassifiedTask:
+        """
+        Escalate task to more capable executor when confidence is low.
+
+        If classified as RESEARCH with low confidence but has action indicators,
+        escalate to CODE_GENERATION which can do everything RESEARCH can + more.
+        """
+        if not self.escalate_on_low_confidence:
+            return task
+
+        # Only escalate RESEARCH tasks
+        if task.task_type != TaskType.RESEARCH:
+            return task
+
+        # Check for action indicators that suggest this should be CODE_GENERATION
+        input_lower = task.original_input.lower()
+        action_indicators = [
+            'create', 'write', 'make', 'add', 'build', 'generate',
+            'implement', 'fix', 'update', 'modify', 'delete', 'remove'
+        ]
+
+        has_action_word = any(word in input_lower for word in action_indicators)
+
+        # Escalate if low confidence and has action indicators
+        if task.confidence < 0.7 and has_action_word:
+            original_type = task.task_type.value
+            task.task_type = TaskType.CODE_GENERATION
+            task.reasoning = f"Escalated from {original_type} due to low confidence ({task.confidence:.2f}) with action indicators"
+            if self.verbose:
+                print(f"  ⬆️ Escalated: {original_type} → CODE_GENERATION (low confidence + action words)")
+
+        return task
 
     def _resolve_provider(self, hint: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
         """
@@ -163,7 +280,14 @@ class TaskRouter:
         if self.verbose:
             self._log_classification(classified)
 
-        # 2. Resolve provider (override takes precedence over suggestion)
+        # 2. Apply confidence escalation (auto-upgrade low-confidence tasks)
+        classified = self._apply_confidence_escalation(classified)
+
+        # 3. Clarify intent if needed (ask user when ambiguous)
+        if self.clarify_on_low_confidence and self._needs_intent_clarification(classified):
+            classified = self._clarify_intent(classified)
+
+        # 4. Resolve provider (override takes precedence over suggestion)
         provider_hint = classified.override_provider or classified.suggested_provider
         provider_name, model_name = self._resolve_provider(provider_hint)
 
