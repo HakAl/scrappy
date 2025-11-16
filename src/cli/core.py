@@ -106,6 +106,47 @@ class CLI:
 
         return "\n".join(lines)
 
+    def _needs_tool_support(self, user_input: str) -> bool:
+        """
+        Detect if the user query needs tool support (web fetch, package lookup, etc.)
+
+        This allows auto-enabling tool use for research queries even when auto_route_mode is OFF.
+        """
+        import re
+        lower_input = user_input.lower()
+
+        # Web fetching patterns
+        web_patterns = [
+            r'\bfetch\b.*\b(docs?|documentation|api|website|url|page)\b',
+            r'\b(get|retrieve|download|pull)\b.*\b(from|the)\b.*\b(web|url|site|docs?)\b',
+            r'\bcheck\b.*\b(package|npm|pypi|github|version)\b',
+            r'\blook\s*up\b.*\b(package|library|module|dependency)\b',
+            r'\bwhat\s+(is|are)\s+the\s+(latest|current|newest)\b.*\b(version|release)\b',
+            r'\b(pypi|npm|github)\b.*\b(info|details|package)\b',
+            r'\bfrom\s+(the\s+)?(website|web|url|docs)\b',
+            r'\b(scikit|sklearn|react|django|flask|express|numpy|pandas)\b.*\b(docs?|documentation|api)\b',
+        ]
+
+        for pattern in web_patterns:
+            if re.search(pattern, lower_input):
+                return True
+
+        # Direct URL mention
+        if re.search(r'https?://', user_input):
+            return True
+
+        # Package registry keywords with action verbs
+        package_keywords = ['pypi', 'npm', 'github.com', 'registry']
+        action_keywords = ['fetch', 'get', 'check', 'look', 'find', 'show', 'what']
+
+        has_package = any(kw in lower_input for kw in package_keywords)
+        has_action = any(kw in lower_input for kw in action_keywords)
+
+        if has_package and has_action:
+            return True
+
+        return False
+
     def _show_current_task(self):
         """Display the current task being worked on."""
         if not self.plan_active or not self.active_plan:
@@ -285,7 +326,7 @@ class CLI:
 
         # Show mode statuses
         if self.multiline_mode:
-            click.secho("Multiline input: ON (blank line to send, /ml to toggle)", fg="green")
+            click.secho("Multiline input: ON (end line with \\ to continue, /ml to toggle)", fg="green")
         else:
             click.secho("Multiline input: OFF (/ml to toggle)", fg="yellow")
 
@@ -298,7 +339,7 @@ class CLI:
         while True:
             try:
                 if self.multiline_mode:
-                    # Multiline input mode - read until blank line
+                    # Multiline input mode - read until blank line or complete input
                     click.secho("You> ", fg="green", bold=True, nl=False)
                     lines = []
                     first_line = True
@@ -311,15 +352,29 @@ class CLI:
                             if line.strip().startswith("/"):
                                 lines.append(line)
                                 break
+
+                            # If line doesn't end with continuation marker (\), treat as complete
+                            # This fixes the "press enter twice" bug
+                            if not line.rstrip().endswith("\\"):
+                                lines.append(line)
+                                break
+                            else:
+                                # Remove the continuation marker and continue reading
+                                lines.append(line.rstrip()[:-1])
                         else:
                             click.secho("... ", fg="green", nl=False)
                             line = input()
 
-                        # Blank line terminates input
-                        if line.strip() == "":
-                            break
+                            # Blank line terminates input
+                            if line.strip() == "":
+                                break
 
-                        lines.append(line)
+                            # Check for continuation marker
+                            if line.rstrip().endswith("\\"):
+                                lines.append(line.rstrip()[:-1])
+                            else:
+                                lines.append(line)
+                                break
 
                     user_input = "\n".join(lines).strip()
                 else:
@@ -352,19 +407,48 @@ class CLI:
                 elif self.smart_mode:
                     response = self.smart.smart_query(user_input)
                 else:
-                    click.secho("Assistant: ", fg="blue", bold=True, nl=False)
+                    # Check if this looks like a research task that needs tools
+                    # (fetch, check package, lookup docs, etc.)
+                    needs_tools = self._needs_tool_support(user_input)
 
-                    response = self.orchestrator.delegate(
-                        self.orchestrator.brain,
-                        user_input,
-                        system_prompt="You are a helpful AI assistant. Be concise and informative."
-                    )
+                    if needs_tools:
+                        # Use ResearchExecutor with tool support
+                        click.secho("🔧 Using tools for research...", fg="cyan")
+                        result = self.task_router.handle_auto_route(user_input)
+                        response_content = result.output if result.success else f"Error: {result.error}"
+                        response = type('Response', (), {'content': response_content})()
 
-                    click.echo(response.content)
-                    click.secho(
-                        f"[{response.provider}/{response.model} | {response.tokens_used} tokens | {response.latency_ms:.0f}ms]",
-                        fg="cyan"
-                    )
+                        # Show tool usage info if available
+                        if hasattr(result, 'metadata') and result.metadata:
+                            tool_calls = result.metadata.get('tool_calls', [])
+                            if tool_calls:
+                                click.secho(f"  Tools used: {[tc['tool'] for tc in tool_calls]}", fg="cyan")
+
+                        click.secho("Assistant: ", fg="blue", bold=True)
+                        click.echo(response.content)
+
+                        # Show execution metadata
+                        provider_used = result.provider_used if hasattr(result, 'provider_used') else "unknown"
+                        tokens = result.tokens_used if hasattr(result, 'tokens_used') else 0
+                        exec_time = result.execution_time if hasattr(result, 'execution_time') else 0
+                        click.secho(
+                            f"[{provider_used} | {tokens} tokens | {exec_time*1000:.0f}ms]",
+                            fg="cyan"
+                        )
+                    else:
+                        click.secho("Assistant: ", fg="blue", bold=True, nl=False)
+
+                        response = self.orchestrator.delegate(
+                            self.orchestrator.brain,
+                            user_input,
+                            system_prompt="You are a helpful AI assistant. Be concise and informative."
+                        )
+
+                        click.echo(response.content)
+                        click.secho(
+                            f"[{response.provider}/{response.model} | {response.tokens_used} tokens | {response.latency_ms:.0f}ms]",
+                            fg="cyan"
+                        )
                 click.echo()
 
                 self.conversation_history.append({
@@ -546,8 +630,8 @@ class CLI:
             self.multiline_mode = not self.multiline_mode
             if self.multiline_mode:
                 click.secho("Multiline input mode: ON", fg="green", bold=True)
-                click.echo("  - Type your message across multiple lines")
-                click.echo("  - Press Enter twice (blank line) to send")
+                click.echo("  - End a line with \\ to continue on next line")
+                click.echo("  - Press Enter normally to send (no double-enter needed)")
                 click.echo("  - Commands still work on the first line")
             else:
                 click.secho("Multiline input mode: OFF", fg="yellow", bold=True)

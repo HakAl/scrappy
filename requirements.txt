@@ -7,6 +7,7 @@ openai>=1.0.0
 click>=8.0.0
 httpx>=0.25.0  # Async HTTP client for parallel API calls
 aiofiles>=23.0.0  # Async file I/O for non-blocking disk operations
+beautifulsoup4>=4.12.0  # HTML parsing for web content extraction
 
 # Future providers (uncomment when you add them)
 # openai>=1.0.0              # For OpenRouter compatibility

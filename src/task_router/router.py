@@ -88,7 +88,9 @@ class TaskRouter:
         if self.orchestrator:
             # Provider will be resolved dynamically per task
             self.strategies[TaskType.RESEARCH] = ResearchExecutor(
-                orchestrator=self.orchestrator
+                orchestrator=self.orchestrator,
+                project_root=self.project_root,
+                max_tool_iterations=3
             )
 
             self.strategies[TaskType.CODE_GENERATION] = AgentExecutor(

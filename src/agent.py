@@ -34,6 +34,7 @@ from .agent_tools.tools.git_tools import (
     GitRecentChangesTool
 )
 from .agent_tools.tools.search_tools import SearchCodeTool
+from .agent_tools.tools.web_tools import WebFetchTool, WebSearchTool
 
 
 @dataclass
@@ -205,6 +206,10 @@ class CodeAgent:
 
         # Register search tools
         registry.register(SearchCodeTool())
+
+        # Register web tools
+        registry.register(WebFetchTool())
+        registry.register(WebSearchTool())
 
         return registry
 
