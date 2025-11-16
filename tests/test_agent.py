@@ -287,7 +287,7 @@ class TestCodeAgentInitialization:
         mock_orch.registry = Mock()
         mock_orch.registry.list_available.return_value = ["cerebras"]
 
-        with patch('src.agent.AgentOrchestratorAdapter') as mock_wrapper:
+        with patch('src.agent.core.AgentOrchestratorAdapter') as mock_wrapper:
             # Create a simple class that mimics the adapter interface
             # This avoids Mock's attribute magic interfering with method returns
             class FakeAdapter:
