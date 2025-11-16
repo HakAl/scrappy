@@ -281,7 +281,9 @@ class TestCodeAgentInitialization:
     @pytest.mark.unit
     def test_agent_with_orchestrator_wrapping(self, temp_project_dir):
         """Test that non-adapter orchestrator gets wrapped."""
-        mock_orch = Mock()
+        # Use spec=object to prevent Mock from satisfying OrchestratorAdapter Protocol
+        # (which is @runtime_checkable and Mock's __getattr__ magic would otherwise match)
+        mock_orch = Mock(spec=object)
         mock_orch.registry = Mock()
         mock_orch.registry.list_available.return_value = ["cerebras"]
 
