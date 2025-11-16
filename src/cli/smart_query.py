@@ -28,6 +28,20 @@ class CLISmartQuery:
         self.orchestrator = orchestrator
         self.classifier = IntentClassifier()
 
+    def _safe_tool_call(self, tool_func, *args, **kwargs):
+        """Safely call a tool function and handle errors.
+
+        Returns:
+            Tuple of (success: bool, result: str)
+        """
+        try:
+            result = tool_func(*args, **kwargs)
+            if result and "Error" not in str(result):
+                return True, result
+            return False, result
+        except Exception as e:
+            return False, f"Error: {str(e)}"
+
     def smart_query(self, query: str):
         """Perform a smart query using tools to gather context before answering.
 
@@ -73,9 +87,13 @@ class CLISmartQuery:
 
             if intent == QueryIntent.FILE_STRUCTURE:
                 click.echo("  - Checking directory structure...")
-                result = agent._tool_list_directory(".", depth=2)
-                research_results.append(f"Directory Structure:\n{result}")
-                tools_used += 1
+                try:
+                    result = agent._tool_list_directory(".", depth=2)
+                    if result and "Error" not in result:
+                        research_results.append(f"Directory Structure:\n{result}")
+                        tools_used += 1
+                except Exception as e:
+                    click.echo(f"    (Warning: Could not list directory: {e})")
 
             elif intent == QueryIntent.CODE_SEARCH:
                 # Search for extracted entities first
@@ -85,8 +103,8 @@ class CLISmartQuery:
                 for class_name in classification.entities.get('class_name', [])[:3]:
                     if class_name not in searched:
                         click.echo(f"  - Searching for class '{class_name}'...")
-                        result = agent._tool_search_code(f"class {class_name}", "*.py")
-                        if "No matches" not in result:
+                        success, result = self._safe_tool_call(agent._tool_search_code, f"class {class_name}", "*.py")
+                        if success and "No matches" not in result:
                             research_results.append(f"Class '{class_name}':\n{result[:1500]}")
                             tools_used += 1
                         searched.add(class_name)
@@ -95,8 +113,8 @@ class CLISmartQuery:
                 for func_name in classification.entities.get('function_name', [])[:3]:
                     if func_name not in searched:
                         click.echo(f"  - Searching for function '{func_name}'...")
-                        result = agent._tool_search_code(f"def {func_name}", "*.py")
-                        if "No matches" not in result:
+                        success, result = self._safe_tool_call(agent._tool_search_code, f"def {func_name}", "*.py")
+                        if success and "No matches" not in result:
                             research_results.append(f"Function '{func_name}':\n{result[:1500]}")
                             tools_used += 1
                         searched.add(func_name)
@@ -106,8 +124,8 @@ class CLISmartQuery:
                     for keyword in classification.keywords[:3]:
                         if len(keyword) > 3:
                             click.echo(f"  - Searching for '{keyword}'...")
-                            result = agent._tool_search_code(keyword, "*.py")
-                            if "No matches" not in result:
+                            success, result = self._safe_tool_call(agent._tool_search_code, keyword, "*.py")
+                            if success and "No matches" not in result:
                                 research_results.append(f"Code containing '{keyword}':\n{result[:1500]}")
                                 tools_used += 1
                                 break
@@ -116,29 +134,31 @@ class CLISmartQuery:
                 # Read specific files if paths are extracted
                 for file_path in classification.entities.get('file_path', [])[:2]:
                     click.echo(f"  - Reading file '{file_path}'...")
-                    result = agent._tool_read_file(file_path, max_lines=100)
-                    if "Error" not in result:
+                    success, result = self._safe_tool_call(agent._tool_read_file, file_path, max_lines=100)
+                    if success:
                         research_results.append(f"File '{file_path}':\n{result[:2000]}")
                         tools_used += 1
 
             elif intent == QueryIntent.GIT_HISTORY:
                 click.echo("  - Checking git history...")
-                result = agent._tool_git_log(n=10)
-                research_results.append(f"Recent Commits:\n{result}")
-                tools_used += 1
+                success, result = self._safe_tool_call(agent._tool_git_log, n=10)
+                if success:
+                    research_results.append(f"Recent Commits:\n{result}")
+                    tools_used += 1
 
                 # Also check git status
                 click.echo("  - Checking git status...")
-                result = agent._tool_git_status()
-                research_results.append(f"Git Status:\n{result}")
-                tools_used += 1
+                success, result = self._safe_tool_call(agent._tool_git_status)
+                if success:
+                    research_results.append(f"Git Status:\n{result}")
+                    tools_used += 1
 
             elif intent == QueryIntent.DEPENDENCY_INFO:
                 click.echo("  - Checking dependencies...")
                 # Check for common dependency files
                 for dep_file in ['requirements.txt', 'setup.py', 'pyproject.toml', 'package.json']:
-                    result = agent._tool_read_file(dep_file, max_lines=50)
-                    if "Error" not in result and "not found" not in result.lower():
+                    success, result = self._safe_tool_call(agent._tool_read_file, dep_file, max_lines=50)
+                    if success and "not found" not in result.lower():
                         research_results.append(f"Dependencies ({dep_file}):\n{result}")
                         tools_used += 1
                         break
@@ -146,21 +166,22 @@ class CLISmartQuery:
                 # Search for specific package imports
                 for pkg in classification.entities.get('package_name', [])[:3]:
                     click.echo(f"  - Searching for '{pkg}' usage...")
-                    result = agent._tool_search_code(f"import {pkg}", "*.py")
-                    if "No matches" not in result:
+                    success, result = self._safe_tool_call(agent._tool_search_code, f"import {pkg}", "*.py")
+                    if success and "No matches" not in result:
                         research_results.append(f"Usage of '{pkg}':\n{result[:1000]}")
                         tools_used += 1
 
             elif intent == QueryIntent.ARCHITECTURE:
                 click.echo("  - Analyzing project architecture...")
-                result = agent._tool_list_directory(".", depth=3)
-                research_results.append(f"Project Structure:\n{result}")
-                tools_used += 1
+                success, result = self._safe_tool_call(agent._tool_list_directory, ".", depth=3)
+                if success:
+                    research_results.append(f"Project Structure:\n{result}")
+                    tools_used += 1
 
                 # Look for architectural patterns
                 for pattern in ['service', 'controller', 'model', 'repository', 'handler']:
-                    result = agent._tool_search_code(f"class.*{pattern}", "*.py")
-                    if "No matches" not in result:
+                    success, result = self._safe_tool_call(agent._tool_search_code, f"class.*{pattern}", "*.py")
+                    if success and "No matches" not in result:
                         research_results.append(f"Architecture pattern '{pattern}':\n{result[:1000]}")
                         tools_used += 1
                         break
@@ -169,58 +190,59 @@ class CLISmartQuery:
                 # Search for error types mentioned
                 for error_type in classification.entities.get('error_type', [])[:3]:
                     click.echo(f"  - Searching for '{error_type}'...")
-                    result = agent._tool_search_code(error_type, "*.py")
-                    if "No matches" not in result:
+                    success, result = self._safe_tool_call(agent._tool_search_code, error_type, "*.py")
+                    if success and "No matches" not in result:
                         research_results.append(f"Error '{error_type}' occurrences:\n{result[:1500]}")
                         tools_used += 1
 
                 # Check for error handling patterns
                 if not classification.entities.get('error_type'):
                     click.echo("  - Searching for error handling...")
-                    result = agent._tool_search_code("except|raise|Error", "*.py")
-                    if "No matches" not in result:
+                    success, result = self._safe_tool_call(agent._tool_search_code, "except|raise|Error", "*.py")
+                    if success and "No matches" not in result:
                         research_results.append(f"Error handling patterns:\n{result[:1500]}")
                         tools_used += 1
 
             elif intent == QueryIntent.TESTING:
                 click.echo("  - Finding test files...")
-                result = agent._tool_list_directory(".", depth=3)
-                # Filter for test directories/files
-                test_lines = [
-                    line for line in result.split('\n')
-                    if 'test' in line.lower()
-                ]
-                if test_lines:
-                    research_results.append(f"Test files:\n" + '\n'.join(test_lines[:20]))
-                    tools_used += 1
+                success, result = self._safe_tool_call(agent._tool_list_directory, ".", depth=3)
+                if success:
+                    # Filter for test directories/files
+                    test_lines = [
+                        line for line in result.split('\n')
+                        if 'test' in line.lower()
+                    ]
+                    if test_lines:
+                        research_results.append(f"Test files:\n" + '\n'.join(test_lines[:20]))
+                        tools_used += 1
 
                 # Search for test patterns
                 click.echo("  - Searching for test patterns...")
-                result = agent._tool_search_code("def test_|class Test", "*.py")
-                if "No matches" not in result:
+                success, result = self._safe_tool_call(agent._tool_search_code, "def test_|class Test", "*.py")
+                if success and "No matches" not in result:
                     research_results.append(f"Test definitions:\n{result[:1500]}")
                     tools_used += 1
 
             elif intent == QueryIntent.CONFIGURATION:
                 click.echo("  - Checking configuration files...")
                 for config_file in ['config.py', 'settings.py', '.env.example', 'config.json', 'config.yaml']:
-                    result = agent._tool_read_file(config_file, max_lines=100)
-                    if "Error" not in result and "not found" not in result.lower():
+                    success, result = self._safe_tool_call(agent._tool_read_file, config_file, max_lines=100)
+                    if success and "not found" not in result.lower():
                         research_results.append(f"Configuration ({config_file}):\n{result}")
                         tools_used += 1
 
                 # Search for config usage
                 click.echo("  - Searching for config usage...")
-                result = agent._tool_search_code("config|CONFIG|settings|Settings", "*.py")
-                if "No matches" not in result:
+                success, result = self._safe_tool_call(agent._tool_search_code, "config|CONFIG|settings|Settings", "*.py")
+                if success and "No matches" not in result:
                     research_results.append(f"Configuration usage:\n{result[:1500]}")
                     tools_used += 1
 
             elif intent == QueryIntent.SECURITY:
                 click.echo("  - Checking security patterns...")
                 for pattern in ['auth', 'permission', 'token', 'password', 'encrypt']:
-                    result = agent._tool_search_code(pattern, "*.py")
-                    if "No matches" not in result:
+                    success, result = self._safe_tool_call(agent._tool_search_code, pattern, "*.py")
+                    if success and "No matches" not in result:
                         research_results.append(f"Security pattern '{pattern}':\n{result[:1000]}")
                         tools_used += 1
                         if tools_used >= 3:
@@ -228,14 +250,15 @@ class CLISmartQuery:
 
             elif intent == QueryIntent.DOCUMENTATION:
                 click.echo("  - Searching documentation...")
-                result = agent._tool_list_directory(".", depth=2)
-                doc_lines = [
-                    line for line in result.split('\n')
-                    if any(ext in line.lower() for ext in ['.md', '.rst', '.txt', 'readme', 'doc'])
-                ]
-                if doc_lines:
-                    research_results.append(f"Documentation files:\n" + '\n'.join(doc_lines[:15]))
-                    tools_used += 1
+                success, result = self._safe_tool_call(agent._tool_list_directory, ".", depth=2)
+                if success:
+                    doc_lines = [
+                        line for line in result.split('\n')
+                        if any(ext in line.lower() for ext in ['.md', '.rst', '.txt', 'readme', 'doc'])
+                    ]
+                    if doc_lines:
+                        research_results.append(f"Documentation files:\n" + '\n'.join(doc_lines[:15]))
+                        tools_used += 1
 
         # Always include project summary if available
         if self.orchestrator.context.summary:

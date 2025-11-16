@@ -28,6 +28,7 @@ from .agent_tools.tools.file_tools import (
 )
 from .agent_tools.tools.git_tools import (
     GitLogTool,
+    GitStatusTool,
     GitDiffTool,
     GitBlameTool,
     GitShowTool,
@@ -153,6 +154,22 @@ class CodeAgent:
         # Add run_command tool (kept inline for security reasons)
         self.tools['run_command'] = self._tool_run_command
 
+        # Build tool name mapping for dynamic _tool_* method resolution
+        self._tool_name_map = {
+            tool.name: tool.name for tool in self.tool_registry.list_all()
+        }
+        # Add common aliases for convenience
+        self._tool_name_map.update({
+            'list_directory': 'list_directory',
+            'search_code': 'search_code',
+            'read_file': 'read_file',
+            'write_file': 'write_file',
+            'git_log': 'git_log',
+            'git_status': 'git_status',
+            'git_diff': 'git_diff',
+            'git_blame': 'git_blame',
+        })
+
         # Hybrid approach: Use configured provider preferences
         available = self.adapter.list_providers()
 
@@ -187,6 +204,59 @@ class CodeAgent:
         if self.executor is None:
             self.executor = self.planner
 
+    def __getattr__(self, name: str):
+        """Dynamic attribute resolution for _tool_* methods.
+
+        Allows calling agent._tool_search_code(...) which routes to self.tools['search_code'](...)
+        This bridges the gap between smart_query.py expectations and the tool registry pattern.
+        """
+        if name.startswith('_tool_'):
+            tool_name = name[6:]  # Remove '_tool_' prefix
+
+            # Check if this is a registered tool
+            if hasattr(self, '_tool_name_map') and tool_name in self._tool_name_map:
+                actual_tool_name = self._tool_name_map[tool_name]
+
+                # Define parameter mappings for common tools (positional to keyword)
+                param_maps = {
+                    'search_code': ['pattern', 'file_pattern'],
+                    'read_file': ['file_path', 'max_lines'],
+                    'write_file': ['file_path', 'content'],
+                    'list_directory': ['path', 'depth'],
+                    'git_log': ['n'],
+                    'git_diff': ['ref1', 'ref2'],
+                    'git_blame': ['file_path'],
+                    'git_show': ['ref'],
+                }
+
+                # Return a wrapper function that calls the tool
+                def tool_wrapper(*args, **kwargs):
+                    if hasattr(self, 'tools') and actual_tool_name in self.tools:
+                        # Convert positional args to keyword args
+                        if args and actual_tool_name in param_maps:
+                            param_names = param_maps[actual_tool_name]
+                            for i, arg in enumerate(args):
+                                if i < len(param_names):
+                                    kwargs[param_names[i]] = arg
+
+                        try:
+                            result = self.tools[actual_tool_name](**kwargs)
+                            # Return the output string for backward compatibility
+                            if hasattr(result, 'output'):
+                                if result.success:
+                                    return result.output
+                                else:
+                                    return f"Error: {result.error}" if result.error else "Error: Tool execution failed"
+                            return str(result)
+                        except Exception as e:
+                            return f"Error: {str(e)}"
+                    raise AttributeError(f"Tool '{actual_tool_name}' not found in tools registry")
+
+                return tool_wrapper
+
+        # Default behavior - raise AttributeError for unknown attributes
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+
     def _create_default_registry(self) -> ToolRegistry:
         """Create and populate the default tool registry."""
         registry = ToolRegistry()
@@ -199,6 +269,7 @@ class CodeAgent:
 
         # Register git tools
         registry.register(GitLogTool())
+        registry.register(GitStatusTool())
         registry.register(GitDiffTool())
         registry.register(GitBlameTool())
         registry.register(GitShowTool())

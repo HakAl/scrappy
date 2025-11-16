@@ -3,7 +3,7 @@
 from .base import Tool, ToolResult, ToolContext
 from .registry import ToolRegistry
 from .file_tools import ReadFileTool, WriteFileTool, ListFilesTool, ListDirectoryTool
-from .git_tools import GitLogTool, GitDiffTool, GitBlameTool, GitShowTool, GitRecentChangesTool
+from .git_tools import GitLogTool, GitDiffTool, GitBlameTool, GitShowTool, GitRecentChangesTool, GitStatusTool
 from .search_tools import SearchCodeTool
 from .web_tools import WebFetchTool, WebSearchTool
 
@@ -17,6 +17,7 @@ __all__ = [
     'ListFilesTool',
     'ListDirectoryTool',
     'GitLogTool',
+    'GitStatusTool',
     'GitDiffTool',
     'GitBlameTool',
     'GitShowTool',

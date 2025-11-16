@@ -113,6 +113,48 @@ class GitLogTool(GitTool):
         )
 
 
+class GitStatusTool(GitTool):
+    """Show git repository status."""
+
+    @property
+    def name(self) -> str:
+        return "git_status"
+
+    @property
+    def description(self) -> str:
+        return "Show current git status (modified, staged, untracked files)"
+
+    @property
+    def parameters(self) -> list[ToolParameter]:
+        return [
+            ToolParameter("short", bool, "Use short format", required=False, default=False)
+        ]
+
+    def execute(self, context: ToolContext, **kwargs) -> ToolResult:
+        short = kwargs.get("short", False)
+
+        args = ['status']
+        if short:
+            args.append('--short')
+
+        success, output = self._run_git_command(context, args)
+
+        if not success:
+            return ToolResult(False, "", f"Git error: {output}")
+
+        if not output:
+            return ToolResult(True, "No changes in working directory")
+
+        # Store in working memory
+        context.remember_git_operation("git status", output)
+
+        return ToolResult(
+            True,
+            output,
+            metadata={"short": short}
+        )
+
+
 class GitDiffTool(GitTool):
     """Show git diff (unstaged changes, or vs a ref)."""
 
