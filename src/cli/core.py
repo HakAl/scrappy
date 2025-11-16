@@ -48,7 +48,7 @@ class CLI:
         self.session_start = datetime.now()
         self.smart_mode = False  # Smart query mode (uses tools for research)
         self.multiline_mode = True  # Multiline input mode (enabled by default)
-        self.auto_route_mode = False  # Task-type aware routing (auto-select execution strategy)
+        self.auto_route_mode = True  # Task-type aware routing (auto-select execution strategy)
         self.conversation_history = []  # Store conversation for session persistence
         self.auto_save = True  # Auto-save session on exit (can be toggled)
 

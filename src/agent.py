@@ -353,29 +353,13 @@ class CodeAgent:
         try:
             timeout = self.config.command_timeout
 
+            # Use streaming output for ALL commands (not just long-running)
+            # This provides real-time feedback and better monitoring
             if is_long_running:
-                # Use streaming output for long-running commands
-                return self._run_command_streaming(command, timeout)
+                return self._run_command_with_retry(command, timeout, show_progress=True)
             else:
-                # Standard execution for quick commands
-                result = subprocess.run(
-                    command,
-                    shell=True,
-                    cwd=str(self.project_root),
-                    capture_output=True,
-                    text=True,
-                    timeout=timeout
-                )
-
-                output = result.stdout
-                if result.stderr:
-                    output += f"\nSTDERR:\n{result.stderr}"
-
-                max_output = self.config.max_command_output
-                if len(output) > max_output:
-                    output = output[:max_output] + "\n... [truncated]"
-
-                return output if output else "(no output)"
+                # Stream all commands but with quieter progress reporting
+                return self._run_command_with_retry(command, timeout, show_progress=False)
 
         except subprocess.TimeoutExpired:
             return f"Error: Command timed out ({self.config.command_timeout}s limit)"
@@ -445,8 +429,133 @@ class CodeAgent:
         except Exception as e:
             return f"Error running interactive command: {str(e)}"
 
-    def _run_command_streaming(self, command: str, timeout: int) -> str:
-        """Run a command with streaming output (for long-running commands)."""
+    def _run_command_with_retry(self, command: str, timeout: int, show_progress: bool = True, max_retries: int = 3) -> str:
+        """
+        Run a command with streaming output and automatic retry logic.
+
+        Args:
+            command: The shell command to execute
+            timeout: Maximum time in seconds before timeout
+            show_progress: Whether to show detailed progress indicators
+            max_retries: Maximum number of retry attempts for recoverable errors
+
+        Returns:
+            Command output with optional format parsing metadata
+        """
+        import time
+
+        last_error = None
+        retry_count = 0
+
+        # Define recoverable error patterns
+        recoverable_patterns = [
+            'connection reset',
+            'connection refused',
+            'network is unreachable',
+            'temporary failure',
+            'timed out',
+            'ECONNRESET',
+            'ETIMEDOUT',
+            'ENOTFOUND',
+            'socket hang up',
+            'certificate has expired',
+            'unable to get local issuer certificate',
+        ]
+
+        for attempt in range(max_retries):
+            if attempt > 0:
+                # Exponential backoff: 2, 4, 8 seconds
+                wait_time = 2 ** attempt
+                print(f"   ⚠️  Retry attempt {attempt + 1}/{max_retries} after {wait_time}s delay...")
+                time.sleep(wait_time)
+                retry_count = attempt
+
+            output = self._run_command_streaming(command, timeout, show_progress)
+
+            # Check if output contains recoverable errors
+            is_recoverable_error = False
+            output_lower = output.lower()
+
+            for pattern in recoverable_patterns:
+                if pattern in output_lower and 'error' in output_lower:
+                    is_recoverable_error = True
+                    last_error = output
+                    print(f"   ⚠️  Recoverable error detected: {pattern}")
+                    break
+
+            if not is_recoverable_error:
+                # Success or non-recoverable error - parse output and return
+                parsed_output = self._parse_command_output(output)
+                if retry_count > 0:
+                    parsed_output = f"[Succeeded after {retry_count} retries]\n{parsed_output}"
+                return parsed_output
+
+        # All retries exhausted
+        return f"Error: Command failed after {max_retries} attempts.\nLast error:\n{last_error}"
+
+    def _parse_command_output(self, output: str) -> str:
+        """
+        Parse command output and auto-detect format (JSON/YAML).
+
+        Adds metadata about detected format and validates structure.
+        """
+        import json
+
+        if not output or output == "(no output)":
+            return output
+
+        stripped = output.strip()
+
+        # Try JSON detection
+        if stripped.startswith('{') or stripped.startswith('['):
+            try:
+                parsed = json.loads(stripped)
+                # Valid JSON detected
+                format_info = "[Auto-detected: JSON output]\n"
+                if isinstance(parsed, dict):
+                    format_info += f"[Structure: Object with {len(parsed)} keys]\n"
+                elif isinstance(parsed, list):
+                    format_info += f"[Structure: Array with {len(parsed)} items]\n"
+                return format_info + output
+            except json.JSONDecodeError:
+                pass  # Not valid JSON, continue
+
+        # Try YAML detection
+        try:
+            import yaml
+            # Only attempt if it looks like YAML (has colons, indentation patterns)
+            if ':' in stripped and not stripped.startswith('Error'):
+                # Check for YAML-like patterns
+                lines = stripped.split('\n')
+                yaml_indicators = 0
+                for line in lines[:10]:  # Check first 10 lines
+                    if line.strip() and ':' in line:
+                        # Key: value pattern
+                        if line.strip().endswith(':') or ': ' in line:
+                            yaml_indicators += 1
+                    if line.startswith('  ') or line.startswith('- '):
+                        yaml_indicators += 1
+
+                if yaml_indicators >= 3:  # Likely YAML
+                    try:
+                        parsed = yaml.safe_load(stripped)
+                        if isinstance(parsed, (dict, list)):
+                            format_info = "[Auto-detected: YAML output]\n"
+                            if isinstance(parsed, dict):
+                                format_info += f"[Structure: Object with {len(parsed)} keys]\n"
+                            elif isinstance(parsed, list):
+                                format_info += f"[Structure: Array with {len(parsed)} items]\n"
+                            return format_info + output
+                    except Exception:
+                        pass  # Not valid YAML
+        except ImportError:
+            pass  # PyYAML not available
+
+        # Return original output if no format detected
+        return output
+
+    def _run_command_streaming(self, command: str, timeout: int, show_progress: bool = True) -> str:
+        """Run a command with streaming output (for all commands)."""
         import threading
         import time
         import os
@@ -487,8 +596,8 @@ class CodeAgent:
                         if line:
                             output_lines.append(line.rstrip())
                             last_output_time = time.time()
-                            # Print progress indicator
-                            if len(output_lines) % 10 == 0:
+                            # Print progress indicator (only for long-running commands)
+                            if show_progress and len(output_lines) % 10 == 0:
                                 print(f"   ... {len(output_lines)} lines processed")
                 except Exception:
                     pass  # Handle closed pipe
@@ -508,7 +617,7 @@ class CodeAgent:
                     return f"Error: Command timed out after {timeout}s\nPartial output ({len(output_lines)} lines):\n" + "\n".join(output_lines[-50:])
 
                 # Warn if no output for 30 seconds (might be waiting for input)
-                if stall_time > 30 and not stall_warning_shown:
+                if stall_time > 30 and not stall_warning_shown and show_progress:
                     print(f"   ⚠️  No output for 30s - command may be waiting for input")
                     print(f"   Press Ctrl+C to interrupt if stuck")
                     stall_warning_shown = True
@@ -526,7 +635,8 @@ class CodeAgent:
                 # Show last part for long outputs
                 output = "... [truncated, showing last portion]\n" + output[-max_output:]
 
-            print(f"   ✓ Command completed ({len(output_lines)} lines)")
+            if show_progress:
+                print(f"   ✓ Command completed ({len(output_lines)} lines)")
             return output if output else "(no output)"
 
         except Exception as e:
@@ -536,6 +646,14 @@ class CodeAgent:
 
     def _get_user_confirmation(self, action: str, params: dict) -> bool:
         """Ask user for confirmation before executing action."""
+        # Auto-approve safe read-only operations
+        safe_actions = ['read_file', 'list_files', 'search_files', 'search_code', 'git_status', 'git_log', 'git_diff']
+        if action in safe_actions:
+            print(f"Agent wants to: {action}")
+            print(f"Parameters: {json.dumps(params, indent=2)}")
+            print("Auto-approved (safe operation)")
+            return True
+
         print(f"\nAgent wants to: {action}")
         print(f"Parameters: {json.dumps(params, indent=2)}")
 
@@ -779,6 +897,21 @@ class CodeAgent:
                 final_result=final_result
             )
 
+        # Smart completion: Check if primary goal was achieved
+        if result.executed and result.action in ['write_file', 'run_command']:
+            if 'Successfully wrote' in result.output or 'successfully' in result.output.lower():
+                # Check if this was likely the main task
+                write_actions = [t for t in state.tools_executed if t == 'write_file']
+                if len(write_actions) >= 1 and state.iteration >= 2:
+                    # File was written successfully - likely complete
+                    print(f"\nTask goal achieved. Stopping execution.")
+                    return EvaluationResult(
+                        is_complete=True,
+                        should_continue=False,
+                        reason="Primary goal achieved (file written successfully)",
+                        final_result=result.output
+                    )
+
         # Check max iterations
         if state.iteration >= state.max_iterations:
             return EvaluationResult(
@@ -875,14 +1008,11 @@ class CodeAgent:
         # Update tool context dry_run state
         self.tool_context.dry_run = self.dry_run
 
-        print(f"\n{'='*60}")
-        print(f"Code Agent - Task: {task}")
-        print(f"{'='*60}")
-        print(f"Planner: {self.planner} | Executor: {self.executor}")
-        print(f"Project: {self.project_root}")
+        # Concise header
+        task_preview = task[:80] + "..." if len(task) > 80 else task
+        print(f"\n🤖 Agent: {task_preview}")
         if self.dry_run:
-            print("[DRY RUN MODE - No actual changes will be made]")
-        print(f"{'='*60}\n")
+            print("[DRY RUN MODE]")
 
         # Build initial context
         context_info = ""
@@ -924,7 +1054,9 @@ Current task: {task}
         # Main agent loop - decoupled stages
         while state.iteration < state.max_iterations:
             state.iteration += 1
-            print(f"\n--- Iteration {state.iteration}/{state.max_iterations} ---")
+            # Minimal iteration indicator (only show on first iteration)
+            if state.iteration == 1:
+                print(f"Working...")
 
             # Stage 1: Think - LLM generates next thought/action
             thought = self._think(state)

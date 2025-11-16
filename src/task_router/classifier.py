@@ -206,7 +206,7 @@ class TaskClassifier:
         complexity = self._calculate_complexity(input_stripped, best_type)
 
         # Determine if planning/tools are needed
-        requires_planning = best_type == TaskType.CODE_GENERATION and complexity >= 5
+        requires_planning = best_type == TaskType.CODE_GENERATION and complexity >= 7
         requires_tools = best_type in [TaskType.CODE_GENERATION, TaskType.RESEARCH]
 
         # Suggest provider based on task type
@@ -256,11 +256,12 @@ class TaskClassifier:
         complexity = 1
 
         # Base complexity by type
+        # Base complexity by type (lowered to avoid over-planning)
         type_base = {
             TaskType.DIRECT_COMMAND: 1,
             TaskType.CONVERSATION: 1,
-            TaskType.RESEARCH: 3,
-            TaskType.CODE_GENERATION: 5,
+            TaskType.RESEARCH: 2,
+            TaskType.CODE_GENERATION: 3,  # Simple file ops shouldn't be complex
         }
         complexity = type_base.get(task_type, 3)
 
@@ -272,16 +273,21 @@ class TaskClassifier:
             complexity += 1
 
         # Multi-step indicators
-        multi_step_keywords = ['then', 'after', 'next', 'also', 'and then', 'finally']
-        for keyword in multi_step_keywords:
-            if keyword in input_text.lower():
-                complexity += 1
-                break
+        multi_step_keywords = ['then', 'after that', 'next', 'and then', 'finally', 'first', 'second']
+        multi_step_count = sum(1 for keyword in multi_step_keywords if keyword in input_text.lower())
+        complexity += min(multi_step_count, 2)
 
-        # Action count
-        action_words = ['create', 'write', 'update', 'modify', 'delete', 'add', 'remove', 'fix', 'refactor', 'test']
+        # Action count (only boost for 3+ distinct actions)
+        action_words = ['create', 'write', 'update', 'modify', 'delete', 'add', 'remove', 'fix', 'refactor', 'test', 'implement']
         action_count = sum(1 for word in action_words if word in input_text.lower())
-        complexity += min(action_count, 3)
+        if action_count >= 3:
+            complexity += action_count - 1
+
+        # High complexity indicators
+        if any(word in input_text.lower() for word in ['multiple', 'several', 'all files', 'each']):
+            complexity += 2
+        if any(word in input_text.lower() for word in ['refactor', 'redesign', 'migrate', 'integrate']):
+            complexity += 2
 
         return min(complexity, 10)
 

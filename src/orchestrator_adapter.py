@@ -175,6 +175,22 @@ class AgentOrchestratorAdapter:
             cached=getattr(response, 'cached', False)
         )
 
+    # Proxy methods for working memory
+    def remember_file_read(self, path: str, content: str, lines: int = 0):
+        """Proxy to orchestrator's remember_file_read."""
+        if hasattr(self._orch, 'remember_file_read'):
+            self._orch.remember_file_read(path, content, lines)
+
+    def remember_search(self, query: str, results: list):
+        """Proxy to orchestrator's remember_search."""
+        if hasattr(self._orch, 'remember_search'):
+            self._orch.remember_search(query, results)
+
+    def remember_git_operation(self, operation: str, result: str):
+        """Proxy to orchestrator's remember_git_operation."""
+        if hasattr(self._orch, 'remember_git_operation'):
+            self._orch.remember_git_operation(operation, result)
+
 
 class SimpleLLMAdapter:
     """

@@ -819,10 +819,11 @@ class AgentExecutor(ExecutionStrategy):
             # Initialize CodeAgent
             agent = CodeAgent(
                 orchestrator=adapter,
-                project_root=self.project_root,
-                max_iterations=self.max_iterations,
-                require_approval=self.require_approval
+                project_path=str(self.project_root)
             )
+            # Configure agent settings
+            agent.config.max_iterations = self.max_iterations
+            agent.require_approval = self.require_approval
 
             # Clear resolved provider after use
             self._resolved_provider = None

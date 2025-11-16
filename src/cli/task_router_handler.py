@@ -44,7 +44,6 @@ class CLITaskRouterHandler:
 
         This is the main entry point for task-aware execution.
         """
-        click.secho("\n🔄 Auto-routing task...", fg="cyan")
 
         result = self.router.route(user_input)
 

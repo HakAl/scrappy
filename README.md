@@ -1,6 +1,6 @@
 # Multi-Provider LLM Agent Team
 
-A framework for orchestrating LLM agents across multiple free-tier providers with **swappable orchestrator brain** and **automatic codebase context awareness**.
+A CLI code assistant that works across multiple free LLM providers with automatic codebase understanding
 
 >"For Users Without Claude Subscription: Yes, Useful"
 
@@ -13,6 +13,8 @@ A framework for orchestrating LLM agents across multiple free-tier providers wit
   4. Redundancy - Multiple providers mean no single point of failure
   5. Interactive exploration - Good for learning codebases, brainstorming, getting quick answers
 
+
+A framework for orchestrating LLM agents across multiple free-tier providers with **swappable orchestrator brain** and **automatic codebase context awareness**.
 
 ## Features
 
