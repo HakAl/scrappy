@@ -11,7 +11,7 @@ import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Any, List, Dict, Union
+from typing import Optional, List, Dict, Union
 
 from .agent_config import AgentConfig
 from .agent_tools.tools import ToolRegistry, ToolContext
@@ -54,7 +54,7 @@ class AgentAction:
     """Parsed action from the planning stage."""
     thought: str
     action: str
-    parameters: Dict[str, Any]
+    parameters: Dict[str, object]
     is_complete: bool
     result_text: str = ""  # For completion results
 
@@ -65,7 +65,7 @@ class ActionResult:
     success: bool
     output: str
     action: str
-    parameters: Dict[str, Any]
+    parameters: Dict[str, object]
     approved: bool
     executed: bool = False
 
@@ -104,7 +104,7 @@ class CodeAgent:
 
     def __init__(
         self,
-        orchestrator: Union[OrchestratorAdapter, Any],
+        orchestrator: Union[OrchestratorAdapter, object],
         project_path: Optional[str] = None,
         config: Optional[AgentConfig] = None,
         tool_registry: Optional[ToolRegistry] = None

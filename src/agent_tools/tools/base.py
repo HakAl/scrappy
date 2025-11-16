@@ -8,7 +8,26 @@ parameter validation and description generation.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional, Protocol
+from typing import TYPE_CHECKING, Optional, Protocol
+
+if TYPE_CHECKING:
+    from ...agent_config import AgentConfig
+
+
+class MemoryProvider(Protocol):
+    """Protocol for memory operations in tools."""
+
+    def remember_file_read(self, path: str, content: str, lines: int) -> None:
+        """Store file read in working memory."""
+        ...
+
+    def remember_search(self, query: str, results: list) -> None:
+        """Store search results in working memory."""
+        ...
+
+    def remember_git_operation(self, operation: str, result: str) -> None:
+        """Store git operation result in working memory."""
+        ...
 
 
 @dataclass
@@ -22,8 +41,8 @@ class ToolContext:
 
     project_root: Path
     dry_run: bool = False
-    config: Any = None  # AgentConfig
-    orchestrator: Any = None  # AgentOrchestrator for memory operations
+    config: Optional["AgentConfig"] = None
+    orchestrator: Optional[MemoryProvider] = None
 
     def is_safe_path(self, path: str) -> bool:
         """Check if path is within project sandbox."""
@@ -57,7 +76,7 @@ class ToolParameter:
     param_type: type
     description: str
     required: bool = True
-    default: Any = None
+    default: object = None
 
 
 @dataclass

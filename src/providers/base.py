@@ -7,7 +7,7 @@ making it easy to add new providers (OpenRouter, HuggingFace, etc.) in the futur
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Optional
 from datetime import datetime
 import asyncio
 
@@ -22,7 +22,7 @@ class LLMResponse:
     input_tokens: int = 0
     output_tokens: int = 0
     latency_ms: float = 0.0
-    raw_response: Any = None
+    raw_response: object = None
     metadata: dict = field(default_factory=dict)
     timestamp: datetime = field(default_factory=datetime.now)
 

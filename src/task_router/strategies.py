@@ -9,7 +9,10 @@ import subprocess
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Protocol
+from typing import TYPE_CHECKING, Dict, List, Optional, Protocol
+
+if TYPE_CHECKING:
+    from ..providers.base import LLMResponse as BaseLLMResponse, ProviderRegistry
 from pathlib import Path
 
 from .classifier import ClassifiedTask, TaskType
@@ -22,9 +25,52 @@ class ExecutionResult:
     output: str
     error: Optional[str] = None
     execution_time: float = 0.0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: Dict[str, object] = field(default_factory=dict)
     tokens_used: int = 0
     provider_used: Optional[str] = None
+
+
+class ContextLike(Protocol):
+    """Protocol for codebase context."""
+
+    def is_explored(self) -> bool:
+        """Check if codebase has been explored."""
+        ...
+
+    def get_summary(self) -> str:
+        """Get summary of codebase."""
+        ...
+
+    @property
+    def file_index(self) -> Dict[str, List[str]]:
+        """Get file index mapping."""
+        ...
+
+    def explore(self, force: bool = False) -> None:
+        """Explore the codebase."""
+        ...
+
+
+class ProviderRegistryLike(Protocol):
+    """Protocol for provider registry."""
+
+    def list_available(self) -> List[str]:
+        """List available providers."""
+        ...
+
+
+class LLMResponseLike(Protocol):
+    """Protocol for LLM response."""
+
+    @property
+    def content(self) -> str:
+        """Get response content."""
+        ...
+
+    @property
+    def tokens_used(self) -> int:
+        """Get tokens used."""
+        ...
 
 
 class OrchestratorLike(Protocol):
@@ -38,12 +84,12 @@ class OrchestratorLike(Protocol):
         max_tokens: int = 1500,
         temperature: float = 0.3,
         use_context: bool = False
-    ) -> Any:
+    ) -> LLMResponseLike:
         """Delegate prompt to a provider."""
         ...
 
     @property
-    def context(self) -> Any:
+    def context(self) -> ContextLike:
         """Get codebase context."""
         ...
 
@@ -53,7 +99,7 @@ class OrchestratorLike(Protocol):
         ...
 
     @property
-    def providers(self) -> Any:
+    def providers(self) -> ProviderRegistryLike:
         """Get provider registry."""
         ...
 
@@ -391,7 +437,7 @@ class ResearchExecutor(ExecutionStrategy):
 
         return "\n".join(descriptions)
 
-    def _parse_tool_call(self, response: str) -> Optional[Dict[str, Any]]:
+    def _parse_tool_call(self, response: str) -> Optional[Dict[str, object]]:
         """Parse tool call from LLM response."""
 
         def fix_json_string(s: str) -> str:
@@ -449,7 +495,7 @@ class ResearchExecutor(ExecutionStrategy):
 
         return None
 
-    def _execute_tool(self, tool_call: Dict[str, Any]) -> str:
+    def _execute_tool(self, tool_call: Dict[str, object]) -> str:
         """Execute a tool call and return the result."""
         tool_name = tool_call.get('tool')
         params = tool_call.get('parameters', {})
