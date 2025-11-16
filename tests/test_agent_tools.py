@@ -410,3 +410,110 @@ class TestFileToolsSafety:
         except ValueError:
             # Some platforms may raise ValueError for null bytes
             pass
+
+    @pytest.mark.unit
+    def test_sibling_directory_attack_blocked(self, temp_project_dir):
+        """Test that sibling directories with similar names are blocked.
+
+        This tests the critical vulnerability where startswith() could be fooled:
+        If project_root is /path/to/myproject, then /path/to/myproject-secrets
+        would pass a startswith check but should be blocked.
+        """
+        context = ToolContext(project_root=temp_project_dir)
+
+        # Create a sibling directory with similar name
+        sibling_dir = temp_project_dir.parent / (temp_project_dir.name + "-secrets")
+        sibling_dir.mkdir(exist_ok=True)
+
+        try:
+            # Create a file in the sibling directory
+            secret_file = sibling_dir / "passwords.txt"
+            secret_file.write_text("secret passwords")
+
+            # Try to access via path traversal to sibling
+            # This path resolves to sibling_dir/passwords.txt
+            # which starts with project_root string but is NOT inside it
+            malicious_path = f"../{sibling_dir.name}/passwords.txt"
+
+            # This MUST be blocked
+            assert context.is_safe_path(malicious_path) is False, \
+                "Sibling directory attack should be blocked"
+        finally:
+            # Cleanup
+            if sibling_dir.exists():
+                import shutil
+                shutil.rmtree(sibling_dir)
+
+    @pytest.mark.unit
+    def test_windows_case_insensitivity(self, temp_project_dir):
+        """Test that Windows case differences are handled correctly.
+
+        On Windows, file paths are case-insensitive but string comparison is not.
+        The is_safe_path method must handle this correctly.
+        """
+        import sys
+        context = ToolContext(project_root=temp_project_dir)
+
+        # Create a test file
+        test_file = temp_project_dir / "TestFile.py"
+        test_file.touch()
+
+        # On Windows, these should all resolve to the same file
+        if sys.platform == 'win32':
+            # Different cases should all be valid (Windows is case-insensitive)
+            assert context.is_safe_path("TestFile.py") is True
+            assert context.is_safe_path("testfile.py") is True
+            assert context.is_safe_path("TESTFILE.PY") is True
+        else:
+            # On Unix, only exact case should match
+            assert context.is_safe_path("TestFile.py") is True
+            # These might return True for safety check but file won't exist
+
+    @pytest.mark.unit
+    def test_relative_to_method_robustness(self, temp_project_dir):
+        """Test that relative_to method properly validates paths.
+
+        This tests the fix: using Path.relative_to() instead of startswith()
+        ensures that paths are truly relative to the project root.
+        """
+        context = ToolContext(project_root=temp_project_dir)
+
+        # Valid relative paths
+        assert context.is_safe_path("src/module.py") is True
+        assert context.is_safe_path("src/sub/deep/file.py") is True
+        assert context.is_safe_path("./src/module.py") is True
+        assert context.is_safe_path("src/../src/module.py") is True  # Resolves to src/module.py
+
+        # Invalid paths that escape
+        assert context.is_safe_path("../escape.py") is False
+        assert context.is_safe_path("src/../../escape.py") is False
+        assert context.is_safe_path("./../../escape.py") is False
+
+    @pytest.mark.unit
+    def test_deeply_nested_traversal(self, temp_project_dir):
+        """Test deeply nested path traversal attempts."""
+        context = ToolContext(project_root=temp_project_dir)
+
+        # Create a deep directory structure
+        deep_dir = temp_project_dir / "a" / "b" / "c" / "d"
+        deep_dir.mkdir(parents=True, exist_ok=True)
+
+        # These should all be blocked
+        blocked_paths = [
+            "a/b/c/d/../../../../..",
+            "a/b/c/d/../../../../../etc/passwd",
+            "a/b/c/d/e/f/g/../../../../../../../..",
+        ]
+
+        for path in blocked_paths:
+            assert context.is_safe_path(path) is False, f"Should block: {path}"
+
+        # These should be allowed (stay within project)
+        allowed_paths = [
+            "a/b/c/d/../../../../a/b/c/d",  # Goes up then back down
+            "a/b/../b/c",  # Goes up one level then back
+            "a/b/c/d",
+        ]
+
+        for path in allowed_paths:
+            assert context.is_safe_path(path) is True, f"Should allow: {path}"

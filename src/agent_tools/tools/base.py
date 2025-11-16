@@ -45,11 +45,20 @@ class ToolContext:
     orchestrator: Optional[MemoryProvider] = None
 
     def is_safe_path(self, path: str) -> bool:
-        """Check if path is within project sandbox."""
+        """Check if path is within project sandbox.
+
+        Uses Path.relative_to() for robust checking that:
+        - Handles Windows case-insensitivity correctly
+        - Cannot be fooled by sibling directories with similar names
+        - Properly resolves symlinks and relative paths
+        """
         try:
             target = (self.project_root / path).resolve()
-            return str(target).startswith(str(self.project_root))
-        except Exception:
+            project_abs = self.project_root.resolve()
+            # relative_to raises ValueError if target is not relative to project_abs
+            target.relative_to(project_abs)
+            return True
+        except (ValueError, Exception):
             return False
 
     def remember_file_read(self, path: str, content: str, lines: int):
