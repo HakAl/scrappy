@@ -1,568 +1,322 @@
-# Multi-Provider LLM Agent Team
+# LLM Team - Free AI Coding Assistant
 
-A CLI code assistant that works across multiple free LLM providers with automatic codebase understanding
+> **A coding assistant for everyone** - students, developers in any region, anyone who can't afford paid AI subscriptions.
 
->"For Users Without Claude Subscription: Yes, Useful"
+> "For Users Without Claude Subscription: Yes, Useful"
 
+Get AI-powered coding help with **23,000+ free requests per day**. No credit card needed. No geographic restrictions.
 
-**Where it shines:**
+---
 
-  1. 23K free requests/day - Real value for development without subscription costs
-  2. Context augmentation - Makes weaker models more effective by injecting project knowledge they'd otherwise lack
-  3. Structured workflows - /plan and /reason provide organized thinking patterns
-  4. Redundancy - Multiple providers mean no single point of failure
-  5. Interactive exploration - Good for learning codebases, brainstorming, getting quick answers
+## Why This Exists
 
+Paid AI tools like ChatGPT Plus ($20/month) and Claude Pro ($20/month) are out of reach for many:
+- **Students** learning to code
+- **Developers in regions** where payments are blocked or $20/month is significant money  
+- **Anyone** who wants to learn but is locked out by paywalls
 
-A framework for orchestrating LLM agents across multiple free-tier providers with **swappable orchestrator brain** and **automatic codebase context awareness**.
+**LLM Team makes AI coding assistance accessible to everyone** by combining multiple free-tier AI providers into one powerful tool.
 
-## Features
+---
 
-- **23,000+ free requests/day** across providers
-- **Task-Type Aware Routing** - automatically routes tasks to optimal execution strategies
-- **Dynamic Provider Selection** - uses fast providers (Cerebras) for simple tasks, quality providers (Gemini 70B) for complex ones
-- **Session Persistence** - save and resume sessions with conversation history, working memory, and context
-- **Response Caching** - avoid duplicate API calls, save quota, instant responses for repeated queries
-- **Code Agent** - AI writes code with human-in-the-loop approval (uses Gemini for smart tasks)
-- **Swappable orchestrator** - use any provider as the "brain" (no Claude subscription required)
-- **Context-aware prompts** - automatically augments queries with project knowledge
-- **Working Memory** - tracks file reads, searches, and discoveries within sessions
-- **Auto-exploration** - learns your codebase structure and purpose
-- **Auto-fallback** - automatically switches models on rate limits
-- **Auto-Execute Plans** - intelligent task execution with appropriate approval levels
-- **Task planning** - AI-powered task breakdown with structured JSON output
-- **Multi-provider routing** - intelligent task delegation
-- **Interactive CLI** - full-featured command-line interface with Click
-- **Persistent caching** - context and responses survive session restarts
-- **Safety features** - Git checkpoints, audit logging, sandboxing, dry-run mode
+## What You Get
 
-## Providers
+✅ **23,000+ free AI requests per day** - enough for serious development work  
+✅ **No payment required** - completely free, just need free API keys  
+✅ **AI code writing** - writes code for you with your approval  
+✅ **Smart about your project** - automatically understands your codebase  
+✅ **Multiple AI models** - uses the best free model for each task  
+✅ **Works offline-first** - caches responses to save your quota  
 
-| Provider | Daily Requests | Tokens/Min | Best For |
-|----------|---------------|------------|----------|
-| **Cerebras** | 14,400 | 60,000 | Primary workhorse, ultra-fast inference |
-| **Groq** | 7,000+ | 20,000 | Secondary, model variety |
-| **Gemini** | 1,650 | - | Auto-fallback, overflow capacity |
-| **Cohere** | 33 (1K/month) | - | Embeddings only |
+---
 
-## Quick Start
+## Quick Start (5 Minutes)
 
 ### 1. Install
-
-**Option A: Install as package (recommended)**
 ```bash
-# Clone or download the project
+git clone https://github.com/HakAl/llm_agent_team
+cd llm_agent_team
+pip install -e .
+```
+
+### 2. Get Free API Keys
+
+**You need at least ONE of these** (all are free, no credit card):
+
+| Provider | How to Get Key | Daily Limit |
+|----------|---------------|-------------|
+| **Cerebras** | [cloud.cerebras.ai](https://cloud.cerebras.ai) → Sign up → Copy key | 14,400 requests |
+| **Groq** | [console.groq.com](https://console.groq.com) → Create account → API Keys | 7,000 requests |
+| **Gemini** | [aistudio.google.com](https://aistudio.google.com) → Get API Key | 1,650 requests |
+
+**Tip**: Get all three for maximum free requests!
+
+### 3. Add Keys to Your Environment
+
+```bash
+export CEREBRAS_API_KEY=your_key_here
+export GROQ_API_KEY=your_key_here
+export GEMINI_API_KEY=your_key_here
+```
+
+Or create a `.env` file:
+```
+CEREBRAS_API_KEY=your_key_here
+GROQ_API_KEY=your_key_here
+GEMINI_API_KEY=your_key_here
+```
+
+### 4. Start Coding with AI
+
+```bash
+# Navigate to your project
+cd ~/my-project
+
+# Start the assistant (it learns about your code automatically)
+llm-team --auto-explore
+```
+
+Now you can:
+- Ask coding questions: `How do I add authentication?`
+- Get code written: `/agent Add rate limiting to my API`
+- Understand codebases: `Explain how the auth module works`
+- Plan features: `/plan Build a user profile page`
+
+---
+
+## Real Examples
+
+### Example 1: Ask a Question
+```
+You: How should I structure my database models for a blog?
+
+AI: Based on your project, I'd recommend:
+- User model (id, username, email, password_hash)
+- Post model (id, title, content, user_id, created_at)
+- Comment model (id, content, user_id, post_id, created_at)
+
+Would you like me to write the code for these models?
+```
+
+### Example 2: Let AI Write Code
+```
+You: /agent Add input validation to my signup form
+
+Code Agent: I'll add validation for email and password. 
+Allow me to modify signup.js? [y/N]: y
+
+✓ Added email format validation
+✓ Added password strength requirements  
+✓ Added error message display
+
+Task completed in 3 iterations!
+```
+
+### Example 3: Understand Existing Code
+```
+You: Explain how authentication works in this app
+
+AI: [Reads your codebase automatically]
+Your app uses JWT tokens stored in localStorage...
+[Detailed explanation based on YOUR actual code]
+```
+
+---
+
+## Who This Is For
+
+### ✅ Perfect for:
+- **Students** - Learn coding with AI help without paying subscriptions
+- **International developers** - No payment restrictions, works anywhere
+- **Beginners** - Get explanations and working code examples  
+- **Budget-conscious developers** - 23K free requests/day is serious capacity
+- **Learning projects** - Build without worrying about API costs
+
+### ⚠️ Maybe not ideal for:
+- **Production apps needing 24/7 uptime** - Free tiers can change
+- **Enterprise teams** - Consider paid options with SLAs
+- **If you already pay for Claude/GPT Plus** - Just use those directly
+
+---
+
+## How It Works
+
+Instead of relying on one expensive AI:
+1. **Uses multiple free AI providers** (Cerebras, Groq, Gemini)
+2. **Routes tasks intelligently** - fast model for simple tasks, smart model for complex
+3. **Understands your codebase** - automatically learns your project structure
+4. **Caches responses** - saves your quota by not re-asking same questions
+5. **Stays within free limits** - auto-switches providers when one hits limits
+
+---
+
+## Common Questions
+
+**Q: Is this really free?**  
+A: Yes! All the AI providers offer generous free tiers. No credit card needed.
+
+**Q: What if free tiers disappear?**  
+A: The tool is designed to easily add new providers. As long as ANY free tier exists, it works.
+
+**Q: Can I use my own paid API keys?**  
+A: Yes! You can use OpenAI, Anthropic, or any paid provider alongside the free ones.
+
+**Q: Will my code be kept private?**  
+A: Your code never leaves your machine. Only prompts are sent to AI providers (check each provider's privacy policy).
+
+**Q: What languages/frameworks does it support?**  
+A: All of them! Works with any codebase - Python, JavaScript, Java, Go, Rust, etc.
+
+**Q: Do I need to know how to use terminal/command line?**  
+A: Basic terminal knowledge helps, but the quickstart above is all you need.
+
+---
+
+## Available Commands
+
+Once running, type `/help` to see all commands:
+
+```
+/agent <task>          - Let AI write code (you approve each step)
+/plan <task>          - Break down a complex task into steps  
+/reason <question>    - Deep analysis with evidence-based reasoning
+/explore [path]       - Understand a codebase
+/context             - See what the AI knows about your project
+/help                - Show all commands
+```
+
+---
+
+## Installation Details
+
+### Requirements
+- Python 3.10 or newer
+- pip (Python package manager)
+- At least one free API key (see Quick Start above)
+
+### Full Installation
+```bash
+# Clone the repository
+git clone https://github.com/HakAl/llm_agent_team
 cd llm_agent_team
 
-# Install in development mode (editable)
+# Install (makes 'llm-team' command available everywhere)
 pip install -e .
 
-# Now available anywhere!
+# Verify installation
 llm-team --help
 ```
 
-**Option B: Install dependencies only**
+### Setting Up API Keys
+
+**Option 1: Environment Variables** (recommended)
 ```bash
-pip install -r requirements.txt
-# Run from project directory
-python llm_team.py
+export CEREBRAS_API_KEY=your_key
+export GROQ_API_KEY=your_key  
+export GEMINI_API_KEY=your_key
 ```
 
-### 2. Set API Keys
-
-```bash
-# Required (get free keys)
-export CEREBRAS_API_KEY=your_key  # https://cloud.cerebras.ai
-export GROQ_API_KEY=your_key      # https://console.groq.com
-
-# Optional
-export GEMINI_API_KEY=your_key    # https://aistudio.google.com
-export COHERE_API_KEY=your_key    # https://dashboard.cohere.com
+**Option 2: .env File** (easier for beginners)
+Create a file named `.env` in the project folder:
+```
+CEREBRAS_API_KEY=your_key_here
+GROQ_API_KEY=your_key_here
+GEMINI_API_KEY=your_key_here
 ```
 
-### 3. Basic Usage
+---
 
+## Safety Features
+
+When AI writes code, you stay in control:
+
+✅ **Human approval required** - You approve EVERY file change  
+✅ **Git checkpoints** - Easy rollback if something goes wrong  
+✅ **Sandboxed** - AI can only modify your project folder  
+✅ **Audit logging** - See exactly what changed  
+✅ **Dry-run mode** - Preview changes without applying them
+
+---
+
+## Get Help
+
+- **Issues?** [Open an issue on GitHub](https://github.com/HakAl/llm_agent_team/issues)
+- **Questions?** Check the [documentation](https://github.com/HakAl/llm_agent_team/tree/main/docs)
+- **Want to contribute?** PRs welcome!
+
+---
+
+## The Mission
+
+**AI coding tools shouldn't be locked behind paywalls.**
+
+Students in developing countries, broke college students, self-taught developers - everyone deserves access to AI-powered learning tools.
+
+This project exists to keep AI coding assistance free and accessible while commercial tools become increasingly expensive.
+
+As long as free AI tiers exist, we'll make them work better for people who need them most.
+
+---
+
+## Technical Details (For Developers)
+
+<details>
+<summary>Click to expand architecture and advanced usage</summary>
+
+### Architecture
+- Multi-provider orchestration with intelligent routing
+- Task classification (direct execution, research, or full agent)
+- Automatic codebase context extraction
+- Response caching to minimize API calls
+- Session persistence across restarts
+
+### Provider Details
+| Provider | RPD | Tokens/Min | Use Case |
+|----------|-----|------------|----------|
+| Cerebras | 14,400 | 60,000 | Fast execution, primary workhorse |
+| Groq | 7,000+ | 20,000 | Secondary, model variety |
+| Gemini | 1,650 | - | Complex reasoning, overflow |
+
+### Extending
+Add new providers by implementing the `LLMProvider` interface:
 ```python
-import sys
-sys.path.insert(0, 'src')
-from providers import CerebrasProvider, GroqProvider, ProviderRegistry
-
-# Simple provider usage
-provider = CerebrasProvider()
-response = provider.chat(
-    messages=[{"role": "user", "content": "Explain recursion briefly"}],
-    max_tokens=100
-)
-print(response.content)
+class NewProvider(LLMProvider):
+    def chat(self, messages, **kwargs):
+        # Your implementation
+        pass
 ```
 
-### 4. Orchestrator with Swappable Brain
+See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for details.
 
-```python
-from src.orchestrator import AgentOrchestrator
-
-# Default: Cerebras as brain
-orch = AgentOrchestrator()
-
-# Or specify your preferred brain
-orch = AgentOrchestrator(orchestrator_provider='groq')
-
-# Task planning (brain breaks down complex task)
-steps = orch.plan("Implement user authentication with JWT")
-for step in steps:
-    print(f"{step['step']}: {step['description']}")
-
-# Complex reasoning (brain analyzes and synthesizes)
-answer = orch.reason(
-    "Should we use microservices or monolith?",
-    context="Small team, MVP phase",
-    evidence=["Need to ship fast", "Limited DevOps experience"]
-)
-
-# Delegate simple tasks to fast providers
-result = orch.delegate('cerebras', 'Summarize this code: ...')
-
-# Smart delegation (auto-selects best provider)
-result = orch.delegate_smart('Format this JSON', task_type='fast')
-```
-
-### 5. CLI Interface (No Claude Subscription Required)
-
-Interactive command-line interface for users without Claude subscriptions:
-
-```bash
-# Start interactive mode
-llm-team
-
-# Resume from last session (conversation + context preserved)
-llm-team --resume
-
-# Auto-explore codebase on startup (recommended)
-llm-team --auto-explore
-
-# Or specify brain provider
-llm-team --brain groq
-
-# Works from any directory!
-cd ~/my-project && llm-team --auto-explore
-```
-
-**One-shot commands:**
-
-```bash
-# Quick query
-llm-team query "What is machine learning?"
-
-# Query with codebase context
-llm-team query "How should I fix the auth bug?" --with-context
-
-# Query with specific provider
-llm-team query "Explain Docker" --provider groq
-
-# Plan a task
-llm-team plan "Build REST API with authentication"
-
-# Reason about a question
-llm-team reason "Redis vs PostgreSQL for caching?" \
-  --evidence "Need sub-ms latency" \
-  --evidence "Data is temporary"
-
-# Explore a codebase
-llm-team explore .
-llm-team explore /path/to/project --save
-
-# View context status
-llm-team context
-
-# Check system status
-llm-team status
-
-# List providers
-llm-team providers
-
-# List models
-llm-team models
-llm-team models cerebras
-```
-
-**Interactive mode commands:**
-
-```
-You: /help              # Show all commands
-You: /plan <task>       # Create task plan
-You: /reason <question> # Analyze with reasoning
-You: /agent <task>      # Run code agent with human approval
-You: /explore [path]    # Explore codebase
-You: /context           # View/manage context
-You: /context explore   # Explore current project
-You: /context toggle    # Enable/disable context awareness
-You: /providers         # List available providers
-You: /brain groq        # Switch brain provider
-You: /models            # List all models
-You: /usage             # Show usage statistics
-You: /status            # System status
-You: /synthesize        # Multi-provider synthesis
-You: /delegate          # Direct provider delegation
-You: /cache             # View cache statistics
-You: /cache clear       # Clear response cache
-You: /cache toggle      # Enable/disable caching
-You: /quit              # Exit
-```
-
-### 6. Code Agent (AI Writes Code)
-
-Let the AI write code with your approval for every action:
-
-```bash
-# One-shot command
-llm-team agent "Add a health check endpoint to the Flask app"
-
-# With options
-llm-team agent "Refactor auth module" --dry-run  # Preview only
-llm-team agent "Fix login bug" --max-iterations 5
-```
-
-**Interactive mode:**
-```
-You: /agent Add rate limiting to the API
-
-Code Agent - Task: Add rate limiting to the API
-------------------------------------------------------------
-Run in dry-run mode? [y/N]: n
-Create git checkpoint before running? [Y/n]: y
-Checkpoint created: a1b2c3d4
-
-Agent Configuration:
-  Planner (smart tasks): gemini
-  Executor (fast tasks): cerebras
-  Project root: /path/to/project
-
---- Iteration 1/10 ---
-[gemini] Thinking...
-
-Thought: I need to first understand the current API structure
-
-Agent wants to: read_file
-Parameters: {"path": "src/api.py"}
-Allow? [y/N]: y
-Executing: read_file
-Result: [file contents...]
-
---- Iteration 2/10 ---
-Thought: Now I'll add rate limiting using flask-limiter
-
-Agent wants to: write_file
-Parameters: {"path": "src/api.py", "content": "..."}
-
-Content preview:
-from flask_limiter import Limiter
-...
-
-Allow? [y/N]: y
-Executing: write_file
-Result: Successfully wrote 2341 characters to src/api.py
-
---- Iteration 3/10 ---
-Thought: Task completed successfully
-
-============================================================
-Task Completed Successfully!
-Result: Added rate limiting decorator using flask-limiter
-Iterations: 3
-
-Audit Log:
-  [2025-01-15T10:30:45] read_file - Approved
-  [2025-01-15T10:31:12] write_file - Approved
-  [2025-01-15T10:31:45] complete - Approved
-
-Save audit log to file? [y/N]: y
-Saved to: .agent_audit.json
-
-Rollback to checkpoint? [y/N]: n
-```
-
-**Key safety features:**
-- Human approval for every file operation
-- Git checkpoint before changes (easy rollback)
-- **Git history awareness** (checks commits, diffs, blame before changes)
-- Sandboxed to project directory
-- Audit logging of all actions
-- Dry-run mode for previewing
-- Dangerous command blocking
-
-### 7. Context-Aware Development
-
-The orchestrator automatically learns about your codebase:
-
+### API Usage (Python)
 ```python
 from src.orchestrator import AgentOrchestrator
 
-# Auto-explore codebase on initialization
+# Initialize
 orch = AgentOrchestrator(auto_explore=True)
 
-# Or manually explore
-orch.explore_project()
+# Plan a task
+steps = orch.plan("Add user authentication")
 
-# Check context status
-print(orch.get_context_status())
+# Delegate to specific provider  
+result = orch.delegate('cerebras', 'Explain this code')
 
-# Queries are now context-aware
-result = orch.delegate(
-    'cerebras',
-    'How should I add rate limiting?',
-    use_context=True  # Automatically includes project info
-)
-
-# Disable context for specific calls
-result = orch.delegate('groq', 'What is 2+2?', use_context=False)
+# Smart delegation (auto-selects best provider)
+result = orch.delegate_smart('Complex task', task_type='quality')
 ```
 
-**Context includes:**
-- Project type and purpose
-- Technologies and frameworks used
-- File structure and organization
-- Key dependencies
-- Entry points
+</details>
 
-**Cache:**
-- Stored in `.llm_team_context.json`
-- Persists across sessions
-- Auto-loads on startup
-
-## Architecture
-
-```
-User Input
-    │
-    ▼
-TaskRouter (NEW)
-    ├─── TaskClassifier
-    │     ├─ Pattern matching
-    │     ├─ Complexity scoring (1-10)
-    │     └─ Provider suggestion (fast/quality)
-    │
-    ├─── ProviderSelector
-    │     ├─ "fast" → Cerebras > Groq > Gemini
-    │     └─ "quality" → 70B models
-    │
-    └─── ExecutionStrategies
-          ├─ DirectExecutor (shell, no LLM)
-          ├─ ResearchExecutor (fast LLM, read-only)
-          ├─ ConversationExecutor (simple responses)
-          └─ AgentExecutor (full planning loop)
-                │
-                ▼
-          CodeAgent
-                ├─ Planner: Gemini (smart tasks)
-                ├─ Executor: Cerebras (fast tasks)
-                ├─ Tools: read_file, write_file, run_command, etc.
-                └─ Human-in-the-loop approval
-    │
-    ▼
-AgentOrchestrator
-    │
-    ├─── Brain Provider (Cerebras/Groq/Gemini)
-    │     └─ Planning, reasoning, synthesis
-    │
-    ├─── Cerebras (Primary - 14,400 RPD)
-    │     └─ llama3.1-8b, llama-3.3-70b, qwen-3-32b
-    │
-    ├─── Groq (Secondary - 7,000 RPD)
-    │     └─ llama-3.x, mixtral, gemma
-    │
-    ├─── Gemini (Overflow - 1,650 RPD)
-    │     └─ Auto-fallback between models
-    │
-    └─── Cohere (Embeddings only - 1K/month)
-          └─ command-r, embeddings
-```
-
-## Key Capabilities
-
-### Swappable Orchestrator Brain
-
-No Claude subscription? No problem:
-
-```python
-# Use Cerebras (default)
-orch = AgentOrchestrator()
-
-# Use Groq instead
-orch = AgentOrchestrator(orchestrator_provider='groq')
-
-# Use Gemini
-orch = AgentOrchestrator(orchestrator_provider='gemini')
-```
-
-### Task Planning
-
-```python
-steps = orch.plan("Add dark mode to React app")
-# Returns structured steps with provider recommendations
-```
-
-### Complex Reasoning
-
-```python
-answer = orch.reason(
-    question="Redis vs PostgreSQL for caching?",
-    evidence=["Need sub-ms latency", "Data is temporary"]
-)
-```
-
-### Result Synthesis
-
-```python
-# Combine outputs from multiple agents
-summary = orch.synthesize([result1, result2, result3])
-```
-
-### Smart Routing
-
-```python
-# Automatically selects best provider
-orch.delegate_smart(prompt, task_type='fast')      # → Cerebras
-orch.delegate_smart(prompt, task_type='quality')   # → Cerebras 70b
-orch.delegate_smart(prompt, task_type='reasoning') # → Brain
-```
-
-### Task-Type Aware Routing (NEW)
-
-Automatically classifies tasks and routes to optimal execution strategies:
-
-```python
-from src.task_router.router import TaskRouter
-
-router = TaskRouter(orchestrator)
-
-# Direct commands - no LLM needed, instant execution
-router.route("pip install requests")
-# → DirectExecutor (immediate, no approval)
-
-# Research tasks - fast LLM, no file changes
-router.route("explain how the auth module works")
-# → ResearchExecutor (Cerebras, no approval)
-
-# Code generation - full agent with approval
-router.route("implement user authentication")
-# → AgentExecutor (Gemini 70B for complex tasks, human approval)
-
-# Provider selection based on complexity
-router.route("fix simple typo")           # → Fast provider (Cerebras)
-router.route("refactor entire module")    # → Quality provider (Gemini 70B)
-```
-
-**Key Features:**
-- **No agent overhead** for simple commands
-- **Dynamic provider selection** based on task complexity
-- **Safety checks** - dangerous commands blocked automatically
-- **Metrics tracking** - monitor execution patterns
-
-See [Task Routing Documentation](docs/task_routing.md) for full details.
-
-### Code Agent
-
-```python
-from src.agent import CodeAgent
-
-# Create agent with hybrid model approach
-agent = CodeAgent(orch)
-# Uses Gemini for planning, Cerebras for fast tasks
-
-# Run a task with human approval
-result = agent.run("Add input validation to the API")
-
-# Check results
-print(f"Success: {result['success']}")
-print(f"Iterations: {result['iterations']}")
-print(f"Audit log: {result['audit_log']}")
-
-# Save audit trail
-agent.save_audit_log(".agent_audit.json")
-```
-
-## Examples
-
-```bash
-# Basic usage
-python examples/basic_usage.py
-
-# Test swappable orchestrator
-python examples/orchestrator_demo.py
-
-# Code agent demo
-python examples/agent_demo.py
-```
-
-**Using the CLI from anywhere:**
-
-```bash
-# Navigate to any project
-cd ~/projects/my-app
-
-# Start LLM Team with auto-exploration
-llm-team --auto-explore
-
-# It automatically learns about my-app!
-You: How should I structure the database models?
-Assistant: [Context-aware response based on your project]
-```
-
-## Adding New Providers
-
-1. Create provider class in `src/providers/`
-2. Implement `LLMProvider` interface
-3. Register in `src/providers/__init__.py`
-4. Add to orchestrator auto-register
-
-See `src/providers/cerebras_provider.py` for example.
-
-## Rate Limits
-
-See [docs/RATE_LIMITS.md](docs/RATE_LIMITS.md) for detailed limits and usage strategy.
-
-**TL;DR**: 23,000 requests/day is plenty for serious development work.
-
-## Documentation
-
-- **[5-Minute Quickstart](docs/QUICKSTART.md)** - Get running fast, no fluff
-- [CLI Reference](docs/CLI.md) - Complete CLI guide and commands
-- [Architecture](docs/ARCHITECTURE.md) - System design and patterns
-- [Rate Limits](docs/RATE_LIMITS.md) - Provider limits and usage strategy
-
-## Requirements
-
-- Python 3.10+
-- API keys for providers you want to use
-- Required packages: `groq`, `cohere`, `google-generativeai`, `openai`, `click`, `python-dotenv`
+---
 
 ## License
 
-MIT
+MIT - Use it, modify it, share it. Help others access AI.
 
-## Status
+---
 
-**Production-ready for prototyping**. Core features implemented:
-- Multi-provider orchestration
-- Swappable orchestrator brain
-- **Task-Type Aware Routing** - intelligent task classification and strategy selection
-- **Dynamic Provider Selection** - automatic provider/model selection based on task complexity
-- **Auto-Execute Plans** - intelligent plan execution with TaskRouter integration
-- **Response caching** - avoid duplicate API calls, TTL-based expiration
-- **Context-aware prompts** with codebase exploration
-- **Interactive CLI** with Click
-- **Code Agent** with human-in-the-loop approval
-- Task planning and reasoning (structured JSON output)
-- Usage tracking with cache hit statistics
-- Auto-fallback (Gemini)
-- **Persistent caching** - both context and responses cached to disk
-- **Safety features**: Git checkpoints, audit logging, sandboxing
+## Star History
 
-**Future work**:
-- Async/parallel execution
-- Persistent rate limit tracking
-- More provider integrations
-- Embedding-based context relevance
-- Provider performance tracking and learning
-- Automatic strategy tuning based on success rates
-- Batch task optimization
+If this helps you, give it a ⭐ so others can find it!
+
+**Built with the belief that education and tools should be accessible to all.**
