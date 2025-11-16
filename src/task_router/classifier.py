@@ -30,6 +30,8 @@ class ClassifiedTask:
     requires_planning: bool = False
     requires_tools: bool = False
     matched_patterns: List[str] = field(default_factory=list)
+    extracted_files: List[str] = field(default_factory=list)  # File references found in input
+    extracted_directories: List[str] = field(default_factory=list)  # Directory references found
 
 
 class TaskClassifier:
@@ -210,6 +212,9 @@ class TaskClassifier:
         # Suggest provider based on task type
         suggested_provider = self._suggest_provider(best_type, complexity)
 
+        # Extract file and directory references
+        extracted_files, extracted_dirs = self._extract_file_references(input_stripped)
+
         return ClassifiedTask(
             original_input=input_stripped,
             task_type=best_type,
@@ -220,7 +225,9 @@ class TaskClassifier:
             complexity_score=complexity,
             requires_planning=requires_planning,
             requires_tools=requires_tools,
-            matched_patterns=matched[best_type]
+            matched_patterns=matched[best_type],
+            extracted_files=extracted_files,
+            extracted_directories=extracted_dirs
         )
 
     def _generate_reasoning(self, task_type: TaskType, patterns: List[str]) -> str:
@@ -303,6 +310,42 @@ class TaskClassifier:
                 return "fast"  # 8B model for simpler code tasks
 
         return "fast"
+
+    def _extract_file_references(self, input_text: str) -> tuple[List[str], List[str]]:
+        """
+        Extract file and directory references from user input.
+
+        Returns:
+            Tuple of (file_references, directory_references)
+        """
+        files = []
+        directories = []
+
+        # Common file extensions
+        file_ext_pattern = r'\b([\w\-./\\]+\.(?:js|jsx|ts|tsx|py|java|cpp|c|h|hpp|rs|go|rb|php|css|scss|html|json|yaml|yml|xml|md|txt|sql|sh|bat|ps1|toml|ini|conf|env))\b'
+
+        # Find all file references
+        for match in re.finditer(file_ext_pattern, input_text, re.IGNORECASE):
+            file_ref = match.group(1)
+            # Normalize path separators
+            file_ref = file_ref.replace('\\', '/')
+            if file_ref not in files:
+                files.append(file_ref)
+
+        # Extract directory references
+        # Common directory names in projects
+        dir_patterns = [
+            r'\b(frontend|backend|src|lib|test|tests|app|components?|pages?|views?|controllers?|models?|services?|utils?|helpers?|config|public|static|dist|build|node_modules)/?\b',
+            r'\b([\w\-]+)/\b',  # Simple path-like pattern
+        ]
+
+        for pattern in dir_patterns:
+            for match in re.finditer(pattern, input_text, re.IGNORECASE):
+                dir_ref = match.group(1).rstrip('/')
+                if dir_ref not in directories and dir_ref.lower() not in ['a', 'i', 'the', 'to', 'of', 'in', 'on', 'at']:
+                    directories.append(dir_ref)
+
+        return files, directories
 
     def is_safe_command(self, command: str) -> bool:
         """

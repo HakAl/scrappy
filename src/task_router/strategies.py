@@ -288,6 +288,96 @@ class ResearchExecutor(ExecutionStrategy):
             self._tool_registry = None
             self._tool_context = None
 
+    def _auto_explore_if_needed(self, task: ClassifiedTask):
+        """Auto-trigger codebase exploration for file-related queries."""
+        # Check if this task involves file/codebase queries
+        needs_exploration = (
+            task.extracted_files or
+            task.extracted_directories or
+            any(kw in task.original_input.lower() for kw in [
+                'file', 'code', 'function', 'class', 'component', 'directory', 'folder'
+            ])
+        )
+
+        if not needs_exploration:
+            return
+
+        # Check if context is already explored
+        try:
+            context = self.orchestrator.context
+            if context:
+                if not context.is_explored():
+                    # Trigger exploration
+                    print("🔍 Auto-exploring codebase for better file resolution...")
+                    context.explore(force=True)  # Force fresh scan
+                elif not context.file_index:
+                    # Cache exists but file_index is empty, reload
+                    print("🔍 Reloading codebase file index...")
+                    context.explore(force=True)
+
+                # If we have extracted files, try to resolve their exact paths
+                if task.extracted_files and context.file_index:
+                    self._resolve_file_paths(task, context)
+
+        except Exception as e:
+            # If exploration fails, continue without it
+            print(f"⚠️ Auto-explore failed: {e}")
+            pass
+
+    def _resolve_file_paths(self, task: ClassifiedTask, context):
+        """Resolve extracted file names to full paths using the file index."""
+        if not hasattr(context, 'file_index') or not context.file_index:
+            return
+
+        resolved_paths = []
+
+        for file_ref in task.extracted_files:
+            # Normalize the file reference
+            file_ref_lower = file_ref.lower()
+            file_basename = file_ref.split('/')[-1].lower()
+
+            # Search in all indexed files
+            for file_type, files in context.file_index.items():
+                for indexed_file in files:
+                    indexed_lower = indexed_file.lower()
+                    indexed_basename = indexed_file.split('/')[-1].lower()
+
+                    # Match by basename (case-insensitive)
+                    if indexed_basename == file_basename:
+                        resolved_paths.append(indexed_file)
+                    # Match by partial path
+                    elif file_ref_lower in indexed_lower:
+                        resolved_paths.append(indexed_file)
+
+        # Store resolved paths in task for use in prompt building
+        if resolved_paths:
+            task.extracted_files = list(set(resolved_paths))  # Deduplicate
+
+    def _generate_fallback_response(self, task: ClassifiedTask, tool_calls_made: list, conversation_history: list) -> str:
+        """Generate a fallback response when LLM doesn't provide one."""
+        # Extract tool results from conversation history
+        results_summary = []
+
+        for item in conversation_history:
+            if item.startswith("\nTool Result:"):
+                result_text = item.replace("\nTool Result:\n", "").strip()
+                if result_text and len(result_text) > 10:
+                    # Truncate long results
+                    if len(result_text) > 500:
+                        result_text = result_text[:500] + "..."
+                    results_summary.append(result_text)
+
+        if results_summary:
+            # Provide a summary of what was found
+            response = f"Based on the research conducted ({len(tool_calls_made)} tool calls made):\n\n"
+            for i, result in enumerate(results_summary[:3], 1):
+                response += f"Result {i}:\n{result}\n\n"
+            return response.strip()
+        else:
+            # No results found
+            tools_used = [tc.get('tool', 'unknown') for tc in tool_calls_made]
+            return f"Research completed using {tools_used}, but no relevant information was found. The files may not exist or may not contain the requested information."
+
     def _get_tool_descriptions(self) -> str:
         """Generate tool descriptions for the LLM."""
         if not self._tool_registry:
@@ -408,6 +498,9 @@ class ResearchExecutor(ExecutionStrategy):
         # Setup tools
         self._setup_tools()
 
+        # Auto-explore codebase if needed for file-related queries
+        self._auto_explore_if_needed(task)
+
         try:
             # Get the provider to use (priority: resolved > preferred > brain)
             if self._resolved_provider:
@@ -470,14 +563,40 @@ class ResearchExecutor(ExecutionStrategy):
                     # Add to conversation history
                     conversation_history.append(f"\nTool Call: {json.dumps(tool_call)}")
                     conversation_history.append(f"\nTool Result:\n{tool_result}")
-                    conversation_history.append("\nPlease continue your research with this information. If you have enough information, provide your final answer without any tool calls.")
+
+                    # Adjust continuation prompt based on remaining iterations
+                    remaining = self.max_tool_iterations - iteration - 1
+                    if remaining > 0:
+                        conversation_history.append(f"\nYou have {remaining} tool call(s) remaining. If you have enough information to answer the user's question, provide your FINAL ANSWER now (no JSON, just plain text). Otherwise, make another tool call.")
+                    else:
+                        conversation_history.append("\nThis is your LAST tool call. You MUST now provide your FINAL ANSWER in plain text (no JSON, no tool calls). Summarize what you found from the tool results above.")
                 else:
                     # No tool call or max iterations reached - this is the final response
                     # Remove any tool call syntax from final response
                     final_response = re.sub(r'```json\s*\n?\s*\{[^`]+\}\s*\n?```', '', response_text)
                     final_response = re.sub(r'<tool_call>.*?</tool_call>', '', final_response, flags=re.DOTALL)
                     final_response = re.sub(r'TOOL_CALL:\s*\{.+?\}', '', final_response, flags=re.DOTALL)
+                    # Remove role-played tool calls (LLM describing what it would do)
+                    final_response = re.sub(r'Tool Call:\s*\{[^}]+\}.*?(?=\n\n|\Z)', '', final_response, flags=re.DOTALL)
+                    # Remove bare JSON tool calls (LLM outputting raw JSON in final response)
+                    # Handle nested braces by matching lines that look like tool calls
+                    lines = final_response.split('\n')
+                    cleaned_lines = []
+                    for line in lines:
+                        # Skip lines that are just JSON tool calls
+                        if line.strip().startswith('{"tool"'):
+                            continue
+                        cleaned_lines.append(line)
+                    final_response = '\n'.join(cleaned_lines)
+                    final_response = re.sub(r'Please wait for the result\.\.\.', '', final_response)
+                    final_response = re.sub(r'Tool Result:\s*\n*', '', final_response)
+                    final_response = re.sub(r'\n{3,}', '\n\n', final_response)  # Clean up excessive newlines
                     final_response = final_response.strip()
+
+                    # If response is empty after cleanup but we have tool results, generate a summary
+                    if not final_response and tool_calls_made:
+                        final_response = self._generate_fallback_response(task, tool_calls_made, conversation_history)
+
                     break
 
             # Clear resolved provider after use
@@ -523,22 +642,36 @@ Available tools:
 {tool_desc}
 
 HOW TO USE TOOLS:
-When you need external information (package versions, documentation, web content), respond ONLY with:
+When you need information (package versions, documentation, web content, or codebase details), respond ONLY with:
 ```json
 {{"tool": "tool_name", "parameters": {{"param1": "value1"}}}}
 ```
 
-EXAMPLES:
+EXAMPLES FOR WEB/EXTERNAL INFO:
 - User asks about Django version → Use: {{"tool": "web_search", "parameters": {{"registry": "pypi", "query": "django"}}}}
 - User asks about React package → Use: {{"tool": "web_search", "parameters": {{"registry": "npm", "query": "react"}}}}
 - User asks to fetch from URL → Use: {{"tool": "web_fetch", "parameters": {{"url": "https://..."}}}}
 - User asks about scikit-learn docs → Use: {{"tool": "web_fetch", "parameters": {{"url": "https://scikit-learn.org/stable/api/index.html"}}}}
 
+EXAMPLES FOR CODEBASE SEARCHES:
+- User asks about "frontend/App.js" → Use: {{"tool": "search_code", "parameters": {{"pattern": "register", "file_pattern": "**/App.js"}}}}
+- User asks "does app.js have X" → Use: {{"tool": "search_code", "parameters": {{"pattern": "X", "file_pattern": "**/*.js"}}}}
+- User asks about a class → Use: {{"tool": "search_code", "parameters": {{"pattern": "ClassName", "search_type": "class", "file_pattern": "**/*.py"}}}}
+- User mentions specific file → Use: {{"tool": "read_file", "parameters": {{"file_path": "frontend/src/App.js"}}}}
+- User asks about directory → Use: {{"tool": "list_directory", "parameters": {{"path": "frontend", "depth": 3}}}}
+
+IMPORTANT FOR FILE SEARCHES:
+- Use "**/" prefix for RECURSIVE search (e.g., "**/App.js" finds frontend/src/App.js)
+- File patterns are CASE-SENSITIVE, so use "**/[Aa]pp.js" or "**/*.js" if unsure
+- When user mentions a directory path like "frontend/", check that directory first with list_directory
+- If searching for text in a specific file, use search_code with that exact file pattern
+
 CRITICAL RULES:
 1. If the user asks to FETCH, CHECK, or LOOK UP external info, you MUST use a tool first
-2. Do NOT give generic advice - USE THE TOOLS to get real data
-3. After receiving tool results, provide a helpful summary
-4. Only give your final answer (without tool calls) after you have the information"""
+2. If the user asks about FILES, CODE, or DIRECTORIES in the project, use search_code, read_file, or list_directory
+3. Do NOT give generic advice - USE THE TOOLS to get real data
+4. After receiving tool results, provide a helpful summary
+5. Only give your final answer (without tool calls) after you have the information"""
         else:
             return base_prompt
 
@@ -557,23 +690,65 @@ CRITICAL RULES:
 
         tool_hint = ""
         if self._tool_registry:
-            # Detect if this likely needs web tools
+            # Detect if this likely needs web tools or codebase tools
             lower_input = task.original_input.lower()
+            original_input = task.original_input
+
             needs_web = any(kw in lower_input for kw in [
-                'fetch', 'check', 'look up', 'latest', 'version', 'pypi', 'npm',
-                'github', 'docs', 'documentation', 'website', 'url'
+                'fetch', 'look up', 'latest', 'version', 'pypi', 'npm',
+                'github.com', 'documentation', 'website', 'url', 'http'
+            ])
+
+            # Detect codebase/file queries
+            needs_codebase = any([
+                # File extension mentions
+                any(ext in lower_input for ext in ['.js', '.py', '.ts', '.tsx', '.jsx', '.java', '.cpp', '.rs', '.go', '.rb', '.php', '.css', '.html', '.json', '.yaml', '.yml', '.md']),
+                # File path patterns
+                '/' in original_input and not 'http' in lower_input,
+                # Keywords indicating file/code queries
+                any(kw in lower_input for kw in [
+                    'file', 'directory', 'folder', 'codebase', 'source', 'frontend', 'backend', 'src/',
+                    'does the', 'is there', 'where is', 'find the', 'show me', 'check if', 'contain',
+                    'have a', 'has a', 'include', 'import'
+                ])
             ])
 
             if needs_web:
                 tool_hint = "\n\nIMPORTANT: This request requires fetching external information. You MUST use a tool (web_fetch or web_search) to get real data. Respond with a JSON tool call first."
+            elif needs_codebase:
+                # Use extracted file references from task classification
+                file_hints = []
+
+                if task.extracted_files:
+                    file_hints.append(f"Detected file reference(s): {', '.join(task.extracted_files)}")
+                    # Suggest search patterns
+                    for f in task.extracted_files[:2]:
+                        basename = f.split('/')[-1]
+                        file_hints.append(f"  → To search in {basename}, use file_pattern: \"**/{basename}\"")
+
+                if task.extracted_directories:
+                    file_hints.append(f"Detected directory reference(s): {', '.join(task.extracted_directories)}")
+                    for d in task.extracted_directories[:2]:
+                        file_hints.append(f"  → To explore {d}/, use: list_directory with path=\"{d}\"")
+
+                hint_text = "\n".join(file_hints) if file_hints else ""
+                if hint_text:
+                    hint_text = f"\n{hint_text}"
+
+                tool_hint = f"""\n\nIMPORTANT: This request is about the LOCAL CODEBASE. You MUST use file/search tools to answer:
+- Use search_code to find text patterns (with file_pattern like "**/*.js" for recursive search)
+- Use read_file to read specific files
+- Use list_directory to explore directories
+{hint_text}
+Respond with a JSON tool call FIRST, do not guess or make assumptions about file contents."""
             else:
-                tool_hint = "\n\nYou have tools available if you need to fetch external information."
+                tool_hint = "\n\nYou have tools available if you need to fetch external information or search the codebase."
 
         return f"""User Request:
 {task.original_input}
 {context_info}{tool_hint}
 
-Respond appropriately. If external information is needed, use a tool first."""
+Respond appropriately. If information is needed, use a tool first."""
 
 
 class AgentExecutor(ExecutionStrategy):
