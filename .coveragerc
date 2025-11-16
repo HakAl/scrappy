@@ -1,0 +1,27 @@
+[run]
+source = src
+omit =
+    */tests/*
+    */__pycache__/*
+    */examples/*
+    */site-packages/*
+    setup.py
+
+[report]
+show_missing = true
+skip_covered = false
+precision = 2
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    if __name__ == .__main__.:
+    raise NotImplementedError
+    pass
+    except ImportError
+    if TYPE_CHECKING:
+
+[html]
+directory = htmlcov
+
+[xml]
+output = coverage.xml
