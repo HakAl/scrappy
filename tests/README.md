@@ -128,31 +128,49 @@ Common fixtures available in `conftest.py`:
 
 ## Current Coverage
 
-As of initial setup:
-- **204 tests total**
-- **200 passing (98%)**
+As of latest update:
+- **312 tests total**
+- **308 passing (98.7%)**
 - **4 skipped (interactive prompt tests)**
 
 ### Code Coverage Breakdown
 
 Run `python -m pytest tests/ --cov=src --cov-report=term-missing` for full report.
 
-**Overall: 23.76%** (excellent baseline for core infrastructure)
+**Overall: 32.83%** (improved from 23.76% baseline)
 
 **Well-tested modules (>70% coverage):**
 - `orchestrator/memory.py`: 100%
-- `task_router/classifier.py`: 95.95%
+- `agent_tools/tools/__init__.py`: 100%
+- `agent_tools/__init__.py`: 100%
+- `orchestrator/__init__.py`: 100%
+- `providers/__init__.py`: 100%
+- `task_router/__init__.py`: 100%
+- `cli/__init__.py`: 100%
 - `agent_tools/tools/base.py`: 96.20%
+- `task_router/classifier.py`: 95.95%
+- `cli/commands.py`: 90.00%
 - `providers/base.py`: 86.76%
-- `platform_utils.py`: 70.83%
-- `orchestrator/cache.py`: 67.43%
+- `agent_tools/tools/registry.py`: 80.77%
+- `platform_utils.py`: 73.96%
+- `providers/cohere_provider.py`: 72.46%
+- `orchestrator/cache.py`: 70.86%
+
+**Improved modules:**
+- `providers/groq_provider.py`: 58.90%
+- `orchestrator_adapter.py`: 55.67%
 - `context.py`: 54.47%
+- `providers/cerebras_provider.py`: 48.54%
+- `providers/gemini_provider.py`: 47.34%
+- `task_router/router.py`: 40.81%
+- `intent_classifier.py`: 38.33%
+- `orchestrator/rate_limiter.py`: 36.21%
 
 **Modules needing more coverage:**
-- CLI modules: 0% (integration tests needed)
-- `agent.py`: 0% (complex agent workflows)
-- Provider implementations: 24-32%
-- Task router strategies: 24-40%
+- CLI modules: 5-23% (functional tests needed)
+- `agent.py`: ~30% (complex agent workflows)
+- Task router strategies: 24.53%
+- Orchestrator core: 18.21%
 
 ## Known Issues
 
