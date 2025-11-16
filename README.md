@@ -17,6 +17,8 @@ A framework for orchestrating LLM agents across multiple free-tier providers wit
 ## Features
 
 - **23,000+ free requests/day** across providers
+- **Task-Type Aware Routing** - automatically routes tasks to optimal execution strategies
+- **Dynamic Provider Selection** - uses fast providers (Cerebras) for simple tasks, quality providers (Gemini 70B) for complex ones
 - **Session Persistence** - save and resume sessions with conversation history, working memory, and context
 - **Response Caching** - avoid duplicate API calls, save quota, instant responses for repeated queries
 - **Code Agent** - AI writes code with human-in-the-loop approval (uses Gemini for smart tasks)
@@ -25,6 +27,7 @@ A framework for orchestrating LLM agents across multiple free-tier providers wit
 - **Working Memory** - tracks file reads, searches, and discoveries within sessions
 - **Auto-exploration** - learns your codebase structure and purpose
 - **Auto-fallback** - automatically switches models on rate limits
+- **Auto-Execute Plans** - intelligent task execution with appropriate approval levels
 - **Task planning** - AI-powered task breakdown with structured JSON output
 - **Multi-provider routing** - intelligent task delegation
 - **Interactive CLI** - full-featured command-line interface with Click
@@ -327,16 +330,34 @@ result = orch.delegate('groq', 'What is 2+2?', use_context=False)
 ## Architecture
 
 ```
-User
+User Input
+    │
+    ▼
+TaskRouter (NEW)
+    ├─── TaskClassifier
+    │     ├─ Pattern matching
+    │     ├─ Complexity scoring (1-10)
+    │     └─ Provider suggestion (fast/quality)
+    │
+    ├─── ProviderSelector
+    │     ├─ "fast" → Cerebras > Groq > Gemini
+    │     └─ "quality" → 70B models
+    │
+    └─── ExecutionStrategies
+          ├─ DirectExecutor (shell, no LLM)
+          ├─ ResearchExecutor (fast LLM, read-only)
+          ├─ ConversationExecutor (simple responses)
+          └─ AgentExecutor (full planning loop)
+                │
+                ▼
+          CodeAgent
+                ├─ Planner: Gemini (smart tasks)
+                ├─ Executor: Cerebras (fast tasks)
+                ├─ Tools: read_file, write_file, run_command, etc.
+                └─ Human-in-the-loop approval
     │
     ▼
 AgentOrchestrator
-    │
-    ├─── CodeAgent (Tool-based execution)
-    │     ├─ Planner: Gemini (smart tasks)
-    │     ├─ Executor: Cerebras (fast tasks)
-    │     ├─ Tools: read_file, write_file, run_command, etc.
-    │     └─ Human-in-the-loop approval
     │
     ├─── Brain Provider (Cerebras/Groq/Gemini)
     │     └─ Planning, reasoning, synthesis
@@ -402,6 +423,40 @@ orch.delegate_smart(prompt, task_type='fast')      # → Cerebras
 orch.delegate_smart(prompt, task_type='quality')   # → Cerebras 70b
 orch.delegate_smart(prompt, task_type='reasoning') # → Brain
 ```
+
+### Task-Type Aware Routing (NEW)
+
+Automatically classifies tasks and routes to optimal execution strategies:
+
+```python
+from src.task_router.router import TaskRouter
+
+router = TaskRouter(orchestrator)
+
+# Direct commands - no LLM needed, instant execution
+router.route("pip install requests")
+# → DirectExecutor (immediate, no approval)
+
+# Research tasks - fast LLM, no file changes
+router.route("explain how the auth module works")
+# → ResearchExecutor (Cerebras, no approval)
+
+# Code generation - full agent with approval
+router.route("implement user authentication")
+# → AgentExecutor (Gemini 70B for complex tasks, human approval)
+
+# Provider selection based on complexity
+router.route("fix simple typo")           # → Fast provider (Cerebras)
+router.route("refactor entire module")    # → Quality provider (Gemini 70B)
+```
+
+**Key Features:**
+- **No agent overhead** for simple commands
+- **Dynamic provider selection** based on task complexity
+- **Safety checks** - dangerous commands blocked automatically
+- **Metrics tracking** - monitor execution patterns
+
+See [Task Routing Documentation](docs/task_routing.md) for full details.
 
 ### Code Agent
 
@@ -488,6 +543,9 @@ MIT
 **Production-ready for prototyping**. Core features implemented:
 - Multi-provider orchestration
 - Swappable orchestrator brain
+- **Task-Type Aware Routing** - intelligent task classification and strategy selection
+- **Dynamic Provider Selection** - automatic provider/model selection based on task complexity
+- **Auto-Execute Plans** - intelligent plan execution with TaskRouter integration
 - **Response caching** - avoid duplicate API calls, TTL-based expiration
 - **Context-aware prompts** with codebase exploration
 - **Interactive CLI** with Click
@@ -503,5 +561,6 @@ MIT
 - Persistent rate limit tracking
 - More provider integrations
 - Embedding-based context relevance
-- Conversation memory
-- Agent memory and learning
+- Provider performance tracking and learning
+- Automatic strategy tuning based on success rates
+- Batch task optimization

@@ -56,7 +56,7 @@ class CLI:
         self.active_plan = []  # List of plan steps
         self.current_task_index = 0  # Current task being worked on
         self.plan_active = False  # Whether we're actively tracking a plan
-        self.auto_execute_tasks = False  # Feature flag: auto-execute tasks (disabled for now)
+        self.auto_execute_tasks = True  # Auto-execute tasks using TaskRouter (now enabled)
 
         # Initialize component handlers
         self.display = CLIDisplay(self.orchestrator, self.session_start)
@@ -215,7 +215,7 @@ class CLI:
         click.echo()
 
     def _execute_current_task(self):
-        """Automatically execute the current task using the code agent."""
+        """Automatically execute the current task using intelligent routing."""
         if not self.plan_active or not self.active_plan:
             return
 
@@ -229,12 +229,39 @@ class CLI:
         else:
             full_task = str(task)
 
-        click.secho(f"\nExecuting task...", fg="cyan", bold=True)
+        click.secho(f"\nAuto-executing task...", fg="cyan", bold=True)
 
-        # Run the agent on this task
-        self.agent_mgr.run_agent(full_task)
+        # Use TaskRouter to intelligently route the task
+        # This automatically selects the right strategy:
+        # - DIRECT_COMMAND: Runs immediately (no LLM)
+        # - RESEARCH: Fast LLM call (no approval)
+        # - CODE_GENERATION: Full agent with approval
+        # - CONVERSATION: Simple response
+        try:
+            result = self.task_router.router.route(full_task)
 
-        # After agent completes, prompt for next action
+            if result.success:
+                click.secho("✓ Task executed successfully", fg="green")
+                if result.output:
+                    click.echo(result.output[:1000])  # Truncate long output
+            else:
+                click.secho(f"✗ Task failed: {result.error}", fg="red")
+
+            # Show execution metadata
+            if "classification" in result.metadata:
+                cls_info = result.metadata["classification"]
+                click.secho(
+                    f"  [Strategy: {cls_info.get('type', 'unknown')} | "
+                    f"Provider: {cls_info.get('resolved_provider', 'none')}]",
+                    fg="bright_black"
+                )
+        except Exception as e:
+            click.secho(f"Error executing task: {e}", fg="red")
+            # Fallback to agent manager if TaskRouter fails
+            click.secho("Falling back to agent manager...", fg="yellow")
+            self.agent_mgr.run_agent(full_task)
+
+        # After task completes, prompt for next action
         self._prompt_task_progression()
 
     def interactive_mode(self):
@@ -250,6 +277,7 @@ class CLI:
         click.echo(f"  {click.style('/agent', fg='yellow')} <task>  - Run code agent (with human approval)")
         click.echo(f"  {click.style('/smart', fg='yellow')} <q>     - Research-first query (uses tools)")
         click.echo(f"  {click.style('/context', fg='yellow')}       - Manage codebase context")
+        click.echo(f"  {click.style('/autoexec', fg='yellow')}      - Toggle auto-execute for plan tasks")
         click.echo(f"  {click.style('/status', fg='yellow')}        - Show system status")
         click.echo(f"  {click.style('/quit', fg='yellow')}          - Exit the CLI")
         click.echo(f"  {click.style('(any text)', fg='bright_white')}     - Chat with current brain")
@@ -386,6 +414,17 @@ class CLI:
 
         elif cmd == "/status":
             self.display.show_status()
+
+        elif cmd == "/autoexec":
+            # Toggle auto-execute for plan tasks
+            self.auto_execute_tasks = not self.auto_execute_tasks
+            status = click.style("ENABLED", fg="green") if self.auto_execute_tasks else click.style("DISABLED", fg="red")
+            click.echo(f"Auto-execute tasks: {status}")
+            if self.auto_execute_tasks:
+                click.echo("  Tasks in plans will be automatically executed using intelligent routing")
+                click.echo("  (DIRECT_COMMAND → immediate, RESEARCH → fast LLM, CODE_GEN → agent with approval)")
+            else:
+                click.echo("  Tasks in plans will wait for manual execution")
 
         elif cmd == "/providers":
             self.display.list_providers()

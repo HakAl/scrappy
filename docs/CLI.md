@@ -502,6 +502,8 @@ When in interactive mode, use slash commands:
 | `/plan <task>` | Create a task plan |
 | `/reason <question>` | Analyze with reasoning |
 | `/agent <task>` | Run code agent with human approval |
+| `/auto <query>` | Auto-route query to optimal strategy |
+| `/autoexec` | Toggle auto-execute for plan tasks |
 | `/smart <query>` | Research-first query (uses tools to gather context) |
 | `/smart toggle` | Toggle smart mode always-on |
 | `/synthesize` | Query multiple providers and synthesize |
@@ -554,6 +556,91 @@ See [Session Management](SESSION_MANAGEMENT.md) for full documentation.
 |---------|-------------|
 | `/help` | Show all commands |
 | `/quit` or `/exit` | Exit CLI (auto-saves session by default) |
+
+## Task Routing and Auto-Execute
+
+The CLI now includes intelligent task routing and automatic plan execution.
+
+### Auto-Execute Mode
+
+When enabled (default), tasks in plans are automatically executed using the TaskRouter:
+
+```
+You: /autoexec
+Auto-execute tasks: ENABLED
+  Tasks in plans will be automatically executed using intelligent routing
+  (DIRECT_COMMAND → immediate, RESEARCH → fast LLM, CODE_GEN → agent with approval)
+```
+
+**How it works:**
+
+1. Create a plan with `/plan <task>`
+2. Start working on the plan
+3. Each task is automatically routed:
+   - **DIRECT_COMMAND** (e.g., `npm install`) → Runs immediately, no LLM
+   - **RESEARCH** (e.g., `explain auth`) → Fast LLM call, no approval needed
+   - **CODE_GENERATION** (e.g., `write login`) → Full agent with human approval
+   - **CONVERSATION** (e.g., `acknowledge`) → Simple response
+
+**Example:**
+```
+You: /plan Build a React app with authentication
+
+1. Install dependencies: npm install react react-dom
+   [Auto-executes immediately - DirectExecutor]
+
+2. Create auth service
+   [Routes to AgentExecutor - requires approval]
+
+3. Write login component
+   [Routes to AgentExecutor - requires approval]
+
+What next?
+  1. Mark complete & continue
+  2. Stay on this task
+  ...
+```
+
+### Auto-Route Mode
+
+Toggle automatic task classification:
+
+```
+You: /auto
+Task routing mode: ENABLED
+All inputs will be automatically classified and routed to optimal strategies.
+
+You: pip install requests
+📋 Task Classification:
+  Type: direct_command
+  Confidence: 1.00
+  Complexity: 1/10
+  Provider: none (hint: None)
+  Executing with: DirectExecutor
+✓ Command executed successfully
+```
+
+### Provider Selection
+
+The router automatically selects providers based on task complexity:
+
+| Complexity | Provider Type | Actual Provider |
+|------------|---------------|-----------------|
+| 1-6 | fast | Cerebras (8B model) |
+| 7-10 | quality | Gemini (70B model) |
+
+**Override provider:**
+```python
+# In code
+router.route_with_provider("implement auth", "quality")
+```
+
+### Benefits
+
+- **Speed**: Simple commands execute instantly without LLM overhead
+- **Efficiency**: Uses fast providers for simple tasks, quality for complex
+- **Safety**: Code generation still requires human approval
+- **Visibility**: Shows classification and provider selection decisions
 
 ## Context Awareness System
 
