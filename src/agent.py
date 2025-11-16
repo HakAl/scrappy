@@ -10,10 +10,16 @@ import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Any, List, Dict
+from typing import Optional, Any, List, Dict, Union
 
 from .agent_config import AgentConfig
 from .agent_tools.tools import ToolRegistry, ToolContext
+from .orchestrator_adapter import (
+    OrchestratorAdapter,
+    AgentOrchestratorAdapter,
+    ContextProvider,
+    NullContext
+)
 from .agent_tools.tools.file_tools import (
     ReadFileTool,
     WriteFileTool,
@@ -93,7 +99,7 @@ class CodeAgent:
 
     def __init__(
         self,
-        orchestrator,
+        orchestrator: Union[OrchestratorAdapter, Any],
         project_path: Optional[str] = None,
         config: Optional[AgentConfig] = None,
         tool_registry: Optional[ToolRegistry] = None
@@ -102,12 +108,22 @@ class CodeAgent:
         Initialize the code agent.
 
         Args:
-            orchestrator: AgentOrchestrator instance
+            orchestrator: OrchestratorAdapter instance or AgentOrchestrator
+                         (will be wrapped in adapter if not already)
             project_path: Root directory to sandbox operations (default: cwd)
             config: AgentConfig instance (uses defaults if not provided)
             tool_registry: ToolRegistry instance (creates default if not provided)
         """
-        self.orch = orchestrator
+        # Wrap orchestrator in adapter if needed
+        if isinstance(orchestrator, OrchestratorAdapter):
+            self.adapter = orchestrator
+        else:
+            # Assume it's a full AgentOrchestrator, wrap it
+            self.adapter = AgentOrchestratorAdapter(orchestrator)
+
+        # Keep orch as alias for backward compatibility
+        self.orch = self.adapter
+
         self.project_root = Path(project_path or ".").resolve()
         self.config = config or AgentConfig()
         self.audit_log = []
@@ -118,7 +134,7 @@ class CodeAgent:
             project_root=self.project_root,
             dry_run=self.dry_run,
             config=self.config,
-            orchestrator=self.orch
+            orchestrator=orchestrator  # Pass original for tool context
         )
 
         # Setup tool registry
@@ -137,7 +153,7 @@ class CodeAgent:
         self.tools['run_command'] = self._tool_run_command
 
         # Hybrid approach: Use configured provider preferences
-        available = orchestrator.registry.list_available()
+        available = self.adapter.list_providers()
 
         # Select planner based on preferences
         self.planner = None
