@@ -71,7 +71,7 @@ class AgentConfig:
 
     # Provider preferences (first available will be used)
     planner_preferences: List[str] = field(
-        default_factory=lambda: ['gemini', 'groq']
+        default_factory=lambda: ['github', 'gemini', 'groq']
     )
     executor_preferences: List[str] = field(
         default_factory=lambda: ['cerebras']

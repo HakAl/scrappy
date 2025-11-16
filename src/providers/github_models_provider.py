@@ -99,7 +99,7 @@ class GitHubModelsProvider(LLMProvider):
 
     @property
     def name(self) -> str:
-        return 'github_models'
+        return 'github'
 
     @property
     def available_models(self) -> list[str]:

@@ -10,6 +10,13 @@ import os
 from datetime import datetime
 from pathlib import Path
 
+# Load environment variables from .env file (supplements, doesn't override existing env vars)
+try:
+    from dotenv import load_dotenv
+    load_dotenv(override=False)  # Don't override existing environment variables
+except ImportError:
+    pass  # python-dotenv not installed, skip
+
 from .core import CLI
 
 try:

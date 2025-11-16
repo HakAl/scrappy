@@ -101,9 +101,12 @@ class CLIDisplay:
                 click.secho(f"\n{name.upper()} ", fg="green", bold=True, nl=False)
                 click.secho("(Active)", fg="green")
                 click.echo(f"  Default Model: {details['default_model']}")
-                click.echo(f"  Daily Quota: {limits.requests_per_day:,} requests")
-                if limits.tokens_per_minute > 0:
+                if limits.requests_per_day:
+                    click.echo(f"  Daily Quota: {limits.requests_per_day:,} requests")
+                if limits.tokens_per_minute and limits.tokens_per_minute > 0:
                     click.echo(f"  Token Limit: {limits.tokens_per_minute:,} TPM")
+                if limits.tokens_per_day:
+                    click.echo(f"  Daily Tokens: {limits.tokens_per_day:,} TPD")
                 click.echo(f"  Models: {', '.join(details['models'][:3])}")
                 if len(details['models']) > 3:
                     click.echo(f"           ... and {len(details['models']) - 3} more")
