@@ -254,3 +254,67 @@ def raise_no_providers_available():
 def raise_operation_failed(operation: str, error: Exception):
     """Raise RuntimeError for failed operation with standardized message."""
     raise RuntimeError(ErrorFormatter.operation_failed(operation, error))
+
+
+# Custom exceptions for rate limit handling
+class RateLimitError(Exception):
+    """Exception raised when a provider hits rate limits."""
+
+    def __init__(self, provider: str, message: str = "", limit_type: str = "requests"):
+        self.provider = provider
+        self.limit_type = limit_type
+        self.message = message or ErrorFormatter.rate_limit_exceeded(provider, limit_type)
+        super().__init__(self.message)
+
+
+class AllProvidersRateLimitedError(Exception):
+    """Exception raised when all providers are rate limited."""
+
+    def __init__(self, attempted_providers: list):
+        self.attempted_providers = attempted_providers
+        self.message = ErrorFormatter.all_providers_rate_limited(attempted_providers)
+        super().__init__(self.message)
+
+
+def is_rate_limit_error(error: Exception) -> bool:
+    """
+    Detect if an exception is a rate limit error.
+
+    Checks error message for common rate limit indicators across providers.
+
+    Args:
+        error: The exception to check
+
+    Returns:
+        True if this appears to be a rate limit error
+
+    Example:
+        >>> is_rate_limit_error(Exception("429 Too Many Requests"))
+        True
+        >>> is_rate_limit_error(Exception("quota exceeded"))
+        True
+    """
+    if isinstance(error, RateLimitError):
+        return True
+
+    error_str = str(error).lower()
+
+    # Common rate limit indicators across different providers
+    rate_limit_indicators = [
+        '429',                      # HTTP status code
+        'rate limit',               # Explicit rate limit
+        'rate_limit',               # Underscore variant
+        'ratelimit',                # No space variant
+        'quota',                    # Quota exceeded
+        'too many requests',        # Common HTTP message
+        'resource exhausted',       # Google/Gemini style
+        'resource_exhausted',       # Underscore variant
+        'capacity',                 # Capacity limit
+        'throttl',                  # Throttling
+        'requests per',             # "X requests per minute/day"
+        'tokens per',               # Token limits
+        'limit exceeded',           # Generic limit exceeded
+        'limit_exceeded',           # Underscore variant
+    ]
+
+    return any(indicator in error_str for indicator in rate_limit_indicators)

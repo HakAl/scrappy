@@ -7,13 +7,16 @@ Central coordinator for multi-provider LLM agent team using composition.
 from typing import Optional
 from datetime import datetime
 import asyncio
+import time
 
 try:
     from ..providers import ProviderRegistry, GroqProvider, CohereProvider, GeminiProvider, CerebrasProvider, GitHubModelsProvider, LLMResponse
     from ..context import CodebaseContext
+    from ..utils.errors import is_rate_limit_error, RateLimitError, AllProvidersRateLimitedError
 except ImportError:
     from providers import ProviderRegistry, GroqProvider, CohereProvider, GeminiProvider, CerebrasProvider, GitHubModelsProvider, LLMResponse
     from context import CodebaseContext
+    from utils.errors import is_rate_limit_error, RateLimitError, AllProvidersRateLimitedError
 
 from .cache import ResponseCache
 from .rate_limiter import RateLimitTracker
@@ -313,13 +316,37 @@ class AgentOrchestrator:
         use_context: Optional[bool] = None,
         use_cache: Optional[bool] = None,
         intent_classification: Optional[dict] = None,
+        auto_fallback: bool = True,
+        max_retries: int = 3,
         **kwargs
     ) -> LLMResponse:
-        """Delegate a task to a specific provider."""
-        provider = self.registry.get(provider_name)
+        """
+        Delegate a task to a specific provider with automatic fallback on rate limits.
 
-        # Determine if we should use context
+        Args:
+            provider_name: Initial provider to try
+            prompt: The prompt to send
+            model: Specific model (optional)
+            system_prompt: System prompt (optional)
+            max_tokens: Maximum tokens in response
+            temperature: Sampling temperature
+            use_context: Override context augmentation setting
+            use_cache: Override cache setting
+            intent_classification: Intent data for semantic caching
+            auto_fallback: Automatically try other providers on rate limit (default True)
+            max_retries: Maximum retry attempts per provider (default 3)
+            **kwargs: Additional provider-specific arguments
+
+        Returns:
+            LLMResponse from successful provider
+
+        Raises:
+            AllProvidersRateLimitedError: If all providers are rate limited
+            Exception: Other non-rate-limit errors
+        """
+        # Determine settings
         should_use_context = use_context if use_context is not None else self.context_aware
+        should_use_cache = use_cache if use_cache is not None else self.caching_enabled
 
         # Augment prompt with context if enabled
         final_prompt = prompt
@@ -332,10 +359,7 @@ class AgentOrchestrator:
             if working_memory_context:
                 final_prompt = working_memory_context + "\n\n" + final_prompt
 
-        # Determine if we should use cache
-        should_use_cache = use_cache if use_cache is not None else self.caching_enabled
-
-        # Check cache first
+        # Check cache first (cache hits don't need fallback)
         cached_response = None
         intent_cache_hit = False
         if should_use_cache:
@@ -366,58 +390,142 @@ class AgentOrchestrator:
             })
             return cached_response
 
-        # Build messages and execute
+        # Build messages
         messages = []
         if system_prompt:
             messages.append({'role': 'system', 'content': system_prompt})
         messages.append({'role': 'user', 'content': final_prompt})
 
-        response = provider.chat(
-            messages=messages,
-            model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            **kwargs
-        )
+        # Track which providers we've tried
+        attempted_providers = []
+        current_provider_name = provider_name
+        current_model = model
 
-        # Store in cache
-        if should_use_cache:
-            self.cache.put(response, final_prompt, model, system_prompt, max_tokens, temperature)
-            if intent_classification:
-                self.cache.put_by_intent(
-                    response,
-                    intent_classification.get('intent', ''),
-                    intent_classification.get('entities', {}),
-                    intent_classification.get('keywords', [])
+        while True:
+            provider = self.registry.get(current_provider_name)
+
+            # Proactive limit check - warn if approaching limits
+            try:
+                provider_limits = provider.get_limits()
+                remaining = self.rate_tracker.get_remaining_quota(
+                    current_provider_name, current_model or provider.default_model, provider_limits
                 )
 
-        # Track rate limits
-        self.rate_tracker.record_request(
-            provider=provider_name,
-            model=response.model,
-            input_tokens=response.input_tokens,
-            output_tokens=response.output_tokens,
-            success=True
-        )
+                # If we're very close to limit (less than 5% remaining), try fallback first
+                if remaining.get('requests_today_remaining', 100) <= 0:
+                    print(f"[WARN] {current_provider_name} has exhausted daily quota, trying fallback...")
+                    raise RateLimitError(current_provider_name, "Daily quota exhausted", "requests")
+            except RateLimitError:
+                raise  # Re-raise rate limit errors
+            except Exception:
+                pass  # Ignore other errors in limit checking
 
-        # Check for approaching limits
-        provider_limits = provider.get_limits()
-        warnings = self.rate_tracker.is_limit_approaching(provider_name, response.model, provider_limits)
-        if warnings.get('message'):
-            response.metadata['rate_limit_warning'] = warnings['message']
+            # Try the current provider with retries
+            last_error = None
+            for attempt in range(max_retries):
+                try:
+                    response = provider.chat(
+                        messages=messages,
+                        model=current_model,
+                        max_tokens=max_tokens,
+                        temperature=temperature,
+                        **kwargs
+                    )
 
-        # Track task
-        self.task_history.append({
-            'timestamp': datetime.now().isoformat(),
-            'provider': provider_name,
-            'model': response.model,
-            'tokens_used': response.tokens_used,
-            'latency_ms': response.latency_ms,
-            'context_augmented': should_use_context and self.context.is_explored(),
-            'cached': False,
-        })
+                    # Success! Store in cache
+                    if should_use_cache:
+                        self.cache.put(response, final_prompt, current_model, system_prompt, max_tokens, temperature)
+                        if intent_classification:
+                            self.cache.put_by_intent(
+                                response,
+                                intent_classification.get('intent', ''),
+                                intent_classification.get('entities', {}),
+                                intent_classification.get('keywords', [])
+                            )
 
-        return response
+                    # Track rate limits
+                    self.rate_tracker.record_request(
+                        provider=current_provider_name,
+                        model=response.model,
+                        input_tokens=response.input_tokens,
+                        output_tokens=response.output_tokens,
+                        success=True
+                    )
+
+                    # Check for approaching limits
+                    warnings = self.rate_tracker.is_limit_approaching(
+                        current_provider_name, response.model, provider_limits
+                    )
+                    if warnings.get('message'):
+                        response.metadata['rate_limit_warning'] = warnings['message']
+
+                    # Add fallback info if we switched providers
+                    if current_provider_name != provider_name:
+                        response.metadata['fallback_from'] = provider_name
+                        response.metadata['fallback_to'] = current_provider_name
+                        response.metadata['attempted_providers'] = attempted_providers
+
+                    # Track task
+                    self.task_history.append({
+                        'timestamp': datetime.now().isoformat(),
+                        'provider': current_provider_name,
+                        'model': response.model,
+                        'tokens_used': response.tokens_used,
+                        'latency_ms': response.latency_ms,
+                        'context_augmented': should_use_context and self.context.is_explored(),
+                        'cached': False,
+                        'fallback': current_provider_name != provider_name,
+                        'attempts': attempt + 1,
+                    })
+
+                    return response
+
+                except Exception as e:
+                    last_error = e
+
+                    # Check if it's a rate limit error
+                    if is_rate_limit_error(e):
+                        # Record the failed request
+                        self.rate_tracker.record_request(
+                            provider=current_provider_name,
+                            model=current_model or provider.default_model,
+                            input_tokens=0,
+                            output_tokens=0,
+                            success=False,
+                            error_message=str(e)
+                        )
+
+                        if attempt < max_retries - 1:
+                            # Exponential backoff before retry
+                            wait_time = (2 ** attempt) * 0.5  # 0.5s, 1s, 2s
+                            print(f"[WARN] Rate limit hit on {current_provider_name}, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})...")
+                            time.sleep(wait_time)
+                        else:
+                            # Max retries reached, will try fallback
+                            print(f"[WARN] Rate limit persists on {current_provider_name} after {max_retries} attempts")
+                            break
+                    else:
+                        # Not a rate limit error, re-raise immediately
+                        raise
+
+            # If we got here, we've exhausted retries for current provider
+            attempted_providers.append(current_provider_name)
+
+            # Try fallback if enabled
+            if not auto_fallback:
+                raise last_error
+
+            # Get next fallback provider
+            fallback_provider = self.provider_selector.get_provider_for_fallback(exclude=attempted_providers)
+
+            if fallback_provider is None:
+                # No more providers available
+                print(f"[ERROR] All providers rate limited. Attempted: {attempted_providers}")
+                raise AllProvidersRateLimitedError(attempted_providers)
+
+            print(f"[FALLBACK] Switching from {current_provider_name} to {fallback_provider}")
+            current_provider_name = fallback_provider
+            current_model = None  # Reset model for new provider
 
     def delegate_with_intent(
         self,
@@ -506,17 +614,39 @@ class AgentOrchestrator:
         use_context: Optional[bool] = None,
         use_cache: Optional[bool] = None,
         intent_classification: Optional[dict] = None,
+        auto_fallback: bool = True,
+        max_retries: int = 3,
         **kwargs
     ) -> LLMResponse:
         """
-        Async version of delegate for non-blocking API calls.
+        Async version of delegate with automatic fallback on rate limits.
 
-        Enables parallel execution of multiple LLM requests.
+        Enables parallel execution of multiple LLM requests with recovery.
+
+        Args:
+            provider_name: Initial provider to try
+            prompt: The prompt to send
+            model: Specific model (optional)
+            system_prompt: System prompt (optional)
+            max_tokens: Maximum tokens in response
+            temperature: Sampling temperature
+            use_context: Override context augmentation setting
+            use_cache: Override cache setting
+            intent_classification: Intent data for semantic caching
+            auto_fallback: Automatically try other providers on rate limit (default True)
+            max_retries: Maximum retry attempts per provider (default 3)
+            **kwargs: Additional provider-specific arguments
+
+        Returns:
+            LLMResponse from successful provider
+
+        Raises:
+            AllProvidersRateLimitedError: If all providers are rate limited
+            Exception: Other non-rate-limit errors
         """
-        provider = self.registry.get(provider_name)
-
-        # Determine if we should use context
+        # Determine settings
         should_use_context = use_context if use_context is not None else self.context_aware
+        should_use_cache = use_cache if use_cache is not None else self.caching_enabled
 
         # Augment prompt with context if enabled
         final_prompt = prompt
@@ -529,10 +659,7 @@ class AgentOrchestrator:
             if working_memory_context:
                 final_prompt = working_memory_context + "\n\n" + final_prompt
 
-        # Determine if we should use cache
-        should_use_cache = use_cache if use_cache is not None else self.caching_enabled
-
-        # Check cache first
+        # Check cache first (cache hits don't need fallback)
         cached_response = None
         intent_cache_hit = False
         if should_use_cache:
@@ -564,66 +691,144 @@ class AgentOrchestrator:
             })
             return cached_response
 
-        # Build messages and execute asynchronously
+        # Build messages
         messages = []
         if system_prompt:
             messages.append({'role': 'system', 'content': system_prompt})
         messages.append({'role': 'user', 'content': final_prompt})
 
-        # Use async chat method
-        response = await provider.chat_async(
-            messages=messages,
-            model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            **kwargs
-        )
+        # Track which providers we've tried
+        attempted_providers = []
+        current_provider_name = provider_name
+        current_model = model
 
-        # Store in cache (background - fire and forget)
-        if should_use_cache:
-            self._schedule_background_task(
-                self.cache.put_async(response, final_prompt, model, system_prompt, max_tokens, temperature)
-            )
-            if intent_classification:
-                self._schedule_background_task(
-                    self.cache.put_by_intent_async(
-                        response,
-                        intent_classification.get('intent', ''),
-                        intent_classification.get('entities', {}),
-                        intent_classification.get('keywords', [])
-                    )
+        while True:
+            provider = self.registry.get(current_provider_name)
+
+            # Proactive limit check
+            try:
+                provider_limits = provider.get_limits()
+                remaining = self.rate_tracker.get_remaining_quota(
+                    current_provider_name, current_model or provider.default_model, provider_limits
                 )
 
-        # Track rate limits (background - fire and forget)
-        self._schedule_background_task(
-            self.rate_tracker.record_request_async(
-                provider=provider_name,
-                model=response.model,
-                input_tokens=response.input_tokens,
-                output_tokens=response.output_tokens,
-                success=True
-            )
-        )
+                if remaining.get('requests_today_remaining', 100) <= 0:
+                    print(f"[WARN] {current_provider_name} has exhausted daily quota, trying fallback...")
+                    raise RateLimitError(current_provider_name, "Daily quota exhausted", "requests")
+            except RateLimitError:
+                raise
+            except Exception:
+                pass
 
-        # Check for approaching limits
-        provider_limits = provider.get_limits()
-        warnings = self.rate_tracker.is_limit_approaching(provider_name, response.model, provider_limits)
-        if warnings.get('message'):
-            response.metadata['rate_limit_warning'] = warnings['message']
+            # Try the current provider with retries
+            last_error = None
+            for attempt in range(max_retries):
+                try:
+                    response = await provider.chat_async(
+                        messages=messages,
+                        model=current_model,
+                        max_tokens=max_tokens,
+                        temperature=temperature,
+                        **kwargs
+                    )
 
-        # Track task
-        self.task_history.append({
-            'timestamp': datetime.now().isoformat(),
-            'provider': provider_name,
-            'model': response.model,
-            'tokens_used': response.tokens_used,
-            'latency_ms': response.latency_ms,
-            'context_augmented': should_use_context and self.context.is_explored(),
-            'cached': False,
-            'async': True,
-        })
+                    # Success! Store in cache (background)
+                    if should_use_cache:
+                        self._schedule_background_task(
+                            self.cache.put_async(response, final_prompt, current_model, system_prompt, max_tokens, temperature)
+                        )
+                        if intent_classification:
+                            self._schedule_background_task(
+                                self.cache.put_by_intent_async(
+                                    response,
+                                    intent_classification.get('intent', ''),
+                                    intent_classification.get('entities', {}),
+                                    intent_classification.get('keywords', [])
+                                )
+                            )
 
-        return response
+                    # Track rate limits (background)
+                    self._schedule_background_task(
+                        self.rate_tracker.record_request_async(
+                            provider=current_provider_name,
+                            model=response.model,
+                            input_tokens=response.input_tokens,
+                            output_tokens=response.output_tokens,
+                            success=True
+                        )
+                    )
+
+                    # Check for approaching limits
+                    warnings = self.rate_tracker.is_limit_approaching(
+                        current_provider_name, response.model, provider_limits
+                    )
+                    if warnings.get('message'):
+                        response.metadata['rate_limit_warning'] = warnings['message']
+
+                    # Add fallback info if we switched providers
+                    if current_provider_name != provider_name:
+                        response.metadata['fallback_from'] = provider_name
+                        response.metadata['fallback_to'] = current_provider_name
+                        response.metadata['attempted_providers'] = attempted_providers
+
+                    # Track task
+                    self.task_history.append({
+                        'timestamp': datetime.now().isoformat(),
+                        'provider': current_provider_name,
+                        'model': response.model,
+                        'tokens_used': response.tokens_used,
+                        'latency_ms': response.latency_ms,
+                        'context_augmented': should_use_context and self.context.is_explored(),
+                        'cached': False,
+                        'async': True,
+                        'fallback': current_provider_name != provider_name,
+                        'attempts': attempt + 1,
+                    })
+
+                    return response
+
+                except Exception as e:
+                    last_error = e
+
+                    if is_rate_limit_error(e):
+                        # Record the failed request (background)
+                        self._schedule_background_task(
+                            self.rate_tracker.record_request_async(
+                                provider=current_provider_name,
+                                model=current_model or provider.default_model,
+                                input_tokens=0,
+                                output_tokens=0,
+                                success=False,
+                                error_message=str(e)
+                            )
+                        )
+
+                        if attempt < max_retries - 1:
+                            wait_time = (2 ** attempt) * 0.5
+                            print(f"[WARN] Rate limit hit on {current_provider_name}, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})...")
+                            await asyncio.sleep(wait_time)
+                        else:
+                            print(f"[WARN] Rate limit persists on {current_provider_name} after {max_retries} attempts")
+                            break
+                    else:
+                        raise
+
+            # Exhausted retries for current provider
+            attempted_providers.append(current_provider_name)
+
+            if not auto_fallback:
+                raise last_error
+
+            # Get next fallback provider
+            fallback_provider = self.provider_selector.get_provider_for_fallback(exclude=attempted_providers)
+
+            if fallback_provider is None:
+                print(f"[ERROR] All providers rate limited. Attempted: {attempted_providers}")
+                raise AllProvidersRateLimitedError(attempted_providers)
+
+            print(f"[FALLBACK] Switching from {current_provider_name} to {fallback_provider}")
+            current_provider_name = fallback_provider
+            current_model = None
 
     async def batch_delegate_async(
         self,

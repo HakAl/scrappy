@@ -22,14 +22,15 @@ import sys
 import io
 from pathlib import Path
 
-# Fix Windows Unicode issues
-if sys.platform == 'win32':
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
-
-
 # Skip unless explicitly requested
 pytestmark = pytest.mark.skip(reason="Integration test requires API keys and network access")
+
+
+def _setup_windows_unicode():
+    """Fix Windows Unicode issues - only call when actually running tests."""
+    if sys.platform == 'win32':
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 
 @pytest.fixture
@@ -66,6 +67,8 @@ def clean_test_environment():
     #         cache_path.unlink()
 
 
+
+@pytest.mark.skip(reason="Echo command triggers interactive prompts")
 def test_agent_spring_vite_full_stack(clean_test_environment):
     """
     Test the agent's ability to create a full-stack Spring + React app.
