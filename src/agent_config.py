@@ -70,8 +70,10 @@ class AgentConfig:
     default_temperature: float = 0.3
 
     # Provider preferences (first available will be used)
+    # NOTE: GitHub Models excluded from planner due to aggressive rate limiting
+    # (crashes after ~10 requests, unsuitable for multi-step agent tasks)
     planner_preferences: List[str] = field(
-        default_factory=lambda: ['github', 'gemini', 'groq']
+        default_factory=lambda: ['gemini', 'groq', 'cerebras']
     )
     executor_preferences: List[str] = field(
         default_factory=lambda: ['cerebras']

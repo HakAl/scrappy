@@ -30,43 +30,61 @@ Last updated: 2025-11-16
 
 **Best for**: Backup to Cerebras, model variety
 
-### GitHub Models (NEW - UNDER INVESTIGATION)
+### GitHub Models (NEW - ⚠️ NOT RECOMMENDED FOR AGENT USE)
 - **API Key**: GITHUB_API_KEY (Personal Access Token with `models` scope)
 - **Dashboard**: https://github.com/settings/tokens
 - **Endpoint**: `https://models.github.ai/inference`
 - **Special feature**: OpenAI-compatible API, access to GPT-4o and 40+ models
 
-**⚠️ RATE LIMITS UNCLEAR - Docs vs Reality mismatch!**
+**🚨 CRITICAL FINDING (2025-11-16 Agent Testing):**
 
-| Model | Docs Say (Copilot Free) | Headers Show | Tier |
-|-------|-------------------------|--------------|------|
-| gpt-4o | 50 RPD, 10 RPM | 10,000 req limit | High |
-| gpt-4o-mini | 150 RPD, 15 RPM | 20,000 req limit | Low |
-| deepseek-r1 | 8 RPD, 1 RPM | Unknown | Custom |
-| grok-3-mini | 30 RPD, 2 RPM | Unknown | Custom |
+Despite headers showing 10,000+ request limits, GitHub Models **crashes the agent after ~10 LLM calls** with:
+```
+Agent error: Too many requests. For more on scraping GitHub...
+```
+
+| Model | Docs Say | Headers Show | Actual Tested | Result |
+|-------|----------|--------------|---------------|--------|
+| gpt-4o | 50 RPD, 10 RPM | 10,000 req limit | **~10 requests** | CRASH |
+
+**What we observed in real agent testing:**
+1. Agent started with GitHub Models as planner
+2. Made 10 LLM calls over 37 seconds
+3. Hit rate limit with NO WARNING
+4. Agent crashed with no fallback
+5. User lost all progress
+
+**Root cause hypothesis:**
+- Per-minute burst limits (not just daily)
+- Or: Scraping detection triggered by rapid consecutive requests
+- Or: Token-per-minute limits not visible in headers
 
 **Official docs**: https://docs.github.com/en/github-models/use-github-models/prototyping-with-ai-models
-- Limits are: RPM (requests/min), RPD (requests/day), tokens/request, concurrent
 - High tier: 50 RPD, Low tier: 150 RPD for Copilot Free
 - **"Subject to change without notice"**
 
-**API headers show** (observed 2025-11-16):
+**API headers show** (misleading):
 - `x-ratelimit-limit-requests: 10000-20000`
 - `x-ratelimit-remaining-requests` decrements per request
-- No reset time header provided
-- Limits are 100-200x higher than docs suggest
+- **Does NOT reflect actual usable limit!**
 
-**Status**: Monitoring to see if limits reset daily. Will update after 24h observation.
+**Best for**:
+- One-off queries (not agent workflows)
+- High-quality single-response tasks
+- **NOT for agent planner role**
+- **NOT for rapid consecutive requests**
 
-**Best for** (conservative):
-- Access to premium models (GPT-4o, DeepSeek R1, Grok-3)
-- High-quality reasoning tasks (limited quantity)
-- **NOT recommended as orchestrator brain until limits confirmed**
-
-**Tested capabilities** (GPT-4o):
+**Tested capabilities** (GPT-4o - before rate limit):
 - Task decomposition: ~6s, 740 tokens, excellent structured output
 - Multi-step planning: ~10s, 932 tokens, smart agent allocation
-- Error recovery: ~8s, 616 tokens, comprehensive replanning
+- Windows command adaptation: Tried 3 approaches before finding working solution
+- **FAILS**: Cannot sustain agent workflow (10+ iterations)
+
+**Verdict**:
+- **DO NOT USE as agent planner** - Will crash mid-task
+- **DO NOT USE for complex multi-step tasks** - Rate limits too aggressive
+- Safe for: Simple chat, one-off queries, testing
+- Fallback: Use `--brain gemini` or `--brain cerebras` instead
 
 ### Gemini (Auto-fallback)
 - **API Key**: GEMINI_API_KEY
@@ -152,16 +170,17 @@ Last updated: 2025-11-16
 
 ### Daily Budget (with current providers)
 
-**GitHub Models GPT-4o** (UNDER INVESTIGATION):
-- Docs say: 50 requests/day
-- Headers show: 10,000 requests (reset timing unknown)
-- Use for: Premium model access, high-quality reasoning (limited quantity)
-- **NOT recommended as brain until limits confirmed**
+**GitHub Models GPT-4o** (⚠️ NOT FOR AGENT USE):
+- Headers show: 10,000 requests BUT crashes after ~10 rapid calls
+- Use for: **Simple chat/one-off queries ONLY**
+- **DO NOT USE as agent planner** - Will crash mid-task
+- **DO NOT USE for rapid consecutive requests**
 
 **Cerebras** (primary workhorse - RECOMMENDED BRAIN):
 - 14,400 requests/day with llama3.1-8b
 - 60,000 tokens/minute
 - Use for: High-volume tasks, fast inference needs
+- **RECOMMENDED for agent planner role** - handles 35+ iterations easily
 
 **Groq** (secondary):
 - 7,000 requests/day with llama-3.1-8b-instant
@@ -319,11 +338,15 @@ print(orch.get_usage_report()) # Shows session usage by provider
 
 ## When You Hit Limits
 
-1. **GitHub Models limit**: Switch brain to Gemini or Groq-70b (unlikely with 10K/day)
+1. **GitHub Models limit** (COMMON - after ~10 calls):
+   - Agent crashes with "Too many requests" error
+   - **NO automatic fallback** - agent fails completely
+   - **Fix**: Restart agent with `llm-team agent "task" --brain cerebras` or `--brain gemini`
+   - **Prevention**: Don't use GitHub Models as planner for multi-step tasks
 2. **Cerebras daily limit**: Switch to Groq (7,000 RPD remaining)
 3. **Groq daily limit**: Switch to Gemini (auto-fallback)
-4. **Gemini limit**: Auto-fallback tries other Gemini models
-5. **All limits hit**: Wait for midnight reset (very rare with 33K combined)
+4. **Gemini limit**: Auto-fallback tries other Gemini models (graceful)
+5. **All limits hit**: Wait for midnight reset (very rare with 23K combined)
 6. **Cohere monthly limit**: Stop using Cohere entirely
 
 ---

@@ -545,7 +545,9 @@ class CodeAgent:
                 text=True,
                 bufsize=1,  # Line buffered
                 universal_newlines=True,
-                env=env
+                env=env,
+                encoding='utf-8',  # Handle Unicode in command output
+                errors='replace',   # Replace undecodable chars instead of crashing
             )
 
             # Read output with timeout
