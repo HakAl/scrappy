@@ -356,15 +356,24 @@ class TestFileToolsSafety:
     @pytest.mark.unit
     def test_path_traversal_blocked(self, temp_project_dir):
         """Test that path traversal attacks are blocked."""
+        import sys
         context = ToolContext(project_root=temp_project_dir)
 
-        # Various path traversal attempts
+        # Various path traversal attempts (platform-independent)
         malicious_paths = [
             "../../../etc/passwd",
-            "..\\..\\windows\\system32",
             "src/../../outside",
-            "/absolute/path",
         ]
+
+        # Add platform-specific paths
+        if sys.platform == 'win32':
+            # Windows-style path traversal
+            malicious_paths.append("..\\..\\windows\\system32")
+            malicious_paths.append("C:\\windows\\system32")
+        else:
+            # Unix-style absolute paths
+            malicious_paths.append("/absolute/path")
+            malicious_paths.append("/etc/shadow")
 
         for path in malicious_paths:
             assert context.is_safe_path(path) is False, f"Should block: {path}"

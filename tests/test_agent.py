@@ -286,10 +286,13 @@ class TestCodeAgentInitialization:
         mock_orch.registry.list_available.return_value = ["cerebras"]
 
         with patch('src.agent.AgentOrchestratorAdapter') as mock_wrapper:
-            mock_adapter_instance = MagicMock()  # Use MagicMock to allow any attribute
-            mock_adapter_instance.list_providers.return_value = ["cerebras"]
-            # Use a lambda to ensure proper tuple return
-            mock_adapter_instance.get_preferred_provider = Mock(return_value=(None, None))
+            # Create adapter mock with explicit configuration
+            # Use configure_mock to ensure methods are set up before any access
+            mock_adapter_instance = MagicMock()
+            mock_adapter_instance.configure_mock(**{
+                'list_providers.return_value': ["cerebras"],
+                'get_preferred_provider.return_value': (None, None),
+            })
             mock_wrapper.return_value = mock_adapter_instance
 
             agent = CodeAgent(
