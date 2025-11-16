@@ -34,11 +34,39 @@ class TaskExecutor:
         self._get_brain_name = get_brain_name
         self._record_task = record_task
 
+    def _is_simple_task(self, task: str) -> bool:
+        """
+        Determine if a task is simple enough to skip planning.
+
+        A task is considered simple if:
+        - It's short (under 50 chars or under 10 words)
+        - Contains single action verbs without complex conjunctions
+        - Has no enumeration or multi-step indicators
+
+        Returns:
+            True if task is simple and planning should be skipped
+        """
+        # Length-based checks
+        word_count = len(task.split())
+        if word_count <= 8 and len(task) < 50:
+            # Check for multi-step indicators
+            multi_step_indicators = [
+                ' and ', ' then ', ' after ', ' before ', ' next ',
+                '1.', '2.', '3.', 'first', 'second', 'third',
+                'step 1', 'step 2', 'steps:', 'multiple', 'several'
+            ]
+            task_lower = task.lower()
+            if not any(indicator in task_lower for indicator in multi_step_indicators):
+                return True
+
+        return False
+
     def plan(
         self,
         task: str,
         context: Optional[str] = None,
-        max_steps: int = 10
+        max_steps: int = 10,
+        complexity_score: Optional[int] = None
     ) -> list[dict]:
         """
         Break down a complex task into steps.
@@ -47,6 +75,7 @@ class TaskExecutor:
             task: The complex task to plan
             context: Optional context about the codebase/project
             max_steps: Maximum number of steps to generate
+            complexity_score: Optional complexity score (1-10). If <= 3, planning is skipped.
 
         Returns:
             List of step dicts with 'step', 'description', 'provider_type' keys
@@ -56,6 +85,22 @@ class TaskExecutor:
             for step in steps:
                 result = orch.delegate(step['provider_type'], step['description'])
         """
+        # Skip planning for simple tasks
+        if complexity_score is not None and complexity_score <= 3:
+            return [{
+                'step': 'execute_task',
+                'description': task,
+                'provider_type': 'fast'
+            }]
+
+        # Heuristic-based simplicity check if no complexity score provided
+        if complexity_score is None and self._is_simple_task(task):
+            return [{
+                'step': 'execute_task',
+                'description': task,
+                'provider_type': 'fast'
+            }]
+
         system_prompt = f"""You are a task planning assistant. Break down the given task into concrete, actionable steps.
 
 For each step, specify:

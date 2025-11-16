@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python -m pytest:*)"
+      "Bash(python -m pytest:*)",
+      "Bash(find:*)",
+      "Bash(dir:*)",
+      "Bash(python llm_team.py:*)"
     ],
     "deny": [],
     "ask": []

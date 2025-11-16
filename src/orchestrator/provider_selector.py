@@ -161,6 +161,8 @@ class ProviderSelector:
             return (preferred_provider, provider)
 
         # Default priority: cerebras > groq > gemini
+        # NOTE: GitHub Models excluded due to aggressive rate limiting (crashes after ~10 requests)
+        # GitHub Models is NOT suitable for orchestrator brain or agent planner roles
         priority = ['cerebras', 'groq', 'gemini']
         for provider_name in priority:
             if provider_name in available:

@@ -1,6 +1,6 @@
 # Free Tier Rate Limits Reference
 
-Last updated: 2025-11-15
+Last updated: 2025-11-16
 
 ## Active Providers
 
@@ -29,6 +29,62 @@ Last updated: 2025-11-15
 | gemma2-9b-it | 30 | 14,400 | 15K | - |
 
 **Best for**: Backup to Cerebras, model variety
+
+### GitHub Models (NEW - ⚠️ NOT RECOMMENDED FOR AGENT USE)
+- **API Key**: GITHUB_API_KEY (Personal Access Token with `models` scope)
+- **Dashboard**: https://github.com/settings/tokens
+- **Endpoint**: `https://models.github.ai/inference`
+- **Special feature**: OpenAI-compatible API, access to GPT-4o and 40+ models
+
+**🚨 CRITICAL FINDING (2025-11-16 Agent Testing):**
+
+Despite headers showing 10,000+ request limits, GitHub Models **crashes the agent after ~10 LLM calls** with:
+```
+Agent error: Too many requests. For more on scraping GitHub...
+```
+
+| Model | Docs Say | Headers Show | Actual Tested | Result |
+|-------|----------|--------------|---------------|--------|
+| gpt-4o | 50 RPD, 10 RPM | 10,000 req limit | **~10 requests** | CRASH |
+
+**What we observed in real agent testing:**
+1. Agent started with GitHub Models as planner
+2. Made 10 LLM calls over 37 seconds
+3. Hit rate limit with NO WARNING
+4. Agent crashed with no fallback
+5. User lost all progress
+
+**Root cause hypothesis:**
+- Per-minute burst limits (not just daily)
+- Or: Scraping detection triggered by rapid consecutive requests
+- Or: Token-per-minute limits not visible in headers
+
+**Official docs**: https://docs.github.com/en/github-models/use-github-models/prototyping-with-ai-models
+- High tier: 50 RPD, Low tier: 150 RPD for Copilot Free
+- **"Subject to change without notice"**
+
+**API headers show** (misleading):
+- `x-ratelimit-limit-requests: 10000-20000`
+- `x-ratelimit-remaining-requests` decrements per request
+- **Does NOT reflect actual usable limit!**
+
+**Best for**:
+- One-off queries (not agent workflows)
+- High-quality single-response tasks
+- **NOT for agent planner role**
+- **NOT for rapid consecutive requests**
+
+**Tested capabilities** (GPT-4o - before rate limit):
+- Task decomposition: ~6s, 740 tokens, excellent structured output
+- Multi-step planning: ~10s, 932 tokens, smart agent allocation
+- Windows command adaptation: Tried 3 approaches before finding working solution
+- **FAILS**: Cannot sustain agent workflow (10+ iterations)
+
+**Verdict**:
+- **DO NOT USE as agent planner** - Will crash mid-task
+- **DO NOT USE for complex multi-step tasks** - Rate limits too aggressive
+- Safe for: Simple chat, one-off queries, testing
+- Fallback: Use `--brain gemini` or `--brain cerebras` instead
 
 ### Gemini (Auto-fallback)
 - **API Key**: GEMINI_API_KEY
@@ -92,16 +148,39 @@ Last updated: 2025-11-15
 - **Models**: Meta-Llama-3.1-8B-Instruct works
 - **Verdict**: Too limited. Skip.
 
+### Cloudflare Workers AI 🔄 FUTURE CONSIDERATION
+- **URL**: https://developers.cloudflare.com/workers-ai/platform/pricing/#free-allocation
+- **Free tier**: **10,000 neurons/day** (token-based budgeting)
+- **Unique model**: Neuron cost varies by model size
+
+| Model | Neurons/Request | Free Requests/Day | Notes |
+|-------|-----------------|-------------------|-------|
+| @cf/meta/llama-3-70b-instruct | 81.1 | ~123 | Complex reasoning |
+| @cf/meta/llama-3.1-8b-instruct | 15.5 | ~645 | General workhorse |
+| @cf/mistral/mistral-7b-instruct-v0.1 | 13.65 | ~732 | Fast, simple |
+| @cf/google/gemma-2b-it | 8.05 | ~1,242 | Very basic tasks |
+| @cf/codellama/codellama-7b-instruct | 17.25 | ~580 | Code generation |
+
+**Potential**: Good fallback option, unique neuron budgeting allows flexible usage
+**Not priority**: Lower RPD than current providers, adds complexity
+
 ---
 
 ## Usage Strategy
 
 ### Daily Budget (with current providers)
 
-**Cerebras** (primary workhorse):
+**GitHub Models GPT-4o** (⚠️ NOT FOR AGENT USE):
+- Headers show: 10,000 requests BUT crashes after ~10 rapid calls
+- Use for: **Simple chat/one-off queries ONLY**
+- **DO NOT USE as agent planner** - Will crash mid-task
+- **DO NOT USE for rapid consecutive requests**
+
+**Cerebras** (primary workhorse - RECOMMENDED BRAIN):
 - 14,400 requests/day with llama3.1-8b
 - 60,000 tokens/minute
 - Use for: High-volume tasks, fast inference needs
+- **RECOMMENDED for agent planner role** - handles 35+ iterations easily
 
 **Groq** (secondary):
 - 7,000 requests/day with llama-3.1-8b-instant
@@ -118,12 +197,14 @@ Last updated: 2025-11-15
 - Use for: Extra capacity when Cerebras/Groq hit limits
 - Auto-fallback handles rate limits automatically
 
-**Orchestrator Brain** (Cerebras/Groq/Gemini):
+**Orchestrator Brain** (Cerebras - RECOMMENDED):
 - Complex reasoning, planning, synthesis
 - Orchestrating the team
 - Can run autonomously without Claude Code
+- 14,400 requests/day with fast inference
 
-**Combined capacity**: ~23,000 requests/day (Cerebras + Groq + Gemini)
+**Combined capacity**: ~23,000+ requests/day (Cerebras + Groq + Gemini)
+- GitHub Models adds premium model access but unclear limits
 
 ### Example Daily Workflow
 
@@ -257,11 +338,16 @@ print(orch.get_usage_report()) # Shows session usage by provider
 
 ## When You Hit Limits
 
-1. **Cerebras daily limit**: Switch to Groq (7,000 RPD remaining)
-2. **Groq daily limit**: Switch to Gemini (auto-fallback)
-3. **Gemini limit**: Auto-fallback tries other Gemini models
-4. **All limits hit**: Wait for midnight reset (rare with 23K combined)
-5. **Cohere monthly limit**: Stop using Cohere entirely
+1. **GitHub Models limit** (COMMON - after ~10 calls):
+   - Agent crashes with "Too many requests" error
+   - **NO automatic fallback** - agent fails completely
+   - **Fix**: Restart agent with `llm-team agent "task" --brain cerebras` or `--brain gemini`
+   - **Prevention**: Don't use GitHub Models as planner for multi-step tasks
+2. **Cerebras daily limit**: Switch to Groq (7,000 RPD remaining)
+3. **Groq daily limit**: Switch to Gemini (auto-fallback)
+4. **Gemini limit**: Auto-fallback tries other Gemini models (graceful)
+5. **All limits hit**: Wait for midnight reset (very rare with 23K combined)
+6. **Cohere monthly limit**: Stop using Cohere entirely
 
 ---
 

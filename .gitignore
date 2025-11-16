@@ -55,4 +55,6 @@ Thumbs.db
 .agent_audit.json
 
 # All llm_team files (generated/temp files)
-.llm_team*
+.llm_*
+
+.env

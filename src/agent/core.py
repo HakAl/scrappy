@@ -545,7 +545,9 @@ class CodeAgent:
                 text=True,
                 bufsize=1,  # Line buffered
                 universal_newlines=True,
-                env=env
+                env=env,
+                encoding='utf-8',  # Handle Unicode in command output
+                errors='replace',   # Replace undecodable chars instead of crashing
             )
 
             # Read output with timeout
@@ -610,7 +612,7 @@ class CodeAgent:
     def _get_user_confirmation(self, action: str, params: dict) -> bool:
         """Ask user for confirmation before executing action."""
         # Auto-approve safe read-only operations
-        safe_actions = ['read_file', 'list_files', 'search_files', 'search_code', 'git_status', 'git_log', 'git_diff']
+        safe_actions = ['read_file', 'list_files', 'list_directory', 'search_files', 'search_code', 'git_status', 'git_log', 'git_diff']
         if action in safe_actions:
             print(f"Agent wants to: {action}")
             print(f"Parameters: {json.dumps(params, indent=2)}")
@@ -947,20 +949,16 @@ class CodeAgent:
                 final_result=final_result
             )
 
-        # Smart completion: Check if primary goal was achieved
-        if result.executed and result.action in ['write_file', 'run_command']:
-            if 'Successfully wrote' in result.output or 'successfully' in result.output.lower():
-                # Check if this was likely the main task
-                write_actions = [t for t in state.tools_executed if t == 'write_file']
-                if len(write_actions) >= 1 and state.iteration >= 2:
-                    # File was written successfully - likely complete
-                    print(f"\nTask goal achieved. Stopping execution.")
-                    return EvaluationResult(
-                        is_complete=True,
-                        should_continue=False,
-                        reason="Primary goal achieved (file written successfully)",
-                        final_result=result.output
-                    )
+        # Smart completion: DISABLED - rely on explicit agent completion signals
+        # The heuristic approach was too aggressive, stopping after simple write operations
+        # even when the task had multiple components. Let the LLM decide when it's done.
+        #
+        # Previous logic checked for write_file operations and declared "done" prematurely.
+        # This caused issues with complex multi-part tasks (e.g., backend + frontend).
+        #
+        # Now the agent must explicitly call action='complete' or set is_complete=True.
+        # This gives the LLM control over task completion semantics.
+        pass  # Intentionally disabled heuristic completion
 
         # Check max iterations
         if state.iteration >= state.max_iterations:
@@ -1070,7 +1068,7 @@ class CodeAgent:
 
         # Concise header
         task_preview = task[:80] + "..." if len(task) > 80 else task
-        print(f"\n🤖 Agent: {task_preview}")
+        print(f"\n[Agent] {task_preview}")
         if self.dry_run:
             print("[DRY RUN MODE]")
 
@@ -1115,6 +1113,19 @@ Important:
 - Test your changes when possible
 - Be careful with file paths (relative to project root)
 - For requirements.txt: Analyze actual import statements in *.py files, NOT pip freeze (which gives ALL installed packages)
+
+Efficiency - Skip redundant operations:
+- If you already have the information you need from previous steps, USE IT instead of re-querying
+- Skip listing directories if you can infer the structure from context or previous results
+- Don't repeat read_file on files you've already read in this conversation
+- Adapt your plan based on what you learn - not every planned step needs to be executed
+- When you have enough context to proceed, skip exploratory steps and take action directly
+
+Task Completion - Signal done when core goal is achieved:
+- Mark task complete once the PRIMARY deliverable is done (e.g., component created, bug fixed, feature added)
+- Don't continue with optional follow-up steps unless explicitly requested
+- If asked to "add X", you're done when X is added - don't add tests, docs, or extras unless asked
+- Be decisive: when the main goal is accomplished, set is_complete to true immediately
 
 CRITICAL - write_file usage:
 - NEVER call write_file with empty content - this WILL fail

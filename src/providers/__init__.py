@@ -4,6 +4,7 @@ from .groq_provider import GroqProvider
 from .cohere_provider import CohereProvider
 from .gemini_provider import GeminiProvider
 from .cerebras_provider import CerebrasProvider
+from .github_models_provider import GitHubModelsProvider
 
 __all__ = [
     'LLMProvider',
@@ -13,4 +14,5 @@ __all__ = [
     'CohereProvider',
     'GeminiProvider',
     'CerebrasProvider',
+    'GitHubModelsProvider',
 ]
