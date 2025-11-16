@@ -130,6 +130,22 @@ Last updated: 2025-11-16
 - **Models**: Meta-Llama-3.1-8B-Instruct works
 - **Verdict**: Too limited. Skip.
 
+### Cloudflare Workers AI 🔄 FUTURE CONSIDERATION
+- **URL**: https://developers.cloudflare.com/workers-ai/platform/pricing/#free-allocation
+- **Free tier**: **10,000 neurons/day** (token-based budgeting)
+- **Unique model**: Neuron cost varies by model size
+
+| Model | Neurons/Request | Free Requests/Day | Notes |
+|-------|-----------------|-------------------|-------|
+| @cf/meta/llama-3-70b-instruct | 81.1 | ~123 | Complex reasoning |
+| @cf/meta/llama-3.1-8b-instruct | 15.5 | ~645 | General workhorse |
+| @cf/mistral/mistral-7b-instruct-v0.1 | 13.65 | ~732 | Fast, simple |
+| @cf/google/gemma-2b-it | 8.05 | ~1,242 | Very basic tasks |
+| @cf/codellama/codellama-7b-instruct | 17.25 | ~580 | Code generation |
+
+**Potential**: Good fallback option, unique neuron budgeting allows flexible usage
+**Not priority**: Lower RPD than current providers, adds complexity
+
 ---
 
 ## Usage Strategy
