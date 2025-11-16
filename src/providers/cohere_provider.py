@@ -20,13 +20,11 @@ import time
 from typing import Optional
 
 from .base import LLMProvider, LLMResponse, ProviderLimits
+from ..utils.imports import safe_import
+from ..utils.errors import raise_package_not_installed, raise_env_var_not_found, raise_model_not_supported
 
-try:
-    import cohere
-    COHERE_AVAILABLE = True
-except ImportError:
-    COHERE_AVAILABLE = False
-    cohere = None
+# Safe import for optional dependency
+cohere, COHERE_AVAILABLE = safe_import('cohere')
 
 
 class CohereProvider(LLMProvider):
@@ -77,11 +75,11 @@ class CohereProvider(LLMProvider):
             api_key: Cohere API key (defaults to COHERE_API_KEY env var)
         """
         if not COHERE_AVAILABLE:
-            raise ImportError("cohere package not installed. Run: pip install cohere")
+            raise_package_not_installed('cohere')
 
         self._api_key = api_key or os.environ.get('COHERE_API_KEY')
         if not self._api_key:
-            raise ValueError("COHERE_API_KEY not found in environment")
+            raise_env_var_not_found('COHERE_API_KEY')
 
         # Use V2 client for chat
         self._client = cohere.ClientV2(api_key=self._api_key)
@@ -122,7 +120,7 @@ class CohereProvider(LLMProvider):
         model = model or self.default_model
 
         if model not in self.MODELS:
-            raise ValueError(f"Model '{model}' not supported. Available: {self.available_models}")
+            raise_model_not_supported(model, self.available_models)
 
         # Warn about usage
         self._calls_made += 1

@@ -12,20 +12,14 @@ import time
 from typing import Optional
 
 from .base import LLMProvider, LLMResponse, ProviderLimits
+from ..utils.imports import safe_import
+from ..utils.errors import raise_package_not_installed, raise_env_var_not_found, raise_model_not_supported
 
-try:
-    from openai import OpenAI
-    OPENAI_AVAILABLE = True
-except ImportError:
-    OPENAI_AVAILABLE = False
-    OpenAI = None
+# Safe imports for optional dependencies
+_openai_module, OPENAI_AVAILABLE = safe_import('openai')
+OpenAI = getattr(_openai_module, 'OpenAI', None) if _openai_module else None
 
-try:
-    import httpx
-    HTTPX_AVAILABLE = True
-except ImportError:
-    HTTPX_AVAILABLE = False
-    httpx = None
+httpx, HTTPX_AVAILABLE = safe_import('httpx')
 
 
 class CerebrasProvider(LLMProvider):
@@ -66,11 +60,11 @@ class CerebrasProvider(LLMProvider):
             api_key: Cerebras API key (defaults to CEREBRAS_API_KEY env var)
         """
         if not OPENAI_AVAILABLE:
-            raise ImportError("openai package not installed. Run: pip install openai")
+            raise_package_not_installed('openai')
 
         self._api_key = api_key or os.environ.get('CEREBRAS_API_KEY')
         if not self._api_key:
-            raise ValueError("CEREBRAS_API_KEY not found in environment")
+            raise_env_var_not_found('CEREBRAS_API_KEY')
 
         self._client = OpenAI(
             api_key=self._api_key,
@@ -106,7 +100,7 @@ class CerebrasProvider(LLMProvider):
         model = model or self.default_model
 
         if model not in self.MODELS:
-            raise ValueError(f"Model '{model}' not supported. Available: {self.available_models}")
+            raise_model_not_supported(model, self.available_models)
 
         start_time = time.time()
 
@@ -203,7 +197,7 @@ class CerebrasProvider(LLMProvider):
         model = model or self.default_model
 
         if model not in self.MODELS:
-            raise ValueError(f"Model '{model}' not supported. Available: {self.available_models}")
+            raise_model_not_supported(model, self.available_models)
 
         # Build request payload
         payload = {

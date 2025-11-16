@@ -79,6 +79,9 @@ class CLI:
         elif context_aware:
             click.secho("Context: Not explored (use /context to explore)", fg="yellow")
 
+        # Auto-detect and offer to load previous session
+        self._check_and_offer_session_restore()
+
         click.echo()
 
     def _read_multiline_input(self, prompt_text: str = "... ") -> str:
@@ -263,6 +266,47 @@ class CLI:
             self.plan_active = False
 
         return True
+
+    def _check_and_offer_session_restore(self):
+        """Check for existing session and offer to restore it automatically."""
+        session_info = self.orchestrator.session_manager.get_session_info()
+
+        if not session_info.get('exists', False):
+            return
+
+        if 'error' in session_info:
+            return
+
+        # Show session info
+        click.secho("\nPrevious session detected:", fg="yellow", bold=True)
+        click.echo(f"  Saved: {session_info.get('saved_at', 'unknown')}")
+        click.echo(f"  Files cached: {session_info.get('file_count', 0)}")
+        click.echo(f"  Searches: {session_info.get('search_count', 0)}")
+        click.echo(f"  Discoveries: {session_info.get('discovery_count', 0)}")
+        click.echo(f"  Tasks: {session_info.get('task_count', 0)}")
+
+        if session_info.get('has_conversation', False):
+            click.echo(f"  Has conversation history: Yes")
+
+        # Offer to restore
+        if click.confirm("Restore previous session?", default=True):
+            result = self.orchestrator.load_session()
+            if result['status'] == 'loaded':
+                click.secho("Session restored successfully!", fg="green")
+                click.echo(f"  Files: {result['files_restored']}")
+                click.echo(f"  Searches: {result['searches_restored']}")
+                click.echo(f"  Git ops: {result['git_ops_restored']}")
+                click.echo(f"  Discoveries: {result['discoveries_restored']}")
+
+                # Restore conversation history
+                conversation = result.get('conversation_history', [])
+                if conversation:
+                    self.conversation_history = conversation
+                    click.echo(f"  Conversation: {len(conversation)} messages")
+            else:
+                click.secho(f"Could not restore session: {result.get('message', 'unknown error')}", fg="red")
+        else:
+            click.secho("Starting fresh session.", fg="yellow")
 
     def _show_plan_summary(self):
         """Show summary of plan progress."""

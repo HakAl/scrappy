@@ -12,20 +12,14 @@ import time
 from typing import Optional
 
 from .base import LLMProvider, LLMResponse, ProviderLimits
+from ..utils.imports import safe_import
+from ..utils.errors import raise_package_not_installed, raise_env_var_not_found, raise_model_not_supported
 
-try:
-    from groq import Groq
-    GROQ_AVAILABLE = True
-except ImportError:
-    GROQ_AVAILABLE = False
-    Groq = None
+# Safe imports for optional dependencies
+_groq_module, GROQ_AVAILABLE = safe_import('groq')
+Groq = getattr(_groq_module, 'Groq', None) if _groq_module else None
 
-try:
-    import httpx
-    HTTPX_AVAILABLE = True
-except ImportError:
-    HTTPX_AVAILABLE = False
-    httpx = None
+httpx, HTTPX_AVAILABLE = safe_import('httpx')
 
 
 class GroqProvider(LLMProvider):
@@ -72,11 +66,11 @@ class GroqProvider(LLMProvider):
             api_key: Groq API key (defaults to GROQ_API_KEY env var)
         """
         if not GROQ_AVAILABLE:
-            raise ImportError("groq package not installed. Run: pip install groq")
+            raise_package_not_installed('groq')
 
         self._api_key = api_key or os.environ.get('GROQ_API_KEY')
         if not self._api_key:
-            raise ValueError("GROQ_API_KEY not found in environment")
+            raise_env_var_not_found('GROQ_API_KEY')
 
         self._client = Groq(api_key=self._api_key)
         self._last_limits = ProviderLimits()
@@ -111,7 +105,7 @@ class GroqProvider(LLMProvider):
         model = model or self.default_model
 
         if model not in self.MODELS:
-            raise ValueError(f"Model '{model}' not supported. Available: {self.available_models}")
+            raise_model_not_supported(model, self.available_models)
 
         start_time = time.time()
 
@@ -199,7 +193,7 @@ class GroqProvider(LLMProvider):
         model = model or self.default_model
 
         if model not in self.MODELS:
-            raise ValueError(f"Model '{model}' not supported. Available: {self.available_models}")
+            raise_model_not_supported(model, self.available_models)
 
         start_time = time.time()
 

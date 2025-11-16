@@ -16,22 +16,23 @@ import time
 from typing import Optional
 
 from .base import LLMProvider, LLMResponse, ProviderLimits
+from ..utils.imports import safe_import
+from ..utils.errors import (
+    raise_package_not_installed, raise_env_var_not_found,
+    raise_model_not_supported, ErrorFormatter
+)
 
-try:
-    import google.generativeai as genai
-    from google.api_core import exceptions as google_exceptions
-    GEMINI_AVAILABLE = True
-except ImportError:
-    GEMINI_AVAILABLE = False
-    genai = None
+# Safe imports for optional dependencies
+genai, GEMINI_AVAILABLE = safe_import('google.generativeai')
+if GEMINI_AVAILABLE:
+    try:
+        from google.api_core import exceptions as google_exceptions
+    except ImportError:
+        google_exceptions = None
+else:
     google_exceptions = None
 
-try:
-    import httpx
-    HTTPX_AVAILABLE = True
-except ImportError:
-    HTTPX_AVAILABLE = False
-    httpx = None
+httpx, HTTPX_AVAILABLE = safe_import('httpx')
 
 
 class GeminiProvider(LLMProvider):
@@ -85,11 +86,11 @@ class GeminiProvider(LLMProvider):
             api_key: Gemini API key (defaults to GEMINI_API_KEY env var)
         """
         if not GEMINI_AVAILABLE:
-            raise ImportError("google-generativeai package not installed. Run: pip install google-generativeai")
+            raise_package_not_installed('google-generativeai')
 
         self._api_key = api_key or os.environ.get('GEMINI_API_KEY')
         if not self._api_key:
-            raise ValueError("GEMINI_API_KEY not found in environment")
+            raise_env_var_not_found('GEMINI_API_KEY')
 
         genai.configure(api_key=self._api_key)
 
@@ -150,7 +151,7 @@ class GeminiProvider(LLMProvider):
     ) -> LLMResponse:
         """Execute chat with a single model (no fallback)."""
         if model not in self.MODELS:
-            raise ValueError(f"Model '{model}' not supported. Available: {self.available_models}")
+            raise_model_not_supported(model, self.available_models)
 
         # Convert messages to Gemini format
         gemini_messages = self._convert_messages(messages)
@@ -252,11 +253,11 @@ class GeminiProvider(LLMProvider):
         # All models failed
         if last_error:
             raise RuntimeError(
-                f"All Gemini models rate limited. Tried: {attempted_models}. "
+                f"{ErrorFormatter.all_providers_rate_limited(attempted_models)}. "
                 f"Last error: {last_error}"
             )
         else:
-            raise RuntimeError("No Gemini models available")
+            raise RuntimeError(ErrorFormatter.no_providers_available())
 
     def _convert_messages(self, messages: list[dict[str, str]]) -> list:
         """
@@ -384,7 +385,7 @@ class GeminiProvider(LLMProvider):
     ) -> LLMResponse:
         """Execute async chat with a single model (no fallback)."""
         if model not in self.MODELS:
-            raise ValueError(f"Model '{model}' not supported. Available: {self.available_models}")
+            raise_model_not_supported(model, self.available_models)
 
         start_time = time.time()
 
@@ -502,11 +503,11 @@ class GeminiProvider(LLMProvider):
         # All models failed
         if last_error:
             raise RuntimeError(
-                f"All Gemini models rate limited. Tried: {attempted_models}. "
+                f"{ErrorFormatter.all_providers_rate_limited(attempted_models)}. "
                 f"Last error: {last_error}"
             )
         else:
-            raise RuntimeError("No Gemini models available")
+            raise RuntimeError(ErrorFormatter.no_providers_available())
 
     def _convert_messages_for_rest(self, messages: list[dict[str, str]]) -> list:
         """

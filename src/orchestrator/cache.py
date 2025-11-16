@@ -12,15 +12,20 @@ import hashlib
 import re
 
 try:
-    import aiofiles
-    AIOFILES_AVAILABLE = True
+    from ..utils.imports import safe_import, setup_src_path
+    aiofiles, AIOFILES_AVAILABLE = safe_import('aiofiles')
 except ImportError:
-    AIOFILES_AVAILABLE = False
-    aiofiles = None
+    # Fallback for direct execution
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from utils.imports import safe_import
+    aiofiles, AIOFILES_AVAILABLE = safe_import('aiofiles')
 
 try:
     from ..providers import LLMResponse
 except ImportError:
+    setup_src_path() if 'setup_src_path' in dir() else None
     from providers import LLMResponse
 
 

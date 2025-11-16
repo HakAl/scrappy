@@ -9,11 +9,16 @@ from pathlib import Path
 import json
 
 try:
-    import aiofiles
-    AIOFILES_AVAILABLE = True
+    from ..utils.imports import safe_import
+    aiofiles, AIOFILES_AVAILABLE = safe_import('aiofiles')
 except ImportError:
-    AIOFILES_AVAILABLE = False
-    aiofiles = None
+    # Fallback for direct execution
+    try:
+        import aiofiles
+        AIOFILES_AVAILABLE = True
+    except ImportError:
+        AIOFILES_AVAILABLE = False
+        aiofiles = None
 
 from .memory import WorkingMemory
 
