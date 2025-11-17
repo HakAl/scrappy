@@ -8,11 +8,14 @@ Constructs dynamic prompts based on:
 - Task context
 """
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 import sys
 
 from src.context import CodebaseContext
 from src.platform_utils import is_windows
+
+if TYPE_CHECKING:
+    from src.agent_tools.tools import ToolRegistry
 
 
 class PromptBuilder:
@@ -21,7 +24,8 @@ class PromptBuilder:
     def __init__(
         self,
         context: Optional[CodebaseContext] = None,
-        project_root: Optional[Path] = None
+        project_root: Optional[Path] = None,
+        tool_registry: Optional["ToolRegistry"] = None
     ):
         """
         Initialize PromptBuilder.
@@ -29,6 +33,7 @@ class PromptBuilder:
         Args:
             context: Existing CodebaseContext instance (preferred)
             project_root: Path to project root (creates new context if context not provided)
+            tool_registry: ToolRegistry instance for dynamic tool descriptions
         """
         if context is not None:
             self.context = context
@@ -36,6 +41,9 @@ class PromptBuilder:
             self.context = CodebaseContext(str(project_root))
         else:
             self.context = CodebaseContext()
+
+        # Tool registry for dynamic tool descriptions
+        self.tool_registry = tool_registry
 
         # Platform detection (deferred to property for mockability)
         self._cached_platform = None
@@ -99,18 +107,21 @@ class PromptBuilder:
         # Project-specific guidance
         sections.append(self._build_project_section())
 
-        # Available tools (skip if custom tools section provided)
+        # Available tools (use registry if provided, skip if custom tools section)
         if 'tools' not in self._custom_sections:
             sections.append(self._build_tools_section())
 
-        # Response format
-        sections.append(self._build_format_section())
+        # Operational guidance sections (built-in, not bolted on)
+        sections.append(self._build_strategy_section())
+        sections.append(self._build_efficiency_section())
+        sections.append(self._build_completion_section())
+        sections.append(self._build_safety_section())
 
         # Task context (if provided)
         if task:
             sections.append(f"\n## Current Task\n{task}")
 
-        # Custom sections
+        # Custom sections (appended at end)
         for name, content in self._custom_sections.items():
             sections.append(f"\n## {name.title()}\n{content}")
 
@@ -205,7 +216,12 @@ Analyze the codebase structure to determine:
 
     def _build_tools_section(self) -> str:
         """Build available tools section."""
-        return """
+        if self.tool_registry is not None:
+            # Use registry for dynamic tool descriptions
+            return f"\n## Available Tools\n\n{self.tool_registry.get_full_prompt_section()}"
+        else:
+            # Fallback to static list
+            return """
 ## Available Tools
 
 - read_file: Read file contents
@@ -215,16 +231,59 @@ Analyze the codebase structure to determine:
 - run_command: Execute shell commands
 
 IMPORTANT: Prefer write_file over shell commands for creating files.
-This ensures proper encoding and cross-platform compatibility."""
+This ensures proper encoding and cross-platform compatibility.
 
-    def _build_format_section(self) -> str:
-        """Build response format section."""
-        return """
 ## Response Format
 
-Return a JSON object with:
-- "action": The tool to use (or "respond" for text response)
-- "parameters": Tool parameters as key-value pairs
-- "reasoning": Brief explanation of your choice
+Response format (JSON):
+{
+    "thought": "What I'm thinking about the task",
+    "action": "tool_name",
+    "parameters": {"param1": "value1"},
+    "is_complete": false
+}
 
-Use lowercase true/false for booleans, not Python's True/False."""
+When task is complete:
+{
+    "thought": "Task completed successfully",
+    "action": "complete",
+    "result": "Summary of what was done",
+    "is_complete": true
+}"""
+
+    def _build_strategy_section(self) -> str:
+        """Build strategy guidance section."""
+        return """
+## Strategy
+
+Prefer write_file over scaffolding tools (curl, npm create).
+Direct file creation is more reliable and predictable."""
+
+    def _build_efficiency_section(self) -> str:
+        """Build efficiency rules section."""
+        return """
+## Efficiency
+
+Skip redundant operations. Reuse information already gathered.
+Don't re-read files you've already seen in this conversation."""
+
+    def _build_completion_section(self) -> str:
+        """Build completion semantics section."""
+        return """
+## Completion
+
+Mark task complete when primary goal is done.
+Don't add optional extras unless explicitly requested."""
+
+    def _build_safety_section(self) -> str:
+        """Build safety rules section."""
+        return """
+## Safety
+
+Use JSON with lowercase true/false (not Python True/False).
+Never write empty files. Make incremental, careful changes."""
+
+    def _build_format_section(self) -> str:
+        """Build response format section (legacy, kept for backward compatibility)."""
+        # This is now integrated into _build_tools_section when registry is used
+        return ""

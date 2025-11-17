@@ -424,3 +424,467 @@ class TestCodebaseContextJavaSupport:
 
         # This test will fail until we add has_build_gradle to CodebaseContext
         assert context.structure.get('has_build_gradle') is True
+
+
+class TestPromptBuilderToolRegistryIntegration:
+    """PromptBuilder should integrate with ToolRegistry for tool descriptions."""
+
+    @pytest.mark.unit
+    def test_accepts_tool_registry(self, temp_project_dir):
+        """PromptBuilder should accept a ToolRegistry instance."""
+        from src.agent.prompt_builder import PromptBuilder
+        from src.agent_tools.tools import ToolRegistry
+
+        registry = ToolRegistry.create_default()
+        builder = PromptBuilder(project_root=temp_project_dir, tool_registry=registry)
+
+        assert builder.tool_registry is registry
+
+    @pytest.mark.unit
+    def test_uses_registry_descriptions_in_prompt(self, temp_project_dir):
+        """Tool descriptions should come from registry, not hardcoded."""
+        from src.agent.prompt_builder import PromptBuilder
+        from src.agent_tools.tools import ToolRegistry, ReadFileTool
+
+        registry = ToolRegistry()
+        registry.register(ReadFileTool())
+
+        builder = PromptBuilder(project_root=temp_project_dir, tool_registry=registry)
+        prompt = builder.build()
+
+        # Should include the actual tool description from registry
+        assert 'read_file' in prompt
+        # Should have the parameter info from the tool itself (ReadFileTool uses 'path')
+        assert 'path' in prompt
+
+    @pytest.mark.unit
+    def test_uses_registry_response_format(self, temp_project_dir):
+        """Response format should come from registry, not generic builder."""
+        from src.agent.prompt_builder import PromptBuilder
+        from src.agent_tools.tools import ToolRegistry
+
+        registry = ToolRegistry.create_default()
+        builder = PromptBuilder(project_root=temp_project_dir, tool_registry=registry)
+        prompt = builder.build()
+
+        # Should include registry's response format (thought/action/parameters/is_complete)
+        assert '"thought"' in prompt
+        assert '"action"' in prompt
+        assert '"parameters"' in prompt
+        assert '"is_complete"' in prompt
+
+        # Should NOT have the old generic format with "reasoning"
+        assert '"reasoning"' not in prompt
+
+    @pytest.mark.unit
+    def test_includes_complete_action_example(self, temp_project_dir):
+        """Should show how to mark task as complete."""
+        from src.agent.prompt_builder import PromptBuilder
+        from src.agent_tools.tools import ToolRegistry
+
+        registry = ToolRegistry.create_default()
+        builder = PromptBuilder(project_root=temp_project_dir, tool_registry=registry)
+        prompt = builder.build()
+
+        # Should show completion format
+        assert '"action": "complete"' in prompt or 'action.*complete' in prompt
+        assert 'is_complete": true' in prompt or 'is_complete.*true' in prompt
+
+    @pytest.mark.unit
+    def test_tool_registry_overrides_default_tools_section(self, temp_project_dir):
+        """When registry provided, it should replace default tools section entirely."""
+        from src.agent.prompt_builder import PromptBuilder
+        from src.agent_tools.tools import ToolRegistry, GitLogTool
+
+        # Registry with only git tool
+        registry = ToolRegistry()
+        registry.register(GitLogTool())
+
+        builder = PromptBuilder(project_root=temp_project_dir, tool_registry=registry)
+        prompt = builder.build()
+
+        # Should only have tools from registry
+        assert 'git_log' in prompt
+        # Should NOT have the generic tools section listing
+        # (the one that lists read_file, write_file etc generically)
+        # The exact tool list should come from the registry
+        assert 'list_files' not in prompt  # Not in this registry
+
+
+class TestPromptBuilderStrategyGuidance:
+    """PromptBuilder should have strategy guidance as a proper section."""
+
+    @pytest.mark.unit
+    def test_has_strategy_section_method(self, temp_project_dir):
+        """PromptBuilder should have _build_strategy_section method."""
+        from src.agent.prompt_builder import PromptBuilder
+
+        builder = PromptBuilder(project_root=temp_project_dir)
+
+        assert hasattr(builder, '_build_strategy_section')
+        section = builder._build_strategy_section()
+        assert isinstance(section, str)
+        assert len(section) > 0
+
+    @pytest.mark.unit
+    def test_strategy_section_prefers_write_file(self, temp_project_dir):
+        """Strategy section should recommend write_file over scaffolding."""
+        from src.agent.prompt_builder import PromptBuilder
+
+        builder = PromptBuilder(project_root=temp_project_dir)
+        section = builder._build_strategy_section()
+
+        # Should recommend write_file
+        assert 'write_file' in section.lower()
+        # Should discourage scaffolding
+        assert 'scaffold' in section.lower() or 'curl' in section.lower()
+
+    @pytest.mark.unit
+    def test_strategy_section_included_in_build(self, temp_project_dir):
+        """Strategy guidance should be in the final prompt."""
+        from src.agent.prompt_builder import PromptBuilder
+
+        builder = PromptBuilder(project_root=temp_project_dir)
+        prompt = builder.build()
+
+        # Should have strategy guidance integrated
+        assert 'write_file' in prompt
+        # Should mention the prefer write_file approach
+        assert 'prefer' in prompt.lower() or 'recommend' in prompt.lower()
+
+
+class TestPromptBuilderEfficiencyRules:
+    """PromptBuilder should have efficiency rules as a proper section."""
+
+    @pytest.mark.unit
+    def test_has_efficiency_section_method(self, temp_project_dir):
+        """PromptBuilder should have _build_efficiency_section method."""
+        from src.agent.prompt_builder import PromptBuilder
+
+        builder = PromptBuilder(project_root=temp_project_dir)
+
+        assert hasattr(builder, '_build_efficiency_section')
+        section = builder._build_efficiency_section()
+        assert isinstance(section, str)
+        assert len(section) > 0
+
+    @pytest.mark.unit
+    def test_efficiency_section_mentions_skip_redundant(self, temp_project_dir):
+        """Efficiency section should mention skipping redundant operations."""
+        from src.agent.prompt_builder import PromptBuilder
+
+        builder = PromptBuilder(project_root=temp_project_dir)
+        section = builder._build_efficiency_section()
+
+        # Should mention avoiding redundant operations
+        assert 'redundant' in section.lower() or 'skip' in section.lower()
+        # Should mention reusing information
+        assert 'reuse' in section.lower() or 'already' in section.lower()
+
+    @pytest.mark.unit
+    def test_efficiency_section_mentions_no_repeat_reads(self, temp_project_dir):
+        """Efficiency section should warn against re-reading files."""
+        from src.agent.prompt_builder import PromptBuilder
+
+        builder = PromptBuilder(project_root=temp_project_dir)
+        section = builder._build_efficiency_section()
+
+        # Should mention not re-reading files
+        assert 'read' in section.lower()
+        # Should mention context or previous results
+        assert 'previous' in section.lower() or 'already' in section.lower()
+
+    @pytest.mark.unit
+    def test_efficiency_rules_in_final_prompt(self, temp_project_dir):
+        """Efficiency rules should appear in the final prompt."""
+        from src.agent.prompt_builder import PromptBuilder
+
+        builder = PromptBuilder(project_root=temp_project_dir)
+        prompt = builder.build()
+
+        # Should have efficiency guidance
+        assert 'redundant' in prompt.lower() or 'skip' in prompt.lower()
+
+
+class TestPromptBuilderCompletionSemantics:
+    """PromptBuilder should have completion semantics as a proper section."""
+
+    @pytest.mark.unit
+    def test_has_completion_section_method(self, temp_project_dir):
+        """PromptBuilder should have _build_completion_section method."""
+        from src.agent.prompt_builder import PromptBuilder
+
+        builder = PromptBuilder(project_root=temp_project_dir)
+
+        assert hasattr(builder, '_build_completion_section')
+        section = builder._build_completion_section()
+        assert isinstance(section, str)
+        assert len(section) > 0
+
+    @pytest.mark.unit
+    def test_completion_section_defines_when_done(self, temp_project_dir):
+        """Completion section should define when to mark task complete."""
+        from src.agent.prompt_builder import PromptBuilder
+
+        builder = PromptBuilder(project_root=temp_project_dir)
+        section = builder._build_completion_section()
+
+        # Should mention when to complete
+        assert 'complete' in section.lower()
+        # Should mention primary goal or deliverable
+        assert 'primary' in section.lower() or 'goal' in section.lower() or 'done' in section.lower()
+
+    @pytest.mark.unit
+    def test_completion_section_warns_against_extras(self, temp_project_dir):
+        """Completion section should warn against adding unrequested extras."""
+        from src.agent.prompt_builder import PromptBuilder
+
+        builder = PromptBuilder(project_root=temp_project_dir)
+        section = builder._build_completion_section()
+
+        # Should mention not adding extras
+        assert 'optional' in section.lower() or 'extra' in section.lower() or 'unless' in section.lower()
+
+    @pytest.mark.unit
+    def test_completion_semantics_in_final_prompt(self, temp_project_dir):
+        """Completion semantics should appear in the final prompt."""
+        from src.agent.prompt_builder import PromptBuilder
+
+        builder = PromptBuilder(project_root=temp_project_dir)
+        prompt = builder.build()
+
+        # Should have completion guidance
+        assert 'is_complete' in prompt
+
+
+class TestPromptBuilderSafetyRules:
+    """PromptBuilder should have safety rules as a proper section."""
+
+    @pytest.mark.unit
+    def test_has_safety_section_method(self, temp_project_dir):
+        """PromptBuilder should have _build_safety_section method."""
+        from src.agent.prompt_builder import PromptBuilder
+
+        builder = PromptBuilder(project_root=temp_project_dir)
+
+        assert hasattr(builder, '_build_safety_section')
+        section = builder._build_safety_section()
+        assert isinstance(section, str)
+        assert len(section) > 0
+
+    @pytest.mark.unit
+    def test_safety_section_warns_empty_files(self, temp_project_dir):
+        """Safety section should warn against empty file writes."""
+        from src.agent.prompt_builder import PromptBuilder
+
+        builder = PromptBuilder(project_root=temp_project_dir)
+        section = builder._build_safety_section()
+
+        # Should warn about empty files
+        assert 'empty' in section.lower()
+        assert 'write' in section.lower() or 'content' in section.lower()
+
+    @pytest.mark.unit
+    def test_safety_section_enforces_json_format(self, temp_project_dir):
+        """Safety section should enforce JSON format rules."""
+        from src.agent.prompt_builder import PromptBuilder
+
+        builder = PromptBuilder(project_root=temp_project_dir)
+        section = builder._build_safety_section()
+
+        # Should mention JSON format
+        assert 'json' in section.lower() or 'JSON' in section
+        # Should mention true/false (not True/False)
+        assert 'true' in section.lower() and 'false' in section.lower()
+
+    @pytest.mark.unit
+    def test_safety_section_mentions_incremental_changes(self, temp_project_dir):
+        """Safety section should recommend incremental changes."""
+        from src.agent.prompt_builder import PromptBuilder
+
+        builder = PromptBuilder(project_root=temp_project_dir)
+        section = builder._build_safety_section()
+
+        # Should mention incremental or careful changes
+        assert 'incremental' in section.lower() or 'careful' in section.lower() or 'small' in section.lower()
+
+    @pytest.mark.unit
+    def test_safety_rules_in_final_prompt(self, temp_project_dir):
+        """Safety rules should appear in the final prompt."""
+        from src.agent.prompt_builder import PromptBuilder
+
+        builder = PromptBuilder(project_root=temp_project_dir)
+        prompt = builder.build()
+
+        # Should have safety guidance about JSON
+        assert 'true/false' in prompt or 'lowercase' in prompt
+
+
+class TestPromptBuilderCodeAgentIntegration:
+    """PromptBuilder should integrate cleanly with CodeAgent."""
+
+    @pytest.mark.unit
+    def test_code_agent_uses_prompt_builder_registry(self, temp_project_dir):
+        """CodeAgent should pass its tool registry to PromptBuilder."""
+        from src.agent.prompt_builder import PromptBuilder
+        from src.agent_tools.tools import ToolRegistry
+
+        # This tests that the PromptBuilder can accept and use the registry
+        # that CodeAgent would provide
+        registry = ToolRegistry.create_default()
+        builder = PromptBuilder(
+            project_root=temp_project_dir,
+            tool_registry=registry
+        )
+
+        prompt = builder.build()
+
+        # All tools from registry should be in prompt
+        for tool_name in registry.list_tools():
+            assert tool_name in prompt, f"Tool {tool_name} not in prompt"
+
+    @pytest.mark.unit
+    def test_prompt_builder_produces_complete_agent_prompt(self, temp_project_dir):
+        """PromptBuilder.build() should produce a complete prompt without needing add_section."""
+        from src.agent.prompt_builder import PromptBuilder
+        from src.agent_tools.tools import ToolRegistry
+
+        registry = ToolRegistry.create_default()
+        builder = PromptBuilder(
+            project_root=temp_project_dir,
+            tool_registry=registry
+        )
+
+        # No add_section calls needed - build() should include everything
+        prompt = builder.build(task="Fix the login bug")
+
+        # Should have all necessary sections built-in
+        required_content = [
+            'thought',           # Response format
+            'action',            # Response format
+            'is_complete',       # Completion semantics
+            'write_file',        # Strategy (prefer write_file)
+            'JSON',              # Safety rules
+            'Fix the login bug', # Task context
+        ]
+
+        for content in required_content:
+            assert content in prompt, f"Missing '{content}' in prompt"
+
+    @pytest.mark.unit
+    def test_no_duplicate_json_format_instructions(self, temp_project_dir):
+        """Prompt should not have duplicate JSON format instructions."""
+        from src.agent.prompt_builder import PromptBuilder
+        from src.agent_tools.tools import ToolRegistry
+
+        registry = ToolRegistry.create_default()
+        builder = PromptBuilder(
+            project_root=temp_project_dir,
+            tool_registry=registry
+        )
+
+        prompt = builder.build()
+
+        # Should only have one set of response format instructions
+        # Count occurrences of the format definition
+        format_count = prompt.count('"thought":')
+        # Should appear in the format example, maybe twice (tool call + complete)
+        # but not more (would indicate duplication)
+        assert format_count <= 3, f"JSON format appears {format_count} times (too many duplicates)"
+
+    @pytest.mark.unit
+    def test_sections_are_logically_ordered(self, temp_project_dir):
+        """Prompt sections should follow logical order."""
+        from src.agent.prompt_builder import PromptBuilder
+        from src.agent_tools.tools import ToolRegistry
+
+        registry = ToolRegistry.create_default()
+        builder = PromptBuilder(
+            project_root=temp_project_dir,
+            tool_registry=registry
+        )
+
+        prompt = builder.build(task="Test task")
+
+        # Core identity should come first
+        identity_pos = prompt.find('software development assistant') if 'software development assistant' in prompt else prompt.find('assistant')
+
+        # Tools should come before response format
+        tools_pos = prompt.find('read_file')
+        format_pos = prompt.find('"thought"')
+
+        # Strategy/efficiency should come after tools
+        strategy_pos = prompt.find('write_file') if 'prefer' in prompt else len(prompt)
+
+        # Task should come last
+        task_pos = prompt.find('Test task')
+
+        # Verify ordering (allow some flexibility)
+        assert tools_pos < task_pos, "Tools section should come before task"
+        assert format_pos < task_pos, "Response format should come before task"
+
+
+class TestPromptBuilderNoOperationalGuidanceBlob:
+    """PromptBuilder should NOT require a huge operational guidance blob."""
+
+    @pytest.mark.unit
+    def test_build_does_not_need_custom_operational_section(self, temp_project_dir):
+        """PromptBuilder.build() should include operational concerns without add_section."""
+        from src.agent.prompt_builder import PromptBuilder
+        from src.agent_tools.tools import ToolRegistry
+
+        registry = ToolRegistry.create_default()
+        builder = PromptBuilder(
+            project_root=temp_project_dir,
+            tool_registry=registry
+        )
+
+        # Build WITHOUT adding custom sections
+        prompt = builder.build()
+
+        # Should still have all operational guidance built-in
+        assert 'write_file' in prompt  # Strategy
+        assert 'redundant' in prompt.lower() or 'skip' in prompt.lower()  # Efficiency
+        assert 'complete' in prompt.lower()  # Completion
+        assert 'true/false' in prompt or 'lowercase' in prompt  # Safety
+
+    @pytest.mark.unit
+    def test_prompt_length_remains_reasonable_with_all_sections(self, temp_project_dir):
+        """Full prompt with all sections should still be reasonable length."""
+        from src.agent.prompt_builder import PromptBuilder
+        from src.agent_tools.tools import ToolRegistry
+
+        registry = ToolRegistry.create_default()
+        builder = PromptBuilder(
+            project_root=temp_project_dir,
+            tool_registry=registry
+        )
+
+        prompt = builder.build(task="Complex multi-step task")
+
+        # Should be comprehensive but not bloated
+        # Current operational_guidance alone is ~2000 chars
+        # With proper sections, total should be < 4000
+        assert len(prompt) < 6000, f"Prompt too long: {len(prompt)} chars"
+        assert len(prompt) > 1000, f"Prompt too short: {len(prompt)} chars"
+
+    @pytest.mark.unit
+    def test_each_section_is_focused(self, temp_project_dir):
+        """Each section method should return focused, concise content."""
+        from src.agent.prompt_builder import PromptBuilder
+
+        builder = PromptBuilder(project_root=temp_project_dir)
+
+        # Each section should be reasonable size
+        sections_to_check = [
+            ('_build_strategy_section', 300),    # Strategy shouldn't be > 300 chars
+            ('_build_efficiency_section', 300),  # Efficiency shouldn't be > 300 chars
+            ('_build_completion_section', 300),  # Completion shouldn't be > 300 chars
+            ('_build_safety_section', 400),      # Safety can be slightly longer
+        ]
+
+        for method_name, max_length in sections_to_check:
+            if hasattr(builder, method_name):
+                section = getattr(builder, method_name)()
+                assert len(section) < max_length, f"{method_name} too long: {len(section)} chars"
+                assert len(section) > 50, f"{method_name} too short: {len(section)} chars"

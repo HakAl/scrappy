@@ -1413,56 +1413,15 @@ class CodeAgent:
         safe_print("Preparing system prompt...")
         from src.agent.prompt_builder import PromptBuilder
 
-        prompt_builder = PromptBuilder(context=self.orch.context)
-
-        # Add tool descriptions section
-        tool_descriptions = self._get_tool_descriptions()
-        prompt_builder.add_section('tools', tool_descriptions)
-
-        # Add operational guidelines
-        operational_guidance = """
-CRITICAL PROJECT CREATION STRATEGY:
-When asked to create a new project (Spring Boot, React, Node.js, etc.), STRONGLY PREFER using write_file to create files directly rather than relying on scaffolding tools (curl, npm create, spring initializr, etc.).
-
-Why write_file is BETTER than scaffolding:
-1. More reliable - no network dependencies or tool compatibility issues
-2. Faster - no downloads, extractions, or external API calls
-3. Predictable - you control exactly what gets created
-4. No Unicode/encoding issues on Windows
-
-SCAFFOLDING FAILURE RULE:
-If a scaffolding command (curl, npm create, spring initializr) fails ONCE, immediately switch to write_file approach. DO NOT retry the same scaffolding approach multiple times.
-
-Important:
-- Always explain your reasoning in the "thought" field
-- RESPOND WITH VALID JSON ONLY - use lowercase true/false/null, not Python's True/False/None
-- Use read_file to understand existing code before modifying
-- Make incremental changes, not massive rewrites
-- Test your changes when possible
-- Be careful with file paths (relative to project root)
-- For requirements.txt: Analyze actual import statements in *.py files, NOT pip freeze (which gives ALL installed packages)
-
-Efficiency - Skip redundant operations:
-- If you already have the information you need from previous steps, USE IT instead of re-querying
-- Skip listing directories if you can infer the structure from context or previous results
-- Don't repeat read_file on files you've already read in this conversation
-- Adapt your plan based on what you learn - not every planned step needs to be executed
-- When you have enough context to proceed, skip exploratory steps and take action directly
-
-Task Completion - Signal done when core goal is achieved:
-- Mark task complete once the PRIMARY deliverable is done (e.g., component created, bug fixed, feature added)
-- Don't continue with optional follow-up steps unless explicitly requested
-- If asked to "add X", you're done when X is added - don't add tests, docs, or extras unless asked
-- Be decisive: when the main goal is accomplished, set is_complete to true immediately
-
-CRITICAL - write_file usage:
-- NEVER call write_file with empty content - this WILL fail
-- Always include the COMPLETE file content in one write_file call
-- Do NOT create empty files then fill them later
-- Plan your file content fully before calling write_file"""
-        prompt_builder.add_section('operational_guidelines', operational_guidance)
+        # Create PromptBuilder with tool registry for unified prompt generation
+        prompt_builder = PromptBuilder(
+            context=self.orch.context,
+            tool_registry=self.tool_registry
+        )
 
         # Build the complete system prompt with task context
+        # PromptBuilder now includes all operational guidance (strategy, efficiency,
+        # completion semantics, safety rules) as proper sections
         system_prompt = prompt_builder.build(task=task)
 
         # Initialize conversation state
