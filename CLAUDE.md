@@ -1,10 +1,12 @@
 # Claude Code Guidelines
 
+**CRITICAL: Demonstrate expected behavior of all new features in tests that fail. When tests exist, write code to satisfy the tests, then verify new code with tests.**
+
+**CRITICAL: Never use emojis or special characters in code.**
+
 ## Test Quality Policy
 
 **CRITICAL: Write tests that prove features work and provide confidence for changes.**
-
-**CRITICAL: Never use emojis or special characters in code.**
 
 ### What Makes a Good Test
 

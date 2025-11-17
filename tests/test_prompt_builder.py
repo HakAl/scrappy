@@ -888,3 +888,216 @@ class TestPromptBuilderNoOperationalGuidanceBlob:
                 section = getattr(builder, method_name)()
                 assert len(section) < max_length, f"{method_name} too long: {len(section)} chars"
                 assert len(section) > 50, f"{method_name} too short: {len(section)} chars"
+
+
+class TestPromptBuilderCodebaseStructure:
+    """PromptBuilder should include actual file locations from context."""
+
+    @pytest.mark.unit
+    def test_has_codebase_structure_section_method(self, temp_project_dir):
+        """PromptBuilder should have _build_codebase_structure_section method."""
+        from src.agent.prompt_builder import PromptBuilder
+
+        builder = PromptBuilder(project_root=temp_project_dir)
+
+        assert hasattr(builder, '_build_codebase_structure_section')
+        section = builder._build_codebase_structure_section()
+        assert isinstance(section, str)
+
+    @pytest.mark.unit
+    def test_includes_javascript_file_locations(self, temp_project_dir):
+        """Should show where JavaScript files are located."""
+        from src.agent.prompt_builder import PromptBuilder
+
+        # Create a frontend structure
+        frontend_src = temp_project_dir / 'frontend' / 'src'
+        frontend_src.mkdir(parents=True)
+        (frontend_src / 'App.js').write_text('export default function App() {}')
+        (frontend_src / 'index.js').write_text('import App from "./App"')
+        (frontend_src / 'components').mkdir()
+        (frontend_src / 'components' / 'LoginPage.js').write_text('export default function LoginPage() {}')
+
+        context = CodebaseContext(str(temp_project_dir))
+        context.explore()
+
+        builder = PromptBuilder(context=context)
+        prompt = builder.build()
+
+        # Should include the actual paths
+        assert 'frontend/src' in prompt or 'frontend\\src' in prompt
+        # Should mention JavaScript files live there
+        assert 'javascript' in prompt.lower() or 'js' in prompt.lower()
+
+    @pytest.mark.unit
+    def test_includes_python_file_locations(self, temp_project_dir):
+        """Should show where Python files are located."""
+        from src.agent.prompt_builder import PromptBuilder
+
+        # Create src structure
+        src_dir = temp_project_dir / 'src' / 'agent'
+        src_dir.mkdir(parents=True)
+        (src_dir / 'core.py').write_text('class Agent: pass')
+        (src_dir / 'tools.py').write_text('def tool(): pass')
+
+        context = CodebaseContext(str(temp_project_dir))
+        context.explore()
+
+        builder = PromptBuilder(context=context)
+        prompt = builder.build()
+
+        # Should include the actual paths
+        assert 'src/agent' in prompt or 'src\\agent' in prompt
+        # Should mention Python files
+        assert 'python' in prompt.lower() or '.py' in prompt
+
+    @pytest.mark.unit
+    def test_shows_sub_project_locations(self, temp_project_dir):
+        """Should show where different sub-projects are located."""
+        from src.agent.prompt_builder import PromptBuilder
+
+        # Create a monorepo structure
+        # Python backend
+        (temp_project_dir / 'requirements.txt').write_text('flask==2.0.0\n')
+
+        # JavaScript frontend
+        frontend = temp_project_dir / 'frontend'
+        frontend.mkdir()
+        (frontend / 'package.json').write_text('{"name": "frontend"}')
+        frontend_src = frontend / 'src'
+        frontend_src.mkdir()
+        (frontend_src / 'App.js').write_text('export default function App() {}')
+
+        context = CodebaseContext(str(temp_project_dir))
+        context.explore()
+
+        builder = PromptBuilder(context=context)
+        prompt = builder.build()
+
+        # Should indicate frontend is a sub-project
+        assert 'frontend' in prompt.lower()
+
+    @pytest.mark.unit
+    def test_agent_knows_js_not_in_root(self, temp_project_dir):
+        """Agent should know JavaScript files are NOT in root directory."""
+        from src.agent.prompt_builder import PromptBuilder
+
+        # Create JS files ONLY in frontend/src
+        frontend_src = temp_project_dir / 'frontend' / 'src'
+        frontend_src.mkdir(parents=True)
+        (frontend_src / 'App.js').write_text('export default function App() {}')
+
+        context = CodebaseContext(str(temp_project_dir))
+        context.explore()
+
+        builder = PromptBuilder(context=context)
+        section = builder._build_codebase_structure_section()
+
+        # Should indicate JS files are in frontend/src, not root
+        # This is the key issue - agent needs to know WHERE to operate
+        assert 'frontend' in section
+
+    @pytest.mark.unit
+    def test_empty_codebase_returns_minimal_section(self, temp_project_dir):
+        """Empty codebase should return minimal/empty structure section."""
+        from src.agent.prompt_builder import PromptBuilder
+
+        context = CodebaseContext(str(temp_project_dir))
+        context.explore()
+
+        builder = PromptBuilder(context=context)
+        section = builder._build_codebase_structure_section()
+
+        # Should be empty or minimal when no code files
+        assert len(section) < 200 or section == ""
+
+    @pytest.mark.unit
+    def test_structure_section_included_in_build(self, temp_project_dir):
+        """Codebase structure should be included in final prompt."""
+        from src.agent.prompt_builder import PromptBuilder
+
+        # Create some structure
+        (temp_project_dir / 'src').mkdir(exist_ok=True)
+        (temp_project_dir / 'src' / 'main.py').write_text('print("hello")')
+
+        context = CodebaseContext(str(temp_project_dir))
+        context.explore()
+
+        builder = PromptBuilder(context=context)
+        prompt = builder.build()
+
+        # Should have codebase structure in the final prompt
+        # Either as "Codebase Structure" section header or the actual paths
+        assert 'src' in prompt
+
+    @pytest.mark.unit
+    def test_structure_section_concise(self, temp_project_dir):
+        """Structure section should be concise, not dump entire file list."""
+        from src.agent.prompt_builder import PromptBuilder
+
+        # Create many files
+        src_dir = temp_project_dir / 'src'
+        src_dir.mkdir(exist_ok=True)
+        for i in range(50):
+            (src_dir / f'module_{i}.py').write_text(f'# module {i}')
+
+        context = CodebaseContext(str(temp_project_dir))
+        context.explore()
+
+        builder = PromptBuilder(context=context)
+        section = builder._build_codebase_structure_section()
+
+        # Should summarize, not list all 50 files
+        # Should be under 1000 characters
+        assert len(section) < 1000, f"Structure section too verbose: {len(section)} chars"
+        # Should show count or directory, not every file
+        assert 'src' in section or 'python' in section.lower()
+
+    @pytest.mark.unit
+    def test_shows_directory_not_file_list(self, temp_project_dir):
+        """Should show directories containing files, not individual file names."""
+        from src.agent.prompt_builder import PromptBuilder
+
+        # Create nested structure
+        frontend_src = temp_project_dir / 'frontend' / 'src' / 'components'
+        frontend_src.mkdir(parents=True)
+        (frontend_src / 'Button.js').write_text('export default Button')
+        (frontend_src / 'Input.js').write_text('export default Input')
+        (frontend_src / 'Form.js').write_text('export default Form')
+
+        context = CodebaseContext(str(temp_project_dir))
+        context.explore()
+
+        builder = PromptBuilder(context=context)
+        section = builder._build_codebase_structure_section()
+
+        # Should show directory path
+        assert 'frontend' in section
+        # Should NOT list every component file
+        assert section.count('.js') <= 3  # Maybe a couple examples, not all
+
+    @pytest.mark.unit
+    def test_prompt_length_reasonable_with_structure(self, temp_project_dir):
+        """Prompt should remain reasonable length even with structure section."""
+        from src.agent.prompt_builder import PromptBuilder
+        from src.agent_tools.tools import ToolRegistry
+
+        # Create realistic structure
+        frontend_src = temp_project_dir / 'frontend' / 'src'
+        frontend_src.mkdir(parents=True, exist_ok=True)
+        for name in ['App.js', 'index.js', 'utils.js']:
+            (frontend_src / name).write_text(f'// {name}')
+
+        src_dir = temp_project_dir / 'src'
+        src_dir.mkdir(exist_ok=True)
+        for name in ['main.py', 'utils.py', 'config.py']:
+            (src_dir / name).write_text(f'# {name}')
+
+        context = CodebaseContext(str(temp_project_dir))
+        context.explore()
+
+        registry = ToolRegistry.create_default()
+        builder = PromptBuilder(context=context, tool_registry=registry)
+        prompt = builder.build()
+
+        # Should still be reasonable
+        assert len(prompt) < 8000, f"Prompt too long with structure: {len(prompt)} chars"

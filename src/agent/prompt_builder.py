@@ -107,6 +107,11 @@ class PromptBuilder:
         # Project-specific guidance
         sections.append(self._build_project_section())
 
+        # Codebase structure (where files are located)
+        codebase_structure = self._build_codebase_structure_section()
+        if codebase_structure:
+            sections.append(codebase_structure)
+
         # Available tools (use registry if provided, skip if custom tools section)
         if 'tools' not in self._custom_sections:
             sections.append(self._build_tools_section())
@@ -282,6 +287,89 @@ Don't add optional extras unless explicitly requested."""
 
 Use JSON with lowercase true/false (not Python True/False).
 Never write empty files. Make incremental, careful changes."""
+
+    def _build_codebase_structure_section(self) -> str:
+        """Build codebase structure section showing where files are located."""
+        if not self.context.is_explored():
+            self.context.explore()
+
+        file_index = self.context.file_index
+        if not file_index:
+            return ""
+
+        # Extract unique directories for each file type
+        dir_map = {}  # language -> set of directories
+
+        for lang, files in file_index.items():
+            if not files or lang in ('config', 'docs', 'other', 'web'):
+                continue
+
+            dirs = set()
+            for file_path in files:
+                # Normalize path separators
+                normalized = file_path.replace('\\', '/')
+                if '/' in normalized:
+                    # Get the directory part
+                    dir_path = '/'.join(normalized.split('/')[:-1])
+                    dirs.add(dir_path)
+                else:
+                    # File in root
+                    dirs.add('.')
+
+            if dirs:
+                dir_map[lang] = dirs
+
+        if not dir_map:
+            return ""
+
+        # Build concise structure description
+        lines = ["\n## Codebase Structure\n"]
+
+        for lang, dirs in sorted(dir_map.items()):
+            # Get common parent directories (avoid listing every subdirectory)
+            common_dirs = self._get_common_directories(dirs)
+            if common_dirs:
+                file_count = len(file_index.get(lang, []))
+                dir_list = ', '.join(sorted(common_dirs)[:5])  # Limit to 5 directories
+                if len(common_dirs) > 5:
+                    dir_list += f' (+{len(common_dirs) - 5} more)'
+                lines.append(f"- {lang}: {dir_list} ({file_count} files)")
+
+        # Add sub-project info if available
+        if hasattr(self.context, 'get_sub_projects'):
+            sub_projects = self.context.get_sub_projects()
+            if sub_projects:
+                lines.append("\nSub-projects:")
+                for dir_name, proj_type in sorted(sub_projects.items()):
+                    lines.append(f"- {dir_name}: {proj_type}")
+
+        return '\n'.join(lines)
+
+    def _get_common_directories(self, dirs: set) -> set:
+        """Get common parent directories, collapsing deeply nested paths."""
+        if not dirs:
+            return set()
+
+        # If only root, return it
+        if dirs == {'.'}:
+            return {'.'}
+
+        # Remove root if there are other directories
+        dirs = dirs - {'.'}
+        if not dirs:
+            return {'.'}
+
+        # For each directory, get the top-level parent
+        result = set()
+        for d in dirs:
+            parts = d.split('/')
+            if len(parts) >= 2:
+                # Show first two levels: e.g., "frontend/src"
+                result.add('/'.join(parts[:2]))
+            else:
+                result.add(d)
+
+        return result
 
     def _build_format_section(self) -> str:
         """Build response format section (legacy, kept for backward compatibility)."""
