@@ -382,6 +382,58 @@ class CodeAgent:
         """
         return self._command_executor._check_retry_pattern(command, failed_commands)
 
+    def _check_duplicate_action(self, action: AgentAction, state: ConversationState) -> str:
+        """
+        Check if an action is a duplicate of recent actions (infinite loop detection).
+
+        Args:
+            action: The action about to be executed
+            state: Current conversation state with action history
+
+        Returns:
+            Warning message if duplicate detected, empty string otherwise
+        """
+        # Only check for actions that modify state (write operations)
+        if action.action not in ['write_file', 'run_command']:
+            return ""
+
+        # Build current action signature for comparison
+        current_sig = {
+            "action": action.action,
+            "parameters": action.parameters
+        }
+
+        # Check immediate duplicate (same as last action)
+        if state.last_action:
+            if (state.last_action.get("action") == action.action and
+                state.last_action.get("parameters") == action.parameters):
+                return (
+                    f"Duplicate action detected: You just executed '{action.action}' with identical parameters. "
+                    f"This action already succeeded. If you need to verify the result, use 'read_file' instead of repeating the write. "
+                    f"If you think the file needs changes, make sure the new content is actually different."
+                )
+
+        # Check for repeated pattern (3+ times in action history)
+        if hasattr(state, 'action_history') and len(state.action_history) >= 2:
+            # Count how many times this exact action appears in recent history
+            identical_count = sum(
+                1 for hist_action in state.action_history[-5:]  # Check last 5 actions
+                if (hist_action.get("action") == action.action and
+                    hist_action.get("parameters") == action.parameters)
+            )
+
+            if identical_count >= 2:
+                return (
+                    f"Repeated action pattern detected: '{action.action}' with these exact parameters "
+                    f"has been executed {identical_count} times already. This suggests an infinite loop. "
+                    f"You MUST try a different approach:\n"
+                    f"- If writing a file: Read it first to see what's actually there\n"
+                    f"- If the content has a bug: Make sure your new content actually fixes it\n"
+                    f"- If the file is correct: Mark the task as complete instead of rewriting"
+                )
+
+        return ""
+
     def _get_user_confirmation(self, action: str, params: dict) -> bool:
         """Ask user for confirmation before executing action."""
         # Auto-approve safe read-only operations
@@ -677,6 +729,20 @@ class CodeAgent:
                 executed=False
             )
 
+        # Check for duplicate actions - prevent infinite loops
+        duplicate_warning = self._check_duplicate_action(action, state)
+        if duplicate_warning:
+            safe_print(f"[Duplicate Action Warning] {duplicate_warning}")
+            # Return warning to LLM instead of executing
+            return ActionResult(
+                success=False,
+                output=duplicate_warning,
+                action=action.action,
+                parameters=action.parameters,
+                approved=True,
+                executed=False
+            )
+
         # Check for retry patterns - detect if same approach is being repeated
         if action.action == 'run_command' and state.failed_commands:
             command = action.parameters.get('command', '')
@@ -850,6 +916,14 @@ class CodeAgent:
                 'content': thought.raw_response
             })
 
+            # Track action in history for duplicate detection
+            action_record = {
+                "action": result.action,
+                "parameters": result.parameters
+            }
+            state.action_history.append(action_record)
+            state.last_action = action_record
+
             # Build user message with tool result and any retry warnings
             user_message = f"Tool result for {result.action}:\n{result.output}\n"
 
@@ -861,6 +935,11 @@ class CodeAgent:
                 user_message += "--- END WARNINGS ---\n"
                 # Clear warnings after injecting
                 state.retry_warnings.clear()
+
+            # For write_file operations, encourage verification
+            if result.action == 'write_file':
+                file_path = result.parameters.get('path', 'the file')
+                user_message += f"\nSuggestion: Consider reading {file_path} to verify the content is correct.\n"
 
             user_message += "\nContinue with the task or mark as complete if done."
 
@@ -878,6 +957,16 @@ class CodeAgent:
             state.messages.append({
                 'role': 'user',
                 'content': f"User denied the {result.action} action. Please try a different approach or explain why this action is necessary."
+            })
+        elif result.approved and not result.executed and result.action in self.tools:
+            # Tool was approved but not executed (e.g., duplicate detected)
+            state.messages.append({
+                'role': 'assistant',
+                'content': thought.raw_response
+            })
+            state.messages.append({
+                'role': 'user',
+                'content': result.output  # Contains warning message (e.g., duplicate detection)
             })
         elif action.action == 'retry_parse':
             # Parse failure - provide detailed JSON format instructions

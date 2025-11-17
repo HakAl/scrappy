@@ -62,3 +62,6 @@ class ConversationState:
     # Track failed commands to force different strategies
     failed_commands: List[Dict[str, str]] = field(default_factory=list)  # List of {command, error, approach}
     retry_warnings: List[str] = field(default_factory=list)  # Warnings to inject into next prompt
+    # Track action history for duplicate detection
+    action_history: List[Dict[str, object]] = field(default_factory=list)  # List of {action, parameters}
+    last_action: Optional[Dict[str, object]] = None  # Most recent action for quick duplicate check

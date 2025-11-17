@@ -46,8 +46,3 @@ The PromptBuilder should consume CodebaseContext rather than duplicate detection
 
 
 
-
-platform_utils -> why not context?
-we can fallback to utils if context doesn't have it, but might be better to just run explore, so context always has
-  it?
-  ensure context is always populated, if no -> /explore

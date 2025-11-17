@@ -49,5 +49,167 @@
   # 'frontend/package.json' -> frontend is nodejs
   # 'backend/requirements.txt' -> backend is python
 
+---
+
+Refactoring Plan
+
+  Core Principle
+
+  Functions accept CodebaseContext directly - no bridge service, no extra layers. Simple and pragmatic.
+
+  Changes to Make
+
+  1. platform_utils.py - Update function signatures
+
+  Before:
+  def is_windows():
+      return platform.system() == "Windows"
+
+  def translate_command_for_platform(command):
+      if is_windows():
+          # translate
+
+  After:
+  def translate_command(command: str, context: CodebaseContext) -> str:
+      """Translate command for target platform."""
+      if context.get_platform() == 'windows':
+          # translate
+      return command
+
+  def validate_command(command: str, context: CodebaseContext) -> tuple[bool, str]:
+      """Validate command is safe for platform."""
+      platform = context.get_platform()
+      # validation logic
+
+  Key changes:
+  - Functions accept context: CodebaseContext parameter
+  - Use context.get_platform() instead of calling platform.system()
+  - Use context.has_tool('bash') instead of detecting tools
+  - Keep the logic the same, just change the data source
+
+  2. command_tool.py - Pass context to platform_utils
+
+  Before:
+  from ...platform_utils import is_windows, translate_command_for_platform
+
+  result = translate_command_for_platform(command)
+
+  After:
+  from src.context import CodebaseContext
+  from ...platform_utils import translate_command
+
+  self.context = CodebaseContext(project_path)
+  result = translate_command(command, self.context)
+
+  3. task_router/classifier.py - DEFER THIS
+
+  Skip for now - you're cleaning this up anyway. Add context later when you refactor it.
+
+  4. agent_config.py - Minimal changes
+
+  These functions just return constants, probably don't need context:
+  get_dangerous_commands()  # Returns list of strings
+  get_interactive_commands()  # Returns list of strings
+
+  No changes needed unless they depend on platform.
+
+  5. Clean up direct platform checks
+
+  llm_team.py:16
+  # Before
+  if sys.platform == 'win32':
+
+  # After
+  from src.context import CodebaseContext
+  context = CodebaseContext(Path.cwd())
+  if context.get_platform() == 'windows':
+
+  agent/audit.py
+  # Before
+  if sys.platform != 'win32':
+
+  # After
+  if self.context.get_platform() != 'windows':
+
+  6. Update tests
+
+  test_platform_utils.py - Pass mock context:
+  # Before
+  result = translate_command_for_platform("ls")
+
+  # After
+  from unittest.mock import Mock
+  mock_context = Mock()
+  mock_context.get_platform.return_value = 'windows'
+  result = translate_command("ls", mock_context)
+
+  Order of Execution
+
+  1. Update platform_utils.py - Add context parameter to functions
+  2. Update command_tool.py - Pass context
+  3. Update agent_config.py - Minimal (if needed)
+  4. Clean up llm_team.py and audit.py - Replace direct checks
+  5. Update tests - Pass mock context
+  6. task_router/classifier.py - Defer until after your cleanup
+
+  What You Get
+
+  - ✅ Single source of truth for platform detection (context.py)
+  - ✅ No duplication of platform checks
+  - ✅ Cached detection (fast)
+  - ✅ Simple, pythonic approach (no extra layers)
+  - ✅ Still testable (mock context)
+  - ⏸️ task_router/classifier.py - Refactor after you clean it up and add better tests
 
 
+---
+
+  Scope
+
+    Production Code (Main Impact)
+
+  Files that import platform_utils (need updates):
+
+  1. src/agent_config.py (line 10)
+    - Imports: get_dangerous_commands, get_interactive_commands
+    - Impact: LOW - these are just data getters, might not need context
+  2. src/agent/core.py (line 49)
+    - Imports: get_platform_name, is_windows, validate_command_for_platform
+    - Impact: UNKNOWN - need to check if actually used (grep found no usage!)
+  3. src/agent_tools/tools/command_tool.py (line 24)
+    - Imports: 6+ functions (main user of platform_utils)
+    - Impact: HIGH - this is the heavy user
+  4. src/task_router/classifier.py (line 10)
+    - Imports: is_windows, validate_command_for_platform
+    - Impact: MEDIUM - uses in validation logic
+
+  Files that already have CodebaseContext:
+
+  1. src/orchestrator/core.py - ✅ already creates context
+  2. src/agent/prompt_builder.py - ✅ already uses context
+
+  Direct platform checks to clean up:
+
+  1. llm_team.py:16 - if sys.platform == 'win32':
+  2. src/agent/audit.py:76,92 - sys.platform checks
+  3. src/agent_tools/tools/command_tool.py:38 - fallback os.name == 'nt'
+
+  Test Files (Secondary Impact)
+
+  - tests/test_platform_utils.py - Will need updates to pass mock context
+  - tests/test_agent_*.py - Various platform_utils usage
+  - Direct sys.platform checks in tests are fine (tests can do direct checks)
+
+  Actual Scope Assessment
+
+  Core changes:
+  1. ✅ Update platform_utils.py function signatures (~30 functions)
+  2. ✅ Update command_tool.py to pass context
+  3. ✅ Update classifier.py to pass context
+  4. ✅ Update agent_config.py (minimal - just data getters)
+  5. ✅ Clean up unused imports in agent/core.py
+  6. ✅ Replace direct platform checks in llm_team.py and audit.py
+
+  Test updates:
+  7. ✅ Update test_platform_utils.py (main test file)
+  8. ✅ Update other tests that call platform_utils
