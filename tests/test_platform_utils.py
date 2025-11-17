@@ -98,8 +98,9 @@ class TestDangerousCommandDetection:
             has_rmdir = any("rmdir" in cmd for cmd in dangerous)
             assert has_del or has_rmdir
         else:
-            # Should have Unix-specific dangerous commands
-            has_rm_rf = any("rm -rf" in cmd for cmd in dangerous)
+            # Should have Unix-specific dangerous commands (regex patterns)
+            # Patterns use \s+ for spaces, so check for "rm" and "rf" in pattern
+            has_rm_rf = any("rm" in cmd and "rf" in cmd for cmd in dangerous)
             assert has_rm_rf
 
     @pytest.mark.unit
