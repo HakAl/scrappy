@@ -249,12 +249,12 @@ class CLI:
             # Mark complete and advance
             task = self.active_plan[self.current_task_index]
             task_name = task.get('step', str(task)) if isinstance(task, dict) else str(task)
-            click.secho(f"✓ Task {self.current_task_index + 1} complete", fg="green", bold=True)
+            click.secho(f"[DONE] Task {self.current_task_index + 1} complete", fg="green", bold=True)
             click.echo()
 
             self.current_task_index += 1
             if self.current_task_index >= len(self.active_plan):
-                click.secho("🎉 All tasks complete!", fg="green", bold=True)
+                click.secho("All tasks complete!", fg="green", bold=True)
                 self._show_plan_summary()
                 self.plan_active = False
                 return True
@@ -389,11 +389,11 @@ class CLI:
             result = self.task_router.router.route(full_task)
 
             if result.success:
-                click.secho("✓ Task executed successfully", fg="green")
+                click.secho("[OK] Task executed successfully", fg="green")
                 if result.output:
                     click.echo(result.output[:1000])  # Truncate long output
             else:
-                click.secho(f"✗ Task failed: {result.error}", fg="red")
+                click.secho(f"[FAIL] Task failed: {result.error}", fg="red")
 
             # Show execution metadata
             if "classification" in result.metadata:
@@ -527,7 +527,7 @@ class CLI:
 
                     if needs_tools:
                         # Use ResearchExecutor with tool support
-                        click.secho("🔧 Using tools for research...", fg="cyan")
+                        click.secho("Using tools for research...", fg="cyan")
                         result = self.task_router.handle_auto_route(user_input)
                         response_content = result.output if result.success else f"Error: {result.error}"
                         response = type('Response', (), {'content': response_content})()
@@ -739,7 +739,7 @@ class CLI:
                 for i, task in enumerate(self.active_plan):
                     if i < self.current_task_index:
                         # Completed
-                        status = click.style("✓", fg="green")
+                        status = click.style("[x]", fg="green")
                     elif i == self.current_task_index:
                         # Current
                         status = click.style("→", fg="yellow", bold=True)

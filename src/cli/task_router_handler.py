@@ -61,7 +61,7 @@ class CLITaskRouterHandler:
 
     def handle_classify_only(self, user_input: str):
         """Classify task without executing (preview mode)."""
-        click.secho("\n🔍 Task Classification Preview:", fg="cyan")
+        click.secho("\nTask Classification Preview:", fg="cyan")
 
         classified = self.router.classify_only(user_input)
         self._display_classification(classified)
@@ -72,7 +72,7 @@ class CLITaskRouterHandler:
         """Display router status and metrics."""
         metrics = self.router.get_metrics()
 
-        click.secho("\n📊 Task Router Metrics:", fg="cyan", bold=True)
+        click.secho("\nTask Router Metrics:", fg="cyan", bold=True)
         click.echo(f"  Total tasks: {metrics.total_tasks}")
 
         if metrics.tasks_by_type:
@@ -90,7 +90,7 @@ class CLITaskRouterHandler:
             click.secho("No routing history yet.", fg="yellow")
             return
 
-        click.secho("\n📜 Routing History:", fg="cyan", bold=True)
+        click.secho("\nRouting History:", fg="cyan", bold=True)
 
         for i, entry in enumerate(self.history[-10:], 1):  # Last 10 entries
             classification = entry["classification"]
@@ -98,15 +98,15 @@ class CLITaskRouterHandler:
 
             click.echo(f"\n{i}. {entry['input'][:50]}...")
             click.echo(f"   Type: {classification.get('type', 'unknown')}")
-            click.echo(f"   Success: {'✅' if result.success else '❌'}")
+            click.echo(f"   Success: {'Yes' if result.success else 'No'}")
             click.echo(f"   Time: {result.execution_time:.2f}s")
 
     def _display_result(self, result):
         """Display execution result."""
         if result.success:
-            click.secho("\n✅ Execution successful", fg="green", bold=True)
+            click.secho("\nExecution successful", fg="green", bold=True)
         else:
-            click.secho("\n❌ Execution failed", fg="red", bold=True)
+            click.secho("\nExecution failed", fg="red", bold=True)
             if result.error:
                 click.secho(f"Error: {result.error}", fg="red")
 

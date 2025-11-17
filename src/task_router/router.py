@@ -155,7 +155,7 @@ class TaskRouter:
 
         Modifies task type based on user response.
         """
-        print(f"\n🤔 Intent Clarification Needed")
+        print(f"\nIntent Clarification Needed")
         print(f"   Classified as: {task.task_type.value} (confidence: {task.confidence:.0%})")
         print(f"   Input: \"{task.original_input}\"")
         print(f"\nDid you want me to:")
@@ -173,16 +173,16 @@ class TaskRouter:
             task.reasoning = f"User clarified: research/explain only. Original: {task.reasoning}"
             task.confidence = 1.0  # User confirmed
             if self.verbose:
-                print(f"  ✓ Switching to RESEARCH mode")
+                print(f"  Switching to RESEARCH mode")
         elif choice == "2":
             task.task_type = TaskType.CODE_GENERATION
             task.reasoning = f"User clarified: execute/create. Original: {task.reasoning}"
             task.confidence = 1.0  # User confirmed
             if self.verbose:
-                print(f"  ✓ Switching to CODE_GENERATION mode")
+                print(f"  Switching to CODE_GENERATION mode")
         else:
             if self.verbose:
-                print(f"  ✓ Keeping {task.task_type.value} classification")
+                print(f"  Keeping {task.task_type.value} classification")
 
         return task
 
@@ -236,7 +236,7 @@ class TaskRouter:
             return task
 
         if self.verbose:
-            print(f"  🤖 Using LLM for semantic classification...")
+            print(f"  Using LLM for semantic classification...")
 
         # Build a focused prompt for classification
         system_prompt = """You are a task classifier. Analyze the user's request and classify it into ONE of these categories:
@@ -342,19 +342,19 @@ What is the user's PRIMARY intent? Respond with JSON only."""
 
                     if self.verbose:
                         if old_type != new_type.value:
-                            print(f"    ✓ LLM reclassified: {old_type} → {new_type.value} ({llm_confidence:.0%})")
+                            print(f"    LLM reclassified: {old_type} -> {new_type.value} ({llm_confidence:.0%})")
                         else:
-                            print(f"    ✓ LLM confirmed: {new_type.value} ({llm_confidence:.0%})")
+                            print(f"    LLM confirmed: {new_type.value} ({llm_confidence:.0%})")
                 else:
                     if self.verbose:
-                        print(f"    ⚠️ LLM uncertain ({llm_confidence:.0%}), keeping rule-based classification")
+                        print(f"    LLM uncertain ({llm_confidence:.0%}), keeping rule-based classification")
 
         except json.JSONDecodeError as e:
             if self.verbose:
-                print(f"    ⚠️ Failed to parse LLM response: {e}")
+                print(f"    Failed to parse LLM response: {e}")
         except Exception as e:
             if self.verbose:
-                print(f"    ⚠️ LLM classification failed: {e}")
+                print(f"    LLM classification failed: {e}")
 
         return task
 
@@ -427,7 +427,7 @@ What is the user's PRIMARY intent? Respond with JSON only."""
         # 3. LLM fallback for low-confidence classifications
         if self.use_llm_classification and classified.confidence < self.confidence_threshold:
             if self.verbose:
-                print(f"  ⚠️ Low confidence ({classified.confidence:.0%}) - trying LLM classification")
+                print(f"  Low confidence ({classified.confidence:.0%}) - trying LLM classification")
             classified = self._classify_with_llm(classified)
 
         # 4. Clarify intent if still needed (ask user when ambiguous)
@@ -534,7 +534,7 @@ What is the user's PRIMARY intent? Respond with JSON only."""
         # LLM fallback for low-confidence classifications
         if self.use_llm_classification and classified.confidence < self.confidence_threshold:
             if self.verbose:
-                print(f"  ⚠️ Low confidence ({classified.confidence:.0%}) - trying LLM classification")
+                print(f"  Low confidence ({classified.confidence:.0%}) - trying LLM classification")
             classified = self._classify_with_llm(classified)
 
         # Resolve provider (override takes precedence)
@@ -612,7 +612,7 @@ What is the user's PRIMARY intent? Respond with JSON only."""
         if task.task_type in [TaskType.RESEARCH, TaskType.CODE_GENERATION]:
             if not self.orchestrator:
                 if self.verbose:
-                    print(f"  ⚠️ No orchestrator available for {task.task_type}")
+                    print(f"  No orchestrator available for {task.task_type}")
                 # Fall back to conversation for unsupported AI tasks
                 return self.strategies.get(TaskType.CONVERSATION)
 
@@ -644,7 +644,7 @@ What is the user's PRIMARY intent? Respond with JSON only."""
             if task.extracted_command:
                 if not self.classifier.is_safe_command(task.extracted_command):
                     if self.verbose:
-                        print(f"  ⚠️ Command blocked: {task.extracted_command}")
+                        print(f"  Command blocked: {task.extracted_command}")
                     return False
 
             # Confirm with user
@@ -661,7 +661,7 @@ What is the user's PRIMARY intent? Respond with JSON only."""
 
     def _log_classification(self, task: ClassifiedTask):
         """Log classification decision."""
-        print(f"\n📋 Task Classification:")
+        print(f"\nTask Classification:")
         print(f"  Type: {task.task_type.value}")
         print(f"  Confidence: {task.confidence:.2f}")
         print(f"  Complexity: {task.complexity_score}/10")

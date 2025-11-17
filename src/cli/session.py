@@ -180,7 +180,7 @@ class CLISessionManager:
         # Check for warnings
         warnings = self.orchestrator.check_rate_limit_warnings()
         if warnings:
-            click.secho("⚠️  WARNINGS:", fg="red", bold=True)
+            click.secho("WARNINGS:", fg="red", bold=True)
             for warning in warnings:
                 click.secho(f"  • {warning}", fg="red")
             click.echo()

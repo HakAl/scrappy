@@ -354,11 +354,11 @@ class ResearchExecutor(ExecutionStrategy):
             if context:
                 if not context.is_explored():
                     # Trigger exploration
-                    print("🔍 Auto-exploring codebase for better file resolution...")
+                    print("Auto-exploring codebase for better file resolution...")
                     context.explore(force=True)  # Force fresh scan
                 elif not context.file_index:
                     # Cache exists but file_index is empty, reload
-                    print("🔍 Reloading codebase file index...")
+                    print("Reloading codebase file index...")
                     context.explore(force=True)
 
                 # If we have extracted files, try to resolve their exact paths
@@ -367,7 +367,7 @@ class ResearchExecutor(ExecutionStrategy):
 
         except Exception as e:
             # If exploration fails, continue without it
-            print(f"⚠️ Auto-explore failed: {e}")
+            print(f"Auto-explore failed: {e}")
             pass
 
     def _resolve_file_paths(self, task: ClassifiedTask, context):
