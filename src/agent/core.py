@@ -284,6 +284,15 @@ class CodeAgent:
         # Validate command for current platform
         is_valid, warning = validate_command_for_platform(command)
         if not is_valid:
+            # Try Python fallback for Unix commands on Windows
+            from ..platform_utils import get_python_fallback
+            fallback_result = get_python_fallback(command, str(self.project_root))
+            if fallback_result:
+                method = "Python fallback"
+                output = fallback_result['output']
+                if fallback_result['returncode'] != 0:
+                    return f"[{method}] {output}"
+                return f"[{method}] {output}" if output else f"[{method}] Command completed successfully"
             return f"Error: {warning}. Use platform-appropriate tools instead (read_file, search_code, list_files, etc.)"
 
         if self.dry_run:

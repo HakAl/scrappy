@@ -6,7 +6,10 @@ Provides platform-aware command validation and translation.
 
 import platform
 import shutil
-from typing import Dict, List, Optional, Tuple
+import re
+import subprocess
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Any
 
 
 def is_windows() -> bool:
@@ -322,3 +325,611 @@ def normalize_path_for_shell(path: str) -> str:
     else:
         # Unix uses forward slashes
         return path.replace('\\', '/')
+
+
+def get_python_fallback(command: str, cwd: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """
+    Execute Unix commands using Python implementations when native commands fail.
+
+    Args:
+        command: Unix command to execute
+        cwd: Working directory
+
+    Returns:
+        Dict with 'output', 'returncode', 'used_fallback' if fallback was used, None otherwise
+    """
+    if not is_windows():
+        return None
+
+    cmd_parts = command.strip().split()
+    if not cmd_parts:
+        return None
+
+    base_cmd = cmd_parts[0].lower()
+    args = cmd_parts[1:] if len(cmd_parts) > 1 else []
+    working_dir = Path(cwd) if cwd else Path.cwd()
+
+    try:
+        # ls - list directory
+        if base_cmd == 'ls':
+            return _python_ls(args, working_dir)
+
+        # pwd - print working directory
+        elif base_cmd == 'pwd':
+            return {
+                'output': str(working_dir.resolve()),
+                'returncode': 0,
+                'used_fallback': True
+            }
+
+        # cat - concatenate files
+        elif base_cmd == 'cat':
+            return _python_cat(args, working_dir)
+
+        # head - show first lines
+        elif base_cmd == 'head':
+            return _python_head(args, working_dir)
+
+        # tail - show last lines
+        elif base_cmd == 'tail':
+            return _python_tail(args, working_dir)
+
+        # grep - search pattern in files
+        elif base_cmd == 'grep':
+            return _python_grep(args, working_dir)
+
+        # find - search for files
+        elif base_cmd == 'find':
+            return _python_find(args, working_dir)
+
+        # wc - word count
+        elif base_cmd == 'wc':
+            return _python_wc(args, working_dir)
+
+        # which - find command location
+        elif base_cmd == 'which':
+            return _python_which(args)
+
+        # touch - create empty file
+        elif base_cmd == 'touch':
+            return _python_touch(args, working_dir)
+
+        # mkdir with -p flag
+        elif base_cmd == 'mkdir' and '-p' in args:
+            return _python_mkdir_p(args, working_dir)
+
+        # rm - remove files
+        elif base_cmd == 'rm':
+            return _python_rm(args, working_dir)
+
+        # cp - copy files
+        elif base_cmd == 'cp':
+            return _python_cp(args, working_dir)
+
+        # mv - move files
+        elif base_cmd == 'mv':
+            return _python_mv(args, working_dir)
+
+    except Exception as e:
+        return {
+            'output': f'Python fallback error: {str(e)}',
+            'returncode': 1,
+            'used_fallback': True
+        }
+
+    return None
+
+
+def _python_ls(args: List[str], cwd: Path) -> Dict[str, Any]:
+    """Python implementation of ls command."""
+    show_all = '-a' in args or '-la' in args or '-al' in args
+    show_long = '-l' in args or '-la' in args or '-al' in args
+
+    # Get target directory
+    target = cwd
+    for arg in args:
+        if not arg.startswith('-'):
+            target = cwd / arg
+            break
+
+    if not target.exists():
+        return {'output': f'ls: {target}: No such file or directory', 'returncode': 1, 'used_fallback': True}
+
+    if target.is_file():
+        return {'output': str(target.name), 'returncode': 0, 'used_fallback': True}
+
+    items = []
+    for item in sorted(target.iterdir(), key=lambda x: x.name.lower()):
+        if not show_all and item.name.startswith('.'):
+            continue
+
+        if show_long:
+            stat = item.stat()
+            size = stat.st_size
+            mtime = stat.st_mtime
+            from datetime import datetime
+            date_str = datetime.fromtimestamp(mtime).strftime('%b %d %H:%M')
+            type_char = 'd' if item.is_dir() else '-'
+            items.append(f'{type_char}rw-r--r--  1 user  user  {size:>8} {date_str} {item.name}')
+        else:
+            items.append(item.name)
+
+    output = '\n'.join(items) if show_long else '  '.join(items)
+    return {'output': output, 'returncode': 0, 'used_fallback': True}
+
+
+def _python_cat(args: List[str], cwd: Path) -> Dict[str, Any]:
+    """Python implementation of cat command."""
+    if not args:
+        return {'output': 'cat: missing file operand', 'returncode': 1, 'used_fallback': True}
+
+    output_parts = []
+    for arg in args:
+        if arg.startswith('-'):
+            continue
+        filepath = cwd / arg
+        if not filepath.exists():
+            return {'output': f'cat: {arg}: No such file or directory', 'returncode': 1, 'used_fallback': True}
+        try:
+            output_parts.append(filepath.read_text(encoding='utf-8', errors='replace'))
+        except Exception as e:
+            return {'output': f'cat: {arg}: {str(e)}', 'returncode': 1, 'used_fallback': True}
+
+    return {'output': ''.join(output_parts), 'returncode': 0, 'used_fallback': True}
+
+
+def _python_head(args: List[str], cwd: Path) -> Dict[str, Any]:
+    """Python implementation of head command."""
+    num_lines = 10
+    files = []
+
+    i = 0
+    while i < len(args):
+        if args[i] == '-n' and i + 1 < len(args):
+            num_lines = int(args[i + 1])
+            i += 2
+        elif args[i].startswith('-') and args[i][1:].isdigit():
+            num_lines = int(args[i][1:])
+            i += 1
+        elif not args[i].startswith('-'):
+            files.append(args[i])
+            i += 1
+        else:
+            i += 1
+
+    if not files:
+        return {'output': 'head: missing file operand', 'returncode': 1, 'used_fallback': True}
+
+    output_parts = []
+    for filepath_str in files:
+        filepath = cwd / filepath_str
+        if not filepath.exists():
+            return {'output': f'head: {filepath_str}: No such file or directory', 'returncode': 1, 'used_fallback': True}
+
+        lines = filepath.read_text(encoding='utf-8', errors='replace').splitlines()[:num_lines]
+        if len(files) > 1:
+            output_parts.append(f'==> {filepath_str} <==')
+        output_parts.extend(lines)
+
+    return {'output': '\n'.join(output_parts), 'returncode': 0, 'used_fallback': True}
+
+
+def _python_tail(args: List[str], cwd: Path) -> Dict[str, Any]:
+    """Python implementation of tail command."""
+    num_lines = 10
+    files = []
+
+    i = 0
+    while i < len(args):
+        if args[i] == '-n' and i + 1 < len(args):
+            num_lines = int(args[i + 1])
+            i += 2
+        elif args[i].startswith('-') and args[i][1:].isdigit():
+            num_lines = int(args[i][1:])
+            i += 1
+        elif not args[i].startswith('-'):
+            files.append(args[i])
+            i += 1
+        else:
+            i += 1
+
+    if not files:
+        return {'output': 'tail: missing file operand', 'returncode': 1, 'used_fallback': True}
+
+    output_parts = []
+    for filepath_str in files:
+        filepath = cwd / filepath_str
+        if not filepath.exists():
+            return {'output': f'tail: {filepath_str}: No such file or directory', 'returncode': 1, 'used_fallback': True}
+
+        lines = filepath.read_text(encoding='utf-8', errors='replace').splitlines()[-num_lines:]
+        if len(files) > 1:
+            output_parts.append(f'==> {filepath_str} <==')
+        output_parts.extend(lines)
+
+    return {'output': '\n'.join(output_parts), 'returncode': 0, 'used_fallback': True}
+
+
+def _python_grep(args: List[str], cwd: Path) -> Dict[str, Any]:
+    """Python implementation of grep command."""
+    case_insensitive = '-i' in args
+    show_line_numbers = '-n' in args
+    recursive = '-r' in args or '-R' in args
+    invert_match = '-v' in args
+
+    # Remove flags from args
+    pattern = None
+    files = []
+    for arg in args:
+        if arg.startswith('-'):
+            continue
+        if pattern is None:
+            pattern = arg
+        else:
+            files.append(arg)
+
+    if pattern is None:
+        return {'output': 'grep: missing pattern', 'returncode': 1, 'used_fallback': True}
+
+    if not files:
+        files = ['.']
+
+    # Compile regex
+    flags = re.IGNORECASE if case_insensitive else 0
+    try:
+        regex = re.compile(pattern, flags)
+    except re.error as e:
+        return {'output': f'grep: invalid pattern: {str(e)}', 'returncode': 1, 'used_fallback': True}
+
+    matches = []
+
+    def search_file(filepath: Path, prefix: str = ''):
+        nonlocal matches
+        try:
+            lines = filepath.read_text(encoding='utf-8', errors='replace').splitlines()
+            for i, line in enumerate(lines, 1):
+                match = regex.search(line)
+                if (match and not invert_match) or (not match and invert_match):
+                    if show_line_numbers:
+                        matches.append(f'{prefix}{filepath}:{i}:{line}')
+                    elif prefix or len(files) > 1:
+                        matches.append(f'{prefix}{filepath}:{line}')
+                    else:
+                        matches.append(line)
+        except Exception:
+            pass
+
+    for file_arg in files:
+        path = cwd / file_arg
+        if path.is_file():
+            search_file(path)
+        elif path.is_dir() and recursive:
+            for item in path.rglob('*'):
+                if item.is_file():
+                    search_file(item, '')
+        elif path.is_dir():
+            return {'output': f'grep: {file_arg}: Is a directory', 'returncode': 1, 'used_fallback': True}
+        else:
+            return {'output': f'grep: {file_arg}: No such file or directory', 'returncode': 1, 'used_fallback': True}
+
+    returncode = 0 if matches else 1
+    return {'output': '\n'.join(matches), 'returncode': returncode, 'used_fallback': True}
+
+
+def _python_find(args: List[str], cwd: Path) -> Dict[str, Any]:
+    """Python implementation of find command."""
+    search_path = cwd
+    name_pattern = None
+    type_filter = None
+
+    i = 0
+    while i < len(args):
+        if args[i] == '-name' and i + 1 < len(args):
+            name_pattern = args[i + 1]
+            i += 2
+        elif args[i] == '-type' and i + 1 < len(args):
+            type_filter = args[i + 1]
+            i += 2
+        elif not args[i].startswith('-'):
+            search_path = cwd / args[i]
+            i += 1
+        else:
+            i += 1
+
+    if not search_path.exists():
+        return {'output': f'find: {search_path}: No such file or directory', 'returncode': 1, 'used_fallback': True}
+
+    results = []
+
+    def matches_pattern(name: str) -> bool:
+        if name_pattern is None:
+            return True
+        # Convert glob pattern to regex
+        regex_pattern = name_pattern.replace('.', r'\.').replace('*', '.*').replace('?', '.')
+        return re.match(f'^{regex_pattern}$', name) is not None
+
+    for item in search_path.rglob('*'):
+        if type_filter == 'f' and not item.is_file():
+            continue
+        if type_filter == 'd' and not item.is_dir():
+            continue
+        if matches_pattern(item.name):
+            results.append(str(item.relative_to(cwd)))
+
+    return {'output': '\n'.join(sorted(results)), 'returncode': 0, 'used_fallback': True}
+
+
+def _python_wc(args: List[str], cwd: Path) -> Dict[str, Any]:
+    """Python implementation of wc command."""
+    count_lines = '-l' in args
+    count_words = '-w' in args
+    count_chars = '-c' in args or '-m' in args
+
+    # Default: count all
+    if not any([count_lines, count_words, count_chars]):
+        count_lines = count_words = count_chars = True
+
+    files = [arg for arg in args if not arg.startswith('-')]
+
+    if not files:
+        return {'output': 'wc: missing file operand', 'returncode': 1, 'used_fallback': True}
+
+    results = []
+    total_lines = total_words = total_chars = 0
+
+    for file_arg in files:
+        filepath = cwd / file_arg
+        if not filepath.exists():
+            return {'output': f'wc: {file_arg}: No such file or directory', 'returncode': 1, 'used_fallback': True}
+
+        content = filepath.read_text(encoding='utf-8', errors='replace')
+        lines = len(content.splitlines())
+        words = len(content.split())
+        chars = len(content)
+
+        parts = []
+        if count_lines:
+            parts.append(f'{lines:>8}')
+            total_lines += lines
+        if count_words:
+            parts.append(f'{words:>8}')
+            total_words += words
+        if count_chars:
+            parts.append(f'{chars:>8}')
+            total_chars += chars
+        parts.append(file_arg)
+        results.append(' '.join(parts))
+
+    if len(files) > 1:
+        parts = []
+        if count_lines:
+            parts.append(f'{total_lines:>8}')
+        if count_words:
+            parts.append(f'{total_words:>8}')
+        if count_chars:
+            parts.append(f'{total_chars:>8}')
+        parts.append('total')
+        results.append(' '.join(parts))
+
+    return {'output': '\n'.join(results), 'returncode': 0, 'used_fallback': True}
+
+
+def _python_which(args: List[str]) -> Dict[str, Any]:
+    """Python implementation of which command."""
+    if not args:
+        return {'output': 'which: missing argument', 'returncode': 1, 'used_fallback': True}
+
+    results = []
+    for cmd in args:
+        if cmd.startswith('-'):
+            continue
+        path = shutil.which(cmd)
+        if path:
+            results.append(path)
+        else:
+            results.append(f'{cmd} not found')
+
+    return {'output': '\n'.join(results), 'returncode': 0 if results else 1, 'used_fallback': True}
+
+
+def _python_touch(args: List[str], cwd: Path) -> Dict[str, Any]:
+    """Python implementation of touch command."""
+    files = [arg for arg in args if not arg.startswith('-')]
+
+    if not files:
+        return {'output': 'touch: missing file operand', 'returncode': 1, 'used_fallback': True}
+
+    for file_arg in files:
+        filepath = cwd / file_arg
+        filepath.touch()
+
+    return {'output': '', 'returncode': 0, 'used_fallback': True}
+
+
+def _python_mkdir_p(args: List[str], cwd: Path) -> Dict[str, Any]:
+    """Python implementation of mkdir -p command."""
+    dirs = [arg for arg in args if not arg.startswith('-')]
+
+    if not dirs:
+        return {'output': 'mkdir: missing operand', 'returncode': 1, 'used_fallback': True}
+
+    for dir_arg in dirs:
+        dirpath = cwd / dir_arg
+        dirpath.mkdir(parents=True, exist_ok=True)
+
+    return {'output': '', 'returncode': 0, 'used_fallback': True}
+
+
+def _python_rm(args: List[str], cwd: Path) -> Dict[str, Any]:
+    """Python implementation of rm command."""
+    recursive = '-r' in args or '-rf' in args or '-R' in args
+    force = '-f' in args or '-rf' in args
+
+    files = [arg for arg in args if not arg.startswith('-')]
+
+    if not files:
+        return {'output': 'rm: missing operand', 'returncode': 1, 'used_fallback': True}
+
+    for file_arg in files:
+        filepath = cwd / file_arg
+        if not filepath.exists():
+            if not force:
+                return {'output': f'rm: {file_arg}: No such file or directory', 'returncode': 1, 'used_fallback': True}
+            continue
+
+        if filepath.is_dir():
+            if not recursive:
+                return {'output': f'rm: {file_arg}: is a directory', 'returncode': 1, 'used_fallback': True}
+            import shutil as sh
+            sh.rmtree(filepath)
+        else:
+            filepath.unlink()
+
+    return {'output': '', 'returncode': 0, 'used_fallback': True}
+
+
+def _python_cp(args: List[str], cwd: Path) -> Dict[str, Any]:
+    """Python implementation of cp command."""
+    recursive = '-r' in args or '-R' in args
+
+    files = [arg for arg in args if not arg.startswith('-')]
+
+    if len(files) < 2:
+        return {'output': 'cp: missing destination operand', 'returncode': 1, 'used_fallback': True}
+
+    *sources, dest = files
+    dest_path = cwd / dest
+
+    import shutil as sh
+
+    for src_arg in sources:
+        src_path = cwd / src_arg
+        if not src_path.exists():
+            return {'output': f'cp: {src_arg}: No such file or directory', 'returncode': 1, 'used_fallback': True}
+
+        if src_path.is_dir():
+            if not recursive:
+                return {'output': f'cp: -r not specified; omitting directory {src_arg}', 'returncode': 1, 'used_fallback': True}
+            if dest_path.exists() and dest_path.is_dir():
+                sh.copytree(src_path, dest_path / src_path.name)
+            else:
+                sh.copytree(src_path, dest_path)
+        else:
+            if dest_path.is_dir():
+                sh.copy2(src_path, dest_path / src_path.name)
+            else:
+                sh.copy2(src_path, dest_path)
+
+    return {'output': '', 'returncode': 0, 'used_fallback': True}
+
+
+def _python_mv(args: List[str], cwd: Path) -> Dict[str, Any]:
+    """Python implementation of mv command."""
+    files = [arg for arg in args if not arg.startswith('-')]
+
+    if len(files) < 2:
+        return {'output': 'mv: missing destination operand', 'returncode': 1, 'used_fallback': True}
+
+    *sources, dest = files
+    dest_path = cwd / dest
+
+    import shutil as sh
+
+    for src_arg in sources:
+        src_path = cwd / src_arg
+        if not src_path.exists():
+            return {'output': f'mv: {src_arg}: No such file or directory', 'returncode': 1, 'used_fallback': True}
+
+        if dest_path.is_dir():
+            sh.move(str(src_path), str(dest_path / src_path.name))
+        else:
+            sh.move(str(src_path), str(dest_path))
+
+    return {'output': '', 'returncode': 0, 'used_fallback': True}
+
+
+def smart_execute_command(
+    command: str,
+    cwd: Optional[str] = None,
+    timeout: int = 30
+) -> Dict[str, Any]:
+    """
+    Execute a command with automatic platform translation and Python fallback.
+
+    This function attempts to:
+    1. Translate Unix commands to Windows equivalents if on Windows
+    2. Fall back to Python implementations if translation fails
+    3. Execute the command natively as a last resort
+
+    Args:
+        command: Command to execute
+        cwd: Working directory
+        timeout: Timeout in seconds
+
+    Returns:
+        Dict with 'output', 'returncode', 'method' (native/translated/python_fallback)
+    """
+    working_dir = cwd or str(Path.cwd())
+
+    # First, try Python fallback for common Unix commands on Windows
+    if is_windows():
+        fallback_result = get_python_fallback(command, working_dir)
+        if fallback_result:
+            return {
+                'output': fallback_result['output'],
+                'returncode': fallback_result['returncode'],
+                'method': 'python_fallback'
+            }
+
+        # Try command translation
+        translated_cmd, was_translated = translate_command_for_platform(command)
+        if was_translated:
+            try:
+                result = subprocess.run(
+                    translated_cmd,
+                    shell=True,
+                    cwd=working_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                    encoding='utf-8',
+                    errors='replace'
+                )
+                return {
+                    'output': result.stdout + result.stderr,
+                    'returncode': result.returncode,
+                    'method': 'translated'
+                }
+            except Exception as e:
+                # If translation failed, try Python fallback again
+                pass
+
+    # Execute natively
+    try:
+        result = subprocess.run(
+            command,
+            shell=True,
+            cwd=working_dir,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            encoding='utf-8',
+            errors='replace'
+        )
+        return {
+            'output': result.stdout + result.stderr,
+            'returncode': result.returncode,
+            'method': 'native'
+        }
+    except subprocess.TimeoutExpired:
+        return {
+            'output': f'Command timed out after {timeout} seconds',
+            'returncode': 124,
+            'method': 'timeout'
+        }
+    except Exception as e:
+        return {
+            'output': f'Execution error: {str(e)}',
+            'returncode': 1,
+            'method': 'error'
+        }

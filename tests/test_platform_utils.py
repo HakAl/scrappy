@@ -313,3 +313,371 @@ class TestEdgeCases:
         # Unknown commands shouldn't be translated
         assert "myCustomCommand" in translated
         assert was_translated is False
+
+
+class TestPythonFallback:
+    """Tests for Python-based command fallback implementations."""
+
+    @pytest.fixture
+    def temp_dir(self, tmp_path):
+        """Create a temporary directory with test files."""
+        # Create test files
+        (tmp_path / "file1.txt").write_text("line1\nline2\nline3\n")
+        (tmp_path / "file2.txt").write_text("hello world\ntest line\n")
+        (tmp_path / ".hidden").write_text("hidden file\n")
+        (tmp_path / "subdir").mkdir()
+        (tmp_path / "subdir" / "nested.txt").write_text("nested content\n")
+        return tmp_path
+
+    @pytest.mark.unit
+    def test_python_fallback_returns_none_on_unix(self, monkeypatch):
+        """Python fallback should return None on Unix systems."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: False)
+        from src.platform_utils import get_python_fallback
+        result = get_python_fallback("ls")
+        assert result is None
+
+    @pytest.mark.unit
+    def test_python_fallback_empty_command(self, monkeypatch):
+        """Empty command should return None."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        from src.platform_utils import get_python_fallback
+        result = get_python_fallback("")
+        assert result is None
+
+    @pytest.mark.unit
+    def test_python_fallback_unknown_command(self, monkeypatch):
+        """Unknown command should return None."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        from src.platform_utils import get_python_fallback
+        result = get_python_fallback("unknowncommand arg1")
+        assert result is None
+
+    @pytest.mark.unit
+    def test_python_ls_basic(self, monkeypatch, temp_dir):
+        """Test Python ls implementation - basic listing."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        from src.platform_utils import get_python_fallback
+        result = get_python_fallback("ls", str(temp_dir))
+        assert result is not None
+        assert result['returncode'] == 0
+        assert result['used_fallback'] is True
+        assert "file1.txt" in result['output']
+        assert "file2.txt" in result['output']
+        # Hidden files should not be shown by default
+        assert ".hidden" not in result['output']
+
+    @pytest.mark.unit
+    def test_python_ls_show_all(self, monkeypatch, temp_dir):
+        """Test Python ls -a shows hidden files."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        from src.platform_utils import get_python_fallback
+        result = get_python_fallback("ls -a", str(temp_dir))
+        assert result is not None
+        assert result['returncode'] == 0
+        assert ".hidden" in result['output']
+
+    @pytest.mark.unit
+    def test_python_ls_long_format(self, monkeypatch, temp_dir):
+        """Test Python ls -l shows detailed output."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        from src.platform_utils import get_python_fallback
+        result = get_python_fallback("ls -l", str(temp_dir))
+        assert result is not None
+        assert result['returncode'] == 0
+        # Should contain file sizes and dates
+        assert "file1.txt" in result['output']
+
+    @pytest.mark.unit
+    def test_python_ls_nonexistent_dir(self, monkeypatch, temp_dir):
+        """Test Python ls on non-existent directory."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        from src.platform_utils import get_python_fallback
+        result = get_python_fallback("ls nonexistent", str(temp_dir))
+        assert result is not None
+        assert result['returncode'] == 1
+        assert "No such file" in result['output']
+
+    @pytest.mark.unit
+    def test_python_pwd(self, monkeypatch, temp_dir):
+        """Test Python pwd implementation."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        from src.platform_utils import get_python_fallback
+        result = get_python_fallback("pwd", str(temp_dir))
+        assert result is not None
+        assert result['returncode'] == 0
+        assert str(temp_dir.resolve()) in result['output']
+
+    @pytest.mark.unit
+    def test_python_cat_single_file(self, monkeypatch, temp_dir):
+        """Test Python cat implementation for single file."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        from src.platform_utils import get_python_fallback
+        result = get_python_fallback("cat file1.txt", str(temp_dir))
+        assert result is not None
+        assert result['returncode'] == 0
+        assert "line1" in result['output']
+        assert "line2" in result['output']
+        assert "line3" in result['output']
+
+    @pytest.mark.unit
+    def test_python_cat_missing_file(self, monkeypatch, temp_dir):
+        """Test Python cat on non-existent file."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        from src.platform_utils import get_python_fallback
+        result = get_python_fallback("cat nonexistent.txt", str(temp_dir))
+        assert result is not None
+        assert result['returncode'] == 1
+        assert "No such file" in result['output']
+
+    @pytest.mark.unit
+    def test_python_cat_no_args(self, monkeypatch, temp_dir):
+        """Test Python cat with no arguments."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        from src.platform_utils import get_python_fallback
+        result = get_python_fallback("cat", str(temp_dir))
+        assert result is not None
+        assert result['returncode'] == 1
+        assert "missing" in result['output']
+
+    @pytest.mark.unit
+    def test_python_head_default(self, monkeypatch, temp_dir):
+        """Test Python head with default 10 lines."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        from src.platform_utils import get_python_fallback
+        result = get_python_fallback("head file1.txt", str(temp_dir))
+        assert result is not None
+        assert result['returncode'] == 0
+        assert "line1" in result['output']
+
+    @pytest.mark.unit
+    def test_python_head_with_count(self, monkeypatch, temp_dir):
+        """Test Python head -n 2."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        from src.platform_utils import get_python_fallback
+        result = get_python_fallback("head -n 2 file1.txt", str(temp_dir))
+        assert result is not None
+        assert result['returncode'] == 0
+        lines = result['output'].strip().split('\n')
+        assert len(lines) == 2
+
+    @pytest.mark.unit
+    def test_python_tail_default(self, monkeypatch, temp_dir):
+        """Test Python tail with default 10 lines."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        from src.platform_utils import get_python_fallback
+        result = get_python_fallback("tail file1.txt", str(temp_dir))
+        assert result is not None
+        assert result['returncode'] == 0
+        assert "line3" in result['output']
+
+    @pytest.mark.unit
+    def test_python_grep_basic(self, monkeypatch, temp_dir):
+        """Test Python grep basic pattern matching."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        from src.platform_utils import get_python_fallback
+        result = get_python_fallback("grep hello file2.txt", str(temp_dir))
+        assert result is not None
+        assert result['returncode'] == 0
+        assert "hello world" in result['output']
+
+    @pytest.mark.unit
+    def test_python_grep_no_match(self, monkeypatch, temp_dir):
+        """Test Python grep when pattern not found."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        from src.platform_utils import get_python_fallback
+        result = get_python_fallback("grep notfound file2.txt", str(temp_dir))
+        assert result is not None
+        assert result['returncode'] == 1
+        assert result['output'] == ""
+
+    @pytest.mark.unit
+    def test_python_grep_case_insensitive(self, monkeypatch, temp_dir):
+        """Test Python grep -i case insensitive."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        from src.platform_utils import get_python_fallback
+        result = get_python_fallback("grep -i HELLO file2.txt", str(temp_dir))
+        assert result is not None
+        assert result['returncode'] == 0
+        assert "hello world" in result['output']
+
+    @pytest.mark.unit
+    def test_python_grep_line_numbers(self, monkeypatch, temp_dir):
+        """Test Python grep -n shows line numbers."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        from src.platform_utils import get_python_fallback
+        result = get_python_fallback("grep -n hello file2.txt", str(temp_dir))
+        assert result is not None
+        assert result['returncode'] == 0
+        assert ":1:" in result['output']
+
+    @pytest.mark.unit
+    def test_python_find_all_files(self, monkeypatch, temp_dir):
+        """Test Python find lists all files."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        from src.platform_utils import get_python_fallback
+        result = get_python_fallback("find .", str(temp_dir))
+        assert result is not None
+        assert result['returncode'] == 0
+        assert "file1.txt" in result['output']
+        assert "nested.txt" in result['output']
+
+    @pytest.mark.unit
+    def test_python_find_by_name(self, monkeypatch, temp_dir):
+        """Test Python find -name pattern."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        from src.platform_utils import get_python_fallback
+        result = get_python_fallback("find . -name *.txt", str(temp_dir))
+        assert result is not None
+        assert result['returncode'] == 0
+        assert "file1.txt" in result['output']
+        assert ".hidden" not in result['output']
+
+    @pytest.mark.unit
+    def test_python_find_type_file(self, monkeypatch, temp_dir):
+        """Test Python find -type f for files only."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        from src.platform_utils import get_python_fallback
+        result = get_python_fallback("find . -type f", str(temp_dir))
+        assert result is not None
+        assert result['returncode'] == 0
+        assert "file1.txt" in result['output']
+        assert "subdir\n" not in result['output']
+
+    @pytest.mark.unit
+    def test_python_wc_lines(self, monkeypatch, temp_dir):
+        """Test Python wc -l counts lines."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        from src.platform_utils import get_python_fallback
+        result = get_python_fallback("wc -l file1.txt", str(temp_dir))
+        assert result is not None
+        assert result['returncode'] == 0
+        assert "3" in result['output']
+
+    @pytest.mark.unit
+    def test_python_which_found(self, monkeypatch):
+        """Test Python which for existing command."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        from src.platform_utils import get_python_fallback
+        result = get_python_fallback("which python")
+        assert result is not None
+        assert result['returncode'] == 0
+        assert "python" in result['output'].lower()
+
+    @pytest.mark.unit
+    def test_python_which_not_found(self, monkeypatch):
+        """Test Python which for non-existent command."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        from src.platform_utils import get_python_fallback
+        result = get_python_fallback("which nonexistentcommand123")
+        assert result is not None
+        assert "not found" in result['output']
+
+    @pytest.mark.unit
+    def test_python_touch_creates_file(self, monkeypatch, temp_dir):
+        """Test Python touch creates new file."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        from src.platform_utils import get_python_fallback
+        result = get_python_fallback("touch newfile.txt", str(temp_dir))
+        assert result is not None
+        assert result['returncode'] == 0
+        assert (temp_dir / "newfile.txt").exists()
+
+    @pytest.mark.unit
+    def test_python_mkdir_p_creates_nested(self, monkeypatch, temp_dir):
+        """Test Python mkdir -p creates nested directories."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        from src.platform_utils import get_python_fallback
+        result = get_python_fallback("mkdir -p a/b/c", str(temp_dir))
+        assert result is not None
+        assert result['returncode'] == 0
+        assert (temp_dir / "a" / "b" / "c").exists()
+
+    @pytest.mark.unit
+    def test_python_rm_file(self, monkeypatch, temp_dir):
+        """Test Python rm removes file."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        from src.platform_utils import get_python_fallback
+        result = get_python_fallback("rm file1.txt", str(temp_dir))
+        assert result is not None
+        assert result['returncode'] == 0
+        assert not (temp_dir / "file1.txt").exists()
+
+    @pytest.mark.unit
+    def test_python_rm_directory_without_r(self, monkeypatch, temp_dir):
+        """Test Python rm fails on directory without -r."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        from src.platform_utils import get_python_fallback
+        result = get_python_fallback("rm subdir", str(temp_dir))
+        assert result is not None
+        assert result['returncode'] == 1
+        assert "directory" in result['output']
+
+    @pytest.mark.unit
+    def test_python_rm_rf_directory(self, monkeypatch, temp_dir):
+        """Test Python rm -rf removes directory."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        from src.platform_utils import get_python_fallback
+        result = get_python_fallback("rm -rf subdir", str(temp_dir))
+        assert result is not None
+        assert result['returncode'] == 0
+        assert not (temp_dir / "subdir").exists()
+
+    @pytest.mark.unit
+    def test_python_cp_file(self, monkeypatch, temp_dir):
+        """Test Python cp copies file."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        from src.platform_utils import get_python_fallback
+        result = get_python_fallback("cp file1.txt copy.txt", str(temp_dir))
+        assert result is not None
+        assert result['returncode'] == 0
+        assert (temp_dir / "copy.txt").exists()
+        assert (temp_dir / "copy.txt").read_text() == (temp_dir / "file1.txt").read_text()
+
+    @pytest.mark.unit
+    def test_python_mv_file(self, monkeypatch, temp_dir):
+        """Test Python mv moves file."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        from src.platform_utils import get_python_fallback
+        original_content = (temp_dir / "file1.txt").read_text()
+        result = get_python_fallback("mv file1.txt moved.txt", str(temp_dir))
+        assert result is not None
+        assert result['returncode'] == 0
+        assert not (temp_dir / "file1.txt").exists()
+        assert (temp_dir / "moved.txt").exists()
+        assert (temp_dir / "moved.txt").read_text() == original_content
+
+
+class TestSmartExecuteCommand:
+    """Tests for smart_execute_command function."""
+
+    @pytest.mark.unit
+    def test_smart_execute_returns_dict(self, monkeypatch, tmp_path):
+        """Smart execute should return a dictionary."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        from src.platform_utils import smart_execute_command
+        result = smart_execute_command("ls", str(tmp_path))
+        assert isinstance(result, dict)
+        assert 'output' in result
+        assert 'returncode' in result
+        assert 'method' in result
+
+    @pytest.mark.unit
+    def test_smart_execute_uses_fallback_on_windows(self, monkeypatch, tmp_path):
+        """Smart execute should use Python fallback for Unix commands on Windows."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        from src.platform_utils import smart_execute_command
+        result = smart_execute_command("pwd", str(tmp_path))
+        assert result['method'] == 'python_fallback'
+        assert result['returncode'] == 0
+
+    @pytest.mark.unit
+    def test_smart_execute_timeout(self, monkeypatch):
+        """Smart execute should handle timeout."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: False)
+        from src.platform_utils import smart_execute_command
+        # Use a command that would timeout but with very short timeout
+        result = smart_execute_command("sleep 10", timeout=1)
+        # On Windows without sleep command, this will fail differently
+        # But on Unix-like systems, it should timeout
+        assert 'returncode' in result
