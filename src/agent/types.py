@@ -5,7 +5,10 @@ Contains all dataclasses used in the agent's operation.
 """
 
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..providers.base import LLMResponse
 
 
 @dataclass
@@ -14,6 +17,7 @@ class AgentThought:
     raw_response: str
     provider: str
     iteration: int
+    llm_response: Optional['LLMResponse'] = None  # Full response for native tool calls
 
 
 @dataclass

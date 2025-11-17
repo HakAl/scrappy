@@ -71,6 +71,35 @@ class OrchestratorAdapter(Protocol):
         """
         ...
 
+    def delegate_with_tools(
+        self,
+        provider: str,
+        prompt: str,
+        tools: List[dict],
+        system_prompt: Optional[str] = None,
+        max_tokens: int = 1500,
+        temperature: float = 0.3,
+        tool_choice: str = "auto",
+        **kwargs
+    ) -> LLMResponse:
+        """
+        Delegate to an LLM provider with native tool calling support.
+
+        Args:
+            provider: Name of the provider to use
+            prompt: User prompt to send
+            tools: List of OpenAI-compatible tool schemas
+            system_prompt: Optional system prompt
+            max_tokens: Maximum tokens in response
+            temperature: Sampling temperature
+            tool_choice: How the model should choose tools ("auto", "none", or specific tool)
+            **kwargs: Additional provider-specific parameters
+
+        Returns:
+            LLMResponse with tool_calls field populated if model decided to call tools
+        """
+        ...
+
 
 class NullContext:
     """Null context provider that returns no context."""
@@ -191,6 +220,71 @@ class AgentOrchestratorAdapter:
             # Preserve tool_calls if present in the response
             tool_calls=getattr(response, 'tool_calls', None)
         )
+
+    def delegate_with_tools(
+        self,
+        provider: Optional[str] = None,
+        prompt: str = "",
+        tools: List[dict] = None,
+        system_prompt: Optional[str] = None,
+        max_tokens: int = 1500,
+        temperature: float = 0.3,
+        tool_choice: str = "auto",
+        provider_name: Optional[str] = None,
+        **kwargs
+    ) -> LLMResponse:
+        """
+        Delegate to provider with native tool calling support.
+
+        Args:
+            provider: Provider name (legacy positional, can be None for auto-selection)
+            prompt: The prompt to send
+            tools: List of OpenAI-compatible tool schemas
+            system_prompt: Optional system prompt
+            max_tokens: Maximum tokens in response
+            temperature: Sampling temperature
+            tool_choice: How the model should choose tools
+            provider_name: Alias for provider (keyword-only)
+            **kwargs: Additional arguments
+
+        Returns:
+            LLMResponse with tool_calls field populated if model called tools
+        """
+        if tools is None:
+            tools = []
+
+        # Support both 'provider' and 'provider_name' for compatibility
+        actual_provider = provider_name if provider_name is not None else provider
+
+        # Get the provider instance from registry
+        provider_obj = self._orch._registry.get(actual_provider)
+        if provider_obj is None:
+            raise ValueError(f"Provider {actual_provider} not found in registry")
+
+        # Check if provider supports native tool calling
+        if not provider_obj.supports_tool_calling:
+            raise ValueError(
+                f"Provider {actual_provider} does not support native tool calling. "
+                "Use regular delegate() with JSON parsing instead."
+            )
+
+        # Build messages array with system prompt if provided
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+
+        # Call provider's chat_with_tools method
+        response = provider_obj.chat_with_tools(
+            messages=messages,
+            tools=tools,
+            tool_choice=tool_choice,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            **kwargs
+        )
+
+        return response
 
     # Proxy methods for working memory
     def remember_file_read(self, path: str, content: str, lines: int = 0):

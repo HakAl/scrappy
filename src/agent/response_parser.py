@@ -329,12 +329,12 @@ class UnifiedResponseParser(ResponseParser):
 
         # Check if it's an LLMResponse object
         if isinstance(response, LLMResponse):
-            # Check if it has tool_calls
-            if response.tool_calls and len(response.tool_calls) > 0:
+            # Check if it has tool_calls with actual calls (not None, not empty)
+            if response.tool_calls is not None and len(response.tool_calls) > 0:
                 # Use native tool calling parser
                 return self._native_parser.parse_response(response)
             else:
-                # No tool_calls, parse content as JSON
+                # No tool_calls or empty list - parse content as JSON
                 return self._json_parser.parse(response.content)
         else:
             # String input - use JSON parser

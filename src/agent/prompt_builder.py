@@ -68,16 +68,18 @@ class PromptBuilder:
         """Override a default section."""
         self._section_overrides[name] = content
 
-    def build(self, task: Optional[str] = None) -> str:
+    def build(self, task: Optional[str] = None, use_native_tools: bool = False) -> str:
         """
         Build the complete system prompt.
 
         Args:
             task: Optional task description to include
+            use_native_tools: Whether native tool calling is being used (skips JSON format instructions)
 
         Returns:
             Complete system prompt string
         """
+        self._use_native_tools = use_native_tools
         # Ensure context is explored
         if not self.context.is_explored():
             self.context.explore()
@@ -212,7 +214,11 @@ Analyze the codebase structure to determine:
         """Build available tools section."""
         if self.tool_registry is not None:
             # Use registry for dynamic tool descriptions
-            return f"\n## Available Tools\n\n{self.tool_registry.get_full_prompt_section()}"
+            # Skip response format when using native tool calling
+            if hasattr(self, '_use_native_tools') and self._use_native_tools:
+                return f"\n## Available Tools\n\n{self.tool_registry.generate_descriptions()}"
+            else:
+                return f"\n## Available Tools\n\n{self.tool_registry.get_full_prompt_section()}"
         else:
             # Fallback to static list
             return """

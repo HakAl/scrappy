@@ -39,6 +39,9 @@ When adding or modifying functionality:
 ### Commands
 
 ```bash
+# Useful mocks!
+tests\helpers.py
+
 # Run all tests
 python -m pytest tests/ -v
 

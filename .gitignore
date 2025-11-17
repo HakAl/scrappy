@@ -48,6 +48,12 @@ env/
 .DS_Store
 Thumbs.db
 
+# Testing
+.pytest_cache/
+.pytest_tmp/
+.coverage
+htmlcov/
+
 # LLM Team cache and session files
 .llm_team_context.json
 .llm_team_session.json

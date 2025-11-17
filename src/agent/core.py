@@ -56,7 +56,7 @@ from .types import (
     ConversationState
 )
 from .audit import AuditLogger
-from .response_parser import ResponseParser, JSONResponseParser, ParseResult
+from .response_parser import ResponseParser, JSONResponseParser, ParseResult, UnifiedResponseParser
 
 
 class CodeAgent:
@@ -107,8 +107,8 @@ class CodeAgent:
             max_result_length=self.config.audit_log_result_truncation
         )
 
-        # Initialize response parser (defaults to JSON parsing)
-        self._response_parser: ResponseParser = JSONResponseParser()
+        # Initialize response parser (auto-detects JSON vs native tool calls)
+        self._response_parser: ResponseParser = UnifiedResponseParser()
 
         # Create tool context
         safe_print("Preparing agent tools...")
@@ -456,30 +456,97 @@ class CodeAgent:
         # Track API call time for first iteration
         start_time = time.time()
 
-        # Delegate with task_type so orchestrator can make intelligent decisions
-        # If orchestrator supports auto-selection, let it choose; otherwise specify provider
-        if self._use_dynamic_selection:
-            response = self.orch.delegate(
-                provider_name=None,  # Let orchestrator decide
+        # Check if orchestrator adapter has delegate_with_tools
+        # and if provider supports native tool calling
+        has_delegate_with_tools = hasattr(self.orch, 'delegate_with_tools')
+        provider_supports_tools = False
+
+        if has_delegate_with_tools and hasattr(self._orchestrator, '_registry'):
+            provider_obj = self._orchestrator._registry.get(current_provider)
+            if provider_obj and hasattr(provider_obj, 'supports_tool_calling'):
+                provider_supports_tools = provider_obj.supports_tool_calling
+
+        # Use native tool calling if both adapter and provider support it
+        if has_delegate_with_tools and provider_supports_tools:
+            # Get tool schemas in OpenAI format
+            tools = self.tool_registry.to_openai_schema()
+
+            # Add run_command tool (not in registry, manual schema)
+            tools.append({
+                "type": "function",
+                "function": {
+                    "name": "run_command",
+                    "description": "Execute a shell command. Use for git operations, builds, tests, etc.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "command": {
+                                "type": "string",
+                                "description": "The shell command to execute"
+                            },
+                            "explanation": {
+                                "type": "string",
+                                "description": "Brief explanation of what the command does"
+                            }
+                        },
+                        "required": ["command"]
+                    }
+                }
+            })
+
+            # Add "complete" tool for task completion
+            tools.append({
+                "type": "function",
+                "function": {
+                    "name": "complete",
+                    "description": "Mark the task as complete and provide final result",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "result": {
+                                "type": "string",
+                                "description": "Final result or summary of completed task"
+                            }
+                        },
+                        "required": ["result"]
+                    }
+                }
+            })
+
+            response = self.orch.delegate_with_tools(
+                provider_name=current_provider,
                 prompt=user_prompt,
+                tools=tools,
                 system_prompt=state.system_prompt,
                 max_tokens=self.config.default_max_tokens,
                 temperature=self.config.default_temperature,
-                use_context=False,  # Context already in system prompt
-                task_type='planning'  # Inform orchestrator this is a planning task
+                tool_choice="auto"
             )
-            # Update planner to reflect what was actually used
             actual_provider = response.provider
         else:
-            response = self.orch.delegate(
-                current_provider,
-                user_prompt,
-                system_prompt=state.system_prompt,
-                max_tokens=self.config.default_max_tokens,
-                temperature=self.config.default_temperature,
-                use_context=False  # Context already in system prompt
-            )
-            actual_provider = current_provider
+            # Fall back to regular delegate with JSON parsing
+            if self._use_dynamic_selection:
+                response = self.orch.delegate(
+                    provider_name=None,  # Let orchestrator decide
+                    prompt=user_prompt,
+                    system_prompt=state.system_prompt,
+                    max_tokens=self.config.default_max_tokens,
+                    temperature=self.config.default_temperature,
+                    use_context=False,  # Context already in system prompt
+                    task_type='planning'  # Inform orchestrator this is a planning task
+                )
+                # Update planner to reflect what was actually used
+                actual_provider = response.provider
+            else:
+                response = self.orch.delegate(
+                    current_provider,
+                    user_prompt,
+                    system_prompt=state.system_prompt,
+                    max_tokens=self.config.default_max_tokens,
+                    temperature=self.config.default_temperature,
+                    use_context=False  # Context already in system prompt
+                )
+                actual_provider = current_provider
 
         # Report latency on first call (helps user understand wait times)
         if state.iteration == 1:
@@ -489,7 +556,8 @@ class CodeAgent:
         return AgentThought(
             raw_response=response.content,
             provider=actual_provider,
-            iteration=state.iteration
+            iteration=state.iteration,
+            llm_response=response  # Store full response for native tool calls
         )
 
     def _plan_action(self, thought: AgentThought) -> AgentAction:
@@ -504,8 +572,18 @@ class CodeAgent:
         Returns:
             AgentAction with parsed action details
         """
-        # Use the injected response parser (JSON by default, native tool calls in future)
-        parse_result = self._response_parser.parse(thought.raw_response)
+        # Check if we have a full LLMResponse with actual tool_calls (non-empty list)
+        # Empty list or None means fall back to JSON parsing
+        if (thought.llm_response and
+            thought.llm_response.tool_calls is not None and
+            len(thought.llm_response.tool_calls) > 0):
+            # Use the response parser to handle LLMResponse objects
+            # UnifiedResponseParser will automatically detect and use NativeToolCallParser
+            parse_result = self._response_parser.parse(thought.llm_response)
+        else:
+            # Fall back to parsing raw text response (JSON format)
+            # This handles: no llm_response, tool_calls=None, or tool_calls=[]
+            parse_result = self._response_parser.parse(thought.raw_response)
 
         return AgentAction(
             thought=parse_result.thought,
@@ -878,10 +956,20 @@ class CodeAgent:
             tool_registry=self.tool_registry
         )
 
+        # Check if we should use native tool calling
+        # Determine this early so we can build the appropriate system prompt
+        use_native_tools = False
+        current_provider = self.planner
+        if hasattr(self._orchestrator, '_registry'):
+            provider_obj = self._orchestrator._registry.get(current_provider)
+            if provider_obj and hasattr(provider_obj, 'supports_tool_calling'):
+                use_native_tools = provider_obj.supports_tool_calling and hasattr(self.orch, 'delegate_with_tools')
+
         # Build the complete system prompt with task context
         # PromptBuilder now includes all operational guidance (strategy, efficiency,
         # completion semantics, safety rules) as proper sections
-        system_prompt = prompt_builder.build(task=task)
+        # Skip JSON format instructions if using native tool calling
+        system_prompt = prompt_builder.build(task=task, use_native_tools=use_native_tools)
 
         # Initialize conversation state
         state = ConversationState(
