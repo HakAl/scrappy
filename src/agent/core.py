@@ -122,6 +122,7 @@ class CodeAgent:
         )
 
         # Create tool context
+        safe_print("Preparing agent tools...")
         self.tool_context = ToolContext(
             project_root=self.project_root,
             dry_run=self.dry_run,
@@ -161,6 +162,7 @@ class CodeAgent:
         })
 
         # Hybrid approach: Use configured provider preferences
+        safe_print("Selecting AI providers...")
         available = self.adapter.list_providers()
 
         # Check if adapter has a preferred provider override (from task routing)
@@ -782,7 +784,14 @@ class CodeAgent:
         Returns:
             AgentThought containing raw LLM response
         """
-        safe_print(f"[{self.planner}] Thinking...")
+        import sys
+        import time
+
+        # Show progress indicator during API call
+        if state.iteration == 1:
+            safe_print(f"[{self.planner}] Analyzing task (this may take a moment)...")
+        else:
+            safe_print(f"[{self.planner}] Thinking...")
 
         # Build the prompt with conversation history for multi-turn
         if len(state.messages) == 2:
@@ -797,6 +806,9 @@ class CodeAgent:
             history_text = "\n\n".join(history_parts)
             user_prompt = f"Previous conversation:\n{history_text}\n\nBased on the above, continue with the task. Remember to respond with valid JSON."
 
+        # Track API call time for first iteration
+        start_time = time.time()
+
         response = self.orch.delegate(
             self.planner,
             user_prompt,
@@ -805,6 +817,11 @@ class CodeAgent:
             temperature=self.config.default_temperature,
             use_context=False  # Context already in system prompt
         )
+
+        # Report latency on first call (helps user understand wait times)
+        if state.iteration == 1:
+            elapsed = time.time() - start_time
+            safe_print(f"[{self.planner}] Response received ({elapsed:.1f}s)")
 
         return AgentThought(
             raw_response=response.content,
@@ -1110,11 +1127,13 @@ class CodeAgent:
             safe_print("[DRY RUN MODE]")
 
         # Build initial context
+        safe_print("Building context...")
         context_info = ""
         if self.orch.context.is_explored():
             context_info = f"\nProject Context:\n{self.orch.context.get_summary()}\n"
 
         # System prompt for agent
+        safe_print("Preparing system prompt...")
         tool_descriptions = self._get_tool_descriptions()
         platform_name = get_platform_name()
         platform_guidance = ""
@@ -1187,6 +1206,7 @@ Current task: {task}
         )
 
         # Main agent loop - decoupled stages
+        safe_print("Starting agent loop...")
         while state.iteration < state.max_iterations:
             state.iteration += 1
             # Minimal iteration indicator (only show on first iteration)
