@@ -10,6 +10,7 @@ import re
 import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
+from urllib.parse import urlencode, quote_plus
 
 
 def is_windows() -> bool:
@@ -939,3 +940,375 @@ def smart_execute_command(
             'returncode': 1,
             'method': 'error'
         }
+
+
+def validate_spring_initializr_url(url: str) -> Tuple[bool, str, str]:
+    """
+    Validate and fix Spring Initializr URLs to prevent 400 Bad Request errors.
+
+    Args:
+        url: The Spring Initializr URL to validate
+
+    Returns:
+        Tuple of (is_valid, fixed_url, error_message)
+    """
+    if 'start.spring.io' not in url:
+        return True, url, ""
+
+    # Extract base URL and parameters
+    if '?' not in url:
+        return True, url, ""
+
+    base_url, query_string = url.split('?', 1)
+
+    # Parse existing parameters
+    params = {}
+    for param in query_string.split('&'):
+        if '=' in param:
+            key, value = param.split('=', 1)
+            # Handle multiple dependencies (e.g., dependencies=web,jpa,security)
+            params[key] = value
+
+    # Validate required parameters
+    valid_params = {
+        'type': ['maven-project', 'gradle-project', 'gradle-project-kotlin'],
+        'language': ['java', 'kotlin', 'groovy'],
+        'bootVersion': None,  # Any version string
+        'baseDir': None,
+        'groupId': None,
+        'artifactId': None,
+        'name': None,
+        'description': None,
+        'packageName': None,
+        'packaging': ['jar', 'war'],
+        'javaVersion': ['8', '11', '17', '21'],
+        'dependencies': None,  # Comma-separated list
+    }
+
+    # Fix common parameter issues
+    fixed_params = {}
+    errors = []
+
+    for key, value in params.items():
+        # URL encode the value properly
+        if key == 'dependencies':
+            # Dependencies should be comma-separated, each properly encoded
+            deps = value.split(',')
+            # Remove invalid characters from dependency names
+            clean_deps = []
+            for dep in deps:
+                # Spring Initializr uses lowercase hyphenated names
+                clean_dep = dep.strip().lower()
+                # Common corrections
+                corrections = {
+                    'jjwt': 'security',  # jjwt is not a Spring Initializr dependency
+                    'jwt': 'security',   # Use spring-security instead
+                    'spring-boot-starter-web': 'web',
+                    'spring-boot-starter-data-jpa': 'data-jpa',
+                    'spring-boot-starter-security': 'security',
+                    'spring-boot-starter-validation': 'validation',
+                }
+                if clean_dep in corrections:
+                    clean_dep = corrections[clean_dep]
+                if clean_dep:
+                    clean_deps.append(clean_dep)
+            fixed_params[key] = ','.join(clean_deps)
+        elif key in valid_params and valid_params[key] is not None:
+            # Check if value is in allowed list
+            if value not in valid_params[key]:
+                errors.append(f"Invalid {key}: {value}. Must be one of {valid_params[key]}")
+            else:
+                fixed_params[key] = value
+        else:
+            # URL encode special characters
+            fixed_params[key] = quote_plus(value, safe='')
+
+    # Ensure required parameters have defaults
+    defaults = {
+        'type': 'maven-project',
+        'language': 'java',
+        'bootVersion': '3.2.0',
+        'packaging': 'jar',
+        'javaVersion': '17',
+        'groupId': 'com.example',
+        'artifactId': 'demo',
+        'name': 'demo',
+    }
+
+    for key, default in defaults.items():
+        if key not in fixed_params:
+            fixed_params[key] = default
+
+    # Rebuild URL with properly encoded parameters
+    # Use urlencode for proper encoding
+    fixed_query = '&'.join(f"{k}={v}" for k, v in fixed_params.items())
+    fixed_url = f"{base_url}?{fixed_query}"
+
+    if errors:
+        return False, fixed_url, "; ".join(errors)
+
+    return True, fixed_url, ""
+
+
+def fix_spring_initializr_command(command: str) -> Tuple[str, bool, str]:
+    """
+    Fix curl/PowerShell commands that use Spring Initializr.
+
+    Args:
+        command: The shell command to fix
+
+    Returns:
+        Tuple of (fixed_command, was_fixed, message)
+    """
+    if 'start.spring.io' not in command:
+        return command, False, ""
+
+    # Extract URL from curl command
+    curl_match = re.search(r'curl\s+[^"\']*["\']?(https?://start\.spring\.io[^"\'\s]+)["\']?', command)
+    if curl_match:
+        url = curl_match.group(1).strip("'\"")
+        is_valid, fixed_url, error = validate_spring_initializr_url(url)
+
+        if not is_valid or url != fixed_url:
+            # Replace URL in command
+            fixed_command = command.replace(url, f'"{fixed_url}"')
+            message = f"Fixed Spring Initializr URL. {error}" if error else "Fixed Spring Initializr URL encoding"
+            return fixed_command, True, message
+
+    # Extract URL from PowerShell DownloadFile
+    ps_match = re.search(r'DownloadFile\s*\(\s*["\']([^"\']+)["\']', command)
+    if ps_match:
+        url = ps_match.group(1)
+        is_valid, fixed_url, error = validate_spring_initializr_url(url)
+
+        if not is_valid or url != fixed_url:
+            fixed_command = command.replace(url, fixed_url)
+            message = f"Fixed Spring Initializr URL. {error}" if error else "Fixed Spring Initializr URL encoding"
+            return fixed_command, True, message
+
+    # Extract URL from Invoke-WebRequest
+    iwr_match = re.search(r'-Uri\s+["\']?([^"\'\s]+start\.spring\.io[^"\'\s]+)["\']?', command)
+    if iwr_match:
+        url = iwr_match.group(1).strip("'\"")
+        is_valid, fixed_url, error = validate_spring_initializr_url(url)
+
+        if not is_valid or url != fixed_url:
+            fixed_command = command.replace(url, f'"{fixed_url}"')
+            message = f"Fixed Spring Initializr URL. {error}" if error else "Fixed Spring Initializr URL encoding"
+            return fixed_command, True, message
+
+    return command, False, ""
+
+
+def get_spring_boot_fallback_files(
+    group_id: str = "com.example",
+    artifact_id: str = "demo",
+    package_name: str = "com.example.demo",
+    dependencies: List[str] = None
+) -> Dict[str, str]:
+    """
+    Generate fallback Spring Boot project files when network download fails.
+
+    Args:
+        group_id: Maven group ID
+        artifact_id: Maven artifact ID
+        package_name: Java package name
+        dependencies: List of dependencies (web, data-jpa, security, h2, validation)
+
+    Returns:
+        Dict mapping file paths to file contents
+    """
+    if dependencies is None:
+        dependencies = ['web', 'data-jpa', 'h2', 'validation', 'security']
+
+    # Convert package name to directory structure
+    package_path = package_name.replace('.', '/')
+
+    files = {}
+
+    # pom.xml
+    dep_xml = ""
+    if 'web' in dependencies:
+        dep_xml += """        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+"""
+    if 'data-jpa' in dependencies:
+        dep_xml += """        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+"""
+    if 'h2' in dependencies:
+        dep_xml += """        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+"""
+    if 'validation' in dependencies:
+        dep_xml += """        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+"""
+    if 'security' in dependencies:
+        dep_xml += """        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>0.11.5</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>0.11.5</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>0.11.5</version>
+            <scope>runtime</scope>
+        </dependency>
+"""
+
+    files['pom.xml'] = f'''<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.2.0</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>{group_id}</groupId>
+    <artifactId>{artifact_id}</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <name>{artifact_id}</name>
+    <description>Spring Boot Application</description>
+
+    <properties>
+        <java.version>17</java.version>
+    </properties>
+
+    <dependencies>
+{dep_xml}        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+'''
+
+    # Main application class
+    class_name = ''.join(word.capitalize() for word in artifact_id.replace('-', ' ').split())
+    files[f'src/main/java/{package_path}/{class_name}Application.java'] = f'''package {package_name};
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class {class_name}Application {{
+
+    public static void main(String[] args) {{
+        SpringApplication.run({class_name}Application.class, args);
+    }}
+}}
+'''
+
+    # application.properties
+    files['src/main/resources/application.properties'] = '''# Spring Boot Configuration
+spring.application.name=demo
+server.port=8080
+
+# H2 Database Configuration
+spring.datasource.url=jdbc:h2:mem:testdb
+spring.datasource.driverClassName=org.h2.Driver
+spring.datasource.username=sa
+spring.datasource.password=
+spring.jpa.database-platform=org.hibernate.dialect.H2Dialect
+spring.h2.console.enabled=true
+spring.h2.console.path=/h2-console
+
+# JPA Configuration
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+'''
+
+    # Test class
+    files[f'src/test/java/{package_path}/{class_name}ApplicationTests.java'] = f'''package {package_name};
+
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.SpringBootTest;
+
+@SpringBootTest
+class {class_name}ApplicationTests {{
+
+    @Test
+    void contextLoads() {{
+    }}
+}}
+'''
+
+    # .gitignore
+    files['.gitignore'] = '''HELP.md
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+'''
+
+    # Maven wrapper files (minimal)
+    files['.mvn/wrapper/maven-wrapper.properties'] = '''distributionUrl=https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.9.5/apache-maven-3.9.5-bin.zip
+wrapperUrl=https://repo.maven.apache.org/maven2/org/apache/maven/wrapper/maven-wrapper/3.2.0/maven-wrapper-3.2.0.jar
+'''
+
+    return files

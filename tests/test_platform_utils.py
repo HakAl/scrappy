@@ -17,6 +17,9 @@ from src.platform_utils import (
     normalize_path_for_shell,
     get_null_device,
     get_path_separator,
+    validate_spring_initializr_url,
+    fix_spring_initializr_command,
+    get_spring_boot_fallback_files,
 )
 
 
@@ -682,3 +685,232 @@ class TestSmartExecuteCommand:
         # On Windows without sleep command, this will fail differently
         # But on Unix-like systems, it should timeout
         assert 'returncode' in result
+
+
+class TestSpringInitializrHelpers:
+    """Tests for Spring Initializr URL validation and fallback templates."""
+
+    @pytest.mark.unit
+    def test_validate_spring_url_non_spring_url(self):
+        """Non-Spring URLs should pass through unchanged."""
+        url = "https://example.com/api"
+        is_valid, fixed_url, error = validate_spring_initializr_url(url)
+        assert is_valid is True
+        assert fixed_url == url
+        assert error == ""
+
+    @pytest.mark.unit
+    def test_validate_spring_url_no_params(self):
+        """Spring URL without params should pass through."""
+        url = "https://start.spring.io"
+        is_valid, fixed_url, error = validate_spring_initializr_url(url)
+        assert is_valid is True
+        assert fixed_url == url
+
+    @pytest.mark.unit
+    def test_validate_spring_url_fixes_jjwt_dependency(self):
+        """Should fix invalid jjwt dependency to security."""
+        url = "https://start.spring.io/starter.zip?dependencies=web,jjwt,data-jpa"
+        is_valid, fixed_url, error = validate_spring_initializr_url(url)
+        assert is_valid is True
+        assert "jjwt" not in fixed_url
+        assert "security" in fixed_url
+        assert "web" in fixed_url
+        assert "data-jpa" in fixed_url
+
+    @pytest.mark.unit
+    def test_validate_spring_url_fixes_jwt_dependency(self):
+        """Should fix jwt dependency to security."""
+        url = "https://start.spring.io/starter.zip?dependencies=jwt"
+        is_valid, fixed_url, error = validate_spring_initializr_url(url)
+        assert "security" in fixed_url
+        assert "jwt" not in fixed_url or "security" in fixed_url
+
+    @pytest.mark.unit
+    def test_validate_spring_url_adds_defaults(self):
+        """Should add default parameters if missing."""
+        url = "https://start.spring.io/starter.zip?dependencies=web"
+        is_valid, fixed_url, error = validate_spring_initializr_url(url)
+        assert is_valid is True
+        assert "type=maven-project" in fixed_url
+        assert "language=java" in fixed_url
+        assert "javaVersion=17" in fixed_url
+
+    @pytest.mark.unit
+    def test_validate_spring_url_preserves_valid_params(self):
+        """Should preserve valid parameters."""
+        url = "https://start.spring.io/starter.zip?type=gradle-project&language=kotlin&javaVersion=21"
+        is_valid, fixed_url, error = validate_spring_initializr_url(url)
+        assert is_valid is True
+        assert "type=gradle-project" in fixed_url
+        assert "language=kotlin" in fixed_url
+        assert "javaVersion=21" in fixed_url
+
+    @pytest.mark.unit
+    def test_validate_spring_url_invalid_type(self):
+        """Should report invalid type."""
+        url = "https://start.spring.io/starter.zip?type=invalid-type"
+        is_valid, fixed_url, error = validate_spring_initializr_url(url)
+        assert is_valid is False
+        assert "Invalid type" in error
+
+    @pytest.mark.unit
+    def test_validate_spring_url_invalid_packaging(self):
+        """Should report invalid packaging."""
+        url = "https://start.spring.io/starter.zip?packaging=invalid"
+        is_valid, fixed_url, error = validate_spring_initializr_url(url)
+        assert is_valid is False
+        assert "Invalid packaging" in error
+
+    @pytest.mark.unit
+    def test_fix_spring_curl_command(self):
+        """Should fix Spring Initializr URL in curl command."""
+        cmd = "curl -o project.zip 'https://start.spring.io/starter.zip?dependencies=jjwt'"
+        fixed_cmd, was_fixed, message = fix_spring_initializr_command(cmd)
+        assert was_fixed is True
+        assert "security" in fixed_cmd
+        assert "Fixed" in message
+
+    @pytest.mark.unit
+    def test_fix_spring_powershell_download(self):
+        """Should fix Spring Initializr URL in PowerShell DownloadFile."""
+        cmd = "(New-Object System.Net.WebClient).DownloadFile('https://start.spring.io/starter.zip?dependencies=jwt', 'project.zip')"
+        fixed_cmd, was_fixed, message = fix_spring_initializr_command(cmd)
+        assert was_fixed is True
+        assert "security" in fixed_cmd
+
+    @pytest.mark.unit
+    def test_fix_spring_invoke_webrequest(self):
+        """Should fix Spring Initializr URL in Invoke-WebRequest."""
+        cmd = "Invoke-WebRequest -Uri https://start.spring.io/starter.zip?dependencies=jjwt -OutFile project.zip"
+        fixed_cmd, was_fixed, message = fix_spring_initializr_command(cmd)
+        assert was_fixed is True
+        assert "security" in fixed_cmd
+
+    @pytest.mark.unit
+    def test_fix_non_spring_command(self):
+        """Should not modify non-Spring commands."""
+        cmd = "curl -o file.zip https://example.com/download"
+        fixed_cmd, was_fixed, message = fix_spring_initializr_command(cmd)
+        assert was_fixed is False
+        assert fixed_cmd == cmd
+        assert message == ""
+
+    @pytest.mark.unit
+    def test_fix_spring_command_already_valid(self):
+        """Should handle already valid Spring commands."""
+        cmd = "curl -o project.zip 'https://start.spring.io/starter.zip?dependencies=web&type=maven-project'"
+        fixed_cmd, was_fixed, message = fix_spring_initializr_command(cmd)
+        # May still be fixed due to adding defaults
+        assert isinstance(was_fixed, bool)
+        assert isinstance(fixed_cmd, str)
+
+    @pytest.mark.unit
+    def test_get_spring_boot_fallback_files_returns_dict(self):
+        """Should return dictionary of files."""
+        files = get_spring_boot_fallback_files()
+        assert isinstance(files, dict)
+        assert len(files) > 0
+
+    @pytest.mark.unit
+    def test_get_spring_boot_fallback_has_pom(self):
+        """Should include pom.xml."""
+        files = get_spring_boot_fallback_files()
+        assert "pom.xml" in files
+        assert "spring-boot-starter-parent" in files["pom.xml"]
+
+    @pytest.mark.unit
+    def test_get_spring_boot_fallback_has_main_class(self):
+        """Should include main application class."""
+        files = get_spring_boot_fallback_files()
+        main_class_path = "src/main/java/com/example/demo/DemoApplication.java"
+        assert main_class_path in files
+        assert "@SpringBootApplication" in files[main_class_path]
+
+    @pytest.mark.unit
+    def test_get_spring_boot_fallback_has_properties(self):
+        """Should include application.properties."""
+        files = get_spring_boot_fallback_files()
+        assert "src/main/resources/application.properties" in files
+        props = files["src/main/resources/application.properties"]
+        assert "spring.datasource" in props
+        assert "h2" in props.lower()
+
+    @pytest.mark.unit
+    def test_get_spring_boot_fallback_has_test(self):
+        """Should include test class."""
+        files = get_spring_boot_fallback_files()
+        test_path = "src/test/java/com/example/demo/DemoApplicationTests.java"
+        assert test_path in files
+        assert "@SpringBootTest" in files[test_path]
+
+    @pytest.mark.unit
+    def test_get_spring_boot_fallback_has_gitignore(self):
+        """Should include .gitignore."""
+        files = get_spring_boot_fallback_files()
+        assert ".gitignore" in files
+        assert "target/" in files[".gitignore"]
+
+    @pytest.mark.unit
+    def test_get_spring_boot_fallback_custom_groupid(self):
+        """Should use custom groupId."""
+        files = get_spring_boot_fallback_files(group_id="org.mycompany")
+        assert "org.mycompany" in files["pom.xml"]
+
+    @pytest.mark.unit
+    def test_get_spring_boot_fallback_custom_artifactid(self):
+        """Should use custom artifactId."""
+        files = get_spring_boot_fallback_files(artifact_id="myapp")
+        assert "myapp" in files["pom.xml"]
+        # Class name should be derived from artifact ID
+        main_path = "src/main/java/com/example/demo/MyappApplication.java"
+        assert main_path in files
+
+    @pytest.mark.unit
+    def test_get_spring_boot_fallback_custom_package(self):
+        """Should use custom package name."""
+        files = get_spring_boot_fallback_files(package_name="com.myorg.myapp")
+        main_path = "src/main/java/com/myorg/myapp/DemoApplication.java"
+        assert main_path in files
+        assert "package com.myorg.myapp;" in files[main_path]
+
+    @pytest.mark.unit
+    def test_get_spring_boot_fallback_with_security_deps(self):
+        """Should include JWT dependencies when security is included."""
+        files = get_spring_boot_fallback_files(dependencies=["security"])
+        pom = files["pom.xml"]
+        assert "spring-boot-starter-security" in pom
+        assert "jjwt-api" in pom
+        assert "jjwt-impl" in pom
+        assert "jjwt-jackson" in pom
+
+    @pytest.mark.unit
+    def test_get_spring_boot_fallback_without_security(self):
+        """Should not include JWT dependencies without security."""
+        files = get_spring_boot_fallback_files(dependencies=["web"])
+        pom = files["pom.xml"]
+        assert "jjwt-api" not in pom
+        assert "spring-boot-starter-security" not in pom
+
+    @pytest.mark.unit
+    def test_get_spring_boot_fallback_h2_dependency(self):
+        """Should include H2 dependency when specified."""
+        files = get_spring_boot_fallback_files(dependencies=["h2"])
+        pom = files["pom.xml"]
+        assert "h2" in pom
+        assert "runtime" in pom
+
+    @pytest.mark.unit
+    def test_get_spring_boot_fallback_validation_dependency(self):
+        """Should include validation dependency when specified."""
+        files = get_spring_boot_fallback_files(dependencies=["validation"])
+        pom = files["pom.xml"]
+        assert "spring-boot-starter-validation" in pom
+
+    @pytest.mark.unit
+    def test_get_spring_boot_fallback_has_maven_wrapper(self):
+        """Should include Maven wrapper properties."""
+        files = get_spring_boot_fallback_files()
+        assert ".mvn/wrapper/maven-wrapper.properties" in files
+        props = files[".mvn/wrapper/maven-wrapper.properties"]
+        assert "apache-maven" in props

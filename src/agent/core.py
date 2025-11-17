@@ -311,6 +311,13 @@ class CodeAgent:
             if re.search(pattern, command, re.IGNORECASE):
                 return f"Error: Command matches dangerous pattern '{pattern}'"
 
+        # Fix Spring Initializr URLs before execution
+        from ..platform_utils import fix_spring_initializr_command
+        fixed_command, was_fixed, fix_message = fix_spring_initializr_command(command)
+        if was_fixed:
+            safe_print(f"   [Auto-fix] {fix_message}")
+            command = fixed_command
+
         # Validate command for current platform
         is_valid, warning = validate_command_for_platform(command)
         if not is_valid:
@@ -502,11 +509,33 @@ class CodeAgent:
         Parse command output and auto-detect format (JSON/YAML).
 
         Adds metadata about detected format and validates structure.
+        Also provides helpful guidance for common errors.
         """
         if not output or output == "(no output)":
             return output
 
         stripped = output.strip()
+
+        # Detect Spring Initializr errors and provide helpful guidance
+        if 'start.spring.io' in output or 'spring' in output.lower():
+            error_indicators = ['400 bad request', '404 not found', '500 internal server error',
+                               'connection refused', 'unable to resolve', 'network error']
+            output_lower = output.lower()
+            for error in error_indicators:
+                if error in output_lower:
+                    guidance = (
+                        "\n\n[Spring Initializr Error Detected]\n"
+                        "The Spring Initializr service returned an error. Common causes:\n"
+                        "1. Invalid dependency names (use 'web' not 'spring-boot-starter-web')\n"
+                        "2. Malformed URL parameters\n"
+                        "3. Network connectivity issues\n\n"
+                        "RECOMMENDED: Use write_file to create Spring Boot files directly:\n"
+                        "- Create pom.xml with required dependencies\n"
+                        "- Create main Application.java class\n"
+                        "- Create application.properties\n"
+                        "This is more reliable than downloading from Spring Initializr."
+                    )
+                    return output + guidance
 
         # Try JSON detection
         if stripped.startswith('{') or stripped.startswith('['):
