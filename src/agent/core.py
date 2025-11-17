@@ -1156,6 +1156,10 @@ class CodeAgent:
         # Update tool context dry_run state
         self.tool_context.dry_run = self.dry_run
 
+        # Enable auto-save for crash safety
+        self._audit_logger.enable_auto_save(self.project_root, ".llm_agent_audit.json")
+        self._audit_logger.set_task_info(task, max_iterations, auto_confirm)
+
         # Concise header
         task_preview = task[:80] + "..." if len(task) > 80 else task
         safe_print(f"\n[Agent] {task_preview}")
@@ -1241,54 +1245,68 @@ Current task: {task}
             auto_confirm=auto_confirm
         )
 
-        # Main agent loop - decoupled stages
+        # Main agent loop - decoupled stages with crash safety
         safe_print("Starting agent loop...")
-        while state.iteration < state.max_iterations:
-            state.iteration += 1
-            # Minimal iteration indicator (only show on first iteration)
-            if state.iteration == 1:
-                safe_print(f"Working...")
+        try:
+            while state.iteration < state.max_iterations:
+                state.iteration += 1
+                # Minimal iteration indicator (only show on first iteration)
+                if state.iteration == 1:
+                    safe_print(f"Working...")
 
-            # Stage 1: Think - LLM generates next thought/action
-            thought = self._think(state)
+                # Stage 1: Think - LLM generates next thought/action
+                thought = self._think(state)
 
-            # Stage 2: Plan - Parse response into structured action
-            action = self._plan_action(thought)
+                # Stage 2: Plan - Parse response into structured action
+                action = self._plan_action(thought)
 
-            # Stage 3: Execute - Run the tool
-            result = self._execute(action, state)
+                # Stage 3: Execute - Run the tool
+                result = self._execute(action, state)
 
-            # Stage 4: Evaluate - Check if task is complete
-            evaluation = self._evaluate(action, result, state)
+                # Stage 4: Evaluate - Check if task is complete
+                evaluation = self._evaluate(action, result, state)
 
-            # Update conversation history
-            self._update_conversation(state, thought, action, result)
+                # Update conversation history
+                self._update_conversation(state, thought, action, result)
 
-            # Check evaluation result
-            if evaluation.is_complete:
-                return {
-                    'success': True,
-                    'result': evaluation.final_result,
-                    'iterations': state.iteration,
-                    'audit_log': self.audit_log
-                }
+                # Check evaluation result
+                if evaluation.is_complete:
+                    self._audit_logger.mark_complete(True, evaluation.final_result)
+                    return {
+                        'success': True,
+                        'result': evaluation.final_result,
+                        'iterations': state.iteration,
+                        'audit_log': self.audit_log
+                    }
 
-            if not evaluation.should_continue:
-                # Max iterations or other stopping condition
-                return {
-                    'success': False,
-                    'result': evaluation.reason,
-                    'iterations': state.iteration,
-                    'audit_log': self.audit_log
-                }
+                if not evaluation.should_continue:
+                    # Max iterations or other stopping condition
+                    self._audit_logger.mark_complete(False, evaluation.reason)
+                    return {
+                        'success': False,
+                        'result': evaluation.reason,
+                        'iterations': state.iteration,
+                        'audit_log': self.audit_log
+                    }
 
-        # Max iterations reached (shouldn't get here but safety check)
-        return {
-            'success': False,
-            'result': f'Max iterations ({max_iterations}) reached',
-            'iterations': state.iteration,
-            'audit_log': self.audit_log
-        }
+            # Max iterations reached (shouldn't get here but safety check)
+            self._audit_logger.mark_complete(False, f'Max iterations ({max_iterations}) reached')
+            return {
+                'success': False,
+                'result': f'Max iterations ({max_iterations}) reached',
+                'iterations': state.iteration,
+                'audit_log': self.audit_log
+            }
+        except KeyboardInterrupt:
+            # User cancelled - save partial state
+            safe_print("\nAgent interrupted by user. Saving audit log...")
+            self._audit_logger.mark_complete(False, "Interrupted by user (KeyboardInterrupt)")
+            raise  # Re-raise to let caller handle
+        except Exception as e:
+            # Unexpected error - save partial state for debugging
+            safe_print(f"\nAgent error: {str(e)}. Saving audit log...")
+            self._audit_logger.mark_complete(False, f"Error: {str(e)}")
+            raise  # Re-raise to let caller handle
 
     def get_audit_log(self) -> list:
         """Get the audit log of all actions."""
