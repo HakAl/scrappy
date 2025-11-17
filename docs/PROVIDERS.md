@@ -1,8 +1,7 @@
- # In src/providers/base.py
+ # Provider Configuration - src/providers/base.py
 
-  from enum import Enum
 
-  class ModelType(Enum):
+```  class ModelType(Enum):
       """Classification of model training/tuning."""
       BASE = "base"           # Raw pretrained, no instruction tuning
       CHAT = "chat"           # Chat-tuned (conversational)
@@ -26,10 +25,10 @@
       @property
       def is_instruction_tuned(self) -> bool:
           """Check if model is instruction-tuned (best for JSON compliance)."""
-          return self.model_type == ModelType.INSTRUCT
+          return self.model_type == ModelType.INSTRUCT```
 
 
-  class LLMProvider(ABC):
+```  class LLMProvider(ABC):
       # ... existing methods ...
 
       @abstractmethod
@@ -42,11 +41,11 @@
           return [
               model_id for model_id in self.available_models
               if self.get_model_info(model_id).is_instruction_tuned
-          ]
+          ]```
 
   Then in providers:
 
-  # In groq_provider.py
+```  # In groq_provider.py
   MODELS = {
       'gemma2-9b-it': {
           'type': ModelType.INSTRUCT,  # NEW
@@ -56,11 +55,11 @@
           'type': ModelType.CHAT,  # NEW
           'rpm': 30, 'rpd': 1000, ...
       },
-  }
+  }```
 
-  And orchestrator could use:
+  And orchestrator use:
 
-  def select_model_for_task(self, task_type: str) -> tuple[str, str]:
+```  def select_model_for_task(self, task_type: str) -> tuple[str, str]:
       """Select best provider/model for task type."""
       if task_type == "planning":
           # Prefer instruction-tuned for JSON compliance
@@ -69,7 +68,7 @@
               if instruct_models:
                   # Pick highest RPD instruction-tuned model
                   best = max(instruct_models, key=lambda m: provider.get_model_info(m).rpd or 0)
-                  return provider.name, best
+                  return provider.name, best```
 
   Benefits:
   1. Automatic selection of instruction-tuned models for agent planning
@@ -77,13 +76,11 @@
   3. Smarter fallback logic
   4. Easy to extend with new model types
 
-
   ---
 
+## Native tool calling implementation -- tests/test_native_tool_calling.py
 
-## Native tool calling implementation plan:
-
-  Phase 1: Add Tool Schema Support to Base Provider
+- Tool Schema Support in Base Provider
 
 ```  # src/providers/base.py
   from dataclasses import dataclass
@@ -112,7 +109,7 @@
           """Chat with native tool calling support."""
           pass```
 
-  Phase 2: Implement in Providers
+- Provider implementations
 
 ```  # src/providers/groq_provider.py
   def chat_with_tools(self, messages, tools, tool_choice="auto", **kwargs):
@@ -169,23 +166,8 @@
               is_complete=True
           )```
 
-  Phase 4: Extract Code from core.py
 
-  The following can be removed from core.py:
-  - _parse_agent_response() (859-952) - JSON parsing
-  - All JSON fallback logic
-  - Boolean fixing (True/False -> true/false)
-  - Regex extraction attempts
 
-  ---
-  Benefits
-
-  1. Reliability - No more JSON parse failures
-  2. Simplicity - Remove ~100 lines of parsing code
-  3. Type safety - Provider guarantees structured output
-  4. Better errors - Provider validates tool schemas upfront
-
-  Should I start implementing this?
-
-  1. Write tests for native tool calling first?
-  2. Or start with extracting the JSON parsing code to prepare for replacement?
+  1. Implement chat_with_tools() in specific providers (e.g., groq_provider.py)
+  2. Update CodeAgent._think() to optionally use native tool calling
+  3. Add provider capability detection for graceful fallback

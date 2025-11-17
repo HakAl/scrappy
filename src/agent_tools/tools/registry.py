@@ -153,6 +153,31 @@ When task is complete:
         """
         return f"{self.generate_descriptions()}\n{self.get_response_format()}"
 
+    def to_openai_schema(self) -> list[dict]:
+        """
+        Convert all registered tools to OpenAI-compatible tool schemas.
+
+        This format is used by OpenAI, Groq, and other providers for native
+        tool/function calling.
+
+        Returns:
+            List of tool definitions in OpenAI format
+        """
+        schemas = []
+
+        for tool in sorted(self._tools.values(), key=lambda t: t.name):
+            schema = {
+                "type": "function",
+                "function": {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": tool.parameters_schema
+                }
+            }
+            schemas.append(schema)
+
+        return schemas
+
     @classmethod
     def create_default(cls) -> "ToolRegistry":
         """

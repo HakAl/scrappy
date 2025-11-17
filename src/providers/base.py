@@ -7,7 +7,7 @@ making it easy to add new providers (OpenRouter, HuggingFace, etc.) in the futur
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime
 from enum import Enum
 import asyncio
@@ -124,6 +124,19 @@ class ModelInfo:
 
 
 @dataclass
+class ToolCall:
+    """
+    Structured tool call from LLM.
+
+    Represents a single tool/function call returned by an LLM when using
+    native tool calling (as opposed to JSON text parsing).
+    """
+    id: str
+    name: str
+    arguments: Dict[str, Any]
+
+
+@dataclass
 class LLMResponse:
     """Standardized response from any LLM provider."""
     content: str
@@ -136,6 +149,7 @@ class LLMResponse:
     raw_response: object = None
     metadata: dict = field(default_factory=dict)
     timestamp: datetime = field(default_factory=datetime.now)
+    tool_calls: Optional[List[ToolCall]] = None  # Native tool calling support
 
 
 @dataclass
@@ -254,6 +268,37 @@ class LLMProvider(ABC):
         Override in paid providers.
         """
         return 0.0
+
+    def chat_with_tools(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        tool_choice: str = "auto",
+        **kwargs
+    ) -> LLMResponse:
+        """
+        Chat with native tool calling support.
+
+        This method allows LLMs to call tools/functions natively rather than
+        requiring the model to output JSON text that must be parsed.
+
+        Args:
+            messages: List of message dicts with 'role' and 'content' keys
+            tools: List of OpenAI-compatible tool schemas
+            tool_choice: How the model should choose tools ("auto", "none", or specific tool)
+            **kwargs: Additional provider-specific parameters
+
+        Returns:
+            LLMResponse with tool_calls field populated if the model decided to call tools
+
+        Note:
+            Default implementation raises NotImplementedError. Providers that support
+            native tool calling should override this method.
+        """
+        raise NotImplementedError(
+            f"Provider {self.name} does not support native tool calling. "
+            "Use JSON text parsing with chat() instead."
+        )
 
     def get_model_info(self, model_id: str) -> ModelInfo:
         """

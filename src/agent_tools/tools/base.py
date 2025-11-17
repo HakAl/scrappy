@@ -127,6 +127,45 @@ class Tool(ABC):
         """List of parameters this tool accepts."""
         pass
 
+    @property
+    def parameters_schema(self) -> dict:
+        """
+        Get OpenAI-compatible JSON schema for tool parameters.
+
+        Can be overridden by subclasses for custom schemas.
+        Default implementation converts ToolParameter list to JSON schema.
+
+        Returns:
+            Dict representing JSON schema for parameters
+        """
+        properties = {}
+        required = []
+
+        type_map = {
+            str: "string",
+            int: "integer",
+            float: "number",
+            bool: "boolean",
+            list: "array",
+            dict: "object"
+        }
+
+        for param in self.parameters:
+            param_schema = {
+                "type": type_map.get(param.param_type, "string"),
+                "description": param.description
+            }
+            properties[param.name] = param_schema
+
+            if param.required:
+                required.append(param.name)
+
+        return {
+            "type": "object",
+            "properties": properties,
+            "required": required
+        }
+
     @abstractmethod
     def execute(self, context: ToolContext, **kwargs) -> ToolResult:
         """

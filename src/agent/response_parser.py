@@ -221,3 +221,71 @@ class JSONResponseParser(ResponseParser):
             is_complete=data.get("is_complete", False),
             result_text=data.get("result", "")
         )
+
+
+class NativeToolCallParser(ResponseParser):
+    """
+    Parser for native tool calling responses.
+
+    This parser handles LLMResponse objects that contain tool_calls directly,
+    rather than parsing JSON text from the response content. This is the modern
+    approach used by OpenAI, Groq, and other providers that support function calling.
+    """
+
+    def parse(self, response_text: str) -> ParseResult:
+        """
+        Parse text response (legacy interface).
+
+        NativeToolCallParser expects LLMResponse objects, not text.
+        This method provides backward compatibility but indicates that
+        native tool calling is expected.
+
+        Args:
+            response_text: Raw text response (not expected for native tool calling)
+
+        Returns:
+            ParseResult indicating that native tool calling is expected
+        """
+        return ParseResult(
+            thought="NativeToolCallParser expects LLMResponse with tool_calls, not text",
+            action="retry_parse",
+            parameters={"raw_response": response_text[:500] if response_text else ""},
+            is_complete=False,
+            error="Native tool call parser received text instead of LLMResponse. "
+                  "Use parse_response() with LLMResponse object instead."
+        )
+
+    def parse_response(self, response) -> ParseResult:
+        """
+        Parse an LLMResponse with native tool calls.
+
+        This is the primary method for parsing responses from providers that
+        support native tool calling.
+
+        Args:
+            response: LLMResponse object with tool_calls field
+
+        Returns:
+            ParseResult containing the parsed action details
+        """
+        # Handle None or empty tool_calls as completion
+        if response.tool_calls is None or len(response.tool_calls) == 0:
+            # No tool calls means the model is done or responding without tools
+            return ParseResult(
+                thought=response.content,
+                action="complete",
+                parameters={},
+                is_complete=True,
+                result_text=response.content
+            )
+
+        # Use the first tool call (most common case)
+        tool_call = response.tool_calls[0]
+
+        return ParseResult(
+            thought=response.content,  # LLM's explanation/reasoning
+            action=tool_call.name,     # Tool to execute
+            parameters=tool_call.arguments,  # Tool parameters
+            is_complete=False,
+            result_text=""
+        )
