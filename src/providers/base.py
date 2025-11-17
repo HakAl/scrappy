@@ -262,6 +262,20 @@ class LLMProvider(ABC):
         except Exception:
             return False
 
+    @property
+    def supports_tool_calling(self) -> bool:
+        """
+        Check if this provider supports native tool calling.
+
+        Returns:
+            True if provider supports chat_with_tools(), False otherwise.
+
+        Note:
+            Override this property to return True in providers that implement
+            native tool calling. Default is False for backward compatibility.
+        """
+        return False
+
     def estimate_cost(self, input_tokens: int, output_tokens: int, model: str = None) -> float:
         """
         Estimate cost for a request (returns 0.0 for free tier).

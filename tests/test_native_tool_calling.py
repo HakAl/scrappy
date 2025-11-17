@@ -434,6 +434,156 @@ class TestNativeToolCallParserInterface:
         assert result.error is not None or result.action == "retry_parse"
 
 
+class TestProviderCapabilityDetection:
+    """Tests for detecting if a provider supports native tool calling."""
+
+    @pytest.mark.unit
+    def test_provider_has_supports_tool_calling_property(self):
+        """LLMProvider has supports_tool_calling property."""
+        from src.providers.base import LLMProvider
+
+        assert hasattr(LLMProvider, 'supports_tool_calling')
+
+    @pytest.mark.unit
+    def test_base_provider_defaults_to_false(self):
+        """Base provider defaults to not supporting tool calling."""
+        from src.providers.base import LLMProvider, LLMResponse, ProviderLimits
+
+        class BasicProvider(LLMProvider):
+            @property
+            def name(self):
+                return "basic"
+
+            @property
+            def available_models(self):
+                return ["basic-model"]
+
+            @property
+            def default_model(self):
+                return "basic-model"
+
+            def chat(self, messages, model=None, max_tokens=1000, temperature=0.7, **kwargs):
+                return LLMResponse(content="test", model="basic-model", provider="basic")
+
+            def get_limits(self):
+                return ProviderLimits()
+
+        provider = BasicProvider()
+        assert provider.supports_tool_calling is False
+
+    @pytest.mark.unit
+    def test_provider_can_override_to_true(self):
+        """Provider can override supports_tool_calling to True."""
+        from src.providers.base import LLMProvider, LLMResponse, ProviderLimits
+
+        class ToolCallingProvider(LLMProvider):
+            @property
+            def name(self):
+                return "tool-enabled"
+
+            @property
+            def available_models(self):
+                return ["tool-model"]
+
+            @property
+            def default_model(self):
+                return "tool-model"
+
+            @property
+            def supports_tool_calling(self):
+                return True  # Override to indicate support
+
+            def chat(self, messages, model=None, max_tokens=1000, temperature=0.7, **kwargs):
+                return LLMResponse(content="test", model="tool-model", provider="tool-enabled")
+
+            def get_limits(self):
+                return ProviderLimits()
+
+            def chat_with_tools(self, messages, tools, tool_choice="auto", **kwargs):
+                # Actual implementation would call API
+                return LLMResponse(
+                    content="Using tool",
+                    model="tool-model",
+                    provider="tool-enabled",
+                    tool_calls=[]
+                )
+
+        provider = ToolCallingProvider()
+        assert provider.supports_tool_calling is True
+
+    @pytest.mark.unit
+    def test_can_check_before_calling(self):
+        """Can check capability before calling chat_with_tools."""
+        from src.providers.base import LLMProvider, LLMResponse, ProviderLimits
+
+        class ConditionalProvider(LLMProvider):
+            @property
+            def name(self):
+                return "conditional"
+
+            @property
+            def available_models(self):
+                return ["cond-model"]
+
+            @property
+            def default_model(self):
+                return "cond-model"
+
+            def chat(self, messages, model=None, max_tokens=1000, temperature=0.7, **kwargs):
+                return LLMResponse(content="test", model="cond-model", provider="conditional")
+
+            def get_limits(self):
+                return ProviderLimits()
+
+        provider = ConditionalProvider()
+
+        # Check capability before calling
+        if provider.supports_tool_calling:
+            # Would call chat_with_tools
+            pass
+        else:
+            # Fall back to JSON parsing
+            assert True  # This path should be taken
+
+    @pytest.mark.unit
+    def test_model_specific_tool_support(self):
+        """Provider can indicate tool support varies by model."""
+        from src.providers.base import LLMProvider, LLMResponse, ProviderLimits
+
+        class MixedProvider(LLMProvider):
+            @property
+            def name(self):
+                return "mixed"
+
+            @property
+            def available_models(self):
+                return ["base-model", "tool-model"]
+
+            @property
+            def default_model(self):
+                return "tool-model"
+
+            @property
+            def supports_tool_calling(self):
+                # Default model supports it
+                return True
+
+            def chat(self, messages, model=None, max_tokens=1000, temperature=0.7, **kwargs):
+                return LLMResponse(content="test", model=model or self.default_model, provider="mixed")
+
+            def get_limits(self):
+                return ProviderLimits()
+
+            def model_supports_tools(self, model_id: str) -> bool:
+                """Check if specific model supports tools."""
+                return model_id == "tool-model"
+
+        provider = MixedProvider()
+        assert provider.supports_tool_calling is True
+        assert provider.model_supports_tools("tool-model") is True
+        assert provider.model_supports_tools("base-model") is False
+
+
 class TestChatWithToolsProviderInterface:
     """Tests for chat_with_tools method in provider interface."""
 

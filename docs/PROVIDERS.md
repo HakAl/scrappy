@@ -1,6 +1,5 @@
  # Provider Configuration - src/providers/base.py
 
-
 ```  class ModelType(Enum):
       """Classification of model training/tuning."""
       BASE = "base"           # Raw pretrained, no instruction tuning
@@ -79,6 +78,8 @@
   ---
 
 ## Native tool calling implementation -- tests/test_native_tool_calling.py
+
+providers have supports_tool_calling() to check support
 
 - Tool Schema Support in Base Provider
 

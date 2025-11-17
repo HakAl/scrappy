@@ -9,9 +9,10 @@ Cerebras provides extremely fast inference on specialized hardware with excellen
 
 import os
 import time
+import json
 from typing import Optional
 
-from .base import LLMProvider, LLMResponse, ProviderLimits, ModelInfo
+from .base import LLMProvider, LLMResponse, ProviderLimits, ModelInfo, ToolCall
 from ..utils.imports import safe_import
 from ..utils.errors import raise_package_not_installed, raise_env_var_not_found, raise_model_not_supported
 
@@ -89,6 +90,11 @@ class CerebrasProvider(LLMProvider):
     def default_model(self) -> str:
         return 'llama3.1-8b'
 
+    @property
+    def supports_tool_calling(self) -> bool:
+        """Cerebras supports native tool calling via OpenAI-compatible API."""
+        return True
+
     def chat(
         self,
         messages: list[dict[str, str]],
@@ -146,6 +152,92 @@ class CerebrasProvider(LLMProvider):
             latency_ms=latency_ms,
             raw_response=response,
             metadata=metadata
+        )
+
+    def chat_with_tools(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        tool_choice: str = "auto",
+        model: Optional[str] = None,
+        max_tokens: int = 1000,
+        temperature: float = 0.7,
+        **kwargs
+    ) -> LLMResponse:
+        """
+        Send chat completion with native tool calling to Cerebras.
+
+        Args:
+            messages: List of message dicts
+            tools: OpenAI-compatible tool schemas
+            tool_choice: How model should choose tools ("auto", "none", etc.)
+            model: Model to use (defaults to default_model)
+            max_tokens: Maximum tokens in response
+            temperature: Sampling temperature
+            **kwargs: Additional parameters
+
+        Returns:
+            LLMResponse with tool_calls populated if model called tools
+        """
+        model = model or self.default_model
+
+        if model not in self.MODELS:
+            raise_model_not_supported(model, self.available_models)
+
+        start_time = time.time()
+
+        response = self._client.chat.completions.create(
+            messages=messages,
+            model=model,
+            tools=tools,
+            tool_choice=tool_choice,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            **kwargs
+        )
+
+        latency_ms = (time.time() - start_time) * 1000
+
+        # Extract usage info
+        usage = response.usage
+        input_tokens = usage.prompt_tokens if usage else 0
+        output_tokens = usage.completion_tokens if usage else 0
+
+        # Build metadata
+        metadata = {
+            'finish_reason': response.choices[0].finish_reason,
+            'model_config': self.MODELS.get(model, {}),
+        }
+
+        # Add Cerebras-specific performance metrics if available
+        if hasattr(usage, 'completion_tokens_per_sec'):
+            metadata['tokens_per_sec'] = getattr(usage, 'completion_tokens_per_sec', None)
+        if hasattr(usage, 'total_latency'):
+            metadata['cerebras_latency'] = getattr(usage, 'total_latency', None)
+
+        # Extract tool calls if present
+        tool_calls = None
+        message = response.choices[0].message
+        if hasattr(message, 'tool_calls') and message.tool_calls:
+            tool_calls = []
+            for tc in message.tool_calls:
+                tool_calls.append(ToolCall(
+                    id=tc.id,
+                    name=tc.function.name,
+                    arguments=json.loads(tc.function.arguments)
+                ))
+
+        return LLMResponse(
+            content=message.content or "",
+            model=model,
+            provider=self.name,
+            tokens_used=input_tokens + output_tokens,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            latency_ms=latency_ms,
+            raw_response=response,
+            metadata=metadata,
+            tool_calls=tool_calls
         )
 
     def get_limits(self) -> ProviderLimits:
