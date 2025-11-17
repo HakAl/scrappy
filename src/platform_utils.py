@@ -277,8 +277,23 @@ def validate_command_for_platform(command: str) -> Tuple[bool, str]:
         'attrib', 'cacls', 'cipher', 'compact',
     }
 
+    # PowerShell cmdlets (Verb-Noun pattern) that won't work in cmd.exe
+    powershell_cmdlets = {
+        'new-item', 'remove-item', 'copy-item', 'move-item', 'rename-item',
+        'get-childitem', 'set-content', 'get-content', 'add-content', 'clear-content',
+        'test-path', 'invoke-webrequest', 'invoke-restmethod',
+        'convertto-json', 'convertfrom-json', 'out-file',
+        'get-item', 'set-item', 'clear-item',
+        'new-object', 'select-object', 'where-object', 'foreach-object',
+        'get-location', 'set-location', 'push-location', 'pop-location',
+    }
+
     # Check for shell-specific syntax
     if is_windows():
+        # Check for PowerShell cmdlets (won't work in cmd.exe subprocess)
+        if base_cmd in powershell_cmdlets:
+            return False, f"PowerShell cmdlet '{base_cmd}' not available in cmd.exe. Use cmd.exe equivalent or Python fallback."
+
         # Check for Unix-specific syntax
         if cmd_lower.startswith('[') and ']' in cmd_lower:
             return False, "Unix test syntax '[ ]' not supported on Windows. Use 'if exist' instead."
@@ -359,6 +374,12 @@ def normalize_command_paths(command: str) -> Tuple[str, bool, str]:
         'move', 'del', 'erase', 'type', 'more', 'attrib'
     ]
 
+    # PowerShell parameters that contain paths
+    powershell_path_params = [
+        '-Path', '-LiteralPath', '-Destination', '-Source', '-FilePath',
+        '-OutputPath', '-InputPath', '-TargetPath'
+    ]
+
     # Split command into parts, preserving quotes
     parts = []
     current = ""
@@ -391,21 +412,61 @@ def normalize_command_paths(command: str) -> Tuple[str, bool, str]:
     # Check if this is a command that uses paths
     is_path_command = any(base_cmd == cmd or base_cmd.endswith('\\' + cmd) for cmd in path_commands)
 
-    if not is_path_command:
+    # Also check for PowerShell path parameters in any command
+    has_powershell_path_param = any(
+        any(part.lower() == param.lower() for param in powershell_path_params)
+        for part in parts
+    )
+
+    if not is_path_command and not has_powershell_path_param:
         return command, False, ""
 
     # Normalize paths in arguments
     modified = False
     new_parts = [parts[0]]
+    next_is_path = False
 
     for i, part in enumerate(parts[1:], 1):
-        # Skip flags
-        if part.startswith('-') or part.startswith('/'):
+        # Check if this is a PowerShell path parameter
+        is_path_param = any(part.lower() == param.lower() for param in powershell_path_params)
+
+        if is_path_param:
+            new_parts.append(part)
+            next_is_path = True
+            continue
+
+        # If previous part was a path parameter, this is the path value
+        if next_is_path:
+            next_is_path = False
+            if '/' in part and not part.startswith('http://') and not part.startswith('https://'):
+                if part.startswith('"') and part.endswith('"'):
+                    inner = part[1:-1]
+                    normalized = inner.replace('/', '\\')
+                    new_parts.append(f'"{normalized}"')
+                elif part.startswith("'") and part.endswith("'"):
+                    inner = part[1:-1]
+                    normalized = inner.replace('/', '\\')
+                    new_parts.append(f"'{normalized}'")
+                else:
+                    normalized = part.replace('/', '\\')
+                    new_parts.append(normalized)
+                modified = True
+            else:
+                new_parts.append(part)
+            continue
+
+        # Skip flags (but not PowerShell parameters which start with -)
+        if (part.startswith('-') or part.startswith('/')) and not is_path_command:
             new_parts.append(part)
             continue
 
-        # Check if this looks like a path (contains forward slash but not a URL)
-        if '/' in part and not part.startswith('http://') and not part.startswith('https://'):
+        # For path commands, check if this looks like a path
+        if is_path_command and '/' in part and not part.startswith('http://') and not part.startswith('https://'):
+            # Skip cmd.exe flags (like /s, /b, /y) - they start with / and are short
+            if part.startswith('/') and len(part) <= 3 and not '/' in part[1:]:
+                new_parts.append(part)
+                continue
+
             # Preserve quotes around the path
             if part.startswith('"') and part.endswith('"'):
                 inner = part[1:-1]
