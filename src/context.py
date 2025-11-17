@@ -6,7 +6,9 @@ Provides automatic project exploration and context augmentation for prompts.
 
 import json
 import os
+import shutil
 import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -40,12 +42,16 @@ class CodebaseContext:
         self.explored_at: Optional[datetime] = None
         self.cache_file = self.project_path / ".llm_team_context.json"
 
+        # Cached platform and tool detection
+        self._platform: Optional[str] = None
+        self._tool_cache: dict = {}
+
         # Try to load cached context
         self._load_cache()
 
     def is_explored(self) -> bool:
         """Check if the codebase has been explored."""
-        return self.summary is not None and self.explored_at is not None
+        return self.explored_at is not None
 
     def explore(self, force: bool = False) -> dict:
         """
@@ -306,21 +312,46 @@ Be concise and technical. No fluff."""
                         categorized = True
                         break
 
-                if not categorized and ext:
+                if not categorized:
                     files['other'].append(file_path)
 
         return files
 
     def _analyze_structure(self) -> dict:
-        """Analyze project structure."""
+        """Analyze project structure using file_index data."""
+        # Build list of all files for marker detection
+        all_files = []
+        for file_list in self.file_index.values():
+            all_files.extend(file_list)
+
+        # Helper to check if marker exists anywhere in tree
+        def has_marker(marker_name):
+            return any(f.endswith(marker_name) or f == marker_name for f in all_files)
+
+        # Helper to check if marker exists in root only
+        def has_root_marker(marker_name):
+            return marker_name in all_files
+
         structure = {
             'total_files': sum(len(f) for f in self.file_index.values()),
             'by_type': {k: len(v) for k, v in self.file_index.items()},
-            'has_readme': (self.project_path / 'README.md').exists() or (self.project_path / 'README').exists(),
-            'has_requirements': (self.project_path / 'requirements.txt').exists(),
-            'has_package_json': (self.project_path / 'package.json').exists(),
-            'has_pyproject': (self.project_path / 'pyproject.toml').exists(),
+            'has_readme': has_root_marker('README.md') or has_root_marker('README'),
+            # Project markers - check anywhere in tree (supports monorepos)
+            'has_requirements': has_marker('requirements.txt'),
+            'has_package_json': has_marker('package.json'),
+            'has_pyproject': has_marker('pyproject.toml'),
             'has_git': (self.project_path / '.git').exists(),
+            # Java/JVM project markers
+            'has_pom_xml': has_marker('pom.xml'),
+            'has_build_gradle': has_marker('build.gradle') or has_marker('build.gradle.kts'),
+            # Rust project marker
+            'has_cargo_toml': has_marker('Cargo.toml'),
+            # Go project marker
+            'has_go_mod': has_marker('go.mod'),
+            # Ruby project marker
+            'has_gemfile': has_marker('Gemfile'),
+            # .NET project marker
+            'has_csproj': any(f.endswith('.csproj') or f.endswith('.sln') for f in all_files),
             'directories': [],
         }
 
@@ -538,3 +569,218 @@ Be concise and technical. No fluff."""
             return f"Project: {self.project_path.name}, {self.structure.get('total_files', 0)} files"
 
         return "Project not explored yet"
+
+    def get_project_type(self) -> str:
+        """
+        Determine the primary project type based on detected markers.
+
+        Returns:
+            String identifier for project type (e.g., 'python', 'java', 'nodejs')
+        """
+        if not self.structure:
+            self.explore()
+
+        # Priority order for project type detection
+        if self.structure.get('has_requirements') or self.structure.get('has_pyproject'):
+            return 'python'
+        elif self.structure.get('has_pom_xml'):
+            return 'java'
+        elif self.structure.get('has_build_gradle'):
+            return 'java'
+        elif self.structure.get('has_package_json'):
+            return 'nodejs'
+        elif self.structure.get('has_cargo_toml'):
+            return 'rust'
+        elif self.structure.get('has_go_mod'):
+            return 'go'
+        elif self.structure.get('has_gemfile'):
+            return 'ruby'
+        elif self.structure.get('has_csproj'):
+            return 'dotnet'
+        else:
+            return 'unknown'
+
+    def get_platform(self) -> str:
+        """
+        Get the current platform (cached).
+
+        Returns:
+            Platform identifier: 'windows', 'darwin', 'linux', or 'unix'
+        """
+        if self._platform is None:
+            if sys.platform == 'win32':
+                self._platform = 'windows'
+            elif sys.platform == 'darwin':
+                self._platform = 'darwin'
+            elif sys.platform.startswith('linux'):
+                self._platform = 'linux'
+            else:
+                self._platform = 'unix'
+
+        return self._platform
+
+    def has_tool(self, tool_name: str) -> bool:
+        """
+        Check if a command-line tool is available (cached).
+
+        Args:
+            tool_name: Name of the tool/command to check
+
+        Returns:
+            True if tool is available, False otherwise
+        """
+        if tool_name not in self._tool_cache:
+            self._tool_cache[tool_name] = shutil.which(tool_name) is not None
+
+        return self._tool_cache[tool_name]
+
+    def get_languages(self) -> list:
+        """
+        Get list of programming languages used in the codebase.
+
+        Returns:
+            List of language names based on file extensions found
+        """
+        if not self.file_index:
+            self.explore()
+
+        languages = []
+        if self.file_index.get('python'):
+            languages.append('python')
+        if self.file_index.get('javascript'):
+            languages.append('javascript')
+        # Note: javascript category includes .ts, .tsx files
+        if any(f.endswith('.ts') or f.endswith('.tsx') for f in self.file_index.get('javascript', [])):
+            if 'typescript' not in languages:
+                languages.append('typescript')
+
+        return languages
+
+    def get_language_stats(self) -> dict:
+        """
+        Get count of files per programming language.
+
+        Returns:
+            Dict mapping language name to file count
+        """
+        if not self.file_index:
+            self.explore()
+
+        return {k: len(v) for k, v in self.file_index.items() if v}
+
+    def get_primary_language(self) -> str:
+        """
+        Determine primary language based on file count.
+
+        Returns:
+            Language with most files, or 'unknown' if no code files
+        """
+        stats = self.get_language_stats()
+
+        # Only consider actual code languages
+        code_languages = {k: v for k, v in stats.items()
+                         if k in ('python', 'javascript') and v > 0}
+
+        if not code_languages:
+            return 'unknown'
+
+        return max(code_languages.items(), key=lambda x: x[1])[0]
+
+    def find_project_markers(self) -> list:
+        """
+        Find all project marker files (package.json, requirements.txt, etc.) anywhere in tree.
+
+        Returns:
+            List of relative paths to project marker files
+        """
+        if not self.file_index:
+            self.explore()
+
+        marker_names = {
+            'package.json', 'requirements.txt', 'pyproject.toml', 'setup.py',
+            'pom.xml', 'build.gradle', 'build.gradle.kts',
+            'Cargo.toml', 'go.mod', 'Gemfile', 'composer.json'
+        }
+
+        markers = []
+        for file_path in self.file_index.get('config', []):
+            if any(file_path.endswith(marker) for marker in marker_names):
+                markers.append(file_path)
+
+        # Also check 'other' category for markers not in config
+        for file_path in self.file_index.get('other', []):
+            if any(file_path.endswith(marker) for marker in marker_names):
+                markers.append(file_path)
+
+        # Also check 'docs' category (requirements.txt has .txt extension)
+        for file_path in self.file_index.get('docs', []):
+            if any(file_path.endswith(marker) for marker in marker_names):
+                markers.append(file_path)
+
+        return markers
+
+    def get_marker_locations(self) -> dict:
+        """
+        Map directories to their project marker files.
+
+        Returns:
+            Dict mapping directory path to marker filename
+        """
+        markers = self.find_project_markers()
+        locations = {}
+
+        for marker_path in markers:
+            # Get directory containing the marker
+            if '/' in marker_path or '\\' in marker_path:
+                # Normalize to forward slashes for consistency
+                normalized = marker_path.replace('\\', '/')
+                parts = normalized.rsplit('/', 1)
+                directory = parts[0]
+                marker_name = parts[1]
+            else:
+                # Marker in root directory
+                directory = '.'
+                marker_name = marker_path
+
+            locations[directory] = marker_name
+
+        return locations
+
+    def get_sub_projects(self) -> dict:
+        """
+        Detect project types in subdirectories (for monorepos).
+
+        Returns:
+            Dict mapping subdirectory name to project type
+        """
+        marker_locations = self.get_marker_locations()
+        sub_projects = {}
+
+        # Map marker files to project types
+        marker_to_type = {
+            'package.json': 'nodejs',
+            'requirements.txt': 'python',
+            'pyproject.toml': 'python',
+            'setup.py': 'python',
+            'pom.xml': 'java',
+            'build.gradle': 'java',
+            'build.gradle.kts': 'java',
+            'Cargo.toml': 'rust',
+            'go.mod': 'go',
+            'Gemfile': 'ruby',
+            'composer.json': 'php',
+        }
+
+        for directory, marker in marker_locations.items():
+            if directory != '.':  # Skip root
+                project_type = marker_to_type.get(marker, 'unknown')
+                # Use the top-level directory name as key
+                top_dir = directory.split('/')[0] if '/' in directory else directory
+                # If we already have this directory, keep the first one found
+                if top_dir not in sub_projects:
+                    sub_projects[top_dir] = project_type
+                # For nested paths like services/auth-api, also track the full path
+                if '/' in directory:
+                    sub_projects[directory] = project_type
+
+        return sub_projects

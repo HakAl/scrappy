@@ -1408,74 +1408,19 @@ class CodeAgent:
 
         # Build initial context
         safe_print("Building context...")
-        context_info = ""
-        if self.orch.context.is_explored():
-            context_info = f"\nProject Context:\n{self.orch.context.get_summary()}\n"
 
-        # System prompt for agent
+        # System prompt for agent - use PromptBuilder for context-aware construction
         safe_print("Preparing system prompt...")
+        from src.agent.prompt_builder import PromptBuilder
+
+        prompt_builder = PromptBuilder(context=self.orch.context)
+
+        # Add tool descriptions section
         tool_descriptions = self._get_tool_descriptions()
-        platform_name = get_platform_name()
-        platform_guidance = ""
-        if is_windows():
-            platform_guidance = """
-IMPORTANT - Platform: Windows (CRITICAL - READ ALL GUIDANCE BELOW)
+        prompt_builder.add_section('tools', tool_descriptions)
 
-FORBIDDEN Unix Commands:
-- Do NOT use: grep, cat, sed, awk, find, xargs, ls, rm, cp, mv, touch, curl, wget
-- Use Python code or PowerShell equivalents instead
-
-File Operations - Use Built-in Tools:
-- For searching files: use search_code tool (NOT grep or findstr)
-- For reading files: use read_file tool (NOT cat or type)
-- For listing files: use list_files tool (NOT ls, dir, or find)
-- For writing files: use write_file tool (NOT echo redirection)
-
-Directory Creation - Use Backslashes:
-  BAD:  mkdir website/frontend (Unix forward slash - WILL FAIL)
-  GOOD: mkdir website\\frontend (Windows backslash)
-  BEST: Use PowerShell: New-Item -ItemType Directory -Path "website\\frontend" -Force
-
-Project Scaffolding - AVOID Network Downloads:
-  BAD:  curl https://start.spring.io/... (URL encoding issues on Windows)
-  BAD:  Invoke-WebRequest https://start.spring.io/... (often fails with 400 errors)
-  GOOD: Write project files directly using write_file tool
-  - For Spring Boot: Write pom.xml, src/main/java/... files directly
-  - For React/Vite: Run "npm create vite@latest projectname -- --template react" with -y flags
-
-NPM Commands - Suppress Unicode Output:
-  BAD:  npm create vite (Unicode spinners cause crashes)
-  GOOD: npm create vite@latest myapp -- --template react 2>&1
-  BEST: Set NO_COLOR=1 and use --no-color flags when available
-
-Command Chaining:
-  BAD:  cd frontend && npm install (Unix style)
-  GOOD: cd frontend & npm install (Windows style with &)
-  BEST: Run commands separately, one at a time
-
-Spring Boot Projects - Write Files Directly:
-Instead of downloading from start.spring.io, create these files with write_file:
-1. pom.xml (Maven configuration)
-2. src/main/java/.../Application.java
-3. src/main/resources/application.properties
-4. Other Java source files as needed
-This is MORE RELIABLE than network downloads.
-
-Key Principles:
-1. NEVER retry the same failing approach - try a completely different strategy
-2. Use write_file for creating project structures (most reliable)
-3. If a shell command fails once, switch to Python/PowerShell alternative immediately
-4. Windows paths use BACKSLASH (\\), not forward slash (/)
-"""
-        else:
-            platform_guidance = f"""
-Platform: {platform_name}
-- Unix commands (grep, cat, sed, etc.) are available
-"""
-
-        system_prompt = f"""You are a code agent that helps with programming tasks.
-You have access to tools to read, write, and analyze code.
-
+        # Add operational guidelines
+        operational_guidance = """
 CRITICAL PROJECT CREATION STRATEGY:
 When asked to create a new project (Spring Boot, React, Node.js, etc.), STRONGLY PREFER using write_file to create files directly rather than relying on scaffolding tools (curl, npm create, spring initializr, etc.).
 
@@ -1487,19 +1432,6 @@ Why write_file is BETTER than scaffolding:
 
 SCAFFOLDING FAILURE RULE:
 If a scaffolding command (curl, npm create, spring initializr) fails ONCE, immediately switch to write_file approach. DO NOT retry the same scaffolding approach multiple times.
-
-Example for Spring Boot:
-  BAD: curl https://start.spring.io/... (network-dependent, often fails)
-  GOOD: write_file("pom.xml", "..."); write_file("src/main/.../Application.java", "...")
-
-Example for React:
-  BAD: npm create vite (interactive prompts, Unicode issues)
-  GOOD: write_file("package.json", "..."); write_file("src/App.jsx", "...")
-
-{tool_descriptions}
-
-{context_info}
-{platform_guidance}
 
 Important:
 - Always explain your reasoning in the "thought" field
@@ -1527,10 +1459,11 @@ CRITICAL - write_file usage:
 - NEVER call write_file with empty content - this WILL fail
 - Always include the COMPLETE file content in one write_file call
 - Do NOT create empty files then fill them later
-- Plan your file content fully before calling write_file
+- Plan your file content fully before calling write_file"""
+        prompt_builder.add_section('operational_guidelines', operational_guidance)
 
-Current task: {task}
-"""
+        # Build the complete system prompt with task context
+        system_prompt = prompt_builder.build(task=task)
 
         # Initialize conversation state
         state = ConversationState(

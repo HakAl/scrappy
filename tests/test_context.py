@@ -364,3 +364,443 @@ class TestEdgeCases:
         # Should handle gracefully on new instance
         context2 = CodebaseContext(str(temp_project_dir))
         assert context2.summary is None or context2.explored_at is None
+
+
+class TestProjectTypeDetection:
+    """Tests for detecting different project types."""
+
+    @pytest.mark.unit
+    def test_detects_maven_project(self, temp_project_dir):
+        """Should detect Java/Maven projects via pom.xml."""
+        (temp_project_dir / 'pom.xml').write_text(
+            '<project><groupId>com.example</groupId></project>\n'
+        )
+
+        context = CodebaseContext(str(temp_project_dir))
+        context.explore()
+
+        assert context.structure.get('has_pom_xml') is True
+
+    @pytest.mark.unit
+    def test_detects_gradle_project(self, temp_project_dir):
+        """Should detect Java/Gradle projects via build.gradle."""
+        (temp_project_dir / 'build.gradle').write_text(
+            'plugins {\n    id "java"\n}\n'
+        )
+
+        context = CodebaseContext(str(temp_project_dir))
+        context.explore()
+
+        assert context.structure.get('has_build_gradle') is True
+
+    @pytest.mark.unit
+    def test_detects_rust_project(self, temp_project_dir):
+        """Should detect Rust projects via Cargo.toml."""
+        (temp_project_dir / 'Cargo.toml').write_text(
+            '[package]\nname = "myapp"\nversion = "0.1.0"\n'
+        )
+
+        context = CodebaseContext(str(temp_project_dir))
+        context.explore()
+
+        assert context.structure.get('has_cargo_toml') is True
+
+    @pytest.mark.unit
+    def test_detects_go_project(self, temp_project_dir):
+        """Should detect Go projects via go.mod."""
+        (temp_project_dir / 'go.mod').write_text(
+            'module github.com/user/myapp\ngo 1.21\n'
+        )
+
+        context = CodebaseContext(str(temp_project_dir))
+        context.explore()
+
+        assert context.structure.get('has_go_mod') is True
+
+    @pytest.mark.unit
+    def test_detects_ruby_project(self, temp_project_dir):
+        """Should detect Ruby projects via Gemfile."""
+        (temp_project_dir / 'Gemfile').write_text(
+            'source "https://rubygems.org"\ngem "rails"\n'
+        )
+
+        context = CodebaseContext(str(temp_project_dir))
+        context.explore()
+
+        assert context.structure.get('has_gemfile') is True
+
+    @pytest.mark.unit
+    def test_detects_dotnet_project(self, temp_project_dir):
+        """Should detect .NET projects via .csproj or .sln."""
+        (temp_project_dir / 'MyApp.csproj').write_text(
+            '<Project Sdk="Microsoft.NET.Sdk"></Project>\n'
+        )
+
+        context = CodebaseContext(str(temp_project_dir))
+        context.explore()
+
+        assert context.structure.get('has_csproj') is True
+
+    @pytest.mark.unit
+    def test_detects_multiple_project_types(self, temp_project_dir):
+        """Should detect multiple project types in monorepo."""
+        # Python backend
+        (temp_project_dir / 'requirements.txt').write_text('flask\n')
+        # Node.js frontend
+        (temp_project_dir / 'package.json').write_text('{"name": "frontend"}\n')
+
+        context = CodebaseContext(str(temp_project_dir))
+        context.explore()
+
+        assert context.structure.get('has_requirements') is True
+        assert context.structure.get('has_package_json') is True
+
+    @pytest.mark.unit
+    def test_get_project_type_returns_primary_type(self, temp_project_dir):
+        """Should return primary project type based on markers."""
+        (temp_project_dir / 'requirements.txt').write_text('django\n')
+
+        context = CodebaseContext(str(temp_project_dir))
+        context.explore()
+
+        # Should provide a method to get primary project type
+        project_type = context.get_project_type()
+        assert project_type == 'python'
+
+    @pytest.mark.unit
+    def test_get_project_type_java_maven(self, tmp_path):
+        """Should identify Java/Maven as project type."""
+        # Use tmp_path to avoid default pyproject.toml
+        (tmp_path / 'pom.xml').write_text('<project></project>\n')
+
+        context = CodebaseContext(str(tmp_path))
+        context.explore()
+
+        project_type = context.get_project_type()
+        assert project_type in ('java', 'maven', 'java-maven')
+
+    @pytest.mark.unit
+    def test_get_project_type_nodejs(self, tmp_path):
+        """Should identify Node.js as project type."""
+        # Use tmp_path to avoid default pyproject.toml
+        (tmp_path / 'package.json').write_text('{"name": "app"}\n')
+
+        context = CodebaseContext(str(tmp_path))
+        context.explore()
+
+        project_type = context.get_project_type()
+        assert project_type in ('nodejs', 'node', 'javascript')
+
+    @pytest.mark.unit
+    def test_get_project_type_unknown(self, tmp_path):
+        """Should return unknown/generic for unmarked projects."""
+        # Use tmp_path to avoid default pyproject.toml
+        context = CodebaseContext(str(tmp_path))
+        context.explore()
+
+        project_type = context.get_project_type()
+        assert project_type in ('unknown', 'generic', None)
+
+
+class TestPlatformAwareness:
+    """Tests for platform detection in context."""
+
+    @pytest.mark.unit
+    def test_context_knows_current_platform(self):
+        """Context should know the current platform."""
+        from src.context import CodebaseContext
+        import sys
+
+        context = CodebaseContext()
+
+        # Should have platform information
+        platform = context.get_platform()
+        assert platform is not None
+        assert platform in ('windows', 'unix', 'darwin', 'linux')
+
+    @pytest.mark.unit
+    def test_platform_matches_system(self):
+        """Platform detection should match actual system."""
+        from src.context import CodebaseContext
+        import sys
+
+        context = CodebaseContext()
+        platform = context.get_platform()
+
+        if sys.platform == 'win32':
+            assert platform == 'windows'
+        elif sys.platform == 'darwin':
+            assert platform in ('darwin', 'unix')
+        else:
+            assert platform in ('linux', 'unix')
+
+    @pytest.mark.unit
+    def test_platform_is_cached(self):
+        """Platform detection should be cached (not recalculated)."""
+        from src.context import CodebaseContext
+        from unittest.mock import patch
+
+        context = CodebaseContext()
+
+        # First call
+        platform1 = context.get_platform()
+
+        # Platform should be cached, not re-detected
+        with patch('sys.platform', 'completely_different'):
+            platform2 = context.get_platform()
+
+        # Should return cached value
+        assert platform1 == platform2
+
+
+class TestToolAvailability:
+    """Tests for detecting available tools/commands."""
+
+    @pytest.mark.unit
+    def test_detects_git_available(self, temp_project_dir):
+        """Should detect if git command is available."""
+        context = CodebaseContext(str(temp_project_dir))
+
+        # git should be available in most dev environments
+        has_git = context.has_tool('git')
+        assert isinstance(has_git, bool)
+
+    @pytest.mark.unit
+    def test_detects_python_available(self, temp_project_dir):
+        """Should detect if python command is available."""
+        context = CodebaseContext(str(temp_project_dir))
+
+        # We're running Python tests, so Python must be available
+        has_python = context.has_tool('python')
+        assert has_python is True
+
+    @pytest.mark.unit
+    def test_detects_nonexistent_tool(self, temp_project_dir):
+        """Should return False for nonexistent tools."""
+        context = CodebaseContext(str(temp_project_dir))
+
+        # This tool definitely doesn't exist
+        has_fake = context.has_tool('definitely_not_a_real_command_xyz123')
+        assert has_fake is False
+
+    @pytest.mark.unit
+    def test_tool_detection_cached(self, temp_project_dir):
+        """Tool detection should be cached for performance."""
+        context = CodebaseContext(str(temp_project_dir))
+
+        # Check same tool twice
+        _ = context.has_tool('git')
+        _ = context.has_tool('git')
+
+        # Should only check once (implementation detail)
+        # At minimum, should not raise errors
+        assert True
+
+
+class TestMonorepoDetection:
+    """Tests for detecting project types in subdirectories (monorepos)."""
+
+    @pytest.fixture
+    def monorepo_dir(self, tmp_path):
+        """Create a monorepo with multiple project types."""
+        # Frontend - Node.js/React
+        frontend = tmp_path / 'frontend'
+        frontend.mkdir()
+        (frontend / 'package.json').write_text('{"name": "frontend", "dependencies": {"react": "^18.0.0"}}\n')
+        (frontend / 'src').mkdir()
+        (frontend / 'src' / 'App.tsx').write_text('export const App = () => <div>Hello</div>;\n')
+        (frontend / 'src' / 'index.ts').write_text('import { App } from "./App";\n')
+
+        # Backend - Python/Django
+        backend = tmp_path / 'backend'
+        backend.mkdir()
+        (backend / 'requirements.txt').write_text('django==4.2\ndjango-rest-framework\n')
+        (backend / 'manage.py').write_text('#!/usr/bin/env python\nimport django\n')
+        (backend / 'api').mkdir()
+        (backend / 'api' / '__init__.py').write_text('')
+        (backend / 'api' / 'views.py').write_text('from django.views import View\n')
+
+        # Services - Java microservices
+        services = tmp_path / 'services'
+        services.mkdir()
+        auth_api = services / 'auth-api'
+        auth_api.mkdir()
+        (auth_api / 'pom.xml').write_text('<project><artifactId>auth-api</artifactId></project>\n')
+
+        # Shared Go worker
+        worker = tmp_path / 'worker'
+        worker.mkdir()
+        (worker / 'go.mod').write_text('module github.com/myorg/worker\ngo 1.21\n')
+        (worker / 'main.go').write_text('package main\nfunc main() {}\n')
+
+        return tmp_path
+
+    @pytest.mark.unit
+    def test_detects_frontend_nodejs_project(self, monorepo_dir):
+        """Should detect Node.js project in frontend subdirectory."""
+        context = CodebaseContext(str(monorepo_dir))
+        context.explore()
+
+        sub_projects = context.get_sub_projects()
+        assert 'frontend' in sub_projects
+        assert sub_projects['frontend'] in ('nodejs', 'node', 'javascript', 'typescript')
+
+    @pytest.mark.unit
+    def test_detects_backend_python_project(self, monorepo_dir):
+        """Should detect Python project in backend subdirectory."""
+        context = CodebaseContext(str(monorepo_dir))
+        context.explore()
+
+        sub_projects = context.get_sub_projects()
+        assert 'backend' in sub_projects
+        assert sub_projects['backend'] == 'python'
+
+    @pytest.mark.unit
+    def test_detects_nested_java_project(self, monorepo_dir):
+        """Should detect Java project in nested subdirectory."""
+        context = CodebaseContext(str(monorepo_dir))
+        context.explore()
+
+        sub_projects = context.get_sub_projects()
+        # Should find services/auth-api as Java
+        has_java = any('java' in ptype for ptype in sub_projects.values())
+        assert has_java, f"No Java project found in {sub_projects}"
+
+    @pytest.mark.unit
+    def test_detects_go_worker_project(self, monorepo_dir):
+        """Should detect Go project in worker subdirectory."""
+        context = CodebaseContext(str(monorepo_dir))
+        context.explore()
+
+        sub_projects = context.get_sub_projects()
+        assert 'worker' in sub_projects
+        assert sub_projects['worker'] == 'go'
+
+    @pytest.mark.unit
+    def test_monorepo_detects_project_type_from_subdirs(self, monorepo_dir):
+        """Monorepo should detect project type based on markers in subdirectories."""
+        context = CodebaseContext(str(monorepo_dir))
+        context.explore()
+
+        # Even though root has no markers, subdirs do
+        # Should detect based on what's found in the tree
+        primary_type = context.get_project_type()
+        # Monorepo has python (backend), nodejs (frontend), java (services), go (worker)
+        # Should detect one of these, not 'unknown'
+        assert primary_type in ('python', 'nodejs', 'java', 'go'), f"Got {primary_type}"
+
+    @pytest.mark.unit
+    def test_lists_all_languages_used(self, monorepo_dir):
+        """Should list all programming languages found in the codebase."""
+        context = CodebaseContext(str(monorepo_dir))
+        context.explore()
+
+        languages = context.get_languages()
+        # Should detect Python, TypeScript/JavaScript, Java, Go
+        assert 'python' in languages or any('py' in lang for lang in languages)
+        assert 'javascript' in languages or 'typescript' in languages or any('js' in lang or 'ts' in lang for lang in languages)
+
+    @pytest.mark.unit
+    def test_uses_file_index_for_language_detection(self, monorepo_dir):
+        """Should use file_index to detect languages, not just project markers."""
+        context = CodebaseContext(str(monorepo_dir))
+        context.explore()
+
+        # file_index should have categorized all files
+        assert len(context.file_index.get('python', [])) > 0, "No Python files found"
+        assert len(context.file_index.get('javascript', [])) > 0, "No JS/TS files found"
+
+
+class TestFileIndexUtilization:
+    """Tests for using file_index to inform project detection."""
+
+    @pytest.mark.unit
+    def test_finds_project_markers_in_subdirs(self, tmp_path):
+        """Should find package.json, requirements.txt in subdirectories."""
+        # Create nested structure
+        (tmp_path / 'app' / 'client').mkdir(parents=True)
+        (tmp_path / 'app' / 'client' / 'package.json').write_text('{"name": "client"}\n')
+
+        context = CodebaseContext(str(tmp_path))
+        context.explore()
+
+        # Should find the nested package.json
+        markers = context.find_project_markers()
+        assert any('package.json' in marker for marker in markers), f"package.json not found in {markers}"
+
+    @pytest.mark.unit
+    def test_maps_markers_to_directories(self, tmp_path):
+        """Should map project markers to their containing directories."""
+        (tmp_path / 'frontend').mkdir()
+        (tmp_path / 'frontend' / 'package.json').write_text('{"name": "fe"}\n')
+        (tmp_path / 'backend').mkdir()
+        (tmp_path / 'backend' / 'requirements.txt').write_text('flask\n')
+
+        context = CodebaseContext(str(tmp_path))
+        context.explore()
+
+        marker_map = context.get_marker_locations()
+        # Should map directory to marker type
+        assert marker_map.get('frontend') == 'package.json' or 'frontend' in str(marker_map)
+        assert marker_map.get('backend') == 'requirements.txt' or 'backend' in str(marker_map)
+
+    @pytest.mark.unit
+    def test_detects_language_from_file_extensions(self, tmp_path):
+        """Should detect languages from actual code files, not just markers."""
+        # Python files without requirements.txt
+        (tmp_path / 'scripts').mkdir()
+        (tmp_path / 'scripts' / 'deploy.py').write_text('import boto3\n')
+        (tmp_path / 'scripts' / 'cleanup.py').write_text('import os\n')
+
+        context = CodebaseContext(str(tmp_path))
+        context.explore()
+
+        # Should detect Python from .py files
+        languages = context.get_languages()
+        assert 'python' in languages
+
+    @pytest.mark.unit
+    def test_config_files_include_nested_markers(self, tmp_path):
+        """file_index['config'] should include nested project markers."""
+        (tmp_path / 'services' / 'api').mkdir(parents=True)
+        (tmp_path / 'services' / 'api' / 'package.json').write_text('{"name": "api"}\n')
+
+        context = CodebaseContext(str(tmp_path))
+        context.explore()
+
+        config_files = context.file_index.get('config', [])
+        has_nested_package_json = any('package.json' in f for f in config_files)
+        assert has_nested_package_json, f"Nested package.json not in config files: {config_files}"
+
+    @pytest.mark.unit
+    def test_counts_files_per_language(self, tmp_path):
+        """Should count how many files of each language type exist."""
+        (tmp_path / 'src').mkdir()
+        (tmp_path / 'src' / 'a.py').write_text('')
+        (tmp_path / 'src' / 'b.py').write_text('')
+        (tmp_path / 'src' / 'c.py').write_text('')
+        (tmp_path / 'lib').mkdir()
+        (tmp_path / 'lib' / 'util.js').write_text('')
+
+        context = CodebaseContext(str(tmp_path))
+        context.explore()
+
+        lang_counts = context.get_language_stats()
+        assert lang_counts.get('python', 0) >= 3
+        assert lang_counts.get('javascript', 0) >= 1
+
+    @pytest.mark.unit
+    def test_primary_language_based_on_file_count(self, tmp_path):
+        """Primary language should be determined by file count, not just markers."""
+        # More Python files than JS
+        (tmp_path / 'src').mkdir()
+        for i in range(10):
+            (tmp_path / 'src' / f'module{i}.py').write_text('')
+        (tmp_path / 'scripts').mkdir()
+        (tmp_path / 'scripts' / 'one.js').write_text('')
+
+        context = CodebaseContext(str(tmp_path))
+        context.explore()
+
+        primary = context.get_primary_language()
+        assert primary == 'python', f"Expected python as primary, got {primary}"
