@@ -76,8 +76,8 @@ class TestPromptBuilderPlatformAwareness:
     """PromptBuilder should provide platform-specific guidance only."""
 
     @pytest.mark.unit
-    @patch('src.agent.prompt_builder.is_windows', return_value=True)
-    def test_windows_prompt_includes_cmd_commands(self, mock_is_win, temp_project_dir):
+    @patch.object(CodebaseContext, 'get_platform', return_value='windows')
+    def test_windows_prompt_includes_cmd_commands(self, mock_platform, temp_project_dir):
         """Windows prompt should include cmd.exe commands, not Unix."""
         from src.agent.prompt_builder import PromptBuilder
 
@@ -93,8 +93,8 @@ class TestPromptBuilderPlatformAwareness:
         assert 'cp -r' not in prompt
 
     @pytest.mark.unit
-    @patch('src.agent.prompt_builder.is_windows', return_value=False)
-    def test_unix_prompt_includes_unix_commands(self, mock_is_win, temp_project_dir):
+    @patch.object(CodebaseContext, 'get_platform', return_value='unix')
+    def test_unix_prompt_includes_unix_commands(self, mock_platform, temp_project_dir):
         """Unix prompt should include Unix commands, not Windows."""
         from src.agent.prompt_builder import PromptBuilder
 
@@ -110,8 +110,8 @@ class TestPromptBuilderPlatformAwareness:
         assert 'cmd.exe' not in prompt
 
     @pytest.mark.unit
-    @patch('src.agent.prompt_builder.is_windows', return_value=True)
-    def test_windows_prompt_warns_about_powershell(self, mock_is_win, temp_project_dir):
+    @patch.object(CodebaseContext, 'get_platform', return_value='windows')
+    def test_windows_prompt_warns_about_powershell(self, mock_platform, temp_project_dir):
         """Windows prompt should warn against PowerShell cmdlets."""
         from src.agent.prompt_builder import PromptBuilder
 
@@ -227,8 +227,8 @@ class TestPromptBuilderSuccinctness:
     """PromptBuilder should produce concise prompts."""
 
     @pytest.mark.unit
-    @patch('src.agent.prompt_builder.is_windows', return_value=True)
-    def test_prompt_does_not_include_all_platform_examples(self, mock_is_win, temp_project_dir):
+    @patch.object(CodebaseContext, 'get_platform', return_value='windows')
+    def test_prompt_does_not_include_all_platform_examples(self, mock_platform, temp_project_dir):
         """Prompt should not include examples for ALL platforms."""
         from src.agent.prompt_builder import PromptBuilder
 
@@ -321,8 +321,8 @@ class TestPromptBuilderAccuracy:
     """PromptBuilder should provide accurate, actionable guidance."""
 
     @pytest.mark.unit
-    @patch('src.agent.prompt_builder.is_windows', return_value=True)
-    def test_windows_provides_correct_mkdir_syntax(self, mock_is_win, temp_project_dir):
+    @patch.object(CodebaseContext, 'get_platform', return_value='windows')
+    def test_windows_provides_correct_mkdir_syntax(self, mock_platform, temp_project_dir):
         """Windows prompt should show correct mkdir syntax."""
         from src.agent.prompt_builder import PromptBuilder
 

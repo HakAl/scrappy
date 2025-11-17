@@ -9,10 +9,8 @@ Constructs dynamic prompts based on:
 """
 from pathlib import Path
 from typing import Optional, TYPE_CHECKING
-import sys
 
 from src.context import CodebaseContext
-from src.platform_utils import is_windows
 
 if TYPE_CHECKING:
     from src.agent_tools.tools import ToolRegistry
@@ -45,24 +43,15 @@ class PromptBuilder:
         # Tool registry for dynamic tool descriptions
         self.tool_registry = tool_registry
 
-        # Platform detection (deferred to property for mockability)
-        self._cached_platform = None
-
         # Custom sections
         self._custom_sections = {}
         self._section_overrides = {}
 
     @property
     def platform(self) -> str:
-        """Current platform (detected on first access for mockability)."""
-        if self._cached_platform is None:
-            if is_windows():
-                self._cached_platform = 'windows'
-            elif sys.platform == 'darwin':
-                self._cached_platform = 'darwin'
-            else:
-                self._cached_platform = 'unix'
-        return self._cached_platform
+        """Current platform (delegated to Context as single source of truth)."""
+        # Use Context's cached platform detection
+        return self.context.get_platform()
 
     @property
     def project_type(self) -> str:

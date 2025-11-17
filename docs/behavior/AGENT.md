@@ -78,3 +78,11 @@ src\agent\core.py
   refactor out: plan, retry
 
   insanity: _tool_run_command --> hardcoded to catch spring dls exactly? npm?
+
+
+
+
+platform_utils -> why not context?
+we can fallback to utils if context doesn't have it, but might be better to just run explore, so context always has
+  it?
+  ensure context is always populated, if no -> /explore

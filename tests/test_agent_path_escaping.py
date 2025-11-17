@@ -201,7 +201,7 @@ class TestCommandExecutionIntegration:
         )
 
     @pytest.mark.unit
-    @patch('subprocess.Popen')
+    @patch('src.agent_tools.tools.command_tool.subprocess.Popen')
     def test_command_executes_in_project_directory(self, mock_popen, agent, temp_project_dir):
         """Commands must execute with cwd set to project root."""
         mock_process = MagicMock()
