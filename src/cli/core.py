@@ -223,6 +223,12 @@ class CLI:
         if not self.plan_active:
             return True
 
+        # Skip prompts if not in interactive mode
+        if not sys.stdin.isatty():
+            click.secho("Non-interactive mode: ending plan execution.", fg="yellow")
+            self.plan_active = False
+            return True
+
         click.echo()
         click.secho("What next?", fg="cyan", bold=True)
         click.echo("  1. Mark complete & continue")
@@ -231,7 +237,13 @@ class CLI:
         click.echo("  4. Finish planning session")
         click.echo()
 
-        choice = click.prompt("Choice", default="1", show_default=True).strip()
+        try:
+            choice = click.prompt("Choice", default="1", show_default=True).strip()
+        except (EOFError, click.Abort):
+            # Non-interactive or cancelled - end plan
+            click.secho("\nEnding planning session...", fg="yellow")
+            self.plan_active = False
+            return True
 
         if choice == "1":
             # Mark complete and advance
@@ -284,6 +296,10 @@ class CLI:
 
     def _check_and_offer_session_restore(self):
         """Check for existing session and offer to restore it automatically."""
+        # Skip session restore if not in interactive mode
+        if not sys.stdin.isatty():
+            return
+
         session_info = self.orchestrator.session_manager.get_session_info()
 
         if not session_info.get('exists', False):
@@ -304,23 +320,27 @@ class CLI:
             click.echo(f"  Has conversation history: Yes")
 
         # Offer to restore
-        if click.confirm("Restore previous session?", default=True):
-            result = self.orchestrator.load_session()
-            if result['status'] == 'loaded':
-                click.secho("Session restored successfully!", fg="green")
-                click.echo(f"  Files: {result['files_restored']}")
-                click.echo(f"  Searches: {result['searches_restored']}")
-                click.echo(f"  Git ops: {result['git_ops_restored']}")
-                click.echo(f"  Discoveries: {result['discoveries_restored']}")
+        try:
+            if click.confirm("Restore previous session?", default=True):
+                result = self.orchestrator.load_session()
+                if result['status'] == 'loaded':
+                    click.secho("Session restored successfully!", fg="green")
+                    click.echo(f"  Files: {result['files_restored']}")
+                    click.echo(f"  Searches: {result['searches_restored']}")
+                    click.echo(f"  Git ops: {result['git_ops_restored']}")
+                    click.echo(f"  Discoveries: {result['discoveries_restored']}")
 
-                # Restore conversation history
-                conversation = result.get('conversation_history', [])
-                if conversation:
-                    self.conversation_history = conversation
-                    click.echo(f"  Conversation: {len(conversation)} messages")
+                    # Restore conversation history
+                    conversation = result.get('conversation_history', [])
+                    if conversation:
+                        self.conversation_history = conversation
+                        click.echo(f"  Conversation: {len(conversation)} messages")
+                else:
+                    click.secho(f"Could not restore session: {result.get('message', 'unknown error')}", fg="red")
             else:
-                click.secho(f"Could not restore session: {result.get('message', 'unknown error')}", fg="red")
-        else:
+                click.secho("Starting fresh session.", fg="yellow")
+        except (EOFError, click.Abort):
+            # Non-interactive environment or user cancelled
             click.secho("Starting fresh session.", fg="yellow")
 
     def _show_plan_summary(self):
@@ -394,6 +414,13 @@ class CLI:
 
     def interactive_mode(self):
         """Run interactive chat mode."""
+        # Check if running in interactive environment
+        if not sys.stdin.isatty():
+            click.secho("Error: Interactive mode requires a TTY (terminal).", fg="red", bold=True)
+            click.echo("Cannot run interactive mode without stdin.")
+            click.echo("Use one-shot commands instead (e.g., llm-team query 'your question')")
+            return
+
         click.secho("=" * 60, fg="cyan")
         click.secho("LLM Agent Team - Interactive Mode", fg="cyan", bold=True)
         click.secho("=" * 60, fg="cyan")
@@ -548,6 +575,23 @@ class CLI:
                     self._prompt_task_progression()
 
             except click.Abort:
+                click.echo("\n\nInterrupted. Type /quit to exit.")
+                continue
+            except EOFError:
+                # Handle EOF gracefully (e.g., when stdin is closed)
+                click.echo("\n")
+                click.secho("EOF received. Exiting...", fg="yellow")
+                # Auto-save session on exit if enabled
+                if self.auto_save:
+                    try:
+                        session_file = self.orchestrator.save_session(self.conversation_history)
+                        click.secho(f"Session saved to: {session_file}", fg="green")
+                    except Exception as save_error:
+                        click.secho(f"Warning: Could not save session: {save_error}", fg="yellow")
+                self.display.show_usage()
+                click.secho("Goodbye!", fg="cyan", bold=True)
+                break
+            except KeyboardInterrupt:
                 click.echo("\n\nInterrupted. Type /quit to exit.")
                 continue
             except Exception as e:
