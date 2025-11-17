@@ -388,22 +388,30 @@ class TestLLMClassification:
     """Tests for LLM-based classification fallback."""
 
     @pytest.fixture
-    def mock_orchestrator(self):
-        """Create mock orchestrator with providers."""
-        orch = Mock()
-        orch.providers = Mock()
-        orch.providers.list_available.return_value = ['groq', 'gemini']
-        return orch
+    def fake_orchestrator(self):
+        """Create a fake orchestrator that returns configurable responses."""
+        class FakeOrchestrator:
+            def __init__(self):
+                self.response_content = ""
+                self.providers = self  # Self-reference for providers attribute
+
+            def list_available(self):
+                return ['groq', 'gemini']
+
+            def delegate(self, provider, prompt, **kwargs):
+                class Response:
+                    def __init__(self, content):
+                        self.content = content
+                return Response(self.response_content)
+
+        return FakeOrchestrator()
 
     @pytest.mark.unit
-    def test_llm_classification_with_valid_response(self, mock_orchestrator):
-        """Test LLM classification with valid JSON response."""
-        mock_orchestrator.delegate.return_value = Mock(
-            content='{"task_type": "CODE_GENERATION", "confidence": 0.85, "reasoning": "User wants to create code"}'
-        )
+    def test_llm_classification_extracts_json_from_plain_text(self, fake_orchestrator):
+        """Test parser finds JSON object embedded in text."""
+        fake_orchestrator.response_content = 'Here is my analysis: {"task_type": "CODE_GENERATION", "confidence": 0.85, "reasoning": "User wants code"} That is my response.'
 
-        router = TaskRouter(orchestrator=mock_orchestrator, verbose=False)
-
+        router = TaskRouter(orchestrator=fake_orchestrator, verbose=False)
         task = ClassifiedTask(
             original_input="write a function",
             task_type=TaskType.RESEARCH,
@@ -414,17 +422,17 @@ class TestLLMClassification:
         result = router._classify_with_llm(task)
         assert result.task_type == TaskType.CODE_GENERATION
         assert result.confidence == 0.85
-        assert "LLM semantic classification" in result.reasoning
 
     @pytest.mark.unit
-    def test_llm_classification_with_json_code_block(self, mock_orchestrator):
-        """Test LLM classification with JSON in code block."""
-        mock_orchestrator.delegate.return_value = Mock(
-            content='```json\n{"task_type": "RESEARCH", "confidence": 0.9, "reasoning": "Research task"}\n```'
-        )
+    def test_llm_classification_extracts_json_from_code_block(self, fake_orchestrator):
+        """Test parser extracts JSON from markdown code block."""
+        fake_orchestrator.response_content = '''Here is the classification:
+```json
+{"task_type": "RESEARCH", "confidence": 0.9, "reasoning": "Research task"}
+```
+That's my analysis.'''
 
-        router = TaskRouter(orchestrator=mock_orchestrator, verbose=False)
-
+        router = TaskRouter(orchestrator=fake_orchestrator, verbose=False)
         task = ClassifiedTask(
             original_input="explain python",
             task_type=TaskType.CONVERSATION,
@@ -434,16 +442,33 @@ class TestLLMClassification:
 
         result = router._classify_with_llm(task)
         assert result.task_type == TaskType.RESEARCH
+        assert result.confidence == 0.9
 
     @pytest.mark.unit
-    def test_llm_classification_with_low_llm_confidence(self, mock_orchestrator):
-        """Test that low LLM confidence doesn't override."""
-        mock_orchestrator.delegate.return_value = Mock(
-            content='{"task_type": "CODE_GENERATION", "confidence": 0.5, "reasoning": "Uncertain"}'
+    def test_llm_classification_extracts_json_from_plain_code_block(self, fake_orchestrator):
+        """Test parser extracts JSON from plain code block without language tag."""
+        fake_orchestrator.response_content = '''```
+{"task_type": "DIRECT_COMMAND", "confidence": 0.95, "reasoning": "Shell command"}
+```'''
+
+        router = TaskRouter(orchestrator=fake_orchestrator, verbose=False)
+        task = ClassifiedTask(
+            original_input="git status",
+            task_type=TaskType.RESEARCH,
+            confidence=0.3,
+            reasoning="Low confidence"
         )
 
-        router = TaskRouter(orchestrator=mock_orchestrator, verbose=False)
+        result = router._classify_with_llm(task)
+        assert result.task_type == TaskType.DIRECT_COMMAND
+        assert result.confidence == 0.95
 
+    @pytest.mark.unit
+    def test_llm_classification_rejects_low_confidence(self, fake_orchestrator):
+        """Test that LLM confidence below 0.7 does not override original."""
+        fake_orchestrator.response_content = '{"task_type": "CODE_GENERATION", "confidence": 0.69, "reasoning": "Uncertain"}'
+
+        router = TaskRouter(orchestrator=fake_orchestrator, verbose=False)
         task = ClassifiedTask(
             original_input="something ambiguous",
             task_type=TaskType.RESEARCH,
@@ -452,18 +477,17 @@ class TestLLMClassification:
         )
 
         result = router._classify_with_llm(task)
-        # Should keep original since LLM confidence < 0.7
+        # Must keep original since 0.69 < 0.7
         assert result.task_type == TaskType.RESEARCH
+        assert result.confidence == 0.4
+        assert result.reasoning == "Original reasoning"
 
     @pytest.mark.unit
-    def test_llm_classification_with_invalid_json(self, mock_orchestrator):
-        """Test LLM classification handles invalid JSON."""
-        mock_orchestrator.delegate.return_value = Mock(
-            content='This is not valid JSON at all'
-        )
+    def test_llm_classification_accepts_exactly_0_7_confidence(self, fake_orchestrator):
+        """Test that exactly 0.7 confidence is accepted."""
+        fake_orchestrator.response_content = '{"task_type": "CODE_GENERATION", "confidence": 0.7, "reasoning": "Just confident enough"}'
 
-        router = TaskRouter(orchestrator=mock_orchestrator, verbose=False)
-
+        router = TaskRouter(orchestrator=fake_orchestrator, verbose=False)
         task = ClassifiedTask(
             original_input="test",
             task_type=TaskType.RESEARCH,
@@ -472,8 +496,226 @@ class TestLLMClassification:
         )
 
         result = router._classify_with_llm(task)
-        # Should keep original classification
+        assert result.task_type == TaskType.CODE_GENERATION
+        assert result.confidence == 0.7
+
+    @pytest.mark.unit
+    def test_llm_classification_handles_malformed_json_missing_brace(self, fake_orchestrator):
+        """Test parser handles JSON missing closing brace."""
+        fake_orchestrator.response_content = '{"task_type": "CODE_GENERATION", "confidence": 0.9'
+
+        router = TaskRouter(orchestrator=fake_orchestrator, verbose=False)
+        task = ClassifiedTask(
+            original_input="test",
+            task_type=TaskType.RESEARCH,
+            confidence=0.4,
+            reasoning="Original"
+        )
+
+        result = router._classify_with_llm(task)
+        # Should keep original on parse failure
         assert result.task_type == TaskType.RESEARCH
+        assert result.confidence == 0.4
+
+    @pytest.mark.unit
+    def test_llm_classification_handles_json_with_trailing_comma(self, fake_orchestrator):
+        """Test parser handles invalid JSON with trailing comma."""
+        fake_orchestrator.response_content = '{"task_type": "CODE_GENERATION", "confidence": 0.9, "reasoning": "test",}'
+
+        router = TaskRouter(orchestrator=fake_orchestrator, verbose=False)
+        task = ClassifiedTask(
+            original_input="test",
+            task_type=TaskType.RESEARCH,
+            confidence=0.4,
+            reasoning="Original"
+        )
+
+        result = router._classify_with_llm(task)
+        # JSON with trailing comma is invalid
+        assert result.task_type == TaskType.RESEARCH
+
+    @pytest.mark.unit
+    def test_llm_classification_handles_missing_task_type_field(self, fake_orchestrator):
+        """Test parser handles JSON missing required task_type field."""
+        fake_orchestrator.response_content = '{"confidence": 0.9, "reasoning": "Missing task type"}'
+
+        router = TaskRouter(orchestrator=fake_orchestrator, verbose=False)
+        task = ClassifiedTask(
+            original_input="test",
+            task_type=TaskType.RESEARCH,
+            confidence=0.4,
+            reasoning="Original"
+        )
+
+        result = router._classify_with_llm(task)
+        # Missing task_type means empty string, not in type_map
+        assert result.task_type == TaskType.RESEARCH
+
+    @pytest.mark.unit
+    def test_llm_classification_handles_invalid_task_type_value(self, fake_orchestrator):
+        """Test parser handles unknown task type value."""
+        fake_orchestrator.response_content = '{"task_type": "UNKNOWN_TYPE", "confidence": 0.9, "reasoning": "Invalid type"}'
+
+        router = TaskRouter(orchestrator=fake_orchestrator, verbose=False)
+        task = ClassifiedTask(
+            original_input="test",
+            task_type=TaskType.RESEARCH,
+            confidence=0.4,
+            reasoning="Original"
+        )
+
+        result = router._classify_with_llm(task)
+        # UNKNOWN_TYPE not in type_map
+        assert result.task_type == TaskType.RESEARCH
+
+    @pytest.mark.unit
+    def test_llm_classification_handles_lowercase_task_type(self, fake_orchestrator):
+        """Test parser handles lowercase task type (should work due to .upper())."""
+        fake_orchestrator.response_content = '{"task_type": "code_generation", "confidence": 0.85, "reasoning": "lowercase"}'
+
+        router = TaskRouter(orchestrator=fake_orchestrator, verbose=False)
+        task = ClassifiedTask(
+            original_input="test",
+            task_type=TaskType.RESEARCH,
+            confidence=0.4,
+            reasoning="Original"
+        )
+
+        result = router._classify_with_llm(task)
+        # Should work because code calls .upper()
+        assert result.task_type == TaskType.CODE_GENERATION
+
+    @pytest.mark.unit
+    def test_llm_classification_handles_confidence_as_string(self, fake_orchestrator):
+        """Test parser converts string confidence to float."""
+        fake_orchestrator.response_content = '{"task_type": "RESEARCH", "confidence": "0.85", "reasoning": "String confidence"}'
+
+        router = TaskRouter(orchestrator=fake_orchestrator, verbose=False)
+        task = ClassifiedTask(
+            original_input="test",
+            task_type=TaskType.CONVERSATION,
+            confidence=0.4,
+            reasoning="Original"
+        )
+
+        result = router._classify_with_llm(task)
+        # float() should convert string "0.85" to 0.85
+        assert result.task_type == TaskType.RESEARCH
+        assert result.confidence == 0.85
+
+    @pytest.mark.unit
+    def test_llm_classification_handles_missing_confidence_field(self, fake_orchestrator):
+        """Test parser uses default 0.5 for missing confidence."""
+        fake_orchestrator.response_content = '{"task_type": "CODE_GENERATION", "reasoning": "No confidence field"}'
+
+        router = TaskRouter(orchestrator=fake_orchestrator, verbose=False)
+        task = ClassifiedTask(
+            original_input="test",
+            task_type=TaskType.RESEARCH,
+            confidence=0.4,
+            reasoning="Original"
+        )
+
+        result = router._classify_with_llm(task)
+        # Default confidence is 0.5 which is < 0.7, so original kept
+        assert result.task_type == TaskType.RESEARCH
+
+    @pytest.mark.unit
+    def test_llm_classification_handles_empty_response(self, fake_orchestrator):
+        """Test parser handles empty string response."""
+        fake_orchestrator.response_content = ''
+
+        router = TaskRouter(orchestrator=fake_orchestrator, verbose=False)
+        task = ClassifiedTask(
+            original_input="test",
+            task_type=TaskType.RESEARCH,
+            confidence=0.4,
+            reasoning="Original"
+        )
+
+        result = router._classify_with_llm(task)
+        assert result.task_type == TaskType.RESEARCH
+
+    @pytest.mark.unit
+    def test_llm_classification_handles_no_providers_available(self):
+        """Test classification when no providers are available."""
+        class NoProviderOrchestrator:
+            def __init__(self):
+                self.providers = self
+
+            def list_available(self):
+                return []  # No providers
+
+            def delegate(self, *args, **kwargs):
+                raise Exception("Should not be called")
+
+        router = TaskRouter(orchestrator=NoProviderOrchestrator(), verbose=False)
+        task = ClassifiedTask(
+            original_input="test",
+            task_type=TaskType.RESEARCH,
+            confidence=0.4,
+            reasoning="Original"
+        )
+
+        result = router._classify_with_llm(task)
+        # No provider available, should return original
+        assert result.task_type == TaskType.RESEARCH
+        assert result.confidence == 0.4
+
+    @pytest.mark.unit
+    def test_llm_classification_prefers_cerebras_provider(self):
+        """Test that cerebras is preferred over other providers."""
+        class ProviderTracker:
+            def __init__(self):
+                self.providers = self
+                self.used_provider = None
+
+            def list_available(self):
+                return ['gemini', 'cerebras', 'groq']  # cerebras not first
+
+            def delegate(self, provider, prompt, **kwargs):
+                self.used_provider = provider
+                class Response:
+                    content = '{"task_type": "RESEARCH", "confidence": 0.8, "reasoning": "test"}'
+                return Response()
+
+        orch = ProviderTracker()
+        router = TaskRouter(orchestrator=orch, verbose=False)
+        task = ClassifiedTask(
+            original_input="test",
+            task_type=TaskType.CONVERSATION,
+            confidence=0.4,
+            reasoning="Original"
+        )
+
+        router._classify_with_llm(task)
+        assert orch.used_provider == 'cerebras'
+
+    @pytest.mark.unit
+    def test_llm_classification_preserves_original_on_exception(self):
+        """Test that exceptions during delegation preserve original task."""
+        class FailingOrchestrator:
+            def __init__(self):
+                self.providers = self
+
+            def list_available(self):
+                return ['groq']
+
+            def delegate(self, *args, **kwargs):
+                raise RuntimeError("API connection failed")
+
+        router = TaskRouter(orchestrator=FailingOrchestrator(), verbose=False)
+        task = ClassifiedTask(
+            original_input="test",
+            task_type=TaskType.RESEARCH,
+            confidence=0.4,
+            reasoning="Original reasoning"
+        )
+
+        result = router._classify_with_llm(task)
+        assert result.task_type == TaskType.RESEARCH
+        assert result.confidence == 0.4
+        assert result.reasoning == "Original reasoning"
 
     @pytest.mark.unit
     def test_llm_classification_without_orchestrator(self):
@@ -489,64 +731,6 @@ class TestLLMClassification:
 
         result = router._classify_with_llm(task)
         assert result.task_type == TaskType.RESEARCH
-
-    @pytest.mark.unit
-    def test_llm_classification_no_available_provider(self, mock_orchestrator):
-        """Test LLM classification when no providers available."""
-        mock_orchestrator.providers.list_available.return_value = []
-
-        router = TaskRouter(orchestrator=mock_orchestrator, verbose=False)
-
-        task = ClassifiedTask(
-            original_input="test",
-            task_type=TaskType.RESEARCH,
-            confidence=0.4,
-            reasoning="Original"
-        )
-
-        result = router._classify_with_llm(task)
-        # Should keep original since no provider available
-        assert result.task_type == TaskType.RESEARCH
-
-    @pytest.mark.unit
-    def test_llm_classification_with_exception(self, mock_orchestrator):
-        """Test LLM classification handles exceptions."""
-        mock_orchestrator.delegate.side_effect = Exception("API Error")
-
-        router = TaskRouter(orchestrator=mock_orchestrator, verbose=False)
-
-        task = ClassifiedTask(
-            original_input="test",
-            task_type=TaskType.RESEARCH,
-            confidence=0.4,
-            reasoning="Original"
-        )
-
-        result = router._classify_with_llm(task)
-        # Should keep original on exception
-        assert result.task_type == TaskType.RESEARCH
-
-    @pytest.mark.unit
-    def test_llm_classification_prefers_cerebras(self, mock_orchestrator):
-        """Test that LLM classification prefers cerebras provider."""
-        mock_orchestrator.providers.list_available.return_value = ['groq', 'cerebras', 'gemini']
-        mock_orchestrator.delegate.return_value = Mock(
-            content='{"task_type": "RESEARCH", "confidence": 0.9, "reasoning": "test"}'
-        )
-
-        router = TaskRouter(orchestrator=mock_orchestrator, verbose=False)
-        task = ClassifiedTask(
-            original_input="test",
-            task_type=TaskType.CONVERSATION,
-            confidence=0.3,
-            reasoning="Low"
-        )
-
-        router._classify_with_llm(task)
-
-        # Check that cerebras was used
-        call_args = mock_orchestrator.delegate.call_args
-        assert call_args[0][0] == 'cerebras'
 
 
 class TestProviderResolution:

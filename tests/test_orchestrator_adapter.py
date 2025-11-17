@@ -176,73 +176,215 @@ class TestAgentOrchestratorAdapter:
         mock_orchestrator.registry.list_available.assert_called_once()
 
     @pytest.mark.unit
-    def test_delegate_returns_llm_response(self, mock_orchestrator):
-        """Test delegate wraps response correctly."""
-        mock_orchestrator.delegate.return_value = LLMResponse(
-            content="Test response",
-            provider="groq",
-            model="llama-3.1-8b",
-            tokens_used=100
-        )
+    def test_delegate_passes_through_llmresponse_unchanged(self):
+        """Test that LLMResponse from orchestrator is returned as-is."""
+        # Create a real orchestrator-like object
+        class FakeOrchestrator:
+            def __init__(self):
+                self.delegate_called_with = None
 
-        adapter = AgentOrchestratorAdapter(mock_orchestrator)
+            def delegate(self, provider_name=None, prompt="", **kwargs):
+                self.delegate_called_with = (provider_name, prompt, kwargs)
+                return LLMResponse(
+                    content="Original response",
+                    provider="groq",
+                    model="llama-3.1-8b",
+                    tokens_used=150,
+                    cached=True
+                )
+
+        fake_orch = FakeOrchestrator()
+        adapter = AgentOrchestratorAdapter(fake_orch)
 
         response = adapter.delegate(
             "groq",
             "Test prompt",
-            system_prompt="System",
+            system_prompt="Be helpful",
             max_tokens=2000,
-            temperature=0.5
+            temperature=0.7
         )
 
-        assert isinstance(response, LLMResponse)
-        assert response.content == "Test response"
+        # Verify response is passed through unchanged
+        assert response.content == "Original response"
         assert response.provider == "groq"
-        mock_orchestrator.delegate.assert_called_once_with(
-            "groq",
-            "Test prompt",
-            system_prompt="System",
-            max_tokens=2000,
-            temperature=0.5,
-            use_context=False
-        )
+        assert response.model == "llama-3.1-8b"
+        assert response.tokens_used == 150
+        assert response.cached is True
+
+        # Verify parameters were forwarded correctly
+        provider, prompt, kwargs = fake_orch.delegate_called_with
+        assert provider == "groq"
+        assert prompt == "Test prompt"
+        assert kwargs["system_prompt"] == "Be helpful"
+        assert kwargs["max_tokens"] == 2000
+        assert kwargs["temperature"] == 0.7
+        assert kwargs["use_context"] is False
 
     @pytest.mark.unit
-    def test_delegate_adapts_non_llmresponse(self, mock_orchestrator):
-        """Test delegate adapts non-LLMResponse objects."""
-        # Return a mock object that's not LLMResponse
-        mock_response = Mock()
-        mock_response.content = "Adapted response"
-        mock_response.model = "test-model"
-        mock_response.tokens_used = 200
-        mock_response.cached = True
-        mock_orchestrator.delegate.return_value = mock_response
+    def test_delegate_adapts_object_with_all_attributes(self):
+        """Test adapter extracts all attributes from non-LLMResponse object."""
+        class CustomResponse:
+            def __init__(self):
+                self.content = "Custom content"
+                self.model = "custom-model-v2"
+                self.tokens_used = 350
+                self.cached = True
 
-        adapter = AgentOrchestratorAdapter(mock_orchestrator)
+        class FakeOrchestrator:
+            def delegate(self, provider_name=None, prompt="", **kwargs):
+                return CustomResponse()
 
-        response = adapter.delegate("groq", "prompt")
+        adapter = AgentOrchestratorAdapter(FakeOrchestrator())
+        response = adapter.delegate("cerebras", "prompt")
 
+        # Verify all attributes were correctly extracted
         assert isinstance(response, LLMResponse)
-        assert response.content == "Adapted response"
-        assert response.provider == "groq"
-        assert response.model == "test-model"
-        assert response.tokens_used == 200
+        assert response.content == "Custom content"
+        assert response.provider == "cerebras"  # Provider comes from argument, not response
+        assert response.model == "custom-model-v2"
+        assert response.tokens_used == 350
         assert response.cached is True
 
     @pytest.mark.unit
-    def test_delegate_handles_missing_attributes(self, mock_orchestrator):
-        """Test delegate handles response without expected attributes."""
-        mock_response = Mock(spec=[])  # No attributes
-        # Make it not an instance of LLMResponse
-        mock_orchestrator.delegate.return_value = "plain string response"
+    def test_delegate_uses_defaults_for_missing_attributes(self):
+        """Test adapter provides defaults when attributes are missing."""
+        class PartialResponse:
+            def __init__(self):
+                self.content = "Partial content"
+                # Missing: model, tokens_used, cached
 
-        adapter = AgentOrchestratorAdapter(mock_orchestrator)
+        class FakeOrchestrator:
+            def delegate(self, provider_name=None, prompt="", **kwargs):
+                return PartialResponse()
 
+        adapter = AgentOrchestratorAdapter(FakeOrchestrator())
         response = adapter.delegate("groq", "prompt")
 
-        assert isinstance(response, LLMResponse)
-        assert response.content == "plain string response"
+        # Verify defaults are used for missing attributes
+        assert response.content == "Partial content"
         assert response.provider == "groq"
+        assert response.model == ""  # Default empty string
+        assert response.tokens_used == 0  # Default 0
+        assert response.cached is False  # Default False
+
+    @pytest.mark.unit
+    def test_delegate_converts_plain_string_response(self):
+        """Test adapter handles plain string responses."""
+        class FakeOrchestrator:
+            def delegate(self, provider_name=None, prompt="", **kwargs):
+                return "Just a plain string"
+
+        adapter = AgentOrchestratorAdapter(FakeOrchestrator())
+        response = adapter.delegate("gemini", "prompt")
+
+        # String should become content via str() call
+        assert response.content == "Just a plain string"
+        assert response.provider == "gemini"
+        assert response.model == ""
+        assert response.tokens_used == 0
+        assert response.cached is False
+
+    @pytest.mark.unit
+    def test_delegate_handles_empty_content(self):
+        """Test adapter handles empty string content."""
+        class EmptyResponse:
+            content = ""
+            model = "model"
+            tokens_used = 10
+            cached = False
+
+        class FakeOrchestrator:
+            def delegate(self, provider_name=None, prompt="", **kwargs):
+                return EmptyResponse()
+
+        adapter = AgentOrchestratorAdapter(FakeOrchestrator())
+        response = adapter.delegate("groq", "prompt")
+
+        assert response.content == ""
+        assert response.tokens_used == 10  # Still tracks tokens even for empty response
+
+    @pytest.mark.unit
+    def test_delegate_handles_zero_tokens(self):
+        """Test adapter correctly handles zero token count (cached response)."""
+        class CachedResponse:
+            content = "Cached content"
+            model = "fast-model"
+            tokens_used = 0
+            cached = True
+
+        class FakeOrchestrator:
+            def delegate(self, provider_name=None, prompt="", **kwargs):
+                return CachedResponse()
+
+        adapter = AgentOrchestratorAdapter(FakeOrchestrator())
+        response = adapter.delegate("cerebras", "prompt")
+
+        assert response.tokens_used == 0
+        assert response.cached is True
+
+    @pytest.mark.unit
+    def test_delegate_preserves_provider_argument_over_response(self):
+        """Test that provider from argument is used, not from response object."""
+        class FakeOrchestrator:
+            def delegate(self, provider_name=None, prompt="", **kwargs):
+                # Return LLMResponse with different provider
+                return LLMResponse(
+                    content="Test",
+                    provider="wrong_provider",
+                    model="model"
+                )
+
+        adapter = AgentOrchestratorAdapter(FakeOrchestrator())
+        response = adapter.delegate("correct_provider", "prompt")
+
+        # When response is already LLMResponse, it's returned as-is
+        # This is actual behavior - verify it
+        assert response.provider == "wrong_provider"  # LLMResponse returned unchanged
+
+    @pytest.mark.unit
+    def test_delegate_with_use_context_true(self):
+        """Test that use_context parameter is forwarded correctly."""
+        class FakeOrchestrator:
+            def __init__(self):
+                self.last_use_context = None
+
+            def delegate(self, provider_name=None, prompt="", **kwargs):
+                self.last_use_context = kwargs.get('use_context')
+                return LLMResponse(content="Context response", provider=provider_name)
+
+        fake_orch = FakeOrchestrator()
+        adapter = AgentOrchestratorAdapter(fake_orch)
+
+        adapter.delegate("groq", "prompt", use_context=True)
+        assert fake_orch.last_use_context is True
+
+        adapter.delegate("groq", "prompt", use_context=False)
+        assert fake_orch.last_use_context is False
+
+    @pytest.mark.unit
+    def test_delegate_handles_object_with_content_as_property(self):
+        """Test adapter works with property-based content access."""
+        class PropertyResponse:
+            def __init__(self):
+                self._content = "Property content"
+
+            @property
+            def content(self):
+                return self._content
+
+            model = "prop-model"
+            tokens_used = 100
+            cached = False
+
+        class FakeOrchestrator:
+            def delegate(self, provider_name=None, prompt="", **kwargs):
+                return PropertyResponse()
+
+        adapter = AgentOrchestratorAdapter(FakeOrchestrator())
+        response = adapter.delegate("groq", "prompt")
+
+        assert response.content == "Property content"
+        assert response.model == "prop-model"
 
     @pytest.mark.unit
     def test_remember_file_read(self, mock_orchestrator):

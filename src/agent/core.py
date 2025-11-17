@@ -161,40 +161,57 @@ class CodeAgent:
             'git_blame': 'git_blame',
         })
 
-        # Hybrid approach: Use configured provider preferences
+        # Use orchestrator's intelligent provider selection
         safe_print("Selecting AI providers...")
         available = self.adapter.list_providers()
 
-        # Check if adapter has a preferred provider override (from task routing)
-        preferred_provider = None
-        if hasattr(self.adapter, 'get_preferred_provider'):
-            pref_provider, pref_model = self.adapter.get_preferred_provider()
-            if pref_provider and pref_provider in available:
-                preferred_provider = pref_provider
+        # Store orchestrator reference for dynamic provider selection
+        self._orchestrator = orchestrator
 
-        # Select planner based on preferences (prefer adapter override)
-        self.planner = None
-        if preferred_provider:
-            self.planner = preferred_provider
-        else:
-            for pref in self.config.planner_preferences:
-                if pref in available:
-                    self.planner = pref
-                    break
-        if self.planner is None:
-            self.planner = available[0] if available else None
+        # Check if orchestrator supports smart provider selection
+        self._use_dynamic_selection = hasattr(orchestrator, 'get_recommended_provider')
 
-        # Select executor based on preferences (prefer adapter override)
-        self.executor = None
-        if preferred_provider:
-            self.executor = preferred_provider
+        if self._use_dynamic_selection:
+            # Let orchestrator decide provider based on task type and rate limits
+            # Get initial recommendation for display purposes
+            if hasattr(orchestrator, 'get_recommended_provider'):
+                self.planner = orchestrator.get_recommended_provider('planning')
+                self.executor = orchestrator.get_recommended_provider('execution')
+            else:
+                self.planner = available[0] if available else None
+                self.executor = self.planner
         else:
-            for pref in self.config.executor_preferences:
-                if pref in available:
-                    self.executor = pref
-                    break
-        if self.executor is None:
-            self.executor = self.planner
+            # Fallback to legacy static selection if orchestrator doesn't support it
+            # Check if adapter has a preferred provider override (from task routing)
+            preferred_provider = None
+            if hasattr(self.adapter, 'get_preferred_provider'):
+                pref_provider, pref_model = self.adapter.get_preferred_provider()
+                if pref_provider and pref_provider in available:
+                    preferred_provider = pref_provider
+
+            # Select planner based on preferences (prefer adapter override)
+            self.planner = None
+            if preferred_provider:
+                self.planner = preferred_provider
+            else:
+                for pref in self.config.planner_preferences:
+                    if pref in available:
+                        self.planner = pref
+                        break
+            if self.planner is None:
+                self.planner = available[0] if available else None
+
+            # Select executor based on preferences (prefer adapter override)
+            self.executor = None
+            if preferred_provider:
+                self.executor = preferred_provider
+            else:
+                for pref in self.config.executor_preferences:
+                    if pref in available:
+                        self.executor = pref
+                        break
+            if self.executor is None:
+                self.executor = self.planner
 
     def __getattr__(self, name: str):
         """Dynamic attribute resolution for _tool_* methods.
@@ -951,11 +968,19 @@ class CodeAgent:
         import sys
         import time
 
+        # Get current recommended provider (may change between calls due to rate limits)
+        if self._use_dynamic_selection and hasattr(self._orchestrator, 'get_recommended_provider'):
+            current_provider = self._orchestrator.get_recommended_provider('planning')
+            # Update cached value for display
+            self.planner = current_provider
+        else:
+            current_provider = self.planner
+
         # Show progress indicator during API call
         if state.iteration == 1:
-            safe_print(f"[{self.planner}] Analyzing task (this may take a moment)...")
+            safe_print(f"[{current_provider}] Analyzing task (this may take a moment)...")
         else:
-            safe_print(f"[{self.planner}] Thinking...")
+            safe_print(f"[{current_provider}] Thinking...")
 
         # Build the prompt with conversation history for multi-turn
         if len(state.messages) == 2:
@@ -973,23 +998,39 @@ class CodeAgent:
         # Track API call time for first iteration
         start_time = time.time()
 
-        response = self.orch.delegate(
-            self.planner,
-            user_prompt,
-            system_prompt=state.system_prompt,
-            max_tokens=self.config.default_max_tokens,
-            temperature=self.config.default_temperature,
-            use_context=False  # Context already in system prompt
-        )
+        # Delegate with task_type so orchestrator can make intelligent decisions
+        # If orchestrator supports auto-selection, let it choose; otherwise specify provider
+        if self._use_dynamic_selection:
+            response = self.orch.delegate(
+                provider_name=None,  # Let orchestrator decide
+                prompt=user_prompt,
+                system_prompt=state.system_prompt,
+                max_tokens=self.config.default_max_tokens,
+                temperature=self.config.default_temperature,
+                use_context=False,  # Context already in system prompt
+                task_type='planning'  # Inform orchestrator this is a planning task
+            )
+            # Update planner to reflect what was actually used
+            actual_provider = response.provider
+        else:
+            response = self.orch.delegate(
+                current_provider,
+                user_prompt,
+                system_prompt=state.system_prompt,
+                max_tokens=self.config.default_max_tokens,
+                temperature=self.config.default_temperature,
+                use_context=False  # Context already in system prompt
+            )
+            actual_provider = current_provider
 
         # Report latency on first call (helps user understand wait times)
         if state.iteration == 1:
             elapsed = time.time() - start_time
-            safe_print(f"[{self.planner}] Response received ({elapsed:.1f}s)")
+            safe_print(f"[{actual_provider}] Response received ({elapsed:.1f}s)")
 
         return AgentThought(
             raw_response=response.content,
-            provider=self.planner,
+            provider=actual_provider,
             iteration=state.iteration
         )
 

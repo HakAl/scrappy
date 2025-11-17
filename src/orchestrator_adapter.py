@@ -145,21 +145,42 @@ class AgentOrchestratorAdapter:
 
     def delegate(
         self,
-        provider: str,
-        prompt: str,
+        provider: Optional[str] = None,
+        prompt: str = "",
         system_prompt: Optional[str] = None,
         max_tokens: int = 1500,
         temperature: float = 0.3,
-        use_context: bool = False
+        use_context: bool = False,
+        task_type: str = 'general',
+        provider_name: Optional[str] = None,  # Alias for provider
+        **kwargs
     ) -> LLMResponse:
-        """Delegate to the orchestrator's delegate method."""
+        """Delegate to the orchestrator's delegate method.
+
+        Args:
+            provider: Provider name (legacy positional, can be None for auto-selection)
+            prompt: The prompt to send
+            system_prompt: Optional system prompt
+            max_tokens: Maximum tokens in response
+            temperature: Sampling temperature
+            use_context: Whether to use context augmentation
+            task_type: Type of task for provider selection
+            provider_name: Alias for provider (keyword-only)
+            **kwargs: Additional arguments passed to orchestrator
+        """
+        # Support both 'provider' and 'provider_name' for compatibility
+        actual_provider = provider_name if provider_name is not None else provider
+
+        # Pass to orchestrator with new signature
         response = self._orch.delegate(
-            provider,
-            prompt,
+            provider_name=actual_provider,
+            prompt=prompt,
             system_prompt=system_prompt,
             max_tokens=max_tokens,
             temperature=temperature,
-            use_context=use_context
+            use_context=use_context,
+            task_type=task_type,
+            **kwargs
         )
 
         # Wrap in our LLMResponse if needed
@@ -167,9 +188,11 @@ class AgentOrchestratorAdapter:
             return response
 
         # Adapt from orchestrator's response format
+        # Use response.provider if available, otherwise fall back to actual_provider
+        response_provider = getattr(response, 'provider', actual_provider or 'unknown')
         return LLMResponse(
             content=getattr(response, 'content', str(response)),
-            provider=provider,
+            provider=response_provider,
             model=getattr(response, 'model', ''),
             tokens_used=getattr(response, 'tokens_used', 0),
             cached=getattr(response, 'cached', False)

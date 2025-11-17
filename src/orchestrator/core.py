@@ -365,12 +365,84 @@ class AgentOrchestrator:
         """Synthesize multiple agent results."""
         return self.task_executor.synthesize(results, synthesis_prompt)
 
+    # Provider Selection
+
+    def get_recommended_provider(self, task_type: str = 'general') -> Optional[str]:
+        """
+        Get recommended provider based on task type and current rate limit status.
+
+        Args:
+            task_type: Type of task ('planning', 'execution', 'quick', 'general')
+
+        Returns:
+            Provider name or None if no providers available
+        """
+        available = self.registry.list_available()
+        if not available:
+            return None
+
+        # Define provider preferences by task type
+        task_preferences = {
+            'planning': ['gemini', 'groq', 'cerebras'],  # Reasoning capability
+            'execution': ['cerebras', 'groq', 'gemini'],  # Speed
+            'quick': ['cerebras', 'groq'],  # Fast responses
+            'general': ['cerebras', 'groq', 'gemini']  # Balanced
+        }
+
+        preferences = task_preferences.get(task_type, task_preferences['general'])
+
+        # Filter out rate-limited providers
+        for provider_name in preferences:
+            if provider_name not in available:
+                continue
+
+            # Check rate limit status
+            if self.is_rate_limited(provider_name):
+                continue
+
+            return provider_name
+
+        # Fallback: return first available provider even if rate-limited
+        return available[0] if available else None
+
+    def is_rate_limited(self, provider_name: str) -> bool:
+        """
+        Check if a provider is currently rate limited.
+
+        Args:
+            provider_name: Name of provider to check
+
+        Returns:
+            True if provider is rate limited, False otherwise
+        """
+        provider = self.registry.get(provider_name)
+        if not provider:
+            return False
+
+        limits = provider.get_limits()
+        if not limits:
+            return False
+
+        # Get default model for this provider
+        model = getattr(provider, 'default_model', 'default')
+
+        # Check remaining quota
+        remaining = self.rate_tracker.get_remaining_quota(provider_name, model, limits)
+
+        # Consider rate limited if no requests remaining today or this month
+        if remaining.get('requests_remaining_today') == 0:
+            return True
+        if remaining.get('requests_remaining_month') == 0:
+            return True
+
+        return False
+
     # Delegation
 
     def delegate(
         self,
-        provider_name: str,
-        prompt: str,
+        provider_name: Optional[str] = None,
+        prompt: str = "",
         model: Optional[str] = None,
         system_prompt: Optional[str] = None,
         max_tokens: int = 1000,
@@ -380,13 +452,14 @@ class AgentOrchestrator:
         intent_classification: Optional[dict] = None,
         auto_fallback: bool = True,
         max_retries: int = 3,
+        task_type: str = 'general',
         **kwargs
     ) -> LLMResponse:
         """
         Delegate a task to a specific provider with automatic fallback on rate limits.
 
         Args:
-            provider_name: Initial provider to try
+            provider_name: Initial provider to try (None for auto-selection)
             prompt: The prompt to send
             model: Specific model (optional)
             system_prompt: System prompt (optional)
@@ -397,6 +470,7 @@ class AgentOrchestrator:
             intent_classification: Intent data for semantic caching
             auto_fallback: Automatically try other providers on rate limit (default True)
             max_retries: Maximum retry attempts per provider (default 3)
+            task_type: Type of task for auto provider selection ('planning', 'execution', 'general')
             **kwargs: Additional provider-specific arguments
 
         Returns:
@@ -406,6 +480,12 @@ class AgentOrchestrator:
             AllProvidersRateLimitedError: If all providers are rate limited
             Exception: Other non-rate-limit errors
         """
+        # Auto-select provider if not specified
+        if provider_name is None:
+            provider_name = self.get_recommended_provider(task_type)
+            if provider_name is None:
+                raise Exception("No providers available")
+
         # Determine settings
         should_use_context = use_context if use_context is not None else self.context_aware
         should_use_cache = use_cache if use_cache is not None else self.caching_enabled

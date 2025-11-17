@@ -919,3 +919,468 @@ class TestEdgeCases:
         assert usage['tokens_today'] == 150000
         assert usage['input_tokens_today'] == 100000
         assert usage['output_tokens_today'] == 50000
+
+
+class TestConcurrentAccess:
+    """Tests for concurrent access and race conditions."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_concurrent_async_writes_preserve_all_requests(self):
+        """Test that concurrent async writes don't lose data."""
+        import asyncio
+        tracker = RateLimitTracker()
+
+        async def record_batch(provider_suffix: str, count: int):
+            for i in range(count):
+                await tracker.record_request_async(
+                    f'provider_{provider_suffix}',
+                    'model',
+                    input_tokens=10,
+                    output_tokens=5
+                )
+
+        # Run 5 concurrent batches of 10 requests each
+        await asyncio.gather(
+            record_batch('a', 10),
+            record_batch('b', 10),
+            record_batch('c', 10),
+            record_batch('d', 10),
+            record_batch('e', 10),
+        )
+
+        # Verify all providers have correct counts
+        for suffix in ['a', 'b', 'c', 'd', 'e']:
+            usage = tracker.get_usage(f'provider_{suffix}', 'model')
+            assert usage['requests_today'] == 10, f"provider_{suffix} lost requests"
+            assert usage['tokens_today'] == 150, f"provider_{suffix} lost tokens"
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_concurrent_writes_to_same_provider(self):
+        """Test concurrent writes to same provider/model accumulate correctly."""
+        import asyncio
+        tracker = RateLimitTracker()
+
+        async def record_one():
+            await tracker.record_request_async('groq', 'model', 100, 50)
+
+        # 20 concurrent requests to same provider
+        await asyncio.gather(*[record_one() for _ in range(20)])
+
+        usage = tracker.get_usage('groq', 'model')
+        assert usage['requests_today'] == 20
+        assert usage['tokens_today'] == 3000  # 20 * 150
+        assert usage['total_requests'] == 20
+
+    @pytest.mark.unit
+    def test_sequential_rapid_writes_accumulate_correctly(self):
+        """Test that rapid sequential writes don't lose data."""
+        tracker = RateLimitTracker()
+
+        # Simulate rapid-fire requests
+        for i in range(100):
+            tracker.record_request('groq', 'model', i, i * 2)
+
+        usage = tracker.get_usage('groq', 'model')
+        assert usage['requests_today'] == 100
+        # Sum of i from 0 to 99 = 4950
+        # Sum of i*2 from 0 to 99 = 9900
+        # Total = 14850
+        expected_tokens = sum(i + i * 2 for i in range(100))
+        assert usage['tokens_today'] == expected_tokens
+        assert usage['total_requests'] == 100
+
+
+class TestDateBoundaryCrossings:
+    """Tests for date and time boundary edge cases."""
+
+    @pytest.mark.unit
+    def test_daily_reset_on_date_change(self, tmp_path):
+        """Test that daily counters reset when date changes."""
+        tracker_path = tmp_path / "tracker.json"
+
+        # Create tracker with yesterday's date
+        yesterday = (datetime.now() - timedelta(days=1)).date().isoformat()
+        existing_data = {
+            'providers': {
+                'groq': {
+                    'model': {
+                        'requests_today': 50,
+                        'requests_this_month': 500,
+                        'tokens_today': 10000,
+                        'tokens_this_month': 100000,
+                        'input_tokens_today': 4000,
+                        'output_tokens_today': 6000,
+                        'total_requests': 1000,
+                        'total_tokens': 200000,
+                        'last_request': None,
+                        'errors': []
+                    }
+                }
+            },
+            'last_reset': {
+                'daily': yesterday,
+                'monthly': datetime.now().strftime('%Y-%m')
+            },
+            'created_at': '2025-01-01T00:00:00'
+        }
+
+        tracker_path.write_text(json.dumps(existing_data))
+        tracker = RateLimitTracker(str(tracker_path))
+
+        usage = tracker.get_usage('groq', 'model')
+
+        # Daily counters should be reset
+        assert usage['requests_today'] == 0
+        assert usage['tokens_today'] == 0
+        assert usage['input_tokens_today'] == 0
+        assert usage['output_tokens_today'] == 0
+
+        # Monthly and total should be preserved
+        assert usage['requests_this_month'] == 500
+        assert usage['total_requests'] == 1000
+        assert usage['total_tokens'] == 200000
+
+    @pytest.mark.unit
+    def test_monthly_reset_on_month_change(self, tmp_path):
+        """Test that monthly counters reset when month changes."""
+        tracker_path = tmp_path / "tracker.json"
+
+        # Create tracker with last month's date
+        today = datetime.now()
+        if today.month == 1:
+            last_month = f"{today.year - 1}-12"
+        else:
+            last_month = f"{today.year}-{today.month - 1:02d}"
+
+        existing_data = {
+            'providers': {
+                'groq': {
+                    'model': {
+                        'requests_today': 50,
+                        'requests_this_month': 500,
+                        'tokens_today': 10000,
+                        'tokens_this_month': 100000,
+                        'input_tokens_today': 4000,
+                        'output_tokens_today': 6000,
+                        'total_requests': 1000,
+                        'total_tokens': 200000,
+                        'last_request': None,
+                        'errors': []
+                    }
+                }
+            },
+            'last_reset': {
+                'daily': (datetime.now() - timedelta(days=1)).date().isoformat(),
+                'monthly': last_month
+            },
+            'created_at': '2025-01-01T00:00:00'
+        }
+
+        tracker_path.write_text(json.dumps(existing_data))
+        tracker = RateLimitTracker(str(tracker_path))
+
+        usage = tracker.get_usage('groq', 'model')
+
+        # Both daily and monthly should be reset
+        assert usage['requests_today'] == 0
+        assert usage['requests_this_month'] == 0
+        assert usage['tokens_today'] == 0
+        assert usage['tokens_this_month'] == 0
+
+        # Total should be preserved
+        assert usage['total_requests'] == 1000
+        assert usage['total_tokens'] == 200000
+
+    @pytest.mark.unit
+    def test_request_during_day_transition_triggers_reset(self, tmp_path):
+        """Test that recording a request after midnight triggers daily reset."""
+        tracker_path = tmp_path / "tracker.json"
+        yesterday = (datetime.now() - timedelta(days=1)).date().isoformat()
+
+        existing_data = {
+            'providers': {
+                'groq': {
+                    'model': {
+                        'requests_today': 100,
+                        'requests_this_month': 500,
+                        'tokens_today': 20000,
+                        'tokens_this_month': 100000,
+                        'input_tokens_today': 8000,
+                        'output_tokens_today': 12000,
+                        'total_requests': 1000,
+                        'total_tokens': 200000,
+                        'last_request': None,
+                        'errors': []
+                    }
+                }
+            },
+            'last_reset': {
+                'daily': yesterday,
+                'monthly': datetime.now().strftime('%Y-%m')
+            },
+            'created_at': '2025-01-01T00:00:00'
+        }
+
+        tracker_path.write_text(json.dumps(existing_data))
+        tracker = RateLimitTracker(str(tracker_path))
+
+        # Record a new request - this should reset daily counters first
+        tracker.record_request('groq', 'model', 50, 25)
+
+        usage = tracker.get_usage('groq', 'model')
+
+        # Should only have the one new request
+        assert usage['requests_today'] == 1
+        assert usage['tokens_today'] == 75
+        # Monthly should accumulate
+        assert usage['requests_this_month'] == 501
+        # Total should accumulate
+        assert usage['total_requests'] == 1001
+
+    @pytest.mark.unit
+    def test_multiple_providers_reset_independently(self, tmp_path):
+        """Test that all providers reset on day change."""
+        tracker_path = tmp_path / "tracker.json"
+        yesterday = (datetime.now() - timedelta(days=1)).date().isoformat()
+
+        existing_data = {
+            'providers': {
+                'groq': {
+                    'model': {
+                        'requests_today': 100,
+                        'requests_this_month': 500,
+                        'tokens_today': 20000,
+                        'tokens_this_month': 100000,
+                        'input_tokens_today': 8000,
+                        'output_tokens_today': 12000,
+                        'total_requests': 1000,
+                        'total_tokens': 200000,
+                        'last_request': None,
+                        'errors': []
+                    }
+                },
+                'cerebras': {
+                    'llama': {
+                        'requests_today': 200,
+                        'requests_this_month': 800,
+                        'tokens_today': 30000,
+                        'tokens_this_month': 150000,
+                        'input_tokens_today': 10000,
+                        'output_tokens_today': 20000,
+                        'total_requests': 2000,
+                        'total_tokens': 400000,
+                        'last_request': None,
+                        'errors': []
+                    }
+                }
+            },
+            'last_reset': {
+                'daily': yesterday,
+                'monthly': datetime.now().strftime('%Y-%m')
+            },
+            'created_at': '2025-01-01T00:00:00'
+        }
+
+        tracker_path.write_text(json.dumps(existing_data))
+        tracker = RateLimitTracker(str(tracker_path))
+
+        # Both providers should have daily counters reset
+        groq_usage = tracker.get_usage('groq', 'model')
+        cerebras_usage = tracker.get_usage('cerebras', 'llama')
+
+        assert groq_usage['requests_today'] == 0
+        assert cerebras_usage['requests_today'] == 0
+        assert groq_usage['tokens_today'] == 0
+        assert cerebras_usage['tokens_today'] == 0
+
+        # Totals should be preserved
+        assert groq_usage['total_requests'] == 1000
+        assert cerebras_usage['total_requests'] == 2000
+
+
+class TestQuotaEnforcement:
+    """Tests for quota checking and enforcement behavior."""
+
+    @pytest.mark.unit
+    def test_should_allow_request_when_under_quota(self):
+        """Test that requests are allowed when under quota."""
+        tracker = RateLimitTracker()
+        tracker.record_request('groq', 'model', 100, 50)
+
+        limits = ProviderLimits(requests_per_day=100, tokens_per_day=10000)
+        remaining = tracker.get_remaining_quota('groq', 'model', limits)
+
+        # 99 requests remaining, should allow
+        assert remaining['requests_remaining_today'] == 99
+        assert remaining['requests_remaining_today'] > 0
+
+    @pytest.mark.unit
+    def test_should_block_request_when_at_quota(self):
+        """Test that quota shows zero when limit reached."""
+        tracker = RateLimitTracker()
+
+        # Use up exactly the quota
+        for _ in range(100):
+            tracker.record_request('groq', 'model', 10, 5)
+
+        limits = ProviderLimits(requests_per_day=100)
+        remaining = tracker.get_remaining_quota('groq', 'model', limits)
+
+        # Should show 0 remaining
+        assert remaining['requests_remaining_today'] == 0
+
+    @pytest.mark.unit
+    def test_should_block_request_when_over_quota(self):
+        """Test that quota doesn't go negative when over limit."""
+        tracker = RateLimitTracker()
+
+        # Go over quota
+        for _ in range(150):
+            tracker.record_request('groq', 'model', 10, 5)
+
+        limits = ProviderLimits(requests_per_day=100)
+        remaining = tracker.get_remaining_quota('groq', 'model', limits)
+
+        # Should show 0, not -50
+        assert remaining['requests_remaining_today'] == 0
+        # But usage should show actual count
+        assert remaining['usage_today'] == 150
+
+    @pytest.mark.unit
+    def test_token_quota_reached_before_request_quota(self):
+        """Test that token limit can be reached before request limit."""
+        tracker = RateLimitTracker()
+
+        # 10 requests with 2000 tokens each = 20000 tokens total
+        for _ in range(10):
+            tracker.record_request('groq', 'model', 1000, 1000)
+
+        limits = ProviderLimits(requests_per_day=100, tokens_per_day=20000)
+        remaining = tracker.get_remaining_quota('groq', 'model', limits)
+
+        # Plenty of requests remaining
+        assert remaining['requests_remaining_today'] == 90
+        # But tokens are exhausted
+        assert remaining['tokens_remaining_today'] == 0
+
+    @pytest.mark.unit
+    def test_monthly_quota_can_exhaust_before_daily(self):
+        """Test monthly quota exhaustion with daily quota available."""
+        tracker = RateLimitTracker()
+
+        # Use up monthly quota over multiple days
+        # Simulate by directly setting the monthly counter
+        tracker._ensure_provider_model('groq', 'model')
+        tracker._usage['providers']['groq']['model']['requests_this_month'] = 1000
+        tracker._usage['providers']['groq']['model']['requests_today'] = 10
+
+        limits = ProviderLimits(requests_per_day=100, requests_per_month=1000)
+        remaining = tracker.get_remaining_quota('groq', 'model', limits)
+
+        # Daily quota available
+        assert remaining['requests_remaining_today'] == 90
+        # Monthly quota exhausted
+        assert remaining['requests_remaining_month'] == 0
+
+    @pytest.mark.unit
+    def test_is_limit_approaching_triggers_at_threshold(self):
+        """Test that warnings trigger at exactly the threshold."""
+        tracker = RateLimitTracker()
+
+        # Use 91 out of 100 requests (9 remaining = 9% < 10% threshold)
+        for _ in range(91):
+            tracker.record_request('groq', 'model', 10, 5)
+
+        limits = ProviderLimits(requests_per_day=100)
+        warnings = tracker.is_limit_approaching('groq', 'model', limits, threshold=0.1)
+
+        assert warnings['approaching_daily_request_limit'] is True
+        assert 'Only 9 requests remaining today' in warnings['message']
+
+    @pytest.mark.unit
+    def test_is_limit_approaching_not_triggered_above_threshold(self):
+        """Test that warnings don't trigger above threshold."""
+        tracker = RateLimitTracker()
+
+        # Use 89 out of 100 requests (11 remaining = 11% > 10% threshold)
+        for _ in range(89):
+            tracker.record_request('groq', 'model', 10, 5)
+
+        limits = ProviderLimits(requests_per_day=100)
+        warnings = tracker.is_limit_approaching('groq', 'model', limits, threshold=0.1)
+
+        assert warnings['approaching_daily_request_limit'] is False
+        assert warnings['message'] is None
+
+    @pytest.mark.unit
+    def test_quota_check_handles_multiple_limit_types_simultaneously(self):
+        """Test tracking when multiple quota types are approaching limits."""
+        tracker = RateLimitTracker()
+
+        # Set up usage that approaches multiple limits
+        tracker._ensure_provider_model('groq', 'model')
+        model_data = tracker._usage['providers']['groq']['model']
+        model_data['requests_today'] = 95  # 5 remaining of 100
+        model_data['requests_this_month'] = 950  # 50 remaining of 1000
+        model_data['tokens_today'] = 48000  # 2000 remaining of 50000
+
+        limits = ProviderLimits(
+            requests_per_day=100,
+            requests_per_month=1000,
+            tokens_per_day=50000
+        )
+
+        warnings = tracker.is_limit_approaching('groq', 'model', limits, threshold=0.1)
+
+        # All limits should be flagged
+        assert warnings['approaching_daily_request_limit'] is True
+        assert warnings['approaching_monthly_request_limit'] is True
+        assert warnings['approaching_daily_token_limit'] is True
+
+        # Message should contain all warnings
+        assert '5 requests remaining today' in warnings['message']
+        assert '50 requests remaining this month' in warnings['message']
+        assert '2000 tokens remaining today' in warnings['message']
+
+    @pytest.mark.unit
+    def test_quota_enforcement_with_real_decision_making(self):
+        """Test using quota info to make real throttling decisions."""
+        tracker = RateLimitTracker()
+
+        # Simulate a rate limit enforcement function
+        def should_allow_request(tracker, provider, model, limits, min_remaining=1):
+            """Return True if request should be allowed."""
+            remaining = tracker.get_remaining_quota(provider, model, limits)
+
+            # Check all applicable limits
+            if remaining['requests_remaining_today'] is not None:
+                if remaining['requests_remaining_today'] < min_remaining:
+                    return False
+
+            if remaining['requests_remaining_month'] is not None:
+                if remaining['requests_remaining_month'] < min_remaining:
+                    return False
+
+            if remaining['tokens_remaining_today'] is not None:
+                if remaining['tokens_remaining_today'] < min_remaining:
+                    return False
+
+            return True
+
+        limits = ProviderLimits(requests_per_day=3)
+
+        # First two requests should be allowed
+        assert should_allow_request(tracker, 'groq', 'model', limits) is True
+        tracker.record_request('groq', 'model', 10, 5)
+
+        assert should_allow_request(tracker, 'groq', 'model', limits) is True
+        tracker.record_request('groq', 'model', 10, 5)
+
+        # Third request - only 1 remaining, still allowed
+        assert should_allow_request(tracker, 'groq', 'model', limits) is True
+        tracker.record_request('groq', 'model', 10, 5)
+
+        # Fourth request should be blocked (0 remaining)
+        assert should_allow_request(tracker, 'groq', 'model', limits) is False

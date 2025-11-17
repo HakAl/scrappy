@@ -233,16 +233,20 @@ class TestCodeAgentInitialization:
         mock_adapter.list_providers.return_value = ["cerebras", "groq", "gemini"]
         mock_adapter.registry = MagicMock()
         mock_adapter.registry.list_available.return_value = ["cerebras", "groq", "gemini"]
+        # Configure get_recommended_provider to return proper provider strings
+        mock_adapter.get_recommended_provider.return_value = "cerebras"
 
         agent = CodeAgent(
             orchestrator=mock_adapter,
             project_path=str(temp_project_dir)
         )
 
-        # Should select from available providers
+        # Should select from available providers using orchestrator's recommendation
         assert agent.planner is not None
         # planner should be a string provider name
         assert isinstance(agent.planner, str)
+        # Agent should use orchestrator's recommendation
+        assert agent.planner == "cerebras"
 
     @pytest.mark.unit
     def test_agent_creates_tool_context(self, mock_adapter, temp_project_dir):

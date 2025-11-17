@@ -1,37 +1,50 @@
 # Claude Code Guidelines
 
-## Test Coverage Policy
+## Test Quality Policy
 
-**CRITICAL: Never decrease test coverage.**
+**CRITICAL: Write tests that prove features work and provide confidence for changes.**
 
 **CRITICAL: Never use emojis or special characters in code.**
 
-When making changes to the codebase:
+### What Makes a Good Test
 
-1. **Run tests before and after changes** to verify coverage is maintained or improved
-2. **Add tests for new code** - all new functionality must have corresponding tests
-3. **Maintain existing test coverage** - if modifying code, ensure tests still pass and coverage doesn't drop
-4. **Fix failing tests** - never delete or skip tests to make CI pass; fix the underlying issue
+Tests must demonstrate functionality and serve as guardrails for refactoring:
+
+1. **Test behavior, not implementation** - Verify what the code does, not how it does it internally
+2. **Cover edge cases and failure modes** - Happy path alone is insufficient; test boundaries, errors, and invalid inputs
+3. **Prove the feature works** - Tests should fail when requirements break, not when implementation details change
+4. **Enable confident refactoring** - If you can't refactor without breaking tests, the tests are testing the wrong things
+
+### Red Flags (Avoid These)
+
+- Tests that mock everything and verify mock calls instead of outcomes
+- Tests that only cover the happy path
+- Tests that break when you refactor but behavior stays the same
+- Tests that pass when actual functionality is broken
+- High coverage numbers with no real safety guarantees
+
+### Writing Tests
+
+When adding or modifying functionality:
+
+1. **Start with edge cases** - What inputs break this? What are the boundaries?
+2. **Test failure modes** - How should this behave when things go wrong?
+3. **Verify observable outcomes** - Assert on return values, state changes, side effects users care about
+4. **Ask: "Does this test give me confidence?"** - If not, rewrite it
 
 ### Commands
 
 ```bash
-# Run all tests with coverage report
-python -m pytest tests/ --cov=src --cov-report=term-missing
+# Run all tests
+python -m pytest tests/ -v
 
 # Run specific test file
 python -m pytest tests/test_<module>.py -v
 
-# Check coverage for specific module
-python -m pytest tests/ --cov=src.<module> --cov-report=term-missing
+# Run with coverage (use as a guide, not a target)
+python -m pytest tests/ --cov=src --cov-report=term-missing
 ```
 
-### Current Coverage Targets
+### Coverage Note
 
-- Rate Limiter: 94%+
-- Task Router: 82%+
-- Orchestrator Adapter: 94%+
-- Groq Provider: 91%+
-- Cohere Provider: 97%+
-
-Aim to maintain or exceed these levels.
+Coverage metrics are informational only. High coverage with poor tests provides false confidence. Focus on test quality: meaningful assertions, edge case coverage, and behavior verification.
