@@ -34,14 +34,22 @@ except ImportError:
 @click.option("--no-context", is_flag=True, help="Disable context-aware prompts")
 @click.option("--resume", "-r", is_flag=True, help="Resume from last saved session")
 @click.option("--no-save", is_flag=True, help="Disable auto-save on exit")
+@click.option("--show-providers", "-p", is_flag=True, help="Show detailed provider status on startup")
+@click.option("--verbose-selection", "-v", is_flag=True, help="Show verbose provider selection logic")
 @click.pass_context
-def cli(ctx, brain, auto_explore, no_context, resume, no_save):
+def cli(ctx, brain, auto_explore, no_context, resume, no_save, show_providers, verbose_selection):
     """LLM Agent Team CLI - Multi-provider orchestrator interface.
 
     Start interactive mode by running without arguments, or use subcommands
     for one-shot operations.
 
     Sessions are auto-saved on /quit by default. Use --resume to continue.
+
+    Provider Selection:
+      By default, the orchestrator auto-selects the brain based on availability.
+      Priority: cerebras (14,400 RPD) > groq (7,000 RPD) > gemini (auto-fallback)
+
+      Use --brain to override, --show-providers to see status, --verbose-selection for details.
     """
     ctx.ensure_object(dict)
 
@@ -51,10 +59,18 @@ def cli(ctx, brain, auto_explore, no_context, resume, no_save):
     ctx.obj['context_aware'] = not no_context
     ctx.obj['resume'] = resume
     ctx.obj['auto_save'] = not no_save
+    ctx.obj['show_providers'] = show_providers
+    ctx.obj['verbose_selection'] = verbose_selection
 
     # If no subcommand, start interactive mode
     if ctx.invoked_subcommand is None:
-        cli_instance = CLI(brain=brain, auto_explore=auto_explore, context_aware=not no_context)
+        cli_instance = CLI(
+            brain=brain,
+            auto_explore=auto_explore,
+            context_aware=not no_context,
+            verbose_selection=verbose_selection,
+            show_provider_status=show_providers
+        )
         cli_instance.auto_save = not no_save
 
         # Resume previous session if requested
@@ -201,8 +217,51 @@ def providers(ctx):
     """List available providers."""
     auto_explore = ctx.obj.get('auto_explore', False)
     context_aware = ctx.obj.get('context_aware', True)
-    cli_instance = CLI(brain=ctx.obj.get('brain'), auto_explore=auto_explore, context_aware=context_aware)
+    verbose_selection = ctx.obj.get('verbose_selection', False)
+    show_providers = ctx.obj.get('show_providers', False)
+    cli_instance = CLI(
+        brain=ctx.obj.get('brain'),
+        auto_explore=auto_explore,
+        context_aware=context_aware,
+        verbose_selection=verbose_selection,
+        show_provider_status=show_providers
+    )
     cli_instance.display.list_providers()
+
+
+@cli.command()
+@click.option("--verbose", "-v", is_flag=True, help="Show selection log details")
+@click.pass_context
+def provider_info(ctx, verbose):
+    """Show detailed provider selection information and reasoning.
+
+    Displays which providers are available, why each was selected or skipped,
+    and the current brain selection with its reasoning.
+
+    Use this command to understand:
+    - Why a particular provider was auto-selected as brain
+    - Which providers are unavailable and why
+    - The selection priority order
+    """
+    auto_explore = ctx.obj.get('auto_explore', False)
+    context_aware = ctx.obj.get('context_aware', True)
+
+    # Always show verbose for this command if requested
+    cli_instance = CLI(
+        brain=ctx.obj.get('brain'),
+        auto_explore=auto_explore,
+        context_aware=context_aware,
+        verbose_selection=verbose,
+        show_provider_status=True  # Always show status for this command
+    )
+
+    # Show additional programmatic info if verbose
+    if verbose:
+        info = cli_instance.orchestrator.get_provider_selection_info()
+        click.secho("\nProgrammatic Info:", bold=True)
+        click.echo(f"  Available: {info['available_providers']}")
+        click.echo(f"  Selected brain: {info['selected_brain']}")
+        click.echo(f"  Priority order: {' > '.join(info['selection_priority'])}")
 
 
 @cli.command()

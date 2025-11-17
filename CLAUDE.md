@@ -3,7 +3,8 @@
 ## Test Coverage Policy
 
 **CRITICAL: Never decrease test coverage.**
-**CRITICAL: Use emojis or special characters in code.**
+
+**CRITICAL: Never use emojis or special characters in code.**
 
 When making changes to the codebase:
 

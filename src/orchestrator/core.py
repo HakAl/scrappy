@@ -44,7 +44,9 @@ class AgentOrchestrator:
         auto_explore: bool = False,
         context_aware: bool = True,
         enable_cache: bool = True,
-        cache_ttl_hours: int = 24
+        cache_ttl_hours: int = 24,
+        verbose_selection: bool = False,
+        show_provider_status: bool = False
     ):
         """
         Initialize orchestrator.
@@ -57,6 +59,8 @@ class AgentOrchestrator:
             context_aware: Enable context-augmented prompts
             enable_cache: Enable response caching
             cache_ttl_hours: Time-to-live for cache entries in hours
+            verbose_selection: Show detailed provider selection logic
+            show_provider_status: Display provider status summary on startup
         """
         # Core components
         self.registry = ProviderRegistry()
@@ -66,6 +70,8 @@ class AgentOrchestrator:
         self._brain_name = orchestrator_provider
         self.context_aware = context_aware
         self.caching_enabled = enable_cache
+        self.verbose_selection = verbose_selection
+        self._show_provider_status = show_provider_status
 
         # Background task management (for fire-and-forget operations)
         self._background_tasks: set = set()
@@ -84,12 +90,14 @@ class AgentOrchestrator:
         )
         self.working_memory = WorkingMemory()
         self.session_manager = SessionManager(self.context.project_path)
-        self.provider_selector = ProviderSelector(self.registry)
+        self.provider_selector = ProviderSelector(self.registry, verbose=verbose_selection)
 
         # Register providers and set up brain
         if auto_register:
             self._auto_register_providers()
             self._setup_brain(orchestrator_provider)
+            if show_provider_status:
+                self.print_provider_status()
 
         # Initialize task executor after brain is set up
         self.task_executor = TaskExecutor(
@@ -200,6 +208,60 @@ class AgentOrchestrator:
             'orchestrator_brain': self._brain_name,
             'tasks_executed': len(self.task_history),
             'session_start': self.created_at.isoformat(),
+        }
+
+    def print_provider_status(self):
+        """Print comprehensive provider status summary."""
+        print("\n" + "=" * 60)
+        print("PROVIDER CONFIGURATION SUMMARY")
+        print("=" * 60)
+
+        available = self.registry.list_available()
+        all_known = ['github_models', 'cerebras', 'groq', 'gemini', 'cohere']
+
+        print("\nProvider Status:")
+        for provider_name in all_known:
+            if provider_name in available:
+                reason = self.provider_selector._get_brain_selection_reason(provider_name)
+                status_str = f"  [OK] {provider_name:<15} - {reason}"
+            else:
+                status_str = f"  [--] {provider_name:<15} - NOT AVAILABLE (missing API key or package)"
+            print(status_str)
+
+        print(f"\nSelected Brain: {self._brain_name}")
+        if self._brain_name:
+            reason = self.provider_selector._get_brain_selection_reason(self._brain_name)
+            print(f"Selection Reason: {reason}")
+
+        print(f"\nSelection Priority: cerebras > groq > gemini")
+        print("Use --brain <provider> to override auto-selection")
+
+        if self.verbose_selection and self.provider_selector.get_selection_log():
+            print("\nSelection Log:")
+            for entry in self.provider_selector.get_selection_log():
+                print(f"  {entry}")
+
+        print("=" * 60 + "\n")
+
+    def get_provider_selection_info(self) -> dict:
+        """Get detailed provider selection information."""
+        available = self.registry.list_available()
+        all_known = ['github_models', 'cerebras', 'groq', 'gemini', 'cohere']
+
+        provider_info = {}
+        for provider_name in all_known:
+            provider_info[provider_name] = {
+                'available': provider_name in available,
+                'reason': self.provider_selector._get_brain_selection_reason(provider_name) if provider_name in available else 'not available'
+            }
+
+        return {
+            'available_providers': available,
+            'all_known_providers': all_known,
+            'selected_brain': self._brain_name,
+            'selection_priority': ['cerebras', 'groq', 'gemini'],
+            'provider_details': provider_info,
+            'selection_log': self.provider_selector.get_selection_log()
         }
 
     # Context Management

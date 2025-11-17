@@ -37,13 +37,27 @@ except ImportError:
 class CLI:
     """Interactive CLI for the LLM Agent Team."""
 
-    def __init__(self, brain: Optional[str] = None, auto_explore: bool = False, context_aware: bool = True):
+    def __init__(
+        self,
+        brain: Optional[str] = None,
+        auto_explore: bool = False,
+        context_aware: bool = True,
+        verbose_selection: bool = False,
+        show_provider_status: bool = False
+    ):
         """Initialize CLI with orchestrator and component handlers."""
         click.secho("Initializing LLM Agent Team...", fg="cyan")
+
+        # Show verbose selection info if requested
+        if verbose_selection:
+            click.secho("Verbose provider selection enabled", fg="yellow")
+
         self.orchestrator = AgentOrchestrator(
             orchestrator_provider=brain,
             auto_explore=auto_explore,
-            context_aware=context_aware
+            context_aware=context_aware,
+            verbose_selection=verbose_selection,
+            show_provider_status=show_provider_status
         )
         self.session_start = datetime.now()
         self.smart_mode = False  # Smart query mode (uses tools for research)
@@ -68,10 +82,11 @@ class CLI:
         self.agent_mgr = CLIAgentManager(self.orchestrator)
         self.task_router = CLITaskRouterHandler(self.orchestrator)
 
-        # Display initialization info
-        click.echo(f"Brain: {click.style(self.orchestrator.brain, fg='green', bold=True)}")
-        providers_list = ', '.join(self.orchestrator.providers.list_available())
-        click.echo(f"Available providers: {click.style(providers_list, fg='cyan')}")
+        # Display initialization info (unless show_provider_status already did)
+        if not show_provider_status:
+            click.echo(f"Brain: {click.style(self.orchestrator.brain, fg='green', bold=True)}")
+            providers_list = ', '.join(self.orchestrator.providers.list_available())
+            click.echo(f"Available providers: {click.style(providers_list, fg='cyan')}")
 
         # Show context status
         if self.orchestrator.context.is_explored():
