@@ -12,6 +12,34 @@ from typing import Optional, Union
 
 from ..agent_config import AgentConfig
 from ..agent_tools.tools import ToolRegistry, ToolContext
+
+
+def safe_print(*args, **kwargs):
+    """
+    Print function that safely handles Unicode encoding errors on Windows.
+
+    Replaces unencodable characters instead of crashing with 'charmap' codec error.
+    """
+    try:
+        print(*args, **kwargs)
+    except UnicodeEncodeError:
+        # Fallback: encode with 'replace' error handling
+        text = ' '.join(str(arg) for arg in args)
+        # Replace problematic characters with '?'
+        safe_text = text.encode('utf-8', errors='replace').decode('utf-8', errors='replace')
+        # Try to print the safe version
+        try:
+            print(safe_text, **kwargs)
+        except Exception:
+            # Last resort: strip all non-ASCII
+            ascii_text = ''.join(c if ord(c) < 128 else '?' for c in text)
+            print(ascii_text, **kwargs)
+    except Exception as e:
+        # Catch-all for any other print errors
+        try:
+            print(f"[Output encoding error: {type(e).__name__}]", **kwargs)
+        except Exception:
+            pass  # Give up silently if we can't print at all
 from ..orchestrator_adapter import (
     OrchestratorAdapter,
     AgentOrchestratorAdapter,
@@ -304,17 +332,17 @@ class CodeAgent:
         for pattern in self.config.interactive_commands:
             if pattern in cmd_lower:
                 interactive_warning = True
-                print(f"⚠️  Warning: '{pattern}' may require interactive input")
+                safe_print(f"Warning: '{pattern}' may require interactive input")
                 # Suggest workarounds for common cases
                 if 'npx' in cmd_lower:
-                    print("   💡 Tip: Add '-y' flag to skip prompts: npx -y create-react-app ...")
+                    safe_print("   Tip: Add '-y' flag to skip prompts: npx -y create-react-app ...")
                 # Ask if user wants interactive mode
                 try:
                     use_interactive = input("   Run in interactive mode (you can respond to prompts)? [Y/n]: ").strip().lower()
                     if use_interactive != 'n':
                         return self._run_command_interactive(command)
                 except (KeyboardInterrupt, EOFError):
-                    print("\n   Skipping interactive mode, running with captured output...")
+                    safe_print("\n   Skipping interactive mode, running with captured output...")
                 break
 
         # Check for long-running commands
@@ -322,8 +350,8 @@ class CodeAgent:
         for pattern in self.config.long_running_commands:
             if pattern in cmd_lower:
                 is_long_running = True
-                print(f"⏳ Long-running command detected: '{pattern}'")
-                print(f"   Timeout: {self.config.command_timeout}s | Streaming output enabled")
+                safe_print(f"Long-running command detected: '{pattern}'")
+                safe_print(f"   Timeout: {self.config.command_timeout}s | Streaming output enabled")
                 break
 
         try:
@@ -347,11 +375,11 @@ class CodeAgent:
         Run a command in interactive mode - passes I/O directly to terminal.
         User can respond to prompts directly.
         """
-        print(f"\n{'='*60}")
-        print(f"Running in INTERACTIVE MODE")
-        print(f"Command: {command}")
-        print(f"You can respond to any prompts. Output goes directly to terminal.")
-        print(f"{'='*60}\n")
+        safe_print(f"\n{'='*60}")
+        safe_print(f"Running in INTERACTIVE MODE")
+        safe_print(f"Command: {command}")
+        safe_print(f"You can respond to any prompts. Output goes directly to terminal.")
+        safe_print(f"{'='*60}\n")
 
         try:
             # Run command with direct terminal I/O (no capture)
@@ -364,9 +392,9 @@ class CodeAgent:
                 # This allows interactive prompts to work
             )
 
-            print(f"\n{'='*60}")
-            print(f"Command finished with exit code: {result.returncode}")
-            print(f"{'='*60}\n")
+            safe_print(f"\n{'='*60}")
+            safe_print(f"Command finished with exit code: {result.returncode}")
+            safe_print(f"{'='*60}\n")
 
             if result.returncode == 0:
                 return f"Command completed successfully (exit code 0). Output was displayed directly to terminal."
@@ -374,9 +402,9 @@ class CodeAgent:
                 return f"Command finished with exit code {result.returncode}. Check terminal output for details."
 
         except KeyboardInterrupt:
-            print(f"\n{'='*60}")
-            print(f"Command stopped by user (Ctrl+C)")
-            print(f"{'='*60}\n")
+            safe_print(f"\n{'='*60}")
+            safe_print(f"Command stopped by user (Ctrl+C)")
+            safe_print(f"{'='*60}\n")
 
             # Provide context-aware message based on command type
             cmd_lower = command.lower()
@@ -440,7 +468,7 @@ class CodeAgent:
             if attempt > 0:
                 # Exponential backoff: 2, 4, 8 seconds
                 wait_time = 2 ** attempt
-                print(f"   ⚠️  Retry attempt {attempt + 1}/{max_retries} after {wait_time}s delay...")
+                safe_print(f"   Retry attempt {attempt + 1}/{max_retries} after {wait_time}s delay...")
                 time.sleep(wait_time)
                 retry_count = attempt
 
@@ -454,7 +482,7 @@ class CodeAgent:
                 if pattern in output_lower and 'error' in output_lower:
                     is_recoverable_error = True
                     last_error = output
-                    print(f"   ⚠️  Recoverable error detected: {pattern}")
+                    safe_print(f"   Recoverable error detected: {pattern}")
                     break
 
             if not is_recoverable_error:
@@ -572,7 +600,7 @@ class CodeAgent:
                             last_output_time = time.time()
                             # Print progress indicator (only for long-running commands)
                             if show_progress and len(output_lines) % 10 == 0:
-                                print(f"   ... {len(output_lines)} lines processed")
+                                safe_print(f"   ... {len(output_lines)} lines processed")
                 except Exception:
                     pass  # Handle closed pipe
 
@@ -592,8 +620,8 @@ class CodeAgent:
 
                 # Warn if no output for 30 seconds (might be waiting for input)
                 if stall_time > 30 and not stall_warning_shown and show_progress:
-                    print(f"   ⚠️  No output for 30s - command may be waiting for input")
-                    print(f"   Press Ctrl+C to interrupt if stuck")
+                    safe_print(f"   No output for 30s - command may be waiting for input")
+                    safe_print(f"   Press Ctrl+C to interrupt if stuck")
                     stall_warning_shown = True
 
                 time.sleep(0.5)
@@ -610,7 +638,7 @@ class CodeAgent:
                 output = "... [truncated, showing last portion]\n" + output[-max_output:]
 
             if show_progress:
-                print(f"   ✓ Command completed ({len(output_lines)} lines)")
+                safe_print(f"   Command completed ({len(output_lines)} lines)")
             return output if output else "(no output)"
 
         except Exception as e:
@@ -623,26 +651,26 @@ class CodeAgent:
         # Auto-approve safe read-only operations
         safe_actions = ['read_file', 'list_files', 'list_directory', 'search_files', 'search_code', 'git_status', 'git_log', 'git_diff']
         if action in safe_actions:
-            print(f"Agent wants to: {action}")
-            print(f"Parameters: {json.dumps(params, indent=2)}")
-            print("Auto-approved (safe operation)")
+            safe_print(f"Agent wants to: {action}")
+            safe_print(f"Parameters: {json.dumps(params, indent=2)}")
+            safe_print("Auto-approved (safe operation)")
             return True
 
-        print(f"\nAgent wants to: {action}")
-        print(f"Parameters: {json.dumps(params, indent=2)}")
+        safe_print(f"\nAgent wants to: {action}")
+        safe_print(f"Parameters: {json.dumps(params, indent=2)}")
 
         # Show preview for write operations
         if action == 'write_file' and 'content' in params:
             content = params['content']
             max_preview = self.config.write_preview_truncation
             preview = content[:max_preview] + "..." if len(content) > max_preview else content
-            print(f"\nContent preview:\n{preview}")
+            safe_print(f"\nContent preview:\n{preview}")
 
         try:
             response = input("Allow? [y/N]: ").strip().lower()
             return response in ('y', 'yes')
         except (KeyboardInterrupt, EOFError):
-            print("\nAction cancelled.")
+            safe_print("\nAction cancelled.")
             raise  # Re-raise to stop the agent loop
 
     def _parse_agent_response(self, response_text: str) -> dict:
@@ -754,7 +782,7 @@ class CodeAgent:
         Returns:
             AgentThought containing raw LLM response
         """
-        print(f"[{self.planner}] Thinking...")
+        safe_print(f"[{self.planner}] Thinking...")
 
         # Build the prompt with conversation history for multi-turn
         if len(state.messages) == 2:
@@ -819,14 +847,14 @@ class CodeAgent:
         Returns:
             ActionResult with execution details
         """
-        print(f"\nThought: {action.thought}")
+        safe_print(f"\nThought: {action.thought}")
 
         # Handle parse failure - provide feedback to LLM to retry with valid JSON
         if action.action == 'retry_parse':
             # Show what the LLM actually returned for debugging
             raw_response = action.parameters.get('raw_response', 'No response captured')
-            print(f"⚠️ Response parsing failed. LLM returned:\n{raw_response[:300]}...")
-            print("Requesting JSON format retry...")
+            safe_print(f"Response parsing failed. LLM returned:\n{raw_response[:300]}...")
+            safe_print("Requesting JSON format retry...")
             error_msg = (
                 "Your previous response could not be parsed as JSON. "
                 "You MUST respond with ONLY a valid JSON object (no other text). "
@@ -862,7 +890,7 @@ class CodeAgent:
 
         # Handle unknown actions
         if action.action not in self.tools and action.action != 'complete' and action.action != 'error':
-            print(f"Unknown action: {action.action}")
+            safe_print(f"Unknown action: {action.action}")
             return ActionResult(
                 success=False,
                 output=f"Unknown action '{action.action}'. Available tools: {', '.join(self.tools.keys())}",
@@ -879,7 +907,7 @@ class CodeAgent:
             approved = self._get_user_confirmation(action.action, action.parameters)
 
         if not approved:
-            print("Action denied by user")
+            safe_print("Action denied by user")
             self._log_action(action.action, action.parameters, "Denied by user", False)
             return ActionResult(
                 success=False,
@@ -891,14 +919,14 @@ class CodeAgent:
             )
 
         # Execute the tool
-        print(f"Executing: {action.action}")
+        safe_print(f"Executing: {action.action}")
         tool_result = self.tools[action.action](**action.parameters)
 
         max_display = self.config.result_display_truncation
         if len(tool_result) > max_display:
-            print(f"Result: {tool_result[:max_display]}...")
+            safe_print(f"Result: {tool_result[:max_display]}...")
         else:
-            print(f"Result: {tool_result}")
+            safe_print(f"Result: {tool_result}")
 
         self._log_action(action.action, action.parameters, tool_result, True)
 
@@ -939,8 +967,8 @@ class CodeAgent:
             ]
 
             if not meaningful_actions and not self.dry_run:
-                print(f"\nWarning: Agent declared completion without performing any file operations.")
-                print("Requesting agent to actually execute the task...")
+                safe_print(f"\nWarning: Agent declared completion without performing any file operations.")
+                safe_print("Requesting agent to actually execute the task...")
                 return EvaluationResult(
                     is_complete=False,
                     should_continue=True,
@@ -948,7 +976,7 @@ class CodeAgent:
                 )
 
             final_result = action.result_text or 'Task completed'
-            print(f"\nResult: {final_result}")
+            safe_print(f"\nResult: {final_result}")
             self._log_action('complete', {}, final_result, True)
 
             return EvaluationResult(
@@ -1077,9 +1105,9 @@ class CodeAgent:
 
         # Concise header
         task_preview = task[:80] + "..." if len(task) > 80 else task
-        print(f"\n[Agent] {task_preview}")
+        safe_print(f"\n[Agent] {task_preview}")
         if self.dry_run:
-            print("[DRY RUN MODE]")
+            safe_print("[DRY RUN MODE]")
 
         # Build initial context
         context_info = ""
@@ -1163,7 +1191,7 @@ Current task: {task}
             state.iteration += 1
             # Minimal iteration indicator (only show on first iteration)
             if state.iteration == 1:
-                print(f"Working...")
+                safe_print(f"Working...")
 
             # Stage 1: Think - LLM generates next thought/action
             thought = self._think(state)
