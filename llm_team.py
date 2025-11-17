@@ -6,6 +6,11 @@ Entry point for LLM Agent Team CLI.
 import sys
 import os
 
+# Suppress gRPC/abseil ALTS warnings BEFORE any imports
+# These warnings occur when using Google APIs (Gemini) outside of GCP
+os.environ['GRPC_VERBOSITY'] = 'ERROR'
+os.environ['GLOG_minloglevel'] = '2'
+
 # Fix Windows Unicode encoding issues BEFORE any other imports
 # This prevents 'charmap' codec errors when printing Unicode characters (emojis, etc.)
 if sys.platform == 'win32':
