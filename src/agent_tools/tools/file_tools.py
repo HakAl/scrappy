@@ -78,13 +78,37 @@ class WriteFileTool(Tool):
             ToolParameter("content", str, "Content to write to file", required=True)
         ]
 
+    def _is_absolute_path_any_platform(self, path: str) -> bool:
+        """Check if path looks like an absolute path on ANY platform.
+
+        Security measure: Reject paths that are absolute in either Unix or Windows
+        format, regardless of the current platform. This prevents:
+        - Unix absolute paths like /etc/passwd
+        - Windows drive paths like C:\\Windows or D:/Users
+        - Windows UNC paths like \\\\server\\share
+        """
+        # Unix/Mac absolute path
+        if path.startswith('/'):
+            return True
+
+        # Windows drive letter (C:, D:, etc.) - check for letter followed by colon
+        if len(path) >= 2 and path[1] == ':' and path[0].isalpha():
+            return True
+
+        # Windows UNC path (\\server\share)
+        if path.startswith('\\\\'):
+            return True
+
+        return False
+
     def execute(self, context: ToolContext, **kwargs) -> ToolResult:
         path = kwargs["path"]
         content = kwargs["content"]
 
-        # Explicitly reject absolute paths (Unix/Mac style starting with /)
-        # This prevents bypassing is_safe_path on Windows where / is treated as relative
-        if path.startswith('/'):
+        # Explicitly reject absolute paths in ANY format (Unix OR Windows)
+        # This is critical security validation - must reject paths that look
+        # absolute on ANY platform, not just the current one
+        if self._is_absolute_path_any_platform(path):
             return ToolResult(False, "", f"Absolute path '{path}' not allowed. Use relative paths only.")
 
         if not context.is_safe_path(path):

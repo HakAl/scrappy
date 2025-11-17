@@ -277,17 +277,42 @@ class TestFileToolPathSafety:
 
     @pytest.mark.unit
     def test_absolute_path_rejected(self, context):
-        """Absolute paths should be rejected."""
+        """Absolute paths should be rejected on ALL platforms.
+
+        SECURITY: This is a critical security test. Absolute paths in ANY format
+        (Windows or Unix) must be rejected regardless of what platform the code
+        runs on. On Unix, a Windows path like 'C:\\Windows\\test.txt' would be
+        treated as a relative path and could create files with those literal names.
+        This is a security hole that must be closed.
+        """
         tool = WriteFileTool()
 
-        # Windows absolute path
+        # Windows absolute path - MUST be rejected on ALL platforms
         result = tool.execute(
             context=context,
             path='C:\\Windows\\System32\\test.txt',
             content='test'
         )
-
         assert result.success is False
+        assert 'absolute' in result.error.lower()
+
+        # Windows path with forward slashes - also absolute
+        result = tool.execute(
+            context=context,
+            path='D:/Users/test.txt',
+            content='test'
+        )
+        assert result.success is False
+        assert 'absolute' in result.error.lower()
+
+        # Windows UNC path
+        result = tool.execute(
+            context=context,
+            path='\\\\server\\share\\file.txt',
+            content='test'
+        )
+        assert result.success is False
+        assert 'absolute' in result.error.lower()
 
     @pytest.mark.unit
     def test_unix_absolute_path_rejected(self, context):
