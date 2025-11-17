@@ -82,6 +82,11 @@ class WriteFileTool(Tool):
         path = kwargs["path"]
         content = kwargs["content"]
 
+        # Explicitly reject absolute paths (Unix/Mac style starting with /)
+        # This prevents bypassing is_safe_path on Windows where / is treated as relative
+        if path.startswith('/'):
+            return ToolResult(False, "", f"Absolute path '{path}' not allowed. Use relative paths only.")
+
         if not context.is_safe_path(path):
             return ToolResult(False, "", f"Path '{path}' is outside project directory")
 

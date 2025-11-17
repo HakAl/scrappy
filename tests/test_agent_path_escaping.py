@@ -290,6 +290,21 @@ class TestFileToolPathSafety:
         assert result.success is False
 
     @pytest.mark.unit
+    def test_unix_absolute_path_rejected(self, context):
+        """Unix/Mac absolute paths should be rejected."""
+        tool = WriteFileTool()
+
+        # Unix absolute path - should be rejected on ALL platforms
+        result = tool.execute(
+            context=context,
+            path='/etc/passwd',
+            content='test'
+        )
+
+        assert result.success is False
+        assert 'absolute' in result.error.lower() or 'outside' in result.error.lower()
+
+    @pytest.mark.unit
     def test_relative_path_accepted(self, context, temp_project_dir):
         """Valid relative paths should be accepted."""
         tool = WriteFileTool()
