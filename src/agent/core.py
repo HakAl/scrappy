@@ -311,12 +311,38 @@ class CodeAgent:
             if re.search(pattern, command, re.IGNORECASE):
                 return f"Error: Command matches dangerous pattern '{pattern}'"
 
-        # Fix Spring Initializr URLs before execution
+        # Intercept Spring Initializr downloads on Windows - suggest using templates instead
+        from ..platform_utils import intercept_spring_initializr_download, is_windows
+        if is_windows():
+            intercept_info = intercept_spring_initializr_download(command, str(self.project_root))
+            if intercept_info and intercept_info['should_intercept']:
+                safe_print(f"   [Platform] {intercept_info['reason']}")
+                safe_print(f"   [Suggestion] {intercept_info['suggested_action']}")
+                # Return helpful error with template parameters
+                params = intercept_info['template_params']
+                return (
+                    f"Error: Spring Initializr downloads are unreliable on Windows. "
+                    f"Instead, use write_file to create the project structure directly. "
+                    f"Detected parameters: groupId={params['group_id']}, "
+                    f"artifactId={params['artifact_id']}, "
+                    f"dependencies={','.join(params['dependencies'])}. "
+                    f"Create these files manually: 1) pom.xml, 2) src/main/java/{params['package_name'].replace('.', '/')}/Application.java, "
+                    f"3) src/main/resources/application.properties"
+                )
+
+        # Fix Spring Initializr URLs before execution (fallback if not intercepted)
         from ..platform_utils import fix_spring_initializr_command
         fixed_command, was_fixed, fix_message = fix_spring_initializr_command(command)
         if was_fixed:
             safe_print(f"   [Auto-fix] {fix_message}")
             command = fixed_command
+
+        # Normalize npm commands for Windows (suppress Unicode output)
+        from ..platform_utils import normalize_npm_command_for_windows
+        npm_normalized, npm_was_normalized, npm_message = normalize_npm_command_for_windows(command)
+        if npm_was_normalized:
+            safe_print(f"   [Auto-fix] {npm_message}")
+            command = npm_normalized
 
         # Normalize paths for Windows (convert forward slashes to backslashes)
         from ..platform_utils import normalize_command_paths
@@ -446,6 +472,95 @@ class CodeAgent:
                 )
         except Exception as e:
             return f"Error running interactive command: {str(e)}"
+
+    def _categorize_command_approach(self, command: str) -> str:
+        """
+        Categorize a command into an approach type for retry tracking.
+
+        This helps detect when the LLM is retrying the same failing approach.
+
+        Args:
+            command: The shell command
+
+        Returns:
+            String describing the approach type
+        """
+        command_lower = command.lower()
+
+        # Network download approaches
+        if 'start.spring.io' in command_lower:
+            return 'spring_initializr_download'
+        if 'curl' in command_lower or 'wget' in command_lower:
+            return 'curl_download'
+        if 'invoke-webrequest' in command_lower or 'downloadfile' in command_lower:
+            return 'powershell_download'
+
+        # Project scaffolding
+        if 'npm create' in command_lower or 'npx create' in command_lower:
+            return 'npm_create_project'
+        if 'npm init' in command_lower:
+            return 'npm_init'
+
+        # Directory operations
+        if command_lower.startswith('mkdir '):
+            if '/' in command and '\\' not in command:
+                return 'mkdir_unix_style'
+            return 'mkdir'
+
+        # Package management
+        if 'npm install' in command_lower or 'npm i ' in command_lower:
+            return 'npm_install'
+
+        # General command categories
+        if any(unix_cmd in command_lower.split()[0] for unix_cmd in ['grep', 'cat', 'sed', 'awk', 'find']):
+            return 'unix_command'
+
+        return 'shell_command'
+
+    def _check_retry_pattern(self, command: str, failed_commands: list) -> str:
+        """
+        Check if a command follows a pattern that has already failed.
+
+        Args:
+            command: The command about to be executed
+            failed_commands: List of previously failed commands with their approaches
+
+        Returns:
+            Warning message if retry pattern detected, empty string otherwise
+        """
+        if not failed_commands:
+            return ""
+
+        current_approach = self._categorize_command_approach(command)
+
+        # Check if same approach has failed before
+        failed_approaches = [f['approach'] for f in failed_commands]
+
+        if current_approach in failed_approaches:
+            count = failed_approaches.count(current_approach)
+            if count >= 1:
+                # Get the failed commands with same approach
+                same_approach_failures = [f for f in failed_commands if f['approach'] == current_approach]
+                last_failure = same_approach_failures[-1]
+
+                suggestions = {
+                    'spring_initializr_download': "Use write_file to create Spring Boot files directly instead of downloading",
+                    'curl_download': "Use write_file tool to create files locally instead of downloading",
+                    'powershell_download': "Use write_file tool to create files locally instead of downloading",
+                    'mkdir_unix_style': "Use backslashes (website\\\\frontend) or PowerShell New-Item command",
+                    'npm_create_project': "Add --no-color flag or use write_file to create package.json manually",
+                    'unix_command': "Use platform tools (read_file, search_code, list_files) instead of Unix commands",
+                }
+
+                suggestion = suggestions.get(current_approach, "Try a completely different approach")
+
+                return (
+                    f"WARNING: '{current_approach}' approach already failed {count} time(s). "
+                    f"Last error: {last_failure['error'][:100]}... "
+                    f"Suggestion: {suggestion}"
+                )
+
+        return ""
 
     def _run_command_with_retry(self, command: str, timeout: int, show_progress: bool = True, max_retries: int = 3) -> str:
         """
@@ -971,9 +1086,42 @@ class CodeAgent:
                 executed=False
             )
 
+        # Check for retry patterns - detect if same approach is being repeated
+        if action.action == 'run_command' and state.failed_commands:
+            command = action.parameters.get('command', '')
+            retry_warning = self._check_retry_pattern(command, state.failed_commands)
+            if retry_warning:
+                safe_print(f"[Retry Warning] {retry_warning}")
+                # Add warning to state for next iteration
+                state.retry_warnings.append(retry_warning)
+
         # Execute the tool
         safe_print(f"Executing: {action.action}")
         tool_result = self.tools[action.action](**action.parameters)
+
+        # Track failed commands for retry detection
+        if action.action == 'run_command':
+            command = action.parameters.get('command', '')
+            if 'Error' in tool_result or 'failed' in tool_result.lower():
+                # Categorize the approach for better tracking
+                approach = self._categorize_command_approach(command)
+                state.failed_commands.append({
+                    'command': command,
+                    'error': tool_result[:200],  # Truncate error
+                    'approach': approach,
+                    'iteration': state.iteration
+                })
+                safe_print(f"   [Tracked] Failed '{approach}' approach - will suggest alternatives")
+
+                # If same approach failed twice, inject strong warning
+                approach_failures = sum(1 for f in state.failed_commands if f['approach'] == approach)
+                if approach_failures >= 2:
+                    warning = (
+                        f"CRITICAL: The '{approach}' approach has failed {approach_failures} times. "
+                        f"You MUST try a completely different strategy. "
+                        f"If using shell commands, switch to write_file tool instead."
+                    )
+                    state.retry_warnings.append(warning)
 
         max_display = self.config.result_display_truncation
         if len(tool_result) > max_display:
@@ -1087,9 +1235,24 @@ class CodeAgent:
                 'role': 'assistant',
                 'content': thought.raw_response
             })
+
+            # Build user message with tool result and any retry warnings
+            user_message = f"Tool result for {result.action}:\n{result.output}\n"
+
+            # Inject retry warnings if any failures were tracked
+            if state.retry_warnings:
+                user_message += "\n--- IMPORTANT WARNINGS ---\n"
+                for warning in state.retry_warnings:
+                    user_message += f"- {warning}\n"
+                user_message += "--- END WARNINGS ---\n"
+                # Clear warnings after injecting
+                state.retry_warnings.clear()
+
+            user_message += "\nContinue with the task or mark as complete if done."
+
             state.messages.append({
                 'role': 'user',
-                'content': f"Tool result for {result.action}:\n{result.output}\n\nContinue with the task or mark as complete if done."
+                'content': user_message
             })
             state.tools_executed.append(result.action)
         elif not result.approved and result.action in self.tools:
@@ -1179,13 +1342,53 @@ class CodeAgent:
         platform_guidance = ""
         if is_windows():
             platform_guidance = """
-IMPORTANT - Platform: Windows
-- Do NOT use Unix commands (grep, cat, sed, awk, find, xargs, etc.)
+IMPORTANT - Platform: Windows (CRITICAL - READ ALL GUIDANCE BELOW)
+
+FORBIDDEN Unix Commands:
+- Do NOT use: grep, cat, sed, awk, find, xargs, ls, rm, cp, mv, touch, curl, wget
 - Use Python code or PowerShell equivalents instead
-- For searching files, use the search_code tool (not grep)
-- For reading files, use the read_file tool (not cat)
-- For listing files, use the list_files tool (not ls or find)
-- When running shell commands, use Windows commands (dir, type, etc.)
+
+File Operations - Use Built-in Tools:
+- For searching files: use search_code tool (NOT grep or findstr)
+- For reading files: use read_file tool (NOT cat or type)
+- For listing files: use list_files tool (NOT ls, dir, or find)
+- For writing files: use write_file tool (NOT echo redirection)
+
+Directory Creation - Use Backslashes:
+  BAD:  mkdir website/frontend (Unix forward slash - WILL FAIL)
+  GOOD: mkdir website\\frontend (Windows backslash)
+  BEST: Use PowerShell: New-Item -ItemType Directory -Path "website\\frontend" -Force
+
+Project Scaffolding - AVOID Network Downloads:
+  BAD:  curl https://start.spring.io/... (URL encoding issues on Windows)
+  BAD:  Invoke-WebRequest https://start.spring.io/... (often fails with 400 errors)
+  GOOD: Write project files directly using write_file tool
+  - For Spring Boot: Write pom.xml, src/main/java/... files directly
+  - For React/Vite: Run "npm create vite@latest projectname -- --template react" with -y flags
+
+NPM Commands - Suppress Unicode Output:
+  BAD:  npm create vite (Unicode spinners cause crashes)
+  GOOD: npm create vite@latest myapp -- --template react 2>&1
+  BEST: Set NO_COLOR=1 and use --no-color flags when available
+
+Command Chaining:
+  BAD:  cd frontend && npm install (Unix style)
+  GOOD: cd frontend & npm install (Windows style with &)
+  BEST: Run commands separately, one at a time
+
+Spring Boot Projects - Write Files Directly:
+Instead of downloading from start.spring.io, create these files with write_file:
+1. pom.xml (Maven configuration)
+2. src/main/java/.../Application.java
+3. src/main/resources/application.properties
+4. Other Java source files as needed
+This is MORE RELIABLE than network downloads.
+
+Key Principles:
+1. NEVER retry the same failing approach - try a completely different strategy
+2. Use write_file for creating project structures (most reliable)
+3. If a shell command fails once, switch to Python/PowerShell alternative immediately
+4. Windows paths use BACKSLASH (\\), not forward slash (/)
 """
         else:
             platform_guidance = f"""

@@ -21,6 +21,8 @@ from src.platform_utils import (
     validate_spring_initializr_url,
     fix_spring_initializr_command,
     get_spring_boot_fallback_files,
+    normalize_npm_command_for_windows,
+    intercept_spring_initializr_download,
 )
 
 
@@ -1012,3 +1014,183 @@ class TestSpringInitializrHelpers:
         assert ".mvn/wrapper/maven-wrapper.properties" in files
         props = files[".mvn/wrapper/maven-wrapper.properties"]
         assert "apache-maven" in props
+
+
+class TestNpmCommandNormalization:
+    """Tests for npm command normalization on Windows."""
+
+    @pytest.mark.unit
+    def test_normalize_npm_returns_tuple(self):
+        """Should return a tuple of (command, was_modified, message)."""
+        result = normalize_npm_command_for_windows("npm install")
+        assert isinstance(result, tuple)
+        assert len(result) == 3
+
+    @pytest.mark.unit
+    def test_normalize_npm_create_adds_no_color(self, monkeypatch):
+        """Should add NO_COLOR and --no-color to npm create commands."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        cmd, modified, msg = normalize_npm_command_for_windows("npm create vite@latest myapp")
+        assert modified is True
+        assert "NO_COLOR=1" in cmd
+        assert "--no-color" in cmd
+
+    @pytest.mark.unit
+    def test_normalize_npm_install_adds_flags(self, monkeypatch):
+        """Should add --no-progress and --no-color to npm install."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        cmd, modified, msg = normalize_npm_command_for_windows("npm install express")
+        assert modified is True
+        assert "--no-progress" in cmd
+        assert "--no-color" in cmd
+
+    @pytest.mark.unit
+    def test_normalize_npm_no_change_on_unix(self, monkeypatch):
+        """Should not modify npm commands on Unix."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: False)
+        cmd, modified, msg = normalize_npm_command_for_windows("npm create vite@latest myapp")
+        assert modified is False
+        assert cmd == "npm create vite@latest myapp"
+
+    @pytest.mark.unit
+    def test_normalize_npm_preserves_template_flag(self, monkeypatch):
+        """Should preserve template flags in npm create."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        cmd, modified, msg = normalize_npm_command_for_windows("npm create vite@latest myapp -- --template react")
+        assert modified is True
+        assert "--template react" in cmd
+        assert "--no-color" in cmd
+
+    @pytest.mark.unit
+    def test_normalize_npx_create_command(self, monkeypatch):
+        """Should handle npx create commands."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        cmd, modified, msg = normalize_npm_command_for_windows("npx create-react-app myapp")
+        assert modified is True
+        assert "NO_COLOR=1" in cmd
+
+    @pytest.mark.unit
+    def test_normalize_npm_init_command(self, monkeypatch):
+        """Should handle npm init commands."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        cmd, modified, msg = normalize_npm_command_for_windows("npm init vite")
+        assert modified is True
+        assert "NO_COLOR=1" in cmd
+
+    @pytest.mark.unit
+    def test_normalize_npm_run_adds_flags(self, monkeypatch):
+        """Should add flags to npm run commands."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        cmd, modified, msg = normalize_npm_command_for_windows("npm run build")
+        assert modified is True
+        assert "--no-progress" in cmd
+        assert "--no-color" in cmd
+
+    @pytest.mark.unit
+    def test_normalize_npm_already_has_flags(self, monkeypatch):
+        """Should not duplicate flags if already present."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        cmd, modified, msg = normalize_npm_command_for_windows("npm install --no-progress --no-color")
+        # Should still modify to ensure consistency
+        assert "--no-progress" in cmd
+        assert "--no-color" in cmd
+
+    @pytest.mark.unit
+    def test_normalize_non_npm_command(self, monkeypatch):
+        """Should not modify non-npm commands."""
+        monkeypatch.setattr("src.platform_utils.is_windows", lambda: True)
+        cmd, modified, msg = normalize_npm_command_for_windows("mkdir website")
+        assert modified is False
+        assert cmd == "mkdir website"
+
+
+class TestInterceptSpringInitializrDownload:
+    """Tests for intercepting Spring Initializr download commands."""
+
+    @pytest.mark.unit
+    def test_intercept_non_spring_command(self):
+        """Should return None for non-Spring commands."""
+        result = intercept_spring_initializr_download("npm install express")
+        assert result is None
+
+    @pytest.mark.unit
+    def test_intercept_curl_spring_command(self):
+        """Should intercept curl commands to Spring Initializr."""
+        result = intercept_spring_initializr_download(
+            "curl https://start.spring.io/starter.zip -o demo.zip"
+        )
+        assert result is not None
+        assert result['should_intercept'] is True
+        assert 'suggested_action' in result
+        assert 'template_params' in result
+
+    @pytest.mark.unit
+    def test_intercept_extracts_parameters(self):
+        """Should extract parameters from Spring Initializr URL."""
+        result = intercept_spring_initializr_download(
+            "curl https://start.spring.io/starter.zip?groupId=com.mycompany&artifactId=myapp&dependencies=web,security"
+        )
+        assert result is not None
+        params = result['template_params']
+        assert params['group_id'] == 'com.mycompany'
+        assert params['artifact_id'] == 'myapp'
+        assert 'web' in params['dependencies']
+        assert 'security' in params['dependencies']
+
+    @pytest.mark.unit
+    def test_intercept_powershell_download(self):
+        """Should intercept PowerShell download commands."""
+        result = intercept_spring_initializr_download(
+            'Invoke-WebRequest -Uri https://start.spring.io/starter.zip -OutFile demo.zip'
+        )
+        assert result is not None
+        assert result['should_intercept'] is True
+
+    @pytest.mark.unit
+    def test_intercept_has_reason_message(self):
+        """Should provide reason for interception."""
+        result = intercept_spring_initializr_download(
+            "curl https://start.spring.io/starter.zip"
+        )
+        assert result is not None
+        assert 'Windows' in result['reason'] or 'URL encoding' in result['reason']
+
+    @pytest.mark.unit
+    def test_intercept_has_original_command(self):
+        """Should include original command in result."""
+        cmd = "curl https://start.spring.io/starter.zip -o demo.zip"
+        result = intercept_spring_initializr_download(cmd)
+        assert result is not None
+        assert result['original_command'] == cmd
+
+    @pytest.mark.unit
+    def test_intercept_default_dependencies(self):
+        """Should have default dependencies when not specified."""
+        result = intercept_spring_initializr_download(
+            "curl https://start.spring.io/starter.zip"
+        )
+        assert result is not None
+        params = result['template_params']
+        assert len(params['dependencies']) > 0
+        # Default includes common dependencies
+        assert 'web' in params['dependencies']
+
+    @pytest.mark.unit
+    def test_intercept_extracts_basedir(self):
+        """Should extract baseDir as artifact_id."""
+        result = intercept_spring_initializr_download(
+            "curl https://start.spring.io/starter.zip?baseDir=myproject"
+        )
+        assert result is not None
+        params = result['template_params']
+        assert params['artifact_id'] == 'myproject'
+
+    @pytest.mark.unit
+    def test_intercept_extracts_package_name(self):
+        """Should extract packageName from URL."""
+        result = intercept_spring_initializr_download(
+            "curl https://start.spring.io/starter.zip?packageName=com.acme.app"
+        )
+        assert result is not None
+        params = result['template_params']
+        assert params['package_name'] == 'com.acme.app'

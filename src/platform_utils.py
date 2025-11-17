@@ -430,6 +430,122 @@ def normalize_command_paths(command: str) -> Tuple[str, bool, str]:
     return command, False, ""
 
 
+def normalize_npm_command_for_windows(command: str) -> Tuple[str, bool, str]:
+    """
+    Normalize npm commands for Windows to prevent Unicode output issues.
+
+    On Windows, npm commands with spinners and progress bars can crash due to
+    Unicode encoding issues. This function adds flags to suppress these.
+
+    Args:
+        command: npm command to normalize
+
+    Returns:
+        Tuple of (normalized_command, was_modified, message)
+    """
+    if not is_windows():
+        return command, False, ""
+
+    original_command = command
+    modified = False
+
+    # Check for npm create commands (Vite, React, etc.)
+    npm_create_patterns = [
+        r'npm\s+create\s+',
+        r'npx\s+create-',
+        r'npm\s+init\s+',
+    ]
+
+    for pattern in npm_create_patterns:
+        if re.search(pattern, command, re.IGNORECASE):
+            # Add environment variable to suppress colors/Unicode
+            if 'NO_COLOR=' not in command and 'set NO_COLOR' not in command:
+                # Prepend environment variable setting
+                command = f'set NO_COLOR=1 && {command}'
+                modified = True
+
+            # Add --no-color flag if not present (for npm)
+            if '--no-color' not in command and 'npm' in command:
+                # Insert before any -- separator
+                if ' -- ' in command:
+                    parts = command.split(' -- ', 1)
+                    command = f'{parts[0]} --no-color -- {parts[1]}'
+                else:
+                    command = command.rstrip() + ' --no-color'
+                modified = True
+            break
+
+    # Check for npm install/run commands
+    if re.search(r'npm\s+(install|i|run|start|build|test)', command, re.IGNORECASE):
+        if '--no-progress' not in command:
+            command = command.rstrip() + ' --no-progress'
+            modified = True
+        if '--no-color' not in command:
+            command = command.rstrip() + ' --no-color'
+            modified = True
+
+    if modified:
+        message = f"Added Windows npm flags to suppress Unicode output"
+        return command, True, message
+
+    return command, False, ""
+
+
+def intercept_spring_initializr_download(command: str, target_dir: str = ".") -> Optional[Dict[str, Any]]:
+    """
+    Intercept Spring Initializr download commands and suggest using local templates.
+
+    On Windows, downloading from start.spring.io often fails due to URL encoding issues.
+    This function detects such commands and returns information to use local templates instead.
+
+    Args:
+        command: Shell command that might be downloading from Spring Initializr
+        target_dir: Directory where the project should be created
+
+    Returns:
+        Dict with 'should_intercept', 'reason', 'suggested_action', and 'template_params'
+        or None if not a Spring Initializr command
+    """
+    if 'start.spring.io' not in command:
+        return None
+
+    # Extract parameters from the URL
+    params = {
+        'group_id': 'com.example',
+        'artifact_id': 'demo',
+        'package_name': 'com.example.demo',
+        'dependencies': ['web', 'data-jpa', 'h2', 'validation', 'security']
+    }
+
+    # Try to extract actual parameters from URL
+    url_match = re.search(r'https?://start\.spring\.io[^"\'\s]+', command)
+    if url_match:
+        url = url_match.group(0)
+        if '?' in url:
+            query = url.split('?', 1)[1]
+            for param in query.split('&'):
+                if '=' in param:
+                    key, value = param.split('=', 1)
+                    if key == 'groupId':
+                        params['group_id'] = value
+                    elif key == 'artifactId':
+                        params['artifact_id'] = value
+                    elif key == 'packageName':
+                        params['package_name'] = value
+                    elif key == 'dependencies':
+                        params['dependencies'] = value.split(',')
+                    elif key == 'baseDir':
+                        params['artifact_id'] = value  # Use baseDir as artifact name
+
+    return {
+        'should_intercept': True,
+        'reason': 'Spring Initializr downloads often fail on Windows due to URL encoding issues',
+        'suggested_action': 'Use write_file to create Spring Boot project files directly',
+        'template_params': params,
+        'original_command': command
+    }
+
+
 def get_python_fallback(command: str, cwd: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """
     Execute Unix commands using Python implementations when native commands fail.

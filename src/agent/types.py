@@ -55,3 +55,6 @@ class ConversationState:
     max_iterations: int = 10
     tools_executed: List[str] = field(default_factory=list)
     auto_confirm: bool = False
+    # Track failed commands to force different strategies
+    failed_commands: List[Dict[str, str]] = field(default_factory=list)  # List of {command, error, approach}
+    retry_warnings: List[str] = field(default_factory=list)  # Warnings to inject into next prompt
