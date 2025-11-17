@@ -7,9 +7,120 @@ making it easy to add new providers (OpenRouter, HuggingFace, etc.) in the futur
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Dict, Any
 from datetime import datetime
+from enum import Enum
 import asyncio
+import re
+
+
+class ModelType(Enum):
+    """Classification of model training/tuning type."""
+    BASE = "base"           # Raw pretrained, no instruction tuning
+    CHAT = "chat"           # Chat-tuned (conversational)
+    INSTRUCT = "instruct"   # Instruction-tuned (follows structured commands)
+    CODE = "code"           # Code-specialized
+    REASONING = "reasoning" # Chain-of-thought / reasoning specialized
+    UNKNOWN = "unknown"     # Type not determined
+
+
+def detect_model_type(model_id: str) -> ModelType:
+    """
+    Auto-detect model type from model ID/name.
+
+    Looks for common patterns in model names to determine type.
+
+    Args:
+        model_id: Model identifier string
+
+    Returns:
+        ModelType enum value
+    """
+    model_lower = model_id.lower()
+
+    # Check for code models first (specific)
+    if "code" in model_lower or "coder" in model_lower:
+        return ModelType.CODE
+
+    # Check for instruction-tuned indicators
+    if "instruct" in model_lower:
+        return ModelType.INSTRUCT
+
+    # Check for -it suffix (instruction-tuned)
+    if re.search(r'-it$', model_lower) or re.search(r'-it-', model_lower):
+        return ModelType.INSTRUCT
+
+    # Check for chat indicators
+    if "chat" in model_lower:
+        return ModelType.CHAT
+
+    # Check for versatile (Groq's term for chat-tuned)
+    if "versatile" in model_lower:
+        return ModelType.CHAT
+
+    # Check for base model indicators
+    if "base" in model_lower:
+        return ModelType.BASE
+
+    # Check for reasoning/thinking models
+    if "thinking" in model_lower or "reasoning" in model_lower:
+        return ModelType.REASONING
+
+    # Default to unknown
+    return ModelType.UNKNOWN
+
+
+@dataclass
+class ModelInfo:
+    """
+    Metadata about a specific model.
+
+    Provides detailed information about model capabilities, limits,
+    and characteristics for intelligent model selection.
+    """
+    id: str
+    model_type: ModelType
+    context_length: int
+    rpd: Optional[int] = None  # Requests per day
+    tpm: Optional[int] = None  # Tokens per minute
+    quality: str = "good"      # good, very_good, excellent
+    speed: str = "fast"        # fast, very_fast, moderate, slow
+
+    @property
+    def is_instruction_tuned(self) -> bool:
+        """Check if model is instruction-tuned (best for JSON compliance)."""
+        return self.model_type == ModelType.INSTRUCT
+
+    @classmethod
+    def from_config(cls, model_id: str, config: Dict[str, Any]) -> "ModelInfo":
+        """
+        Create ModelInfo from provider config dictionary.
+
+        Args:
+            model_id: Model identifier
+            config: Dictionary with model configuration
+
+        Returns:
+            ModelInfo instance
+        """
+        # Get model type from config or auto-detect from name
+        if "type" in config:
+            model_type = config["type"]
+        else:
+            model_type = detect_model_type(model_id)
+
+        # Extract context length (may be 'context' or 'context_length')
+        context_length = config.get("context", config.get("context_length", 4096))
+
+        return cls(
+            id=model_id,
+            model_type=model_type,
+            context_length=context_length,
+            rpd=config.get("rpd"),
+            tpm=config.get("tpm"),
+            quality=config.get("quality", "good"),
+            speed=config.get("speed", "fast")
+        )
 
 
 @dataclass
@@ -143,6 +254,38 @@ class LLMProvider(ABC):
         Override in paid providers.
         """
         return 0.0
+
+    def get_model_info(self, model_id: str) -> ModelInfo:
+        """
+        Get detailed information about a specific model.
+
+        Default implementation returns ModelInfo with auto-detected type.
+        Override in providers with model configuration dictionaries.
+
+        Args:
+            model_id: Model identifier
+
+        Returns:
+            ModelInfo with model metadata
+        """
+        # Default implementation - providers should override
+        return ModelInfo(
+            id=model_id,
+            model_type=detect_model_type(model_id),
+            context_length=4096  # Conservative default
+        )
+
+    def get_instruction_tuned_models(self) -> list[str]:
+        """
+        Get all instruction-tuned models from this provider.
+
+        Returns:
+            List of model IDs that are instruction-tuned
+        """
+        return [
+            model_id for model_id in self.available_models
+            if self.get_model_info(model_id).is_instruction_tuned
+        ]
 
 
 class ProviderRegistry:

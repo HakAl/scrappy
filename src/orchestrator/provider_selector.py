@@ -4,12 +4,14 @@ Provider selection and routing logic.
 Automatically selects the best provider based on task requirements.
 """
 
-from typing import Optional
+from typing import Optional, List, Tuple
 
 try:
     from ..providers import ProviderRegistry
+    from ..providers.base import ModelType
 except ImportError:
     from providers import ProviderRegistry
+    from providers.base import ModelType
 
 
 class ProviderSelector:
@@ -76,6 +78,10 @@ class ProviderSelector:
             raise RuntimeError("No providers available!")
 
         self._log(f"Available providers: {', '.join(available)}")
+
+        if task_type == 'planning':
+            # Planning tasks need instruction-tuned models for JSON compliance
+            return self.select_for_planning()
 
         if task_type in ['fast', 'high_volume', 'general']:
             # Prefer Cerebras (14,400 RPD), then Groq (7,000 RPD)
@@ -257,3 +263,145 @@ class ProviderSelector:
                 return provider_name
 
         return None
+
+    def select_for_planning(self) -> Tuple[str, str]:
+        """
+        Select best provider and model for planning/agent tasks.
+
+        Prioritizes instruction-tuned models for better JSON compliance.
+
+        Returns:
+            Tuple of (provider_name, model_name)
+
+        Raises:
+            RuntimeError: If no providers available
+        """
+        self._log("Selecting provider for planning (prioritizing instruction-tuned models)")
+        available = self.registry.list_available()
+
+        if not available:
+            self._log("No providers available!", "ERROR")
+            raise RuntimeError("No providers available!")
+
+        # First, try to find instruction-tuned models with high RPD
+        best_provider = None
+        best_model = None
+        best_rpd = 0
+
+        for provider_name in available:
+            provider = self.registry.get(provider_name)
+
+            # Check for instruction-tuned models
+            if hasattr(provider, 'get_instruction_tuned_models'):
+                instruct_models = provider.get_instruction_tuned_models()
+
+                for model_id in instruct_models:
+                    if hasattr(provider, 'get_model_info'):
+                        info = provider.get_model_info(model_id)
+                        rpd = info.rpd or 0
+
+                        if rpd > best_rpd:
+                            best_rpd = rpd
+                            best_provider = provider_name
+                            best_model = model_id
+
+        if best_provider and best_model:
+            self._log(f"Selected {best_provider}/{best_model} (instruction-tuned, {best_rpd} RPD)", "SELECTED")
+            return (best_provider, best_model)
+
+        # Fallback: try chat-tuned models
+        self._log("No instruction-tuned models found, trying chat models", "WARN")
+        for provider_name in available:
+            provider = self.registry.get(provider_name)
+
+            for model_id in provider.available_models:
+                if hasattr(provider, 'get_model_info'):
+                    info = provider.get_model_info(model_id)
+                    if info.model_type == ModelType.CHAT:
+                        rpd = info.rpd or 0
+                        if rpd > best_rpd:
+                            best_rpd = rpd
+                            best_provider = provider_name
+                            best_model = model_id
+
+        if best_provider and best_model:
+            self._log(f"Selected {best_provider}/{best_model} (chat model, {best_rpd} RPD)", "SELECTED")
+            return (best_provider, best_model)
+
+        # Last resort: use first available provider's default
+        self._log("No instruction or chat models found, using default", "WARN")
+        provider_name = available[0]
+        provider = self.registry.get(provider_name)
+        model = provider.available_models[0] if provider.available_models else None
+        self._log(f"Fallback to {provider_name}/{model}", "SELECTED")
+        return (provider_name, model)
+
+    def get_best_instruct_model(self, provider_name: str) -> Optional[str]:
+        """
+        Get the best instruction-tuned model from a specific provider.
+
+        Prioritizes models with higher RPD.
+
+        Args:
+            provider_name: Provider to check
+
+        Returns:
+            Model ID or None if no instruction-tuned models
+        """
+        if provider_name not in self.registry.list_available():
+            return None
+
+        provider = self.registry.get(provider_name)
+
+        if not hasattr(provider, 'get_instruction_tuned_models'):
+            return None
+
+        instruct_models = provider.get_instruction_tuned_models()
+        if not instruct_models:
+            return None
+
+        # Find model with highest RPD
+        best_model = None
+        best_rpd = 0
+
+        for model_id in instruct_models:
+            if hasattr(provider, 'get_model_info'):
+                info = provider.get_model_info(model_id)
+                rpd = info.rpd or 0
+                if rpd > best_rpd:
+                    best_rpd = rpd
+                    best_model = model_id
+
+        # If no RPD info, return first instruction-tuned model
+        return best_model or instruct_models[0]
+
+    def has_instruction_tuned_models(self) -> bool:
+        """
+        Check if any provider has instruction-tuned models.
+
+        Returns:
+            True if instruction-tuned models available
+        """
+        for provider_name in self.registry.list_available():
+            provider = self.registry.get(provider_name)
+            if hasattr(provider, 'get_instruction_tuned_models'):
+                if provider.get_instruction_tuned_models():
+                    return True
+        return False
+
+    def list_instruction_tuned_models(self) -> List[Tuple[str, str]]:
+        """
+        List all instruction-tuned models across all providers.
+
+        Returns:
+            List of (provider_name, model_id) tuples
+        """
+        result = []
+
+        for provider_name in self.registry.list_available():
+            provider = self.registry.get(provider_name)
+            if hasattr(provider, 'get_instruction_tuned_models'):
+                for model_id in provider.get_instruction_tuned_models():
+                    result.append((provider_name, model_id))
+
+        return result

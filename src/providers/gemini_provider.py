@@ -15,7 +15,7 @@ import os
 import time
 from typing import Optional
 
-from .base import LLMProvider, LLMResponse, ProviderLimits
+from .base import LLMProvider, LLMResponse, ProviderLimits, ModelInfo
 from ..utils.imports import safe_import
 from ..utils.errors import (
     raise_package_not_installed, raise_env_var_not_found,
@@ -543,3 +543,21 @@ class GeminiProvider(LLMProvider):
                 })
 
         return contents
+
+    def get_model_info(self, model_id: str) -> ModelInfo:
+        """
+        Get detailed information about a specific model.
+
+        Uses the MODELS configuration dictionary to provide accurate info.
+
+        Args:
+            model_id: Model identifier
+
+        Returns:
+            ModelInfo with model metadata
+        """
+        if model_id in self.MODELS:
+            return ModelInfo.from_config(model_id, self.MODELS[model_id])
+        else:
+            # Fall back to auto-detection for unknown models
+            return super().get_model_info(model_id)

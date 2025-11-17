@@ -11,7 +11,7 @@ import os
 import time
 from typing import Optional
 
-from .base import LLMProvider, LLMResponse, ProviderLimits
+from .base import LLMProvider, LLMResponse, ProviderLimits, ModelInfo
 from ..utils.imports import safe_import
 from ..utils.errors import raise_package_not_installed, raise_env_var_not_found, raise_model_not_supported
 
@@ -47,6 +47,11 @@ class CerebrasProvider(LLMProvider):
         'qwen-3-32b': {
             'rpd': 14400, 'tpm': 60000,
             'context': 8192, 'speed': 'very_fast', 'quality': 'very_good'
+        },
+        # New instruction-tuned model (added 2025-11) - excellent JSON compliance
+        'qwen-3-235b-a22b-instruct-2507': {
+            'rpd': 14400, 'tpm': 60000,
+            'context': 8192, 'speed': 'fast', 'quality': 'excellent'
         },
     }
 
@@ -292,3 +297,21 @@ class CerebrasProvider(LLMProvider):
     def is_available(self) -> bool:
         """Check if Cerebras is properly configured."""
         return bool(self._api_key and OPENAI_AVAILABLE)
+
+    def get_model_info(self, model_id: str) -> ModelInfo:
+        """
+        Get detailed information about a specific model.
+
+        Uses the MODELS configuration dictionary to provide accurate info.
+
+        Args:
+            model_id: Model identifier
+
+        Returns:
+            ModelInfo with model metadata
+        """
+        if model_id in self.MODELS:
+            return ModelInfo.from_config(model_id, self.MODELS[model_id])
+        else:
+            # Fall back to auto-detection for unknown models
+            return super().get_model_info(model_id)

@@ -11,7 +11,7 @@ import os
 import time
 from typing import Optional
 
-from .base import LLMProvider, LLMResponse, ProviderLimits
+from .base import LLMProvider, LLMResponse, ProviderLimits, ModelInfo
 from ..utils.imports import safe_import
 from ..utils.errors import raise_package_not_installed, raise_env_var_not_found, raise_model_not_supported
 
@@ -52,9 +52,15 @@ class GroqProvider(LLMProvider):
             'rpm': 30, 'rpd': 14400, 'tpm': 5000, 'tpd': None,
             'context': 32768, 'speed': 'fast', 'quality': 'very_good'
         },
-        'gemma2-9b-it': {
-            'rpm': 30, 'rpd': 14400, 'tpm': 15000, 'tpd': None,
-            'context': 8192, 'speed': 'very_fast', 'quality': 'good'
+        # gemma2-9b-it removed - decommissioned by Groq as of 2025-11
+        # New instruction-tuned models (added 2025-11)
+        'meta-llama/llama-4-scout-17b-16e-instruct': {
+            'rpm': 30, 'rpd': 7000, 'tpm': 20000, 'tpd': 200000,
+            'context': 16384, 'speed': 'ultra_fast', 'quality': 'excellent'
+        },
+        'moonshotai/kimi-k2-instruct': {
+            'rpm': 30, 'rpd': 7000, 'tpm': 20000, 'tpd': 200000,
+            'context': 131072, 'speed': 'ultra_fast', 'quality': 'excellent'
         },
     }
 
@@ -251,3 +257,21 @@ class GroqProvider(LLMProvider):
     def is_available(self) -> bool:
         """Check if Groq is properly configured."""
         return bool(self._api_key and GROQ_AVAILABLE)
+
+    def get_model_info(self, model_id: str) -> ModelInfo:
+        """
+        Get detailed information about a specific model.
+
+        Uses the MODELS configuration dictionary to provide accurate info.
+
+        Args:
+            model_id: Model identifier
+
+        Returns:
+            ModelInfo with model metadata
+        """
+        if model_id in self.MODELS:
+            return ModelInfo.from_config(model_id, self.MODELS[model_id])
+        else:
+            # Fall back to auto-detection for unknown models
+            return super().get_model_info(model_id)
