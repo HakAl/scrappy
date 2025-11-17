@@ -544,20 +544,33 @@ class CodeAgent:
                 last_failure = same_approach_failures[-1]
 
                 suggestions = {
-                    'spring_initializr_download': "Use write_file to create Spring Boot files directly instead of downloading",
-                    'curl_download': "Use write_file tool to create files locally instead of downloading",
-                    'powershell_download': "Use write_file tool to create files locally instead of downloading",
+                    'spring_initializr_download': "STOP using network downloads. Use write_file to create Spring Boot files directly: pom.xml, Application.java, etc.",
+                    'curl_download': "STOP using curl. Use write_file tool to create files directly instead of downloading",
+                    'powershell_download': "STOP using PowerShell downloads. Use write_file tool to create files directly",
                     'mkdir_unix_style': "Use backslashes (website\\\\frontend) or PowerShell New-Item command",
-                    'npm_create_project': "Add --no-color flag or use write_file to create package.json manually",
+                    'npm_create_project': "STOP using npm create. Use write_file to create package.json and source files directly",
                     'unix_command': "Use platform tools (read_file, search_code, list_files) instead of Unix commands",
                 }
 
                 suggestion = suggestions.get(current_approach, "Try a completely different approach")
 
                 return (
-                    f"WARNING: '{current_approach}' approach already failed {count} time(s). "
+                    f"CRITICAL: '{current_approach}' approach already failed {count} time(s). "
                     f"Last error: {last_failure['error'][:100]}... "
-                    f"Suggestion: {suggestion}"
+                    f"YOU MUST USE A DIFFERENT STRATEGY. {suggestion}"
+                )
+
+        # Also warn if trying any scaffolding approach when others have failed
+        scaffolding_approaches = [
+            'spring_initializr_download', 'curl_download', 'powershell_download', 'npm_create_project'
+        ]
+        if current_approach in scaffolding_approaches:
+            # Check if any scaffolding has failed
+            scaffolding_failures = [f for f in failed_commands if f['approach'] in scaffolding_approaches]
+            if scaffolding_failures:
+                return (
+                    f"WARNING: Scaffolding/download approaches have failed {len(scaffolding_failures)} time(s). "
+                    f"STRONGLY RECOMMEND using write_file to create project files directly instead of {current_approach}."
                 )
 
         return ""
@@ -1113,6 +1126,29 @@ class CodeAgent:
                 })
                 safe_print(f"   [Tracked] Failed '{approach}' approach - will suggest alternatives")
 
+                # Check if this is a scaffolding approach
+                scaffolding_approaches = [
+                    'spring_initializr_download', 'curl_download',
+                    'powershell_download', 'npm_create_project'
+                ]
+
+                # If ANY scaffolding approach failed, inject strong write_file suggestion
+                if approach in scaffolding_approaches:
+                    scaffolding_failures = sum(
+                        1 for f in state.failed_commands
+                        if f['approach'] in scaffolding_approaches
+                    )
+                    if scaffolding_failures >= 1:
+                        warning = (
+                            f"MANDATORY STRATEGY CHANGE: Scaffolding/download approaches have failed {scaffolding_failures} time(s). "
+                            f"You MUST now use write_file tool to create project files directly. "
+                            f"Do NOT attempt any more curl, npm create, or spring initializr commands. "
+                            f"For Spring Boot: write_file to create pom.xml, Application.java, etc. "
+                            f"For React: write_file to create package.json, App.jsx, etc."
+                        )
+                        state.retry_warnings.append(warning)
+                        safe_print(f"   [MANDATORY] Switching to write_file strategy after scaffolding failure")
+
                 # If same approach failed twice, inject strong warning
                 approach_failures = sum(1 for f in state.failed_commands if f['approach'] == approach)
                 if approach_failures >= 2:
@@ -1398,6 +1434,26 @@ Platform: {platform_name}
 
         system_prompt = f"""You are a code agent that helps with programming tasks.
 You have access to tools to read, write, and analyze code.
+
+CRITICAL PROJECT CREATION STRATEGY:
+When asked to create a new project (Spring Boot, React, Node.js, etc.), STRONGLY PREFER using write_file to create files directly rather than relying on scaffolding tools (curl, npm create, spring initializr, etc.).
+
+Why write_file is BETTER than scaffolding:
+1. More reliable - no network dependencies or tool compatibility issues
+2. Faster - no downloads, extractions, or external API calls
+3. Predictable - you control exactly what gets created
+4. No Unicode/encoding issues on Windows
+
+SCAFFOLDING FAILURE RULE:
+If a scaffolding command (curl, npm create, spring initializr) fails ONCE, immediately switch to write_file approach. DO NOT retry the same scaffolding approach multiple times.
+
+Example for Spring Boot:
+  BAD: curl https://start.spring.io/... (network-dependent, often fails)
+  GOOD: write_file("pom.xml", "..."); write_file("src/main/.../Application.java", "...")
+
+Example for React:
+  BAD: npm create vite (interactive prompts, Unicode issues)
+  GOOD: write_file("package.json", "..."); write_file("src/App.jsx", "...")
 
 {tool_descriptions}
 
