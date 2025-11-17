@@ -77,11 +77,11 @@ class TestCommandToolInterface:
             config=self.config
         )
 
-        result = tool.execute(dry_run_context, command="rm -rf /")
+        result = tool.execute(dry_run_context, command="echo 'test'")
 
         assert result.success is True
         assert "DRY RUN" in result.output
-        assert "rm -rf /" in result.output
+        assert "echo" in result.output
 
     def test_missing_command_parameter_fails_validation(self):
         """Missing required command parameter should fail validation."""

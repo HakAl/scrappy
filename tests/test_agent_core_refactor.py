@@ -520,8 +520,8 @@ class TestCommandSecurityChecks:
         assert "platform" in result.lower() or "grep" in result
 
     @pytest.mark.unit
-    @patch('src.platform_utils.is_windows', return_value=True)
-    @patch('src.platform_utils.intercept_spring_initializr_download')
+    @patch('src.agent_tools.tools.command_tool.is_windows', return_value=True)
+    @patch('src.agent_tools.tools.command_tool.intercept_spring_initializr_download')
     def test_intercepts_spring_initializr_on_windows(self, mock_intercept, mock_windows, agent_with_config):
         """Should intercept Spring Initializr downloads on Windows."""
         mock_intercept.return_value = {
