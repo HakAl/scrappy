@@ -14,6 +14,7 @@ from .types import (
 from .audit import AuditLogger
 from .checkpoint import create_git_checkpoint, rollback_to_checkpoint
 from .core import CodeAgent
+from .response_parser import ResponseParser, JSONResponseParser, ParseResult
 
 __all__ = [
     # Core agent
@@ -24,6 +25,10 @@ __all__ = [
     'ActionResult',
     'EvaluationResult',
     'ConversationState',
+    # Response parsing
+    'ResponseParser',
+    'JSONResponseParser',
+    'ParseResult',
     # Audit
     'AuditLogger',
     # Checkpoint

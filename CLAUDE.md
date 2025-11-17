@@ -1,5 +1,7 @@
 # Claude Code Guidelines
 
+**IMPORTANT: ALWAYS USE TDD. TESTS FIRST, THEN CODE!**
+
 **CRITICAL: Demonstrate expected behavior of all new features in tests that fail. When tests exist, write code to satisfy the tests, then verify new code with tests.**
 
 **CRITICAL: Never use emojis or special characters in code.**

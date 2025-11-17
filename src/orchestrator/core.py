@@ -382,8 +382,10 @@ class AgentOrchestrator:
             return None
 
         # Define provider preferences by task type
+        # Cerebras llama-3.3-70b preferred for planning (best quality/speed balance)
+        # Groq llama-4-scout-17b-16e-instruct as secondary option
         task_preferences = {
-            'planning': ['gemini', 'groq', 'cerebras'],  # Reasoning capability
+            'planning': ['cerebras', 'groq', 'gemini'],  # Cerebras 70b for quality+speed
             'execution': ['cerebras', 'groq', 'gemini'],  # Speed
             'quick': ['cerebras', 'groq'],  # Fast responses
             'general': ['cerebras', 'groq', 'gemini']  # Balanced

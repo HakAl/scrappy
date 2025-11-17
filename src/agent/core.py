@@ -71,6 +71,7 @@ from .types import (
     ConversationState
 )
 from .audit import AuditLogger
+from .response_parser import ResponseParser, JSONResponseParser, ParseResult
 
 
 class CodeAgent:
@@ -120,6 +121,9 @@ class CodeAgent:
         self._audit_logger = AuditLogger(
             max_result_length=self.config.audit_log_result_truncation
         )
+
+        # Initialize response parser (defaults to JSON parsing)
+        self._response_parser: ResponseParser = JSONResponseParser()
 
         # Create tool context
         safe_print("Preparing agent tools...")
@@ -856,101 +860,6 @@ class CodeAgent:
             safe_print("\nAction cancelled.")
             raise  # Re-raise to stop the agent loop
 
-    def _parse_agent_response(self, response_text: str) -> dict:
-        """Parse the agent's JSON response with robust error handling."""
-        # Try to extract JSON from response
-        text = response_text.strip()
-
-        def fix_json_string(s: str) -> str:
-            """Fix common JSON issues from LLM output."""
-            # Replace Python booleans with JSON booleans
-            s = re.sub(r'\bTrue\b', 'true', s)
-            s = re.sub(r'\bFalse\b', 'false', s)
-            s = re.sub(r'\bNone\b', 'null', s)
-            return s
-
-        # Handle markdown code blocks
-        if '```json' in text:
-            start = text.find('```json') + 7
-            end = text.find('```', start)
-            if end > start:
-                text = text[start:end].strip()
-        elif '```' in text:
-            start = text.find('```') + 3
-            end = text.find('```', start)
-            if end > start:
-                text = text[start:end].strip()
-
-        # Try to parse as-is first
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            pass
-
-        # Try fixing Python-style booleans
-        try:
-            fixed_text = fix_json_string(text)
-            return json.loads(fixed_text)
-        except json.JSONDecodeError:
-            pass
-
-        # Try to find JSON object with proper brace matching
-        try:
-            start = text.find('{')
-            if start != -1:
-                brace_count = 0
-                end = start
-                for i in range(start, len(text)):
-                    if text[i] == '{':
-                        brace_count += 1
-                    elif text[i] == '}':
-                        brace_count -= 1
-                        if brace_count == 0:
-                            end = i + 1
-                            break
-
-                if end > start:
-                    json_str = fix_json_string(text[start:end])
-                    return json.loads(json_str)
-        except (json.JSONDecodeError, IndexError):
-            pass
-
-        # Try to extract key fields using regex as last resort
-        thought_match = re.search(r'"thought"\s*:\s*"([^"]+)"', text)
-        action_match = re.search(r'"action"\s*:\s*"([^"]+)"', text)
-
-        if thought_match and action_match:
-            # Found at least thought and action, try to reconstruct
-            result = {
-                'thought': thought_match.group(1),
-                'action': action_match.group(1),
-                'parameters': {},
-                'is_complete': False
-            }
-
-            # Try to extract parameters
-            params_match = re.search(r'"parameters"\s*:\s*(\{[^}]+\})', text)
-            if params_match:
-                try:
-                    result['parameters'] = json.loads(fix_json_string(params_match.group(1)))
-                except Exception:
-                    pass
-
-            # Check for is_complete
-            if re.search(r'"is_complete"\s*:\s*true', text, re.IGNORECASE):
-                result['is_complete'] = True
-
-            return result
-
-        # Return error response - but don't mark as complete so agent retries
-        return {
-            'thought': 'Failed to parse LLM response as JSON',
-            'action': 'retry_parse',  # Special action indicating parse failure
-            'parameters': {'raw_response': response_text[:500]},
-            'is_complete': False,  # Don't complete on parse error - allow retry
-            'result': f'Parse error: {response_text[:200]}'
-        }
-
     # ========== Decoupled Agent Loop Methods ==========
 
     def _think(self, state: ConversationState) -> AgentThought:
@@ -1046,14 +955,15 @@ class CodeAgent:
         Returns:
             AgentAction with parsed action details
         """
-        action_data = self._parse_agent_response(thought.raw_response)
+        # Use the injected response parser (JSON by default, native tool calls in future)
+        parse_result = self._response_parser.parse(thought.raw_response)
 
         return AgentAction(
-            thought=action_data.get('thought', 'No thought provided'),
-            action=action_data.get('action', 'error'),
-            parameters=action_data.get('parameters', {}),
-            is_complete=action_data.get('is_complete', False),
-            result_text=action_data.get('result', '')
+            thought=parse_result.thought,
+            action=parse_result.action,
+            parameters=parse_result.parameters,
+            is_complete=parse_result.is_complete,
+            result_text=parse_result.result_text
         )
 
     def _execute(self, action: AgentAction, state: ConversationState) -> ActionResult:

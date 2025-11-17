@@ -72,11 +72,13 @@ class AgentConfig:
     # Provider preferences (first available will be used)
     # NOTE: GitHub Models excluded from planner due to aggressive rate limiting
     # (crashes after ~10 requests, unsuitable for multi-step agent tasks)
+    # Cerebras llama-3.3-70b preferred for planning (best quality/speed balance)
+    # Groq llama-4-scout-17b-16e-instruct as secondary option
     planner_preferences: List[str] = field(
-        default_factory=lambda: ['gemini', 'groq', 'cerebras']
+        default_factory=lambda: ['cerebras', 'groq', 'gemini']
     )
     executor_preferences: List[str] = field(
-        default_factory=lambda: ['cerebras']
+        default_factory=lambda: ['cerebras', 'groq']
     )
 
     # Completion validation

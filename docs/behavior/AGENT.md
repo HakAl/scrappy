@@ -33,6 +33,6 @@ The PromptBuilder should consume CodebaseContext rather than duplicate detection
 
 
 src\agent\core.py
-  refactor out: parse, plan, retry
+  refactor out: plan, retry
 
   insanity: _tool_run_command --> hardcoded to catch spring dls exactly? npm?
