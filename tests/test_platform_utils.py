@@ -15,6 +15,7 @@ from src.platform_utils import (
     get_shell_info,
     translate_command_for_platform,
     normalize_path_for_shell,
+    normalize_command_paths,
     get_null_device,
     get_path_separator,
     validate_spring_initializr_url,
@@ -283,6 +284,103 @@ class TestPathNormalization:
             assert null_dev == "NUL"
         else:
             assert null_dev == "/dev/null"
+
+    @pytest.mark.unit
+    def test_normalize_command_paths_returns_tuple(self):
+        """Test that normalize_command_paths returns a tuple."""
+        result = normalize_command_paths("mkdir website/frontend")
+        assert isinstance(result, tuple)
+        assert len(result) == 3
+        assert isinstance(result[0], str)
+        assert isinstance(result[1], bool)
+        assert isinstance(result[2], str)
+
+    @pytest.mark.unit
+    @patch('src.platform_utils.is_windows', return_value=True)
+    def test_normalize_command_paths_mkdir_windows(self, mock_is_windows):
+        """Test mkdir path normalization on Windows."""
+        command, was_modified, message = normalize_command_paths("mkdir website/frontend")
+        assert was_modified is True
+        assert "website\\frontend" in command
+        assert "website/frontend" not in command
+        assert "Normalized paths" in message
+
+    @pytest.mark.unit
+    @patch('src.platform_utils.is_windows', return_value=True)
+    def test_normalize_command_paths_cd_windows(self, mock_is_windows):
+        """Test cd path normalization on Windows."""
+        command, was_modified, message = normalize_command_paths("cd src/main/java")
+        assert was_modified is True
+        assert "src\\main\\java" in command
+        assert "/" not in command
+
+    @pytest.mark.unit
+    @patch('src.platform_utils.is_windows', return_value=True)
+    def test_normalize_command_paths_copy_windows(self, mock_is_windows):
+        """Test copy path normalization on Windows."""
+        command, was_modified, message = normalize_command_paths("copy src/file.txt dest/file.txt")
+        assert was_modified is True
+        assert "src\\file.txt" in command
+        assert "dest\\file.txt" in command
+
+    @pytest.mark.unit
+    @patch('src.platform_utils.is_windows', return_value=True)
+    def test_normalize_command_paths_quoted_path_windows(self, mock_is_windows):
+        """Test quoted path normalization on Windows."""
+        command, was_modified, message = normalize_command_paths('mkdir "my project/src/main"')
+        assert was_modified is True
+        assert '"my project\\src\\main"' in command
+
+    @pytest.mark.unit
+    @patch('src.platform_utils.is_windows', return_value=True)
+    def test_normalize_command_paths_no_path_windows(self, mock_is_windows):
+        """Test command without paths is not modified."""
+        command, was_modified, message = normalize_command_paths("mkdir newfolder")
+        assert was_modified is False
+        assert command == "mkdir newfolder"
+
+    @pytest.mark.unit
+    @patch('src.platform_utils.is_windows', return_value=True)
+    def test_normalize_command_paths_non_path_command_windows(self, mock_is_windows):
+        """Test non-path commands are not modified."""
+        command, was_modified, message = normalize_command_paths("npm install some/package")
+        assert was_modified is False
+        assert command == "npm install some/package"
+
+    @pytest.mark.unit
+    @patch('src.platform_utils.is_windows', return_value=True)
+    def test_normalize_command_paths_preserves_flags_windows(self, mock_is_windows):
+        """Test that command flags are preserved."""
+        command, was_modified, message = normalize_command_paths("dir /s /b path/to/dir")
+        assert was_modified is True
+        assert "/s" in command
+        assert "/b" in command
+        assert "path\\to\\dir" in command
+
+    @pytest.mark.unit
+    @patch('src.platform_utils.is_windows', return_value=False)
+    def test_normalize_command_paths_no_change_unix(self, mock_is_windows):
+        """Test that Unix paths are not modified."""
+        command, was_modified, message = normalize_command_paths("mkdir website/frontend")
+        assert was_modified is False
+        assert command == "mkdir website/frontend"
+
+    @pytest.mark.unit
+    @patch('src.platform_utils.is_windows', return_value=True)
+    def test_normalize_command_paths_empty_command(self, mock_is_windows):
+        """Test empty command handling."""
+        command, was_modified, message = normalize_command_paths("")
+        assert was_modified is False
+        assert command == ""
+
+    @pytest.mark.unit
+    @patch('src.platform_utils.is_windows', return_value=True)
+    def test_normalize_command_paths_multiple_paths(self, mock_is_windows):
+        """Test multiple paths in one command."""
+        command, was_modified, message = normalize_command_paths("xcopy src/dir1 dest/dir2")
+        assert was_modified is True
+        assert "src\\dir1" in command
+        assert "dest\\dir2" in command
 
 
 class TestEdgeCases:

@@ -334,6 +334,102 @@ def normalize_path_for_shell(path: str) -> str:
         return path.replace('\\', '/')
 
 
+def normalize_command_paths(command: str) -> Tuple[str, bool, str]:
+    """
+    Normalize paths in shell commands for the current platform.
+
+    On Windows, converts forward slashes to backslashes in path arguments.
+    This fixes issues where commands like 'mkdir website/frontend' fail
+    because Windows cmd.exe doesn't accept forward slashes in paths.
+
+    Args:
+        command: Shell command that may contain paths
+
+    Returns:
+        Tuple of (normalized_command, was_modified, message)
+    """
+    if not is_windows():
+        return command, False, ""
+
+    original_command = command
+
+    # Commands that take path arguments
+    path_commands = [
+        'mkdir', 'md', 'rmdir', 'rd', 'cd', 'dir', 'copy', 'xcopy',
+        'move', 'del', 'erase', 'type', 'more', 'attrib'
+    ]
+
+    # Split command into parts, preserving quotes
+    parts = []
+    current = ""
+    in_quote = False
+    quote_char = None
+
+    for char in command:
+        if char in ('"', "'") and not in_quote:
+            in_quote = True
+            quote_char = char
+            current += char
+        elif char == quote_char and in_quote:
+            in_quote = False
+            quote_char = None
+            current += char
+        elif char == ' ' and not in_quote:
+            if current:
+                parts.append(current)
+                current = ""
+        else:
+            current += char
+    if current:
+        parts.append(current)
+
+    if not parts:
+        return command, False, ""
+
+    base_cmd = parts[0].lower()
+
+    # Check if this is a command that uses paths
+    is_path_command = any(base_cmd == cmd or base_cmd.endswith('\\' + cmd) for cmd in path_commands)
+
+    if not is_path_command:
+        return command, False, ""
+
+    # Normalize paths in arguments
+    modified = False
+    new_parts = [parts[0]]
+
+    for i, part in enumerate(parts[1:], 1):
+        # Skip flags
+        if part.startswith('-') or part.startswith('/'):
+            new_parts.append(part)
+            continue
+
+        # Check if this looks like a path (contains forward slash but not a URL)
+        if '/' in part and not part.startswith('http://') and not part.startswith('https://'):
+            # Preserve quotes around the path
+            if part.startswith('"') and part.endswith('"'):
+                inner = part[1:-1]
+                normalized = inner.replace('/', '\\')
+                new_parts.append(f'"{normalized}"')
+            elif part.startswith("'") and part.endswith("'"):
+                inner = part[1:-1]
+                normalized = inner.replace('/', '\\')
+                new_parts.append(f"'{normalized}'")
+            else:
+                normalized = part.replace('/', '\\')
+                new_parts.append(normalized)
+            modified = True
+        else:
+            new_parts.append(part)
+
+    if modified:
+        new_command = ' '.join(new_parts)
+        message = f"Normalized paths for Windows: {original_command} -> {new_command}"
+        return new_command, True, message
+
+    return command, False, ""
+
+
 def get_python_fallback(command: str, cwd: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """
     Execute Unix commands using Python implementations when native commands fail.

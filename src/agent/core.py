@@ -318,6 +318,13 @@ class CodeAgent:
             safe_print(f"   [Auto-fix] {fix_message}")
             command = fixed_command
 
+        # Normalize paths for Windows (convert forward slashes to backslashes)
+        from ..platform_utils import normalize_command_paths
+        normalized_command, was_normalized, norm_message = normalize_command_paths(command)
+        if was_normalized:
+            safe_print(f"   [Auto-fix] {norm_message}")
+            command = normalized_command
+
         # Validate command for current platform
         is_valid, warning = validate_command_for_platform(command)
         if not is_valid:
