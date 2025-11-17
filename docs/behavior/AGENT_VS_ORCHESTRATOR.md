@@ -4,6 +4,8 @@ Decide what to do (reason, plan, execute tools). The agent properly delegates pr
 ### Orchestrator's responsibility:
 Decide which provider to use (rate limits, availability, capabilities)
 
+**Orchestrator uses LLMResponse from providers/base.py**
+
 ### Specific Behavior:
 
 1.  Agent should not hardcode provider selection. The current `self.planner = 'gemini'` approach defeats the orchestrator's purpose.

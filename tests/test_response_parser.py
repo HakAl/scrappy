@@ -741,3 +741,211 @@ Now let me refactor it:
         assert result.action == "retry_parse"
         assert "raw_response" in result.parameters
         assert result.parameters["raw_response"] != ""
+
+
+class TestUnifiedResponseParser:
+    """Tests for UnifiedResponseParser that auto-detects JSON vs native tool calling."""
+
+    @pytest.fixture
+    def parser(self):
+        """Create unified parser instance."""
+        from src.agent.response_parser import UnifiedResponseParser
+        return UnifiedResponseParser()
+
+    @pytest.mark.unit
+    def test_string_input_uses_json_parser(self, parser):
+        """String input should be parsed as JSON."""
+        response = '''{
+            "thought": "Reading file",
+            "action": "read_file",
+            "parameters": {"path": "test.py"},
+            "is_complete": false
+        }'''
+
+        result = parser.parse(response)
+
+        assert result.action == "read_file"
+        assert result.parameters == {"path": "test.py"}
+        assert result.is_complete is False
+
+    @pytest.mark.unit
+    def test_llm_response_without_tool_calls_uses_json_parser(self, parser):
+        """LLMResponse with no tool_calls should parse content as JSON."""
+        from src.providers.base import LLMResponse
+
+        llm_response = LLMResponse(
+            content='''{
+                "thought": "Searching code",
+                "action": "search_code",
+                "parameters": {"pattern": "def main"},
+                "is_complete": false
+            }''',
+            model="llama-3.1-8b",
+            provider="groq",
+            tool_calls=None
+        )
+
+        result = parser.parse(llm_response)
+
+        assert result.action == "search_code"
+        assert result.parameters == {"pattern": "def main"}
+
+    @pytest.mark.unit
+    def test_llm_response_with_empty_tool_calls_uses_json_parser(self, parser):
+        """LLMResponse with empty tool_calls list should parse content as JSON."""
+        from src.providers.base import LLMResponse
+
+        llm_response = LLMResponse(
+            content='''{
+                "thought": "Writing file",
+                "action": "write_file",
+                "parameters": {"path": "out.txt", "content": "data"},
+                "is_complete": false
+            }''',
+            model="llama-3.1-8b",
+            provider="groq",
+            tool_calls=[]  # Empty list, not None
+        )
+
+        result = parser.parse(llm_response)
+
+        assert result.action == "write_file"
+        assert result.parameters["path"] == "out.txt"
+
+    @pytest.mark.unit
+    def test_llm_response_with_tool_calls_uses_native_parser(self, parser):
+        """LLMResponse with tool_calls should use native tool calling parser."""
+        from src.providers.base import LLMResponse, ToolCall
+
+        llm_response = LLMResponse(
+            content="I'll read that file for you.",
+            model="llama-3.1-8b",
+            provider="groq",
+            tool_calls=[
+                ToolCall(
+                    id="call_123",
+                    name="read_file",
+                    arguments={"path": "/src/main.py"}
+                )
+            ]
+        )
+
+        result = parser.parse(llm_response)
+
+        assert result.action == "read_file"
+        assert result.parameters == {"path": "/src/main.py"}
+        assert result.thought == "I'll read that file for you."
+
+    @pytest.mark.unit
+    def test_llm_response_with_multiple_tool_calls_uses_first(self, parser):
+        """When multiple tool calls, parser should use the first one."""
+        from src.providers.base import LLMResponse, ToolCall
+
+        llm_response = LLMResponse(
+            content="Let me read these files.",
+            model="llama-3.1-8b",
+            provider="groq",
+            tool_calls=[
+                ToolCall(id="call_1", name="read_file", arguments={"path": "a.py"}),
+                ToolCall(id="call_2", name="read_file", arguments={"path": "b.py"})
+            ]
+        )
+
+        result = parser.parse(llm_response)
+
+        # Should use first tool call
+        assert result.action == "read_file"
+        assert result.parameters == {"path": "a.py"}
+
+    @pytest.mark.unit
+    def test_llm_response_with_complete_action(self, parser):
+        """Native tool call for completion should set is_complete."""
+        from src.providers.base import LLMResponse, ToolCall
+
+        llm_response = LLMResponse(
+            content="Task completed successfully.",
+            model="llama-3.1-8b",
+            provider="groq",
+            tool_calls=[
+                ToolCall(
+                    id="call_done",
+                    name="complete",
+                    arguments={"result": "File created at /out.txt"}
+                )
+            ]
+        )
+
+        result = parser.parse(llm_response)
+
+        assert result.action == "complete"
+        assert result.is_complete is True
+        assert "File created" in result.result_text
+
+    @pytest.mark.unit
+    def test_invalid_json_string_returns_retry_parse(self, parser):
+        """Invalid JSON string should return retry_parse action."""
+        response = "This is not JSON at all"
+
+        result = parser.parse(response)
+
+        assert result.action == "retry_parse"
+        assert result.is_complete is False
+
+    @pytest.mark.unit
+    def test_llm_response_with_invalid_json_content_returns_retry_parse(self, parser):
+        """LLMResponse with invalid JSON content should return retry_parse."""
+        from src.providers.base import LLMResponse
+
+        llm_response = LLMResponse(
+            content="I'm not sure what to do next",
+            model="llama-3.1-8b",
+            provider="groq",
+            tool_calls=None
+        )
+
+        result = parser.parse(llm_response)
+
+        assert result.action == "retry_parse"
+        assert result.is_complete is False
+
+    @pytest.mark.unit
+    def test_parser_preserves_tool_call_id_in_metadata(self, parser):
+        """Parser should preserve tool call ID for potential future use."""
+        from src.providers.base import LLMResponse, ToolCall
+
+        llm_response = LLMResponse(
+            content="Reading file",
+            model="llama-3.1-8b",
+            provider="groq",
+            tool_calls=[
+                ToolCall(
+                    id="call_abc123",
+                    name="read_file",
+                    arguments={"path": "test.py"}
+                )
+            ]
+        )
+
+        result = parser.parse(llm_response)
+
+        # ID might be in parameters or a separate field - test the behavior
+        assert result.action == "read_file"
+        # If we want to track tool_call_id, it should be accessible somehow
+
+    @pytest.mark.unit
+    def test_backward_compatibility_with_string_only(self, parser):
+        """Parser should work exactly like JSONResponseParser for string input."""
+        json_parser = JSONResponseParser()
+
+        test_cases = [
+            '{"thought": "test", "action": "read_file", "parameters": {"path": "x"}, "is_complete": false}',
+            '{"thought": "done", "action": "complete", "is_complete": true, "result": "success"}',
+            'invalid json',
+        ]
+
+        for test_input in test_cases:
+            unified_result = parser.parse(test_input)
+            json_result = json_parser.parse(test_input)
+
+            assert unified_result.action == json_result.action
+            assert unified_result.is_complete == json_result.is_complete

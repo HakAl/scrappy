@@ -282,10 +282,60 @@ class NativeToolCallParser(ResponseParser):
         # Use the first tool call (most common case)
         tool_call = response.tool_calls[0]
 
+        # Handle "complete" action specially
+        is_complete = tool_call.name == "complete"
+        result_text = ""
+        if is_complete:
+            result_text = tool_call.arguments.get("result", response.content)
+
         return ParseResult(
             thought=response.content,  # LLM's explanation/reasoning
             action=tool_call.name,     # Tool to execute
             parameters=tool_call.arguments,  # Tool parameters
-            is_complete=False,
-            result_text=""
+            is_complete=is_complete,
+            result_text=result_text
         )
+
+
+class UnifiedResponseParser(ResponseParser):
+    """
+    Parser that auto-detects between JSON text and native tool calling.
+
+    This parser handles both:
+    - String input (JSON text) - uses JSONResponseParser
+    - LLMResponse objects - checks for tool_calls and routes appropriately
+
+    This allows the agent to work with both old JSON-based responses and
+    modern native tool calling without changing the agent loop.
+    """
+
+    def __init__(self):
+        """Initialize with both parser types."""
+        self._json_parser = JSONResponseParser()
+        self._native_parser = NativeToolCallParser()
+
+    def parse(self, response) -> ParseResult:
+        """
+        Parse response, auto-detecting the format.
+
+        Args:
+            response: Either a string (JSON text) or LLMResponse object
+
+        Returns:
+            ParseResult containing the parsed action details
+        """
+        # Import here to avoid circular dependency
+        from ..providers.base import LLMResponse
+
+        # Check if it's an LLMResponse object
+        if isinstance(response, LLMResponse):
+            # Check if it has tool_calls
+            if response.tool_calls and len(response.tool_calls) > 0:
+                # Use native tool calling parser
+                return self._native_parser.parse_response(response)
+            else:
+                # No tool_calls, parse content as JSON
+                return self._json_parser.parse(response.content)
+        else:
+            # String input - use JSON parser
+            return self._json_parser.parse(response)

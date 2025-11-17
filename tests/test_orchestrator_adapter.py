@@ -12,11 +12,11 @@ from src.orchestrator_adapter import (
     LLMResponse,
     NullContext,
     AgentOrchestratorAdapter,
-    SimpleLLMAdapter,
-    MockOrchestratorAdapter,
     ContextProvider,
     OrchestratorAdapter
 )
+# Import test adapters from test helpers module
+from helpers import SimpleLLMAdapter, MockOrchestratorAdapter
 
 
 class TestLLMResponse:
@@ -27,14 +27,14 @@ class TestLLMResponse:
         """Test creating response with minimal arguments."""
         response = LLMResponse(
             content="Hello world",
-            provider="groq"
+            provider="groq",
+            model=""
         )
 
         assert response.content == "Hello world"
         assert response.provider == "groq"
         assert response.model == ""
         assert response.tokens_used == 0
-        assert response.cached is False
 
     @pytest.mark.unit
     def test_creation_with_all_args(self):
@@ -43,20 +43,18 @@ class TestLLMResponse:
             content="Full response",
             provider="cerebras",
             model="llama-3.3-70b",
-            tokens_used=500,
-            cached=True
+            tokens_used=500
         )
 
         assert response.content == "Full response"
         assert response.provider == "cerebras"
         assert response.model == "llama-3.3-70b"
         assert response.tokens_used == 500
-        assert response.cached is True
 
     @pytest.mark.unit
     def test_empty_content(self):
         """Test response with empty content."""
-        response = LLMResponse(content="", provider="test")
+        response = LLMResponse(content="", provider="test", model="")
         assert response.content == ""
 
     @pytest.mark.unit
@@ -65,9 +63,57 @@ class TestLLMResponse:
         response = LLMResponse(
             content="x" * 100000,
             provider="test",
+            model="",
             tokens_used=100000
         )
         assert response.tokens_used == 100000
+
+    @pytest.mark.unit
+    def test_tool_calls_field_exists(self):
+        """Test that LLMResponse has tool_calls field for native tool calling."""
+        response = LLMResponse(
+            content="I'll help with that",
+            provider="groq",
+            model="llama-3.1-8b"
+        )
+        # tool_calls should default to None
+        assert response.tool_calls is None
+
+    @pytest.mark.unit
+    def test_tool_calls_can_be_set(self):
+        """Test that tool_calls can be populated with ToolCall objects."""
+        from src.providers.base import ToolCall
+
+        tool_calls = [
+            ToolCall(id="call_1", name="read_file", arguments={"path": "/test.py"}),
+            ToolCall(id="call_2", name="search_code", arguments={"pattern": "def main"})
+        ]
+
+        response = LLMResponse(
+            content="Let me read that file",
+            provider="groq",
+            model="llama-3.1-8b",
+            tool_calls=tool_calls
+        )
+
+        assert response.tool_calls is not None
+        assert len(response.tool_calls) == 2
+        assert response.tool_calls[0].name == "read_file"
+        assert response.tool_calls[0].arguments == {"path": "/test.py"}
+        assert response.tool_calls[1].name == "search_code"
+
+    @pytest.mark.unit
+    def test_response_with_metadata(self):
+        """Test that LLMResponse includes metadata field."""
+        response = LLMResponse(
+            content="Response",
+            provider="groq",
+            model="llama-3.1-8b",
+            metadata={"finish_reason": "tool_calls", "model_config": {"speed": "fast"}}
+        )
+
+        assert response.metadata["finish_reason"] == "tool_calls"
+        assert response.metadata["model_config"]["speed"] == "fast"
 
 
 class TestNullContext:
@@ -187,10 +233,9 @@ class TestAgentOrchestratorAdapter:
                 self.delegate_called_with = (provider_name, prompt, kwargs)
                 return LLMResponse(
                     content="Original response",
-                    provider="groq",
                     model="llama-3.1-8b",
-                    tokens_used=150,
-                    cached=True
+                    provider="groq",
+                    tokens_used=150
                 )
 
         fake_orch = FakeOrchestrator()
@@ -209,7 +254,6 @@ class TestAgentOrchestratorAdapter:
         assert response.provider == "groq"
         assert response.model == "llama-3.1-8b"
         assert response.tokens_used == 150
-        assert response.cached is True
 
         # Verify parameters were forwarded correctly
         provider, prompt, kwargs = fake_orch.delegate_called_with
@@ -228,7 +272,7 @@ class TestAgentOrchestratorAdapter:
                 self.content = "Custom content"
                 self.model = "custom-model-v2"
                 self.tokens_used = 350
-                self.cached = True
+                self.tool_calls = None
 
         class FakeOrchestrator:
             def delegate(self, provider_name=None, prompt="", **kwargs):
@@ -243,7 +287,7 @@ class TestAgentOrchestratorAdapter:
         assert response.provider == "cerebras"  # Provider comes from argument, not response
         assert response.model == "custom-model-v2"
         assert response.tokens_used == 350
-        assert response.cached is True
+        assert response.tool_calls is None
 
     @pytest.mark.unit
     def test_delegate_uses_defaults_for_missing_attributes(self):
@@ -251,7 +295,7 @@ class TestAgentOrchestratorAdapter:
         class PartialResponse:
             def __init__(self):
                 self.content = "Partial content"
-                # Missing: model, tokens_used, cached
+                # Missing: model, tokens_used, tool_calls
 
         class FakeOrchestrator:
             def delegate(self, provider_name=None, prompt="", **kwargs):
@@ -265,7 +309,7 @@ class TestAgentOrchestratorAdapter:
         assert response.provider == "groq"
         assert response.model == ""  # Default empty string
         assert response.tokens_used == 0  # Default 0
-        assert response.cached is False  # Default False
+        assert response.tool_calls is None  # Default None
 
     @pytest.mark.unit
     def test_delegate_converts_plain_string_response(self):
@@ -282,7 +326,7 @@ class TestAgentOrchestratorAdapter:
         assert response.provider == "gemini"
         assert response.model == ""
         assert response.tokens_used == 0
-        assert response.cached is False
+        assert response.tool_calls is None
 
     @pytest.mark.unit
     def test_delegate_handles_empty_content(self):
@@ -305,22 +349,22 @@ class TestAgentOrchestratorAdapter:
 
     @pytest.mark.unit
     def test_delegate_handles_zero_tokens(self):
-        """Test adapter correctly handles zero token count (cached response)."""
-        class CachedResponse:
-            content = "Cached content"
+        """Test adapter correctly handles zero token count."""
+        class ZeroTokenResponse:
+            content = "Quick response"
             model = "fast-model"
             tokens_used = 0
-            cached = True
+            tool_calls = None
 
         class FakeOrchestrator:
             def delegate(self, provider_name=None, prompt="", **kwargs):
-                return CachedResponse()
+                return ZeroTokenResponse()
 
         adapter = AgentOrchestratorAdapter(FakeOrchestrator())
         response = adapter.delegate("cerebras", "prompt")
 
         assert response.tokens_used == 0
-        assert response.cached is True
+        assert response.tool_calls is None
 
     @pytest.mark.unit
     def test_delegate_preserves_provider_argument_over_response(self):
@@ -350,7 +394,7 @@ class TestAgentOrchestratorAdapter:
 
             def delegate(self, provider_name=None, prompt="", **kwargs):
                 self.last_use_context = kwargs.get('use_context')
-                return LLMResponse(content="Context response", provider=provider_name)
+                return LLMResponse(content="Context response", model="", provider=provider_name)
 
         fake_orch = FakeOrchestrator()
         adapter = AgentOrchestratorAdapter(fake_orch)
@@ -850,3 +894,77 @@ class TestIntegrationScenarios:
         # Should pass through LLMResponse unchanged
         assert response.content == "AI response"
         assert response.tokens_used == 150
+
+    @pytest.mark.unit
+    def test_adapter_preserves_tool_calls_from_provider_response(self):
+        """Test that tool_calls are preserved through the adapter layer."""
+        from src.providers.base import ToolCall
+
+        tool_calls = [
+            ToolCall(id="call_123", name="read_file", arguments={"path": "/src/main.py"})
+        ]
+
+        class FakeOrchestrator:
+            def delegate(self, provider_name=None, prompt="", **kwargs):
+                return LLMResponse(
+                    content="I'll read that file for you",
+                    provider="groq",
+                    model="llama-3.1-8b",
+                    tool_calls=tool_calls
+                )
+
+        adapter = AgentOrchestratorAdapter(FakeOrchestrator())
+        response = adapter.delegate("groq", "Read main.py")
+
+        # Critical: tool_calls must be preserved
+        assert response.tool_calls is not None
+        assert len(response.tool_calls) == 1
+        assert response.tool_calls[0].id == "call_123"
+        assert response.tool_calls[0].name == "read_file"
+        assert response.tool_calls[0].arguments == {"path": "/src/main.py"}
+
+    @pytest.mark.unit
+    def test_adapter_handles_response_without_tool_calls(self):
+        """Test adapter works when response has no tool_calls (text-only response)."""
+        class FakeOrchestrator:
+            def delegate(self, provider_name=None, prompt="", **kwargs):
+                return LLMResponse(
+                    content="Here is my analysis",
+                    provider="gemini",
+                    model="gemini-pro",
+                    tool_calls=None
+                )
+
+        adapter = AgentOrchestratorAdapter(FakeOrchestrator())
+        response = adapter.delegate("gemini", "Analyze this")
+
+        assert response.content == "Here is my analysis"
+        assert response.tool_calls is None
+
+    @pytest.mark.unit
+    def test_adapter_preserves_multiple_tool_calls(self):
+        """Test that multiple tool_calls are preserved through adapter."""
+        from src.providers.base import ToolCall
+
+        tool_calls = [
+            ToolCall(id="call_1", name="read_file", arguments={"path": "/a.py"}),
+            ToolCall(id="call_2", name="read_file", arguments={"path": "/b.py"}),
+            ToolCall(id="call_3", name="search_code", arguments={"pattern": "TODO"})
+        ]
+
+        class FakeOrchestrator:
+            def delegate(self, provider_name=None, prompt="", **kwargs):
+                return LLMResponse(
+                    content="Reading multiple files",
+                    provider="groq",
+                    model="llama-3.1-8b",
+                    tool_calls=tool_calls
+                )
+
+        adapter = AgentOrchestratorAdapter(FakeOrchestrator())
+        response = adapter.delegate("groq", "Read files")
+
+        assert len(response.tool_calls) == 3
+        assert response.tool_calls[0].name == "read_file"
+        assert response.tool_calls[1].name == "read_file"
+        assert response.tool_calls[2].name == "search_code"

@@ -18,55 +18,25 @@ from pathlib import Path
 from src.agent.core import CodeAgent
 from src.agent.types import ConversationState
 from src.agent_config import AgentConfig
-from src.orchestrator_adapter import LLMResponse
+from helpers import ConfigurableTestOrchestrator
 
 
 class TestAgentProviderDelegation:
     """Tests that agent properly delegates provider selection to orchestrator."""
 
     @pytest.fixture
-    def fake_orchestrator(self):
+    def tracking_orchestrator(self):
         """Create orchestrator that tracks how it's called."""
-        class TrackingOrchestrator:
-            def __init__(self):
-                self.delegate_calls = []
-                self.registry = self
-                self.context = Mock()
-                self.context.is_explored.return_value = False
-                self.context.get_summary.return_value = ""
-
-            def list_available(self):
-                return ['cerebras', 'groq', 'gemini']
-
-            def get_recommended_provider(self, task_type='general'):
-                """Smart provider selection based on task type."""
-                if task_type == 'planning':
-                    return 'cerebras'  # Not gemini!
-                return 'cerebras'
-
-            def delegate(self, provider_name=None, prompt="", **kwargs):
-                # Auto-select if not specified
-                if provider_name is None:
-                    task_type = kwargs.get('task_type', 'general')
-                    provider_name = self.get_recommended_provider(task_type)
-                self.delegate_calls.append({
-                    'provider': provider_name,
-                    'prompt': prompt,
-                    'kwargs': kwargs
-                })
-                return LLMResponse(
-                    content='{"thought": "test", "action": "complete", "is_complete": true, "result": "done"}',
-                    provider=provider_name,
-                    model="test-model",
-                    tokens_used=100
-                )
-
-        return TrackingOrchestrator()
+        return ConfigurableTestOrchestrator(
+            recommended_provider='cerebras',
+            response_content='{"thought": "test", "action": "complete", "is_complete": true, "result": "done"}',
+            response_tokens=100
+        )
 
     @pytest.mark.unit
-    def test_agent_should_not_hardcode_gemini_as_planner(self, fake_orchestrator, tmp_path):
+    def test_agent_should_not_hardcode_gemini_as_planner(self, tracking_orchestrator, tmp_path):
         """Agent should not always use gemini just because it's first in preferences."""
-        agent = CodeAgent(fake_orchestrator, project_path=str(tmp_path))
+        agent = CodeAgent(tracking_orchestrator, project_path=str(tmp_path))
 
         # Even though gemini is available, agent shouldn't automatically pick it
         # This test will FAIL because current implementation picks gemini as first preference
@@ -78,27 +48,7 @@ class TestAgentProviderDelegation:
     @pytest.mark.unit
     def test_agent_should_respect_orchestrator_provider_recommendation(self, tmp_path):
         """Agent should use provider recommended by orchestrator."""
-        class RecommendingOrchestrator:
-            def __init__(self):
-                self.registry = self
-                self.context = Mock()
-                self.context.is_explored.return_value = False
-                self.recommended_provider = 'cerebras'  # Orchestrator recommends cerebras
-
-            def list_available(self):
-                return ['cerebras', 'groq', 'gemini']
-
-            def get_recommended_provider(self, task_type='planning'):
-                """Orchestrator's recommendation based on rate limits and task type."""
-                return self.recommended_provider
-
-            def delegate(self, provider, prompt, **kwargs):
-                return LLMResponse(
-                    content='{"thought": "test", "action": "complete", "is_complete": true}',
-                    provider=provider
-                )
-
-        orch = RecommendingOrchestrator()
+        orch = ConfigurableTestOrchestrator(recommended_provider='cerebras')
         agent = CodeAgent(orch, project_path=str(tmp_path))
 
         # Agent should ask orchestrator for recommendation
@@ -111,39 +61,10 @@ class TestAgentProviderDelegation:
     @pytest.mark.unit
     def test_agent_should_avoid_rate_limited_provider(self, tmp_path):
         """Agent should not use a provider that's rate limited."""
-        class RateLimitAwareOrchestrator:
-            def __init__(self):
-                self.registry = self
-                self.context = Mock()
-                self.context.is_explored.return_value = False
-                self.rate_limited_providers = {'gemini'}  # gemini is rate limited
-
-            def list_available(self):
-                return ['cerebras', 'groq', 'gemini']
-
-            def is_rate_limited(self, provider):
-                return provider in self.rate_limited_providers
-
-            def get_recommended_provider(self, task_type='general'):
-                """Skip rate-limited providers."""
-                preferences = ['gemini', 'groq', 'cerebras']
-                for prov in preferences:
-                    if prov not in self.rate_limited_providers:
-                        return prov
-                return 'cerebras'
-
-            def delegate(self, provider_name=None, prompt="", **kwargs):
-                if provider_name is None:
-                    task_type = kwargs.get('task_type', 'general')
-                    provider_name = self.get_recommended_provider(task_type)
-                if self.is_rate_limited(provider_name):
-                    raise Exception(f"{provider_name} is rate limited")
-                return LLMResponse(
-                    content='{"thought": "test", "action": "complete", "is_complete": true}',
-                    provider=provider_name
-                )
-
-        orch = RateLimitAwareOrchestrator()
+        orch = ConfigurableTestOrchestrator(
+            rate_limited={'gemini'},
+            recommended_provider='groq'  # Should skip gemini since it's rate limited
+        )
         agent = CodeAgent(orch, project_path=str(tmp_path))
 
         # Agent should check rate limits before selecting provider
@@ -154,9 +75,9 @@ class TestAgentProviderDelegation:
         )
 
     @pytest.mark.unit
-    def test_agent_think_should_let_orchestrator_pick_provider(self, fake_orchestrator, tmp_path):
+    def test_agent_think_should_let_orchestrator_pick_provider(self, tracking_orchestrator, tmp_path):
         """When agent thinks, it should let orchestrator decide which provider to use."""
-        agent = CodeAgent(fake_orchestrator, project_path=str(tmp_path))
+        agent = CodeAgent(tracking_orchestrator, project_path=str(tmp_path))
 
         state = ConversationState(
             system_prompt="You are a helpful assistant",
@@ -173,8 +94,8 @@ class TestAgentProviderDelegation:
         agent._think(state)
 
         # Check what provider was requested
-        assert len(fake_orchestrator.delegate_calls) == 1
-        call_info = fake_orchestrator.delegate_calls[0]
+        assert len(tracking_orchestrator.delegate_calls) == 1
+        call_info = tracking_orchestrator.delegate_calls[0]
 
         # Agent should pass task_type to let orchestrator make informed decision
         # The orchestrator picks the provider, not the agent
@@ -193,34 +114,7 @@ class TestAgentProviderDelegation:
     @pytest.mark.unit
     def test_agent_should_use_task_type_for_provider_selection(self, tmp_path):
         """Agent should indicate task type so orchestrator can pick appropriate provider."""
-        class TaskAwareOrchestrator:
-            def __init__(self):
-                self.registry = self
-                self.context = Mock()
-                self.context.is_explored.return_value = False
-                self.delegate_calls = []
-
-            def list_available(self):
-                return ['cerebras', 'groq', 'gemini']
-
-            def get_recommended_provider(self, task_type='general'):
-                return 'cerebras'
-
-            def delegate(self, provider_name=None, prompt="", **kwargs):
-                if provider_name is None:
-                    task_type = kwargs.get('task_type', 'general')
-                    provider_name = self.get_recommended_provider(task_type)
-                self.delegate_calls.append({
-                    'provider': provider_name,
-                    'task_type': kwargs.get('task_type'),
-                    'kwargs': kwargs
-                })
-                return LLMResponse(
-                    content='{"thought": "test", "action": "complete", "is_complete": true}',
-                    provider=provider_name
-                )
-
-        orch = TaskAwareOrchestrator()
+        orch = ConfigurableTestOrchestrator(recommended_provider='cerebras')
         agent = CodeAgent(orch, project_path=str(tmp_path))
 
         state = ConversationState(
@@ -247,35 +141,12 @@ class TestAgentProviderDelegation:
     @pytest.mark.unit
     def test_agent_should_not_override_orchestrator_with_config_preferences(self, tmp_path):
         """Config preferences should not override orchestrator's intelligent selection."""
-        class SmartOrchestrator:
-            def __init__(self):
-                self.registry = self
-                self.context = Mock()
-                self.context.is_explored.return_value = False
-                # Orchestrator knows cerebras is best right now (fast, not rate limited)
-                self.best_provider = 'cerebras'
-
-            def list_available(self):
-                return ['cerebras', 'groq', 'gemini']
-
-            def get_recommended_provider(self, task_type='general'):
-                """Smart selection based on current state."""
-                return self.best_provider
-
-            def delegate(self, provider_name=None, prompt="", **kwargs):
-                if provider_name is None:
-                    task_type = kwargs.get('task_type', 'general')
-                    provider_name = self.get_recommended_provider(task_type)
-                return LLMResponse(
-                    content='{"thought": "test", "action": "complete", "is_complete": true}',
-                    provider=provider_name
-                )
+        orch = ConfigurableTestOrchestrator(recommended_provider='cerebras')
 
         # Config says prefer gemini
         config = AgentConfig()
         config.planner_preferences = ['gemini', 'groq', 'cerebras']
 
-        orch = SmartOrchestrator()
         agent = CodeAgent(orch, project_path=str(tmp_path), config=config)
 
         # Orchestrator's smart selection should win over static config preferences
@@ -287,35 +158,10 @@ class TestAgentProviderDelegation:
     @pytest.mark.unit
     def test_multiple_think_calls_should_allow_provider_rotation(self, tmp_path):
         """Orchestrator should be able to rotate providers between calls if needed."""
-        class RotatingOrchestrator:
-            def __init__(self):
-                self.registry = self
-                self.context = Mock()
-                self.context.is_explored.return_value = False
-                self.call_count = 0
-                self.providers_used = []
-                self.rotation = ['cerebras', 'groq', 'gemini']
-
-            def list_available(self):
-                return ['cerebras', 'groq', 'gemini']
-
-            def get_recommended_provider(self, task_type='general'):
-                """Rotate through providers on each call."""
-                provider = self.rotation[self.call_count % len(self.rotation)]
-                return provider
-
-            def delegate(self, provider_name=None, prompt="", **kwargs):
-                if provider_name is None:
-                    task_type = kwargs.get('task_type', 'general')
-                    provider_name = self.get_recommended_provider(task_type)
-                self.providers_used.append(provider_name)
-                self.call_count += 1
-                return LLMResponse(
-                    content='{"thought": "test", "action": "read_file", "parameters": {"file_path": "test.py"}, "is_complete": false}',
-                    provider=provider_name
-                )
-
-        orch = RotatingOrchestrator()
+        orch = ConfigurableTestOrchestrator(
+            rotation=['cerebras', 'groq', 'gemini'],
+            response_content='{"thought": "test", "action": "read_file", "parameters": {"file_path": "test.py"}, "is_complete": false}'
+        )
         agent = CodeAgent(orch, project_path=str(tmp_path))
 
         state = ConversationState(
