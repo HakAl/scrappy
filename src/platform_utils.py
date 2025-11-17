@@ -169,33 +169,39 @@ def get_dangerous_commands() -> List[str]:
     Get list of dangerous command patterns for the current platform.
 
     Returns:
-        List of dangerous command patterns to block
+        List of dangerous command patterns to block (regex patterns)
     """
+    # Common dangerous patterns (regex)
     common_dangerous = [
-        'format',   # Disk formatting
-        'mkfs',     # Make filesystem
+        r'\bformat\s+[a-zA-Z]:',  # Disk formatting with drive letter
+        r'\bmkfs\b',              # Make filesystem
     ]
 
     if is_windows():
         return common_dangerous + [
-            'del /f /s /q',  # Force delete recursively
-            'rmdir /s /q',   # Remove directory tree quietly
-            'format c:',     # Format C drive
-            'rd /s /q',      # Remove directory silently
-            '> nul',         # Redirect to null (less dangerous but can hide output)
-            'diskpart',      # Disk partitioning
-            'reg delete',    # Registry deletion
+            # Only block recursive deletes on drive roots or system paths
+            r'\bdel\s+/[fqs].*\s+[a-zA-Z]:\\$',      # del /f /s /q C:\
+            r'\bdel\s+/[fqs].*\s+[a-zA-Z]:\\\*',     # del /f /s /q C:\*
+            r'\brmdir\s+/s\s+/q\s+[a-zA-Z]:\\$',     # rmdir /s /q C:\
+            r'\brmdir\s+/s\s+/q\s+[a-zA-Z]:\\\s*$',  # rmdir /s /q C: (end of command)
+            r'\brd\s+/s\s+/q\s+[a-zA-Z]:\\$',        # rd /s /q C:\
+            r'\brd\s+/s\s+/q\s+[a-zA-Z]:\\\s*$',     # rd /s /q C: (end of command)
+            r'\bformat\s+[a-zA-Z]:',                  # Format any drive
+            r'\bdiskpart\b',                          # Disk partitioning
+            r'\breg\s+delete\s+HKLM',                 # Registry deletion (system hive)
+            r'\breg\s+delete\s+HKEY_LOCAL_MACHINE',   # Registry deletion (system hive)
         ]
     else:
         return common_dangerous + [
-            'rm -rf /',      # Delete root
-            'rm -rf ~',      # Delete home
-            'rm -rf *',      # Delete everything
-            '> /dev/',       # Write to device
-            'sudo rm',       # Privileged delete
-            'dd if=',        # Disk dump (can overwrite disks)
-            ':(){:|:&};:',   # Fork bomb
-            'chmod -R 777 /',  # Insecure permissions on root
+            r'\brm\s+-rf\s+/$',           # Delete root
+            r'\brm\s+-rf\s+~',            # Delete home
+            r'\brm\s+-rf\s+/\*',          # Delete everything in root
+            r'\brm\s+-rf\s+\*\s*$',       # Delete everything in cwd
+            r'>\s*/dev/sd',               # Write to disk device
+            r'\bsudo\s+rm\s+-rf\s+/',     # Privileged delete of root
+            r'\bdd\s+if=.*of=/dev/sd',    # Disk dump to drive
+            r':\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:',  # Fork bomb
+            r'\bchmod\s+-R\s+777\s+/',    # Insecure permissions on root
         ]
 
 

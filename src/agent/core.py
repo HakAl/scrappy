@@ -276,10 +276,10 @@ class CodeAgent:
 
     def _tool_run_command(self, command: str) -> str:
         """Run a shell command."""
-        # Security: Block dangerous commands
-        for d in self.config.dangerous_commands:
-            if d in command.lower():
-                return f"Error: Command contains dangerous pattern '{d}'"
+        # Security: Block dangerous commands (using regex patterns)
+        for pattern in self.config.dangerous_commands:
+            if re.search(pattern, command, re.IGNORECASE):
+                return f"Error: Command matches dangerous pattern '{pattern}'"
 
         # Validate command for current platform
         is_valid, warning = validate_command_for_platform(command)
