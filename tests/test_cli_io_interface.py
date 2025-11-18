@@ -54,6 +54,12 @@ class TestCLIIOProtocol:
         from src.cli.io_interface import CLIIOProtocol
         assert hasattr(CLIIOProtocol, 'input_line')
 
+    @pytest.mark.unit
+    def test_protocol_defines_secho(self):
+        """Test that protocol defines secho method (click-style naming)."""
+        from src.cli.io_interface import CLIIOProtocol
+        assert hasattr(CLIIOProtocol, 'secho')
+
 
 class TestTestIO:
     """Tests for TestIO implementation - used for testing CLI code."""
@@ -133,6 +139,30 @@ class TestTestIO:
         assert styles[0]['text'] == "Error!"
         assert styles[0]['fg'] == "red"
         assert styles[0]['bold'] == True
+
+    @pytest.mark.unit
+    def test_testio_secho_captures_content(self):
+        """Test that secho captures content."""
+        from src.cli.io_interface import TestIO
+        io = TestIO()
+
+        io.secho("Styled text", fg="green", bold=True)
+
+        assert "Styled text" in io.get_output()
+
+    @pytest.mark.unit
+    def test_testio_secho_records_style_info(self):
+        """Test that secho records styling information."""
+        from src.cli.io_interface import TestIO
+        io = TestIO()
+
+        io.secho("Warning!", fg="yellow", bold=False)
+
+        styles = io.get_styled_outputs()
+        assert len(styles) == 1
+        assert styles[0]['text'] == "Warning!"
+        assert styles[0]['fg'] == "yellow"
+        assert styles[0]['bold'] == False
 
     @pytest.mark.unit
     def test_testio_style_returns_text(self):
@@ -258,6 +288,93 @@ class TestTestIO:
         assert result == True
 
 
+class TestMockIO:
+    """Tests for MockIO in tests/helpers.py."""
+
+    @pytest.mark.unit
+    def test_mockio_exists(self):
+        """Test that MockIO class can be imported from helpers."""
+        from tests.helpers import MockIO
+        assert MockIO is not None
+
+    @pytest.mark.unit
+    def test_mockio_instantiation(self):
+        """Test MockIO can be instantiated."""
+        from tests.helpers import MockIO
+        io = MockIO()
+        assert io is not None
+
+    @pytest.mark.unit
+    def test_mockio_echo_captures_output(self):
+        """Test that echo() captures output."""
+        from tests.helpers import MockIO
+        io = MockIO()
+
+        io.echo("Hello from MockIO!")
+
+        assert "Hello from MockIO!" in io.get_output()
+
+    @pytest.mark.unit
+    def test_mockio_secho_captures_content(self):
+        """Test that secho captures content."""
+        from tests.helpers import MockIO
+        io = MockIO()
+
+        io.secho("Styled text", fg="cyan", bold=True)
+
+        assert "Styled text" in io.get_output()
+        styles = io.get_styled_outputs()
+        assert len(styles) == 1
+        assert styles[0]['fg'] == "cyan"
+
+    @pytest.mark.unit
+    def test_mockio_prompt_returns_preset(self):
+        """Test that prompt returns preset inputs."""
+        from tests.helpers import MockIO
+        io = MockIO(inputs=["test input"])
+
+        result = io.prompt("Enter: ")
+
+        assert result == "test input"
+
+    @pytest.mark.unit
+    def test_mockio_confirm_returns_preset(self):
+        """Test that confirm returns preset confirmations."""
+        from tests.helpers import MockIO
+        io = MockIO(confirmations=[True])
+
+        result = io.confirm("Continue?")
+
+        assert result == True
+
+    @pytest.mark.unit
+    def test_mockio_reset(self):
+        """Test that reset clears all state."""
+        from tests.helpers import MockIO
+        io = MockIO(inputs=["input1", "input2"], confirmations=[True])
+
+        io.echo("Some output")
+        io.prompt("First: ")
+        io.confirm("Confirm: ")
+
+        io.reset()
+
+        assert io.get_output() == ""
+        # After reset, indices are reset but inputs/confirmations remain
+        result = io.prompt("Second: ", default="default")
+        assert result == "input1"  # Back to first input
+
+    @pytest.mark.unit
+    def test_mockio_style_returns_text(self):
+        """Test that style returns text without modification."""
+        from tests.helpers import MockIO
+        io = MockIO()
+
+        result = io.style("styled", fg="red", bold=True)
+
+        assert result == "styled"
+
+
 class TestClickIO:
     """Tests for ClickIO implementation - real CLI output using click."""
 
@@ -300,6 +417,15 @@ class TestClickIO:
         # Result should be a string (with ANSI codes when terminal supports it)
         assert isinstance(result, str)
         assert "test" in result
+
+    @pytest.mark.unit
+    def test_clickio_has_secho(self):
+        """Test that ClickIO has secho method."""
+        from src.cli.io_interface import ClickIO
+        io = ClickIO()
+
+        assert hasattr(io, 'secho')
+        assert callable(io.secho)
 
 
 class TestIOProtocolUsage:

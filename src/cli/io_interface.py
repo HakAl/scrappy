@@ -8,10 +8,11 @@ Usage:
     # In production code
     from src.cli.io_interface import ClickIO
     io = ClickIO()
-    io.styled_echo("Hello!", fg="green")
+    io.secho("Hello!", fg="green")
 
     # In tests
     from src.cli.io_interface import TestIO
+    # or from tests.helpers import MockIO
     io = TestIO(inputs=["user input"], confirmations=[True])
     result = my_function(io)
     assert "expected" in io.get_output()
@@ -37,7 +38,7 @@ class CLIIOProtocol(Protocol):
         """
         ...
 
-    def styled_echo(
+    def secho(
         self,
         message: str,
         fg: Optional[str] = None,
@@ -52,6 +53,16 @@ class CLIIOProtocol(Protocol):
             bold: Whether to make text bold
             nl: Whether to append a newline (default True)
         """
+        ...
+
+    def styled_echo(
+        self,
+        message: str,
+        fg: Optional[str] = None,
+        bold: bool = False,
+        nl: bool = True
+    ) -> None:
+        """Alias for secho() for backwards compatibility."""
         ...
 
     def style(
@@ -159,7 +170,7 @@ class TestIO:
         else:
             self._output_buffer.append(message)
 
-    def styled_echo(
+    def secho(
         self,
         message: str,
         fg: Optional[str] = None,
@@ -180,6 +191,16 @@ class TestIO:
             self._output_buffer.append(message + "\n")
         else:
             self._output_buffer.append(message)
+
+    def styled_echo(
+        self,
+        message: str,
+        fg: Optional[str] = None,
+        bold: bool = False,
+        nl: bool = True
+    ) -> None:
+        """Alias for secho() for backwards compatibility."""
+        self.secho(message, fg=fg, bold=bold, nl=nl)
 
     def style(
         self,
@@ -265,7 +286,7 @@ class ClickIO:
         """Output message using click.echo."""
         click.echo(message, nl=nl)
 
-    def styled_echo(
+    def secho(
         self,
         message: str,
         fg: Optional[str] = None,
@@ -274,6 +295,16 @@ class ClickIO:
     ) -> None:
         """Output styled message using click.secho."""
         click.secho(message, fg=fg, bold=bold, nl=nl)
+
+    def styled_echo(
+        self,
+        message: str,
+        fg: Optional[str] = None,
+        bold: bool = False,
+        nl: bool = True
+    ) -> None:
+        """Alias for secho() for backwards compatibility."""
+        self.secho(message, fg=fg, bold=bold, nl=nl)
 
     def style(
         self,
