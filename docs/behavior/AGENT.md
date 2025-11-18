@@ -3,6 +3,10 @@
 - 2 audit logs created: 
   - .agent_audit.json
   - .llm_agent_audit.json
+- Premature Task Completion: Agent stops after 4 iterations (7 seconds), completing ~5% of the task and declaring success
+  - Naive Completion Detection: Any write_file operation triggers "task complete"
+- No Task Decomposition: Doesn't break complex tasks into tracked subtasks
+- Complex Import Structure: Relative imports fail when using programmatically
 
 <!-- todo -->
 - Agent composition - Chain multiple specialized agents
