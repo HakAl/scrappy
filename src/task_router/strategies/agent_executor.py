@@ -7,10 +7,10 @@ from pathlib import Path
 from typing import Optional
 
 from ..classifier import ClassifiedTask, TaskType
-from .base import ExecutionResult, ExecutionStrategy, OrchestratorLike
+from .base import ExecutionResult, ProviderAwareStrategy, OrchestratorLike
 
 
-class AgentExecutor(ExecutionStrategy):
+class AgentExecutor(ProviderAwareStrategy):
     """
     Full agent loop with planning and tool use.
 
@@ -35,22 +35,10 @@ class AgentExecutor(ExecutionStrategy):
         max_iterations: int = 10,
         require_approval: bool = True
     ):
-        self.orchestrator = orchestrator
+        super().__init__(orchestrator)
         self.project_root = project_root or Path.cwd()
         self.max_iterations = max_iterations
         self.require_approval = require_approval
-        self._resolved_provider: Optional[str] = None
-        self._resolved_model: Optional[str] = None
-
-    def set_provider(self, provider_name: Optional[str], model_name: Optional[str] = None):
-        """
-        Set the provider to use for the next execution.
-
-        Called by TaskRouter with resolved provider from classifier hints.
-        For complex tasks (complexity >= 7), this will use quality models.
-        """
-        self._resolved_provider = provider_name
-        self._resolved_model = model_name
 
     @property
     def name(self) -> str:

@@ -1,3 +1,5 @@
+ ### No Emojis
+ 
  Unicode defines specific blocks for emoji characters:
 
   Main Emoji Blocks:

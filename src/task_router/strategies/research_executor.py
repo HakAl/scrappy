@@ -9,10 +9,10 @@ from pathlib import Path
 from typing import Dict, Optional
 
 from ..classifier import ClassifiedTask, TaskType
-from .base import ExecutionResult, ExecutionStrategy, OrchestratorLike
+from .base import ExecutionResult, ProviderAwareStrategy, OrchestratorLike
 
 
-class ResearchExecutor(ExecutionStrategy):
+class ResearchExecutor(ProviderAwareStrategy):
     """
     Fast research and information gathering with tool support.
 
@@ -55,12 +55,10 @@ class ResearchExecutor(ExecutionStrategy):
         project_root: Optional[Path] = None,
         max_tool_iterations: int = 3
     ):
-        self.orchestrator = orchestrator
+        super().__init__(orchestrator)
         self.preferred_provider = preferred_provider
         self.project_root = project_root or Path.cwd()
         self.max_tool_iterations = max_tool_iterations
-        self._resolved_provider: Optional[str] = None
-        self._resolved_model: Optional[str] = None
         self._tool_registry = None
         self._tool_context = None
 
@@ -293,15 +291,6 @@ class ResearchExecutor(ExecutionStrategy):
         except Exception as e:
             return f"Error executing {tool_name}: {str(e)}"
 
-    def set_provider(self, provider_name: Optional[str], model_name: Optional[str] = None):
-        """
-        Set the provider to use for the next execution.
-
-        Called by TaskRouter with resolved provider from classifier hints.
-        """
-        self._resolved_provider = provider_name
-        self._resolved_model = model_name
-
     @property
     def name(self) -> str:
         return "ResearchExecutor"
@@ -322,19 +311,8 @@ class ResearchExecutor(ExecutionStrategy):
         self._auto_explore_if_needed(task)
 
         try:
-            # Get the provider to use (priority: resolved > preferred > brain)
-            if self._resolved_provider:
-                provider_to_use = self._resolved_provider
-            else:
-                provider_to_use = self.preferred_provider
-
-            # Validate provider is available
-            try:
-                available = self.orchestrator.providers.list_available()
-                if provider_to_use not in available:
-                    provider_to_use = self.orchestrator.brain
-            except Exception:
-                provider_to_use = self.orchestrator.brain
+            # Get the provider to use (uses base class method for single source of truth)
+            provider_to_use = self._resolve_and_validate_provider(self.preferred_provider)
 
             # Build initial research prompt with tools
             system_prompt = self._build_system_prompt()
@@ -418,10 +396,6 @@ class ResearchExecutor(ExecutionStrategy):
                         final_response = self._generate_fallback_response(task, tool_calls_made, conversation_history)
 
                     break
-
-            # Clear resolved provider after use
-            self._resolved_provider = None
-            self._resolved_model = None
 
             execution_time = time.time() - start_time
 

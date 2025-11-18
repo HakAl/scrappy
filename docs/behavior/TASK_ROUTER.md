@@ -158,11 +158,13 @@ TaskClassifier
   Recommended Fix Strategy
 
  
+we're working to improve src\task_router the next task is: 
+Remove Code Duplication - Extract common provider logic - Single source of truth
+can you research the problem and begin writing tests for the change?
 
 
   Phase 4: Remove Code Duplication
 
-  1. Consolidate routing methods - Single route() method that accepts options
   2. Extract common provider logic - Single source of truth
   3. Reuse JSON parsing - One robust implementation
 

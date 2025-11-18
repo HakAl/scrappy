@@ -1,6 +1,8 @@
-Path escaping/construction.
-- tests\test_agent_path_escaping.py
+## Architecture
 
+### Path escaping/construction.
+
+- tests\test_agent_path_escaping.py
   The agent will now receive a clear error message instead of a cryptic "not recognized" failure.
 
 ## System Prompt

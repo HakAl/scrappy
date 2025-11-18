@@ -1,7 +1,9 @@
 ### Agent's responsibility:
+
 Decide what to do (reason, plan, execute tools). The agent properly delegates provider selection to the orchestrator, respecting rate limits and enabling smart provider rotation.
 
 ### Orchestrator's responsibility:
+
 Decide which provider to use (rate limits, availability, capabilities)
 
 **Orchestrator uses LLMResponse from providers/base.py**

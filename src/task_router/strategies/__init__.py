@@ -8,6 +8,7 @@ Each strategy is now in its own module for better organization and maintainabili
 from .base import (
     ExecutionResult,
     ExecutionStrategy,
+    ProviderAwareStrategy,
     ContextLike,
     ProviderRegistryLike,
     LLMResponseLike,
@@ -24,6 +25,7 @@ __all__ = [
     # Base classes
     'ExecutionResult',
     'ExecutionStrategy',
+    'ProviderAwareStrategy',
     'ContextLike',
     'ProviderRegistryLike',
     'LLMResponseLike',

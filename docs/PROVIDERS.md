@@ -1,13 +1,14 @@
  # Provider Configuration - src/providers/base.py
 
-```  class ModelType(Enum):
-      """Classification of model training/tuning."""
-      BASE = "base"           # Raw pretrained, no instruction tuning
-      CHAT = "chat"           # Chat-tuned (conversational)
-      INSTRUCT = "instruct"   # Instruction-tuned (follows structured commands)
-      CODE = "code"           # Code-specialized
-      REASONING = "reasoning" # Chain-of-thought / reasoning specialized
-      UNKNOWN = "unknown"
+```  
+class ModelType(Enum):
+    """Classification of model training/tuning."""
+    BASE = "base"           # Raw pretrained, no instruction tuning
+    CHAT = "chat"           # Chat-tuned (conversational)
+    INSTRUCT = "instruct"   # Instruction-tuned (follows structured commands)
+    CODE = "code"           # Code-specialized
+    REASONING = "reasoning" # Chain-of-thought / reasoning specialized
+    UNKNOWN = "unknown"
 
 
   @dataclass
@@ -24,27 +25,30 @@
       @property
       def is_instruction_tuned(self) -> bool:
           """Check if model is instruction-tuned (best for JSON compliance)."""
-          return self.model_type == ModelType.INSTRUCT```
+          return self.model_type == ModelType.INSTRUCT
+```
 
+```
+class LLMProvider(ABC):
+    # ... existing methods ...
 
-```  class LLMProvider(ABC):
-      # ... existing methods ...
+    @abstractmethod
+    def get_model_info(self, model_id: str) -> ModelInfo:
+        """Get detailed information about a specific model."""
+        pass
 
-      @abstractmethod
-      def get_model_info(self, model_id: str) -> ModelInfo:
-          """Get detailed information about a specific model."""
-          pass
+    def get_instruction_tuned_models(self) -> list[str]:
+        """Get all instruction-tuned models from this provider."""
+        return [
+            model_id for model_id in self.available_models
+            if self.get_model_info(model_id).is_instruction_tuned
+        ]
+```
 
-      def get_instruction_tuned_models(self) -> list[str]:
-          """Get all instruction-tuned models from this provider."""
-          return [
-              model_id for model_id in self.available_models
-              if self.get_model_info(model_id).is_instruction_tuned
-          ]```
+Then in providers:
 
-  Then in providers:
-
-```  # In groq_provider.py
+```
+# In groq_provider.py
   MODELS = {
       'gemma2-9b-it': {
           'type': ModelType.INSTRUCT,  # NEW
@@ -54,28 +58,31 @@
           'type': ModelType.CHAT,  # NEW
           'rpm': 30, 'rpd': 1000, ...
       },
-  }```
+  }
+```
 
-  And orchestrator use:
+And orchestrator use:
 
-```  def select_model_for_task(self, task_type: str) -> tuple[str, str]:
-      """Select best provider/model for task type."""
-      if task_type == "planning":
-          # Prefer instruction-tuned for JSON compliance
-          for provider in self.providers:
-              instruct_models = provider.get_instruction_tuned_models()
-              if instruct_models:
-                  # Pick highest RPD instruction-tuned model
-                  best = max(instruct_models, key=lambda m: provider.get_model_info(m).rpd or 0)
-                  return provider.name, best```
+```
+def select_model_for_task(self, task_type: str) -> tuple[str, str]:
+    """Select best provider/model for task type."""
+    if task_type == "planning":
+        # Prefer instruction-tuned for JSON compliance
+        for provider in self.providers:
+            instruct_models = provider.get_instruction_tuned_models()
+            if instruct_models:
+                # Pick highest RPD instruction-tuned model
+                best = max(instruct_models, key=lambda m: provider.get_model_info(m).rpd or 0)
+                return provider.name, best
+```
 
-  Benefits:
+Benefits:
   1. Automatic selection of instruction-tuned models for agent planning
   2. Self-documenting model capabilities
   3. Smarter fallback logic
   4. Easy to extend with new model types
 
-  ---
+---
 
 ## Native tool calling implementation -- tests/test_native_tool_calling.py
 
@@ -83,7 +90,8 @@ providers have supports_tool_calling() to check support
 
 - Tool Schema Support in Base Provider
 
-```  # src/providers/base.py
+```
+# src/providers/base.py
   from dataclasses import dataclass
   from typing import List, Dict, Any
 
@@ -108,11 +116,13 @@ providers have supports_tool_calling() to check support
           **kwargs
       ) -> LLMResponse:
           """Chat with native tool calling support."""
-          pass```
+          pass
+```
 
 - Provider implementations
 
-```  # src/providers/groq_provider.py
+```
+# src/providers/groq_provider.py
   def chat_with_tools(self, messages, tools, tool_choice="auto", **kwargs):
       response = self._client.chat.completions.create(
           messages=messages,
