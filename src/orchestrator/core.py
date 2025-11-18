@@ -178,9 +178,10 @@ class AgentOrchestrator:
 
     @property
     def brain(self):
-        """Access the orchestrator's reasoning brain provider name."""
-        if not self._brain_name:
-            raise RuntimeError("No orchestrator brain configured. No providers available?")
+        """Access the orchestrator's reasoning brain provider name.
+
+        Returns None if no brain is configured (e.g., no providers available).
+        """
         return self._brain_name
 
     @brain.setter

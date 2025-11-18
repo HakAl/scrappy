@@ -97,9 +97,16 @@ class CLI:
 
         # Display initialization info (unless show_provider_status already did)
         if not show_provider_status:
-            io.echo(f"Brain: {io.style(self.orchestrator.brain, fg='green', bold=True)}")
+            brain_name = self.orchestrator.brain
+            if brain_name:
+                io.echo(f"Brain: {io.style(brain_name, fg='green', bold=True)}")
+            else:
+                io.secho("Brain: None (no providers available)", fg='yellow')
             providers_list = ', '.join(self.orchestrator.providers.list_available())
-            io.echo(f"Available providers: {io.style(providers_list, fg='cyan')}")
+            if providers_list:
+                io.echo(f"Available providers: {io.style(providers_list, fg='cyan')}")
+            else:
+                io.secho("No providers available - check API keys", fg='yellow')
 
         # Show context status
         if self.orchestrator.context.is_explored():
