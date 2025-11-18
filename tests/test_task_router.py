@@ -1172,7 +1172,7 @@ class TestClarifyIntent:
 
 
 class TestRouteWithProvider:
-    """Tests for route_with_provider method."""
+    """Tests for route() method with provider parameter."""
 
     @pytest.fixture
     def mock_orchestrator(self):
@@ -1191,7 +1191,7 @@ class TestRouteWithProvider:
         )
         router.use_llm_classification = False
 
-        result = router.route_with_provider("hello", provider_override="fast")
+        result = router.route("hello", provider="fast")
 
         assert isinstance(result, ExecutionResult)
         assert "override_provider" in result.metadata.get("classification", {})
@@ -1203,7 +1203,7 @@ class TestRouteWithProvider:
         router = TaskRouter(orchestrator=None, verbose=False)
         router.use_llm_classification = False
 
-        result = router.route_with_provider("hello")
+        result = router.route("hello")
 
         assert isinstance(result, ExecutionResult)
         assert result.metadata["classification"]["override_provider"] is None
@@ -1214,7 +1214,7 @@ class TestRouteWithProvider:
         router = TaskRouter(orchestrator=None, verbose=False)
         router.use_llm_classification = False
 
-        result = router.route_with_provider("hello")
+        result = router.route("hello")
 
         metadata = result.metadata.get("classification", {})
         assert "type" in metadata
@@ -1484,14 +1484,295 @@ class TestNoStrategyAvailable:
 
     @pytest.mark.unit
     def test_route_with_provider_returns_error_when_no_strategy(self):
-        """Test route_with_provider returns error when no strategy."""
+        """Test route with provider returns error when no strategy."""
         router = TaskRouter(orchestrator=None, verbose=False)
         router.use_llm_classification = False
 
         # Remove all strategies
         router.strategies.clear()
 
-        result = router.route_with_provider("hello")
+        result = router.route("hello", provider="fast")
 
         assert result.success is False
         assert "No strategy available" in result.error
+
+
+class TestConsolidatedRouteMethod:
+    """
+    Tests for consolidated route() method that accepts options.
+
+    This eliminates code duplication between route() and route_with_provider()
+    by having a single route() method that accepts an optional provider parameter.
+    """
+
+    @pytest.fixture
+    def router(self):
+        return TaskRouter(
+            orchestrator=None,
+            auto_confirm_direct=True,
+            verbose=False
+        )
+
+    @pytest.fixture
+    def mock_orchestrator(self):
+        orch = Mock()
+        orch.providers = Mock()
+        orch.providers.list_available.return_value = ['groq', 'cerebras']
+        return orch
+
+    @pytest.mark.unit
+    def test_route_without_provider_works_as_before(self, router):
+        """Test that route() without provider parameter works as before."""
+        router.use_llm_classification = False
+
+        result = router.route("hello")
+
+        assert isinstance(result, ExecutionResult)
+        assert result.success is True
+        # No override should be set
+        assert result.metadata["classification"]["override_provider"] is None
+
+    @pytest.mark.unit
+    def test_route_with_provider_parameter(self, router):
+        """Test that route() accepts provider as keyword argument."""
+        router.use_llm_classification = False
+
+        # New API: route() accepts provider parameter
+        result = router.route("hello", provider="fast")
+
+        assert isinstance(result, ExecutionResult)
+        assert result.success is True
+        # Provider override should be set
+        assert result.metadata["classification"]["override_provider"] == "fast"
+
+    @pytest.mark.unit
+    def test_route_with_quality_provider(self, mock_orchestrator):
+        """Test routing with quality provider hint."""
+        router = TaskRouter(
+            orchestrator=mock_orchestrator,
+            verbose=False,
+            auto_confirm_direct=True
+        )
+        router.use_llm_classification = False
+
+        result = router.route("hello", provider="quality")
+
+        assert isinstance(result, ExecutionResult)
+        assert result.metadata["classification"]["override_provider"] == "quality"
+
+    @pytest.mark.unit
+    def test_route_with_specific_provider_name(self, mock_orchestrator):
+        """Test routing with specific provider name."""
+        router = TaskRouter(
+            orchestrator=mock_orchestrator,
+            verbose=False,
+            auto_confirm_direct=True
+        )
+        router.use_llm_classification = False
+
+        result = router.route("hello", provider="cerebras")
+
+        assert isinstance(result, ExecutionResult)
+        assert result.metadata["classification"]["override_provider"] == "cerebras"
+
+    @pytest.mark.unit
+    def test_route_provider_none_same_as_no_provider(self, router):
+        """Test that provider=None is same as not passing provider."""
+        router.use_llm_classification = False
+
+        result_without = router.route("hello")
+        result_with_none = router.route("hello", provider=None)
+
+        # Both should have no override
+        assert result_without.metadata["classification"]["override_provider"] is None
+        assert result_with_none.metadata["classification"]["override_provider"] is None
+
+    @pytest.mark.unit
+    def test_route_with_provider_resolves_correctly(self, mock_orchestrator):
+        """Test that provider hint is resolved to actual provider."""
+        mock_orchestrator.providers.list_available.return_value = ['cerebras', 'groq']
+        router = TaskRouter(
+            orchestrator=mock_orchestrator,
+            verbose=False,
+            auto_confirm_direct=True
+        )
+        router.use_llm_classification = False
+
+        result = router.route("hello", provider="fast")
+
+        # Fast should resolve to cerebras (preferred fast provider)
+        assert result.metadata["classification"]["resolved_provider"] == "cerebras"
+
+    @pytest.mark.unit
+    def test_route_with_provider_validates_input(self, router):
+        """Test that input validation still works with provider parameter."""
+        router.use_llm_classification = False
+
+        # Empty input should fail validation
+        result = router.route("", provider="fast")
+
+        assert result.success is False
+        assert "Invalid input" in result.error
+
+    @pytest.mark.unit
+    def test_route_with_provider_applies_hooks(self, router):
+        """Test that hooks are applied when using provider parameter."""
+        hook_called = []
+
+        def track_hook(task):
+            hook_called.append(True)
+            return task
+
+        router.add_pre_hook(track_hook)
+        router.use_llm_classification = False
+
+        router.route("hello", provider="fast")
+
+        assert len(hook_called) == 1
+
+    @pytest.mark.unit
+    def test_route_with_provider_updates_metrics(self, router):
+        """Test that metrics are updated when using provider parameter."""
+        router.use_llm_classification = False
+
+        router.route("hello", provider="fast")
+        router.route("thanks", provider="quality")
+
+        metrics = router.get_metrics()
+        assert metrics.total_tasks >= 2
+
+    @pytest.mark.unit
+    def test_route_with_provider_includes_full_metadata(self, router):
+        """Test that result includes all classification metadata."""
+        router.use_llm_classification = False
+
+        result = router.route("hello", provider="fast")
+
+        metadata = result.metadata.get("classification", {})
+        assert "type" in metadata
+        assert "confidence" in metadata
+        assert "complexity" in metadata
+        assert "reasoning" in metadata
+        assert "suggested_provider" in metadata
+        assert "override_provider" in metadata
+        assert "resolved_provider" in metadata
+        assert "resolved_model" in metadata
+        assert "used_llm_classification" in metadata
+
+    @pytest.mark.unit
+    def test_route_with_provider_handles_no_strategy(self, router):
+        """Test error handling when no strategy available with provider."""
+        router.use_llm_classification = False
+        router.strategies.clear()
+
+        result = router.route("hello", provider="fast")
+
+        assert result.success is False
+        assert "No strategy available" in result.error
+
+    @pytest.mark.unit
+    def test_route_preserves_execution_time_tracking(self, router):
+        """Test that execution time is tracked with provider parameter."""
+        router.use_llm_classification = False
+
+        result = router.route("hello", provider="fast")
+
+        assert result.execution_time >= 0
+        assert isinstance(result.execution_time, float)
+
+
+class TestRouteWithProviderDeprecation:
+    """
+    Tests to verify route_with_provider() is properly deprecated/removed.
+
+    After consolidation, route_with_provider() should either:
+    - Be removed entirely, or
+    - Emit a deprecation warning and delegate to route()
+    """
+
+    @pytest.fixture
+    def router(self):
+        return TaskRouter(
+            orchestrator=None,
+            auto_confirm_direct=True,
+            verbose=False
+        )
+
+    @pytest.mark.unit
+    def test_route_with_provider_method_removed(self, router):
+        """Test that route_with_provider() method no longer exists."""
+        # After consolidation, route_with_provider should be removed
+        # This test will fail until the method is removed
+        assert not hasattr(router, 'route_with_provider'), \
+            "route_with_provider() should be removed - use route(provider=...) instead"
+
+    @pytest.mark.unit
+    def test_single_route_method_handles_all_cases(self, router):
+        """Test that single route() method can handle all provider cases."""
+        router.use_llm_classification = False
+
+        # Without provider (old route behavior)
+        result1 = router.route("hello")
+        assert result1.success is True
+
+        # With provider (old route_with_provider behavior)
+        result2 = router.route("hello", provider="fast")
+        assert result2.success is True
+        assert result2.metadata["classification"]["override_provider"] == "fast"
+
+
+class TestConsolidatedRouteSignature:
+    """
+    Tests for the new consolidated route() method signature.
+
+    Expected signature:
+        def route(self, user_input: str, *, provider: Optional[str] = None) -> ExecutionResult
+    """
+
+    @pytest.fixture
+    def router(self):
+        return TaskRouter(
+            orchestrator=None,
+            auto_confirm_direct=True,
+            verbose=False
+        )
+
+    @pytest.mark.unit
+    def test_route_accepts_keyword_only_provider(self, router):
+        """Test that provider must be passed as keyword argument."""
+        router.use_llm_classification = False
+
+        # This should work - keyword argument
+        result = router.route("hello", provider="fast")
+        assert result.success is True
+
+        # This should raise TypeError - positional argument
+        # provider should be keyword-only (after the *)
+        with pytest.raises(TypeError):
+            router.route("hello", "fast")
+
+    @pytest.mark.unit
+    def test_route_type_hints_are_correct(self, router):
+        """Test that route() has correct type hints."""
+        import inspect
+
+        sig = inspect.signature(router.route)
+        params = sig.parameters
+
+        # Should have user_input and provider parameters
+        assert "user_input" in params
+        assert "provider" in params
+
+        # provider should have default of None
+        assert params["provider"].default is None
+
+    @pytest.mark.unit
+    def test_route_returns_execution_result(self, router):
+        """Test that route() returns ExecutionResult regardless of provider."""
+        router.use_llm_classification = False
+
+        result1 = router.route("hello")
+        result2 = router.route("hello", provider="fast")
+
+        assert isinstance(result1, ExecutionResult)
+        assert isinstance(result2, ExecutionResult)

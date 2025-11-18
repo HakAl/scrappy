@@ -343,11 +343,16 @@ What is the user's PRIMARY intent? Respond with JSON only."""
         """
         return self.provider_resolver.resolve(hint)
 
-    def route(self, user_input: str) -> ExecutionResult:
+    def route(self, user_input: str, *, provider: Optional[str] = None) -> ExecutionResult:
         """
         Route user input to appropriate execution strategy.
 
-        Returns ExecutionResult with output and metadata.
+        Args:
+            user_input: User's task/query
+            provider: Optional provider hint ("fast", "quality") or specific provider name
+
+        Returns:
+            ExecutionResult with output and metadata
         """
         start_time = time.time()
 
@@ -363,6 +368,10 @@ What is the user's PRIMARY intent? Respond with JSON only."""
 
         # 1. Classify the task
         classified = self.classifier.classify(user_input)
+
+        # 2. Apply provider override if specified
+        if provider:
+            classified.override_provider = provider
 
         if self.verbose:
             self._log_classification(classified)
@@ -436,123 +445,6 @@ What is the user's PRIMARY intent? Respond with JSON only."""
         self._update_metrics(classified, result)
 
         # 9. Add classification info to result
-        result.metadata["classification"] = {
-            "type": classified.task_type.value,
-            "confidence": classified.confidence,
-            "complexity": classified.complexity_score,
-            "reasoning": classified.reasoning,
-            "suggested_provider": classified.suggested_provider,
-            "override_provider": classified.override_provider,
-            "resolved_provider": provider_name,
-            "resolved_model": model_name,
-            "used_llm_classification": "LLM semantic classification" in classified.reasoning
-        }
-
-        return result
-
-    def route_with_provider(
-        self,
-        user_input: str,
-        provider_override: Optional[str] = None
-    ) -> ExecutionResult:
-        """
-        Route user input with optional provider override.
-
-        Args:
-            user_input: User's task/query
-            provider_override: Force specific provider type ("fast", "quality", or provider name)
-
-        Returns:
-            ExecutionResult with output and metadata
-        """
-        start_time = time.time()
-
-        # 0. Validate input at boundary
-        is_valid, error_message = self.validator.validate_user_input(user_input)
-        if not is_valid:
-            return ExecutionResult(
-                success=False,
-                output="",
-                error=f"Invalid input: {error_message}",
-                execution_time=time.time() - start_time
-            )
-
-        # Classify first
-        classified = self.classifier.classify(user_input)
-
-        # Apply override if provided
-        if provider_override:
-            classified.override_provider = provider_override
-
-        # Now route with the modified classification
-        start_time = time.time()
-
-        if self.verbose:
-            self._log_classification(classified)
-
-        # Apply confidence escalation
-        classified = self._apply_confidence_escalation(classified)
-
-        # LLM fallback for low-confidence classifications
-        if self.use_llm_classification and classified.confidence < self.confidence_threshold:
-            if self.verbose:
-                self.output_handler.log_info(f"Low confidence ({classified.confidence:.0%}) - trying LLM classification")
-            classified = self._classify_with_llm(classified)
-
-        # Resolve provider (override takes precedence)
-        provider_hint = classified.override_provider or classified.suggested_provider
-        provider_name, model_name = self._resolve_provider(provider_hint)
-
-        if self.verbose and provider_name:
-            model_info = f" ({model_name})" if model_name else ""
-            source = "override" if classified.override_provider else "hint"
-            self.output_handler.log_provider_selection(
-                provider=provider_name,
-                model=model_name,
-                source=f"{source}: {provider_hint}"
-            )
-
-        # Apply pre-execution hooks
-        for hook in self._pre_hooks:
-            classified = hook(classified)
-
-        # Get appropriate strategy
-        strategy = self._get_strategy(classified)
-
-        if not strategy:
-            return ExecutionResult(
-                success=False,
-                output="",
-                error=f"No strategy available for task type: {classified.task_type}",
-                execution_time=time.time() - start_time
-            )
-
-        # Confirm execution if needed
-        if not self._should_execute(classified, strategy):
-            return ExecutionResult(
-                success=False,
-                output="",
-                error="Execution cancelled by user",
-                execution_time=time.time() - start_time
-            )
-
-        # Execute with resolved provider
-        if self.verbose:
-            self.output_handler.log_execution_start(strategy.name)
-
-        if hasattr(strategy, 'set_provider'):
-            strategy.set_provider(provider_name, model_name)
-
-        result = strategy.execute(classified)
-
-        # Apply post-execution hooks
-        for hook in self._post_hooks:
-            result = hook(result)
-
-        # Update metrics
-        self._update_metrics(classified, result)
-
-        # Add classification info to result
         result.metadata["classification"] = {
             "type": classified.task_type.value,
             "confidence": classified.confidence,

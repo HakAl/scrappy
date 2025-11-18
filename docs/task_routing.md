@@ -107,7 +107,7 @@ Manual provider override takes precedence:
 
 ```python
 # In code
-result = router.route_with_provider("implement auth", "quality")
+result = router.route("implement auth", provider="quality")
 
 # Via ClassifiedTask
 task.override_provider = "quality"
@@ -484,9 +484,9 @@ result = router.route("implement OAuth2 authentication with refresh tokens")
 
 ```python
 # Force quality provider for important task
-result = router.route_with_provider(
+result = router.route(
     "fix critical security bug",
-    "quality"
+    provider="quality"
 )
 # → Uses 70B model regardless of complexity
 ```
@@ -514,7 +514,7 @@ print(result.metadata["classification"])
 ## Best Practices
 
 1. **Let the router decide** - Trust automatic classification for most tasks
-2. **Override for critical tasks** - Use `route_with_provider()` for important work
+2. **Override for critical tasks** - Use `route(provider=...)` for important work
 3. **Monitor metrics** - Track success rates and adjust strategies
 4. **Use pre-hooks** - Add logging, validation, or modification logic
 5. **Keep patterns updated** - Add new patterns as usage patterns emerge

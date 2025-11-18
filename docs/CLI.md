@@ -632,7 +632,7 @@ The router automatically selects providers based on task complexity:
 **Override provider:**
 ```python
 # In code
-router.route_with_provider("implement auth", "quality")
+router.route("implement auth", provider="quality")
 ```
 
 ### Benefits
