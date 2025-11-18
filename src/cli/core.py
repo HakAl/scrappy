@@ -23,6 +23,7 @@ try:
     from .state_manager import PlanStateManager
     from .command_router import CommandRouter
     from .interactive import InteractiveMode
+    from .utils.session_utils import display_previous_session_detected
 except ImportError:
     # Allow running as script
     import os
@@ -42,6 +43,7 @@ except ImportError:
     from cli.state_manager import PlanStateManager
     from cli.command_router import CommandRouter
     from cli.interactive import InteractiveMode
+    from cli.utils.session_utils import display_previous_session_detected
 
 
 class CLI:
@@ -125,15 +127,7 @@ class CLI:
             return
 
         # Show session info
-        io.secho("\nPrevious session detected:", fg="yellow", bold=True)
-        io.echo(f"  Saved: {session_info.get('saved_at', 'unknown')}")
-        io.echo(f"  Files cached: {session_info.get('file_count', 0)}")
-        io.echo(f"  Searches: {session_info.get('search_count', 0)}")
-        io.echo(f"  Discoveries: {session_info.get('discovery_count', 0)}")
-        io.echo(f"  Tasks: {session_info.get('task_count', 0)}")
-
-        if session_info.get('has_conversation', False):
-            io.echo(f"  Has conversation history: Yes")
+        display_previous_session_detected(io, session_info)
 
         # Offer to restore
         try:

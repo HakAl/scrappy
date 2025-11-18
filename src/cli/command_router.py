@@ -16,6 +16,11 @@ from .multiprovider import CLIMultiProvider
 from .smart_query import CLISmartQuery
 from .agent_manager import CLIAgentManager
 from .task_router_handler import CLITaskRouterHandler
+from .utils.session_utils import (
+    display_session_saved,
+    display_session_save_error,
+    display_session_not_saved_warning
+)
 
 
 class CommandRouter:
@@ -76,14 +81,11 @@ class CommandRouter:
             if self.auto_save:
                 try:
                     session_file = self.orchestrator.save_session(self.conversation_history)
-                    io.secho(f"\nSession saved to: {session_file}", fg="green")
-                    io.echo(f"  Conversation: {len(self.conversation_history)} messages")
-                    io.echo("Use 'llm-team --resume' to continue later.")
+                    display_session_saved(io, session_file, len(self.conversation_history), with_help=True)
                 except Exception as e:
-                    io.secho(f"Warning: Could not save session: {e}", fg="yellow")
+                    display_session_save_error(io, e)
             else:
-                io.secho("\nSession not saved (auto-save disabled).", fg="yellow")
-                io.echo("Use '/session save' to manually save before quitting.")
+                display_session_not_saved_warning(io)
 
             self.display.show_usage()
             io.secho("\nGoodbye!", fg="cyan", bold=True)

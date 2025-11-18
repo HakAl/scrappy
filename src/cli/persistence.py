@@ -8,11 +8,13 @@ from typing import Optional
 
 try:
     from .io_interface import CLIIOProtocol, ClickIO
+    from .utils.session_utils import display_session_load_error
 except ImportError:
     import sys
     import os
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from cli.io_interface import CLIIOProtocol, ClickIO
+    from cli.utils.session_utils import display_session_load_error
 
 
 class SessionPersistence:
@@ -101,10 +103,8 @@ class SessionPersistence:
                 if conversation:
                     result['conversation_history'] = conversation
                     io.echo(f"  Conversation: {len(conversation)} messages")
-            elif load_result['status'] == 'no_session':
-                io.secho("No saved session found.", fg="yellow")
             else:
-                io.secho(f"Error: {load_result.get('message', 'unknown')}", fg="red")
+                display_session_load_error(io, load_result)
 
         elif args.lower() == "clear":
             self.orchestrator.clear_session()

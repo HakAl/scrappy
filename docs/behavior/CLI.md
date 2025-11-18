@@ -144,11 +144,9 @@
 RED
 
 we're working to improve src\cli the next task is: 
-Extract Pattern Configuration
+Eliminate Duplication - Create Shared Utilities
 
- - Move 23+ regex patterns to src/cli/config/patterns.py
- - Pre-compile at module load time
- - Add pattern documentation
+ - src/cli/utils/session_utils.py - Session restoration display
 can you research the task and begin writing tests for the change?
 
 GREEN
@@ -164,14 +162,6 @@ can you finsih  CLISessionManager to delegate to these new classes (refactor pha
 
 
 CLI Refactoring
-
- Phase 2: Split God Objects -- Address SRP violations
-
- 2.3 Extract Pattern Configuration
-
- - Move 23+ regex patterns to src/cli/config/patterns.py
- - Pre-compile at module load time
- - Add pattern documentation
 
  ---
  Phase 3: Eliminate Duplication

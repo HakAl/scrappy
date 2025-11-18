@@ -18,6 +18,10 @@ except ImportError:
     pass  # python-dotenv not installed, skip
 
 from .core import CLI
+from .utils.session_utils import (
+    display_session_restored,
+    display_session_load_error
+)
 
 try:
     from ..agent import CodeAgent, create_git_checkpoint, rollback_to_checkpoint
@@ -77,32 +81,11 @@ def cli(ctx, brain, auto_explore, no_context, resume, no_save, show_providers, v
         if resume:
             result = cli_instance.orchestrator.load_session()
             if result['status'] == 'loaded':
-                click.secho(f"\nResumed session from {result['saved_at']}", fg="green", bold=True)
-                click.echo(f"  Files restored: {result['files_restored']}")
-                click.echo(f"  Searches restored: {result['searches_restored']}")
-                click.echo(f"  Git ops restored: {result['git_ops_restored']}")
-                click.echo(f"  Discoveries restored: {result['discoveries_restored']}")
-                click.echo(f"  Task history: {result['tasks_restored']} entries")
-
-                conversation = result.get('conversation_history', [])
+                conversation = display_session_restored(click, result)
                 if conversation:
                     cli_instance.conversation_history = conversation
-                    click.echo(f"  Conversation: {len(conversation)} messages restored")
-
-                    click.secho("\nLast conversation:", fg="cyan")
-                    for msg in conversation[-4:]:
-                        role = msg.get('role', 'unknown')
-                        content = msg.get('content', '')[:100]
-                        if len(msg.get('content', '')) > 100:
-                            content += "..."
-                        if role == 'user':
-                            click.echo(f"  You: {content}")
-                        else:
-                            click.echo(f"  Assistant: {content}")
-            elif result['status'] == 'no_session':
-                click.secho("No previous session found. Starting fresh.", fg="yellow")
             else:
-                click.secho(f"Error loading session: {result.get('message', 'unknown')}", fg="red")
+                display_session_load_error(click, result)
 
         cli_instance.interactive_mode()
 
@@ -297,32 +280,11 @@ def interactive(ctx, resume):
     if resume:
         result = cli_instance.orchestrator.load_session()
         if result['status'] == 'loaded':
-            click.secho(f"\nResumed session from {result['saved_at']}", fg="green", bold=True)
-            click.echo(f"  Files restored: {result['files_restored']}")
-            click.echo(f"  Searches restored: {result['searches_restored']}")
-            click.echo(f"  Git ops restored: {result['git_ops_restored']}")
-            click.echo(f"  Discoveries restored: {result['discoveries_restored']}")
-            click.echo(f"  Task history: {result['tasks_restored']} entries")
-
-            conversation = result.get('conversation_history', [])
+            conversation = display_session_restored(click, result)
             if conversation:
                 cli_instance.conversation_history = conversation
-                click.echo(f"  Conversation: {len(conversation)} messages restored")
-
-                click.secho("\nLast conversation:", fg="cyan")
-                for msg in conversation[-4:]:
-                    role = msg.get('role', 'unknown')
-                    content = msg.get('content', '')[:100]
-                    if len(msg.get('content', '')) > 100:
-                        content += "..."
-                    if role == 'user':
-                        click.echo(f"  You: {content}")
-                    else:
-                        click.echo(f"  Assistant: {content}")
-        elif result['status'] == 'no_session':
-            click.secho("No previous session found. Starting fresh.", fg="yellow")
         else:
-            click.secho(f"Error loading session: {result.get('message', 'unknown')}", fg="red")
+            display_session_load_error(click, result)
 
     cli_instance.interactive_mode()
 

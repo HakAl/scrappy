@@ -17,6 +17,7 @@ from .display import CLIDisplay
 from .smart_query import CLISmartQuery
 from .task_router_handler import CLITaskRouterHandler
 from .tasks import CLITaskExecution
+from .utils.session_utils import display_session_save_error
 
 
 class InteractiveMode:
@@ -235,7 +236,7 @@ class InteractiveMode:
                 session_file = self.orchestrator.save_session(self.conversation_history)
                 io.secho(f"Session saved to: {session_file}", fg="green")
             except Exception as save_error:
-                io.secho(f"Warning: Could not save session: {save_error}", fg="yellow")
+                display_session_save_error(io, save_error)
 
         self.display.show_usage()
         io.secho("Goodbye!", fg="cyan", bold=True)

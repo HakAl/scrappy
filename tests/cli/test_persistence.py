@@ -356,7 +356,7 @@ class TestPersistenceLoad:
         persistence.manage_session(args="load", io=io)
 
         output = io.get_output()
-        assert "No saved session" in output or "no session" in output.lower()
+        assert "No saved session" in output or "No previous session" in output
 
     def test_load_error_shows_message(self):
         """Should show error message when load fails."""
