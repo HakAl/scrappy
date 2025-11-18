@@ -6,6 +6,7 @@ Following the dependency inversion principle, we define an interface (Protocol)
 that can be swapped with different implementations.
 """
 from abc import ABC, abstractmethod
+from dataclasses import replace
 from typing import Callable, Optional
 
 from .classifier import ClassifiedTask, TaskType
@@ -83,15 +84,21 @@ class InteractiveClarifier(IntentClarifierInterface):
 
         if choice == "1":
             # User wants explanation (research mode)
-            task.task_type = TaskType.RESEARCH
-            task.reasoning = f"User clarified: research/explain only. Original: {task.reasoning}"
-            task.confidence = 1.0  # User confirmed
+            return replace(
+                task,
+                task_type=TaskType.RESEARCH,
+                reasoning=f"User clarified: research/explain only. Original: {task.reasoning}",
+                confidence=1.0  # User confirmed
+            )
         elif choice == "2":
             # User wants action (code generation mode)
-            task.task_type = TaskType.CODE_GENERATION
-            task.reasoning = f"User clarified: execute/create. Original: {task.reasoning}"
-            task.confidence = 1.0  # User confirmed
-        # else: choice == "3" or invalid input, keep original (do nothing)
+            return replace(
+                task,
+                task_type=TaskType.CODE_GENERATION,
+                reasoning=f"User clarified: execute/create. Original: {task.reasoning}",
+                confidence=1.0  # User confirmed
+            )
+        # else: choice == "3" or invalid input, keep original
 
         return task
 
@@ -128,9 +135,12 @@ class AutoClarifier(IntentClarifierInterface):
         if self.default_action == "escalate":
             # Auto-escalate to CODE_GENERATION if not already
             if task.task_type != TaskType.CODE_GENERATION:
-                task.task_type = TaskType.CODE_GENERATION
-                task.reasoning = f"Auto-escalated from {task.task_type.value} due to ambiguity. Original: {task.reasoning}"
-        # else: keep original (do nothing)
+                return replace(
+                    task,
+                    task_type=TaskType.CODE_GENERATION,
+                    reasoning=f"Auto-escalated from {task.task_type.value} due to ambiguity. Original: {task.reasoning}"
+                )
+        # else: keep original
 
         return task
 

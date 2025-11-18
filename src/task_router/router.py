@@ -4,6 +4,7 @@ Central task router that dispatches to appropriate execution strategies.
 
 import json
 import time
+from dataclasses import replace
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
@@ -206,8 +207,11 @@ class TaskRouter:
         # Escalate if low confidence and has action indicators
         if task.confidence < 0.7 and has_action_word:
             original_type = task.task_type.value
-            task.task_type = TaskType.CODE_GENERATION
-            task.reasoning = f"Escalated from {original_type} due to low confidence ({task.confidence:.2f}) with action indicators"
+            task = replace(
+                task,
+                task_type=TaskType.CODE_GENERATION,
+                reasoning=f"Escalated from {original_type} due to low confidence ({task.confidence:.2f}) with action indicators"
+            )
             if self.verbose:
                 self.output_handler.log_info(f"Escalated: {original_type} -> CODE_GENERATION (low confidence + action words)")
 
@@ -315,9 +319,12 @@ What is the user's PRIMARY intent? Respond with JSON only."""
                 # Only accept LLM classification if it's confident
                 if llm_confidence >= 0.7:
                     old_type = task.task_type.value
-                    task.task_type = new_type
-                    task.confidence = llm_confidence
-                    task.reasoning = f"LLM semantic classification: {llm_reasoning} (was {old_type}, confidence {task.confidence:.2f})"
+                    task = replace(
+                        task,
+                        task_type=new_type,
+                        confidence=llm_confidence,
+                        reasoning=f"LLM semantic classification: {llm_reasoning} (was {old_type}, confidence {llm_confidence:.2f})"
+                    )
 
                     if self.verbose:
                         if old_type != new_type.value:
@@ -377,7 +384,7 @@ What is the user's PRIMARY intent? Respond with JSON only."""
 
         # 2. Apply provider override if specified
         if provider:
-            classified.override_provider = provider
+            classified = replace(classified, override_provider=provider)
 
         if self.verbose:
             self._log_classification(classified)

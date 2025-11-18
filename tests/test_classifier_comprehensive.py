@@ -470,7 +470,7 @@ class TestFileDirectoryExtraction:
         """Test that classification works when no files mentioned."""
         result = classifier.classify("what is python?")
 
-        assert result.extracted_files == []
+        assert result.extracted_files == ()
         assert len(result.extracted_directories) >= 0  # May extract common words
 
 

@@ -914,11 +914,14 @@ class TestHooksAndExtensibility:
     @pytest.mark.unit
     def test_pre_hook_modifies_task(self, router):
         """Test that pre-hook can modify task."""
+        from dataclasses import replace
 
         def force_conversation(task):
-            task.task_type = TaskType.CONVERSATION
-            task.confidence = 1.0
-            return task
+            return replace(
+                task,
+                task_type=TaskType.CONVERSATION,
+                confidence=1.0
+            )
 
         router.add_pre_hook(force_conversation)
         result = router.route("create a file")  # Would normally be CODE_GEN

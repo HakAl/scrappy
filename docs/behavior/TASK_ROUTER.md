@@ -79,7 +79,7 @@ TaskClassifier
 
   4. Duplicated Code
 
-  - [FIXED] route() and route_with_provider() consolidated into single route() method with optional provider parameter
+  - route() and route_with_provider() consolidated into single route() method with optional provider parameter
   - Provider resolution logic scattered across multiple methods
 
   5. Complex JSON Parsing with No Error Recovery
@@ -159,12 +159,11 @@ TaskClassifier
 
  
 we're working to improve src\task_router the next task is: 
-Improve Architecture - Dependency injection - Pass all dependencies explicitly
+Improve Architecture - Immutable domain objects - Make ClassifiedTask immutable
 can you research the problem and begin writing tests for the change?
 
 
   Phase 5: Improve Architecture
 
-  2. Dependency injection - Pass all dependencies explicitly
   3. Immutable domain objects - Make ClassifiedTask immutable
   4. Pure functions - Separate calculation from side effects

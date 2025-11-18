@@ -51,6 +51,9 @@
 
 ---
 
+<!-- EXISITING ISSUE -->
+- context summary file always written, doesn't respect user choice
+
 Refactoring Plan
 
   Core Principle

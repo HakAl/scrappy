@@ -1,3 +1,13 @@
+
+<!-- EXISITING ISSUE -->
+- 2 audit logs created: 
+  - .agent_audit.json
+  - .llm_agent_audit.json
+
+<!-- todo -->
+- Agent composition - Chain multiple specialized agents
+
+
 ## Architecture
 
 ### Path escaping/construction.

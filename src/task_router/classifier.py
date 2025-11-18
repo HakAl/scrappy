@@ -5,8 +5,8 @@ Refactored to use Strategy Pattern for better maintainability and extensibility.
 """
 
 import re
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Set, Tuple
 
 from ..platform_utils import is_windows, validate_command_for_platform
 from .classification_strategy import TaskType
@@ -18,9 +18,9 @@ from .classification_strategies import (
 )
 
 
-@dataclass
+@dataclass(frozen=True)
 class ClassifiedTask:
-    """Result of task classification."""
+    """Result of task classification (immutable)."""
     original_input: str
     task_type: TaskType
     confidence: float  # 0.0 to 1.0
@@ -31,9 +31,9 @@ class ClassifiedTask:
     complexity_score: int = 1  # 1-10 scale
     requires_planning: bool = False
     requires_tools: bool = False
-    matched_patterns: List[str] = field(default_factory=list)
-    extracted_files: List[str] = field(default_factory=list)  # File references found in input
-    extracted_directories: List[str] = field(default_factory=list)  # Directory references found
+    matched_patterns: Tuple[str, ...] = ()  # Patterns that matched (immutable)
+    extracted_files: Tuple[str, ...] = ()  # File references found in input (immutable)
+    extracted_directories: Tuple[str, ...] = ()  # Directory references found (immutable)
 
 
 class TaskClassifier:
@@ -157,9 +157,9 @@ class TaskClassifier:
             complexity_score=complexity,
             requires_planning=requires_planning,
             requires_tools=requires_tools,
-            matched_patterns=matched,
-            extracted_files=extracted_files,
-            extracted_directories=extracted_dirs
+            matched_patterns=tuple(matched),
+            extracted_files=tuple(extracted_files),
+            extracted_directories=tuple(extracted_dirs)
         )
 
     def _generate_reasoning(self, task_type: TaskType, patterns: List[str]) -> str:
