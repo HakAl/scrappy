@@ -13,6 +13,8 @@ except ImportError:
     from providers import ProviderRegistry
     from providers.base import ModelType
 
+from .output import OutputInterface, ConsoleOutput
+
 
 class ProviderSelector:
     """
@@ -25,16 +27,18 @@ class ProviderSelector:
     - Cohere: Limited (1,000/month) - embeddings only
     """
 
-    def __init__(self, registry: ProviderRegistry, verbose: bool = False):
+    def __init__(self, registry: ProviderRegistry, verbose: bool = False, output: Optional[OutputInterface] = None):
         """
         Initialize provider selector.
 
         Args:
             registry: Provider registry to select from
             verbose: Enable verbose selection logging
+            output: Output interface for messages (default: ConsoleOutput)
         """
         self.registry = registry
         self.verbose = verbose
+        self.output = output or ConsoleOutput()
         self._selection_log = []
 
     def _log(self, message: str, level: str = "INFO"):
@@ -42,7 +46,7 @@ class ProviderSelector:
         entry = f"[{level}] {message}"
         self._selection_log.append(entry)
         if self.verbose:
-            print(f"  {entry}")
+            self.output.info(f"  {entry}")
 
     def get_selection_log(self) -> list[str]:
         """Get the selection decision log."""
@@ -113,7 +117,7 @@ class ProviderSelector:
 
         elif task_type == 'embed' and 'cohere' in available:
             self._log("Selected cohere for embeddings (1,000/month limit!)", "WARN")
-            print("WARNING: Using Cohere. This counts toward 1,000/month limit!")
+            self.output.warn("Using Cohere. This counts toward 1,000/month limit!")
             return ('cohere', None)
 
         # Fallback: use first available provider

@@ -24,6 +24,7 @@ from .memory import WorkingMemory
 from .session import SessionManager
 from .task_executor import TaskExecutor
 from .provider_selector import ProviderSelector
+from .output import OutputInterface, ConsoleOutput
 
 
 class AgentOrchestrator:
@@ -46,7 +47,8 @@ class AgentOrchestrator:
         enable_cache: bool = True,
         cache_ttl_hours: int = 24,
         verbose_selection: bool = False,
-        show_provider_status: bool = False
+        show_provider_status: bool = False,
+        output: Optional[OutputInterface] = None
     ):
         """
         Initialize orchestrator.
@@ -61,8 +63,10 @@ class AgentOrchestrator:
             cache_ttl_hours: Time-to-live for cache entries in hours
             verbose_selection: Show detailed provider selection logic
             show_provider_status: Display provider status summary on startup
+            output: Output interface for messages (default: ConsoleOutput)
         """
         # Core components
+        self.output = output or ConsoleOutput()
         self.registry = ProviderRegistry()
         self.task_history: list[dict] = []
         self.created_at = datetime.now()
@@ -90,7 +94,7 @@ class AgentOrchestrator:
         )
         self.working_memory = WorkingMemory()
         self.session_manager = SessionManager(self.context.project_path)
-        self.provider_selector = ProviderSelector(self.registry, verbose=verbose_selection)
+        self.provider_selector = ProviderSelector(self.registry, verbose=verbose_selection, output=self.output)
 
         # Register providers and set up brain
         if auto_register:
@@ -115,59 +119,59 @@ class AgentOrchestrator:
         # Try GitHub Models (RECOMMENDED BRAIN - GPT-4o with 10K RPD)
         try:
             self.registry.register(GitHubModelsProvider())
-            print("[OK] GitHub Models provider registered (GPT-4o: 10K RPD, 10M TPD)")
+            self.output.success("GitHub Models provider registered (GPT-4o: 10K RPD, 10M TPD)")
         except Exception as e:
-            print(f"[X] GitHub Models provider unavailable: {e}")
+            self.output.error(f"GitHub Models provider unavailable: {e}")
 
         # Try Cerebras (primary workhorse - highest quota)
         try:
             self.registry.register(CerebrasProvider())
-            print("[OK] Cerebras provider registered (14,400 RPD)")
+            self.output.success("Cerebras provider registered (14,400 RPD)")
         except Exception as e:
-            print(f"[X] Cerebras provider unavailable: {e}")
+            self.output.error(f"Cerebras provider unavailable: {e}")
 
         # Try Groq (secondary)
         try:
             self.registry.register(GroqProvider())
-            print("[OK] Groq provider registered (7,000 RPD)")
+            self.output.success("Groq provider registered (7,000 RPD)")
         except Exception as e:
-            print(f"[X] Groq provider unavailable: {e}")
+            self.output.error(f"Groq provider unavailable: {e}")
 
         # Try Gemini (with auto-fallback)
         try:
             self.registry.register(GeminiProvider())
-            print("[OK] Gemini provider registered (auto-fallback enabled)")
+            self.output.success("Gemini provider registered (auto-fallback enabled)")
         except Exception as e:
-            print(f"[X] Gemini provider unavailable: {e}")
+            self.output.error(f"Gemini provider unavailable: {e}")
 
         # Try Cohere (limited - embeddings only)
         try:
             self.registry.register(CohereProvider())
-            print("[OK] Cohere provider registered (1,000/month - use sparingly)")
+            self.output.success("Cohere provider registered (1,000/month - use sparingly)")
         except Exception as e:
-            print(f"[X] Cohere provider unavailable: {e}")
+            self.output.error(f"Cohere provider unavailable: {e}")
 
     def _setup_brain(self, preferred_provider: Optional[str] = None):
         """Set up the orchestrator's reasoning brain."""
         try:
             self._brain_name, self._brain = self.provider_selector.setup_brain(preferred_provider)
-            print(f"[BRAIN] Using {self._brain_name} as orchestrator brain")
+            self.output.info(f"[BRAIN] Using {self._brain_name} as orchestrator brain")
         except RuntimeError as e:
-            print(f"[WARN] {e}")
+            self.output.warn(str(e))
 
     def _auto_explore(self):
         """Automatically explore the codebase if not already explored."""
         if self.context.is_explored():
-            print(f"[CONTEXT] Loaded cached context for {self.context.project_path.name}")
+            self.output.info(f"[CONTEXT] Loaded cached context for {self.context.project_path.name}")
             return
 
-        print(f"[CONTEXT] Exploring codebase: {self.context.project_path}")
+        self.output.info(f"[CONTEXT] Exploring codebase: {self.context.project_path}")
         result = self.context.explore()
 
         if result['status'] == 'explored':
-            print(f"[CONTEXT] Found {result['total_files']} files")
+            self.output.info(f"[CONTEXT] Found {result['total_files']} files")
             self.context.generate_summary(self.task_executor.generate_context_summary)
-            print(f"[CONTEXT] Generated project summary")
+            self.output.info("[CONTEXT] Generated project summary")
 
     # Provider Management
 
@@ -213,36 +217,36 @@ class AgentOrchestrator:
 
     def print_provider_status(self):
         """Print comprehensive provider status summary."""
-        print("\n" + "=" * 60)
-        print("PROVIDER CONFIGURATION SUMMARY")
-        print("=" * 60)
+        self.output.info("\n" + "=" * 60)
+        self.output.info("PROVIDER CONFIGURATION SUMMARY")
+        self.output.info("=" * 60)
 
         available = self.registry.list_available()
         all_known = ['github_models', 'cerebras', 'groq', 'gemini', 'cohere']
 
-        print("\nProvider Status:")
+        self.output.info("\nProvider Status:")
         for provider_name in all_known:
             if provider_name in available:
                 reason = self.provider_selector._get_brain_selection_reason(provider_name)
                 status_str = f"  [OK] {provider_name:<15} - {reason}"
             else:
                 status_str = f"  [--] {provider_name:<15} - NOT AVAILABLE (missing API key or package)"
-            print(status_str)
+            self.output.info(status_str)
 
-        print(f"\nSelected Brain: {self._brain_name}")
+        self.output.info(f"\nSelected Brain: {self._brain_name}")
         if self._brain_name:
             reason = self.provider_selector._get_brain_selection_reason(self._brain_name)
-            print(f"Selection Reason: {reason}")
+            self.output.info(f"Selection Reason: {reason}")
 
-        print(f"\nSelection Priority: cerebras > groq > gemini")
-        print("Use --brain <provider> to override auto-selection")
+        self.output.info("\nSelection Priority: cerebras > groq > gemini")
+        self.output.info("Use --brain <provider> to override auto-selection")
 
         if self.verbose_selection and self.provider_selector.get_selection_log():
-            print("\nSelection Log:")
+            self.output.info("\nSelection Log:")
             for entry in self.provider_selector.get_selection_log():
-                print(f"  {entry}")
+                self.output.info(f"  {entry}")
 
-        print("=" * 60 + "\n")
+        self.output.info("=" * 60 + "\n")
 
     def get_provider_selection_info(self) -> dict:
         """Get detailed provider selection information."""
@@ -558,7 +562,7 @@ class AgentOrchestrator:
 
                 # If we're very close to limit (less than 5% remaining), try fallback first
                 if remaining.get('requests_today_remaining', 100) <= 0:
-                    print(f"[WARN] {current_provider_name} has exhausted daily quota, trying fallback...")
+                    self.output.warn(f"{current_provider_name} has exhausted daily quota, trying fallback...")
                     raise RateLimitError(current_provider_name, "Daily quota exhausted", "requests")
             except RateLimitError:
                 raise  # Re-raise rate limit errors
@@ -643,11 +647,11 @@ class AgentOrchestrator:
                         if attempt < max_retries - 1:
                             # Exponential backoff before retry
                             wait_time = (2 ** attempt) * 0.5  # 0.5s, 1s, 2s
-                            print(f"[WARN] Rate limit hit on {current_provider_name}, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})...")
+                            self.output.warn(f"Rate limit hit on {current_provider_name}, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})...")
                             time.sleep(wait_time)
                         else:
                             # Max retries reached, will try fallback
-                            print(f"[WARN] Rate limit persists on {current_provider_name} after {max_retries} attempts")
+                            self.output.warn(f"Rate limit persists on {current_provider_name} after {max_retries} attempts")
                             break
                     else:
                         # Not a rate limit error, re-raise immediately
@@ -665,10 +669,10 @@ class AgentOrchestrator:
 
             if fallback_provider is None:
                 # No more providers available
-                print(f"[ERROR] All providers rate limited. Attempted: {attempted_providers}")
+                self.output.error(f"All providers rate limited. Attempted: {attempted_providers}")
                 raise AllProvidersRateLimitedError(attempted_providers)
 
-            print(f"[FALLBACK] Switching from {current_provider_name} to {fallback_provider}")
+            self.output.info(f"[FALLBACK] Switching from {current_provider_name} to {fallback_provider}")
             current_provider_name = fallback_provider
             current_model = None  # Reset model for new provider
 
@@ -858,7 +862,7 @@ class AgentOrchestrator:
                 )
 
                 if remaining.get('requests_today_remaining', 100) <= 0:
-                    print(f"[WARN] {current_provider_name} has exhausted daily quota, trying fallback...")
+                    self.output.warn(f"{current_provider_name} has exhausted daily quota, trying fallback...")
                     raise RateLimitError(current_provider_name, "Daily quota exhausted", "requests")
             except RateLimitError:
                 raise
@@ -950,10 +954,10 @@ class AgentOrchestrator:
 
                         if attempt < max_retries - 1:
                             wait_time = (2 ** attempt) * 0.5
-                            print(f"[WARN] Rate limit hit on {current_provider_name}, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})...")
+                            self.output.warn(f"Rate limit hit on {current_provider_name}, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})...")
                             await asyncio.sleep(wait_time)
                         else:
-                            print(f"[WARN] Rate limit persists on {current_provider_name} after {max_retries} attempts")
+                            self.output.warn(f"Rate limit persists on {current_provider_name} after {max_retries} attempts")
                             break
                     else:
                         raise
@@ -968,10 +972,10 @@ class AgentOrchestrator:
             fallback_provider = self.provider_selector.get_provider_for_fallback(exclude=attempted_providers)
 
             if fallback_provider is None:
-                print(f"[ERROR] All providers rate limited. Attempted: {attempted_providers}")
+                self.output.error(f"All providers rate limited. Attempted: {attempted_providers}")
                 raise AllProvidersRateLimitedError(attempted_providers)
 
-            print(f"[FALLBACK] Switching from {current_provider_name} to {fallback_provider}")
+            self.output.info(f"[FALLBACK] Switching from {current_provider_name} to {fallback_provider}")
             current_provider_name = fallback_provider
             current_model = None
 
@@ -1042,7 +1046,7 @@ class AgentOrchestrator:
                 response = await self.delegate_async(provider_name, prompt, **kwargs)
                 return provider_name, response
             except Exception as e:
-                print(f"[WARN] {provider_name} failed: {e}")
+                self.output.warn(f"{provider_name} failed: {e}")
                 return provider_name, None
 
         results = await asyncio.gather(*[query_provider(p) for p in providers])
