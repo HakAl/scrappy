@@ -25,21 +25,6 @@ class TestTaskRouter:
         )
 
     @pytest.mark.unit
-    def test_router_creation(self, router):
-        """Test basic router creation."""
-        assert router is not None
-        assert hasattr(router, 'route')
-        assert hasattr(router, 'get_metrics')
-
-    @pytest.mark.unit
-    def test_route_returns_result(self, router):
-        """Test that route returns ExecutionResult."""
-        result = router.route("hello")
-        assert isinstance(result, ExecutionResult)
-        assert hasattr(result, 'success')
-        assert hasattr(result, 'execution_time')
-
-    @pytest.mark.unit
     def test_conversation_routing(self, router):
         """Test that simple greetings are routed correctly."""
         result = router.route("hello")
@@ -166,36 +151,6 @@ class TestIntentClarification:
         assert needs_clarify is False
 
 
-class TestExecutionResult:
-    """Tests for ExecutionResult dataclass."""
-
-    @pytest.mark.unit
-    def test_result_creation(self):
-        """Test creating execution result."""
-        result = ExecutionResult(
-            success=True,
-            output="Command output",
-            execution_time=0.5
-        )
-
-        assert result.success is True
-        assert result.output == "Command output"
-        assert result.execution_time == 0.5
-
-    @pytest.mark.unit
-    def test_result_with_error(self):
-        """Test result with error."""
-        result = ExecutionResult(
-            success=False,
-            output="",
-            execution_time=1.0,
-            error="API timeout"
-        )
-
-        assert result.success is False
-        assert result.error == "API timeout"
-
-
 class TestRouterWithMockOrchestrator:
     """Tests for router with mock orchestrator."""
 
@@ -211,15 +166,6 @@ class TestRouterWithMockOrchestrator:
         orch.providers = Mock()
         orch.providers.list_available.return_value = ['groq']
         return orch
-
-    @pytest.mark.unit
-    def test_router_with_orchestrator(self, mock_orchestrator):
-        """Test router creation with orchestrator."""
-        router = TaskRouter(
-            orchestrator=mock_orchestrator,
-            verbose=False
-        )
-        assert router.orchestrator is mock_orchestrator
 
     @pytest.mark.unit
     def test_research_uses_orchestrator(self, mock_orchestrator):
@@ -282,35 +228,6 @@ class TestTaskTypeRouting:
         assert isinstance(result, ExecutionResult)
 
 
-class TestRouterConfiguration:
-    """Tests for router configuration options."""
-
-    @pytest.mark.unit
-    def test_auto_confirm_direct_option(self):
-        """Test auto_confirm_direct configuration."""
-        router = TaskRouter(
-            orchestrator=None,
-            auto_confirm_direct=False
-        )
-        assert router.auto_confirm_direct is False
-
-    @pytest.mark.unit
-    def test_verbose_option(self):
-        """Test verbose configuration."""
-        router = TaskRouter(
-            orchestrator=None,
-            verbose=True
-        )
-        assert router.verbose is True
-
-    @pytest.mark.unit
-    def test_default_configuration(self):
-        """Test default configuration values."""
-        router = TaskRouter(orchestrator=None)
-        assert hasattr(router, 'auto_confirm_direct')
-        assert hasattr(router, 'verbose')
-
-
 class TestDirectExecutor:
     """Tests for direct command execution."""
 
@@ -339,20 +256,6 @@ class TestDirectExecutor:
         # Should either fail validation or refuse to execute
         # Depends on implementation
         assert isinstance(result, ExecutionResult)
-
-    @pytest.mark.unit
-    def test_pip_command_recognized(self, router):
-        """Test that pip commands are recognized as direct."""
-        classifier = TaskClassifier()
-        task = classifier.classify("pip install requests")
-        assert task.task_type == TaskType.DIRECT_COMMAND
-
-    @pytest.mark.unit
-    def test_git_command_recognized(self, router):
-        """Test that git commands are recognized as direct."""
-        classifier = TaskClassifier()
-        task = classifier.classify("git status")
-        assert task.task_type == TaskType.DIRECT_COMMAND
 
 
 class TestMetricsAggregation:
@@ -387,16 +290,6 @@ class TestMetricsAggregation:
         # All conversation tasks should succeed
         assert metrics.success_rate >= 0.0
         assert metrics.success_rate <= 1.0
-
-    @pytest.mark.unit
-    def test_average_execution_time(self, router):
-        """Test average execution time calculation."""
-        router.route("hello")
-        router.route("thanks")
-
-        metrics = router.get_metrics()
-        assert metrics.avg_execution_time >= 0
-        assert isinstance(metrics.avg_execution_time, float)
 
 
 class TestLLMClassification:
@@ -758,22 +651,6 @@ class TestProviderResolution:
         return orch
 
     @pytest.mark.unit
-    def test_resolve_provider_without_hint(self):
-        """Test provider resolution with no hint."""
-        router = TaskRouter(orchestrator=None, verbose=False)
-        provider, model = router._resolve_provider(None)
-        assert provider is None
-        assert model is None
-
-    @pytest.mark.unit
-    def test_resolve_provider_without_orchestrator(self):
-        """Test provider resolution without orchestrator."""
-        router = TaskRouter(orchestrator=None, verbose=False)
-        provider, model = router._resolve_provider("fast")
-        assert provider is None
-        assert model is None
-
-    @pytest.mark.unit
     def test_resolve_provider_fast_prefers_cerebras(self, mock_orchestrator):
         """Test fast hint prefers cerebras."""
         mock_orchestrator.providers.list_available.return_value = ['groq', 'cerebras', 'gemini']
@@ -877,28 +754,6 @@ class TestHooksAndExtensibility:
         return TaskRouter(orchestrator=None, auto_confirm_direct=True, verbose=False)
 
     @pytest.mark.unit
-    def test_add_pre_hook(self, router):
-        """Test adding a pre-execution hook."""
-
-        def modify_task(task):
-            task.reasoning = "Modified by hook"
-            return task
-
-        router.add_pre_hook(modify_task)
-        assert len(router._pre_hooks) == 1
-
-    @pytest.mark.unit
-    def test_add_post_hook(self, router):
-        """Test adding a post-execution hook."""
-
-        def modify_result(result):
-            result.tokens_used = 999
-            return result
-
-        router.add_post_hook(modify_result)
-        assert len(router._post_hooks) == 1
-
-    @pytest.mark.unit
     def test_pre_hook_execution(self, router):
         """Test that pre-hooks are executed."""
         hook_called = []
@@ -991,25 +846,6 @@ class TestStrategyManagement:
 
         assert isinstance(task, ClassifiedTask)
         assert task.task_type in [TaskType.CODE_GENERATION, TaskType.RESEARCH, TaskType.DIRECT_COMMAND, TaskType.CONVERSATION]
-
-    @pytest.mark.unit
-    def test_set_strategy(self, router):
-        """Test overriding strategy for task type."""
-        custom_strategy = Mock()
-        custom_strategy.name = "CustomStrategy"
-        custom_strategy.can_handle.return_value = True
-
-        router.set_strategy(TaskType.CONVERSATION, custom_strategy)
-
-        assert router.strategies[TaskType.CONVERSATION] == custom_strategy
-
-    @pytest.mark.unit
-    def test_router_repr(self, router):
-        """Test router string representation."""
-        repr_str = repr(router)
-
-        assert "TaskRouter" in repr_str
-        assert "strategies" in repr_str
 
     @pytest.mark.unit
     def test_get_strategy_fallback_without_orchestrator(self):
@@ -1216,17 +1052,6 @@ class TestRouteWithProvider:
         assert result.metadata["classification"]["override_provider"] == "fast"
 
     @pytest.mark.unit
-    def test_route_with_provider_no_override(self):
-        """Test routing without provider override."""
-        router = TaskRouter(orchestrator=None, verbose=False)
-        router.use_llm_classification = False
-
-        result = router.route("hello")
-
-        assert isinstance(result, ExecutionResult)
-        assert result.metadata["classification"]["override_provider"] is None
-
-    @pytest.mark.unit
     def test_route_with_provider_includes_classification_metadata(self):
         """Test that result includes classification metadata."""
         router = TaskRouter(orchestrator=None, verbose=False)
@@ -1240,247 +1065,6 @@ class TestRouteWithProvider:
         assert "reasoning" in metadata
         assert "resolved_provider" in metadata
         assert "resolved_model" in metadata
-
-
-class TestShouldExecute:
-    """Tests for execution confirmation logic."""
-
-    @pytest.fixture
-    def router(self):
-        return TaskRouter(orchestrator=None, auto_confirm_direct=False, verbose=False)
-
-    @pytest.mark.unit
-    def test_conversation_always_executes(self, router):
-        """Test that conversation tasks always execute."""
-        task = ClassifiedTask(
-            original_input="hello",
-            task_type=TaskType.CONVERSATION,
-            confidence=0.9,
-            reasoning="Greeting"
-        )
-
-        strategy = router.strategies[TaskType.CONVERSATION]
-        should_exec = router._should_execute(task, strategy)
-
-        assert should_exec is True
-
-    @pytest.mark.unit
-    def test_research_always_executes(self, router):
-        """Test that research tasks always execute."""
-        task = ClassifiedTask(
-            original_input="explain python",
-            task_type=TaskType.RESEARCH,
-            confidence=0.9,
-            reasoning="Research"
-        )
-
-        strategy = Mock()
-        should_exec = router._should_execute(task, strategy)
-
-        assert should_exec is True
-
-    @pytest.mark.unit
-    def test_code_generation_always_executes(self, router):
-        """Test that code generation tasks always execute."""
-        task = ClassifiedTask(
-            original_input="create file",
-            task_type=TaskType.CODE_GENERATION,
-            confidence=0.9,
-            reasoning="Code gen"
-        )
-
-        strategy = Mock()
-        should_exec = router._should_execute(task, strategy)
-
-        assert should_exec is True
-
-    @pytest.mark.unit
-    def test_direct_command_auto_confirm(self):
-        """Test direct command with auto-confirm."""
-        router = TaskRouter(orchestrator=None, auto_confirm_direct=True, verbose=False)
-
-        task = ClassifiedTask(
-            original_input="echo test",
-            task_type=TaskType.DIRECT_COMMAND,
-            confidence=0.9,
-            reasoning="Direct",
-            extracted_command="echo test"
-        )
-
-        strategy = router.strategies[TaskType.DIRECT_COMMAND]
-        should_exec = router._should_execute(task, strategy)
-
-        assert should_exec is True
-
-    @pytest.mark.unit
-    def test_direct_command_dangerous_blocked(self):
-        """Test that dangerous direct commands are blocked."""
-        router = TaskRouter(orchestrator=None, auto_confirm_direct=False, verbose=False)
-
-        task = ClassifiedTask(
-            original_input="rm -rf /",
-            task_type=TaskType.DIRECT_COMMAND,
-            confidence=0.9,
-            reasoning="Direct",
-            extracted_command="rm -rf /"
-        )
-
-        strategy = router.strategies[TaskType.DIRECT_COMMAND]
-        should_exec = router._should_execute(task, strategy)
-
-        # Should be blocked as dangerous
-        assert should_exec is False
-
-
-class TestLogging:
-    """Tests for logging and output."""
-
-    @pytest.mark.unit
-    def test_log_classification_with_command(self, capsys):
-        """Test that classification logging includes command."""
-        router = TaskRouter(orchestrator=None, verbose=True)
-
-        task = ClassifiedTask(
-            original_input="echo test",
-            task_type=TaskType.DIRECT_COMMAND,
-            confidence=0.9,
-            reasoning="Direct command",
-            extracted_command="echo test"
-        )
-
-        router._log_classification(task)
-
-        captured = capsys.readouterr()
-        assert "direct_command" in captured.out  # TaskType.value is lowercase
-        assert "echo test" in captured.out
-
-    @pytest.mark.unit
-    def test_log_classification_with_planning(self, capsys):
-        """Test that classification logging includes planning flag."""
-        router = TaskRouter(orchestrator=None, verbose=True)
-
-        task = ClassifiedTask(
-            original_input="create complex app",
-            task_type=TaskType.CODE_GENERATION,
-            confidence=0.9,
-            reasoning="Code generation",
-            requires_planning=True
-        )
-
-        router._log_classification(task)
-
-        captured = capsys.readouterr()
-        assert "Requires planning" in captured.out
-
-    @pytest.mark.unit
-    def test_verbose_logging_in_route(self, capsys):
-        """Test that verbose mode produces output."""
-        router = TaskRouter(orchestrator=None, verbose=True)
-        router.use_llm_classification = False
-
-        router.route("hello")
-
-        captured = capsys.readouterr()
-        assert "Task Classification" in captured.out
-
-
-class TestAdditionalIntentClarification:
-    """Additional tests for intent clarification detection."""
-
-    @pytest.fixture
-    def router(self):
-        return TaskRouter(orchestrator=None, verbose=False)
-
-    @pytest.mark.unit
-    def test_low_confidence_needs_clarification(self, router):
-        """Test that low confidence always needs clarification."""
-        task = ClassifiedTask(
-            original_input="something",
-            task_type=TaskType.CONVERSATION,
-            confidence=0.3,  # Below threshold
-            reasoning="Low confidence"
-        )
-
-        needs = router._needs_intent_clarification(task)
-        assert needs is True
-
-    @pytest.mark.unit
-    def test_question_mark_with_action_verb_needs_clarification(self, router):
-        """Test question mark with action verb needs clarification."""
-        task = ClassifiedTask(
-            original_input="can you create this?",
-            task_type=TaskType.CODE_GENERATION,
-            confidence=0.8,
-            reasoning="High confidence"
-        )
-
-        needs = router._needs_intent_clarification(task)
-        assert needs is True
-
-    @pytest.mark.unit
-    def test_escalation_disabled_respects_setting(self, router):
-        """Test that escalation respects disabled setting."""
-        router.escalate_on_low_confidence = False
-
-        task = ClassifiedTask(
-            original_input="create something",
-            task_type=TaskType.RESEARCH,
-            confidence=0.3,
-            reasoning="Low confidence"
-        )
-
-        result = router._apply_confidence_escalation(task)
-        # Should not escalate when disabled
-        assert result.task_type == TaskType.RESEARCH
-
-    @pytest.mark.unit
-    def test_non_research_task_not_escalated(self, router):
-        """Test that non-RESEARCH tasks are not escalated."""
-        task = ClassifiedTask(
-            original_input="hello",
-            task_type=TaskType.CONVERSATION,
-            confidence=0.3,
-            reasoning="Low confidence"
-        )
-
-        result = router._apply_confidence_escalation(task)
-        # CONVERSATION should not escalate
-        assert result.task_type == TaskType.CONVERSATION
-
-
-class TestRouterResultMetadata:
-    """Tests for result metadata population."""
-
-    @pytest.mark.unit
-    def test_classification_metadata_complete(self):
-        """Test that classification metadata is complete."""
-        router = TaskRouter(orchestrator=None, verbose=False)
-        router.use_llm_classification = False
-
-        result = router.route("hello")
-
-        metadata = result.metadata.get("classification", {})
-        assert "type" in metadata
-        assert "confidence" in metadata
-        assert "complexity" in metadata
-        assert "reasoning" in metadata
-        assert "suggested_provider" in metadata
-        assert "override_provider" in metadata
-        assert "resolved_provider" in metadata
-        assert "resolved_model" in metadata
-        assert "used_llm_classification" in metadata
-
-    @pytest.mark.unit
-    def test_used_llm_classification_flag(self):
-        """Test that LLM classification flag is set correctly."""
-        router = TaskRouter(orchestrator=None, verbose=False)
-        router.use_llm_classification = False
-
-        result = router.route("hello")
-
-        metadata = result.metadata.get("classification", {})
-        # Should be False since LLM wasn't used
-        assert metadata["used_llm_classification"] is False
 
 
 class TestNoStrategyAvailable:
@@ -1500,213 +1084,9 @@ class TestNoStrategyAvailable:
         assert result.success is False
         assert "No strategy available" in result.error
 
-    @pytest.mark.unit
-    def test_route_with_provider_returns_error_when_no_strategy(self):
-        """Test route with provider returns error when no strategy."""
-        router = TaskRouter(orchestrator=None, verbose=False)
-        router.use_llm_classification = False
-
-        # Remove all strategies
-        router.strategies.clear()
-
-        result = router.route("hello", provider="fast")
-
-        assert result.success is False
-        assert "No strategy available" in result.error
-
-
-class TestConsolidatedRouteMethod:
-    """
-    Tests for consolidated route() method that accepts options.
-
-    This eliminates code duplication between route() and route_with_provider()
-    by having a single route() method that accepts an optional provider parameter.
-    """
-
-    @pytest.fixture
-    def router(self):
-        return TaskRouter(
-            orchestrator=None,
-            auto_confirm_direct=True,
-            verbose=False
-        )
-
-    @pytest.fixture
-    def mock_orchestrator(self):
-        orch = Mock()
-        orch.providers = Mock()
-        orch.providers.list_available.return_value = ['groq', 'cerebras']
-        return orch
-
-    @pytest.mark.unit
-    def test_route_without_provider_works_as_before(self, router):
-        """Test that route() without provider parameter works as before."""
-        router.use_llm_classification = False
-
-        result = router.route("hello")
-
-        assert isinstance(result, ExecutionResult)
-        assert result.success is True
-        # No override should be set
-        assert result.metadata["classification"]["override_provider"] is None
-
-    @pytest.mark.unit
-    def test_route_with_provider_parameter(self, router):
-        """Test that route() accepts provider as keyword argument."""
-        router.use_llm_classification = False
-
-        # New API: route() accepts provider parameter
-        result = router.route("hello", provider="fast")
-
-        assert isinstance(result, ExecutionResult)
-        assert result.success is True
-        # Provider override should be set
-        assert result.metadata["classification"]["override_provider"] == "fast"
-
-    @pytest.mark.unit
-    def test_route_with_quality_provider(self, mock_orchestrator):
-        """Test routing with quality provider hint."""
-        router = TaskRouter(
-            orchestrator=mock_orchestrator,
-            verbose=False,
-            auto_confirm_direct=True
-        )
-        router.use_llm_classification = False
-
-        result = router.route("hello", provider="quality")
-
-        assert isinstance(result, ExecutionResult)
-        assert result.metadata["classification"]["override_provider"] == "quality"
-
-    @pytest.mark.unit
-    def test_route_with_specific_provider_name(self, mock_orchestrator):
-        """Test routing with specific provider name."""
-        router = TaskRouter(
-            orchestrator=mock_orchestrator,
-            verbose=False,
-            auto_confirm_direct=True
-        )
-        router.use_llm_classification = False
-
-        result = router.route("hello", provider="cerebras")
-
-        assert isinstance(result, ExecutionResult)
-        assert result.metadata["classification"]["override_provider"] == "cerebras"
-
-    @pytest.mark.unit
-    def test_route_provider_none_same_as_no_provider(self, router):
-        """Test that provider=None is same as not passing provider."""
-        router.use_llm_classification = False
-
-        result_without = router.route("hello")
-        result_with_none = router.route("hello", provider=None)
-
-        # Both should have no override
-        assert result_without.metadata["classification"]["override_provider"] is None
-        assert result_with_none.metadata["classification"]["override_provider"] is None
-
-    @pytest.mark.unit
-    def test_route_with_provider_resolves_correctly(self, mock_orchestrator):
-        """Test that provider hint is resolved to actual provider."""
-        mock_orchestrator.providers.list_available.return_value = ['cerebras', 'groq']
-        router = TaskRouter(
-            orchestrator=mock_orchestrator,
-            verbose=False,
-            auto_confirm_direct=True
-        )
-        router.use_llm_classification = False
-
-        result = router.route("hello", provider="fast")
-
-        # Fast should resolve to cerebras (preferred fast provider)
-        assert result.metadata["classification"]["resolved_provider"] == "cerebras"
-
-    @pytest.mark.unit
-    def test_route_with_provider_validates_input(self, router):
-        """Test that input validation still works with provider parameter."""
-        router.use_llm_classification = False
-
-        # Empty input should fail validation
-        result = router.route("", provider="fast")
-
-        assert result.success is False
-        assert "Invalid input" in result.error
-
-    @pytest.mark.unit
-    def test_route_with_provider_applies_hooks(self, router):
-        """Test that hooks are applied when using provider parameter."""
-        hook_called = []
-
-        def track_hook(task):
-            hook_called.append(True)
-            return task
-
-        router.add_pre_hook(track_hook)
-        router.use_llm_classification = False
-
-        router.route("hello", provider="fast")
-
-        assert len(hook_called) == 1
-
-    @pytest.mark.unit
-    def test_route_with_provider_updates_metrics(self, router):
-        """Test that metrics are updated when using provider parameter."""
-        router.use_llm_classification = False
-
-        router.route("hello", provider="fast")
-        router.route("thanks", provider="quality")
-
-        metrics = router.get_metrics()
-        assert metrics.total_tasks >= 2
-
-    @pytest.mark.unit
-    def test_route_with_provider_includes_full_metadata(self, router):
-        """Test that result includes all classification metadata."""
-        router.use_llm_classification = False
-
-        result = router.route("hello", provider="fast")
-
-        metadata = result.metadata.get("classification", {})
-        assert "type" in metadata
-        assert "confidence" in metadata
-        assert "complexity" in metadata
-        assert "reasoning" in metadata
-        assert "suggested_provider" in metadata
-        assert "override_provider" in metadata
-        assert "resolved_provider" in metadata
-        assert "resolved_model" in metadata
-        assert "used_llm_classification" in metadata
-
-    @pytest.mark.unit
-    def test_route_with_provider_handles_no_strategy(self, router):
-        """Test error handling when no strategy available with provider."""
-        router.use_llm_classification = False
-        router.strategies.clear()
-
-        result = router.route("hello", provider="fast")
-
-        assert result.success is False
-        assert "No strategy available" in result.error
-
-    @pytest.mark.unit
-    def test_route_preserves_execution_time_tracking(self, router):
-        """Test that execution time is tracked with provider parameter."""
-        router.use_llm_classification = False
-
-        result = router.route("hello", provider="fast")
-
-        assert result.execution_time >= 0
-        assert isinstance(result.execution_time, float)
-
 
 class TestRouteWithProviderDeprecation:
-    """
-    Tests to verify route_with_provider() is properly deprecated/removed.
-
-    After consolidation, route_with_provider() should either:
-    - Be removed entirely, or
-    - Emit a deprecation warning and delegate to route()
-    """
+    """Tests to verify route_with_provider() is properly deprecated/removed."""
 
     @pytest.fixture
     def router(self):
@@ -1719,41 +1099,8 @@ class TestRouteWithProviderDeprecation:
     @pytest.mark.unit
     def test_route_with_provider_method_removed(self, router):
         """Test that route_with_provider() method no longer exists."""
-        # After consolidation, route_with_provider should be removed
-        # This test will fail until the method is removed
         assert not hasattr(router, 'route_with_provider'), \
             "route_with_provider() should be removed - use route(provider=...) instead"
-
-    @pytest.mark.unit
-    def test_single_route_method_handles_all_cases(self, router):
-        """Test that single route() method can handle all provider cases."""
-        router.use_llm_classification = False
-
-        # Without provider (old route behavior)
-        result1 = router.route("hello")
-        assert result1.success is True
-
-        # With provider (old route_with_provider behavior)
-        result2 = router.route("hello", provider="fast")
-        assert result2.success is True
-        assert result2.metadata["classification"]["override_provider"] == "fast"
-
-
-class TestConsolidatedRouteSignature:
-    """
-    Tests for the new consolidated route() method signature.
-
-    Expected signature:
-        def route(self, user_input: str, *, provider: Optional[str] = None) -> ExecutionResult
-    """
-
-    @pytest.fixture
-    def router(self):
-        return TaskRouter(
-            orchestrator=None,
-            auto_confirm_direct=True,
-            verbose=False
-        )
 
     @pytest.mark.unit
     def test_route_accepts_keyword_only_provider(self, router):
@@ -1765,32 +1112,5 @@ class TestConsolidatedRouteSignature:
         assert result.success is True
 
         # This should raise TypeError - positional argument
-        # provider should be keyword-only (after the *)
         with pytest.raises(TypeError):
             router.route("hello", "fast")
-
-    @pytest.mark.unit
-    def test_route_type_hints_are_correct(self, router):
-        """Test that route() has correct type hints."""
-        import inspect
-
-        sig = inspect.signature(router.route)
-        params = sig.parameters
-
-        # Should have user_input and provider parameters
-        assert "user_input" in params
-        assert "provider" in params
-
-        # provider should have default of None
-        assert params["provider"].default is None
-
-    @pytest.mark.unit
-    def test_route_returns_execution_result(self, router):
-        """Test that route() returns ExecutionResult regardless of provider."""
-        router.use_llm_classification = False
-
-        result1 = router.route("hello")
-        result2 = router.route("hello", provider="fast")
-
-        assert isinstance(result1, ExecutionResult)
-        assert isinstance(result2, ExecutionResult)

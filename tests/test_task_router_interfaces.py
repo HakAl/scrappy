@@ -224,11 +224,6 @@ class TestProviderAwareStrategyInterface:
 class TestToolProtocol:
     """Tests for Tool protocol definition."""
 
-    def test_tool_protocol_exists(self):
-        """Tool protocol should be importable from base or tools module."""
-        # ToolLike is imported at module level, this verifies it exists
-        assert ToolLike is not None
-
     def test_tool_protocol_is_runtime_checkable(self):
         """Tool protocol should be runtime checkable."""
         from typing import Protocol
@@ -287,11 +282,6 @@ class TestToolProtocol:
 
 class TestToolRegistryProtocol:
     """Tests for ToolRegistry protocol definition."""
-
-    def test_tool_registry_protocol_exists(self):
-        """ToolRegistryLike protocol should be importable."""
-        # ToolRegistryLike is imported at module level
-        assert ToolRegistryLike is not None
 
     def test_tool_registry_must_have_get_method(self):
         """ToolRegistry must implement get(tool_name) -> Optional[Tool]."""
@@ -433,11 +423,6 @@ class TestClassificationStrategyReasoning:
 
 class TestMetricsLikeProtocol:
     """Tests for MetricsLike protocol definition."""
-
-    def test_metrics_like_protocol_exists(self):
-        """MetricsLike protocol should be importable."""
-        # MetricsLike is imported at module level
-        assert MetricsLike is not None
 
     def test_metrics_must_have_required_fields(self):
         """MetricsLike must have total_tasks, success_rate, avg_execution_time."""

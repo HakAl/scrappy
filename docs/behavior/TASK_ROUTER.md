@@ -1,3 +1,44 @@
+<!-- todo -->
+
+---
+  Recommendations
+
+  1. Configuration consolidation - Consider a RouterConfig dataclass for all thresholds/settings
+  2. Pattern weight configuration - Allow runtime/file-based pattern weight adjustment
+  3. Metrics persistence - Add optional persistence for MetricsCollector
+
+  ---
+  3. Fragile Pattern Matching
+
+  Evidence:
+  - Strategy pattern with pluggable ClassificationStrategy implementations
+  - LLM-augmented classification for disambiguation
+  - Intent clarification for ambiguous cases
+  - Confidence scoring with escalation logic
+
+  Remaining concerns:
+  - Pattern weights still hardcoded in strategy classes
+  - Could benefit from configurable patterns or learned weights
+
+  Location: classification_strategies/*.py
+
+  ---
+  15. Configuration Scattered ⚠️ IMPROVED
+
+  Evidence:
+  - Router configuration centralized in constructor
+  - Behavior switches on router instance:
+    - clarify_on_low_confidence
+    - confidence_threshold
+    - escalate_on_low_confidence
+    - use_llm_classification
+
+  Remaining concerns:
+  - Some thresholds hardcoded (e.g., 0.7 in pure_functions)
+  - Pattern weights in strategy classes
+  - Consider centralizing to a config object
+
+
 # Task Router 
 
 The Task Router is an intelligent dispatch system that:
@@ -55,33 +96,4 @@ TaskClassifier
   ]
   classifier = TaskClassifier(strategies=custom_strategies)
   ```
-
-  Critical Issues
-
-  1. Poor Testability - Interactive I/O
-  2. Massive Files - Single Responsibility Violation
-  3. Fragile Pattern Matching
-  4. Duplicated Code
-  5. Complex JSON Parsing with No Error Recovery
-  6. Mixed Concerns & God Objects
-  7. Shallow Tests That Don't Prove Correctness
-
-  Code Quality Issues
-
-  8. Side Effects Everywhere
-  9. No Validation
-  10. Tight Coupling
-
-  Test Quality Issues
-
-  11. Tests Don't Follow TDD (violates CLAUDE.md)
-  12. Over-reliance on Mocks Without Behavior Verification
-  13. Skipped Tests Indicate Design Problems
-
-  Architecture Issues
-
-  14. No Clear Abstractions
-  15. Configuration Scattered
-
-
   
