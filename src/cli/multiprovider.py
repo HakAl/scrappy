@@ -26,7 +26,25 @@ class CLIMultiProvider:
         self.orchestrator = orchestrator
 
     def synthesize_mode(self, io: Optional[CLIIOProtocol] = None):
-        """Interactive synthesis mode - gather responses from multiple providers."""
+        """Interactive synthesis mode - gather responses from multiple providers.
+
+        Prompts user for a question and provider selection, queries each selected
+        provider, then synthesizes their responses into a combined answer.
+
+        Args:
+            io: I/O interface for input/output. Defaults to ClickIO if None.
+
+        State Changes:
+            - Adds discovery to orchestrator working memory with synthesis info
+
+        Side Effects:
+            - Prompts user for question and provider selection via io
+            - Makes multiple LLM API calls (one per provider + synthesis)
+            - Writes progress and results to stdout via io
+
+        Returns:
+            None
+        """
         if io is None:
             io = ClickIO()
 
@@ -87,7 +105,28 @@ class CLIMultiProvider:
         )
 
     def delegate_mode(self, args: str, io: Optional[CLIIOProtocol] = None):
-        """Delegate a task to a specific provider."""
+        """Delegate a task to a specific provider.
+
+        Sends a prompt directly to a specified provider, bypassing the default
+        brain. Useful for comparing provider responses or using specific
+        provider capabilities.
+
+        Args:
+            args: Space-separated string of "provider prompt". If empty,
+                prompts user interactively for both.
+            io: I/O interface for input/output. Defaults to ClickIO if None.
+
+        State Changes:
+            - Adds discovery to orchestrator working memory with delegation info
+
+        Side Effects:
+            - May prompt user for provider/prompt via io
+            - Makes LLM API call to specified provider
+            - Writes response to stdout via io
+
+        Returns:
+            None
+        """
         if io is None:
             io = ClickIO()
 

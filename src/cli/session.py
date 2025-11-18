@@ -38,15 +38,72 @@ class CLISessionManager:
         self._session_persistence = SessionPersistence(orchestrator)
 
     def manage_context(self, args: str = "", io: Optional[CLIIOProtocol] = None) -> None:
-        """Manage codebase context."""
+        """Manage codebase context through the context manager.
+
+        Delegates to ContextManager to handle context operations like exploring,
+        refreshing, clearing, and toggling context awareness.
+
+        Args:
+            args: Command arguments (explore|refresh|clear|clearmem|toggle).
+                Empty string shows context status.
+            io: I/O interface for output. Defaults to ClickIO if None.
+
+        State Changes:
+            - May modify orchestrator.context_aware flag (toggle)
+            - May clear context cache (clear)
+            - May populate context with project data (explore/refresh)
+
+        Side Effects:
+            - Writes status or confirmation to stdout via io
+
+        Returns:
+            None
+        """
         self._context_manager.manage_context(args, io)
 
     def manage_cache(self, args: str = "", io: Optional[CLIIOProtocol] = None) -> None:
-        """Manage response cache."""
+        """Manage response cache through the cache manager.
+
+        Delegates to CacheManager to handle cache operations like showing stats,
+        clearing cache, and toggling caching on/off.
+
+        Args:
+            args: Command arguments (clear|toggle). Empty string shows cache stats.
+            io: I/O interface for output. Defaults to ClickIO if None.
+
+        State Changes:
+            - May toggle orchestrator caching state (toggle)
+            - May clear all cached responses (clear)
+
+        Side Effects:
+            - Writes cache statistics or confirmation to stdout via io
+
+        Returns:
+            None
+        """
         self._cache_manager.manage_cache(args, io)
 
     def show_rate_limits(self, args: str = "", io: Optional[CLIIOProtocol] = None) -> None:
-        """Show rate limit usage (persistent tracking)."""
+        """Show rate limit usage with persistent tracking.
+
+        Delegates to RateLimiter to display rate limit information. Tracks usage
+        across sessions via persistent storage.
+
+        Args:
+            args: Optional provider name to show specific provider limits,
+                or 'reset' to reset tracking. Empty string shows all providers.
+            io: I/O interface for output. Defaults to ClickIO if None.
+
+        State Changes:
+            - May reset persistent rate limit tracking (reset)
+
+        Side Effects:
+            - Writes rate limit statistics to stdout via io
+            - Reads/writes persistent rate limit data
+
+        Returns:
+            None
+        """
         self._rate_limiter.show_rate_limits(args, io)
 
     def manage_session(

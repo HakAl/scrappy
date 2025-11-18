@@ -43,8 +43,18 @@ class CLISmartQuery:
     def _safe_tool_call(self, tool_func, *args, **kwargs):
         """Safely call a tool function and handle errors.
 
+        Wraps tool function calls in try/except to prevent research failures
+        from crashing the entire smart query operation.
+
+        Args:
+            tool_func: The tool function to call.
+            *args: Positional arguments to pass to tool_func.
+            **kwargs: Keyword arguments to pass to tool_func.
+
         Returns:
-            Tuple of (success: bool, result: str)
+            tuple: (success: bool, result: str)
+                - success is True if the call succeeded and result has content
+                - result is the tool output or error message
         """
         try:
             result = tool_func(*args, **kwargs)
@@ -57,8 +67,29 @@ class CLISmartQuery:
     def smart_query(self, query: str):
         """Perform a smart query using tools to gather context before answering.
 
+        Classifies the query intent, executes relevant research actions using
+        code analysis tools, then generates an informed response with the
+        gathered context.
+
+        Supported intents include: file structure, code search, code explanation,
+        git history, dependencies, architecture, bug investigation, testing,
+        configuration, security, and documentation.
+
+        Args:
+            query: The user's question or query string.
+
+        State Changes:
+            - Saves research results to orchestrator working memory
+            - Adds discovery to orchestrator with query classification info
+
+        Side Effects:
+            - Writes progress messages to stdout via click
+            - Reads files and searches codebase using CodeAgent tools
+            - Makes LLM API call to generate response
+
         Returns:
-            LLMResponse object with the answer
+            LLMResponse: The response object containing the answer, provider info,
+                token usage, and latency.
         """
         click.secho("\n[Smart Query] Analyzing intent...", fg="cyan", bold=True)
 

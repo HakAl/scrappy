@@ -53,7 +53,31 @@ class CLICodebaseAnalysis:
         self.orchestrator = orchestrator
 
     def explore_codebase(self, path: str = "", io: Optional[CLIIOProtocol] = None):
-        """Explore and learn about a codebase."""
+        """Explore and generate a comprehensive summary of a codebase.
+
+        Scans the directory structure, reads key files, and uses LLM to generate
+        a summary including project type, purpose, technologies, and architecture.
+
+        For the current project directory, uses context-aware exploration with
+        persistence. For external directories, performs standalone exploration.
+
+        Args:
+            path: Directory path to explore. If empty, prompts user for input.
+            io: I/O interface for output. Defaults to ClickIO if None.
+
+        State Changes:
+            - Adds discovery to orchestrator working memory
+            - For current project: Updates orchestrator.context with exploration data
+
+        Side Effects:
+            - Reads files from disk to analyze codebase
+            - Makes LLM API call to generate summary
+            - Writes progress and summary to stdout via io/click
+            - May write CODEBASE_SUMMARY.md file if user confirms
+
+        Returns:
+            None
+        """
         if io is None:
             io = ClickIO()
 
@@ -139,7 +163,18 @@ class CLICodebaseAnalysis:
             io.secho(f"Saved to: {summary_file}", fg="green")
 
     def _find_source_files(self, path: Path) -> dict:
-        """Find all source files organized by type."""
+        """Find all source files organized by type/category.
+
+        Walks the directory tree, skipping common non-source directories,
+        and categorizes files by extension (python, javascript, config, etc.).
+
+        Args:
+            path: Root directory path to scan.
+
+        Returns:
+            dict: Mapping of category names to lists of relative file paths.
+                Categories include: python, javascript, config, docs, other.
+        """
         files = {k: [] for k in EXTENSIONS_BY_CATEGORY}
 
         for root, dirs, filenames in os.walk(path):
@@ -168,7 +203,22 @@ class CLICodebaseAnalysis:
         return files
 
     def _analyze_structure(self, path: Path, files: dict) -> dict:
-        """Analyze the project structure."""
+        """Analyze the project structure and detect project type indicators.
+
+        Examines the root directory for common project indicators like
+        README, requirements.txt, package.json, pyproject.toml, and .git.
+
+        Args:
+            path: Root directory path to analyze.
+            files: Pre-scanned files dict from _find_source_files.
+
+        Returns:
+            dict: Structure information containing:
+                - total_files: Total count of all files
+                - by_type: Counts by file category
+                - has_readme, has_requirements, etc.: Boolean indicators
+                - directories: List of top-level directory names
+        """
         structure = {
             'total_files': sum(len(f) for f in files.values()),
             'by_type': {k: len(v) for k, v in files.items()},
@@ -188,7 +238,21 @@ class CLICodebaseAnalysis:
         return structure
 
     def _read_key_files(self, path: Path, files: dict) -> dict:
-        """Read contents of key files for analysis."""
+        """Read contents of key files for LLM analysis.
+
+        Reads priority files (README, requirements.txt, etc.) and a selection
+        of main Python files to provide context for the LLM summary.
+
+        Args:
+            path: Root directory path.
+            files: Pre-scanned files dict from _find_source_files.
+
+        Returns:
+            dict: Mapping of filename to file content (truncated if too large).
+
+        Side Effects:
+            - Reads multiple files from disk
+        """
         key_contents = {}
 
         for filename in PRIORITY_FILES:
@@ -236,7 +300,23 @@ class CLICodebaseAnalysis:
         return key_contents
 
     def _generate_codebase_summary(self, path: Path, structure: dict, contents: dict) -> str:
-        """Use LLM to generate a codebase summary."""
+        """Use LLM to generate a comprehensive codebase summary.
+
+        Builds a prompt from structure analysis and file contents, then
+        delegates to the orchestrator's brain to generate a summary covering
+        project type, purpose, technologies, architecture, and potential issues.
+
+        Args:
+            path: Root directory path.
+            structure: Structure analysis from _analyze_structure.
+            contents: Key file contents from _read_key_files.
+
+        Returns:
+            str: LLM-generated summary text, or error message if generation fails.
+
+        Side Effects:
+            - Makes LLM API call via orchestrator.delegate
+        """
         # Build context
         context_parts = [
             f"Project directory: {path.name}",

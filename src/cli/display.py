@@ -21,7 +21,18 @@ class CLIDisplay:
         self.session_start = session_start
 
     def show_help(self):
-        """Display help information."""
+        """Display help information showing all available CLI commands.
+
+        Outputs a formatted list of all available commands grouped by category
+        (Chat, Task Operations, Provider Management, Context, Cache, Rate Limits,
+        Session, System).
+
+        Side Effects:
+            - Writes formatted help text to stdout via click
+
+        Returns:
+            None
+        """
         click.secho("\nAvailable Commands:", fg="cyan", bold=True)
         click.secho("-" * 50, fg="cyan")
         click.secho("Chat & Conversation:", bold=True)
@@ -76,7 +87,20 @@ class CLIDisplay:
         click.echo("  /quit or /exit   - Exit the CLI")
 
     def show_status(self):
-        """Display current system status."""
+        """Display current system status including brain, providers, and session info.
+
+        Retrieves status from the orchestrator and displays:
+        - Current brain provider
+        - Total and available providers
+        - Tasks completed count
+        - Session duration
+
+        Side Effects:
+            - Writes formatted status to stdout via click
+
+        Returns:
+            None
+        """
         status = self.orchestrator.status()
 
         click.secho("\nSystem Status:", fg="cyan", bold=True)
@@ -89,7 +113,17 @@ class CLIDisplay:
         click.echo(f"Session Duration: {datetime.now() - self.session_start}")
 
     def list_providers(self):
-        """List all providers with their details."""
+        """List all providers with their configuration and rate limit details.
+
+        Displays each provider's availability status, default model, rate limits
+        (requests/day, tokens/minute, tokens/day), and available models.
+
+        Side Effects:
+            - Writes formatted provider list to stdout via click
+
+        Returns:
+            None
+        """
         click.secho("\nAvailable Providers:", fg="cyan", bold=True)
         click.secho("-" * 50, fg="cyan")
 
@@ -115,7 +149,21 @@ class CLIDisplay:
                 click.secho("(Not Configured)", fg="red")
 
     def switch_brain(self, provider_name: str):
-        """Switch the orchestrator brain to a different provider."""
+        """Switch the orchestrator's primary brain to a different provider.
+
+        Args:
+            provider_name: Name of the provider to switch to. If empty, displays
+                current brain and available providers.
+
+        State Changes:
+            - Sets orchestrator.brain to the new provider name
+
+        Side Effects:
+            - Writes confirmation or error message to stdout via click
+
+        Returns:
+            None
+        """
         if not provider_name:
             click.echo(f"Current brain: {click.style(self.orchestrator.brain, fg='green', bold=True)}")
             click.echo(f"Available: {', '.join(self.orchestrator.providers.list_available())}")
@@ -135,7 +183,21 @@ class CLIDisplay:
         click.secho(f"Brain switched: {old_brain} -> {provider_name}", fg="green")
 
     def show_usage(self):
-        """Display usage statistics."""
+        """Display usage statistics for the current session.
+
+        Shows aggregate and per-provider statistics including:
+        - Total tasks executed
+        - Cache hits and API calls
+        - Session duration
+        - Per-provider request counts, token usage, and latency
+        - Cache hit rates and entry counts
+
+        Side Effects:
+            - Writes formatted usage report to stdout via click
+
+        Returns:
+            None
+        """
         report = self.orchestrator.get_usage_report()
 
         click.secho("\nUsage Statistics:", fg="cyan", bold=True)
@@ -166,7 +228,18 @@ class CLIDisplay:
             click.echo(f"  Entries: {total_entries}")
 
     def list_models(self, provider_name: str = ""):
-        """List available models."""
+        """List available models for one or all providers.
+
+        Args:
+            provider_name: Specific provider to list models for. If empty,
+                lists models for all available providers.
+
+        Side Effects:
+            - Writes formatted model list to stdout via click
+
+        Returns:
+            None
+        """
         if provider_name:
             provider_name = provider_name.lower().strip()
             available = self.orchestrator.providers.list_available()

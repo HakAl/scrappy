@@ -26,7 +26,35 @@ class ContextManager:
         self.orchestrator = orchestrator
 
     def manage_context(self, args: str = "", io: Optional[CLIIOProtocol] = None):
-        """Manage codebase context."""
+        """Manage codebase context, working memory, and context awareness settings.
+
+        Handles multiple subcommands:
+        - (no args): Display context status, working memory, and project summary
+        - explore: Explore project using cache if available
+        - refresh: Force re-exploration of the project
+        - clear: Clear cached context data
+        - clearmem: Clear session working memory
+        - toggle: Toggle context-aware prompts on/off
+
+        Args:
+            args: Subcommand string (explore|refresh|clear|clearmem|toggle).
+                Empty string displays status.
+            io: I/O interface for output. Defaults to ClickIO if None.
+
+        State Changes:
+            - explore/refresh: Populates orchestrator.context with project data
+            - clear: Removes cached context from disk
+            - clearmem: Clears orchestrator working memory
+            - toggle: Flips orchestrator.context_aware boolean
+
+        Side Effects:
+            - Writes formatted output to stdout via io
+            - explore/refresh: May read many files from disk
+            - clear: Deletes context cache file
+
+        Returns:
+            None
+        """
         if io is None:
             io = ClickIO()
 
