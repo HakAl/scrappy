@@ -159,14 +159,11 @@ TaskClassifier
 
  
 we're working to improve src\task_router the next task is: 
-Remove Code Duplication - Extract common provider logic - Single source of truth
+Remove Code Duplication - Reuse JSON parsing - One robust implementation
 can you research the problem and begin writing tests for the change?
 
 
-  Phase 4: Remove Code Duplication
-
-  2. Extract common provider logic - Single source of truth
-  3. Reuse JSON parsing - One robust implementation
+  Phase 4: Remove Code Duplication - Reuse JSON parsing - One robust implementation
 
   Phase 5: Improve Architecture
 

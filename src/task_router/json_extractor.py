@@ -5,7 +5,15 @@ Extracts JSON from various formats:
 - Markdown code blocks (```json ... ```)
 - Generic code blocks (``` ... ```)
 - Plain text with JSON objects
+
+Also provides:
+- fix_json: Fix Python booleans/None and single quotes
+- parse: Extract + fix + parse to dict in one step
 """
+
+import json
+import re
+from typing import Any
 
 
 class JSONExtractor:
@@ -167,3 +175,84 @@ class JSONExtractor:
         # Extract from first { to last }
         content = text[start_idx:end_idx + 1]
         return content
+
+    def fix_json(self, text: str | None) -> str:
+        """
+        Fix common JSON issues from LLM output.
+
+        Converts Python-style values to JSON-compliant values:
+        - True -> true
+        - False -> false
+        - None -> null
+        - Single quotes -> double quotes
+
+        Args:
+            text: JSON string with potential Python-style values
+
+        Returns:
+            Fixed JSON string, or empty string if input is None/empty
+
+        Examples:
+            >>> extractor = JSONExtractor()
+            >>> extractor.fix_json('{"enabled": True}')
+            '{"enabled": true}'
+
+            >>> extractor.fix_json("{'key': 'value'}")
+            '{"key": "value"}'
+        """
+        if text is None or text == "":
+            return ""
+
+        # Replace Python booleans with JSON booleans using word boundaries
+        text = re.sub(r'\bTrue\b', 'true', text)
+        text = re.sub(r'\bFalse\b', 'false', text)
+        text = re.sub(r'\bNone\b', 'null', text)
+
+        # Convert single quotes to double quotes
+        text = text.replace("'", '"')
+
+        return text
+
+    def parse(self, text: str | None) -> dict[str, Any] | None:
+        """
+        Extract, fix, and parse JSON from text to a dictionary.
+
+        Combines extract(), fix_json(), and json.loads() into one step.
+        This is the recommended method for parsing LLM responses that
+        may contain Python-style JSON.
+
+        Args:
+            text: Raw text that may contain JSON in various formats
+
+        Returns:
+            Parsed dictionary, or None if no valid JSON found
+
+        Examples:
+            >>> extractor = JSONExtractor()
+            >>> extractor.parse('```json\\n{"enabled": True}\\n```')
+            {'enabled': True}
+
+            >>> extractor.parse('No JSON here')
+            None
+        """
+        if text is None or text == "":
+            return None
+
+        # Extract JSON string from text
+        json_str = self.extract(text)
+
+        if not json_str:
+            return None
+
+        # Fix Python-style values
+        json_str = self.fix_json(json_str)
+
+        # Parse to dictionary
+        try:
+            result = json.loads(json_str)
+            if isinstance(result, dict):
+                return result
+            # Handle arrays or other JSON types - wrap or return None
+            return None
+        except json.JSONDecodeError:
+            return None

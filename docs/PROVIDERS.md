@@ -1,4 +1,5 @@
- # Provider Configuration - src/providers/base.py
+ ## Provider Configuration 
+ **- src/providers/base.py**
 
 ```  
 class ModelType(Enum):
@@ -84,7 +85,7 @@ Benefits:
 
 ---
 
-## Native tool calling implementation -- tests/test_native_tool_calling.py
+### Native tool calling implementation -- tests/test_native_tool_calling.py
 
 providers have supports_tool_calling() to check support
 
@@ -119,7 +120,7 @@ providers have supports_tool_calling() to check support
           pass
 ```
 
-- Provider implementations
+**- Provider implementations**
 
 ```
 # src/providers/groq_provider.py
@@ -144,11 +145,13 @@ providers have supports_tool_calling() to check support
           content=response.choices[0].message.content or "",
           tool_calls=tool_calls,
           # ...
-      )```
+      )
+```
 
-  Phase 3: Refactor Agent Core
+** Agent Core**
 
-```  # src/agent/core.py - SIMPLIFIED
+```
+ # src/agent/core.py - SIMPLIFIED
   def _think(self, state):
       # Convert tool registry to OpenAI schema
       tools = self.tool_registry.to_openai_schema()
@@ -175,8 +178,8 @@ providers have supports_tool_calling() to check support
               action="complete",
               result=response.content,
               is_complete=True
-          )```
-
+          )
+```
 
 
   1. Implement chat_with_tools() in specific providers (e.g., groq_provider.py)

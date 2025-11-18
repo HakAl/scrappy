@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 from ..classifier import ClassifiedTask, TaskType
+from ..json_extractor import JSONExtractor
 from .base import ExecutionResult, ProviderAwareStrategy, OrchestratorLike
 
 
@@ -210,60 +211,17 @@ class ResearchExecutor(ProviderAwareStrategy):
         return "\n".join(descriptions)
 
     def _parse_tool_call(self, response: str) -> Optional[Dict[str, object]]:
-        """Parse tool call from LLM response."""
+        """Parse tool call from LLM response.
 
-        def fix_json_string(s: str) -> str:
-            """Fix common JSON issues from LLM output."""
-            # Replace Python booleans with JSON booleans
-            s = re.sub(r'\bTrue\b', 'true', s)
-            s = re.sub(r'\bFalse\b', 'false', s)
-            s = re.sub(r'\bNone\b', 'null', s)
-            # Single to double quotes (careful with apostrophes)
-            s = s.replace("'", '"')
-            return s
+        Uses JSONExtractor to extract and parse JSON from various formats
+        including code blocks, plain text, and Python-style booleans.
+        """
+        extractor = JSONExtractor()
+        result = extractor.parse(response)
 
-        # Look for JSON tool call pattern
-        patterns = [
-            r'```json\s*\n?\s*(\{[\s\S]*?\})\s*\n?```',
-            r'```\s*\n?\s*(\{[\s\S]*?"tool"[\s\S]*?\})\s*\n?```',
-            r'<tool_call>\s*(\{[\s\S]*?\})\s*</tool_call>',
-            r'TOOL_CALL:\s*(\{[^\n]+\})',
-        ]
-
-        for pattern in patterns:
-            match = re.search(pattern, response, re.DOTALL)
-            if match:
-                try:
-                    json_str = fix_json_string(match.group(1).strip())
-                    return json.loads(json_str)
-                except json.JSONDecodeError:
-                    continue
-
-        # Try to find bare JSON object with "tool" key (no code blocks)
-        # This handles LLM output like: {"tool": "...", "parameters": {...}}
-        try:
-            # Find the start of a JSON object containing "tool"
-            tool_match = re.search(r'\{\s*"tool"\s*:', response)
-            if tool_match:
-                start = tool_match.start()
-                # Extract from { to matching }
-                brace_count = 0
-                end = start
-                for i in range(start, len(response)):
-                    if response[i] == '{':
-                        brace_count += 1
-                    elif response[i] == '}':
-                        brace_count -= 1
-                        if brace_count == 0:
-                            end = i + 1
-                            break
-
-                json_str = fix_json_string(response[start:end])
-                return json.loads(json_str)
-        except json.JSONDecodeError:
-            pass
-        except:
-            pass
+        # Verify it's a tool call (has 'tool' key)
+        if result and 'tool' in result:
+            return result
 
         return None
 
