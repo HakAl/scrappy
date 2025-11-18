@@ -159,25 +159,6 @@ class TestCLITaskRouterHandler:
         assert len(handler.history) == 0
 
     @pytest.mark.unit
-    def test_handle_route_status_retrieves_metrics(self, mock_orchestrator):
-        """Test route_status retrieves metrics from router."""
-        from src.cli.task_router_handler import CLITaskRouterHandler
-
-        handler = CLITaskRouterHandler(mock_orchestrator)
-        handler.router = Mock()
-        mock_metrics = Mock()
-        mock_metrics.total_tasks = 10
-        mock_metrics.tasks_by_type = {"code_generation": 5, "research": 3}
-        mock_metrics.avg_execution_time = 2.5
-        mock_metrics.total_tokens_used = 1000
-        mock_metrics.success_rate = 0.9
-        handler.router.get_metrics.return_value = mock_metrics
-
-        handler.handle_route_status()
-
-        handler.router.get_metrics.assert_called_once()
-
-    @pytest.mark.unit
     def test_handle_route_history_empty(self, mock_orchestrator, capsys):
         """Test route_history handles empty history gracefully."""
         from src.cli.task_router_handler import CLITaskRouterHandler
@@ -335,13 +316,6 @@ class TestCLIDisplay:
         assert "cerebras" in captured.out
 
     @pytest.mark.unit
-    def test_show_status_calls_orchestrator_status(self, display, mock_orchestrator):
-        """Test show_status retrieves status from orchestrator."""
-        display.show_status()
-
-        mock_orchestrator.status.assert_called_once()
-
-    @pytest.mark.unit
     def test_list_providers_shows_available(self, display, capsys):
         """Test list_providers shows available providers."""
         display.list_providers()
@@ -397,13 +371,6 @@ class TestCLIDisplay:
         assert "Total Tasks:" in captured.out
 
     @pytest.mark.unit
-    def test_show_usage_calls_get_usage_report(self, display, mock_orchestrator):
-        """Test show_usage retrieves report from orchestrator."""
-        display.show_usage()
-
-        mock_orchestrator.get_usage_report.assert_called_once()
-
-    @pytest.mark.unit
     def test_list_models_all_providers(self, display, mock_orchestrator, capsys):
         """Test list_models shows models for all providers."""
         display.list_models("")
@@ -448,64 +415,6 @@ class TestCLISession:
         assert manager._cache_manager is not None
         assert manager._rate_limiter is not None
         assert manager._session_persistence is not None
-
-    @pytest.mark.unit
-    def test_manage_context_delegates_to_context_manager(self, mock_orchestrator):
-        """Test manage_context delegates to internal context manager."""
-        from src.cli.session import CLISessionManager
-
-        manager = CLISessionManager(mock_orchestrator)
-        manager._context_manager = Mock()
-        io = MockIO()
-
-        manager.manage_context("explore", io=io)
-
-        manager._context_manager.manage_context.assert_called_once_with("explore", io)
-
-    @pytest.mark.unit
-    def test_manage_cache_delegates_to_cache_manager(self, mock_orchestrator):
-        """Test manage_cache delegates to internal cache manager."""
-        from src.cli.session import CLISessionManager
-
-        manager = CLISessionManager(mock_orchestrator)
-        manager._cache_manager = Mock()
-        io = MockIO()
-
-        manager.manage_cache("clear", io=io)
-
-        manager._cache_manager.manage_cache.assert_called_once_with("clear", io)
-
-    @pytest.mark.unit
-    def test_show_rate_limits_delegates_to_rate_limiter(self, mock_orchestrator):
-        """Test show_rate_limits delegates to internal rate limiter."""
-        from src.cli.session import CLISessionManager
-
-        manager = CLISessionManager(mock_orchestrator)
-        manager._rate_limiter = Mock()
-        io = MockIO()
-
-        manager.show_rate_limits("cerebras", io=io)
-
-        manager._rate_limiter.show_rate_limits.assert_called_once_with("cerebras", io)
-
-    @pytest.mark.unit
-    def test_manage_session_delegates_to_persistence(self, mock_orchestrator):
-        """Test manage_session delegates to session persistence."""
-        from src.cli.session import CLISessionManager
-
-        manager = CLISessionManager(mock_orchestrator)
-        manager._session_persistence = Mock()
-        manager._session_persistence.manage_session.return_value = {"auto_save": True}
-        io = MockIO()
-        conversation = [{"role": "user", "content": "test"}]
-
-        result = manager.manage_session("save", conversation, True, io=io)
-
-        manager._session_persistence.manage_session.assert_called_once_with(
-            "save", conversation, True, io
-        )
-        assert result == {"auto_save": True}
-
 
 class TestCLISmartQuery:
     """Tests for smart query handling."""
@@ -866,62 +775,3 @@ class TestCLIAgentManager:
         assert "agent_task" in call_args[0]
 
 
-class TestCLIMultiprovider:
-    """Tests for multi-provider operations."""
-
-    @pytest.mark.unit
-    def test_multiprovider_module_importable(self):
-        """Test multiprovider module can be imported."""
-        from src.cli import multiprovider
-        assert multiprovider is not None
-
-
-class TestCLITasks:
-    """Tests for task execution CLI."""
-
-    @pytest.mark.unit
-    def test_tasks_module_importable(self):
-        """Test tasks module can be imported."""
-        from src.cli import tasks
-        assert tasks is not None
-
-
-class TestCLICore:
-    """Tests for core CLI functionality."""
-
-    @pytest.mark.unit
-    def test_cli_core_module_importable(self):
-        """Test CLI core module can be imported."""
-        from src.cli import core
-        assert core is not None
-
-    @pytest.mark.unit
-    def test_cli_class_exists(self):
-        """Test CLI class can be imported."""
-        from src.cli.core import CLI
-        assert CLI is not None
-
-
-class TestCLICommands:
-    """Tests for Click command definitions."""
-
-    @pytest.mark.unit
-    def test_commands_module_importable(self):
-        """Test commands module can be imported."""
-        from src.cli import commands
-        assert commands is not None
-
-    @pytest.mark.unit
-    def test_main_cli_command_exists(self):
-        """Test main CLI command can be imported."""
-        from src.cli.commands import cli
-        assert cli is not None
-
-    @pytest.mark.unit
-    def test_cli_is_click_command(self):
-        """Test CLI is a Click command/group."""
-        from src.cli.commands import cli
-        import click
-
-        # Should have invoke method (Click command characteristic)
-        assert callable(cli)

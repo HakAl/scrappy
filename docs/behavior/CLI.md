@@ -1,3 +1,15 @@
+# CLI
+
+**The Good**
+
+  1. CLIIOProtocol abstraction - Clean dependency injection
+  2. MockIO and ConfigurableTestOrchestrator - Excellent test helpers
+  3. validators.py - Comprehensive validation with dataclass results
+  4. src/cli/config/ - Well-organized configuration
+  5. error_recovery.py - Sophisticated patterns (CircuitBreaker, retry, fallback)
+  6. Docstrings - Good documentation throughout
+
+
 ### Issues
 
 <!-- todo -- Assess code / tests / maintainability -->
@@ -22,3 +34,78 @@
   4. Add type stubs for external dependencies (types-PyYAML, etc.)
 
 ---
+
+Critical Issues Found
+
+  | Issue                  | Severity | Files Affected                         |
+  |------------------------|----------|----------------------------------------|
+  | Direct click I/O       | High     | display.py, tasks.py, smart_query.py   |
+  | Massive route() method | High     | command_router.py:71-302 (192 lines)   |
+  | Global state           | Medium   | logging.py lines 23-25                 |
+  | Duplicated imports     | Medium   | ~10 files with try/except fallback     |
+
+  ---
+  1. Poor Testability - Interactive I/O ⚠️
+
+  Still problematic in:
+  - display.py:36-41 - Uses click.secho() directly
+  - tasks.py:50-51 - Uses click.secho()/click.echo() directly
+  - smart_query.py:94, 339 - Bypasses CLIIOProtocol
+
+  Despite having the excellent CLIIOProtocol abstraction, these files still call click directly.
+
+  ---
+  2. Massive Files - Single Responsibility ⚠️
+
+  Worst offenders:
+  - error_recovery.py - 710 lines
+  - validators.py - 512 lines
+  - command_router.py - route() method is 192 lines with 30+ elif branches
+
+  ---
+  3-6: Pattern Matching, Duplication, JSON, God Objects ⚠️
+
+  - Fragile patterns: 25+ regex patterns in config/patterns.py with limited edge case tests
+  - Duplicated imports: Try/except fallback pattern in ~10 files
+  - JSON risk: No error handling around json.dumps() in logging.py:182
+  - God object: smart_query.smart_query() handles 9 different concerns in one method
+
+  ---
+  7. Shallow Tests ⚠️
+
+  Example from test_cli_command_router.py:46-55:
+  router.display.show_help.assert_called_once()  # Only verifies call
+  # Never checks that help content was actually correct
+
+  Better pattern from test_cli_input_handler.py:24-31:
+  result = handler.read_multiline_input()
+  assert result == "hello world"  # Verifies actual behavior
+
+  ---
+  8-10: Side Effects, Validation, Coupling
+
+  - Global state: _loggers, _global_io, _global_level in logging.py
+  - Validation inconsistent: Some inline checks should use validators.py
+  - Tight coupling: InteractiveMode syncs 5 state attributes from CommandRouter
+
+  ---
+  11-13: Test Quality Issues
+
+  - 15 skipped tests across 5 files
+  - Tests mention TDD in docstrings but coverage gaps suggest post-hoc writing
+
+  ---
+  14-15: Architecture Issues
+
+  - CLI handlers access orchestrator.context.project_path, agent.planner, etc. directly
+  - Configuration split between src/cli/config/ and inline in validators.py:124-145
+
+
+  ---
+  Priority Fixes
+
+  1. Convert direct click calls to use io parameter in display.py, tasks.py, smart_query.py
+  2. Split CommandRouter.route() into command-specific handlers or a dispatch table
+  3. Add behavior assertions to tests - verify outputs, not just mock calls
+  4. Consolidate configuration into src/cli/config/
+  5. Add JSON error handling in logging.py

@@ -1,3 +1,16 @@
+# Task Router 
+
+The Task Router is an intelligent dispatch system that:
+
+1. **Classifies** user input by task type and complexity
+2. **Selects** the optimal provider based on task requirements
+3. **Routes** to the appropriate execution strategy
+4. **Executes** with strategy-specific optimizations
+
+This eliminates the overhead of running every task through a full agent loop while ensuring complex tasks still receive appropriate handling.
+
+## Issues
+
 <!-- todo -->
 
 - Semantic LLM classification
@@ -41,17 +54,6 @@
   - Pattern weights in strategy classes
   - Consider centralizing to a config object
 
-
-# Task Router 
-
-The Task Router is an intelligent dispatch system that:
-
-1. **Classifies** user input by task type and complexity
-2. **Selects** the optimal provider based on task requirements
-3. **Routes** to the appropriate execution strategy
-4. **Executes** with strategy-specific optimizations
-
-This eliminates the overhead of running every task through a full agent loop while ensuring complex tasks still receive appropriate handling.
 
 ## Architecture
 

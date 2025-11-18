@@ -7,7 +7,6 @@
 
 New Tools to Add (High Impact)
 
-
   2. Database Query Tool
 
   - Execute SQL queries (SELECT only for safety)

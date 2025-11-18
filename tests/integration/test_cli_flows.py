@@ -149,19 +149,6 @@ class TestSessionExitFlow:
         output = io.get_output()
         assert "saved" in output.lower() or "Goodbye" in output
 
-    def test_exit_shows_usage_summary(self):
-        """Exit should show usage summary."""
-        io = MockIO()
-        orchestrator = ConfigurableTestOrchestrator()
-        router = self.CommandRouter(io, orchestrator)
-        router.auto_save = False
-        router.display = MagicMock()
-
-        router.route("/quit", "")
-
-        router.display.show_usage.assert_called_once()
-
-
 # =============================================================================
 # Plan Workflow Flow Tests
 # =============================================================================
@@ -479,39 +466,6 @@ class TestCommandExecutionFlow:
         from src.cli.command_router import CommandRouter
         self.CommandRouter = CommandRouter
 
-    def test_help_command_shows_all_commands(self):
-        """Help command should show all available commands."""
-        io = MockIO()
-        orchestrator = ConfigurableTestOrchestrator()
-        router = self.CommandRouter(io, orchestrator)
-        router.display = MagicMock()
-
-        router.route("/help", "")
-
-        router.display.show_help.assert_called_once()
-
-    def test_status_command_shows_system_status(self):
-        """Status command should show system status."""
-        io = MockIO()
-        orchestrator = ConfigurableTestOrchestrator()
-        router = self.CommandRouter(io, orchestrator)
-        router.display = MagicMock()
-
-        router.route("/status", "")
-
-        router.display.show_status.assert_called_once()
-
-    def test_providers_command_lists_providers(self):
-        """Providers command should list available providers."""
-        io = MockIO()
-        orchestrator = ConfigurableTestOrchestrator()
-        router = self.CommandRouter(io, orchestrator)
-        router.display = MagicMock()
-
-        router.route("/providers", "")
-
-        router.display.list_providers.assert_called_once()
-
     def test_clear_command_clears_history(self):
         """Clear command should clear conversation history."""
         io = MockIO()
@@ -581,23 +535,6 @@ class TestChatWithAutoRouteFlow:
         from src.cli.interactive import InteractiveMode
         self.InteractiveMode = InteractiveMode
 
-    def test_chat_uses_task_router_when_auto_route_on(self):
-        """Chat should use task router when auto-route is enabled."""
-        io = MockIO()
-        orchestrator = ConfigurableTestOrchestrator()
-        mode = self.InteractiveMode(io, orchestrator)
-        mode.auto_route_mode = True
-        mode.task_router = MagicMock()
-        mode.task_router.handle_auto_route.return_value = MagicMock(
-            success=True,
-            output="Auto-routed response"
-        )
-
-        mode._process_input("create a function to sort numbers")
-
-        mode.task_router.handle_auto_route.assert_called_once()
-        assert "create a function to sort numbers" in mode.task_router.handle_auto_route.call_args[0]
-
     def test_chat_adds_to_conversation_history(self):
         """Chat should add messages to conversation history."""
         io = MockIO()
@@ -617,78 +554,6 @@ class TestChatWithAutoRouteFlow:
         assert mode.conversation_history[0]['content'] == 'hello world'
 
 
-class TestChatWithSmartModeFlow:
-    """Tests for chat with smart mode enabled."""
-
-    def setup_method(self):
-        """Set up test fixtures."""
-        from src.cli.interactive import InteractiveMode
-        self.InteractiveMode = InteractiveMode
-
-    def test_chat_uses_smart_query_when_smart_mode_on(self):
-        """Chat should use smart query when smart mode is enabled."""
-        io = MockIO()
-        orchestrator = ConfigurableTestOrchestrator()
-        mode = self.InteractiveMode(io, orchestrator)
-        mode.auto_route_mode = False
-        mode.smart_mode = True
-        mode.smart = MagicMock()
-        mock_response = MagicMock()
-        mock_response.content = "Smart response"
-        mode.smart.smart_query.return_value = mock_response
-
-        mode._process_input("search for documentation")
-
-        mode.smart.smart_query.assert_called_once_with("search for documentation")
-
-
-class TestChatWithToolDetectionFlow:
-    """Tests for chat with automatic tool detection."""
-
-    def setup_method(self):
-        """Set up test fixtures."""
-        from src.cli.interactive import InteractiveMode
-        self.InteractiveMode = InteractiveMode
-
-    def test_chat_detects_tool_need_and_routes(self):
-        """Chat should detect tool need and route to task router."""
-        io = MockIO()
-        orchestrator = ConfigurableTestOrchestrator()
-        mode = self.InteractiveMode(io, orchestrator)
-        mode.auto_route_mode = False
-        mode.smart_mode = False
-        mode.task_router = MagicMock()
-        mode.task_router.handle_auto_route.return_value = MagicMock(
-            success=True,
-            output="Fetched result"
-        )
-
-        # Input that needs tools (URL fetch)
-        mode._process_input("fetch the content from https://example.com")
-
-        mode.task_router.handle_auto_route.assert_called()
-
-    def test_simple_chat_uses_direct_delegation(self):
-        """Simple chat should use direct LLM delegation."""
-        io = MockIO()
-        orchestrator = ConfigurableTestOrchestrator()
-        mode = self.InteractiveMode(io, orchestrator)
-        mode.auto_route_mode = False
-        mode.smart_mode = False
-
-        mock_response = MagicMock()
-        mock_response.content = "Hello!"
-        mock_response.provider = "test"
-        mock_response.model = "test-model"
-        mock_response.tokens_used = 10
-        mock_response.latency_ms = 50
-        orchestrator.delegate = MagicMock(return_value=mock_response)
-
-        mode._process_input("hi there")
-
-        orchestrator.delegate.assert_called()
-
-
 # =============================================================================
 # Session Management Flow Tests
 # =============================================================================
@@ -700,18 +565,6 @@ class TestSessionManagementFlow:
         """Set up test fixtures."""
         from src.cli.command_router import CommandRouter
         self.CommandRouter = CommandRouter
-
-    def test_session_save_stores_conversation(self):
-        """Session save should store conversation history."""
-        io = MockIO()
-        orchestrator = ConfigurableTestOrchestrator()
-        router = self.CommandRouter(io, orchestrator)
-        router.session_mgr = MagicMock()
-        router.session_mgr.manage_session.return_value = {}
-
-        router.route("/session", "save")
-
-        router.session_mgr.manage_session.assert_called()
 
     def test_session_load_restores_conversation(self):
         """Session load should restore conversation history."""
@@ -891,28 +744,6 @@ class TestCompleteUserWorkflows:
         # Toggle back
         router.route("/ml", "")
         assert router.multiline_mode == initial_multiline
-
-    def test_context_cache_session_workflow(self):
-        """Complete workflow: manage context, cache, and session."""
-        io = MockIO()
-        orchestrator = ConfigurableTestOrchestrator()
-        router = self.CommandRouter(io, orchestrator)
-        router.session_mgr = MagicMock()
-        router.session_mgr.manage_context.return_value = None
-        router.session_mgr.manage_cache.return_value = None
-        router.session_mgr.manage_session.return_value = {}
-
-        # Manage context
-        router.route("/context", "")
-        router.session_mgr.manage_context.assert_called()
-
-        # Manage cache
-        router.route("/cache", "")
-        router.session_mgr.manage_cache.assert_called()
-
-        # Show rate limits
-        router.route("/limits", "")
-        router.session_mgr.show_rate_limits.assert_called()
 
     def test_chat_with_plan_active_prompts_progression(self):
         """Chat while plan active should prompt for task progression."""

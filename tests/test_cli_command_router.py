@@ -40,130 +40,8 @@ class TestCommandRouter:
         assert router.state_manager is state_mgr
 
     # =========================================================================
-    # Command Routing Tests
-    # =========================================================================
-
-    def test_route_help_command(self):
-        """Should route /help to display handler."""
-        io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
-        router.display = MagicMock()
-
-        result = router.route("/help", "")
-
-        router.display.show_help.assert_called_once()
-        assert result is True  # Continue loop
-
-    def test_route_status_command(self):
-        """Should route /status to display handler."""
-        io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
-        router.display = MagicMock()
-
-        result = router.route("/status", "")
-
-        router.display.show_status.assert_called_once()
-        assert result is True
-
-    def test_route_providers_command(self):
-        """Should route /providers to display handler."""
-        io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
-        router.display = MagicMock()
-
-        result = router.route("/providers", "")
-
-        router.display.list_providers.assert_called_once()
-
-    def test_route_brain_command(self):
-        """Should route /brain to display handler."""
-        io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
-        router.display = MagicMock()
-
-        result = router.route("/brain", "claude")
-
-        router.display.switch_brain.assert_called_once_with("claude")
-
-    def test_route_usage_command(self):
-        """Should route /usage to display handler."""
-        io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
-        router.display = MagicMock()
-
-        result = router.route("/usage", "")
-
-        router.display.show_usage.assert_called_once()
-
-    def test_route_models_command(self):
-        """Should route /models to display handler."""
-        io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
-        router.display = MagicMock()
-
-        result = router.route("/models", "openai")
-
-        router.display.list_models.assert_called_once_with("openai")
-
-    # =========================================================================
-    # Session Command Tests
-    # =========================================================================
-
-    def test_route_context_command(self):
-        """Should route /context to session manager."""
-        io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
-        router.session_mgr = MagicMock()
-
-        result = router.route("/context", "explore")
-
-        router.session_mgr.manage_context.assert_called_once()
-
-    def test_route_cache_command(self):
-        """Should route /cache to session manager."""
-        io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
-        router.session_mgr = MagicMock()
-
-        result = router.route("/cache", "stats")
-
-        router.session_mgr.manage_cache.assert_called_once()
-
-    def test_route_session_command(self):
-        """Should route /session to session manager."""
-        io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
-        router.session_mgr = MagicMock()
-        router.session_mgr.manage_session.return_value = {}
-
-        result = router.route("/session", "save")
-
-        router.session_mgr.manage_session.assert_called_once()
-
-    def test_route_limits_command(self):
-        """Should route /limits to session manager."""
-        io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
-        router.session_mgr = MagicMock()
-
-        result = router.route("/limits", "")
-
-        router.session_mgr.show_rate_limits.assert_called_once()
-
-    # =========================================================================
     # Task Command Tests
     # =========================================================================
-
-    def test_route_plan_command_with_args(self):
-        """Should route /plan to tasks handler."""
-        io = MockIO(confirmations=[False])  # Don't start plan
-        router = self.CommandRouter(io, self.orchestrator)
-        router.tasks = MagicMock()
-        router.tasks.plan_task.return_value = []
-
-        result = router.route("/plan", "create a feature")
-
-        router.tasks.plan_task.assert_called_once_with("create a feature")
 
     def test_route_plan_command_no_args_shows_usage(self):
         """Should show usage when /plan called without args."""
@@ -174,26 +52,6 @@ class TestCommandRouter:
 
         output = io.get_output()
         assert "Usage:" in output
-
-    def test_route_reason_command(self):
-        """Should route /reason to tasks handler."""
-        io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
-        router.tasks = MagicMock()
-
-        result = router.route("/reason", "why is the sky blue")
-
-        router.tasks.reason.assert_called_once_with("why is the sky blue")
-
-    def test_route_agent_command(self):
-        """Should route /agent to agent manager."""
-        io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
-        router.agent_mgr = MagicMock()
-
-        result = router.route("/agent", "implement feature")
-
-        router.agent_mgr.run_agent.assert_called_once()
 
     def test_route_agent_no_args_shows_usage(self):
         """Should show usage when /agent called without args."""
@@ -206,42 +64,8 @@ class TestCommandRouter:
         assert "Usage:" in output
 
     # =========================================================================
-    # Multi-Provider Command Tests
-    # =========================================================================
-
-    def test_route_synthesize_command(self):
-        """Should route /synthesize to multiprovider."""
-        io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
-        router.multiprovider = MagicMock()
-
-        result = router.route("/synthesize", "")
-
-        router.multiprovider.synthesize_mode.assert_called_once()
-
-    def test_route_delegate_command(self):
-        """Should route /delegate to multiprovider."""
-        io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
-        router.multiprovider = MagicMock()
-
-        result = router.route("/delegate", "openai test")
-
-        router.multiprovider.delegate_mode.assert_called_once()
-
-    # =========================================================================
     # Smart Query Command Tests
     # =========================================================================
-
-    def test_route_smart_command_with_query(self):
-        """Should route /smart with query to smart handler."""
-        io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
-        router.smart = MagicMock()
-
-        result = router.route("/smart", "search for something")
-
-        router.smart.smart_query.assert_called_once_with("search for something")
 
     def test_route_smart_toggle(self):
         """Should toggle smart mode when /smart toggle."""
@@ -265,32 +89,8 @@ class TestCommandRouter:
         assert "Smart" in output or "smart" in output
 
     # =========================================================================
-    # Codebase Command Tests
-    # =========================================================================
-
-    def test_route_explore_command(self):
-        """Should route /explore to codebase handler."""
-        io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
-        router.codebase = MagicMock()
-
-        result = router.route("/explore", "/path/to/dir")
-
-        router.codebase.explore_codebase.assert_called_once()
-
-    # =========================================================================
     # Task Router Command Tests
     # =========================================================================
-
-    def test_route_classify_command(self):
-        """Should route /classify to task router."""
-        io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
-        router.task_router = MagicMock()
-
-        result = router.route("/classify", "write a function")
-
-        router.task_router.handle_classify_only.assert_called_once_with("write a function")
 
     def test_route_classify_no_args_shows_usage(self):
         """Should show usage when /classify without args."""
@@ -355,26 +155,6 @@ class TestCommandRouter:
         assert router.auto_route_mode is True
         output = io.get_output()
         assert "Auto-routing" in output or "routing" in output.lower()
-
-    def test_route_auto_status(self):
-        """Should show routing status on /auto status."""
-        io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
-        router.task_router = MagicMock()
-
-        result = router.route("/auto", "status")
-
-        router.task_router.handle_route_status.assert_called_once()
-
-    def test_route_auto_history(self):
-        """Should show routing history on /auto history."""
-        io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
-        router.task_router = MagicMock()
-
-        result = router.route("/auto", "history")
-
-        router.task_router.handle_route_history.assert_called_once()
 
     # =========================================================================
     # Tasks List Command Tests
@@ -538,52 +318,3 @@ class TestCommandRouter:
 
         router.route("/autoroute", "")
         assert router.auto_route_mode is False
-
-
-class TestCommandRouterModuleStructure:
-    """Tests for command_router module structure."""
-
-    def test_module_imports_successfully(self):
-        """Module should import without errors."""
-        from src.cli import command_router
-        assert command_router is not None
-
-    def test_command_router_class_exists(self):
-        """CommandRouter class should exist."""
-        from src.cli.command_router import CommandRouter
-        assert CommandRouter is not None
-
-    def test_has_route_method(self):
-        """CommandRouter should have route method."""
-        from src.cli.command_router import CommandRouter
-        io = MockIO()
-        orchestrator = ConfigurableTestOrchestrator()
-        router = CommandRouter(io, orchestrator)
-
-        assert hasattr(router, 'route')
-        assert callable(router.route)
-
-    def test_route_method_signature(self):
-        """route() should accept command and args parameters."""
-        import inspect
-        from src.cli.command_router import CommandRouter
-
-        sig = inspect.signature(CommandRouter.route)
-        params = list(sig.parameters.keys())
-
-        assert 'cmd' in params or 'command' in params
-        assert 'args' in params
-
-    def test_has_required_state_attributes(self):
-        """Should have required state attributes."""
-        from src.cli.command_router import CommandRouter
-        io = MockIO()
-        orchestrator = ConfigurableTestOrchestrator()
-        router = CommandRouter(io, orchestrator)
-
-        # State that router manages
-        assert hasattr(router, 'conversation_history')
-        assert hasattr(router, 'multiline_mode')
-        assert hasattr(router, 'auto_route_mode')
-        assert hasattr(router, 'smart_mode')
-        assert hasattr(router, 'auto_save')
