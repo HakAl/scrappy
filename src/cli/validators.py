@@ -11,9 +11,29 @@ import os
 
 
 class ValidationError(Exception):
-    """Exception raised for validation failures."""
+    """Exception raised for validation failures.
+
+    This exception provides context about what failed validation and why,
+    enabling better error messages and debugging.
+
+    Attributes:
+        field: Name of the field that failed validation (e.g., 'command', 'path').
+        value: The invalid value that was provided.
+        message: Human-readable description of the validation failure.
+
+    Example:
+        >>> raise ValidationError("Path too long", field="path", value="/very/long/...")
+        ValidationError: Path too long
+    """
 
     def __init__(self, message: str, field: Optional[str] = None, value: Optional[str] = None):
+        """Initialize a ValidationError.
+
+        Args:
+            message: Human-readable description of the validation failure.
+            field: Optional name of the field that failed validation.
+            value: Optional invalid value that was provided.
+        """
         super().__init__(message)
         self.field = field
         self.value = value
@@ -21,7 +41,27 @@ class ValidationError(Exception):
 
 @dataclass
 class CommandValidationResult:
-    """Result of command validation."""
+    """Result of command validation.
+
+    Contains the parsed command components and any validation errors or warnings.
+    Used as the return type for validate_command().
+
+    Attributes:
+        is_valid: Whether the command passed all validation checks.
+        command: The parsed command name (lowercase, without slash). Empty if invalid.
+        args: The arguments portion of the command. Empty if no arguments.
+        error: Description of what failed validation. None if valid.
+        warnings: List of non-fatal issues detected. None if no warnings.
+
+    Example:
+        >>> result = validate_command("/plan my task")
+        >>> result.is_valid
+        True
+        >>> result.command
+        'plan'
+        >>> result.args
+        'my task'
+    """
     is_valid: bool
     command: str = ""
     args: str = ""
@@ -31,7 +71,24 @@ class CommandValidationResult:
 
 @dataclass
 class PathValidationResult:
-    """Result of path validation."""
+    """Result of path validation.
+
+    Contains the normalized path and any validation errors or warnings.
+    Used as the return type for validate_path().
+
+    Attributes:
+        is_valid: Whether the path passed all validation checks.
+        path: The normalized path with cleaned separators. Empty if invalid.
+        error: Description of what failed validation. None if valid.
+        warnings: List of non-fatal issues (e.g., excessive traversal). None if no warnings.
+
+    Example:
+        >>> result = validate_path("src/cli/validators.py")
+        >>> result.is_valid
+        True
+        >>> result.path
+        'src/cli/validators.py'
+    """
     is_valid: bool
     path: str = ""
     error: Optional[str] = None
@@ -40,7 +97,24 @@ class PathValidationResult:
 
 @dataclass
 class ProviderValidationResult:
-    """Result of provider validation."""
+    """Result of provider validation.
+
+    Contains the normalized provider name and any validation errors or warnings.
+    Used as the return type for validate_provider().
+
+    Attributes:
+        is_valid: Whether the provider passed all validation checks.
+        provider: The normalized provider name (lowercase). Empty if invalid.
+        error: Description of what failed validation. None if valid.
+        warnings: List of non-fatal issues. None if no warnings.
+
+    Example:
+        >>> result = validate_provider("Cerebras")
+        >>> result.is_valid
+        True
+        >>> result.provider
+        'cerebras'
+    """
     is_valid: bool
     provider: str = ""
     error: Optional[str] = None
@@ -84,13 +158,37 @@ GLOB_CHARS_PATTERN = re.compile(r'[*?]')
 
 
 def validate_command(command_input: str) -> CommandValidationResult:
-    """Validate a CLI command.
+    """Validate a CLI command string and parse its components.
+
+    Performs comprehensive validation including:
+    - None and empty checks
+    - Length limits (max 5000 characters)
+    - Control character detection
+    - Slash prefix requirement
+    - Command name validation against VALID_COMMANDS
 
     Args:
-        command_input: The command string to validate (e.g., "/help" or "/plan task")
+        command_input: The command string to validate (e.g., "/help" or "/plan task").
+            Must start with a slash and contain a valid command name.
 
     Returns:
-        CommandValidationResult with validation status and parsed command/args
+        CommandValidationResult with:
+        - is_valid: True if all checks pass
+        - command: Parsed command name (lowercase)
+        - args: Any arguments after the command
+        - error: Description of failure if invalid
+
+    Side Effects:
+        None. This is a pure validation function.
+
+    State Changes:
+        None. Does not modify any external state.
+
+    Example:
+        >>> result = validate_command("/plan implement feature")
+        >>> if result.is_valid:
+        ...     print(f"Command: {result.command}, Args: {result.args}")
+        Command: plan, Args: implement feature
     """
     # Handle None input
     if command_input is None:
@@ -167,13 +265,37 @@ def validate_command(command_input: str) -> CommandValidationResult:
 
 
 def validate_path(path_input: str) -> PathValidationResult:
-    """Validate a file or directory path.
+    """Validate a file or directory path and normalize it.
+
+    Performs comprehensive validation including:
+    - None and empty checks
+    - Length limits (max 500 characters total, 255 per component)
+    - Control character and newline detection
+    - Glob character rejection (use actual paths, not patterns)
+    - Windows-invalid character detection
+    - Path traversal security check (max 3 levels of ..)
 
     Args:
-        path_input: The path string to validate
+        path_input: The path string to validate. Can be relative or absolute.
+            Forward and back slashes are normalized for the current OS.
 
     Returns:
-        PathValidationResult with validation status and normalized path
+        PathValidationResult with:
+        - is_valid: True if all checks pass
+        - path: Normalized path with cleaned separators
+        - error: Description of failure if invalid
+        - warnings: Security concerns like excessive traversal
+
+    Side Effects:
+        None. This is a pure validation function.
+
+    State Changes:
+        None. Does not modify any external state or files.
+
+    Example:
+        >>> result = validate_path("src//cli/validators.py")
+        >>> result.path
+        'src/cli/validators.py'
     """
     warnings: List[str] = []
 
@@ -289,13 +411,38 @@ def validate_path(path_input: str) -> PathValidationResult:
 
 
 def validate_provider(provider_input: str) -> ProviderValidationResult:
-    """Validate a provider name.
+    """Validate a provider name and normalize it.
+
+    Performs comprehensive validation including:
+    - None and empty checks
+    - Length limits (max 50 characters)
+    - Control character detection
+    - Space rejection
+    - Alphanumeric and underscore only (must start with letter)
+    - Validation against VALID_PROVIDERS set
 
     Args:
-        provider_input: The provider name to validate
+        provider_input: The provider name to validate (e.g., "cerebras", "Groq").
+            Case-insensitive; will be normalized to lowercase.
 
     Returns:
-        ProviderValidationResult with validation status and normalized provider
+        ProviderValidationResult with:
+        - is_valid: True if all checks pass
+        - provider: Normalized provider name (lowercase)
+        - error: Description of failure if invalid
+
+    Side Effects:
+        None. This is a pure validation function.
+
+    State Changes:
+        None. Does not modify any external state.
+
+    Example:
+        >>> result = validate_provider("CEREBRAS")
+        >>> result.is_valid
+        True
+        >>> result.provider
+        'cerebras'
     """
     # Handle None input
     if provider_input is None:
