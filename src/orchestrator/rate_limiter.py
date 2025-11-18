@@ -18,6 +18,7 @@ except ImportError:
 
 if TYPE_CHECKING:
     from ..providers import ProviderLimits
+    from .output import OutputInterface
 
 
 class RateLimitTracker:
@@ -31,15 +32,24 @@ class RateLimitTracker:
     - Proactive quota monitoring
     """
 
-    def __init__(self, tracker_file: Optional[str] = None):
+    def __init__(
+        self,
+        tracker_file: Optional[str] = None,
+        output: Optional['OutputInterface'] = None
+    ):
         """
         Initialize rate limit tracker.
 
         Args:
             tracker_file: Path to persistent tracker file (optional)
+            output: Output interface for error reporting (optional)
         """
+        # Import here to avoid circular imports
+        from .output import NullOutput
+
         self._usage: dict = {}
         self.tracker_file = Path(tracker_file) if tracker_file else None
+        self.output = output or NullOutput()
 
         # Load existing data if available
         if self.tracker_file and self.tracker_file.exists():
@@ -77,8 +87,8 @@ class RateLimitTracker:
         try:
             with open(self.tracker_file, 'w', encoding='utf-8') as f:
                 json.dump(self._usage, f, indent=2)
-        except Exception:
-            pass  # Silently fail on write errors
+        except Exception as e:
+            self.output.error(f"Rate tracker write failed: {e}")
 
     async def _save_tracker_async(self):
         """Save tracker data to disk asynchronously."""
@@ -92,8 +102,8 @@ class RateLimitTracker:
         try:
             async with aiofiles.open(self.tracker_file, 'w', encoding='utf-8') as f:
                 await f.write(json.dumps(self._usage, indent=2))
-        except Exception:
-            pass  # Silently fail on write errors
+        except Exception as e:
+            self.output.error(f"Rate tracker write failed: {e}")
 
     async def _load_tracker_async(self):
         """Load tracker data from disk asynchronously."""

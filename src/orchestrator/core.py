@@ -577,8 +577,8 @@ class AgentOrchestrator:
                     raise RateLimitError(current_provider_name, "Daily quota exhausted", "requests")
             except RateLimitError:
                 raise  # Re-raise rate limit errors
-            except Exception:
-                pass  # Ignore other errors in limit checking
+            except Exception as e:
+                self.output.warn(f"Proactive limit check failed for {current_provider_name}: {e}")
 
             # Try the current provider with retries
             last_error = None
@@ -877,8 +877,8 @@ class AgentOrchestrator:
                     raise RateLimitError(current_provider_name, "Daily quota exhausted", "requests")
             except RateLimitError:
                 raise
-            except Exception:
-                pass
+            except Exception as e:
+                self.output.warn(f"Proactive limit check failed for {current_provider_name}: {e}")
 
             # Try the current provider with retries
             last_error = None
@@ -1245,14 +1245,16 @@ class AgentOrchestrator:
                     'tokens_per_minute': limits.tokens_per_minute,
                 }
                 status['providers'][provider_name]['remaining'] = remaining
-            except Exception:
-                pass
+            except Exception as e:
+                self.output.warn(f"Failed to get rate limit status for {provider_name}: {e}")
 
         return status
 
     def get_remaining_quota(self, provider_name: str, model: Optional[str] = None) -> dict:
         """Get remaining quota for a specific provider."""
         provider = self.registry.get(provider_name)
+        if provider is None:
+            raise ValueError(f"Provider '{provider_name}' not available")
         limits = provider.get_limits()
         if model is None:
             model = provider.default_model
@@ -1270,8 +1272,8 @@ class AgentOrchestrator:
                     warning_info = self.rate_tracker.is_limit_approaching(provider_name, model, limits)
                     if warning_info.get('message'):
                         warnings.append(warning_info['message'])
-            except Exception:
-                pass
+            except Exception as e:
+                self.output.warn(f"Failed to check rate limit warnings for {provider_name}: {e}")
         return warnings
 
     def reset_rate_tracking(self, provider_name: Optional[str] = None):

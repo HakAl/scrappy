@@ -234,28 +234,22 @@ Critical Issues
 **RED**
 
 we're working to improve src\orchestrator the next task is: 
-Make Code Testable - Enable Dependency Injection
-Modify AgentOrchestrator.__init__ signature (core.py:66-107):
+Make Code Testable - Create error result types:
 
-  def __init__(
-      self,
-      context: ProjectContext,
-      # ... existing params ...
-      # NEW: injectable dependencies
-      cache: Optional[ResponseCache] = None,
-      rate_tracker: Optional[RateLimitTracker] = None,
-      working_memory: Optional[WorkingMemory] = None,
-      session_manager: Optional[SessionManager] = None,
-      provider_selector: Optional[ProviderSelector] = None,
-      output: Optional[OutputInterface] = None,
-  ):
-      # Create defaults only if not injected
-      self.cache = cache or ResponseCache(...)
-      self.rate_tracker = rate_tracker or RateLimitTracker(...)
-      # etc.
+  # Replace this pattern everywhere:
+  except Exception:
+      pass
 
-  2. Update tests/helpers.py ConfigurableTestOrchestrator to use injection
-can you research the task and implement?
+  # With:
+  except Exception as e:
+      self.output.error(f"Cache write failed: {e}")
+      # Or return a Result type indicating failure
+
+  Files to update:
+  - cache.py:371-372, 389-390
+  - core.py:565-566, 1233-1234, 1258-1259
+  - rate_limiter.py:80-81, 95-96
+can you research the task and begin with tests?
 
 **GREEN**
 
@@ -271,38 +265,9 @@ they're fully tested and ready for integration in src/. can you complete the ref
 ---
   Phase 1: Foundation - Make Code Testable
 
-  ---
-  1.2 Enable Dependency Injection
 
   Steps:
-  1. Modify AgentOrchestrator.__init__ signature (core.py:66-107):
-
-  def __init__(
-      self,
-      context: ProjectContext,
-      # ... existing params ...
-      # NEW: injectable dependencies
-      cache: Optional[ResponseCache] = None,
-      rate_tracker: Optional[RateLimitTracker] = None,
-      working_memory: Optional[WorkingMemory] = None,
-      session_manager: Optional[SessionManager] = None,
-      provider_selector: Optional[ProviderSelector] = None,
-      output: Optional[OutputInterface] = None,
-  ):
-      # Create defaults only if not injected
-      self.cache = cache or ResponseCache(...)
-      self.rate_tracker = rate_tracker or RateLimitTracker(...)
-      # etc.
-
-  2. Update tests/helpers.py ConfigurableTestOrchestrator to use injection
-
-  ---
-  1.3 Replace Silent Error Swallowing
-
-  Fixes: Issue #8 (Side Effects)
-
-  Steps:
-  1. Create error result types or use logging:
+  1. Create error result types:
 
   # Replace this pattern everywhere:
   except Exception:

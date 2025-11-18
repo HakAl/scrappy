@@ -4,12 +4,15 @@ Response caching for LLM API calls.
 Provides both exact-match and intent-based caching to reduce API costs.
 """
 
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from datetime import datetime, timedelta
 from pathlib import Path
 import json
 import hashlib
 import re
+
+if TYPE_CHECKING:
+    from .output import OutputInterface
 
 try:
     from ..utils.imports import safe_import, setup_src_path
@@ -42,14 +45,23 @@ class ResponseCache:
     - Cache statistics
     """
 
-    def __init__(self, cache_file: Optional[str] = None, default_ttl_hours: int = 24):
+    def __init__(
+        self,
+        cache_file: Optional[str] = None,
+        default_ttl_hours: int = 24,
+        output: Optional['OutputInterface'] = None
+    ):
         """
         Initialize response cache.
 
         Args:
             cache_file: Path to persistent cache file (optional)
             default_ttl_hours: Default time-to-live for cache entries in hours
+            output: Output interface for error reporting (optional)
         """
+        # Import here to avoid circular imports
+        from .output import NullOutput
+
         self._cache: dict = {}
         self._intent_cache: dict = {}  # Separate cache for intent-based lookups
         self._stats = {
@@ -61,6 +73,7 @@ class ResponseCache:
         }
         self.default_ttl = timedelta(hours=default_ttl_hours)
         self.cache_file = Path(cache_file) if cache_file else None
+        self.output = output or NullOutput()
 
         # Load persistent cache if available
         if self.cache_file and self.cache_file.exists():
@@ -368,8 +381,8 @@ class ResponseCache:
             }
             with open(self.cache_file, 'w', encoding='utf-8') as f:
                 json.dump(cache_data, f, indent=2)
-        except Exception:
-            pass  # Silently fail on write errors
+        except Exception as e:
+            self.output.error(f"Cache write failed: {e}")
 
     async def _save_cache_async(self):
         """Save cache to disk asynchronously."""
@@ -386,8 +399,8 @@ class ResponseCache:
             }
             async with aiofiles.open(self.cache_file, 'w', encoding='utf-8') as f:
                 await f.write(json.dumps(cache_data, indent=2))
-        except Exception:
-            pass  # Silently fail on write errors
+        except Exception as e:
+            self.output.error(f"Cache write failed: {e}")
 
     def _load_cache(self):
         """Load cache from disk."""
