@@ -220,10 +220,9 @@ Refactoring Plan
 
   ---
 
-MOAR FEATURES
+**MOAR FEATURES**
 
-
-To enhance the user experience of your coding assistant, you should consider adding support for several other popular and trending development contexts. Based on 2025 developer surveys and technology trend reports, here are some recommendations, complete with their common marker files and potential areas for `PromptBuilder` support.
+- - File watching for continuous monitoring
 
 ### High-Priority Additions:
 

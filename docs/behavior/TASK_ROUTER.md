@@ -159,11 +159,10 @@ TaskClassifier
 
  
 we're working to improve src\task_router the next task is: 
-Improve Architecture - Immutable domain objects - Make ClassifiedTask immutable
+Improve Architecture - Pure functions - Separate calculation from side effects
 can you research the problem and begin writing tests for the change?
 
 
   Phase 5: Improve Architecture
 
-  3. Immutable domain objects - Make ClassifiedTask immutable
   4. Pure functions - Separate calculation from side effects

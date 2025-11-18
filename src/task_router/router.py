@@ -22,6 +22,14 @@ from .output_handler import (
     OutputHandlerInterface,
 )
 from .provider_resolver import ProviderResolver
+from .pure_functions import (
+    build_classification_metadata,
+    create_escalated_task,
+    determine_execution_action,
+    needs_clarification,
+    parse_llm_classification_response,
+    should_escalate_confidence,
+)
 from .strategies import (
     AgentExecutor,
     ConversationExecutor,
@@ -135,43 +143,15 @@ class TaskRouter:
         """
         Check if task needs user clarification due to ambiguity.
 
+        Delegates to pure function for the calculation logic.
+
         Returns True when:
         - Confidence is below threshold
         - Has conflicting signals (action verb + question pattern)
         - Task type is RESEARCH but has strong action indicators
         - Has both explanation words AND action words (ambiguous intent)
         """
-        # Low confidence always needs clarification
-        if task.confidence < self.confidence_threshold:
-            return True
-
-        input_lower = task.original_input.lower()
-
-        # Conflicting signals: action verb but classified as research
-        if task.task_type == TaskType.RESEARCH:
-            action_verbs = ['create', 'write', 'make', 'add', 'build', 'generate', 'implement', 'fix', 'update']
-            has_strong_action = any(f' {verb} ' in f' {input_lower} ' or input_lower.startswith(verb)
-                                   for verb in action_verbs)
-            if has_strong_action:
-                return True
-
-        # Has question mark but also action verb (ambiguous)
-        has_question = '?' in task.original_input
-        has_action = any(verb in input_lower for verb in ['create', 'write', 'make', 'add', 'generate'])
-        if has_question and has_action:
-            return True
-
-        # NEW: Conflicting signals - has BOTH explanation AND action keywords
-        explanation_words = ['explain', 'describe', 'tell me', 'what is', 'how does', 'how to']
-        action_words = ['create', 'write', 'make', 'add', 'build', 'generate', 'implement']
-
-        has_explanation = any(word in input_lower for word in explanation_words)
-        has_action_word = any(word in input_lower for word in action_words)
-
-        if has_explanation and has_action_word:
-            return True
-
-        return False
+        return needs_clarification(task, self.confidence_threshold)
 
     def _clarify_intent(self, task: ClassifiedTask) -> ClassifiedTask:
         """
@@ -187,31 +167,18 @@ class TaskRouter:
 
         If classified as RESEARCH with low confidence but has action indicators,
         escalate to CODE_GENERATION which can do everything RESEARCH can + more.
+
+        Uses pure functions for calculation, keeps logging as side effect.
         """
         if not self.escalate_on_low_confidence:
             return task
 
-        # Only escalate RESEARCH tasks
-        if task.task_type != TaskType.RESEARCH:
-            return task
-
-        # Check for action indicators that suggest this should be CODE_GENERATION
-        input_lower = task.original_input.lower()
-        action_indicators = [
-            'create', 'write', 'make', 'add', 'build', 'generate',
-            'implement', 'fix', 'update', 'modify', 'delete', 'remove'
-        ]
-
-        has_action_word = any(word in input_lower for word in action_indicators)
-
-        # Escalate if low confidence and has action indicators
-        if task.confidence < 0.7 and has_action_word:
+        # Use pure function to determine if escalation is needed
+        if should_escalate_confidence(task, threshold=0.7):
             original_type = task.task_type.value
-            task = replace(
-                task,
-                task_type=TaskType.CODE_GENERATION,
-                reasoning=f"Escalated from {original_type} due to low confidence ({task.confidence:.2f}) with action indicators"
-            )
+            # Use pure function to create escalated task
+            task = create_escalated_task(task)
+            # Side effect: logging
             if self.verbose:
                 self.output_handler.log_info(f"Escalated: {original_type} -> CODE_GENERATION (low confidence + action words)")
 
@@ -291,19 +258,19 @@ What is the user's PRIMARY intent? Respond with JSON only."""
                 use_context=False
             )
 
-            # Parse response
+            # Parse response using pure function
             response_text = response.content.strip()
+            result = parse_llm_classification_response(response_text)
 
-            # Extract JSON from response using JSONExtractor utility
-            extractor = JSONExtractor()
-            response_text = extractor.extract(response_text)
-
-            result = json.loads(response_text)
+            if result is None:
+                if self.verbose:
+                    self.output_handler.log_info("Failed to parse LLM classification response")
+                return task
 
             # Update task based on LLM classification
-            llm_type_str = result.get('task_type', '').upper()
-            llm_confidence = float(result.get('confidence', 0.5))
-            llm_reasoning = result.get('reasoning', 'LLM classification')
+            llm_type_str = result['task_type']
+            llm_confidence = float(result['confidence'])
+            llm_reasoning = result['reasoning']
 
             # Map string to TaskType
             type_map = {
@@ -457,18 +424,10 @@ What is the user's PRIMARY intent? Respond with JSON only."""
         # 8. Update metrics
         self._update_metrics(classified, result)
 
-        # 9. Add classification info to result
-        result.metadata["classification"] = {
-            "type": classified.task_type.value,
-            "confidence": classified.confidence,
-            "complexity": classified.complexity_score,
-            "reasoning": classified.reasoning,
-            "suggested_provider": classified.suggested_provider,
-            "override_provider": classified.override_provider,
-            "resolved_provider": provider_name,
-            "resolved_model": model_name,
-            "used_llm_classification": "LLM semantic classification" in classified.reasoning
-        }
+        # 9. Add classification info to result using pure function
+        result.metadata["classification"] = build_classification_metadata(
+            classified, provider_name, model_name
+        )
 
         return result
 
@@ -497,36 +456,38 @@ What is the user's PRIMARY intent? Respond with JSON only."""
         """
         Check if execution should proceed.
 
+        Uses pure function for decision logic, keeps I/O as side effect.
         May prompt for confirmation based on task type and settings.
         """
-        # Auto-execute safe tasks
-        if task.task_type == TaskType.CONVERSATION:
+        # Determine if command is safe (for direct commands)
+        is_safe = True
+        if task.task_type == TaskType.DIRECT_COMMAND and task.extracted_command:
+            is_safe = self.classifier.is_safe_command(task.extracted_command)
+
+        # Use pure function for decision
+        action = determine_execution_action(
+            task_type=task.task_type,
+            auto_confirm=self.auto_confirm_direct,
+            command=task.extracted_command,
+            is_safe=is_safe
+        )
+
+        # Handle the decision with appropriate side effects
+        if action == "execute":
             return True
 
-        if task.task_type == TaskType.RESEARCH:
-            return True
+        if action == "block":
+            if self.verbose:
+                self.output_handler.log_info(f"Command blocked: {task.extracted_command}")
+            return False
 
-        # Direct commands may need confirmation
-        if task.task_type == TaskType.DIRECT_COMMAND:
-            if self.auto_confirm_direct:
-                return True
-
-            # Check if command is safe
-            if task.extracted_command:
-                if not self.classifier.is_safe_command(task.extracted_command):
-                    if self.verbose:
-                        self.output_handler.log_info(f"Command blocked: {task.extracted_command}")
-                    return False
-
-            # Confirm with user
+        if action == "confirm":
+            # Side effect: user interaction
             if self.verbose:
                 self.output_handler.log_info(f"Command: {task.extracted_command}")
                 response = input("  Execute? [y/N]: ").strip().lower()
                 return response in ['y', 'yes']
-
-        # Code generation always proceeds (has its own approval loop)
-        if task.task_type == TaskType.CODE_GENERATION:
-            return True
+            return False
 
         return True
 
