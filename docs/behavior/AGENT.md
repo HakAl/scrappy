@@ -10,6 +10,8 @@
 
 <!-- todo -->
 - Agent composition - Chain multiple specialized agents
+- Complexity-based planning
+-  Create HybridExecutor - Chain ResearchExecutor → Decision → AgentExecutor
 
 
 ## Architecture

@@ -7,6 +7,12 @@
 - Verbose ALTS warning: Google Cloud ALTS credentials warning on every run
 - Interactive-Only CLI: Can't pipe commands, no programmatic API, no --command flag
 - Windows Unicode Incompatibility: Emoji characters crash on Windows (cp1252)
+- Missing API Key Warning: Shows [X] but continues (not blocking, just noisy)
+
+<!-- new features -->
+
+- Diff preview
+
 
  Code Quality Assessment Summary
 
@@ -134,24 +140,17 @@
 
 ---
 
-we're working to improve src\cli the next tasks is: 
-Create Base Handler Protocol
- - Create src/cli/protocols.py with CLIHandlerProtocol
- - Define common interface for all handlers
- - Add type hints for all protocol methods
+we're working to improve src\cli the next task is: 
+Inject I/O Dependencies
+ - Update all handlers to accept io: CLIIOProtocol parameter
+ - Replace direct click.prompt/confirm/echo/secho calls
+ - Files: core.py, session.py, agent_manager.py, codebase.py, multiprovider.py
 can you research the task and begin writing tests for the change?
 
 
 CLI Refactoring
 
  Phase 1: Foundation - Enable Testability
-
-
- 1.2 Create Base Handler Protocol
-
- - Create src/cli/protocols.py with CLIHandlerProtocol
- - Define common interface for all handlers
- - Add type hints for all protocol methods
 
  1.3 Inject I/O Dependencies
 

@@ -7,6 +7,14 @@ import os
 import click
 from pathlib import Path
 from datetime import datetime
+from typing import Optional
+
+try:
+    from .io_interface import CLIIOProtocol, ClickIO
+except ImportError:
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from cli.io_interface import CLIIOProtocol, ClickIO
 
 
 class CLICodebaseAnalysis:
@@ -20,29 +28,32 @@ class CLICodebaseAnalysis:
         """
         self.orchestrator = orchestrator
 
-    def explore_codebase(self, path: str = ""):
+    def explore_codebase(self, path: str = "", io: Optional[CLIIOProtocol] = None):
         """Explore and learn about a codebase."""
+        if io is None:
+            io = ClickIO()
+
         if not path:
-            path = click.prompt("Directory to explore", default=".")
+            path = io.prompt("Directory to explore", default=".")
 
         path = Path(path).resolve()
         if not path.exists():
-            click.secho(f"Path does not exist: {path}", fg="red")
+            io.secho(f"Path does not exist: {path}", fg="red")
             return
 
         if not path.is_dir():
-            click.secho(f"Not a directory: {path}", fg="red")
+            io.secho(f"Not a directory: {path}", fg="red")
             return
 
-        click.secho(f"\nExploring: {path}", bold=True)
-        click.echo("-" * 50)
+        io.secho(f"\nExploring: {path}", bold=True)
+        io.echo("-" * 50)
 
         # Check if exploring current project or different directory
         is_current_project = path == self.orchestrator.context.project_path
 
         if is_current_project:
             # Use orchestrator's context system for proper persistence
-            click.echo("Using context-aware exploration...")
+            io.echo("Using context-aware exploration...")
             with click.progressbar(length=2, label="Scanning codebase") as bar:
                 # Step 1: Explore and scan files
                 result = self.orchestrator.context.explore(force=True)
@@ -69,7 +80,7 @@ class CLICodebaseAnalysis:
             )
         else:
             # For external directories, use standalone exploration (legacy behavior)
-            click.echo("Exploring external directory (not persisted to context)...")
+            io.echo("Exploring external directory (not persisted to context)...")
             with click.progressbar(length=4, label="Scanning codebase") as bar:
                 source_files = self._find_source_files(path)
                 bar.update(1)
@@ -86,22 +97,22 @@ class CLICodebaseAnalysis:
                 str(path)
             )
 
-        click.echo()
-        click.secho("Codebase Summary:", bold=True)
-        click.echo("-" * 50)
-        click.echo(summary)
+        io.echo()
+        io.secho("Codebase Summary:", bold=True)
+        io.echo("-" * 50)
+        io.echo(summary)
 
         if is_current_project:
-            click.secho("\nContext saved! Use /context to view status.", fg="green")
+            io.secho("\nContext saved! Use /context to view status.", fg="green")
 
         # Offer to save summary
-        if click.confirm("\nSave summary to file?", default=False):
+        if io.confirm("\nSave summary to file?", default=False):
             summary_file = path / "CODEBASE_SUMMARY.md"
             with open(summary_file, 'w', encoding='utf-8') as f:
                 f.write(f"# Codebase Summary\n\n")
                 f.write(f"Generated: {datetime.now().isoformat()}\n\n")
                 f.write(summary)
-            click.secho(f"Saved to: {summary_file}", fg="green")
+            io.secho(f"Saved to: {summary_file}", fg="green")
 
     def _find_source_files(self, path: Path) -> dict:
         """Find all source files organized by type."""

@@ -1,6 +1,7 @@
 <!-- todo  -->
 
-Parallel tool execution - Run independent tools concurrently
+- Parallel tool execution - Run independent tools concurrently
+- Test runner tool
 
 ---
 

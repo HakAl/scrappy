@@ -6,6 +6,7 @@ Provides mock adapters and utilities for testing the orchestrator and agent.
 
 from typing import List, Optional, Dict, Any, Callable
 from unittest.mock import Mock
+from pathlib import Path
 
 from src.providers.base import LLMResponse
 from src.orchestrator_adapter import NullContext, ContextProvider
@@ -108,6 +109,24 @@ class ConfigurableTestOrchestrator:
         self.context = Mock()
         self.context.is_explored.return_value = context_explored
         self.context.get_summary.return_value = "" if not context_explored else "Test codebase summary"
+        self.context.project_path = Path("/test/project")
+
+        # Additional attributes for CLI handlers
+        self.brain = recommended_provider
+        self.context_aware = True
+        self.caching_enabled = True
+        self.providers = self  # self implements list_available
+        self.session_manager = Mock()
+        self.session_manager.get_session_info.return_value = {'exists': False}
+
+        # Storage for discoveries
+        self._discoveries = []
+        self._working_memory = {
+            'files': {},
+            'searches': [],
+            'git_ops': [],
+            'discoveries': []
+        }
 
     def list_available(self) -> List[str]:
         """Return available providers."""
@@ -179,6 +198,104 @@ class ConfigurableTestOrchestrator:
         self.delegate_calls = []
         self.call_count = 0
         self.providers_used = []
+
+    def add_discovery(self, content: str, source: str = "") -> None:
+        """Add a discovery to working memory."""
+        self._discoveries.append({'content': content, 'source': source})
+        self._working_memory['discoveries'].append({'content': content, 'source': source})
+
+    def explore_project(self, force: bool = False) -> dict:
+        """Explore the project."""
+        return {'status': 'cached' if not force else 'explored', 'total_files': 10}
+
+    def get_working_memory_summary(self) -> dict:
+        """Get summary of working memory."""
+        return {
+            'files_cached': len(self._working_memory['files']),
+            'cached_files': list(self._working_memory['files'].keys()),
+            'recent_searches': len(self._working_memory['searches']),
+            'git_operations': len(self._working_memory['git_ops']),
+            'discoveries': len(self._working_memory['discoveries'])
+        }
+
+    def get_context_status(self) -> dict:
+        """Get context status."""
+        return {
+            'project_path': self.context.project_path,
+            'is_explored': self.context.is_explored(),
+            'has_summary': bool(self.context.get_summary()),
+            'explored_at': None,
+            'total_files': 10,
+            'cache_file': '/test/.cache',
+            'cache_exists': False
+        }
+
+    def get_cache_stats(self) -> dict:
+        """Get cache statistics."""
+        return {
+            'exact_cache_entries': 10,
+            'intent_cache_entries': 5,
+            'exact_hits': 20,
+            'intent_hits': 10,
+            'exact_misses': 30,
+            'saves': 15,
+            'exact_hit_rate': '40.0%',
+            'intent_hit_rate': '25.0%',
+            'cache_file': '/test/.cache'
+        }
+
+    def toggle_cache(self) -> bool:
+        """Toggle caching on/off."""
+        self.caching_enabled = not self.caching_enabled
+        return self.caching_enabled
+
+    def clear_cache(self) -> None:
+        """Clear the response cache."""
+        pass
+
+    def get_rate_limit_status(self) -> dict:
+        """Get rate limit status."""
+        return {
+            'last_reset': {'daily': 'N/A', 'monthly': 'N/A'},
+            'providers': {}
+        }
+
+    def check_rate_limit_warnings(self) -> list:
+        """Check for rate limit warnings."""
+        return []
+
+    def reset_rate_tracking(self, provider: str = None) -> None:
+        """Reset rate limit tracking."""
+        pass
+
+    def save_session(self, conversation_history: list = None) -> str:
+        """Save the current session."""
+        return '/test/session.json'
+
+    def load_session(self) -> dict:
+        """Load a saved session."""
+        return {
+            'status': 'loaded',
+            'saved_at': '2024-01-01',
+            'files_restored': 5,
+            'searches_restored': 3,
+            'git_ops_restored': 2,
+            'discoveries_restored': 1,
+            'conversation_history': []
+        }
+
+    def clear_session(self) -> None:
+        """Clear the saved session."""
+        pass
+
+    def clear_working_memory(self) -> None:
+        """Clear working memory."""
+        self._working_memory = {
+            'files': {},
+            'searches': [],
+            'git_ops': [],
+            'discoveries': []
+        }
 
 
 class SimpleLLMAdapter:

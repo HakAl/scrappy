@@ -1,5 +1,8 @@
 <!-- todo -->
 
+- Semantic LLM classification
+- Add intent clarification mechanism
+
 ---
   Recommendations
 

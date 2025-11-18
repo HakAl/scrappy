@@ -1,3 +1,9 @@
+<!-- todo  -->
+ 
+ - still an issue? Inconsistent API: ProviderRegistry.providers vs ._providers
+ - local embeddings
+
+
  ## Provider Configuration 
  **- src/providers/base.py**
 

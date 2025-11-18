@@ -18,6 +18,7 @@ try:
     from .smart_query import CLISmartQuery
     from .agent_manager import CLIAgentManager
     from .task_router_handler import CLITaskRouterHandler
+    from .io_interface import CLIIOProtocol, ClickIO
 except ImportError:
     # Allow running as script
     import sys
@@ -32,6 +33,7 @@ except ImportError:
     from cli.smart_query import CLISmartQuery
     from cli.agent_manager import CLIAgentManager
     from cli.task_router_handler import CLITaskRouterHandler
+    from cli.io_interface import CLIIOProtocol, ClickIO
 
 
 class CLI:
@@ -43,14 +45,19 @@ class CLI:
         auto_explore: bool = False,
         context_aware: bool = True,
         verbose_selection: bool = False,
-        show_provider_status: bool = False
+        show_provider_status: bool = False,
+        io: Optional[CLIIOProtocol] = None
     ):
         """Initialize CLI with orchestrator and component handlers."""
-        click.secho("Initializing LLM Agent Team...", fg="cyan")
+        if io is None:
+            io = ClickIO()
+        self.io = io
+
+        io.secho("Initializing LLM Agent Team...", fg="cyan")
 
         # Show verbose selection info if requested
         if verbose_selection:
-            click.secho("Verbose provider selection enabled", fg="yellow")
+            io.secho("Verbose provider selection enabled", fg="yellow")
 
         self.orchestrator = AgentOrchestrator(
             orchestrator_provider=brain,
@@ -84,42 +91,45 @@ class CLI:
 
         # Display initialization info (unless show_provider_status already did)
         if not show_provider_status:
-            click.echo(f"Brain: {click.style(self.orchestrator.brain, fg='green', bold=True)}")
+            io.echo(f"Brain: {io.style(self.orchestrator.brain, fg='green', bold=True)}")
             providers_list = ', '.join(self.orchestrator.providers.list_available())
-            click.echo(f"Available providers: {click.style(providers_list, fg='cyan')}")
+            io.echo(f"Available providers: {io.style(providers_list, fg='cyan')}")
 
         # Show context status
         if self.orchestrator.context.is_explored():
-            click.secho(f"Context: {self.orchestrator.context.project_path.name} (cached)", fg="cyan")
+            io.secho(f"Context: {self.orchestrator.context.project_path.name} (cached)", fg="cyan")
         elif context_aware:
-            click.secho("Context: Not explored (use /context to explore)", fg="yellow")
+            io.secho("Context: Not explored (use /context to explore)", fg="yellow")
 
         # Auto-detect and offer to load previous session
-        self._check_and_offer_session_restore()
+        self._check_and_offer_session_restore(io=io)
 
-        click.echo()
+        io.echo()
 
-    def _read_multiline_input(self, prompt_text: str = "... ") -> str:
+    def _read_multiline_input(self, prompt_text: str = "... ", io: Optional[CLIIOProtocol] = None) -> str:
         """
         Read multiline input from user until they enter a blank line or 'END'.
 
         Returns:
             The complete multiline string.
         """
-        click.secho("Enter your multiline input (blank line or 'END' to finish):", fg="cyan")
+        if io is None:
+            io = self.io
+
+        io.secho("Enter your multiline input (blank line or 'END' to finish):", fg="cyan")
         lines = []
 
         while True:
             try:
-                line = click.prompt(prompt_text, default="", show_default=False, prompt_suffix="")
+                line = io.prompt(prompt_text, default="", show_default=False)
 
                 # Check for termination
                 if line.strip() == "" or line.strip().upper() == "END":
                     break
 
                 lines.append(line)
-            except click.Abort:
-                click.echo("\nMultiline input cancelled.")
+            except Exception:
+                io.echo("\nMultiline input cancelled.")
                 return ""
 
         return "\n".join(lines)
@@ -193,55 +203,61 @@ class CLI:
 
         return False
 
-    def _show_current_task(self):
+    def _show_current_task(self, io: Optional[CLIIOProtocol] = None):
         """Display the current task being worked on."""
+        if io is None:
+            io = self.io
+
         if not self.plan_active or not self.active_plan:
             return
 
         total = len(self.active_plan)
         current = self.current_task_index + 1
 
-        click.secho("━" * 60, fg="cyan")
-        click.secho(f"[{current}/{total}] ", fg="cyan", bold=True, nl=False)
+        io.secho("=" * 60, fg="cyan")
+        io.secho(f"[{current}/{total}] ", fg="cyan", bold=True, nl=False)
 
         task = self.active_plan[self.current_task_index]
         if isinstance(task, dict):
-            click.secho(task.get('step', task.get('description', 'Task')), bold=True)
+            io.secho(task.get('step', task.get('description', 'Task')), bold=True)
             if 'description' in task and 'step' in task:
-                click.echo(f"    {task['description']}")
+                io.echo(f"    {task['description']}")
         else:
-            click.secho(str(task), bold=True)
+            io.secho(str(task), bold=True)
 
-        click.secho("━" * 60, fg="cyan")
-        click.echo()
+        io.secho("=" * 60, fg="cyan")
+        io.echo()
 
-    def _prompt_task_progression(self) -> bool:
+    def _prompt_task_progression(self, io: Optional[CLIIOProtocol] = None) -> bool:
         """
         Prompt user for next action after completing work.
         Returns True to continue loop, False if plan is finished.
         """
+        if io is None:
+            io = self.io
+
         if not self.plan_active:
             return True
 
         # Skip prompts if not in interactive mode
         if not sys.stdin.isatty():
-            click.secho("Non-interactive mode: ending plan execution.", fg="yellow")
+            io.secho("Non-interactive mode: ending plan execution.", fg="yellow")
             self.plan_active = False
             return True
 
-        click.echo()
-        click.secho("What next?", fg="cyan", bold=True)
-        click.echo("  1. Mark complete & continue")
-        click.echo("  2. Stay on this task")
-        click.echo("  3. Skip this task")
-        click.echo("  4. Finish planning session")
-        click.echo()
+        io.echo()
+        io.secho("What next?", fg="cyan", bold=True)
+        io.echo("  1. Mark complete & continue")
+        io.echo("  2. Stay on this task")
+        io.echo("  3. Skip this task")
+        io.echo("  4. Finish planning session")
+        io.echo()
 
         try:
-            choice = click.prompt("Choice", default="1", show_default=True).strip()
-        except (EOFError, click.Abort):
+            choice = io.prompt("Choice", default="1", show_default=True).strip()
+        except (EOFError, Exception):
             # Non-interactive or cancelled - end plan
-            click.secho("\nEnding planning session...", fg="yellow")
+            io.secho("\nEnding planning session...", fg="yellow")
             self.plan_active = False
             return True
 
@@ -249,53 +265,56 @@ class CLI:
             # Mark complete and advance
             task = self.active_plan[self.current_task_index]
             task_name = task.get('step', str(task)) if isinstance(task, dict) else str(task)
-            click.secho(f"[DONE] Task {self.current_task_index + 1} complete", fg="green", bold=True)
-            click.echo()
+            io.secho(f"[DONE] Task {self.current_task_index + 1} complete", fg="green", bold=True)
+            io.echo()
 
             self.current_task_index += 1
             if self.current_task_index >= len(self.active_plan):
-                click.secho("All tasks complete!", fg="green", bold=True)
-                self._show_plan_summary()
+                io.secho("All tasks complete!", fg="green", bold=True)
+                self._show_plan_summary(io=io)
                 self.plan_active = False
                 return True
 
-            self._show_current_task()
+            self._show_current_task(io=io)
             # Auto-execute the next task (if enabled)
             if self.auto_execute_tasks:
-                self._execute_current_task()
+                self._execute_current_task(io=io)
 
         elif choice == "2":
             # Stay on current task
-            click.secho("Continuing with current task...", fg="yellow")
-            click.echo()
+            io.secho("Continuing with current task...", fg="yellow")
+            io.echo()
 
         elif choice == "3":
             # Skip task
-            click.secho(f"⏭ Skipped task {self.current_task_index + 1}", fg="yellow")
-            click.echo()
+            io.secho(f"Skipped task {self.current_task_index + 1}", fg="yellow")
+            io.echo()
 
             self.current_task_index += 1
             if self.current_task_index >= len(self.active_plan):
-                click.secho("Plan complete (some tasks skipped)", fg="yellow", bold=True)
-                self._show_plan_summary()
+                io.secho("Plan complete (some tasks skipped)", fg="yellow", bold=True)
+                self._show_plan_summary(io=io)
                 self.plan_active = False
                 return True
 
-            self._show_current_task()
+            self._show_current_task(io=io)
             # Auto-execute the next task (if enabled)
             if self.auto_execute_tasks:
-                self._execute_current_task()
+                self._execute_current_task(io=io)
 
         elif choice == "4":
             # End planning session
-            click.secho("Ending planning session...", fg="yellow")
-            self._show_plan_summary()
+            io.secho("Ending planning session...", fg="yellow")
+            self._show_plan_summary(io=io)
             self.plan_active = False
 
         return True
 
-    def _check_and_offer_session_restore(self):
+    def _check_and_offer_session_restore(self, io: Optional[CLIIOProtocol] = None):
         """Check for existing session and offer to restore it automatically."""
+        if io is None:
+            io = self.io
+
         # Skip session restore if not in interactive mode
         if not sys.stdin.isatty():
             return
@@ -309,61 +328,67 @@ class CLI:
             return
 
         # Show session info
-        click.secho("\nPrevious session detected:", fg="yellow", bold=True)
-        click.echo(f"  Saved: {session_info.get('saved_at', 'unknown')}")
-        click.echo(f"  Files cached: {session_info.get('file_count', 0)}")
-        click.echo(f"  Searches: {session_info.get('search_count', 0)}")
-        click.echo(f"  Discoveries: {session_info.get('discovery_count', 0)}")
-        click.echo(f"  Tasks: {session_info.get('task_count', 0)}")
+        io.secho("\nPrevious session detected:", fg="yellow", bold=True)
+        io.echo(f"  Saved: {session_info.get('saved_at', 'unknown')}")
+        io.echo(f"  Files cached: {session_info.get('file_count', 0)}")
+        io.echo(f"  Searches: {session_info.get('search_count', 0)}")
+        io.echo(f"  Discoveries: {session_info.get('discovery_count', 0)}")
+        io.echo(f"  Tasks: {session_info.get('task_count', 0)}")
 
         if session_info.get('has_conversation', False):
-            click.echo(f"  Has conversation history: Yes")
+            io.echo(f"  Has conversation history: Yes")
 
         # Offer to restore
         try:
-            if click.confirm("Restore previous session?", default=True):
+            if io.confirm("Restore previous session?", default=True):
                 result = self.orchestrator.load_session()
                 if result['status'] == 'loaded':
-                    click.secho("Session restored successfully!", fg="green")
-                    click.echo(f"  Files: {result['files_restored']}")
-                    click.echo(f"  Searches: {result['searches_restored']}")
-                    click.echo(f"  Git ops: {result['git_ops_restored']}")
-                    click.echo(f"  Discoveries: {result['discoveries_restored']}")
+                    io.secho("Session restored successfully!", fg="green")
+                    io.echo(f"  Files: {result['files_restored']}")
+                    io.echo(f"  Searches: {result['searches_restored']}")
+                    io.echo(f"  Git ops: {result['git_ops_restored']}")
+                    io.echo(f"  Discoveries: {result['discoveries_restored']}")
 
                     # Restore conversation history
                     conversation = result.get('conversation_history', [])
                     if conversation:
                         self.conversation_history = conversation
-                        click.echo(f"  Conversation: {len(conversation)} messages")
+                        io.echo(f"  Conversation: {len(conversation)} messages")
                 else:
-                    click.secho(f"Could not restore session: {result.get('message', 'unknown error')}", fg="red")
+                    io.secho(f"Could not restore session: {result.get('message', 'unknown error')}", fg="red")
             else:
-                click.secho("Starting fresh session.", fg="yellow")
-        except (EOFError, click.Abort):
+                io.secho("Starting fresh session.", fg="yellow")
+        except (EOFError, Exception):
             # Non-interactive environment or user cancelled
-            click.secho("Starting fresh session.", fg="yellow")
+            io.secho("Starting fresh session.", fg="yellow")
 
-    def _show_plan_summary(self):
+    def _show_plan_summary(self, io: Optional[CLIIOProtocol] = None):
         """Show summary of plan progress."""
+        if io is None:
+            io = self.io
+
         if not self.active_plan:
             return
 
         total = len(self.active_plan)
         completed = self.current_task_index
 
-        click.echo()
-        click.secho("Plan Summary:", fg="cyan", bold=True)
-        click.echo(f"  Completed: {completed}/{total} tasks")
+        io.echo()
+        io.secho("Plan Summary:", fg="cyan", bold=True)
+        io.echo(f"  Completed: {completed}/{total} tasks")
 
         # Progress bar
         progress = int((completed / total) * 20)
-        bar = "█" * progress + "░" * (20 - progress)
+        bar = "#" * progress + "-" * (20 - progress)
         percentage = int((completed / total) * 100)
-        click.echo(f"  Progress: [{bar}] {percentage}%")
-        click.echo()
+        io.echo(f"  Progress: [{bar}] {percentage}%")
+        io.echo()
 
-    def _execute_current_task(self):
+    def _execute_current_task(self, io: Optional[CLIIOProtocol] = None):
         """Automatically execute the current task using intelligent routing."""
+        if io is None:
+            io = self.io
+
         if not self.plan_active or not self.active_plan:
             return
 
@@ -377,7 +402,7 @@ class CLI:
         else:
             full_task = str(task)
 
-        click.secho(f"\nAuto-executing task...", fg="cyan", bold=True)
+        io.secho(f"\nAuto-executing task...", fg="cyan", bold=True)
 
         # Use TaskRouter to intelligently route the task
         # This automatically selects the right strategy:
@@ -389,28 +414,28 @@ class CLI:
             result = self.task_router.router.route(full_task)
 
             if result.success:
-                click.secho("[OK] Task executed successfully", fg="green")
+                io.secho("[OK] Task executed successfully", fg="green")
                 if result.output:
-                    click.echo(result.output[:1000])  # Truncate long output
+                    io.echo(result.output[:1000])  # Truncate long output
             else:
-                click.secho(f"[FAIL] Task failed: {result.error}", fg="red")
+                io.secho(f"[FAIL] Task failed: {result.error}", fg="red")
 
             # Show execution metadata
             if "classification" in result.metadata:
                 cls_info = result.metadata["classification"]
-                click.secho(
+                io.secho(
                     f"  [Strategy: {cls_info.get('type', 'unknown')} | "
                     f"Provider: {cls_info.get('resolved_provider', 'none')}]",
                     fg="bright_black"
                 )
         except Exception as e:
-            click.secho(f"Error executing task: {e}", fg="red")
+            io.secho(f"Error executing task: {e}", fg="red")
             # Fallback to agent manager if TaskRouter fails
-            click.secho("Falling back to agent manager...", fg="yellow")
-            self.agent_mgr.run_agent(full_task)
+            io.secho("Falling back to agent manager...", fg="yellow")
+            self.agent_mgr.run_agent(full_task, io=io)
 
         # After task completes, prompt for next action
-        self._prompt_task_progression()
+        self._prompt_task_progression(io=io)
 
     def interactive_mode(self):
         """Run interactive chat mode."""
@@ -598,10 +623,13 @@ class CLI:
                 click.secho(f"\nError: {e}", fg="red")
                 click.echo("Type /help for available commands.\n")
 
-    def _handle_command(self, command: str) -> bool:
+    def _handle_command(self, command: str, io: Optional[CLIIOProtocol] = None) -> bool:
         """
         Handle slash commands. Returns True to continue loop, False to exit.
         """
+        if io is None:
+            io = self.io
+
         parts = command.split(maxsplit=1)
         cmd = parts[0].lower()
         args = parts[1] if len(parts) > 1 else ""
@@ -611,17 +639,17 @@ class CLI:
             if self.auto_save:
                 try:
                     session_file = self.orchestrator.save_session(self.conversation_history)
-                    click.secho(f"\nSession saved to: {session_file}", fg="green")
-                    click.echo(f"  Conversation: {len(self.conversation_history)} messages")
-                    click.echo("Use 'llm-team --resume' to continue later.")
+                    io.secho(f"\nSession saved to: {session_file}", fg="green")
+                    io.echo(f"  Conversation: {len(self.conversation_history)} messages")
+                    io.echo("Use 'llm-team --resume' to continue later.")
                 except Exception as e:
-                    click.secho(f"Warning: Could not save session: {e}", fg="yellow")
+                    io.secho(f"Warning: Could not save session: {e}", fg="yellow")
             else:
-                click.secho("\nSession not saved (auto-save disabled).", fg="yellow")
-                click.echo("Use '/session save' to manually save before quitting.")
+                io.secho("\nSession not saved (auto-save disabled).", fg="yellow")
+                io.echo("Use '/session save' to manually save before quitting.")
 
             self.display.show_usage()
-            click.secho("\nGoodbye!", fg="cyan", bold=True)
+            io.secho("\nGoodbye!", fg="cyan", bold=True)
             return False
 
         elif cmd == "/help":
@@ -633,13 +661,13 @@ class CLI:
         elif cmd == "/autoexec":
             # Toggle auto-execute for plan tasks
             self.auto_execute_tasks = not self.auto_execute_tasks
-            status = click.style("ENABLED", fg="green") if self.auto_execute_tasks else click.style("DISABLED", fg="red")
-            click.echo(f"Auto-execute tasks: {status}")
+            status = io.style("ENABLED", fg="green") if self.auto_execute_tasks else io.style("DISABLED", fg="red")
+            io.echo(f"Auto-execute tasks: {status}")
             if self.auto_execute_tasks:
-                click.echo("  Tasks in plans will be automatically executed using intelligent routing")
-                click.echo("  (DIRECT_COMMAND → immediate, RESEARCH → fast LLM, CODE_GEN → agent with approval)")
+                io.echo("  Tasks in plans will be automatically executed using intelligent routing")
+                io.echo("  (DIRECT_COMMAND -> immediate, RESEARCH -> fast LLM, CODE_GEN -> agent with approval)")
             else:
-                click.echo("  Tasks in plans will wait for manual execution")
+                io.echo("  Tasks in plans will wait for manual execution")
 
         elif cmd == "/providers":
             self.display.list_providers()
@@ -652,75 +680,75 @@ class CLI:
 
         elif cmd == "/plan":
             if not args:
-                click.echo("Usage: /plan <task description>")
+                io.echo("Usage: /plan <task description>")
             else:
                 steps = self.tasks.plan_task(args)
                 if steps and len(steps) > 0:
                     # Prompt to start tracking
-                    if click.confirm("Start working on this plan?", default=True):
+                    if io.confirm("Start working on this plan?", default=True):
                         self.active_plan = steps
                         self.current_task_index = 0
                         self.plan_active = True
-                        click.echo()
-                        self._show_current_task()
+                        io.echo()
+                        self._show_current_task(io=io)
                         # Auto-execute the first task (if enabled)
                         if self.auto_execute_tasks:
-                            self._execute_current_task()
+                            self._execute_current_task(io=io)
 
         elif cmd == "/reason":
             if not args:
-                click.echo("Usage: /reason <question>")
+                io.echo("Usage: /reason <question>")
             else:
                 self.tasks.reason(args)
 
         elif cmd == "/synthesize":
-            self.multiprovider.synthesize_mode()
+            self.multiprovider.synthesize_mode(io=io)
 
         elif cmd == "/delegate":
-            self.multiprovider.delegate_mode(args)
+            self.multiprovider.delegate_mode(args, io=io)
 
         elif cmd == "/clear":
             self.conversation_history.clear()
-            click.secho("Conversation history cleared.", fg="green")
+            io.secho("Conversation history cleared.", fg="green")
 
         elif cmd == "/models":
             self.display.list_models(args)
 
         elif cmd == "/explore":
-            self.codebase.explore_codebase(args)
+            self.codebase.explore_codebase(args, io=io)
 
         elif cmd == "/context":
-            self.session_mgr.manage_context(args)
+            self.session_mgr.manage_context(args, io=io)
 
         elif cmd == "/agent":
             if not args:
-                click.echo("Usage: /agent <task description>")
+                io.echo("Usage: /agent <task description>")
             else:
-                self.agent_mgr.run_agent(args)
+                self.agent_mgr.run_agent(args, io=io)
                 # Prompt for task progression if plan is active
                 if self.plan_active:
-                    self._prompt_task_progression()
+                    self._prompt_task_progression(io=io)
 
         elif cmd == "/smart":
             if not args:
                 # Show smart mode status
-                status = click.style("ON", fg="green") if self.smart_mode else click.style("OFF", fg="yellow")
-                click.echo(f"Smart query mode: {status}")
-                click.echo("Usage: /smart <query> or /smart toggle")
+                status = io.style("ON", fg="green") if self.smart_mode else io.style("OFF", fg="yellow")
+                io.echo(f"Smart query mode: {status}")
+                io.echo("Usage: /smart <query> or /smart toggle")
             elif args.lower() == "toggle":
                 self.smart_mode = not self.smart_mode
                 status = "enabled" if self.smart_mode else "disabled"
-                click.secho(f"Smart query mode {status}.", fg="green" if self.smart_mode else "yellow")
+                io.secho(f"Smart query mode {status}.", fg="green" if self.smart_mode else "yellow")
                 if self.smart_mode:
-                    click.echo("All queries will now use tools for research (higher quota usage).")
+                    io.echo("All queries will now use tools for research (higher quota usage).")
             else:
                 self.smart.smart_query(args)
 
         elif cmd == "/cache":
-            self.session_mgr.manage_cache(args)
+            self.session_mgr.manage_cache(args, io=io)
 
         elif cmd == "/session":
-            result = self.session_mgr.manage_session(args, self.conversation_history, self.auto_save)
+            result = self.session_mgr.manage_session(args, self.conversation_history, self.auto_save, io=io)
             # Update state if changed
             if result.get('conversation_history') is not None:
                 self.conversation_history = result['conversation_history']
@@ -728,81 +756,81 @@ class CLI:
                 self.auto_save = result['auto_save']
 
         elif cmd == "/limits":
-            self.session_mgr.show_rate_limits(args)
+            self.session_mgr.show_rate_limits(args, io=io)
 
         elif cmd == "/tasks":
             if not self.plan_active or not self.active_plan:
-                click.secho("No active plan. Use /plan <task> to create one.", fg="yellow")
+                io.secho("No active plan. Use /plan <task> to create one.", fg="yellow")
             else:
-                click.secho("\nCurrent Plan:", fg="cyan", bold=True)
-                click.secho("-" * 50, fg="cyan")
+                io.secho("\nCurrent Plan:", fg="cyan", bold=True)
+                io.secho("-" * 50, fg="cyan")
                 for i, task in enumerate(self.active_plan):
                     if i < self.current_task_index:
                         # Completed
-                        status = click.style("[x]", fg="green")
+                        status = io.style("[x]", fg="green")
                     elif i == self.current_task_index:
                         # Current
-                        status = click.style("→", fg="yellow", bold=True)
+                        status = io.style("->", fg="yellow", bold=True)
                     else:
                         # Pending
-                        status = click.style("○", fg="white")
+                        status = io.style("o", fg="white")
 
                     if isinstance(task, dict):
                         task_name = task.get('step', task.get('description', 'Task'))
                     else:
                         task_name = str(task)
 
-                    click.echo(f"  {status} {i+1}. {task_name}")
-                click.echo()
-                self._show_plan_summary()
+                    io.echo(f"  {status} {i+1}. {task_name}")
+                io.echo()
+                self._show_plan_summary(io=io)
 
         elif cmd in ["/paste", "/ml", "/multiline"]:
             # Toggle multiline input mode
             self.multiline_mode = not self.multiline_mode
             if self.multiline_mode:
-                click.secho("Multiline input mode: ON", fg="green", bold=True)
-                click.echo("  - End a line with \\ to continue on next line")
-                click.echo("  - Press Enter normally to send (no double-enter needed)")
-                click.echo("  - Commands still work on the first line")
+                io.secho("Multiline input mode: ON", fg="green", bold=True)
+                io.echo("  - End a line with \\ to continue on next line")
+                io.echo("  - Press Enter normally to send (no double-enter needed)")
+                io.echo("  - Commands still work on the first line")
             else:
-                click.secho("Multiline input mode: OFF", fg="yellow", bold=True)
-                click.echo("  - Single line input (press Enter to send)")
-                click.echo("  - Each line is processed separately")
+                io.secho("Multiline input mode: OFF", fg="yellow", bold=True)
+                io.echo("  - Single line input (press Enter to send)")
+                io.echo("  - Each line is processed separately")
 
         elif cmd in ["/auto", "/route", "/autoroute"]:
             if not args:
                 # Toggle auto-routing mode
                 self.auto_route_mode = not self.auto_route_mode
                 if self.auto_route_mode:
-                    click.secho("Auto-routing mode: ON", fg="green", bold=True)
-                    click.echo("  Tasks are automatically classified and routed:")
-                    click.echo("  - Direct commands (pip, git) → Shell execution")
-                    click.echo("  - Code generation → Full agent loop with planning")
-                    click.echo("  - Research queries → Fast provider (Cerebras)")
-                    click.echo("  - Simple chat → Instant responses")
+                    io.secho("Auto-routing mode: ON", fg="green", bold=True)
+                    io.echo("  Tasks are automatically classified and routed:")
+                    io.echo("  - Direct commands (pip, git) -> Shell execution")
+                    io.echo("  - Code generation -> Full agent loop with planning")
+                    io.echo("  - Research queries -> Fast provider (Cerebras)")
+                    io.echo("  - Simple chat -> Instant responses")
                 else:
-                    click.secho("Auto-routing mode: OFF", fg="yellow", bold=True)
-                    click.echo("  All input goes to default chat mode.")
+                    io.secho("Auto-routing mode: OFF", fg="yellow", bold=True)
+                    io.echo("  All input goes to default chat mode.")
             elif args.lower() == "status":
                 self.task_router.handle_route_status()
             elif args.lower() == "history":
                 self.task_router.handle_route_history()
             else:
-                click.echo("Usage: /auto [status|history]")
-                click.echo("  /auto         - Toggle auto-routing mode")
-                click.echo("  /auto status  - Show routing metrics")
-                click.echo("  /auto history - Show routing history")
+                io.echo("Usage: /auto [status|history]")
+                io.echo("  /auto         - Toggle auto-routing mode")
+                io.echo("  /auto status  - Show routing metrics")
+                io.echo("  /auto history - Show routing history")
 
         elif cmd == "/classify":
             if not args:
-                click.echo("Usage: /classify <task description>")
-                click.echo("  Preview how a task would be classified without executing.")
+                io.echo("Usage: /classify <task description>")
+                io.echo("  Preview how a task would be classified without executing.")
             else:
                 self.task_router.handle_classify_only(args)
 
         else:
-            click.secho(f"Unknown command: {cmd}", fg="yellow")
-            click.echo("Type /help for available commands.")
+            io.secho(f"Unknown command: {cmd}", fg="yellow")
+            io.echo("Type /help for available commands.")
 
-        click.echo()
+        io.echo()
         return True

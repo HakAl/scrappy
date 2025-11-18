@@ -51,6 +51,10 @@
 
 ---
 
+<!-- new features -->
+- Project-based auto-resume
+- Add research result caching - Store findings for action phase to use
+
 <!-- EXISITING ISSUE -->
 - context summary file always written, doesn't respect user choice
 - Auto-explore Stale Context: Uses cached context from llm_team itself, not the new project

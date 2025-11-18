@@ -3,7 +3,15 @@ Multi-provider operations for the CLI.
 Handles synthesis and delegation across multiple providers.
 """
 
-import click
+from typing import Optional
+
+try:
+    from .io_interface import CLIIOProtocol, ClickIO
+except ImportError:
+    import sys
+    import os
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from cli.io_interface import CLIIOProtocol, ClickIO
 
 
 class CLIMultiProvider:
@@ -17,21 +25,24 @@ class CLIMultiProvider:
         """
         self.orchestrator = orchestrator
 
-    def synthesize_mode(self):
+    def synthesize_mode(self, io: Optional[CLIIOProtocol] = None):
         """Interactive synthesis mode - gather responses from multiple providers."""
-        click.secho("\nSynthesis Mode", bold=True)
-        click.echo("-" * 50)
-        click.echo("This will query multiple providers and synthesize their responses.")
+        if io is None:
+            io = ClickIO()
 
-        prompt = click.prompt("Enter your question")
+        io.secho("\nSynthesis Mode", bold=True)
+        io.echo("-" * 50)
+        io.echo("This will query multiple providers and synthesize their responses.")
+
+        prompt = io.prompt("Enter your question")
         if not prompt:
-            click.echo("No question provided.")
+            io.echo("No question provided.")
             return
 
         available = self.orchestrator.providers.list_available()
-        click.echo(f"\nAvailable providers: {', '.join(available)}")
+        io.echo(f"\nAvailable providers: {', '.join(available)}")
 
-        providers_input = click.prompt("Providers to query (comma-separated, or 'all')")
+        providers_input = io.prompt("Providers to query (comma-separated, or 'all')")
 
         if providers_input.lower() == 'all':
             providers_to_use = available
@@ -40,34 +51,34 @@ class CLIMultiProvider:
             providers_to_use = [p for p in providers_to_use if p in available]
 
         if len(providers_to_use) < 2:
-            click.secho("Need at least 2 providers for synthesis.", fg="yellow")
+            io.secho("Need at least 2 providers for synthesis.", fg="yellow")
             return
 
-        click.echo(f"\nQuerying: {', '.join(providers_to_use)}")
+        io.echo(f"\nQuerying: {', '.join(providers_to_use)}")
 
         results = []
         for provider in providers_to_use:
-            click.echo(f"  Asking {provider}...", nl=False)
+            io.echo(f"  Asking {provider}...", nl=False)
             try:
                 response = self.orchestrator.delegate(provider, prompt)
                 results.append(response)  # Append LLMResponse object, not .content
-                click.secho(f" Done ({response.tokens_used} tokens)", fg="green")
+                io.secho(f" Done ({response.tokens_used} tokens)", fg="green")
             except Exception as e:
-                click.secho(f" Error: {e}", fg="red")
+                io.secho(f" Error: {e}", fg="red")
 
         if len(results) < 2:
-            click.secho("Not enough responses for synthesis.", fg="yellow")
+            io.secho("Not enough responses for synthesis.", fg="yellow")
             return
 
-        click.echo("\nSynthesizing responses...")
+        io.echo("\nSynthesizing responses...")
         synthesis = self.orchestrator.synthesize(
             results,
             "Combine these perspectives into a comprehensive answer:"
         )
 
-        click.secho(f"\nSynthesized Response:", bold=True)
-        click.echo("-" * 50)
-        click.echo(synthesis)
+        io.secho(f"\nSynthesized Response:", bold=True)
+        io.echo("-" * 50)
+        io.echo(synthesis)
 
         # Save synthesis result to working memory
         self.orchestrator.add_discovery(
@@ -75,41 +86,44 @@ class CLIMultiProvider:
             "synthesis"
         )
 
-    def delegate_mode(self, args: str):
+    def delegate_mode(self, args: str, io: Optional[CLIIOProtocol] = None):
         """Delegate a task to a specific provider."""
-        if not args:
-            click.echo("Usage: /delegate <provider> <prompt>")
-            click.echo("   or: /delegate (for interactive mode)")
+        if io is None:
+            io = ClickIO()
 
-            provider = click.prompt("Provider")
-            prompt = click.prompt("Prompt")
+        if not args:
+            io.echo("Usage: /delegate <provider> <prompt>")
+            io.echo("   or: /delegate (for interactive mode)")
+
+            provider = io.prompt("Provider")
+            prompt = io.prompt("Prompt")
         else:
             parts = args.split(maxsplit=1)
             if len(parts) < 2:
-                click.echo("Usage: /delegate <provider> <prompt>")
+                io.echo("Usage: /delegate <provider> <prompt>")
                 return
             provider, prompt = parts
 
         if not provider or not prompt:
-            click.secho("Both provider and prompt are required.", fg="yellow")
+            io.secho("Both provider and prompt are required.", fg="yellow")
             return
 
         provider = provider.lower().strip()
         available = self.orchestrator.providers.list_available()
 
         if provider not in available:
-            click.secho(f"Provider '{provider}' not available.", fg="red")
-            click.echo(f"Available: {', '.join(available)}")
+            io.secho(f"Provider '{provider}' not available.", fg="red")
+            io.echo(f"Available: {', '.join(available)}")
             return
 
-        click.echo(f"\nDelegating to {provider}...")
+        io.echo(f"\nDelegating to {provider}...")
 
         try:
             response = self.orchestrator.delegate(provider, prompt)
-            click.secho(f"\nResponse from {provider}:", bold=True)
-            click.echo("-" * 50)
-            click.echo(response.content)
-            click.secho(
+            io.secho(f"\nResponse from {provider}:", bold=True)
+            io.echo("-" * 50)
+            io.echo(response.content)
+            io.secho(
                 f"\n[{response.model} | {response.tokens_used} tokens | {response.latency_ms:.0f}ms]",
                 fg="cyan"
             )
@@ -120,4 +134,4 @@ class CLIMultiProvider:
                 "delegation"
             )
         except Exception as e:
-            click.secho(f"Error: {e}", fg="red")
+            io.secho(f"Error: {e}", fg="red")
