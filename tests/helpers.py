@@ -590,3 +590,409 @@ class MockIO:
         self._styled_outputs = []
         self._input_index = 0
         self._confirm_index = 0
+
+
+# =============================================================================
+# Factory Functions for Common Test Setups
+# =============================================================================
+
+def make_handler_test_setup(
+    inputs: Optional[List[str]] = None,
+    confirmations: Optional[List[bool]] = None,
+    providers: Optional[List[str]] = None,
+    brain: str = 'cerebras',
+    context_explored: bool = False,
+    response_content: str = '{"thought": "test", "action": "complete", "is_complete": true, "result": "done"}'
+) -> tuple:
+    """
+    Create a common test setup with MockIO and ConfigurableTestOrchestrator.
+
+    Factory function to reduce boilerplate in CLI handler tests.
+
+    Args:
+        inputs: List of input strings for MockIO
+        confirmations: List of boolean confirmations for MockIO
+        providers: List of available providers for orchestrator
+        brain: Default brain/provider for orchestrator
+        context_explored: Whether context should report as explored
+        response_content: JSON content for delegate responses
+
+    Returns:
+        Tuple of (MockIO, ConfigurableTestOrchestrator)
+
+    Usage:
+        io, orch = make_handler_test_setup(
+            inputs=["user input"],
+            confirmations=[True, False],
+            brain='anthropic'
+        )
+
+        handler = MyHandler(orch)
+        handler.do_something(io=io)
+
+        assert "expected" in io.get_output()
+    """
+    io = MockIO(inputs=inputs, confirmations=confirmations)
+
+    orch = ConfigurableTestOrchestrator(
+        available_providers=providers or ['cerebras', 'groq', 'gemini'],
+        recommended_provider=brain,
+        context_explored=context_explored,
+        response_content=response_content
+    )
+    orch.brain = brain
+
+    return io, orch
+
+
+def make_cli_test_context(
+    inputs: Optional[List[str]] = None,
+    confirmations: Optional[List[bool]] = None,
+    context_explored: bool = False,
+    providers: Optional[List[str]] = None
+) -> Dict[str, Any]:
+    """
+    Create a full CLI test context with all commonly needed components.
+
+    Returns a dictionary with io, orchestrator, and context for comprehensive tests.
+
+    Args:
+        inputs: List of input strings for MockIO
+        confirmations: List of boolean confirmations for MockIO
+        context_explored: Whether context should report as explored
+        providers: List of available providers
+
+    Returns:
+        Dictionary with 'io', 'orchestrator', 'context' keys
+
+    Usage:
+        ctx = make_cli_test_context(context_explored=True)
+
+        handler = MyHandler(ctx['orchestrator'])
+        handler.process(io=ctx['io'])
+
+        assert ctx['orchestrator'].context.is_explored()
+    """
+    io, orch = make_handler_test_setup(
+        inputs=inputs,
+        confirmations=confirmations,
+        providers=providers,
+        context_explored=context_explored
+    )
+
+    return {
+        'io': io,
+        'orchestrator': orch,
+        'context': orch.context
+    }
+
+
+def make_mock_agent_result(
+    success: bool = True,
+    result: str = "Task completed",
+    iterations: int = 1,
+    audit_log: Optional[List[Dict[str, Any]]] = None
+) -> Dict[str, Any]:
+    """
+    Create a mock agent run result dictionary.
+
+    Factory function to create properly structured agent results for testing.
+
+    Args:
+        success: Whether the agent completed successfully
+        result: Result message
+        iterations: Number of iterations the agent ran
+        audit_log: List of audit log entries
+
+    Returns:
+        Dictionary matching agent run result structure
+
+    Usage:
+        result = make_mock_agent_result(success=True, iterations=3)
+
+        mock_agent.run.return_value = result
+    """
+    return {
+        'success': success,
+        'result': result,
+        'iterations': iterations,
+        'audit_log': audit_log or []
+    }
+
+
+def make_delegate_response(
+    content: str = '{"thought": "test", "action": "complete", "is_complete": true}',
+    provider: str = "mock",
+    model: str = "",
+    tokens_used: int = 100
+) -> LLMResponse:
+    """
+    Create an LLMResponse for testing delegate calls.
+
+    Convenience wrapper around make_response with better defaults for delegate testing.
+
+    Args:
+        content: Response content
+        provider: Provider name
+        model: Model name
+        tokens_used: Token count
+
+    Returns:
+        LLMResponse instance
+    """
+    return make_response(
+        content=content,
+        provider=provider,
+        model=model,
+        tokens_used=tokens_used
+    )
+
+
+def make_completion_response(
+    result: str = "Task completed",
+    provider: str = "mock",
+    tokens_used: int = 100
+) -> LLMResponse:
+    """
+    Create an LLMResponse with agent completion JSON.
+
+    Creates a response that signals the agent has completed its task.
+
+    Args:
+        result: The result message to include
+        provider: Provider name
+        tokens_used: Token count
+
+    Returns:
+        LLMResponse with completion JSON content
+    """
+    import json
+    content = json.dumps({
+        "thought": "Task completed successfully",
+        "action": "complete",
+        "is_complete": True,
+        "result": result
+    })
+
+    return make_response(
+        content=content,
+        provider=provider,
+        tokens_used=tokens_used
+    )
+
+
+# =============================================================================
+# Behavior Verification Helpers
+# =============================================================================
+
+def assert_output_contains(io: MockIO, text: str, msg: str = "") -> None:
+    """
+    Assert that MockIO output contains the specified text.
+
+    Args:
+        io: MockIO instance to check
+        text: Text to search for
+        msg: Optional custom message on failure
+
+    Raises:
+        AssertionError: If text is not found in output
+    """
+    output = io.get_output()
+    if text not in output:
+        default_msg = f"Text '{text}' not found in output.\nOutput was:\n{output}"
+        raise AssertionError(msg or default_msg)
+
+
+def assert_output_not_contains(io: MockIO, text: str, msg: str = "") -> None:
+    """
+    Assert that MockIO output does not contain the specified text.
+
+    Args:
+        io: MockIO instance to check
+        text: Text that should not be present
+        msg: Optional custom message on failure
+
+    Raises:
+        AssertionError: If text is found in output
+    """
+    output = io.get_output()
+    if text in output:
+        default_msg = f"Text '{text}' was found in output but should not be present.\nOutput was:\n{output}"
+        raise AssertionError(msg or default_msg)
+
+
+def assert_styled_with(
+    io: MockIO,
+    text: str,
+    fg: Optional[str] = None,
+    bold: Optional[bool] = None,
+    msg: str = ""
+) -> None:
+    """
+    Assert that styled output contains text with specified styling.
+
+    Args:
+        io: MockIO instance to check
+        text: Text to search for (can be substring)
+        fg: Expected foreground color (None to skip check)
+        bold: Expected bold state (None to skip check)
+        msg: Optional custom message on failure
+
+    Raises:
+        AssertionError: If no matching styled output is found
+    """
+    styled_outputs = io.get_styled_outputs()
+
+    for styled in styled_outputs:
+        if text in styled['text']:
+            # Found the text, now check styling
+            if fg is not None and styled.get('fg') != fg:
+                default_msg = f"Text '{text}' found but has fg='{styled.get('fg')}' instead of '{fg}'"
+                raise AssertionError(msg or default_msg)
+
+            if bold is not None and styled.get('bold') != bold:
+                default_msg = f"Text '{text}' found but has bold={styled.get('bold')} instead of {bold}"
+                raise AssertionError(msg or default_msg)
+
+            # All checks passed
+            return
+
+    # Text not found in any styled output
+    texts = [s['text'] for s in styled_outputs]
+    default_msg = f"Text '{text}' not found in styled outputs.\nStyled texts: {texts}"
+    raise AssertionError(msg or default_msg)
+
+
+def get_styled_by_color(io: MockIO, color: str) -> List[Dict[str, Any]]:
+    """
+    Get all styled outputs with a specific color.
+
+    Args:
+        io: MockIO instance
+        color: Color to filter by (e.g., 'red', 'green', 'yellow')
+
+    Returns:
+        List of styled output dictionaries with the specified color
+    """
+    return [s for s in io.get_styled_outputs() if s.get('fg') == color]
+
+
+def assert_has_error_output(io: MockIO, msg: str = "") -> None:
+    """
+    Assert that MockIO has error-styled output (red color).
+
+    Args:
+        io: MockIO instance to check
+        msg: Optional custom message on failure
+
+    Raises:
+        AssertionError: If no red-colored output is found
+    """
+    red_outputs = get_styled_by_color(io, 'red')
+    if not red_outputs:
+        default_msg = "No error output (red) found in styled outputs"
+        raise AssertionError(msg or default_msg)
+
+
+def assert_has_success_output(io: MockIO, msg: str = "") -> None:
+    """
+    Assert that MockIO has success-styled output (green color).
+
+    Args:
+        io: MockIO instance to check
+        msg: Optional custom message on failure
+
+    Raises:
+        AssertionError: If no green-colored output is found
+    """
+    green_outputs = get_styled_by_color(io, 'green')
+    if not green_outputs:
+        default_msg = "No success output (green) found in styled outputs"
+        raise AssertionError(msg or default_msg)
+
+
+def assert_has_warning_output(io: MockIO, msg: str = "") -> None:
+    """
+    Assert that MockIO has warning-styled output (yellow color).
+
+    Args:
+        io: MockIO instance to check
+        msg: Optional custom message on failure
+
+    Raises:
+        AssertionError: If no yellow-colored output is found
+    """
+    yellow_outputs = get_styled_by_color(io, 'yellow')
+    if not yellow_outputs:
+        default_msg = "No warning output (yellow) found in styled outputs"
+        raise AssertionError(msg or default_msg)
+
+
+def assert_provider_used(
+    orch: ConfigurableTestOrchestrator,
+    provider: str,
+    count: Optional[int] = None,
+    msg: str = ""
+) -> None:
+    """
+    Assert that a specific provider was used in delegate calls.
+
+    Args:
+        orch: ConfigurableTestOrchestrator instance
+        provider: Provider name to check for
+        count: Expected number of times used (None for at least once)
+        msg: Optional custom message on failure
+
+    Raises:
+        AssertionError: If provider was not used (or count doesn't match)
+    """
+    provider_count = orch.providers_used.count(provider)
+
+    if count is not None:
+        if provider_count != count:
+            default_msg = f"Provider '{provider}' was used {provider_count} times, expected {count}"
+            raise AssertionError(msg or default_msg)
+    elif provider_count == 0:
+        default_msg = f"Provider '{provider}' was not used. Providers used: {orch.providers_used}"
+        raise AssertionError(msg or default_msg)
+
+
+def assert_delegate_called_with(
+    orch: ConfigurableTestOrchestrator,
+    prompt_contains: Optional[str] = None,
+    provider: Optional[str] = None,
+    msg: str = ""
+) -> None:
+    """
+    Assert that delegate was called with specific parameters.
+
+    Args:
+        orch: ConfigurableTestOrchestrator instance
+        prompt_contains: Text that should be in the prompt
+        provider: Provider that should have been used
+        msg: Optional custom message on failure
+
+    Raises:
+        AssertionError: If no matching call is found
+    """
+    for call in orch.delegate_calls:
+        matches = True
+
+        if prompt_contains is not None:
+            if prompt_contains not in call.get('prompt', ''):
+                matches = False
+
+        if provider is not None:
+            if call.get('provider') != provider:
+                matches = False
+
+        if matches:
+            return
+
+    # No match found
+    call_summaries = [
+        {'provider': c.get('provider'), 'prompt_preview': c.get('prompt', '')[:50]}
+        for c in orch.delegate_calls
+    ]
+    default_msg = f"No delegate call matched criteria. Calls: {call_summaries}"
+    raise AssertionError(msg or default_msg)

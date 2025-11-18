@@ -11,7 +11,9 @@
 <!-- todo -->
 - Agent composition - Chain multiple specialized agents
 - Complexity-based planning
--  Create HybridExecutor - Chain ResearchExecutor → Decision → AgentExecutor
+- Create HybridExecutor - Chain ResearchExecutor → Decision → AgentExecutor
+- code review feature
+- ensure proper context is included with requests -- path, files, env, etc
 
 
 ## Architecture

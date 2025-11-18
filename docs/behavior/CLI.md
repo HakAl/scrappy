@@ -143,17 +143,16 @@
 **RED**
 
 we're working to improve src\cli the next task is: 
-Add Validation & Error Handling - afe JSON/String Parsing
+Test Infrastructure Overhaul - Create Test Fixtures
 
- - Add try-catch for all string splitting operations
- - Validate timestamp formats before parsing
- - Add fallback values with logging
+ - Update tests/helpers.py with MockIO, MockOrchestrator
+ - Create factory functions for common test setups
+ - Add behavior verification helpers
 can you research the task and begin writing tests for the change?
 
 **GREEN**
 
 we completed the red phase of the task: 
-
 
 **REFACTOR**
 
@@ -161,21 +160,10 @@ we created:
 
 they're fully tested and ready for integration in src/cli. can you complete the refactor phase of TDD?
 
-
+---
 CLI Refactoring
 
- Phase 4: Add Validation & Error Handling 
-
- 4.3 Safe JSON/String Parsing
-
- - Add try-catch for all string splitting operations
- - Validate timestamp formats before parsing
- - Add fallback values with logging
-
- ---
  Phase 5: Test Infrastructure Overhaul
-
- Enable proper TDD
 
  5.1 Create Test Fixtures
 
@@ -219,54 +207,3 @@ CLI Refactoring
  - Document side effects explicitly
  - Document state changes
 
- ---
- Dependencies Between Phases
-
- Phase 1 (Foundation)
-     ↓
- Phase 2 (Split) ← requires I/O abstraction
-     ↓
- Phase 3 (DRY) ← requires split modules
-     ↓
- Phase 4 (Validation) ← can use new structure
-     ↓
- Phase 5 (Tests) ← requires testable code
-     ↓
- Phase 6 (Polish) ← final cleanup
-
- TDD Approach for Each Phase
-
- For each task:
- 1. Write failing tests demonstrating expected behavior
- 2. Implement minimal code to pass tests
- 3. Refactor while keeping tests green
- 4. Verify with python -m pytest tests/ -v
-
- Files Created/Modified Summary
-
- New Files (15):
- - src/cli/protocols.py
- - src/cli/io_interface.py
- - src/cli/input_handler.py
- - src/cli/command_router.py
- - src/cli/state_manager.py
- - src/cli/interactive.py
- - src/cli/tool_detector.py
- - src/cli/context_manager.py
- - src/cli/cache_manager.py
- - src/cli/rate_limiter.py
- - src/cli/persistence.py
- - src/cli/config/patterns.py
- - src/cli/config/defaults.py
- - src/cli/validators.py
- - src/cli/exceptions.py
-
- Modified Files (8):
- - src/cli/core.py → becomes thin orchestrator
- - src/cli/session.py → becomes thin facade
- - src/cli/commands.py
- - src/cli/agent_manager.py
- - src/cli/codebase.py
- - src/cli/multiprovider.py
- - tests/helpers.py
- - tests/test_cli_handlers.py
