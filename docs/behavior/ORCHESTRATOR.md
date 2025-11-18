@@ -234,22 +234,7 @@ Critical Issues
 **RED**
 
 we're working to improve src\orchestrator the next task is: 
-Make Code Testable - Create error result types:
-
-  # Replace this pattern everywhere:
-  except Exception:
-      pass
-
-  # With:
-  except Exception as e:
-      self.output.error(f"Cache write failed: {e}")
-      # Or return a Result type indicating failure
-
-  Files to update:
-  - cache.py:371-372, 389-390
-  - core.py:565-566, 1233-1234, 1258-1259
-  - rate_limiter.py:80-81, 95-96
-can you research the task and begin with tests?
+Write tests - 
 
 **GREEN**
 
@@ -261,36 +246,12 @@ we created:
 they're fully tested and ready for integration in src/. can you complete the refactor phase of TDD?
 
 
-
----
-  Phase 1: Foundation - Make Code Testable
-
-
-  Steps:
-  1. Create error result types:
-
-  # Replace this pattern everywhere:
-  except Exception:
-      pass
-
-  # With:
-  except Exception as e:
-      self.output.error(f"Cache write failed: {e}")
-      # Or return a Result type indicating failure
-
-  Files to update:
-  - cache.py:371-372, 389-390
-  - core.py:565-566, 1233-1234, 1258-1259
-  - rate_limiter.py:80-81, 95-96
-
   ---
   Phase 2: Write Tests for Existing Behavior
 
   Capture current behavior before refactoring
 
   2.1 Create test_orchestrator_core.py
-
-  Fixes: Issues #7, #11 (Shallow Tests, TDD)
 
   Steps:
   1. Create tests/test_orchestrator_core.py
@@ -329,7 +290,7 @@ they're fully tested and ready for integration in src/. can you complete the ref
       ...
 
   3. Use NullOutput and mock providers to isolate tests
-  4. Target: 80%+ coverage of delegate() method behavior
+  4. Target test delegate() method behavior thoroughly
 
   ---
   2.2 Improve test_task_executor.py
