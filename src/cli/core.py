@@ -25,6 +25,9 @@ try:
     from .interactive import InteractiveMode
     from .utils.session_utils import display_previous_session_detected
     from .utils.cli_factory import initialize_cli_handlers
+    from .exceptions import CLIError, SessionError, TaskExecutionError
+    from .error_recovery import graceful_degrade, error_recovery_context
+    from .logging import get_logger
 except ImportError:
     # Allow running as script
     import os
@@ -46,6 +49,9 @@ except ImportError:
     from cli.interactive import InteractiveMode
     from cli.utils.session_utils import display_previous_session_detected
     from cli.utils.cli_factory import initialize_cli_handlers
+    from cli.exceptions import CLIError, SessionError, TaskExecutionError
+    from cli.error_recovery import graceful_degrade, error_recovery_context
+    from cli.logging import get_logger
 
 
 class CLI:
@@ -95,6 +101,14 @@ class CLI:
         self.task_router = handlers['task_router']
         self.input_handler = InputHandler(io)
 
+        # Logger for structured logging
+        self.logger = get_logger("cli.core", io=io)
+        self.logger.info("CLI initialized", extra={
+            "brain": self.orchestrator.brain,
+            "auto_explore": auto_explore,
+            "context_aware": context_aware,
+        })
+
         # Display initialization info (unless show_provider_status already did)
         if not show_provider_status:
             brain_name = self.orchestrator.brain
@@ -142,20 +156,36 @@ class CLI:
         # Offer to restore
         try:
             if io.confirm("Restore previous session?", default=True):
-                result = self.orchestrator.load_session()
-                if result['status'] == 'loaded':
+                def load_session():
+                    return self.orchestrator.load_session()
+
+                result = graceful_degrade(
+                    load_session,
+                    on_error=lambda e: {'status': 'error', 'message': str(e)},
+                    io=io
+                )
+
+                if result.get('status') == 'loaded':
                     io.secho("Session restored successfully!", fg="green")
                     io.echo(f"  Files: {result['files_restored']}")
                     io.echo(f"  Searches: {result['searches_restored']}")
                     io.echo(f"  Git ops: {result['git_ops_restored']}")
                     io.echo(f"  Discoveries: {result['discoveries_restored']}")
+                    self.logger.info("Session restored", extra={
+                        "files": result['files_restored'],
+                        "searches": result['searches_restored'],
+                    })
                 else:
-                    io.secho(f"Could not restore session: {result.get('message', 'unknown error')}", fg="red")
+                    error_msg = result.get('message', 'unknown error')
+                    io.secho(f"Could not restore session: {error_msg}", fg="red")
+                    self.logger.warning("Session restore failed", extra={"error": error_msg})
             else:
                 io.secho("Starting fresh session.", fg="yellow")
-        except (EOFError, Exception):
+                self.logger.info("User declined session restore")
+        except (EOFError, KeyboardInterrupt):
             # Non-interactive environment or user cancelled
             io.secho("Starting fresh session.", fg="yellow")
+            self.logger.info("Session restore skipped (non-interactive)")
 
     def interactive_mode(self):
         """Run interactive chat mode."""
@@ -341,6 +371,7 @@ class CLI:
             full_task = str(task)
 
         io.secho(f"\nAuto-executing task...", fg="cyan", bold=True)
+        self.logger.info("Auto-executing task", extra={"task": full_task})
 
         # Use TaskRouter to intelligently route the task
         try:
@@ -350,8 +381,10 @@ class CLI:
                 io.secho("[OK] Task executed successfully", fg="green")
                 if result.output:
                     io.echo(result.output[:1000])  # Truncate long output
+                self.logger.info("Task completed", extra={"task": full_task})
             else:
                 io.secho(f"[FAIL] Task failed: {result.error}", fg="red")
+                self.logger.warning("Task failed", extra={"task": full_task, "error": result.error})
 
             # Show execution metadata
             if "classification" in result.metadata:
@@ -361,8 +394,17 @@ class CLI:
                     f"Provider: {cls_info.get('resolved_provider', 'none')}]",
                     fg="bright_black"
                 )
+        except CLIError as e:
+            io.secho(f"Error executing task: {e}", fg="red")
+            if e.suggestion:
+                io.echo(f"Suggestion: {e.suggestion}")
+            self.logger.error("Task execution error", extra=e.logging_extra())
+            # Fallback to agent manager if TaskRouter fails
+            io.secho("Falling back to agent manager...", fg="yellow")
+            self.agent_mgr.run_agent(full_task, io=io)
         except Exception as e:
             io.secho(f"Error executing task: {e}", fg="red")
+            self.logger.exception("Unexpected error during task execution")
             # Fallback to agent manager if TaskRouter fails
             io.secho("Falling back to agent manager...", fg="yellow")
             self.agent_mgr.run_agent(full_task, io=io)

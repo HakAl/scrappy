@@ -20,9 +20,17 @@ except ImportError:
 from .core import CLI
 from .utils.cli_factory import create_cli_from_context
 from .utils.session_utils import restore_session_to_cli
-from .utils.error_utils import run_with_error_handling
+from .utils.error_utils import run_with_error_handling, run_with_recovery
 from .io_interface import ClickIO
 from .validators import validate_path, validate_provider
+from .exceptions import (
+    CLIError,
+    ValidationError,
+    ProviderError,
+    TaskExecutionError,
+    FileOperationError,
+)
+from .logging import get_logger
 
 try:
     from ..agent import CodeAgent, create_git_checkpoint, rollback_to_checkpoint
@@ -97,12 +105,20 @@ def query(ctx, prompt, provider, model, temperature, max_tokens, with_context):
     if provider:
         provider_validation = validate_provider(provider)
         if not provider_validation.is_valid:
-            click.secho(f"Invalid provider: {provider_validation.error}", fg="red")
+            error = ValidationError(
+                f"Invalid provider: {provider_validation.error}",
+                field="provider",
+                value=provider
+            )
+            click.secho(f"Error: {error}", fg="red")
+            click.echo(f"Suggestion: {error.suggestion}")
             sys.exit(1)
         target_provider = provider_validation.provider
     else:
         target_provider = cli_instance.orchestrator.brain
 
+    logger = get_logger("cli.query", io=io)
+    logger.info("Query started", extra={"provider": target_provider, "with_context": with_context})
     click.echo(f"Querying {target_provider}...\n")
 
     def execute_query():
@@ -277,16 +293,34 @@ def explore(ctx, path, save):
     # Validate path input
     path_validation = validate_path(path)
     if not path_validation.is_valid:
-        click.secho(f"Invalid path: {path_validation.error}", fg="red")
+        error = FileOperationError(
+            f"Invalid path: {path_validation.error}",
+            path=Path(path),
+            operation="explore"
+        )
+        click.secho(f"Error: {error}", fg="red")
+        click.echo(f"Suggestion: {error.suggestion}")
         sys.exit(1)
 
     path_obj = Path(path_validation.path).resolve()
     if not path_obj.exists():
-        click.secho(f"Path does not exist: {path_obj}", fg="red")
+        error = FileOperationError(
+            f"Path does not exist: {path_obj}",
+            path=path_obj,
+            operation="explore"
+        )
+        click.secho(f"Error: {error}", fg="red")
+        click.echo(f"Suggestion: Check that the path exists and is spelled correctly.")
         sys.exit(1)
 
     if not path_obj.is_dir():
-        click.secho(f"Not a directory: {path_obj}", fg="red")
+        error = FileOperationError(
+            f"Not a directory: {path_obj}",
+            path=path_obj,
+            operation="explore"
+        )
+        click.secho(f"Error: {error}", fg="red")
+        click.echo(f"Suggestion: Provide a directory path, not a file.")
         sys.exit(1)
 
     click.secho(f"\nExploring: {path_obj}", bold=True)
@@ -360,14 +394,23 @@ def agent(ctx, task, dry_run, no_checkpoint, auto_confirm, max_iterations):
         click.secho("  WARNING: Auto-confirm enabled - no approval prompts", fg="red", bold=True)
     click.echo()
 
+    logger = get_logger("cli.agent")
+    logger.info("Agent started", extra={
+        "task": task,
+        "dry_run": dry_run,
+        "max_iterations": max_iterations,
+    })
+
     try:
         result = code_agent.run(task, max_iterations=max_iterations, auto_confirm=auto_confirm)
 
         click.echo("\n" + "=" * 60)
         if result['success']:
             click.secho("Task Completed Successfully!", fg="green", bold=True)
+            logger.info("Agent task completed", extra={"task": task, "iterations": result['iterations']})
         else:
             click.secho("Task Did Not Complete", fg="yellow", bold=True)
+            logger.warning("Agent task incomplete", extra={"task": task, "iterations": result['iterations']})
 
         click.echo(f"Result: {result['result']}")
         click.echo(f"Iterations: {result['iterations']}")
@@ -386,9 +429,23 @@ def agent(ctx, task, dry_run, no_checkpoint, auto_confirm, max_iterations):
 
     except KeyboardInterrupt:
         click.echo("\n\nAgent interrupted by user.")
+        logger.info("Agent interrupted by user", extra={"task": task})
+        sys.exit(1)
+    except CLIError as e:
+        click.secho(f"\nAgent error: {e}", fg="red")
+        if e.suggestion:
+            click.echo(f"Suggestion: {e.suggestion}")
+        logger.error("Agent CLI error", extra=e.logging_extra())
         sys.exit(1)
     except Exception as e:
-        click.secho(f"\nAgent error: {e}", fg="red")
+        error = TaskExecutionError(
+            f"Agent error: {e}",
+            task_name=task,
+            original=e
+        )
+        click.secho(f"\n{error}", fg="red")
+        click.echo(f"Suggestion: {error.suggestion}")
+        logger.exception("Unexpected agent error")
         sys.exit(1)
 
 

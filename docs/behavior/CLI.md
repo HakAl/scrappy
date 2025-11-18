@@ -143,37 +143,32 @@
 **RED**
 
 we're working to improve src\cli the next task is: 
-Add Validation & Error Handling - Input Validation Layer
+Add Validation & Error Handling - Consistent Error Handling
 
- - Create src/cli/validators.py
- - Add validators: validate_command(), validate_path(), validate_provider()
- - Add length limits, empty checks, character validation
+ - Create src/cli/exceptions.py - Custom CLI exceptions
+ - Implement error recovery strategies
+ - Add structured logging (not just click.secho)
+ - Remove bare except: pass patterns
 can you research the task and begin writing tests for the change?
 
 **GREEN**
 
 we completed the red phase of the task: 
 
+
 **REFACTOR**
 
-we
+we created:
+src/cli/error_recovery.py
+src/cli/exceptions.py
+src/cli/logging.py
+they're fully tested and ready for integration in src/cli. can you complete the refactor phase of TDD?
 
-can you finsih integration src/cli/ refactor phase of TDD?
-created:
 
 
 CLI Refactoring
 
- ---
- Phase 4: Add Validation & Error Handling
-
- Robustness improvements
-
- 4.1 Input Validation Layer
-
- - Create src/cli/validators.py
- - Add validators: validate_command(), validate_path(), validate_provider()
- - Add length limits, empty checks, character validation
+ Phase 4: Add Validation & Error Handling 
 
  4.2 Consistent Error Handling
 

@@ -19,6 +19,15 @@ from .task_router_handler import CLITaskRouterHandler
 from .tasks import CLITaskExecution
 from .utils.session_utils import display_session_save_error
 
+from .exceptions import (
+    CLIError,
+    ProviderError,
+    UserInputError,
+    SessionError,
+)
+from .error_recovery import error_recovery_context, graceful_degrade
+from .logging import get_logger, CLILogger
+
 
 class InteractiveMode:
     """Handles the main interactive chat loop."""
@@ -60,6 +69,9 @@ class InteractiveMode:
         self.smart = CLISmartQuery(orchestrator)
         self.task_router = CLITaskRouterHandler(orchestrator)
         self.tasks = CLITaskExecution(orchestrator)
+
+        # Logger for structured logging
+        self.logger = get_logger("cli.interactive", io=io)
 
     def run(self) -> None:
         """Run the interactive chat loop."""
@@ -120,10 +132,21 @@ class InteractiveMode:
 
             except KeyboardInterrupt:
                 self.io.echo("\n\nInterrupted. Type /quit to exit.")
+                self.logger.info("User interrupted input", extra={"action": "keyboard_interrupt"})
                 continue
             except EOFError:
                 self._handle_eof()
                 break
+            except UserInputError as e:
+                if e.interrupted:
+                    self.io.echo("\n\nInterrupted. Type /quit to exit.")
+                elif e.eof:
+                    self._handle_eof()
+                    break
+                else:
+                    self._handle_error(e)
+            except CLIError as e:
+                self._handle_error(e)
             except Exception as e:
                 self._handle_error(e)
 
@@ -229,14 +252,25 @@ class InteractiveMode:
 
         io.echo("\n")
         io.secho("EOF received. Exiting...", fg="yellow")
+        self.logger.info("EOF received, exiting interactive mode")
 
         # Auto-save session on exit if enabled
         if self.auto_save:
-            try:
-                session_file = self.orchestrator.save_session(self.conversation_history)
-                io.secho(f"Session saved to: {session_file}", fg="green")
-            except Exception as save_error:
-                display_session_save_error(io, save_error)
+            def save_session():
+                return self.orchestrator.save_session(self.conversation_history)
+
+            result = graceful_degrade(
+                save_session,
+                on_error=lambda e: None,
+                io=io,
+                degraded_message=f"Could not save session: will continue without saving"
+            )
+
+            if result:
+                io.secho(f"Session saved to: {result}", fg="green")
+                self.logger.info("Session saved", extra={"session_file": str(result)})
+            else:
+                self.logger.warning("Session save failed during exit")
 
         self.display.show_usage()
         io.secho("Goodbye!", fg="cyan", bold=True)
@@ -248,5 +282,38 @@ class InteractiveMode:
         Args:
             exception: The exception that occurred.
         """
-        self.io.secho(f"\nError: {exception}", fg="red")
-        self.io.echo("Type /help for available commands.\n")
+        io = self.io
+
+        if isinstance(exception, CLIError):
+            # Use severity-appropriate styling
+            if exception.severity.value >= 4:  # CRITICAL
+                io.secho(f"\nError: {exception}", fg="red", bold=True)
+            else:
+                io.secho(f"\nError: {exception}", fg="red")
+
+            # Show suggestion if available
+            if exception.suggestion:
+                io.echo(f"Suggestion: {exception.suggestion}")
+
+            # Log with structured data
+            self.logger.error(
+                str(exception),
+                extra=exception.logging_extra()
+            )
+        elif isinstance(exception, ProviderError):
+            io.secho(f"\nProvider error: {exception}", fg="red")
+            if exception.suggestion:
+                io.echo(f"Suggestion: {exception.suggestion}")
+            self.logger.error(
+                str(exception),
+                extra={
+                    "provider": exception.provider,
+                    "rate_limited": exception.rate_limited,
+                    "is_timeout": exception.is_timeout,
+                }
+            )
+        else:
+            io.secho(f"\nError: {exception}", fg="red")
+            self.logger.exception("Unhandled exception in interactive mode")
+
+        io.echo("Type /help for available commands.\n")
