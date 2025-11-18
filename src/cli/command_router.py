@@ -21,6 +21,7 @@ from .utils.session_utils import (
     display_session_save_error,
     display_session_not_saved_warning
 )
+from .utils.cli_factory import initialize_cli_handlers
 
 
 class CommandRouter:
@@ -51,16 +52,17 @@ class CommandRouter:
         self.smart_mode: bool = False
         self.auto_save: bool = True
 
-        # Initialize component handlers
+        # Initialize component handlers using factory
         self.session_start = datetime.now()
-        self.display = CLIDisplay(orchestrator, self.session_start)
-        self.session_mgr = CLISessionManager(orchestrator)
-        self.codebase = CLICodebaseAnalysis(orchestrator)
-        self.tasks = CLITaskExecution(orchestrator)
-        self.multiprovider = CLIMultiProvider(orchestrator)
-        self.smart = CLISmartQuery(orchestrator)
-        self.agent_mgr = CLIAgentManager(orchestrator)
-        self.task_router = CLITaskRouterHandler(orchestrator)
+        handlers = initialize_cli_handlers(orchestrator, self.session_start)
+        self.display = handlers['display']
+        self.session_mgr = handlers['session_mgr']
+        self.codebase = handlers['codebase']
+        self.tasks = handlers['tasks']
+        self.multiprovider = handlers['multiprovider']
+        self.smart = handlers['smart']
+        self.agent_mgr = handlers['agent_mgr']
+        self.task_router = handlers['task_router']
 
     def route(self, cmd: str, args: str) -> bool:
         """

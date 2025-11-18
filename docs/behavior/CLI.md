@@ -145,8 +145,7 @@ RED
 
 we're working to improve src\cli the next task is: 
 Eliminate Duplication - Create Shared Utilities
-
- - src/cli/utils/session_utils.py - Session restoration display
+ - src/cli/utils/cli_factory.py - CLI instance creation
 can you research the task and begin writing tests for the change?
 
 GREEN
@@ -158,7 +157,8 @@ REFACTOR
 
 we
 
-can you finsih  CLISessionManager to delegate to these new classes (refactor phase of TDD)?
+can you finsih integration src/cli/ refactor phase of TDD?
+created:
 
 
 CLI Refactoring
@@ -170,7 +170,6 @@ CLI Refactoring
 
  3.1 Create Shared Utilities
 
- - src/cli/utils/session_utils.py - Session restoration display
  - src/cli/utils/cli_factory.py - CLI instance creation
  - src/cli/utils/error_handler.py - Consistent error handling
 

@@ -24,6 +24,7 @@ try:
     from .command_router import CommandRouter
     from .interactive import InteractiveMode
     from .utils.session_utils import display_previous_session_detected
+    from .utils.cli_factory import initialize_cli_handlers
 except ImportError:
     # Allow running as script
     import os
@@ -44,6 +45,7 @@ except ImportError:
     from cli.command_router import CommandRouter
     from cli.interactive import InteractiveMode
     from cli.utils.session_utils import display_previous_session_detected
+    from cli.utils.cli_factory import initialize_cli_handlers
 
 
 class CLI:
@@ -81,15 +83,16 @@ class CLI:
         # Initialize state manager for plan tracking
         self.state_manager = PlanStateManager()
 
-        # Initialize component handlers
-        self.display = CLIDisplay(self.orchestrator, self.session_start)
-        self.session_mgr = CLISessionManager(self.orchestrator)
-        self.codebase = CLICodebaseAnalysis(self.orchestrator)
-        self.tasks = CLITaskExecution(self.orchestrator)
-        self.multiprovider = CLIMultiProvider(self.orchestrator)
-        self.smart = CLISmartQuery(self.orchestrator)
-        self.agent_mgr = CLIAgentManager(self.orchestrator)
-        self.task_router = CLITaskRouterHandler(self.orchestrator)
+        # Initialize component handlers using factory
+        handlers = initialize_cli_handlers(self.orchestrator, self.session_start)
+        self.display = handlers['display']
+        self.session_mgr = handlers['session_mgr']
+        self.codebase = handlers['codebase']
+        self.tasks = handlers['tasks']
+        self.multiprovider = handlers['multiprovider']
+        self.smart = handlers['smart']
+        self.agent_mgr = handlers['agent_mgr']
+        self.task_router = handlers['task_router']
         self.input_handler = InputHandler(io)
 
         # Display initialization info (unless show_provider_status already did)

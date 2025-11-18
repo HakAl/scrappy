@@ -18,6 +18,7 @@ except ImportError:
     pass  # python-dotenv not installed, skip
 
 from .core import CLI
+from .utils.cli_factory import create_cli_from_context
 from .utils.session_utils import (
     display_session_restored,
     display_session_load_error
@@ -68,14 +69,8 @@ def cli(ctx, brain, auto_explore, no_context, resume, no_save, show_providers, v
 
     # If no subcommand, start interactive mode
     if ctx.invoked_subcommand is None:
-        cli_instance = CLI(
-            brain=brain,
-            auto_explore=auto_explore,
-            context_aware=not no_context,
-            verbose_selection=verbose_selection,
-            show_provider_status=show_providers
-        )
-        cli_instance.auto_save = not no_save
+        cli_instance = create_cli_from_context(ctx)
+        cli_instance.auto_save = ctx.obj['auto_save']
 
         # Resume previous session if requested
         if resume:
@@ -100,10 +95,7 @@ def cli(ctx, brain, auto_explore, no_context, resume, no_save, show_providers, v
 @click.pass_context
 def query(ctx, prompt, provider, model, temperature, max_tokens, with_context):
     """Send a one-shot query to the orchestrator."""
-    auto_explore = ctx.obj.get('auto_explore', False)
-    context_aware = ctx.obj.get('context_aware', True)
-
-    cli_instance = CLI(brain=ctx.obj.get('brain'), auto_explore=auto_explore, context_aware=context_aware)
+    cli_instance = create_cli_from_context(ctx)
 
     target_provider = provider or cli_instance.orchestrator.brain
     click.echo(f"Querying {target_provider}...\n")
@@ -134,9 +126,7 @@ def query(ctx, prompt, provider, model, temperature, max_tokens, with_context):
 @click.pass_context
 def plan(ctx, task, max_steps):
     """Create a task plan."""
-    auto_explore = ctx.obj.get('auto_explore', False)
-    context_aware = ctx.obj.get('context_aware', True)
-    cli_instance = CLI(brain=ctx.obj.get('brain'), auto_explore=auto_explore, context_aware=context_aware)
+    cli_instance = create_cli_from_context(ctx)
     click.echo(f"Planning: {task}\n")
     cli_instance.tasks.plan_task(task)
 
@@ -148,9 +138,7 @@ def plan(ctx, task, max_steps):
 @click.pass_context
 def reason(ctx, question, context, evidence):
     """Reason about a question with evidence."""
-    auto_explore = ctx.obj.get('auto_explore', False)
-    context_aware = ctx.obj.get('context_aware', True)
-    cli_instance = CLI(brain=ctx.obj.get('brain'), auto_explore=auto_explore, context_aware=context_aware)
+    cli_instance = create_cli_from_context(ctx)
     click.echo(f"Reasoning: {question}\n")
 
     try:
@@ -178,9 +166,7 @@ def reason(ctx, question, context, evidence):
 @click.pass_context
 def smart(ctx, query):
     """Perform a research-first query using tools to gather context."""
-    auto_explore = ctx.obj.get('auto_explore', False)
-    context_aware = ctx.obj.get('context_aware', True)
-    cli_instance = CLI(brain=ctx.obj.get('brain'), auto_explore=auto_explore, context_aware=context_aware)
+    cli_instance = create_cli_from_context(ctx)
     cli_instance.smart.smart_query(query)
 
 
@@ -188,9 +174,7 @@ def smart(ctx, query):
 @click.pass_context
 def status(ctx):
     """Show system status."""
-    auto_explore = ctx.obj.get('auto_explore', False)
-    context_aware = ctx.obj.get('context_aware', True)
-    cli_instance = CLI(brain=ctx.obj.get('brain'), auto_explore=auto_explore, context_aware=context_aware)
+    cli_instance = create_cli_from_context(ctx)
     cli_instance.display.show_status()
 
 
@@ -198,17 +182,7 @@ def status(ctx):
 @click.pass_context
 def providers(ctx):
     """List available providers."""
-    auto_explore = ctx.obj.get('auto_explore', False)
-    context_aware = ctx.obj.get('context_aware', True)
-    verbose_selection = ctx.obj.get('verbose_selection', False)
-    show_providers = ctx.obj.get('show_providers', False)
-    cli_instance = CLI(
-        brain=ctx.obj.get('brain'),
-        auto_explore=auto_explore,
-        context_aware=context_aware,
-        verbose_selection=verbose_selection,
-        show_provider_status=show_providers
-    )
+    cli_instance = create_cli_from_context(ctx)
     cli_instance.display.list_providers()
 
 
@@ -226,17 +200,10 @@ def provider_info(ctx, verbose):
     - Which providers are unavailable and why
     - The selection priority order
     """
-    auto_explore = ctx.obj.get('auto_explore', False)
-    context_aware = ctx.obj.get('context_aware', True)
-
-    # Always show verbose for this command if requested
-    cli_instance = CLI(
-        brain=ctx.obj.get('brain'),
-        auto_explore=auto_explore,
-        context_aware=context_aware,
-        verbose_selection=verbose,
-        show_provider_status=True  # Always show status for this command
-    )
+    # Override context values for this specific command
+    ctx.obj['verbose_selection'] = verbose
+    ctx.obj['show_providers'] = True  # Always show status for this command
+    cli_instance = create_cli_from_context(ctx)
 
     # Show additional programmatic info if verbose
     if verbose:
@@ -252,9 +219,7 @@ def provider_info(ctx, verbose):
 @click.pass_context
 def models(ctx, provider):
     """List available models."""
-    auto_explore = ctx.obj.get('auto_explore', False)
-    context_aware = ctx.obj.get('context_aware', True)
-    cli_instance = CLI(brain=ctx.obj.get('brain'), auto_explore=auto_explore, context_aware=context_aware)
+    cli_instance = create_cli_from_context(ctx)
     cli_instance.display.list_models(provider or "")
 
 
@@ -262,9 +227,7 @@ def models(ctx, provider):
 @click.pass_context
 def usage(ctx):
     """Show usage statistics."""
-    auto_explore = ctx.obj.get('auto_explore', False)
-    context_aware = ctx.obj.get('context_aware', True)
-    cli_instance = CLI(brain=ctx.obj.get('brain'), auto_explore=auto_explore, context_aware=context_aware)
+    cli_instance = create_cli_from_context(ctx)
     cli_instance.display.show_usage()
 
 
@@ -273,9 +236,7 @@ def usage(ctx):
 @click.pass_context
 def interactive(ctx, resume):
     """Start interactive chat mode."""
-    auto_explore = ctx.obj.get('auto_explore', False)
-    context_aware = ctx.obj.get('context_aware', True)
-    cli_instance = CLI(brain=ctx.obj.get('brain'), auto_explore=auto_explore, context_aware=context_aware)
+    cli_instance = create_cli_from_context(ctx)
 
     if resume:
         result = cli_instance.orchestrator.load_session()
@@ -295,9 +256,7 @@ def interactive(ctx, resume):
 @click.pass_context
 def context(ctx, clear, refresh):
     """Show and manage codebase context."""
-    auto_explore = ctx.obj.get('auto_explore', False)
-    context_aware = ctx.obj.get('context_aware', True)
-    cli_instance = CLI(brain=ctx.obj.get('brain'), auto_explore=auto_explore, context_aware=context_aware)
+    cli_instance = create_cli_from_context(ctx)
 
     if clear:
         cli_instance.orchestrator.context.clear_cache()
@@ -314,9 +273,7 @@ def context(ctx, clear, refresh):
 @click.pass_context
 def explore(ctx, path, save):
     """Explore and learn about a codebase."""
-    auto_explore = ctx.obj.get('auto_explore', False)
-    context_aware = ctx.obj.get('context_aware', True)
-    cli_instance = CLI(brain=ctx.obj.get('brain'), auto_explore=auto_explore, context_aware=context_aware)
+    cli_instance = create_cli_from_context(ctx)
 
     path_obj = Path(path).resolve()
     if not path_obj.exists():
@@ -370,9 +327,7 @@ def agent(ctx, task, dry_run, no_checkpoint, auto_confirm, max_iterations):
     Example:
         llm-team agent "Add a health check endpoint to the Flask app"
     """
-    auto_explore = ctx.obj.get('auto_explore', False)
-    context_aware = ctx.obj.get('context_aware', True)
-    cli_instance = CLI(brain=ctx.obj.get('brain'), auto_explore=auto_explore, context_aware=context_aware)
+    cli_instance = create_cli_from_context(ctx)
 
     click.secho(f"\nCode Agent - Task: {task}", bold=True)
     click.echo("-" * 60)
