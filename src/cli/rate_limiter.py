@@ -4,6 +4,7 @@ Handles display and reset of API rate limit usage.
 """
 
 from typing import Optional
+import logging
 
 try:
     from .io_interface import CLIIOProtocol, ClickIO
@@ -12,6 +13,57 @@ except ImportError:
     import os
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from cli.io_interface import CLIIOProtocol, ClickIO
+
+logger = logging.getLogger(__name__)
+
+
+def extract_time_from_timestamp(timestamp: str) -> str:
+    """Safely extract time portion from ISO timestamp.
+
+    Handles various ISO 8601 formats:
+    - 2024-11-18T10:30:45.123456
+    - 2024-11-18T10:30:45
+    - 2024-11-18T10:30:45Z
+    - 2024-11-18T10:30:45+05:00
+    - 2024-11-18T10:30:45-08:00
+
+    Args:
+        timestamp: ISO format timestamp string
+
+    Returns:
+        Time portion (HH:MM:SS) or fallback value
+    """
+    if not timestamp or timestamp == 'never':
+        return timestamp or 'never'
+
+    try:
+        # Check for ISO format with 'T' separator
+        if 'T' not in timestamp:
+            return timestamp
+
+        # Extract time portion after 'T'
+        time_part = timestamp.split('T')[1]
+
+        # Remove fractional seconds if present (before timezone)
+        if '.' in time_part:
+            time_part = time_part.split('.')[0]
+
+        # Remove timezone info: Z, +HH:MM, -HH:MM
+        # Check for 'Z' suffix
+        if time_part.endswith('Z'):
+            time_part = time_part[:-1]
+        # Check for timezone offset (+ or - followed by time)
+        # Be careful not to split on the first character if it's a minus
+        for i, char in enumerate(time_part):
+            if i > 0 and char in ['+', '-']:
+                time_part = time_part[:i]
+                break
+
+        return time_part
+
+    except (IndexError, AttributeError) as e:
+        logger.debug(f"Failed to parse timestamp '{timestamp}': {e}")
+        return timestamp
 
 
 class RateLimiter:
@@ -128,7 +180,7 @@ class RateLimiter:
                     last_req = model_data.get('last_request', 'never')
                     if last_req and last_req != 'never':
                         # Format the timestamp nicely
-                        last_req = last_req.split('T')[1].split('.')[0] if 'T' in last_req else last_req
+                        last_req = extract_time_from_timestamp(last_req)
                     io.echo(f"    {model}:")
                     io.echo(f"      Today: {model_data['requests_today']} req, {model_data['tokens_today']:,} tok")
                     io.echo(f"      Last: {last_req}")

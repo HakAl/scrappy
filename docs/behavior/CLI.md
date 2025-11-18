@@ -143,12 +143,11 @@
 **RED**
 
 we're working to improve src\cli the next task is: 
-Add Validation & Error Handling - Consistent Error Handling
+Add Validation & Error Handling - afe JSON/String Parsing
 
- - Create src/cli/exceptions.py - Custom CLI exceptions
- - Implement error recovery strategies
- - Add structured logging (not just click.secho)
- - Remove bare except: pass patterns
+ - Add try-catch for all string splitting operations
+ - Validate timestamp formats before parsing
+ - Add fallback values with logging
 can you research the task and begin writing tests for the change?
 
 **GREEN**
@@ -159,23 +158,13 @@ we completed the red phase of the task:
 **REFACTOR**
 
 we created:
-src/cli/error_recovery.py
-src/cli/exceptions.py
-src/cli/logging.py
-they're fully tested and ready for integration in src/cli. can you complete the refactor phase of TDD?
 
+they're fully tested and ready for integration in src/cli. can you complete the refactor phase of TDD?
 
 
 CLI Refactoring
 
  Phase 4: Add Validation & Error Handling 
-
- 4.2 Consistent Error Handling
-
- - Create src/cli/exceptions.py - Custom CLI exceptions
- - Implement error recovery strategies
- - Add structured logging (not just click.secho)
- - Remove bare except: pass patterns
 
  4.3 Safe JSON/String Parsing
 
