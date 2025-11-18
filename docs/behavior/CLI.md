@@ -144,7 +144,11 @@
 RED
 
 we're working to improve src\cli the next task is: 
+Extract Pattern Configuration
 
+ - Move 23+ regex patterns to src/cli/config/patterns.py
+ - Pre-compile at module load time
+ - Add pattern documentation
 can you research the task and begin writing tests for the change?
 
 GREEN
@@ -162,12 +166,6 @@ can you finsih  CLISessionManager to delegate to these new classes (refactor pha
 CLI Refactoring
 
  Phase 2: Split God Objects -- Address SRP violations
-
- 2.2 Split session.py (343 lines → 4 modules)
- - src/cli/context_manager.py - Context operations
- - src/cli/cache_manager.py - Cache operations
- - src/cli/rate_limiter.py - Rate limit tracking
- - src/cli/persistence.py - Session save/restore
 
  2.3 Extract Pattern Configuration
 
