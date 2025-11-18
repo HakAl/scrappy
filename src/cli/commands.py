@@ -19,10 +19,9 @@ except ImportError:
 
 from .core import CLI
 from .utils.cli_factory import create_cli_from_context
-from .utils.session_utils import (
-    display_session_restored,
-    display_session_load_error
-)
+from .utils.session_utils import restore_session_to_cli
+from .utils.error_utils import run_with_error_handling
+from .io_interface import ClickIO
 
 try:
     from ..agent import CodeAgent, create_git_checkpoint, rollback_to_checkpoint
@@ -74,13 +73,8 @@ def cli(ctx, brain, auto_explore, no_context, resume, no_save, show_providers, v
 
         # Resume previous session if requested
         if resume:
-            result = cli_instance.orchestrator.load_session()
-            if result['status'] == 'loaded':
-                conversation = display_session_restored(click, result)
-                if conversation:
-                    cli_instance.conversation_history = conversation
-            else:
-                display_session_load_error(click, result)
+            io = ClickIO()
+            restore_session_to_cli(cli_instance, io)
 
         cli_instance.interactive_mode()
 
@@ -96,11 +90,12 @@ def cli(ctx, brain, auto_explore, no_context, resume, no_save, show_providers, v
 def query(ctx, prompt, provider, model, temperature, max_tokens, with_context):
     """Send a one-shot query to the orchestrator."""
     cli_instance = create_cli_from_context(ctx)
+    io = ClickIO()
 
     target_provider = provider or cli_instance.orchestrator.brain
     click.echo(f"Querying {target_provider}...\n")
 
-    try:
+    def execute_query():
         response = cli_instance.orchestrator.delegate(
             target_provider,
             prompt,
@@ -115,9 +110,8 @@ def query(ctx, prompt, provider, model, temperature, max_tokens, with_context):
             f"\n[{response.provider}/{response.model} | {response.tokens_used} tokens | {response.latency_ms:.0f}ms]",
             fg="cyan"
         )
-    except Exception as e:
-        click.secho(f"Error: {e}", fg="red")
-        sys.exit(1)
+
+    run_with_error_handling(io, execute_query)
 
 
 @cli.command()
@@ -139,9 +133,10 @@ def plan(ctx, task, max_steps):
 def reason(ctx, question, context, evidence):
     """Reason about a question with evidence."""
     cli_instance = create_cli_from_context(ctx)
+    io = ClickIO()
     click.echo(f"Reasoning: {question}\n")
 
-    try:
+    def execute_reasoning():
         response = cli_instance.orchestrator.reason(
             question,
             context=context,
@@ -156,9 +151,8 @@ def reason(ctx, question, context, evidence):
             click.echo(f"Confidence: {response.get('confidence', 'N/A')}")
         else:
             click.echo(response)
-    except Exception as e:
-        click.secho(f"Error: {e}", fg="red")
-        sys.exit(1)
+
+    run_with_error_handling(io, execute_reasoning)
 
 
 @cli.command()
@@ -239,13 +233,8 @@ def interactive(ctx, resume):
     cli_instance = create_cli_from_context(ctx)
 
     if resume:
-        result = cli_instance.orchestrator.load_session()
-        if result['status'] == 'loaded':
-            conversation = display_session_restored(click, result)
-            if conversation:
-                cli_instance.conversation_history = conversation
-        else:
-            display_session_load_error(click, result)
+        io = ClickIO()
+        restore_session_to_cli(cli_instance, io)
 
     cli_instance.interactive_mode()
 

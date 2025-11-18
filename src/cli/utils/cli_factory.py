@@ -134,3 +134,37 @@ def create_cli_from_context(ctx, io: Optional[CLIIOProtocol] = None):
         show_provider_status=options['show_provider_status'],
         io=io
     )
+
+
+def create_cli(config: Dict[str, Any], io: Optional[CLIIOProtocol] = None):
+    """
+    Create CLI instance from a simple dictionary configuration.
+
+    This is a convenience function for creating CLI instances without
+    needing a Click context object. Useful for programmatic usage and testing.
+
+    Args:
+        config: Dictionary with configuration options:
+            - brain: Provider to use as brain (default None)
+            - auto_explore: Auto-explore on startup (default False)
+            - context_aware: Enable context-aware prompts (default True)
+            - verbose_selection: Show verbose provider selection (default False)
+            - show_provider_status: Show provider status on startup (default False)
+        io: Optional IO interface (creates ClickIO if not provided)
+
+    Returns:
+        CLI instance configured from dict
+
+    Example:
+        cli = create_cli({'brain': 'cerebras', 'auto_explore': True})
+    """
+    from ..core import CLI
+
+    return CLI(
+        brain=config.get('brain'),
+        auto_explore=config.get('auto_explore', False),
+        context_aware=config.get('context_aware', True),
+        verbose_selection=config.get('verbose_selection', False),
+        show_provider_status=config.get('show_provider_status', False),
+        io=io
+    )

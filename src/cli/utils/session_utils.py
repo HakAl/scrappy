@@ -8,6 +8,32 @@ Eliminates duplication in session restoration, save, and detection display code.
 from typing import Any, Dict, List, Optional
 
 
+def restore_session_to_cli(cli_instance: Any, io: Any) -> bool:
+    """
+    Restore a saved session to a CLI instance.
+
+    This function consolidates the session restoration logic that was
+    duplicated in cli() and interactive() commands.
+
+    Args:
+        cli_instance: CLI instance with orchestrator and conversation_history
+        io: IO interface for output (CLIIOProtocol or click)
+
+    Returns:
+        True if session was loaded successfully, False otherwise
+    """
+    result = cli_instance.orchestrator.load_session()
+
+    if result['status'] == 'loaded':
+        conversation = display_session_restored(io, result)
+        if conversation:
+            cli_instance.conversation_history = conversation
+        return True
+    else:
+        display_session_load_error(io, result)
+        return False
+
+
 def display_session_restored(io: Any, result: Dict[str, Any]) -> Optional[List[Dict[str, str]]]:
     """
     Display session restoration success information.

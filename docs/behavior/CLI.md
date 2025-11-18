@@ -138,27 +138,23 @@
   8. Implement consistent error handling
   9. Add input validation layer
 
-failing tests from cli:
-
-FAILED tests/test_cli_factory.py::TestCreateCLIFromContext::test_uses_default_values_when_not_in_context - RuntimeError: No orchestrator brain configured. No providers available?
-FAILED tests/test_cli_factory.py::TestCreateCLIFromContext::test_handles_none_obj_in_context - RuntimeError: No orchestrator brain configured. No providers available?
-
-appears we don't handle no providers available situation?
 
 ---
-RED
+**RED**
 
 we're working to improve src\cli the next task is: 
-Eliminate Duplication - Create Shared Utilities
-src/cli/utils/error_handler.py - Consistent error handling
+Eliminate Duplication - Centralize Configuration
+ - Create src/cli/config/defaults.py - All default values
+ - Create src/cli/config/extensions.py - File extension categories
+ - Create src/cli/config/paths.py - Skip directories, config files
 can you research the task and begin writing tests for the change?
 
-GREEN
+**GREEN**
 
 we completed the red phase of the task: split src\cli . can you continue with the implementation?
 
 
-REFACTOR
+**REFACTOR**
 
 we
 
@@ -169,12 +165,7 @@ created:
 CLI Refactoring
 
  ---
- Phase 3: Eliminate Duplication
-
- DRY principle
-
- 3.1 Create Shared Utilities
- - src/cli/utils/error_handler.py - Consistent error handling
+ Phase 3: Eliminate Duplication - DRY principle
 
  3.2 Refactor commands.py
 
