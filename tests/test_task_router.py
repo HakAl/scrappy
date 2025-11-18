@@ -8,6 +8,7 @@ import time
 from src.task_router.router import TaskRouter
 from src.task_router.classifier import TaskClassifier, ClassifiedTask, TaskType
 from src.task_router.strategies import ExecutionResult
+from src.task_router.intent_clarifier import NullClarifier
 
 
 class TestTaskRouter:
@@ -19,7 +20,8 @@ class TestTaskRouter:
         return TaskRouter(
             orchestrator=None,
             auto_confirm_direct=True,
-            verbose=False
+            verbose=False,
+            intent_clarifier=NullClarifier()
         )
 
     @pytest.mark.unit
@@ -44,12 +46,13 @@ class TestTaskRouter:
         assert result.success is True
 
     @pytest.mark.unit
-    @pytest.mark.skip(reason="Triggers interactive prompt in low confidence scenarios")
     def test_direct_command_routing(self, router):
         """Test that shell commands are routed to direct executor."""
-        # This test may actually execute the command
+        # With NullClarifier injected, this won't trigger interactive prompts
         result = router.route("echo test")
         assert isinstance(result, ExecutionResult)
+        # Echo should succeed with auto_confirm_direct=True
+        assert result.success is True
 
     @pytest.mark.unit
     def test_metrics_tracking(self, router):
@@ -198,12 +201,15 @@ class TestRouterWithMockOrchestrator:
 
     @pytest.fixture
     def mock_orchestrator(self):
-        """Create a mock orchestrator."""
+        """Create a mock orchestrator with complete interface."""
         orch = Mock()
         orch.delegate.return_value = Mock(
-            content="Mock response",
+            content="Mock response about machine learning",
             tokens_used=100
         )
+        # Need providers attribute for LLM classification
+        orch.providers = Mock()
+        orch.providers.list_available.return_value = ['groq']
         return orch
 
     @pytest.mark.unit
@@ -216,17 +222,22 @@ class TestRouterWithMockOrchestrator:
         assert router.orchestrator is mock_orchestrator
 
     @pytest.mark.unit
-    @pytest.mark.skip(reason="Requires full orchestrator setup")
     def test_research_uses_orchestrator(self, mock_orchestrator):
         """Test that research tasks use orchestrator."""
         router = TaskRouter(
             orchestrator=mock_orchestrator,
-            verbose=False
+            verbose=False,
+            intent_clarifier=NullClarifier()
         )
+        # Disable LLM classification to get predictable routing
+        router.use_llm_classification = False
 
         result = router.route("what is machine learning?")
-        # Should have called orchestrator for research
-        # This depends on strategy implementation
+
+        # Research task should complete (even without full orchestrator)
+        assert isinstance(result, ExecutionResult)
+        # The result should be a fallback since orchestrator isn't fully wired
+        # but the point is it doesn't error out or trigger prompts
 
 
 class TestTaskTypeRouting:
@@ -237,7 +248,8 @@ class TestTaskTypeRouting:
         return TaskRouter(
             orchestrator=None,
             auto_confirm_direct=True,
-            verbose=False
+            verbose=False,
+            intent_clarifier=NullClarifier()
         )
 
     @pytest.mark.unit
@@ -254,11 +266,13 @@ class TestTaskTypeRouting:
         assert result.success is True
 
     @pytest.mark.unit
-    @pytest.mark.skip(reason="Empty input triggers interactive clarification prompt")
     def test_empty_input_handled(self, router):
         """Test that empty input is handled gracefully."""
+        # With NullClarifier injected, this won't trigger interactive prompts
         result = router.route("")
         assert isinstance(result, ExecutionResult)
+        # Empty input should fail validation
+        assert result.success is False
 
     @pytest.mark.unit
     def test_very_long_input_handled(self, router):
@@ -305,16 +319,17 @@ class TestDirectExecutor:
         return TaskRouter(
             orchestrator=None,
             auto_confirm_direct=True,
-            verbose=False
+            verbose=False,
+            intent_clarifier=NullClarifier()
         )
 
     @pytest.mark.unit
-    @pytest.mark.skip(reason="Echo command triggers interactive clarification prompt")
     def test_echo_command_execution(self, router):
         """Test executing echo command."""
+        # With NullClarifier injected, this won't trigger interactive prompts
         result = router.route("echo 'test output'")
         assert isinstance(result, ExecutionResult)
-        # Echo should succeed
+        # Echo should succeed with auto_confirm_direct=True
         assert result.success is True
 
     @pytest.mark.unit
