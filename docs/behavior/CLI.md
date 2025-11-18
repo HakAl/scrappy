@@ -134,25 +134,18 @@
 
 ---
 
-we're working to improve src\cli the next tasks are: 
-Enable Testability, Create I/O Abstraction Layer 
- - Define methods: prompt(), confirm(), echo(), secho()
- - Create ClickIO implementation (production)
- - Create MockIO in tests/helpers.py (testing)
+we're working to improve src\cli the next tasks is: 
+Create Base Handler Protocol
+ - Create src/cli/protocols.py with CLIHandlerProtocol
+ - Define common interface for all handlers
+ - Add type hints for all protocol methods
 can you research the task and begin writing tests for the change?
 
 
- Phased Implementation Plan: CLI Refactoring
+CLI Refactoring
 
  Phase 1: Foundation - Enable Testability
 
- Prerequisite for all other improvements
-
- 1.1 Create I/O Abstraction Layer
-
- - Define methods: prompt(), confirm(), echo(), secho()
- - Create ClickIO implementation (production)
- - Create MockIO in tests/helpers.py (testing)
 
  1.2 Create Base Handler Protocol
 

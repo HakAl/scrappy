@@ -2,6 +2,9 @@
 
 Get running with LLM Team in 5 minutes. No fluff.
 
+First time setting up a development tool?
+Before you start, make sure you have Python and pip installed and are comfortable with a command line terminal. If not, no worries! Follow our Complete Beginner's Setup Guide to get everything you need.
+
 ## 1. Get Free API Keys (2 min)
 
 Pick at least one:
