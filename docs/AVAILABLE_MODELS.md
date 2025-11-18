@@ -4,6 +4,8 @@ Last updated: 2025-11-17
 
 This document lists all models discovered from provider APIs, with emphasis on instruction-tuned variants that are better suited for structured JSON output (critical for agent tool-calling).
 
+Good resource here: https://github.com/cheahjs/free-llm-api-resources
+
 ## Summary
 
 | Provider | Total Models | Instruction-Tuned | Currently Configured |

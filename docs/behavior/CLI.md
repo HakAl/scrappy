@@ -12,6 +12,8 @@
 <!-- new features -->
 
 - Diff preview
+ - Structured output validation - Pydantic schemas for LLM responses
+ - Streaming responses - Token-by-token generation for better UX
 
 
  Code Quality Assessment Summary
@@ -141,27 +143,36 @@
 ---
 
 we're working to improve src\cli the next task is: 
-Inject I/O Dependencies
- - Update all handlers to accept io: CLIIOProtocol parameter
- - Replace direct click.prompt/confirm/echo/secho calls
- - Files: core.py, session.py, agent_manager.py, codebase.py, multiprovider.py
+Split God Objects - Split session.py (343 lines → 4 modules)
+ - src/cli/context_manager.py - Context operations
+ - src/cli/cache_manager.py - Cache operations
+ - src/cli/rate_limiter.py - Rate limit tracking
+ - src/cli/persistence.py - Session save/restore
 can you research the task and begin writing tests for the change?
+
+
+we completed the red phase of the task: split src\cli session.py. can you continue with the implementation?
+
+we  Successfully implemented all 5 modules for the src/cli/core.py split:
+
+  | Module            | Tests | Description                                                            |
+  |-------------------|-------|------------------------------------------------------------------------|
+  | tool_detector.py  | 35    | Pure function needs_tool_support() for detecting if queries need tools |
+  | input_handler.py  | 32    | InputHandler class for multiline input and command parsing             |
+  | state_manager.py  | 42    | PlanStateManager class for plan state and task progression             |
+  | command_router.py | 48    | CommandRouter class for dispatching commands to handlers               |
+  | interactive.py    | 33    | InteractiveMode class for the main interactive loop                    |
+
+  Total: 190 new tests passing
+
+  The new modules are ready for the refactor phase where the original core.py can be updated to use these extracted
+  components. can you finsih the refactoring please?
+
 
 
 CLI Refactoring
 
- Phase 1: Foundation - Enable Testability
-
- 1.3 Inject I/O Dependencies
-
- - Update all handlers to accept io: CLIIOProtocol parameter
- - Replace direct click.prompt/confirm/echo/secho calls
- - Files: core.py, session.py, agent_manager.py, codebase.py, multiprovider.py
-
- ---
- Phase 2: Split God Objects
-
- Address SRP violations
+ Phase 2: Split God Objects -- Address SRP violations
 
  2.1 Split core.py (808 lines → 5 modules)
 
