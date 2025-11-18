@@ -6,10 +6,34 @@ task execution statistics including success rates, execution times, and token us
 """
 
 from dataclasses import dataclass, field
-from typing import Dict
+from typing import Dict, Protocol, runtime_checkable
 
 from .classifier import ClassifiedTask
 from .strategies import ExecutionResult
+
+
+@runtime_checkable
+class MetricsLike(Protocol):
+    """Protocol for metrics tracking data.
+
+    Defines the required fields for any metrics implementation.
+    Allows custom metrics classes to be used interchangeably.
+    """
+
+    total_tasks: int
+    """Total number of tasks executed."""
+
+    success_rate: float
+    """Ratio of successful tasks (0.0 to 1.0)."""
+
+    avg_execution_time: float
+    """Average execution time in seconds."""
+
+    tasks_by_type: Dict[str, int]
+    """Count of tasks by task type."""
+
+    total_tokens_used: int
+    """Total tokens consumed across all tasks."""
 
 
 @dataclass

@@ -159,11 +159,9 @@ TaskClassifier
 
  
 we're working to improve src\task_router the next task is: 
-Remove Code Duplication - Reuse JSON parsing - One robust implementation
+Improve Architecture - Define clear interfaces - Expand protocol classes
 can you research the problem and begin writing tests for the change?
 
-
-  Phase 4: Remove Code Duplication - Reuse JSON parsing - One robust implementation
 
   Phase 5: Improve Architecture
 

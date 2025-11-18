@@ -4,7 +4,7 @@ Base classes and protocols for execution strategies.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Protocol
+from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 
 from ..classifier import ClassifiedTask
 
@@ -92,6 +92,80 @@ class OrchestratorLike(Protocol):
     @property
     def providers(self) -> ProviderRegistryLike:
         """Get provider registry."""
+        ...
+
+
+@runtime_checkable
+class ToolLike(Protocol):
+    """Protocol for task execution tools.
+
+    Tools are callable objects that perform specific operations
+    like reading files, searching code, or fetching web content.
+    """
+
+    @property
+    def name(self) -> str:
+        """Tool name for registration and lookup."""
+        ...
+
+    def __call__(self, context: Any, **kwargs) -> str:
+        """
+        Execute the tool with given context and parameters.
+
+        Args:
+            context: Tool context with project root, settings, etc.
+            **kwargs: Tool-specific parameters
+
+        Returns:
+            String result of tool execution
+        """
+        ...
+
+    def get_full_description(self) -> str:
+        """
+        Get full description of tool for LLM prompts.
+
+        Returns:
+            Human-readable description including parameters
+        """
+        ...
+
+
+@runtime_checkable
+class ToolRegistryLike(Protocol):
+    """Protocol for tool registration and lookup.
+
+    Manages a collection of tools that can be retrieved by name.
+    """
+
+    def get(self, tool_name: str) -> Optional[ToolLike]:
+        """
+        Get a tool by name.
+
+        Args:
+            tool_name: Name of the tool to retrieve
+
+        Returns:
+            Tool instance or None if not found
+        """
+        ...
+
+    def register(self, tool: ToolLike) -> None:
+        """
+        Register a tool in the registry.
+
+        Args:
+            tool: Tool instance to register
+        """
+        ...
+
+    def list_tools(self) -> List[str]:
+        """
+        List all registered tool names.
+
+        Returns:
+            List of tool names
+        """
         ...
 
 

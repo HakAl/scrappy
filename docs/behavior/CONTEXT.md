@@ -213,3 +213,50 @@ Refactoring Plan
   Test updates:
   7. ✅ Update test_platform_utils.py (main test file)
   8. ✅ Update other tests that call platform_utils
+
+
+  ---
+
+MOAR FEATURES
+
+
+To enhance the user experience of your coding assistant, you should consider adding support for several other popular and trending development contexts. Based on 2025 developer surveys and technology trend reports, here are some recommendations, complete with their common marker files and potential areas for `PromptBuilder` support.
+
+### High-Priority Additions:
+
+Here are contexts that are highly prevalent in modern software development and would offer immediate value to a broad range of users.
+
+| Type | Marker Files | PromptBuilder Support |
+| --- | --- | --- |
+| **PHP** | `composer.json`, `php.ini`, `.env` | Yes - Composer (dependency management), PHPUnit (testing), guidance on popular frameworks like Laravel (`artisan` commands) and Symfony (`symfony` CLI). |
+| **C++** | `CMakeLists.txt`, `.vcxproj` (Visual Studio), `Makefile` | Yes - Guidance on CMake, vcpkg (dependency management), and popular testing frameworks like Google Test and Catch2. |
+| **Swift** | `Package.swift`, `.xcodeproj`, `.xcworkspace`, `.xcconfig` | Yes - Swift Package Manager (SPM) guidance, XCTest (testing framework) support, and assistance with Xcode build configurations. |
+| **Kotlin** | `build.gradle.kts` (Gradle for Kotlin), `pom.xml` (Maven) | Yes - Enhanced Gradle/Maven support for Kotlin-specific dependencies and plugins, guidance on testing with JUnit and Mockito. |
+| **TypeScript** | `tsconfig.json`, `package.json` | Yes - Deeper integration with `tsc` (the TypeScript compiler), guidance on popular testing frameworks like Jest and Mocha, and support for common frameworks like Angular (`angular.json`) and Vue.js. |
+| **Mobile (Cross-Platform)** | | |
+| &nbsp;&nbsp;&nbsp;Flutter | `pubspec.yaml` | Yes - Guidance on `flutter pub` commands, `flutter test` for unit and widget testing, and integration with popular state management libraries. |
+| &nbsp;&nbsp;&nbsp;React Native | `package.json` | Yes - Similar to Node.js but with specific guidance for React Native CLI, Metro bundler, and testing with Jest and React Native Testing Library. |
+
+### Broadening Framework Support:
+
+Beyond base languages, providing specific guidance for popular frameworks within your existing supported languages can significantly improve the user experience.
+
+| Type | Marker Files | PromptBuilder Support |
+| --- | --- | --- |
+| **JavaScript/TypeScript Frameworks** | | |
+| &nbsp;&nbsp;&nbsp;Angular | `angular.json`, `tsconfig.json` | Yes - Angular CLI (`ng`) commands, Karma and Jasmine for testing, and guidance on component and service generation. |
+| &nbsp;&nbsp;&nbsp;Vue.js | `vue.config.js`, `package.json` | Yes - Vue CLI (`vue`) commands, guidance on testing with Vue Test Utils and Jest/Mocha, and support for state management with Pinia. |
+| &nbsp;&nbsp;&nbsp;React.js | `package.json` (often with Create React App scripts) | Yes - Guidance on Create React App, Next.js, or Vite, testing with Jest and React Testing Library, and state management with Redux or Zustand. |
+| **Python Frameworks** | | |
+| &nbsp;&nbsp;&nbsp;Django | `manage.py`, `settings.py` | Yes - Guidance on `manage.py` commands (e.g., `runserver`, `makemigrations`), Django's built-in testing framework, and Django REST framework. |
+| **PHP Frameworks** | | |
+| &nbsp;&nbsp;&nbsp;Laravel | `artisan`, `composer.json` | Yes - `artisan` command assistance, PHPUnit testing integration, and guidance on Blade templating and Eloquent ORM. |
+
+### Emerging and Specialized Technologies:
+
+To cater to forward-looking developers and those in specialized fields, consider adding support for these languages.
+
+| Type | Marker Files | PromptBuilder Support |
+| --- | --- | --- |
+| **Scala** | `build.sbt`, `pom.xml` | Detected only (or with guidance on SBT, ScalaTest, and popular frameworks like Akka and Play). |
+| **Dart** | `pubspec.yaml`, `analysis_options.yaml` | Detected only (or with guidance on `dart pub` and `dart test`). |
