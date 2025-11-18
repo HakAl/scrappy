@@ -6,7 +6,7 @@ Handles the main interactive chat loop.
 
 import sys
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 from .io_interface import CLIIOProtocol
 from .state_manager import PlanStateManager
@@ -28,6 +28,9 @@ from .exceptions import (
 from .error_recovery import error_recovery_context, graceful_degrade
 from .logging import get_logger, CLILogger
 
+if TYPE_CHECKING:
+    from ..orchestrator import AgentOrchestrator
+
 
 class InteractiveMode:
     """Handles the main interactive chat loop."""
@@ -35,9 +38,9 @@ class InteractiveMode:
     def __init__(
         self,
         io: CLIIOProtocol,
-        orchestrator: Any,
+        orchestrator: "AgentOrchestrator",
         state_manager: Optional[PlanStateManager] = None
-    ):
+    ) -> None:
         """
         Initialize InteractiveMode.
 
@@ -57,7 +60,7 @@ class InteractiveMode:
         self.command_router = CommandRouter(io, orchestrator, state_manager=self.state_manager)
 
         # State attributes (sync from command_router for convenience)
-        self.conversation_history: List[dict] = self.command_router.conversation_history
+        self.conversation_history: List[Dict[str, str]] = self.command_router.conversation_history
         self.multiline_mode: bool = self.command_router.multiline_mode
         self.auto_route_mode: bool = self.command_router.auto_route_mode
         self.smart_mode: bool = self.command_router.smart_mode

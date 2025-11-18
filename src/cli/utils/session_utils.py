@@ -5,10 +5,13 @@ Shared utilities for displaying session-related information across CLI modules.
 Eliminates duplication in session restoration, save, and detection display code.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
+if TYPE_CHECKING:
+    from ..io_interface import CLIIOProtocol
 
 
-def restore_session_to_cli(cli_instance: Any, io: Any) -> bool:
+def restore_session_to_cli(cli_instance: Any, io: "CLIIOProtocol") -> bool:
     """
     Restore a saved session to a CLI instance.
 
@@ -34,7 +37,7 @@ def restore_session_to_cli(cli_instance: Any, io: Any) -> bool:
         return False
 
 
-def display_session_restored(io: Any, result: Dict[str, Any]) -> Optional[List[Dict[str, str]]]:
+def display_session_restored(io: "CLIIOProtocol", result: Dict[str, Any]) -> Optional[List[Dict[str, str]]]:
     """
     Display session restoration success information.
 
@@ -61,7 +64,7 @@ def display_session_restored(io: Any, result: Dict[str, Any]) -> Optional[List[D
     return conversation if conversation else None
 
 
-def display_session_load_error(io: Any, result: Dict[str, Any]) -> None:
+def display_session_load_error(io: "CLIIOProtocol", result: Dict[str, Any]) -> None:
     """
     Display session load error or no-session message.
 
@@ -79,7 +82,7 @@ def display_session_load_error(io: Any, result: Dict[str, Any]) -> None:
 
 
 def display_session_saved(
-    io: Any,
+    io: "CLIIOProtocol",
     session_file: str,
     conversation_count: int,
     with_help: bool = False
@@ -100,7 +103,7 @@ def display_session_saved(
         io.echo("Use 'llm-team --resume' to continue later.")
 
 
-def display_session_save_error(io: Any, error: Exception) -> None:
+def display_session_save_error(io: "CLIIOProtocol", error: Exception) -> None:
     """
     Display session save error warning.
 
@@ -111,7 +114,7 @@ def display_session_save_error(io: Any, error: Exception) -> None:
     io.secho(f"Warning: Could not save session: {error}", fg="yellow")
 
 
-def display_previous_session_detected(io: Any, session_info: Dict[str, Any]) -> None:
+def display_previous_session_detected(io: "CLIIOProtocol", session_info: Dict[str, Any]) -> None:
     """
     Display information about a detected previous session.
 
@@ -131,7 +134,7 @@ def display_previous_session_detected(io: Any, session_info: Dict[str, Any]) -> 
 
 
 def display_last_conversation_messages(
-    io: Any,
+    io: "CLIIOProtocol",
     conversation: List[Dict[str, str]],
     max_messages: int = 4,
     truncate_at: int = 100
@@ -166,7 +169,7 @@ def display_last_conversation_messages(
             io.echo(f"  Assistant: {content}")
 
 
-def display_session_not_saved_warning(io: Any) -> None:
+def display_session_not_saved_warning(io: "CLIIOProtocol") -> None:
     """
     Display warning that session was not saved due to auto-save being disabled.
 

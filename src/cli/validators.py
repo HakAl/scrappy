@@ -175,7 +175,7 @@ def validate_path(path_input: str) -> PathValidationResult:
     Returns:
         PathValidationResult with validation status and normalized path
     """
-    warnings = []
+    warnings: List[str] = []
 
     # Handle None input
     if path_input is None:

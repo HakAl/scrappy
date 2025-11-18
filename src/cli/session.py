@@ -3,7 +3,7 @@ Session management functionality for the CLI.
 Handles context, cache, rate limits, and session persistence.
 """
 
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 try:
     from .io_interface import CLIIOProtocol, ClickIO
@@ -15,17 +15,17 @@ except ImportError:
     import sys
     import os
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from cli.io_interface import CLIIOProtocol, ClickIO
-    from cli.context_manager import ContextManager
-    from cli.cache_manager import CacheManager
-    from cli.rate_limiter import RateLimiter
-    from cli.persistence import SessionPersistence
+    from cli.io_interface import CLIIOProtocol, ClickIO  # type: ignore[no-redef]
+    from cli.context_manager import ContextManager  # type: ignore[no-redef]
+    from cli.cache_manager import CacheManager  # type: ignore[no-redef]
+    from cli.rate_limiter import RateLimiter  # type: ignore[no-redef]
+    from cli.persistence import SessionPersistence  # type: ignore[no-redef]
 
 
 class CLISessionManager:
     """Manages session state, caching, and persistence."""
 
-    def __init__(self, orchestrator):
+    def __init__(self, orchestrator: Any) -> None:
         """Initialize session manager.
 
         Args:
@@ -37,19 +37,25 @@ class CLISessionManager:
         self._rate_limiter = RateLimiter(orchestrator)
         self._session_persistence = SessionPersistence(orchestrator)
 
-    def manage_context(self, args: str = "", io: Optional[CLIIOProtocol] = None):
+    def manage_context(self, args: str = "", io: Optional[CLIIOProtocol] = None) -> None:
         """Manage codebase context."""
         self._context_manager.manage_context(args, io)
 
-    def manage_cache(self, args: str = "", io: Optional[CLIIOProtocol] = None):
+    def manage_cache(self, args: str = "", io: Optional[CLIIOProtocol] = None) -> None:
         """Manage response cache."""
         self._cache_manager.manage_cache(args, io)
 
-    def show_rate_limits(self, args: str = "", io: Optional[CLIIOProtocol] = None):
+    def show_rate_limits(self, args: str = "", io: Optional[CLIIOProtocol] = None) -> None:
         """Show rate limit usage (persistent tracking)."""
         self._rate_limiter.show_rate_limits(args, io)
 
-    def manage_session(self, args: str = "", conversation_history: list = None, auto_save: bool = True, io: Optional[CLIIOProtocol] = None):
+    def manage_session(
+        self,
+        args: str = "",
+        conversation_history: Optional[List[Dict[str, str]]] = None,
+        auto_save: bool = True,
+        io: Optional[CLIIOProtocol] = None
+    ) -> Dict[str, Any]:
         """Manage session persistence.
 
         Args:

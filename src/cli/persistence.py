@@ -4,7 +4,7 @@ Handles saving, loading, and managing session state.
 """
 
 import json
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 try:
     from .io_interface import CLIIOProtocol, ClickIO
@@ -13,14 +13,14 @@ except ImportError:
     import sys
     import os
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from cli.io_interface import CLIIOProtocol, ClickIO
-    from cli.utils.session_utils import display_session_load_error
+    from cli.io_interface import CLIIOProtocol, ClickIO  # type: ignore[no-redef]
+    from cli.utils.session_utils import display_session_load_error  # type: ignore[no-redef]
 
 
 class SessionPersistence:
     """Manages session persistence operations."""
 
-    def __init__(self, orchestrator):
+    def __init__(self, orchestrator: Any) -> None:
         """Initialize session persistence manager.
 
         Args:
@@ -28,7 +28,13 @@ class SessionPersistence:
         """
         self.orchestrator = orchestrator
 
-    def manage_session(self, args: str = "", conversation_history: list = None, auto_save: bool = True, io: Optional[CLIIOProtocol] = None):
+    def manage_session(
+        self,
+        args: str = "",
+        conversation_history: Optional[List[Dict[str, str]]] = None,
+        auto_save: bool = True,
+        io: Optional[CLIIOProtocol] = None
+    ) -> Dict[str, Any]:
         """Manage session persistence.
 
         Args:

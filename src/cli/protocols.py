@@ -5,7 +5,10 @@ This module defines the common interface that all CLI handlers must implement,
 enabling consistent behavior, testability, and type checking across the CLI layer.
 """
 
-from typing import Protocol, Any, Dict, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, Dict, runtime_checkable
+
+if TYPE_CHECKING:
+    from ..orchestrator import AgentOrchestrator
 
 
 @runtime_checkable
@@ -42,7 +45,7 @@ class CLIHandlerProtocol(Protocol):
                 ...
     """
 
-    orchestrator: Any  # AgentOrchestrator - using Any to avoid circular imports
+    orchestrator: "AgentOrchestrator"
 
     def initialize(self) -> None:
         """Initialize the handler.
@@ -71,7 +74,7 @@ class CLIHandlerProtocol(Protocol):
         """
         ...
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> Dict[str, object]:
         """Return handler status and diagnostic information.
 
         Provides insight into the handler's current state for debugging,

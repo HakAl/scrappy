@@ -6,7 +6,7 @@ extracting configuration from Click contexts.
 """
 
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import TYPE_CHECKING, Any, Optional, Dict
 
 from ..io_interface import CLIIOProtocol, ClickIO, TestIO
 from ..display import CLIDisplay
@@ -17,6 +17,10 @@ from ..multiprovider import CLIMultiProvider
 from ..smart_query import CLISmartQuery
 from ..agent_manager import CLIAgentManager
 from ..task_router_handler import CLITaskRouterHandler
+
+if TYPE_CHECKING:
+    from ..core import CLI
+    from ...orchestrator import AgentOrchestrator
 
 
 def get_io_interface(
@@ -40,7 +44,7 @@ def get_io_interface(
     return ClickIO()
 
 
-def create_context_state(ctx) -> Dict[str, Any]:
+def create_context_state(ctx: Any) -> Dict[str, Any]:
     """
     Create context state dict from Click context.
 
@@ -65,7 +69,7 @@ def create_context_state(ctx) -> Dict[str, Any]:
     }
 
 
-def extract_context_options(ctx) -> Dict[str, Any]:
+def extract_context_options(ctx: Any) -> Dict[str, Any]:
     """
     Extract options needed for CLI creation from Click context.
 
@@ -88,7 +92,7 @@ def extract_context_options(ctx) -> Dict[str, Any]:
     }
 
 
-def initialize_cli_handlers(orchestrator, session_start: datetime) -> Dict[str, Any]:
+def initialize_cli_handlers(orchestrator: "AgentOrchestrator", session_start: datetime) -> Dict[str, Any]:
     """
     Create and return all CLI component handlers.
 
@@ -111,7 +115,7 @@ def initialize_cli_handlers(orchestrator, session_start: datetime) -> Dict[str, 
     }
 
 
-def create_cli_from_context(ctx, io: Optional[CLIIOProtocol] = None):
+def create_cli_from_context(ctx: Any, io: Optional[CLIIOProtocol] = None) -> "CLI":
     """
     Create CLI instance from Click context object.
 
@@ -136,7 +140,7 @@ def create_cli_from_context(ctx, io: Optional[CLIIOProtocol] = None):
     )
 
 
-def create_cli(config: Dict[str, Any], io: Optional[CLIIOProtocol] = None):
+def create_cli(config: Dict[str, Any], io: Optional[CLIIOProtocol] = None) -> "CLI":
     """
     Create CLI instance from a simple dictionary configuration.
 

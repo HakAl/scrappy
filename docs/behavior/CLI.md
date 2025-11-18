@@ -143,8 +143,11 @@
 **RED**
 
 we're working to improve src\cli the next task is: 
-
-can you research the task and begin writing tests for the change?
+Type Safety & Documentation - Add Complete Type Hints
+ - Add return types to all methods
+ - Add parameter types where missing
+ - Run mypy and fix all errors
+can you research the task and implement?
 
 **GREEN**
 
@@ -159,9 +162,6 @@ they're fully tested and ready for integration in src/cli. can you complete the 
 ---
 CLI Refactoring
 
- Phase 5: Test Infrastructure Overhaul
-
- ---
  Phase 6: Type Safety & Documentation
 
  Code quality polish
@@ -178,3 +178,8 @@ CLI Refactoring
  - Document side effects explicitly
  - Document state changes
 
+v
+  1. Add # type: ignore[no-redef] to fallback imports in except blocks
+  2. Consider using a common imports module to avoid the try/except pattern
+  3. Fix the codebase.py Path vs str type issues
+  4. Add type stubs for external dependencies (types-PyYAML, etc.)

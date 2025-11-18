@@ -5,7 +5,7 @@ Routes slash commands to appropriate handlers.
 """
 
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import TYPE_CHECKING, List, Optional
 from .io_interface import CLIIOProtocol
 from .state_manager import PlanStateManager
 from .display import CLIDisplay
@@ -24,6 +24,9 @@ from .utils.session_utils import (
 )
 from .utils.cli_factory import initialize_cli_handlers
 
+if TYPE_CHECKING:
+    from ..orchestrator import AgentOrchestrator
+
 
 class CommandRouter:
     """Routes slash commands to appropriate handlers."""
@@ -31,9 +34,9 @@ class CommandRouter:
     def __init__(
         self,
         io: CLIIOProtocol,
-        orchestrator: Any,
+        orchestrator: "AgentOrchestrator",
         state_manager: Optional[PlanStateManager] = None
-    ):
+    ) -> None:
         """
         Initialize CommandRouter with IO interface and orchestrator.
 
