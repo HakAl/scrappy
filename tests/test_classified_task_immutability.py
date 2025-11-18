@@ -37,64 +37,22 @@ class TestClassifiedTaskImmutability:
         )
 
     @pytest.mark.unit
-    def test_cannot_modify_task_type(self, sample_task):
-        """Test that task_type cannot be modified after creation."""
+    @pytest.mark.parametrize("field,value", [
+        ("task_type", TaskType.CODE_GENERATION),
+        ("confidence", 1.0),
+        ("reasoning", "New reasoning"),
+        ("original_input", "different input"),
+        ("extracted_command", "new command"),
+        ("suggested_provider", "quality"),
+        ("override_provider", "quality"),
+        ("complexity_score", 10),
+        ("requires_planning", True),
+        ("requires_tools", False),
+    ])
+    def test_cannot_modify_frozen_fields(self, sample_task, field, value):
+        """Test that frozen fields cannot be modified after creation."""
         with pytest.raises(FrozenInstanceError):
-            sample_task.task_type = TaskType.CODE_GENERATION
-
-    @pytest.mark.unit
-    def test_cannot_modify_confidence(self, sample_task):
-        """Test that confidence cannot be modified after creation."""
-        with pytest.raises(FrozenInstanceError):
-            sample_task.confidence = 1.0
-
-    @pytest.mark.unit
-    def test_cannot_modify_reasoning(self, sample_task):
-        """Test that reasoning cannot be modified after creation."""
-        with pytest.raises(FrozenInstanceError):
-            sample_task.reasoning = "New reasoning"
-
-    @pytest.mark.unit
-    def test_cannot_modify_original_input(self, sample_task):
-        """Test that original_input cannot be modified after creation."""
-        with pytest.raises(FrozenInstanceError):
-            sample_task.original_input = "different input"
-
-    @pytest.mark.unit
-    def test_cannot_modify_extracted_command(self, sample_task):
-        """Test that extracted_command cannot be modified after creation."""
-        with pytest.raises(FrozenInstanceError):
-            sample_task.extracted_command = "new command"
-
-    @pytest.mark.unit
-    def test_cannot_modify_suggested_provider(self, sample_task):
-        """Test that suggested_provider cannot be modified after creation."""
-        with pytest.raises(FrozenInstanceError):
-            sample_task.suggested_provider = "quality"
-
-    @pytest.mark.unit
-    def test_cannot_modify_override_provider(self, sample_task):
-        """Test that override_provider cannot be modified after creation."""
-        with pytest.raises(FrozenInstanceError):
-            sample_task.override_provider = "quality"
-
-    @pytest.mark.unit
-    def test_cannot_modify_complexity_score(self, sample_task):
-        """Test that complexity_score cannot be modified after creation."""
-        with pytest.raises(FrozenInstanceError):
-            sample_task.complexity_score = 10
-
-    @pytest.mark.unit
-    def test_cannot_modify_requires_planning(self, sample_task):
-        """Test that requires_planning cannot be modified after creation."""
-        with pytest.raises(FrozenInstanceError):
-            sample_task.requires_planning = True
-
-    @pytest.mark.unit
-    def test_cannot_modify_requires_tools(self, sample_task):
-        """Test that requires_tools cannot be modified after creation."""
-        with pytest.raises(FrozenInstanceError):
-            sample_task.requires_tools = False
+            setattr(sample_task, field, value)
 
 
 class TestClassifiedTaskReplace:
