@@ -221,7 +221,19 @@ class CircuitBreaker:
 
     @property
     def is_open(self) -> bool:
-        """Check if circuit is open."""
+        """Check if circuit breaker is in open state.
+
+        When the circuit is open, calls will be blocked to prevent cascade
+        failures. After the reset timeout expires, the circuit transitions
+        to half-open state to allow a test call.
+
+        Returns:
+            True if circuit is open and blocking calls, False otherwise.
+
+        Side Effects:
+            - May transition circuit from "open" to "half-open" state if the
+              reset timeout has elapsed since the last failure
+        """
         if self._state == "open":
             # Check if reset timeout has passed
             if time.time() - self._last_failure_time >= self.reset_timeout:
@@ -231,17 +243,28 @@ class CircuitBreaker:
         return False
 
     def call(self, func: Callable) -> Any:
-        """
-        Execute function through circuit breaker.
+        """Execute function through circuit breaker.
+
+        Attempts to execute the function if the circuit is not open. On success,
+        resets the failure counter and closes the circuit. On failure, increments
+        the failure counter and may open the circuit.
 
         Args:
-            func: Function to execute
+            func: Zero-argument callable to execute.
 
         Returns:
-            Function result
+            The return value of func() if successful.
 
         Raises:
-            ProviderError: If circuit is open
+            ProviderError: If circuit is open due to too many recent failures.
+            Exception: Any exception raised by func() is re-raised after updating
+                circuit state.
+
+        Side Effects:
+            - On success: Resets _failures to 0, sets _state to "closed"
+            - On failure: Increments _failures, updates _last_failure_time,
+              may set _state to "open" if threshold reached
+            - Logs state changes if logger is configured
         """
         if self.is_open:
             raise ProviderError(
@@ -276,20 +299,41 @@ class CircuitBreaker:
 
 
 class ErrorRecoveryContext:
-    """Context for error recovery operations."""
+    """Context for error recovery operations.
 
-    def __init__(self):
+    A simple data class that holds the state of an error recovery operation,
+    tracking whether an error occurred and storing the error details or result.
+
+    Attributes:
+        had_error: True if an error occurred during the operation.
+        error: The exception that was raised, or None if no error.
+        result: The result value, typically from a fallback operation.
+    """
+
+    def __init__(self) -> None:
+        """Initialize error recovery context with default values.
+
+        State Changes:
+            Sets had_error to False, error to None, and result to None.
+        """
         self.had_error = False
         self.error = None
         self.result = None
 
 
 class _RetryContextManager:
-    """
-    Context manager that supports retry logic.
+    """Context manager that supports retry logic.
 
     This uses a frame-based approach to re-execute the code block
     on errors, which is a bit unusual but matches the test expectations.
+
+    Attributes:
+        io: Optional I/O interface for error output.
+        max_retries: Maximum number of retry attempts.
+        fallback: Optional fallback function to call on final failure.
+        had_error: True if all retries were exhausted with errors.
+        error: The last exception that occurred, or None.
+        result: Result from fallback function, or None.
     """
 
     def __init__(
@@ -297,7 +341,17 @@ class _RetryContextManager:
         io: Optional[Any] = None,
         max_retries: int = 3,
         fallback: Optional[Callable] = None
-    ):
+    ) -> None:
+        """Initialize retry context manager.
+
+        Args:
+            io: Optional I/O interface for displaying error messages.
+            max_retries: Maximum number of attempts before giving up.
+            fallback: Optional callable to invoke on final failure.
+
+        State Changes:
+            Initializes all attributes with provided values or defaults.
+        """
         self.io = io
         self.max_retries = max_retries
         self.fallback = fallback
@@ -307,9 +361,30 @@ class _RetryContextManager:
         self._attempts = 0
 
     def __enter__(self):
+        """Enter the context manager.
+
+        Returns:
+            Self, allowing access to context state attributes.
+        """
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        """Exit the context manager, handling any exceptions.
+
+        Args:
+            exc_type: Exception type if an exception was raised.
+            exc_val: Exception value if an exception was raised.
+            exc_tb: Exception traceback if an exception was raised.
+
+        Returns:
+            True to suppress the exception, False to propagate it.
+
+        Side Effects:
+            - Increments _attempts counter
+            - If max retries exhausted: sets had_error=True, error=exc_val,
+              displays error via io, calls fallback and stores result
+            - Always suppresses exceptions (returns True)
+        """
         if exc_type is None:
             return False
 
@@ -353,13 +428,32 @@ def error_recovery_context(
 
 
 class _RetryableErrorContext:
-    """
-    Error context that supports retry semantics.
+    """Error context that supports retry semantics.
 
     Uses code introspection to re-execute the with block on failure.
+    This is an advanced context manager that captures the calling frame
+    and can re-execute the code block through exec().
+
+    Attributes:
+        io: Optional I/O interface for error output.
+        max_retries: Maximum number of retry attempts.
+        fallback: Optional fallback function to call on final failure.
+        had_error: True if all retries were exhausted with errors.
+        error: The last exception that occurred, or None.
+        result: Result from fallback function, or None.
     """
 
-    def __init__(self, io=None, max_retries=3, fallback=None):
+    def __init__(self, io=None, max_retries=3, fallback=None) -> None:
+        """Initialize retryable error context.
+
+        Args:
+            io: Optional I/O interface for displaying error messages.
+            max_retries: Maximum number of attempts before giving up.
+            fallback: Optional callable to invoke on final failure.
+
+        State Changes:
+            Initializes all attributes with provided values or defaults.
+        """
         self.io = io
         self.max_retries = max_retries
         self.fallback = fallback
@@ -372,6 +466,19 @@ class _RetryableErrorContext:
         self._globals = None
 
     def __enter__(self):
+        """Enter the context manager, capturing the calling frame.
+
+        Captures the caller's frame, locals, and globals for potential
+        code re-execution on error.
+
+        Returns:
+            Self, allowing access to context state attributes.
+
+        Side Effects:
+            - Captures sys._getframe(1) for introspection
+            - Stores caller's locals and globals
+            - Increments _attempt counter
+        """
         import sys
         # Capture the calling frame for potential re-execution
         self._frame = sys._getframe(1)
@@ -381,6 +488,26 @@ class _RetryableErrorContext:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        """Exit the context manager, attempting retry on error.
+
+        On exception, attempts to re-execute the with block by introspecting
+        the source code and using exec(). If introspection fails or max retries
+        are exhausted, falls back to normal error handling.
+
+        Args:
+            exc_type: Exception type if an exception was raised.
+            exc_val: Exception value if an exception was raised.
+            exc_tb: Exception traceback if an exception was raised.
+
+        Returns:
+            True to suppress the exception, False to propagate it.
+
+        Side Effects:
+            - May re-execute the with block code via exec()
+            - On final failure: sets had_error=True, error=exc_val,
+              displays error via io, calls fallback and stores result
+            - Always suppresses exceptions (returns True)
+        """
         if exc_type is None:
             return False
 
@@ -460,7 +587,20 @@ class _RetryableErrorContext:
         return True  # Suppress the exception
 
     def __iter__(self):
-        """Allow using the context in a for loop for explicit retry."""
+        """Allow using the context in a for loop for explicit retry.
+
+        Enables explicit retry loops like:
+            for ctx in error_recovery_context(retry=True):
+                with ctx:
+                    # operation that might fail
+
+        Yields:
+            Self for each retry attempt.
+
+        Side Effects:
+            - Increments _attempt counter for each iteration
+            - Resets had_error and error between attempts
+        """
         for _ in range(self.max_retries):
             self._attempt += 1
             yield self
@@ -471,9 +611,30 @@ class _RetryableErrorContext:
 
 
 class _SimpleErrorContext:
-    """Simple error-catching context manager."""
+    """Simple error-catching context manager.
 
-    def __init__(self, io=None, fallback=None):
+    A basic context manager that catches exceptions, optionally displays
+    them via an I/O interface, and can invoke a fallback function.
+    Unlike _RetryableErrorContext, this does not attempt retries.
+
+    Attributes:
+        io: Optional I/O interface for error output.
+        fallback: Optional fallback function to call on error.
+        had_error: True if an error occurred during the operation.
+        error: The exception that was raised, or None.
+        result: Result from fallback function, or None.
+    """
+
+    def __init__(self, io=None, fallback=None) -> None:
+        """Initialize simple error context.
+
+        Args:
+            io: Optional I/O interface for displaying error messages.
+            fallback: Optional callable to invoke on error.
+
+        State Changes:
+            Initializes all attributes with provided values or defaults.
+        """
         self.io = io
         self.fallback = fallback
         self.had_error = False
@@ -481,9 +642,29 @@ class _SimpleErrorContext:
         self.result = None
 
     def __enter__(self):
+        """Enter the context manager.
+
+        Returns:
+            Self, allowing access to context state attributes.
+        """
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        """Exit the context manager, handling any exceptions.
+
+        Args:
+            exc_type: Exception type if an exception was raised.
+            exc_val: Exception value if an exception was raised.
+            exc_tb: Exception traceback if an exception was raised.
+
+        Returns:
+            True to suppress the exception, False if no exception.
+
+        Side Effects:
+            - If exception: sets had_error=True, error=exc_val,
+              displays error via io, calls fallback and stores result
+            - Always suppresses exceptions (returns True when exc_type is set)
+        """
         if exc_type is None:
             return False
 

@@ -1,4 +1,4 @@
-### Issues (many)
+### Issues
 
 <!-- todo -- Assess code / tests / maintainability -->
 
@@ -58,9 +58,6 @@ CLI Refactoring
  - Document state changes
 
 
-  Phase 3 - Infrastructure (~30 methods)
-  - cache_manager.py, rate_limiter.py, persistence.py
-  - task_router_handler.py, error_recovery.py, exceptions.py
 
   Phase 4 - Utilities/Config (~10-20 items)
   - utils/*.py, config/*.py, validators.py, protocols.py, types.py

@@ -15,18 +15,55 @@ except ImportError:
 
 
 class CacheManager:
-    """Manages response cache operations."""
+    """Manages response cache operations.
 
-    def __init__(self, orchestrator):
+    This class provides cache management functionality including viewing statistics,
+    clearing cached responses, and toggling cache on/off. It wraps the orchestrator's
+    cache functionality with a CLI-friendly interface.
+
+    Attributes:
+        orchestrator: The AgentOrchestrator instance that owns the actual cache.
+    """
+
+    def __init__(self, orchestrator) -> None:
         """Initialize cache manager.
 
         Args:
-            orchestrator: The AgentOrchestrator instance
+            orchestrator: The AgentOrchestrator instance that provides cache
+                operations (get_cache_stats, clear_cache, toggle_cache).
+
+        State Changes:
+            Sets self.orchestrator to the provided orchestrator instance.
         """
         self.orchestrator = orchestrator
 
-    def manage_cache(self, args: str = "", io: Optional[CLIIOProtocol] = None):
-        """Manage response cache."""
+    def manage_cache(self, args: str = "", io: Optional[CLIIOProtocol] = None) -> None:
+        """Manage response cache with subcommands.
+
+        Provides a CLI interface for cache management with the following subcommands:
+        - (no args): Display cache statistics including hit rates and entry counts
+        - "clear": Clear all cached responses
+        - "toggle": Toggle caching on/off
+
+        Args:
+            args: Command argument string. Valid values are "", "clear", or "toggle".
+            io: I/O interface for output. Defaults to ClickIO if not provided.
+
+        Returns:
+            None. Results are displayed via the io interface.
+
+        Side Effects:
+            - When args is "": Outputs cache statistics to io (no state changes)
+            - When args is "clear": Calls orchestrator.clear_cache() which removes
+              all cached responses from memory and disk
+            - When args is "toggle": Calls orchestrator.toggle_cache() which changes
+              orchestrator.caching_enabled state
+
+        Example:
+            >>> cache_mgr.manage_cache()  # Show stats
+            >>> cache_mgr.manage_cache("clear")  # Clear cache
+            >>> cache_mgr.manage_cache("toggle")  # Toggle on/off
+        """
         if io is None:
             io = ClickIO()
 

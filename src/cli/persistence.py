@@ -18,13 +18,30 @@ except ImportError:
 
 
 class SessionPersistence:
-    """Manages session persistence operations."""
+    """Manages session persistence operations.
+
+    This class provides functionality for saving and loading CLI session state
+    to disk, allowing users to resume work across sessions. Session data includes
+    file caches, search results, git operations, discoveries, and conversation
+    history.
+
+    The session file is stored at .llm_team_session.json in the project directory.
+
+    Attributes:
+        orchestrator: The AgentOrchestrator instance that provides session
+            storage operations.
+    """
 
     def __init__(self, orchestrator: Any) -> None:
         """Initialize session persistence manager.
 
         Args:
-            orchestrator: The AgentOrchestrator instance
+            orchestrator: The AgentOrchestrator instance that provides session
+                operations (save_session, load_session, clear_session,
+                get_working_memory_summary) and context for project path.
+
+        State Changes:
+            Sets self.orchestrator to the provided orchestrator instance.
         """
         self.orchestrator = orchestrator
 
@@ -35,18 +52,52 @@ class SessionPersistence:
         auto_save: bool = True,
         io: Optional[CLIIOProtocol] = None
     ) -> Dict[str, Any]:
-        """Manage session persistence.
+        """Manage session persistence with subcommands.
+
+        Provides a CLI interface for session management including saving,
+        loading, clearing session state, and toggling auto-save behavior.
 
         Args:
-            args: Command arguments
-            conversation_history: Current conversation history
-            auto_save: Current auto-save setting
-            io: I/O interface for output
+            args: Command argument string. Valid values are:
+                - "": Show current session info and memory statistics
+                - "save": Save current session to disk
+                - "load": Load saved session from disk
+                - "clear": Delete saved session file
+                - "toggle": Toggle auto-save on/off
+
+            conversation_history: Current conversation history list to save/restore.
+                Each entry is a dict with 'role' and 'content' keys.
+
+            auto_save: Current auto-save setting. When True, session is saved
+                automatically on /quit.
+
+            io: I/O interface for output. Defaults to ClickIO if not provided.
 
         Returns:
-            dict with keys:
-                - conversation_history: Updated conversation history (if loaded)
-                - auto_save: Updated auto-save setting (if toggled)
+            Dict with the following keys:
+                - conversation_history: Updated conversation history (same as input,
+                  or restored list if "load" was called)
+                - auto_save: Updated auto-save setting (same as input, or toggled
+                  value if "toggle" was called)
+
+        Side Effects:
+            - When args is "": Reads session file and memory stats, displays
+              formatted output (no state changes)
+            - When args is "save": Calls orchestrator.save_session() which writes
+              session data to .llm_team_session.json including file caches,
+              search results, git operations, discoveries, and conversation history
+            - When args is "load": Calls orchestrator.load_session() which reads
+              .llm_team_session.json and restores working memory state in the
+              orchestrator. Updates returned conversation_history.
+            - When args is "clear": Calls orchestrator.clear_session() which
+              deletes .llm_team_session.json from disk
+            - When args is "toggle": Returns opposite auto_save value (no disk I/O)
+
+        Example:
+            >>> result = persistence.manage_session()  # Show info
+            >>> result = persistence.manage_session("save", conversation_history)
+            >>> result = persistence.manage_session("load")
+            >>> history = result['conversation_history']  # Restored history
         """
         if io is None:
             io = ClickIO()

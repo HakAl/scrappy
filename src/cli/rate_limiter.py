@@ -67,18 +67,73 @@ def extract_time_from_timestamp(timestamp: str) -> str:
 
 
 class RateLimiter:
-    """Manages rate limit tracking display and operations."""
+    """Manages rate limit tracking display and operations.
 
-    def __init__(self, orchestrator):
+    This class provides a CLI interface for viewing and managing API rate limit
+    usage data that is persisted across sessions. It displays usage statistics
+    per provider and model, along with quota information and warnings.
+
+    Attributes:
+        orchestrator: The AgentOrchestrator instance that provides rate limit
+            tracking functionality.
+    """
+
+    def __init__(self, orchestrator) -> None:
         """Initialize rate limiter.
 
         Args:
-            orchestrator: The AgentOrchestrator instance
+            orchestrator: The AgentOrchestrator instance that provides rate limit
+                operations (get_rate_limit_status, reset_rate_tracking,
+                check_rate_limit_warnings) and context for project path.
+
+        State Changes:
+            Sets self.orchestrator to the provided orchestrator instance.
         """
         self.orchestrator = orchestrator
 
-    def show_rate_limits(self, args: str = "", io: Optional[CLIIOProtocol] = None):
-        """Show rate limit usage (persistent tracking)."""
+    def show_rate_limits(self, args: str = "", io: Optional[CLIIOProtocol] = None) -> None:
+        """Display and manage rate limit usage data.
+
+        Shows persistent rate limit tracking data including requests and tokens
+        used per provider and model, quota usage percentages, and warnings when
+        approaching limits.
+
+        Args:
+            args: Command argument string. Valid values are:
+                - "": Show all providers' rate limit usage
+                - "reset": Reset all tracking data (with confirmation)
+                - "reset <provider>": Reset specific provider's data (with confirmation)
+                - "<provider>": Filter display to specific provider only
+
+            io: I/O interface for output. Defaults to ClickIO if not provided.
+
+        Returns:
+            None. Results are displayed via the io interface.
+
+        Side Effects:
+            - When args is "": Reads rate limit status from orchestrator and
+              displays formatted output (no state changes)
+            - When args is "reset": Prompts for confirmation, then calls
+              orchestrator.reset_rate_tracking() which clears persisted tracking
+              data in .llm_rate_limits.json
+            - When args is "reset <provider>": Prompts for confirmation, then
+              calls orchestrator.reset_rate_tracking(provider) which clears
+              tracking data for that specific provider
+
+        Output Sections:
+            - Last reset times (daily and monthly)
+            - Warnings for providers approaching limits (if any)
+            - Per-provider usage showing daily/monthly requests and tokens
+            - Quota percentages with color-coded status (green/yellow/red)
+            - Per-model breakdown with last request timestamps
+            - Tracker file location
+
+        Example:
+            >>> rate_limiter.show_rate_limits()  # Show all
+            >>> rate_limiter.show_rate_limits("anthropic")  # Filter to anthropic
+            >>> rate_limiter.show_rate_limits("reset")  # Reset all
+            >>> rate_limiter.show_rate_limits("reset openai")  # Reset openai only
+        """
         if io is None:
             io = ClickIO()
 
