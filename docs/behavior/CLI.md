@@ -143,11 +143,7 @@
 **RED**
 
 we're working to improve src\cli the next task is: 
-Test Infrastructure Overhaul - Fix Skipped Tests
 
- - Investigate mock setup issues in test_native_tool_integration.py
- - Implement missing features for test_model_type.py
- - Remove or fix all pytest.skip() calls -> excluding tests\benchmark
 can you research the task and begin writing tests for the change?
 
 **GREEN**
@@ -164,19 +160,6 @@ they're fully tested and ready for integration in src/cli. can you complete the 
 CLI Refactoring
 
  Phase 5: Test Infrastructure Overhaul
-
-
- 5.3 Fix Skipped Tests
-
- - Investigate mock setup issues in test_native_tool_integration.py
- - Implement missing features for test_model_type.py
- - Remove or fix all pytest.skip() calls
-
- 5.4 Add Integration Tests
-
- - Create tests/integration/test_cli_flows.py
- - Test complete user workflows with MockIO
- - Verify state transitions and side effects
 
  ---
  Phase 6: Type Safety & Documentation

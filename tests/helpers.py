@@ -272,6 +272,40 @@ class ConfigurableTestOrchestrator:
         """Reset rate limit tracking."""
         pass
 
+    def status(self) -> dict:
+        """Get orchestrator status."""
+        return {
+            'brain': self.brain,
+            'orchestrator_brain': self.brain,
+            'available_providers': self.available_providers,
+            'tasks_executed': self.call_count
+        }
+
+    def get_usage_report(self) -> dict:
+        """Get usage report."""
+        return {
+            'total_tasks': self.call_count,
+            'session_duration': '0:00:00',
+            'cached_hits': 0,
+            'api_calls': self.call_count,
+            'by_provider': {
+                provider: {
+                    'count': self.providers_used.count(provider),
+                    'total_tokens': 100 * self.providers_used.count(provider),
+                    'avg_tokens': 100,
+                    'total_latency_ms': 50 * self.providers_used.count(provider),
+                    'cached_hits': 0
+                }
+                for provider in set(self.providers_used)
+            },
+            'cache_stats': {
+                'exact_hit_rate': '0%',
+                'intent_hit_rate': '0%',
+                'exact_cache_entries': 0,
+                'intent_cache_entries': 0
+            }
+        }
+
     def save_session(self, conversation_history: list = None) -> str:
         """Save the current session."""
         return '/test/session.json'
