@@ -234,7 +234,21 @@ Critical Issues
 **RED**
 
 we're working to improve src\orchestrator the next task is: 
-Write tests - 
+Write tests - Improve test_task_executor.py
+Add tests that verify actual planning output:
+
+  def test_plan_returns_valid_steps_for_complex_task(self, executor):
+      # Don't just check mock wasn't called
+      # Verify actual step structure and content
+      result = executor.plan("Implement user auth with OAuth", complexity_score=8)
+
+      assert len(result) >= 2
+      assert all('step' in step for step in result)
+      assert all('description' in step for step in result)
+
+  def test_plan_handles_malformed_llm_response(self, executor):
+      # Test the JSON recovery logic
+      ...
 
 **GREEN**
 
@@ -249,56 +263,9 @@ they're fully tested and ready for integration in src/. can you complete the ref
   ---
   Phase 2: Write Tests for Existing Behavior
 
-  Capture current behavior before refactoring
-
-  2.1 Create test_orchestrator_core.py
-
-  Steps:
-  1. Create tests/test_orchestrator_core.py
-  2. Write tests for critical paths (use injected test doubles):
-
-  class TestAgentOrchestratorDelegate:
-      """Tests for delegate() method - core.py:445-673"""
-
-      def test_delegate_with_valid_provider_returns_response(self):
-          # Test happy path
-
-      def test_delegate_with_unknown_provider_raises_error(self):
-          # Test error handling
-
-      def test_delegate_retries_on_rate_limit(self):
-          # Test retry logic
-
-      def test_delegate_falls_back_on_quota_exhaustion(self):
-          # Test fallback logic
-
-      def test_delegate_uses_cache_when_available(self):
-          # Test caching behavior
-
-      def test_delegate_records_usage_metrics(self):
-          # Test side effects
-
-  class TestAgentOrchestratorAsync:
-      """Tests for delegate_async() - core.py:749-976"""
-
-      @pytest.mark.asyncio
-      async def test_delegate_async_parallel_execution(self):
-          ...
-
-  class TestAgentOrchestratorBackgroundTasks:
-      """Tests for background task management - core.py:1123-1211"""
-      ...
-
-  3. Use NullOutput and mock providers to isolate tests
-  4. Target test delegate() method behavior thoroughly
-
   ---
   2.2 Improve test_task_executor.py
-
-  Fixes: Issue #12 (Over-reliance on Mocks)
-
-  Steps:
-  1. Add tests that verify actual planning output:
+Add tests that verify actual planning output:
 
   def test_plan_returns_valid_steps_for_complex_task(self, executor):
       # Don't just check mock wasn't called
