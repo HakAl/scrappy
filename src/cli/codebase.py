@@ -11,10 +11,34 @@ from typing import Optional
 
 try:
     from .io_interface import CLIIOProtocol, ClickIO
+    from .config.defaults import (
+        MAX_TOKENS_SUMMARY,
+        TEMPERATURE_LOW,
+        TRUNCATE_PRIORITY_FILE,
+        TRUNCATE_FILE_CONTENT,
+    )
+    from .config.extensions import (
+        EXTENSIONS_BY_CATEGORY,
+        PRIORITY_FILES,
+        ENTRY_POINT_FILES,
+    )
+    from .config.paths import SKIP_DIRS
 except ImportError:
     import sys
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from cli.io_interface import CLIIOProtocol, ClickIO
+    from cli.config.defaults import (
+        MAX_TOKENS_SUMMARY,
+        TEMPERATURE_LOW,
+        TRUNCATE_PRIORITY_FILE,
+        TRUNCATE_FILE_CONTENT,
+    )
+    from cli.config.extensions import (
+        EXTENSIONS_BY_CATEGORY,
+        PRIORITY_FILES,
+        ENTRY_POINT_FILES,
+    )
+    from cli.config.paths import SKIP_DIRS
 
 
 class CLICodebaseAnalysis:
@@ -65,8 +89,8 @@ class CLICodebaseAnalysis:
                         self.orchestrator.brain,
                         prompt,
                         system_prompt="You are a code analysis expert. Analyze codebases and provide clear, actionable summaries. Be concise but thorough.",
-                        max_tokens=2000,
-                        temperature=0.3
+                        max_tokens=MAX_TOKENS_SUMMARY,
+                        temperature=TEMPERATURE_LOW
                     )
                     return response.content
 
@@ -116,23 +140,11 @@ class CLICodebaseAnalysis:
 
     def _find_source_files(self, path: Path) -> dict:
         """Find all source files organized by type."""
-        extensions = {
-            'python': ['.py'],
-            'javascript': ['.js', '.jsx', '.ts', '.tsx'],
-            'web': ['.html', '.css', '.scss'],
-            'config': ['.json', '.yaml', '.yml', '.toml', '.ini'],
-            'docs': ['.md', '.rst', '.txt'],
-            'other': []
-        }
-
-        files = {k: [] for k in extensions}
-
-        # Common directories to skip
-        skip_dirs = {'.git', '__pycache__', 'node_modules', '.venv', 'venv', 'env', '.env', 'dist', 'build'}
+        files = {k: [] for k in EXTENSIONS_BY_CATEGORY}
 
         for root, dirs, filenames in os.walk(path):
             # Skip common non-source directories
-            dirs[:] = [d for d in dirs if d not in skip_dirs and not d.startswith('.')]
+            dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.startswith('.')]
 
             rel_root = Path(root).relative_to(path)
 
@@ -144,7 +156,7 @@ class CLICodebaseAnalysis:
                 ext = Path(filename).suffix.lower()
 
                 categorized = False
-                for category, exts in extensions.items():
+                for category, exts in EXTENSIONS_BY_CATEGORY.items():
                     if ext in exts:
                         files[category].append(str(file_path))
                         categorized = True
@@ -170,7 +182,7 @@ class CLICodebaseAnalysis:
 
         # Get top-level directories
         for item in path.iterdir():
-            if item.is_dir() and not item.name.startswith('.') and item.name not in {'__pycache__', 'node_modules', 'venv', '.venv'}:
+            if item.is_dir() and not item.name.startswith('.') and item.name not in SKIP_DIRS:
                 structure['directories'].append(item.name)
 
         return structure
@@ -179,21 +191,14 @@ class CLICodebaseAnalysis:
         """Read contents of key files for analysis."""
         key_contents = {}
 
-        # Priority files to read
-        priority_files = [
-            'README.md', 'README', 'README.rst',
-            'setup.py', 'pyproject.toml', 'package.json',
-            'requirements.txt', 'Cargo.toml', 'go.mod',
-        ]
-
-        for filename in priority_files:
+        for filename in PRIORITY_FILES:
             file_path = path / filename
             if file_path.exists():
                 try:
                     content = file_path.read_text(encoding='utf-8', errors='ignore')
                     # Limit content size
-                    if len(content) > 3000:
-                        content = content[:3000] + "\n... (truncated)"
+                    if len(content) > TRUNCATE_PRIORITY_FILE:
+                        content = content[:TRUNCATE_PRIORITY_FILE] + "\n... (truncated)"
                     key_contents[filename] = content
                 except Exception:
                     pass
@@ -202,10 +207,9 @@ class CLICodebaseAnalysis:
         python_files = files.get('python', [])
         if python_files:
             # Prioritize main entry points
-            priority = ['main.py', '__main__.py', 'app.py', 'cli.py', 'setup.py']
             selected = []
 
-            for p in priority:
+            for p in ENTRY_POINT_FILES:
                 for f in python_files:
                     if f.endswith(p) or f == p:
                         selected.append(f)
@@ -223,8 +227,8 @@ class CLICodebaseAnalysis:
                 if file_path.exists():
                     try:
                         content = file_path.read_text(encoding='utf-8', errors='ignore')
-                        if len(content) > 2000:
-                            content = content[:2000] + "\n... (truncated)"
+                        if len(content) > TRUNCATE_FILE_CONTENT:
+                            content = content[:TRUNCATE_FILE_CONTENT] + "\n... (truncated)"
                         key_contents[filename] = content
                     except Exception:
                         pass
@@ -283,8 +287,8 @@ Be concise but thorough. Focus on actionable insights."""
                 self.orchestrator.brain,
                 prompt,
                 system_prompt="You are a code analysis expert. Analyze codebases and provide clear, actionable summaries. Do not repeat yourself.",
-                max_tokens=2000,
-                temperature=0.3
+                max_tokens=MAX_TOKENS_SUMMARY,
+                temperature=TEMPERATURE_LOW
             )
             return response.content
         except Exception as e:

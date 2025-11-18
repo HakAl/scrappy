@@ -8,12 +8,24 @@ import click
 try:
     from ..agent import CodeAgent
     from ..intent_classifier import IntentClassifier, QueryIntent, get_research_actions
+    from .config.defaults import (
+        TRUNCATE_RESEARCH_LARGE,
+        TRUNCATE_RESEARCH_MEDIUM,
+        TRUNCATE_FILE_CONTENT,
+    )
+    from .config.extensions import DEPENDENCY_FILES, CONFIGURATION_FILES
 except ImportError:
     import sys
     import os
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from agent import CodeAgent
     from intent_classifier import IntentClassifier, QueryIntent, get_research_actions
+    from cli.config.defaults import (
+        TRUNCATE_RESEARCH_LARGE,
+        TRUNCATE_RESEARCH_MEDIUM,
+        TRUNCATE_FILE_CONTENT,
+    )
+    from cli.config.extensions import DEPENDENCY_FILES, CONFIGURATION_FILES
 
 
 class CLISmartQuery:
@@ -105,7 +117,7 @@ class CLISmartQuery:
                         click.echo(f"  - Searching for class '{class_name}'...")
                         success, result = self._safe_tool_call(agent._tool_search_code, f"class {class_name}", "*.py")
                         if success and "No matches" not in result:
-                            research_results.append(f"Class '{class_name}':\n{result[:1500]}")
+                            research_results.append(f"Class '{class_name}':\n{result[:TRUNCATE_RESEARCH_LARGE]}")
                             tools_used += 1
                         searched.add(class_name)
 
@@ -115,7 +127,7 @@ class CLISmartQuery:
                         click.echo(f"  - Searching for function '{func_name}'...")
                         success, result = self._safe_tool_call(agent._tool_search_code, f"def {func_name}", "*.py")
                         if success and "No matches" not in result:
-                            research_results.append(f"Function '{func_name}':\n{result[:1500]}")
+                            research_results.append(f"Function '{func_name}':\n{result[:TRUNCATE_RESEARCH_LARGE]}")
                             tools_used += 1
                         searched.add(func_name)
 
@@ -126,7 +138,7 @@ class CLISmartQuery:
                             click.echo(f"  - Searching for '{keyword}'...")
                             success, result = self._safe_tool_call(agent._tool_search_code, keyword, "*.py")
                             if success and "No matches" not in result:
-                                research_results.append(f"Code containing '{keyword}':\n{result[:1500]}")
+                                research_results.append(f"Code containing '{keyword}':\n{result[:TRUNCATE_RESEARCH_LARGE]}")
                                 tools_used += 1
                                 break
 
@@ -136,7 +148,7 @@ class CLISmartQuery:
                     click.echo(f"  - Reading file '{file_path}'...")
                     success, result = self._safe_tool_call(agent._tool_read_file, file_path, max_lines=100)
                     if success:
-                        research_results.append(f"File '{file_path}':\n{result[:2000]}")
+                        research_results.append(f"File '{file_path}':\n{result[:TRUNCATE_FILE_CONTENT]}")
                         tools_used += 1
 
             elif intent == QueryIntent.GIT_HISTORY:
@@ -156,7 +168,7 @@ class CLISmartQuery:
             elif intent == QueryIntent.DEPENDENCY_INFO:
                 click.echo("  - Checking dependencies...")
                 # Check for common dependency files
-                for dep_file in ['requirements.txt', 'setup.py', 'pyproject.toml', 'package.json']:
+                for dep_file in DEPENDENCY_FILES[:4]:
                     success, result = self._safe_tool_call(agent._tool_read_file, dep_file, max_lines=50)
                     if success and "not found" not in result.lower():
                         research_results.append(f"Dependencies ({dep_file}):\n{result}")
@@ -168,7 +180,7 @@ class CLISmartQuery:
                     click.echo(f"  - Searching for '{pkg}' usage...")
                     success, result = self._safe_tool_call(agent._tool_search_code, f"import {pkg}", "*.py")
                     if success and "No matches" not in result:
-                        research_results.append(f"Usage of '{pkg}':\n{result[:1000]}")
+                        research_results.append(f"Usage of '{pkg}':\n{result[:TRUNCATE_RESEARCH_MEDIUM]}")
                         tools_used += 1
 
             elif intent == QueryIntent.ARCHITECTURE:
@@ -182,7 +194,7 @@ class CLISmartQuery:
                 for pattern in ['service', 'controller', 'model', 'repository', 'handler']:
                     success, result = self._safe_tool_call(agent._tool_search_code, f"class.*{pattern}", "*.py")
                     if success and "No matches" not in result:
-                        research_results.append(f"Architecture pattern '{pattern}':\n{result[:1000]}")
+                        research_results.append(f"Architecture pattern '{pattern}':\n{result[:TRUNCATE_RESEARCH_MEDIUM]}")
                         tools_used += 1
                         break
 
@@ -192,7 +204,7 @@ class CLISmartQuery:
                     click.echo(f"  - Searching for '{error_type}'...")
                     success, result = self._safe_tool_call(agent._tool_search_code, error_type, "*.py")
                     if success and "No matches" not in result:
-                        research_results.append(f"Error '{error_type}' occurrences:\n{result[:1500]}")
+                        research_results.append(f"Error '{error_type}' occurrences:\n{result[:TRUNCATE_RESEARCH_LARGE]}")
                         tools_used += 1
 
                 # Check for error handling patterns
@@ -200,7 +212,7 @@ class CLISmartQuery:
                     click.echo("  - Searching for error handling...")
                     success, result = self._safe_tool_call(agent._tool_search_code, "except|raise|Error", "*.py")
                     if success and "No matches" not in result:
-                        research_results.append(f"Error handling patterns:\n{result[:1500]}")
+                        research_results.append(f"Error handling patterns:\n{result[:TRUNCATE_RESEARCH_LARGE]}")
                         tools_used += 1
 
             elif intent == QueryIntent.TESTING:
@@ -220,12 +232,12 @@ class CLISmartQuery:
                 click.echo("  - Searching for test patterns...")
                 success, result = self._safe_tool_call(agent._tool_search_code, "def test_|class Test", "*.py")
                 if success and "No matches" not in result:
-                    research_results.append(f"Test definitions:\n{result[:1500]}")
+                    research_results.append(f"Test definitions:\n{result[:TRUNCATE_RESEARCH_LARGE]}")
                     tools_used += 1
 
             elif intent == QueryIntent.CONFIGURATION:
                 click.echo("  - Checking configuration files...")
-                for config_file in ['config.py', 'settings.py', '.env.example', 'config.json', 'config.yaml']:
+                for config_file in CONFIGURATION_FILES:
                     success, result = self._safe_tool_call(agent._tool_read_file, config_file, max_lines=100)
                     if success and "not found" not in result.lower():
                         research_results.append(f"Configuration ({config_file}):\n{result}")
@@ -235,7 +247,7 @@ class CLISmartQuery:
                 click.echo("  - Searching for config usage...")
                 success, result = self._safe_tool_call(agent._tool_search_code, "config|CONFIG|settings|Settings", "*.py")
                 if success and "No matches" not in result:
-                    research_results.append(f"Configuration usage:\n{result[:1500]}")
+                    research_results.append(f"Configuration usage:\n{result[:TRUNCATE_RESEARCH_LARGE]}")
                     tools_used += 1
 
             elif intent == QueryIntent.SECURITY:
@@ -243,7 +255,7 @@ class CLISmartQuery:
                 for pattern in ['auth', 'permission', 'token', 'password', 'encrypt']:
                     success, result = self._safe_tool_call(agent._tool_search_code, pattern, "*.py")
                     if success and "No matches" not in result:
-                        research_results.append(f"Security pattern '{pattern}':\n{result[:1000]}")
+                        research_results.append(f"Security pattern '{pattern}':\n{result[:TRUNCATE_RESEARCH_MEDIUM]}")
                         tools_used += 1
                         if tools_used >= 3:
                             break

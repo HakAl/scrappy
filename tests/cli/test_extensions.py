@@ -1,0 +1,370 @@
+"""
+Tests for CLI extensions configuration module.
+
+TDD: Tests written first for the extensions.py module which centralizes
+file extension categories and file type patterns used throughout the CLI.
+"""
+
+import pytest
+
+
+class TestExtensionsModuleStructure:
+    """Tests for the extensions module structure and exports."""
+
+    def test_module_imports_successfully(self):
+        """Module should import without errors."""
+        from src.cli.config import extensions
+        assert extensions is not None
+
+    def test_module_has_docstring(self):
+        """Extensions module should have a module-level docstring."""
+        from src.cli.config import extensions
+        assert extensions.__doc__ is not None
+        assert len(extensions.__doc__) > 0
+
+
+class TestLanguageExtensions:
+    """Tests for programming language file extensions."""
+
+    def test_python_extensions_exists(self):
+        """PYTHON_EXTENSIONS should be exported."""
+        from src.cli.config.extensions import PYTHON_EXTENSIONS
+        assert PYTHON_EXTENSIONS is not None
+        assert isinstance(PYTHON_EXTENSIONS, (list, tuple, set))
+
+    def test_python_extensions_contains_py(self):
+        """PYTHON_EXTENSIONS should contain .py."""
+        from src.cli.config.extensions import PYTHON_EXTENSIONS
+        assert '.py' in PYTHON_EXTENSIONS
+
+    def test_javascript_extensions_exists(self):
+        """JAVASCRIPT_EXTENSIONS should be exported."""
+        from src.cli.config.extensions import JAVASCRIPT_EXTENSIONS
+        assert JAVASCRIPT_EXTENSIONS is not None
+        assert isinstance(JAVASCRIPT_EXTENSIONS, (list, tuple, set))
+
+    def test_javascript_extensions_values(self):
+        """JAVASCRIPT_EXTENSIONS should contain js, jsx, ts, tsx."""
+        from src.cli.config.extensions import JAVASCRIPT_EXTENSIONS
+        expected = {'.js', '.jsx', '.ts', '.tsx'}
+        for ext in expected:
+            assert ext in JAVASCRIPT_EXTENSIONS, f"Missing {ext}"
+
+    def test_web_extensions_exists(self):
+        """WEB_EXTENSIONS should be exported."""
+        from src.cli.config.extensions import WEB_EXTENSIONS
+        assert WEB_EXTENSIONS is not None
+        assert isinstance(WEB_EXTENSIONS, (list, tuple, set))
+
+    def test_web_extensions_values(self):
+        """WEB_EXTENSIONS should contain html, css, scss."""
+        from src.cli.config.extensions import WEB_EXTENSIONS
+        expected = {'.html', '.css', '.scss'}
+        for ext in expected:
+            assert ext in WEB_EXTENSIONS, f"Missing {ext}"
+
+
+class TestConfigExtensions:
+    """Tests for configuration file extensions."""
+
+    def test_config_extensions_exists(self):
+        """CONFIG_EXTENSIONS should be exported."""
+        from src.cli.config.extensions import CONFIG_EXTENSIONS
+        assert CONFIG_EXTENSIONS is not None
+        assert isinstance(CONFIG_EXTENSIONS, (list, tuple, set))
+
+    def test_config_extensions_values(self):
+        """CONFIG_EXTENSIONS should contain common config formats."""
+        from src.cli.config.extensions import CONFIG_EXTENSIONS
+        expected = {'.json', '.yaml', '.yml', '.toml', '.ini'}
+        for ext in expected:
+            assert ext in CONFIG_EXTENSIONS, f"Missing {ext}"
+
+
+class TestDocExtensions:
+    """Tests for documentation file extensions."""
+
+    def test_docs_extensions_exists(self):
+        """DOCS_EXTENSIONS should be exported."""
+        from src.cli.config.extensions import DOCS_EXTENSIONS
+        assert DOCS_EXTENSIONS is not None
+        assert isinstance(DOCS_EXTENSIONS, (list, tuple, set))
+
+    def test_docs_extensions_values(self):
+        """DOCS_EXTENSIONS should contain md, rst, txt."""
+        from src.cli.config.extensions import DOCS_EXTENSIONS
+        expected = {'.md', '.rst', '.txt'}
+        for ext in expected:
+            assert ext in DOCS_EXTENSIONS, f"Missing {ext}"
+
+
+class TestExtensionsCategoryMapping:
+    """Tests for the complete extensions category mapping."""
+
+    def test_extensions_by_category_exists(self):
+        """EXTENSIONS_BY_CATEGORY should be exported."""
+        from src.cli.config.extensions import EXTENSIONS_BY_CATEGORY
+        assert EXTENSIONS_BY_CATEGORY is not None
+        assert isinstance(EXTENSIONS_BY_CATEGORY, dict)
+
+    def test_extensions_by_category_keys(self):
+        """EXTENSIONS_BY_CATEGORY should have all category keys."""
+        from src.cli.config.extensions import EXTENSIONS_BY_CATEGORY
+        expected_keys = {'python', 'javascript', 'web', 'config', 'docs', 'other'}
+        for key in expected_keys:
+            assert key in EXTENSIONS_BY_CATEGORY, f"Missing category: {key}"
+
+    def test_python_category_value(self):
+        """Python category should contain .py."""
+        from src.cli.config.extensions import EXTENSIONS_BY_CATEGORY
+        assert '.py' in EXTENSIONS_BY_CATEGORY['python']
+
+    def test_javascript_category_values(self):
+        """JavaScript category should contain expected extensions."""
+        from src.cli.config.extensions import EXTENSIONS_BY_CATEGORY
+        expected = {'.js', '.jsx', '.ts', '.tsx'}
+        for ext in expected:
+            assert ext in EXTENSIONS_BY_CATEGORY['javascript'], f"Missing {ext}"
+
+    def test_config_category_values(self):
+        """Config category should contain expected extensions."""
+        from src.cli.config.extensions import EXTENSIONS_BY_CATEGORY
+        expected = {'.json', '.yaml', '.yml', '.toml', '.ini'}
+        for ext in expected:
+            assert ext in EXTENSIONS_BY_CATEGORY['config'], f"Missing {ext}"
+
+    def test_other_category_empty(self):
+        """Other category should be an empty list."""
+        from src.cli.config.extensions import EXTENSIONS_BY_CATEGORY
+        assert EXTENSIONS_BY_CATEGORY['other'] == []
+
+
+class TestEntryPointFiles:
+    """Tests for entry point file names."""
+
+    def test_entry_point_files_exists(self):
+        """ENTRY_POINT_FILES should be exported."""
+        from src.cli.config.extensions import ENTRY_POINT_FILES
+        assert ENTRY_POINT_FILES is not None
+        assert isinstance(ENTRY_POINT_FILES, (list, tuple, set))
+
+    def test_entry_point_files_values(self):
+        """ENTRY_POINT_FILES should contain common entry points."""
+        from src.cli.config.extensions import ENTRY_POINT_FILES
+        expected = {'main.py', '__main__.py', 'app.py', 'cli.py', 'setup.py'}
+        for file in expected:
+            assert file in ENTRY_POINT_FILES, f"Missing {file}"
+
+
+class TestPriorityFiles:
+    """Tests for priority file names."""
+
+    def test_priority_files_exists(self):
+        """PRIORITY_FILES should be exported."""
+        from src.cli.config.extensions import PRIORITY_FILES
+        assert PRIORITY_FILES is not None
+        assert isinstance(PRIORITY_FILES, (list, tuple, set))
+
+    def test_priority_files_contains_readme(self):
+        """PRIORITY_FILES should contain README variants."""
+        from src.cli.config.extensions import PRIORITY_FILES
+        readme_variants = {'README.md', 'README', 'README.rst'}
+        for readme in readme_variants:
+            assert readme in PRIORITY_FILES, f"Missing {readme}"
+
+    def test_priority_files_contains_package_configs(self):
+        """PRIORITY_FILES should contain package configuration files."""
+        from src.cli.config.extensions import PRIORITY_FILES
+        package_configs = {
+            'setup.py', 'pyproject.toml', 'package.json',
+            'requirements.txt', 'Cargo.toml', 'go.mod'
+        }
+        for config in package_configs:
+            assert config in PRIORITY_FILES, f"Missing {config}"
+
+
+class TestDependencyFiles:
+    """Tests for dependency file names."""
+
+    def test_dependency_files_exists(self):
+        """DEPENDENCY_FILES should be exported."""
+        from src.cli.config.extensions import DEPENDENCY_FILES
+        assert DEPENDENCY_FILES is not None
+        assert isinstance(DEPENDENCY_FILES, (list, tuple, set))
+
+    def test_dependency_files_python(self):
+        """DEPENDENCY_FILES should contain Python dependency files."""
+        from src.cli.config.extensions import DEPENDENCY_FILES
+        python_deps = {'requirements.txt', 'setup.py', 'pyproject.toml'}
+        for dep in python_deps:
+            assert dep in DEPENDENCY_FILES, f"Missing {dep}"
+
+    def test_dependency_files_javascript(self):
+        """DEPENDENCY_FILES should contain JavaScript dependency file."""
+        from src.cli.config.extensions import DEPENDENCY_FILES
+        assert 'package.json' in DEPENDENCY_FILES
+
+    def test_dependency_files_other_languages(self):
+        """DEPENDENCY_FILES should contain other language dependency files."""
+        from src.cli.config.extensions import DEPENDENCY_FILES
+        other_deps = {'Cargo.toml', 'go.mod'}
+        for dep in other_deps:
+            assert dep in DEPENDENCY_FILES, f"Missing {dep}"
+
+
+class TestConfigurationFiles:
+    """Tests for configuration file names."""
+
+    def test_configuration_files_exists(self):
+        """CONFIGURATION_FILES should be exported."""
+        from src.cli.config.extensions import CONFIGURATION_FILES
+        assert CONFIGURATION_FILES is not None
+        assert isinstance(CONFIGURATION_FILES, (list, tuple, set))
+
+    def test_configuration_files_values(self):
+        """CONFIGURATION_FILES should contain common config file names."""
+        from src.cli.config.extensions import CONFIGURATION_FILES
+        expected = {
+            'config.py', 'settings.py', '.env.example',
+            'config.json', 'config.yaml'
+        }
+        for config in expected:
+            assert config in CONFIGURATION_FILES, f"Missing {config}"
+
+
+class TestAllCodeExtensions:
+    """Tests for combined code extensions."""
+
+    def test_all_code_extensions_exists(self):
+        """ALL_CODE_EXTENSIONS should be exported."""
+        from src.cli.config.extensions import ALL_CODE_EXTENSIONS
+        assert ALL_CODE_EXTENSIONS is not None
+        assert isinstance(ALL_CODE_EXTENSIONS, (list, tuple, set))
+
+    def test_all_code_extensions_includes_python(self):
+        """ALL_CODE_EXTENSIONS should include Python."""
+        from src.cli.config.extensions import ALL_CODE_EXTENSIONS
+        assert '.py' in ALL_CODE_EXTENSIONS
+
+    def test_all_code_extensions_includes_javascript(self):
+        """ALL_CODE_EXTENSIONS should include JavaScript/TypeScript."""
+        from src.cli.config.extensions import ALL_CODE_EXTENSIONS
+        for ext in ['.js', '.jsx', '.ts', '.tsx']:
+            assert ext in ALL_CODE_EXTENSIONS, f"Missing {ext}"
+
+
+class TestHelperFunctions:
+    """Tests for helper functions in extensions module."""
+
+    def test_get_category_for_extension_exists(self):
+        """get_category_for_extension helper should exist."""
+        from src.cli.config.extensions import get_category_for_extension
+        assert callable(get_category_for_extension)
+
+    def test_get_category_for_python(self):
+        """get_category_for_extension should return 'python' for .py."""
+        from src.cli.config.extensions import get_category_for_extension
+        assert get_category_for_extension('.py') == 'python'
+
+    def test_get_category_for_javascript(self):
+        """get_category_for_extension should return 'javascript' for js files."""
+        from src.cli.config.extensions import get_category_for_extension
+        for ext in ['.js', '.jsx', '.ts', '.tsx']:
+            assert get_category_for_extension(ext) == 'javascript'
+
+    def test_get_category_for_config(self):
+        """get_category_for_extension should return 'config' for config files."""
+        from src.cli.config.extensions import get_category_for_extension
+        for ext in ['.json', '.yaml', '.yml', '.toml', '.ini']:
+            assert get_category_for_extension(ext) == 'config'
+
+    def test_get_category_for_unknown(self):
+        """get_category_for_extension should return 'other' for unknown."""
+        from src.cli.config.extensions import get_category_for_extension
+        assert get_category_for_extension('.unknown') == 'other'
+
+    def test_is_code_file_exists(self):
+        """is_code_file helper should exist."""
+        from src.cli.config.extensions import is_code_file
+        assert callable(is_code_file)
+
+    def test_is_code_file_true_cases(self):
+        """is_code_file should return True for code file extensions."""
+        from src.cli.config.extensions import is_code_file
+        code_exts = ['.py', '.js', '.jsx', '.ts', '.tsx', '.html', '.css']
+        for ext in code_exts:
+            assert is_code_file(ext) is True, f"{ext} should be a code file"
+
+    def test_is_code_file_false_cases(self):
+        """is_code_file should return False for non-code extensions."""
+        from src.cli.config.extensions import is_code_file
+        non_code = ['.exe', '.dll', '.so', '.bin']
+        for ext in non_code:
+            assert is_code_file(ext) is False, f"{ext} should not be a code file"
+
+    def test_is_config_file_exists(self):
+        """is_config_file helper should exist."""
+        from src.cli.config.extensions import is_config_file
+        assert callable(is_config_file)
+
+    def test_is_config_file_true_cases(self):
+        """is_config_file should return True for config extensions."""
+        from src.cli.config.extensions import is_config_file
+        config_exts = ['.json', '.yaml', '.yml', '.toml', '.ini']
+        for ext in config_exts:
+            assert is_config_file(ext) is True, f"{ext} should be a config file"
+
+    def test_is_config_file_false_cases(self):
+        """is_config_file should return False for non-config extensions."""
+        from src.cli.config.extensions import is_config_file
+        non_config = ['.py', '.js', '.exe']
+        for ext in non_config:
+            assert is_config_file(ext) is False, f"{ext} should not be a config file"
+
+    def test_is_docs_file_exists(self):
+        """is_docs_file helper should exist."""
+        from src.cli.config.extensions import is_docs_file
+        assert callable(is_docs_file)
+
+    def test_is_docs_file_true_cases(self):
+        """is_docs_file should return True for docs extensions."""
+        from src.cli.config.extensions import is_docs_file
+        docs_exts = ['.md', '.rst', '.txt']
+        for ext in docs_exts:
+            assert is_docs_file(ext) is True, f"{ext} should be a docs file"
+
+
+class TestExtensionsEdgeCases:
+    """Tests for edge cases in extensions module."""
+
+    def test_extension_with_dot(self):
+        """Extensions should handle both '.py' and 'py' formats."""
+        from src.cli.config.extensions import get_category_for_extension
+        # The function should work with extensions that have dots
+        assert get_category_for_extension('.py') == 'python'
+
+    def test_case_sensitivity(self):
+        """Extensions should be lowercase for consistency."""
+        from src.cli.config.extensions import EXTENSIONS_BY_CATEGORY
+        for category, exts in EXTENSIONS_BY_CATEGORY.items():
+            for ext in exts:
+                assert ext == ext.lower(), f"Extension {ext} should be lowercase"
+
+    def test_extensions_start_with_dot(self):
+        """File extensions should start with a dot."""
+        from src.cli.config.extensions import EXTENSIONS_BY_CATEGORY
+        for category, exts in EXTENSIONS_BY_CATEGORY.items():
+            if category == 'other':
+                continue  # other is empty
+            for ext in exts:
+                assert ext.startswith('.'), f"Extension {ext} should start with dot"
+
+    def test_no_duplicate_extensions_across_categories(self):
+        """Same extension should not appear in multiple categories."""
+        from src.cli.config.extensions import EXTENSIONS_BY_CATEGORY
+        seen = {}
+        for category, exts in EXTENSIONS_BY_CATEGORY.items():
+            for ext in exts:
+                if ext in seen:
+                    pytest.fail(f"Extension {ext} appears in both {seen[ext]} and {category}")
+                seen[ext] = category

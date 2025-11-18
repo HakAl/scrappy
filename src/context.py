@@ -14,6 +14,63 @@ from pathlib import Path
 from typing import Optional
 
 
+def _get_config_defaults():
+    """Lazy import of config defaults to avoid circular imports."""
+    try:
+        from src.cli.config.defaults import (
+            TRUNCATE_RESEARCH_LARGE,
+            TRUNCATE_ERROR_MESSAGE,
+            TRUNCATE_PRIORITY_FILE,
+        )
+    except ImportError:
+        try:
+            from cli.config.defaults import (
+                TRUNCATE_RESEARCH_LARGE,
+                TRUNCATE_ERROR_MESSAGE,
+                TRUNCATE_PRIORITY_FILE,
+            )
+        except ImportError:
+            # Fallback values if imports fail
+            TRUNCATE_RESEARCH_LARGE = 1500
+            TRUNCATE_ERROR_MESSAGE = 500
+            TRUNCATE_PRIORITY_FILE = 3000
+    return TRUNCATE_RESEARCH_LARGE, TRUNCATE_ERROR_MESSAGE, TRUNCATE_PRIORITY_FILE
+
+
+def _get_config_extensions():
+    """Lazy import of config extensions to avoid circular imports."""
+    try:
+        from src.cli.config.extensions import EXTENSIONS_BY_CATEGORY, ENTRY_POINT_FILES
+    except ImportError:
+        try:
+            from cli.config.extensions import EXTENSIONS_BY_CATEGORY, ENTRY_POINT_FILES
+        except ImportError:
+            # Fallback values if imports fail
+            EXTENSIONS_BY_CATEGORY = {
+                'python': ['.py'],
+                'javascript': ['.js', '.jsx', '.ts', '.tsx'],
+                'web': ['.html', '.css', '.scss'],
+                'config': ['.json', '.yaml', '.yml', '.toml', '.ini'],
+                'docs': ['.md', '.rst', '.txt'],
+                'other': []
+            }
+            ENTRY_POINT_FILES = ['main.py', '__main__.py', 'app.py', 'cli.py', 'setup.py']
+    return EXTENSIONS_BY_CATEGORY, ENTRY_POINT_FILES
+
+
+def _get_config_paths():
+    """Lazy import of config paths to avoid circular imports."""
+    try:
+        from src.cli.config.paths import SKIP_DIRS
+    except ImportError:
+        try:
+            from cli.config.paths import SKIP_DIRS
+        except ImportError:
+            # Fallback values if imports fail
+            SKIP_DIRS = {'.git', '__pycache__', 'node_modules', '.venv', 'venv', 'env', '.env', 'dist', 'build'}
+    return SKIP_DIRS
+
+
 class CodebaseContext:
     """
     Manages codebase knowledge and context for intelligent prompt augmentation.
@@ -148,9 +205,10 @@ class CodebaseContext:
 
         # Build file contents section (limited)
         file_contents = ""
+        TRUNCATE_RESEARCH_LARGE, _, _ = _get_config_defaults()
         for filename, content in list(self.key_files.items())[:5]:
             # Truncate to avoid token explosion
-            truncated = content[:1500] if len(content) > 1500 else content
+            truncated = content[:TRUNCATE_RESEARCH_LARGE] if len(content) > TRUNCATE_RESEARCH_LARGE else content
             file_contents += f"\n--- {filename} ---\n{truncated}\n"
 
         prompt = f"""Analyze this codebase and provide a concise technical summary.
@@ -265,7 +323,8 @@ Be concise and technical. No fluff."""
         # Check for config-related queries
         if any(word in query_lower for word in ['config', 'setup', 'install', 'dependency', 'require']):
             if 'requirements.txt' in self.key_files:
-                deps = self.key_files['requirements.txt'][:500]
+                _, TRUNCATE_ERROR_MESSAGE, _ = _get_config_defaults()
+                deps = self.key_files['requirements.txt'][:TRUNCATE_ERROR_MESSAGE]
                 relevant_parts.append(f"Dependencies:\n{deps}")
 
         # Check for architecture queries
@@ -278,20 +337,12 @@ Be concise and technical. No fluff."""
 
     def _scan_files(self) -> dict:
         """Scan project for source files."""
-        extensions = {
-            'python': ['.py'],
-            'javascript': ['.js', '.jsx', '.ts', '.tsx'],
-            'web': ['.html', '.css', '.scss'],
-            'config': ['.json', '.yaml', '.yml', '.toml', '.ini'],
-            'docs': ['.md', '.rst', '.txt'],
-            'other': []
-        }
-
-        files = {k: [] for k in extensions}
-        skip_dirs = {'.git', '__pycache__', 'node_modules', '.venv', 'venv', 'env', 'dist', 'build', '.tox', '.pytest_cache'}
+        EXTENSIONS_BY_CATEGORY, _ = _get_config_extensions()
+        SKIP_DIRS = _get_config_paths()
+        files = {k: [] for k in EXTENSIONS_BY_CATEGORY}
 
         for root, dirs, filenames in os.walk(self.project_path):
-            dirs[:] = [d for d in dirs if d not in skip_dirs and not d.startswith('.')]
+            dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.startswith('.')]
 
             try:
                 rel_root = Path(root).relative_to(self.project_path)
@@ -306,7 +357,7 @@ Be concise and technical. No fluff."""
                 ext = Path(filename).suffix.lower()
 
                 categorized = False
-                for category, exts in extensions.items():
+                for category, exts in EXTENSIONS_BY_CATEGORY.items():
                     if ext in exts:
                         files[category].append(file_path)
                         categorized = True
@@ -355,8 +406,9 @@ Be concise and technical. No fluff."""
             'directories': [],
         }
 
+        SKIP_DIRS = _get_config_paths()
         for item in self.project_path.iterdir():
-            if item.is_dir() and not item.name.startswith('.') and item.name not in {'__pycache__', 'node_modules', 'venv', '.venv'}:
+            if item.is_dir() and not item.name.startswith('.') and item.name not in SKIP_DIRS:
                 structure['directories'].append(item.name)
 
         return structure
@@ -384,17 +436,18 @@ Be concise and technical. No fluff."""
 
         # Read main Python entry points
         py_files = self.file_index.get('python', [])
-        entry_points = ['main.py', '__main__.py', 'app.py', 'cli.py']
+        _, ENTRY_POINT_FILES = _get_config_extensions()
+        _, _, TRUNCATE_PRIORITY_FILE = _get_config_defaults()
 
-        for entry in entry_points:
+        for entry in ENTRY_POINT_FILES:
             for f in py_files:
                 if f.endswith(entry) or f == entry:
                     file_path = self.project_path / f
                     if file_path.exists():
                         try:
                             content = file_path.read_text(encoding='utf-8', errors='ignore')
-                            if len(content) > 3000:
-                                content = content[:3000] + "\n... (truncated)"
+                            if len(content) > TRUNCATE_PRIORITY_FILE:
+                                content = content[:TRUNCATE_PRIORITY_FILE] + "\n... (truncated)"
                             key_contents[f] = content
                         except Exception:
                             pass
