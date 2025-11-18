@@ -55,12 +55,5 @@ Thumbs.db
 htmlcov/
 
 # LLM Team cache and session files
-.llm_team_context.json
-.llm_team_session.json
-.llm_response_cache.json
-.agent_audit.json
-
-# All llm_team files (generated/temp files)
 .llm_*
-
-.env
+.agent_audit.json
