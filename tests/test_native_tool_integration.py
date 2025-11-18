@@ -211,16 +211,14 @@ class TestThinkMethodNativeToolDetection:
         # Call _think
         thought = agent_with_native_orchestrator._think(state)
 
-        # If native tools are supported, delegate_with_tools should be called
-        # OR the response should have tool_calls (meaning native path was used)
-        if mock_orchestrator_with_native_support.delegate_with_tools.called:
-            # Verify tools were passed
-            call_kwargs = mock_orchestrator_with_native_support.delegate_with_tools.call_args
-            assert call_kwargs is not None
-            assert "tools" in call_kwargs.kwargs or len(call_kwargs.args) > 2
-        else:
-            # If not called, skip test (provider detection may not be working in test)
-            pytest.skip("delegate_with_tools not called - mock setup issue")
+        # Native tools are supported, so delegate_with_tools should be called
+        assert mock_orchestrator_with_native_support.delegate_with_tools.called, \
+            "delegate_with_tools should be called when provider supports native tools"
+
+        # Verify tools were passed
+        call_kwargs = mock_orchestrator_with_native_support.delegate_with_tools.call_args
+        assert call_kwargs is not None
+        assert "tools" in call_kwargs.kwargs or len(call_kwargs.args) > 2
 
     @pytest.mark.unit
     def test_think_falls_back_to_delegate_for_json_provider(
@@ -279,24 +277,24 @@ class TestThinkMethodNativeToolDetection:
 
         agent_with_native_orchestrator._think(state)
 
-        # If delegate_with_tools was called, verify tool schemas
-        if mock_orchestrator_with_native_support.delegate_with_tools.called:
-            call_kwargs = mock_orchestrator_with_native_support.delegate_with_tools.call_args.kwargs
+        # delegate_with_tools should be called since provider supports native tools
+        assert mock_orchestrator_with_native_support.delegate_with_tools.called, \
+            "delegate_with_tools should be called when provider supports native tools"
 
-            # Should have tools parameter with OpenAI schema format
-            assert "tools" in call_kwargs
-            tools = call_kwargs["tools"]
+        call_kwargs = mock_orchestrator_with_native_support.delegate_with_tools.call_args.kwargs
 
-            # Tools should be a list of OpenAI-format tool definitions
-            assert isinstance(tools, list)
-            assert len(tools) > 0
-            # Each tool should have type and function
-            assert "type" in tools[0]
-            assert tools[0]["type"] == "function"
-            assert "function" in tools[0]
-            assert "name" in tools[0]["function"]
-        else:
-            pytest.skip("delegate_with_tools not called - mock setup issue")
+        # Should have tools parameter with OpenAI schema format
+        assert "tools" in call_kwargs
+        tools = call_kwargs["tools"]
+
+        # Tools should be a list of OpenAI-format tool definitions
+        assert isinstance(tools, list)
+        assert len(tools) > 0
+        # Each tool should have type and function
+        assert "type" in tools[0]
+        assert tools[0]["type"] == "function"
+        assert "function" in tools[0]
+        assert "name" in tools[0]["function"]
 
 
 class TestPlanActionNativeToolParsing:

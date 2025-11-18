@@ -143,12 +143,11 @@
 **RED**
 
 we're working to improve src\cli the next task is: 
-Test Infrastructure Overhaul - Replace Shallow Tests
+Test Infrastructure Overhaul - Fix Skipped Tests
 
- - Rewrite test_cli_handlers.py tests to verify behavior
- - Remove assert hasattr() patterns
- - Add actual method invocation with assertions
- - Test edge cases and error paths
+ - Investigate mock setup issues in test_native_tool_integration.py
+ - Implement missing features for test_model_type.py
+ - Remove or fix all pytest.skip() calls -> excluding tests\benchmark
 can you research the task and begin writing tests for the change?
 
 **GREEN**

@@ -132,6 +132,10 @@ class ConfigurableTestOrchestrator:
         """Return available providers."""
         return self.available_providers
 
+    def list_providers(self) -> List[str]:
+        """Return available providers (Protocol method)."""
+        return self.available_providers
+
     def is_rate_limited(self, provider: str) -> bool:
         """Check if provider is rate limited."""
         return provider in self.rate_limited_providers

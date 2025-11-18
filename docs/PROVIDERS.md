@@ -2,6 +2,7 @@
  
  - still an issue? Inconsistent API: ProviderRegistry.providers vs ._providers
  - local embeddings
+ - integrate cloudflare
 
 
  ## Provider Configuration 
