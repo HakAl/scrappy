@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+
+# THIS TEST IS FOR BENCHMARK AND UX TESTS DO NOT DELETE
+
 """
 Integration test: Spring Boot + Vite React task via /agent CLI command.
 

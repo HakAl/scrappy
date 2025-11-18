@@ -143,11 +143,12 @@
 **RED**
 
 we're working to improve src\cli the next task is: 
-Test Infrastructure Overhaul - Create Test Fixtures
+Test Infrastructure Overhaul - Replace Shallow Tests
 
- - Update tests/helpers.py with MockIO, MockOrchestrator
- - Create factory functions for common test setups
- - Add behavior verification helpers
+ - Rewrite test_cli_handlers.py tests to verify behavior
+ - Remove assert hasattr() patterns
+ - Add actual method invocation with assertions
+ - Test edge cases and error paths
 can you research the task and begin writing tests for the change?
 
 **GREEN**
@@ -165,18 +166,6 @@ CLI Refactoring
 
  Phase 5: Test Infrastructure Overhaul
 
- 5.1 Create Test Fixtures
-
- - Update tests/helpers.py with MockIO, MockOrchestrator
- - Create factory functions for common test setups
- - Add behavior verification helpers
-
- 5.2 Replace Shallow Tests
-
- - Rewrite test_cli_handlers.py tests to verify behavior
- - Remove assert hasattr() patterns
- - Add actual method invocation with assertions
- - Test edge cases and error paths
 
  5.3 Fix Skipped Tests
 

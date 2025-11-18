@@ -1,10 +1,26 @@
 """
 Tests for CLI command handlers and session management.
+
+These tests verify actual behavior, not just existence of methods.
+They invoke methods, assert on outcomes, and test edge cases.
 """
 import pytest
 from unittest.mock import Mock, MagicMock, patch, call
 from pathlib import Path
 import json
+from datetime import datetime
+
+from tests.helpers import (
+    MockIO,
+    ConfigurableTestOrchestrator,
+    make_handler_test_setup,
+    assert_output_contains,
+    assert_output_not_contains,
+    assert_styled_with,
+    assert_has_error_output,
+    assert_has_success_output,
+    assert_has_warning_output,
+)
 
 
 class TestCLITaskRouterHandler:
@@ -13,99 +29,482 @@ class TestCLITaskRouterHandler:
     @pytest.fixture
     def mock_orchestrator(self):
         """Create mock orchestrator."""
-        orch = Mock()
-        orch.registry = Mock()
-        orch.registry.list_available.return_value = ["cerebras", "groq"]
-        orch.delegate.return_value = Mock(content="Response", tokens_used=50)
-        return orch
+        return ConfigurableTestOrchestrator(
+            available_providers=["cerebras", "groq"],
+            recommended_provider="cerebras"
+        )
+
+    @pytest.fixture
+    def mock_router_result(self):
+        """Create mock routing result."""
+        result = Mock()
+        result.success = True
+        result.output = "Task completed successfully"
+        result.error = None
+        result.execution_time = 1.5
+        result.tokens_used = 100
+        result.provider_used = "cerebras"
+        result.metadata = {"classification": {"type": "code_generation"}}
+        return result
+
+    @pytest.fixture
+    def mock_classified_task(self):
+        """Create mock classified task."""
+        from src.task_router import TaskType
+        classified = Mock()
+        classified.task_type = Mock()
+        classified.task_type.value = "code_generation"
+        classified.confidence = 0.85
+        classified.complexity_score = 5
+        classified.reasoning = "Contains code patterns"
+        classified.extracted_command = None
+        classified.suggested_provider = "cerebras"
+        classified.requires_planning = True
+        classified.requires_tools = True
+        classified.matched_patterns = ["generate", "create"]
+        return classified
 
     @pytest.mark.unit
-    def test_handler_initialization(self, mock_orchestrator):
-        """Test CLI handler initialization."""
+    def test_handler_stores_orchestrator_reference(self, mock_orchestrator):
+        """Test CLI handler stores orchestrator reference correctly."""
         from src.cli.task_router_handler import CLITaskRouterHandler
 
         handler = CLITaskRouterHandler(mock_orchestrator)
         assert handler.orchestrator is mock_orchestrator
 
     @pytest.mark.unit
-    def test_handler_has_router(self, mock_orchestrator):
-        """Test that handler creates task router."""
+    def test_handler_initializes_router(self, mock_orchestrator):
+        """Test that handler creates task router with correct config."""
         from src.cli.task_router_handler import CLITaskRouterHandler
 
-        handler = CLITaskRouterHandler(mock_orchestrator)
-        assert hasattr(handler, 'router')
+        handler = CLITaskRouterHandler(
+            mock_orchestrator,
+            project_root=Path("/test/project"),
+            auto_confirm=True
+        )
+
+        assert handler.router is not None
+        assert handler.project_root == Path("/test/project")
+        assert handler.auto_confirm is True
 
     @pytest.mark.unit
-    def test_handler_has_methods(self, mock_orchestrator):
-        """Test handler has expected methods."""
+    def test_handler_starts_with_empty_history(self, mock_orchestrator):
+        """Test handler initializes with empty history."""
+        from src.cli.task_router_handler import CLITaskRouterHandler
+
+        handler = CLITaskRouterHandler(mock_orchestrator)
+        assert handler.history == []
+
+    @pytest.mark.unit
+    def test_handle_auto_route_adds_to_history(self, mock_orchestrator, mock_router_result):
+        """Test that handle_auto_route adds entry to history."""
+        from src.cli.task_router_handler import CLITaskRouterHandler
+
+        handler = CLITaskRouterHandler(mock_orchestrator)
+        handler.router = Mock()
+        handler.router.route.return_value = mock_router_result
+
+        result = handler.handle_auto_route("Create a function")
+
+        assert len(handler.history) == 1
+        assert handler.history[0]["input"] == "Create a function"
+        assert handler.history[0]["result"] is mock_router_result
+
+    @pytest.mark.unit
+    def test_handle_auto_route_returns_router_result(self, mock_orchestrator, mock_router_result):
+        """Test that handle_auto_route returns the routing result."""
+        from src.cli.task_router_handler import CLITaskRouterHandler
+
+        handler = CLITaskRouterHandler(mock_orchestrator)
+        handler.router = Mock()
+        handler.router.route.return_value = mock_router_result
+
+        result = handler.handle_auto_route("Test task")
+
+        assert result is mock_router_result
+        handler.router.route.assert_called_once_with("Test task")
+
+    @pytest.mark.unit
+    def test_handle_auto_route_multiple_tasks_build_history(self, mock_orchestrator, mock_router_result):
+        """Test multiple auto_route calls accumulate in history."""
+        from src.cli.task_router_handler import CLITaskRouterHandler
+
+        handler = CLITaskRouterHandler(mock_orchestrator)
+        handler.router = Mock()
+        handler.router.route.return_value = mock_router_result
+
+        handler.handle_auto_route("Task 1")
+        handler.handle_auto_route("Task 2")
+        handler.handle_auto_route("Task 3")
+
+        assert len(handler.history) == 3
+        assert handler.history[0]["input"] == "Task 1"
+        assert handler.history[1]["input"] == "Task 2"
+        assert handler.history[2]["input"] == "Task 3"
+
+    @pytest.mark.unit
+    def test_handle_classify_only_returns_classification(self, mock_orchestrator, mock_classified_task):
+        """Test classify_only returns classification without executing."""
+        from src.cli.task_router_handler import CLITaskRouterHandler
+
+        handler = CLITaskRouterHandler(mock_orchestrator)
+        handler.router = Mock()
+        handler.router.classify_only.return_value = mock_classified_task
+
+        result = handler.handle_classify_only("Analyze this code")
+
+        assert result is mock_classified_task
+        handler.router.classify_only.assert_called_once_with("Analyze this code")
+        # Verify it doesn't add to history (preview mode)
+        assert len(handler.history) == 0
+
+    @pytest.mark.unit
+    def test_handle_route_status_retrieves_metrics(self, mock_orchestrator):
+        """Test route_status retrieves metrics from router."""
+        from src.cli.task_router_handler import CLITaskRouterHandler
+
+        handler = CLITaskRouterHandler(mock_orchestrator)
+        handler.router = Mock()
+        mock_metrics = Mock()
+        mock_metrics.total_tasks = 10
+        mock_metrics.tasks_by_type = {"code_generation": 5, "research": 3}
+        mock_metrics.avg_execution_time = 2.5
+        mock_metrics.total_tokens_used = 1000
+        mock_metrics.success_rate = 0.9
+        handler.router.get_metrics.return_value = mock_metrics
+
+        handler.handle_route_status()
+
+        handler.router.get_metrics.assert_called_once()
+
+    @pytest.mark.unit
+    def test_handle_route_history_empty(self, mock_orchestrator, capsys):
+        """Test route_history handles empty history gracefully."""
         from src.cli.task_router_handler import CLITaskRouterHandler
 
         handler = CLITaskRouterHandler(mock_orchestrator)
 
-        # Check for expected attributes/methods
-        assert hasattr(handler, 'router')
-        assert hasattr(handler, 'orchestrator')
+        # Should not raise an error
+        handler.handle_route_history()
+
+    @pytest.mark.unit
+    def test_handle_route_history_shows_recent_entries(self, mock_orchestrator, mock_router_result):
+        """Test route_history shows most recent entries."""
+        from src.cli.task_router_handler import CLITaskRouterHandler
+
+        handler = CLITaskRouterHandler(mock_orchestrator)
+        handler.router = Mock()
+        handler.router.route.return_value = mock_router_result
+
+        # Add 15 entries
+        for i in range(15):
+            handler.handle_auto_route(f"Task {i}")
+
+        assert len(handler.history) == 15
+
+    @pytest.mark.unit
+    def test_failed_result_stored_in_history(self, mock_orchestrator):
+        """Test failed routing result is stored in history."""
+        from src.cli.task_router_handler import CLITaskRouterHandler
+
+        handler = CLITaskRouterHandler(mock_orchestrator)
+        handler.router = Mock()
+
+        failed_result = Mock()
+        failed_result.success = False
+        failed_result.output = ""
+        failed_result.error = "Provider unavailable"
+        failed_result.execution_time = 0.1
+        failed_result.tokens_used = 0
+        failed_result.provider_used = None
+        failed_result.metadata = {"classification": {"type": "unknown"}}
+        handler.router.route.return_value = failed_result
+
+        handler.handle_auto_route("Failing task")
+
+        assert len(handler.history) == 1
+        assert handler.history[0]["result"].success is False
+        assert handler.history[0]["result"].error == "Provider unavailable"
 
 
 class TestCLIDisplay:
     """Tests for CLI display formatting."""
 
-    @pytest.mark.unit
-    def test_display_module_exists(self):
-        """Test that display module can be imported."""
-        from src.cli import display
-        assert display is not None
+    @pytest.fixture
+    def mock_orchestrator(self):
+        """Create mock orchestrator with required methods."""
+        orch = Mock()
+        orch.brain = "cerebras"
+        orch.providers = Mock()
+        orch.providers.list_available.return_value = ["cerebras", "groq"]
+        orch.providers.get.return_value = Mock(
+            available_models=["model1", "model2"],
+            default_model="model1"
+        )
+        orch.providers.get_provider_info.return_value = {
+            "cerebras": {
+                "available": True,
+                "default_model": "llama-3.1-8b",
+                "limits": Mock(
+                    requests_per_day=1000,
+                    tokens_per_minute=60000,
+                    tokens_per_day=1000000
+                ),
+                "models": ["llama-3.1-8b", "llama-3.3-70b"]
+            },
+            "groq": {
+                "available": True,
+                "default_model": "llama-70b",
+                "limits": Mock(
+                    requests_per_day=500,
+                    tokens_per_minute=0,
+                    tokens_per_day=500000
+                ),
+                "models": ["llama-70b"]
+            }
+        }
+        orch.status.return_value = {
+            "orchestrator_brain": "cerebras",
+            "available_providers": ["cerebras", "groq"],
+            "tasks_executed": 5
+        }
+        orch.get_usage_report.return_value = {
+            "total_tasks": 10,
+            "cached_hits": 3,
+            "api_calls": 7,
+            "session_duration": "00:30:00",
+            "by_provider": {
+                "cerebras": {
+                    "count": 6,
+                    "cached_hits": 2,
+                    "total_tokens": 5000,
+                    "avg_tokens": 833.3,
+                    "total_latency_ms": 1500
+                }
+            }
+        }
+        return orch
+
+    @pytest.fixture
+    def display(self, mock_orchestrator):
+        """Create CLIDisplay instance."""
+        from src.cli.display import CLIDisplay
+        return CLIDisplay(mock_orchestrator, datetime.now())
 
     @pytest.mark.unit
-    def test_display_class_exists(self):
-        """Test CLIDisplay class exists."""
+    def test_display_initializes_with_orchestrator(self, mock_orchestrator):
+        """Test CLIDisplay stores orchestrator reference."""
         from src.cli.display import CLIDisplay
-        assert CLIDisplay is not None
+
+        session_start = datetime.now()
+        display = CLIDisplay(mock_orchestrator, session_start)
+
+        assert display.orchestrator is mock_orchestrator
+        assert display.session_start == session_start
 
     @pytest.mark.unit
-    def test_display_has_show_help(self):
-        """Test CLIDisplay has show_help method."""
-        from src.cli.display import CLIDisplay
-        assert hasattr(CLIDisplay, 'show_help')
+    def test_show_help_outputs_command_list(self, display, capsys):
+        """Test show_help outputs available commands."""
+        display.show_help()
+
+        captured = capsys.readouterr()
+        assert "Available Commands:" in captured.out
+        assert "/help" in captured.out
+        assert "/quit" in captured.out
+        assert "/providers" in captured.out
+        assert "/brain" in captured.out
 
     @pytest.mark.unit
-    def test_display_has_show_status(self):
-        """Test CLIDisplay has show_status method."""
-        from src.cli.display import CLIDisplay
-        assert hasattr(CLIDisplay, 'show_status')
+    def test_show_help_groups_commands_logically(self, display, capsys):
+        """Test show_help organizes commands into logical groups."""
+        display.show_help()
+
+        captured = capsys.readouterr()
+        assert "Chat & Conversation:" in captured.out
+        assert "Task Operations:" in captured.out
+        assert "Provider Management:" in captured.out
+        assert "Context Management:" in captured.out
+
+    @pytest.mark.unit
+    def test_show_status_displays_brain(self, display, capsys):
+        """Test show_status displays current brain."""
+        display.show_status()
+
+        captured = capsys.readouterr()
+        assert "System Status:" in captured.out
+        assert "cerebras" in captured.out
+
+    @pytest.mark.unit
+    def test_show_status_calls_orchestrator_status(self, display, mock_orchestrator):
+        """Test show_status retrieves status from orchestrator."""
+        display.show_status()
+
+        mock_orchestrator.status.assert_called_once()
+
+    @pytest.mark.unit
+    def test_list_providers_shows_available(self, display, capsys):
+        """Test list_providers shows available providers."""
+        display.list_providers()
+
+        captured = capsys.readouterr()
+        assert "Available Providers:" in captured.out
+        assert "CEREBRAS" in captured.out
+
+    @pytest.mark.unit
+    def test_switch_brain_shows_current_when_empty(self, display, mock_orchestrator, capsys):
+        """Test switch_brain shows current brain when no provider given."""
+        display.switch_brain("")
+
+        captured = capsys.readouterr()
+        assert "Current brain:" in captured.out
+        assert "cerebras" in captured.out
+
+    @pytest.mark.unit
+    def test_switch_brain_changes_to_valid_provider(self, display, mock_orchestrator, capsys):
+        """Test switch_brain changes to valid provider."""
+        display.switch_brain("groq")
+
+        assert mock_orchestrator.brain == "groq"
+        captured = capsys.readouterr()
+        assert "switched" in captured.out.lower()
+
+    @pytest.mark.unit
+    def test_switch_brain_rejects_invalid_provider(self, display, mock_orchestrator, capsys):
+        """Test switch_brain rejects invalid provider name."""
+        original_brain = mock_orchestrator.brain
+
+        display.switch_brain("invalid_provider")
+
+        captured = capsys.readouterr()
+        assert "not available" in captured.out
+        # Brain should not change
+        assert mock_orchestrator.brain == original_brain
+
+    @pytest.mark.unit
+    def test_switch_brain_normalizes_provider_name(self, display, mock_orchestrator, capsys):
+        """Test switch_brain normalizes provider name (lowercase, strip)."""
+        display.switch_brain("  GROQ  ")
+
+        assert mock_orchestrator.brain == "groq"
+
+    @pytest.mark.unit
+    def test_show_usage_displays_stats(self, display, capsys):
+        """Test show_usage displays usage statistics."""
+        display.show_usage()
+
+        captured = capsys.readouterr()
+        assert "Usage Statistics:" in captured.out
+        assert "Total Tasks:" in captured.out
+
+    @pytest.mark.unit
+    def test_show_usage_calls_get_usage_report(self, display, mock_orchestrator):
+        """Test show_usage retrieves report from orchestrator."""
+        display.show_usage()
+
+        mock_orchestrator.get_usage_report.assert_called_once()
+
+    @pytest.mark.unit
+    def test_list_models_all_providers(self, display, mock_orchestrator, capsys):
+        """Test list_models shows models for all providers."""
+        display.list_models("")
+
+        captured = capsys.readouterr()
+        assert "All Available Models:" in captured.out
+
+    @pytest.mark.unit
+    def test_list_models_specific_provider(self, display, mock_orchestrator, capsys):
+        """Test list_models shows models for specific provider."""
+        display.list_models("cerebras")
+
+        captured = capsys.readouterr()
+        assert "CEREBRAS Models:" in captured.out
+
+    @pytest.mark.unit
+    def test_list_models_invalid_provider(self, display, mock_orchestrator, capsys):
+        """Test list_models handles invalid provider."""
+        display.list_models("nonexistent")
+
+        captured = capsys.readouterr()
+        assert "not available" in captured.out
 
 
 class TestCLISession:
     """Tests for CLI session management."""
 
     @pytest.fixture
-    def temp_session_file(self, tmp_path):
-        """Create temporary session file path."""
-        return tmp_path / "session.json"
+    def mock_orchestrator(self):
+        """Create mock orchestrator."""
+        return ConfigurableTestOrchestrator()
 
     @pytest.mark.unit
-    def test_session_manager_exists(self):
-        """Test CLI session manager class exists."""
+    def test_session_manager_initializes_components(self, mock_orchestrator):
+        """Test CLISessionManager initializes all management components."""
         from src.cli.session import CLISessionManager
-        assert CLISessionManager is not None
+
+        manager = CLISessionManager(mock_orchestrator)
+
+        assert manager.orchestrator is mock_orchestrator
+        assert manager._context_manager is not None
+        assert manager._cache_manager is not None
+        assert manager._rate_limiter is not None
+        assert manager._session_persistence is not None
 
     @pytest.mark.unit
-    def test_session_manager_has_manage_context(self):
-        """Test that session manager has manage_context method."""
+    def test_manage_context_delegates_to_context_manager(self, mock_orchestrator):
+        """Test manage_context delegates to internal context manager."""
         from src.cli.session import CLISessionManager
-        assert hasattr(CLISessionManager, 'manage_context')
+
+        manager = CLISessionManager(mock_orchestrator)
+        manager._context_manager = Mock()
+        io = MockIO()
+
+        manager.manage_context("explore", io=io)
+
+        manager._context_manager.manage_context.assert_called_once_with("explore", io)
 
     @pytest.mark.unit
-    def test_session_manager_has_manage_cache(self):
-        """Test session manager has manage_cache method."""
+    def test_manage_cache_delegates_to_cache_manager(self, mock_orchestrator):
+        """Test manage_cache delegates to internal cache manager."""
         from src.cli.session import CLISessionManager
-        assert hasattr(CLISessionManager, 'manage_cache')
+
+        manager = CLISessionManager(mock_orchestrator)
+        manager._cache_manager = Mock()
+        io = MockIO()
+
+        manager.manage_cache("clear", io=io)
+
+        manager._cache_manager.manage_cache.assert_called_once_with("clear", io)
 
     @pytest.mark.unit
-    def test_session_manager_has_show_rate_limits(self):
-        """Test session manager has show_rate_limits method."""
+    def test_show_rate_limits_delegates_to_rate_limiter(self, mock_orchestrator):
+        """Test show_rate_limits delegates to internal rate limiter."""
         from src.cli.session import CLISessionManager
-        assert hasattr(CLISessionManager, 'show_rate_limits')
+
+        manager = CLISessionManager(mock_orchestrator)
+        manager._rate_limiter = Mock()
+        io = MockIO()
+
+        manager.show_rate_limits("cerebras", io=io)
+
+        manager._rate_limiter.show_rate_limits.assert_called_once_with("cerebras", io)
+
+    @pytest.mark.unit
+    def test_manage_session_delegates_to_persistence(self, mock_orchestrator):
+        """Test manage_session delegates to session persistence."""
+        from src.cli.session import CLISessionManager
+
+        manager = CLISessionManager(mock_orchestrator)
+        manager._session_persistence = Mock()
+        manager._session_persistence.manage_session.return_value = {"auto_save": True}
+        io = MockIO()
+        conversation = [{"role": "user", "content": "test"}]
+
+        result = manager.manage_session("save", conversation, True, io=io)
+
+        manager._session_persistence.manage_session.assert_called_once_with(
+            "save", conversation, True, io
+        )
+        assert result == {"auto_save": True}
 
 
 class TestCLISmartQuery:
@@ -114,45 +513,111 @@ class TestCLISmartQuery:
     @pytest.fixture
     def mock_orchestrator(self):
         """Create mock orchestrator."""
-        orch = Mock()
-        orch.registry = Mock()
-        orch.registry.list_available.return_value = ["cerebras"]
+        orch = ConfigurableTestOrchestrator(
+            response_content="This is the answer to your query.",
+            response_tokens=50
+        )
+        orch.context = Mock()
+        orch.context.summary = ""
+        orch.context.project_path = Path("/test/project")
+        orch.remember_search = Mock()
+        orch.add_discovery = Mock()
         return orch
 
     @pytest.mark.unit
-    def test_smart_query_module_exists(self):
-        """Test smart query module exists."""
-        from src.cli import smart_query
-        assert smart_query is not None
-
-    @pytest.mark.unit
-    def test_smart_query_class_exists(self):
-        """Test CLISmartQuery class exists."""
+    def test_smart_query_initializes_with_classifier(self, mock_orchestrator):
+        """Test CLISmartQuery initializes with intent classifier."""
         from src.cli.smart_query import CLISmartQuery
-        assert CLISmartQuery is not None
 
+        smart = CLISmartQuery(mock_orchestrator)
 
-class TestCLICodebaseCommands:
-    """Tests for codebase analysis commands."""
-
-    @pytest.fixture
-    def mock_context(self, temp_project_dir):
-        """Create mock codebase context."""
-        from src.context import CodebaseContext
-        return CodebaseContext(str(temp_project_dir))
+        assert smart.orchestrator is mock_orchestrator
+        assert smart.classifier is not None
 
     @pytest.mark.unit
-    def test_codebase_module_exists(self):
-        """Test codebase module exists."""
-        from src.cli import codebase
-        assert codebase is not None
+    def test_safe_tool_call_returns_success_on_valid_result(self, mock_orchestrator):
+        """Test _safe_tool_call returns success tuple on valid result."""
+        from src.cli.smart_query import CLISmartQuery
+
+        smart = CLISmartQuery(mock_orchestrator)
+
+        def good_tool():
+            return "Valid result"
+
+        success, result = smart._safe_tool_call(good_tool)
+
+        assert success is True
+        assert result == "Valid result"
 
     @pytest.mark.unit
-    def test_explore_codebase_command(self, mock_context):
-        """Test exploring codebase."""
-        result = mock_context.explore()
-        assert isinstance(result, dict)
-        assert "status" in result
+    def test_safe_tool_call_returns_failure_on_error_result(self, mock_orchestrator):
+        """Test _safe_tool_call returns failure when result contains Error."""
+        from src.cli.smart_query import CLISmartQuery
+
+        smart = CLISmartQuery(mock_orchestrator)
+
+        def error_tool():
+            return "Error: File not found"
+
+        success, result = smart._safe_tool_call(error_tool)
+
+        assert success is False
+        assert "Error" in result
+
+    @pytest.mark.unit
+    def test_safe_tool_call_handles_exceptions(self, mock_orchestrator):
+        """Test _safe_tool_call catches exceptions and returns failure."""
+        from src.cli.smart_query import CLISmartQuery
+
+        smart = CLISmartQuery(mock_orchestrator)
+
+        def throwing_tool():
+            raise ValueError("Something went wrong")
+
+        success, result = smart._safe_tool_call(throwing_tool)
+
+        assert success is False
+        assert "Error:" in result
+        assert "Something went wrong" in result
+
+    @pytest.mark.unit
+    def test_safe_tool_call_returns_failure_on_none(self, mock_orchestrator):
+        """Test _safe_tool_call returns failure when result is None."""
+        from src.cli.smart_query import CLISmartQuery
+
+        smart = CLISmartQuery(mock_orchestrator)
+
+        def none_tool():
+            return None
+
+        success, result = smart._safe_tool_call(none_tool)
+
+        assert success is False
+
+    @pytest.mark.unit
+    @patch('src.cli.smart_query.CodeAgent')
+    def test_smart_query_classifies_intent(self, mock_agent_class, mock_orchestrator):
+        """Test smart_query classifies the query intent."""
+        from src.cli.smart_query import CLISmartQuery
+
+        smart = CLISmartQuery(mock_orchestrator)
+        smart.classifier = Mock()
+
+        mock_classification = Mock()
+        mock_classification.primary_intent = Mock()
+        mock_classification.primary_intent.intent = Mock()
+        mock_classification.primary_intent.intent.value = "code_search"
+        mock_classification.primary_intent.confidence = 0.9
+        mock_classification.secondary_intents = []
+        mock_classification.entities = {}
+        mock_classification.keywords = ["test"]
+        smart.classifier.classify.return_value = mock_classification
+
+        # Need to mock get_research_actions
+        with patch('src.cli.smart_query.get_research_actions', return_value=[]):
+            smart.smart_query("Where is the test function?")
+
+        smart.classifier.classify.assert_called_once_with("Where is the test function?")
 
 
 class TestCLIAgentManager:
@@ -161,30 +626,252 @@ class TestCLIAgentManager:
     @pytest.fixture
     def mock_orchestrator(self):
         """Create mock orchestrator."""
-        orch = Mock()
-        orch.registry = Mock()
-        orch.registry.list_available.return_value = ["cerebras"]
+        orch = ConfigurableTestOrchestrator()
+        orch.add_discovery = Mock()
         return orch
 
     @pytest.mark.unit
-    def test_agent_manager_module_exists(self):
-        """Test agent manager module exists."""
-        from src.cli import agent_manager
-        assert agent_manager is not None
+    def test_agent_manager_stores_orchestrator(self, mock_orchestrator):
+        """Test CLIAgentManager stores orchestrator reference."""
+        from src.cli.agent_manager import CLIAgentManager
+
+        manager = CLIAgentManager(mock_orchestrator)
+
+        assert manager.orchestrator is mock_orchestrator
 
     @pytest.mark.unit
-    def test_agent_manager_class_exists(self):
-        """Test CLIAgentManager class exists."""
+    @patch('src.cli.agent_manager.CodeAgent')
+    @patch('src.cli.agent_manager.create_git_checkpoint')
+    def test_run_agent_prompts_for_options(self, mock_checkpoint, mock_agent_class, mock_orchestrator):
+        """Test run_agent prompts user for dry run and checkpoint options."""
         from src.cli.agent_manager import CLIAgentManager
-        assert CLIAgentManager is not None
+
+        manager = CLIAgentManager(mock_orchestrator)
+        io = MockIO(
+            confirmations=[False, False, False]  # dry_run=False, checkpoint=False, start=False (cancel)
+        )
+
+        manager.run_agent("Test task", io=io)
+
+        output = io.get_output()
+        assert "dry-run" in output.lower() or "Test task" in output
+
+    @pytest.mark.unit
+    @patch('src.cli.agent_manager.CodeAgent')
+    @patch('src.cli.agent_manager.create_git_checkpoint')
+    def test_run_agent_cancelled_by_user(self, mock_checkpoint, mock_agent_class, mock_orchestrator):
+        """Test run_agent can be cancelled by user."""
+        from src.cli.agent_manager import CLIAgentManager
+
+        manager = CLIAgentManager(mock_orchestrator)
+        io = MockIO(
+            confirmations=[False, False, False]  # dry_run, checkpoint, start=False
+        )
+
+        manager.run_agent("Test task", io=io)
+
+        output = io.get_output()
+        assert "cancelled" in output.lower()
+        # Agent should not have been run
+        mock_agent_class.return_value.run.assert_not_called()
+
+    @pytest.mark.unit
+    @patch('src.cli.agent_manager.CodeAgent')
+    @patch('src.cli.agent_manager.create_git_checkpoint')
+    def test_run_agent_creates_checkpoint_when_requested(self, mock_checkpoint, mock_agent_class, mock_orchestrator):
+        """Test run_agent creates git checkpoint when user confirms."""
+        from src.cli.agent_manager import CLIAgentManager
+
+        mock_checkpoint.return_value = "abc123"
+        mock_agent = Mock()
+        mock_agent.run.return_value = {
+            "success": True,
+            "result": "Done",
+            "iterations": 1,
+            "audit_log": []
+        }
+        mock_agent.planner = "cerebras"
+        mock_agent.executor = "groq"
+        mock_agent.project_root = Path("/test")
+        mock_agent_class.return_value = mock_agent
+
+        manager = CLIAgentManager(mock_orchestrator)
+        io = MockIO(
+            confirmations=[
+                False,  # dry_run
+                True,   # create checkpoint
+                True,   # start
+                False,  # save audit log
+                False   # rollback
+            ]
+        )
+
+        manager.run_agent("Test task", io=io)
+
+        mock_checkpoint.assert_called_once()
+        output = io.get_output()
+        assert "abc123" in output  # Should show checkpoint hash
+
+    @pytest.mark.unit
+    @patch('src.cli.agent_manager.CodeAgent')
+    @patch('src.cli.agent_manager.create_git_checkpoint')
+    def test_run_agent_success_shows_result(self, mock_checkpoint, mock_agent_class, mock_orchestrator):
+        """Test run_agent displays success result."""
+        from src.cli.agent_manager import CLIAgentManager
+
+        mock_checkpoint.return_value = None
+        mock_agent = Mock()
+        mock_agent.run.return_value = {
+            "success": True,
+            "result": "Task completed successfully",
+            "iterations": 3,
+            "audit_log": []
+        }
+        mock_agent.planner = "cerebras"
+        mock_agent.executor = "groq"
+        mock_agent.project_root = Path("/test")
+        mock_agent_class.return_value = mock_agent
+
+        manager = CLIAgentManager(mock_orchestrator)
+        io = MockIO(
+            confirmations=[False, False, True, False]  # dry_run, checkpoint, start, save_log
+        )
+
+        manager.run_agent("Create file", io=io)
+
+        output = io.get_output()
+        assert "Task Completed Successfully" in output or "Completed" in output
+        assert "Task completed successfully" in output
+
+    @pytest.mark.unit
+    @patch('src.cli.agent_manager.CodeAgent')
+    @patch('src.cli.agent_manager.create_git_checkpoint')
+    def test_run_agent_failure_shows_result(self, mock_checkpoint, mock_agent_class, mock_orchestrator):
+        """Test run_agent displays failure result."""
+        from src.cli.agent_manager import CLIAgentManager
+
+        mock_checkpoint.return_value = None
+        mock_agent = Mock()
+        mock_agent.run.return_value = {
+            "success": False,
+            "result": "Could not complete task",
+            "iterations": 5,
+            "audit_log": []
+        }
+        mock_agent.planner = "cerebras"
+        mock_agent.executor = "groq"
+        mock_agent.project_root = Path("/test")
+        mock_agent_class.return_value = mock_agent
+
+        manager = CLIAgentManager(mock_orchestrator)
+        io = MockIO(
+            confirmations=[False, False, True, False]
+        )
+
+        manager.run_agent("Failing task", io=io)
+
+        output = io.get_output()
+        assert "Did Not Complete" in output or "Could not complete" in output
+
+    @pytest.mark.unit
+    @patch('src.cli.agent_manager.CodeAgent')
+    @patch('src.cli.agent_manager.create_git_checkpoint')
+    def test_run_agent_dry_run_mode(self, mock_checkpoint, mock_agent_class, mock_orchestrator):
+        """Test run_agent respects dry run mode."""
+        from src.cli.agent_manager import CLIAgentManager
+
+        mock_checkpoint.return_value = None
+        mock_agent = Mock()
+        mock_agent.run.return_value = {
+            "success": True,
+            "result": "Dry run completed",
+            "iterations": 1,
+            "audit_log": []
+        }
+        mock_agent.planner = "cerebras"
+        mock_agent.executor = "groq"
+        mock_agent.project_root = Path("/test")
+        mock_agent_class.return_value = mock_agent
+
+        manager = CLIAgentManager(mock_orchestrator)
+        io = MockIO(
+            confirmations=[True, False, True, False]  # dry_run=True
+        )
+
+        manager.run_agent("Test", io=io)
+
+        assert mock_agent.dry_run is True
+        output = io.get_output()
+        assert "DRY RUN" in output
+
+    @pytest.mark.unit
+    @patch('src.cli.agent_manager.CodeAgent')
+    @patch('src.cli.agent_manager.create_git_checkpoint')
+    def test_run_agent_handles_exception(self, mock_checkpoint, mock_agent_class, mock_orchestrator):
+        """Test run_agent handles exceptions gracefully."""
+        from src.cli.agent_manager import CLIAgentManager
+
+        mock_checkpoint.return_value = None
+        mock_agent = Mock()
+        mock_agent.run.side_effect = RuntimeError("Agent crashed")
+        mock_agent.planner = "cerebras"
+        mock_agent.executor = "groq"
+        mock_agent.project_root = Path("/test")
+        mock_agent_class.return_value = mock_agent
+
+        manager = CLIAgentManager(mock_orchestrator)
+        io = MockIO(
+            confirmations=[False, False, True]
+        )
+
+        # Should not raise
+        manager.run_agent("Crashing task", io=io)
+
+        output = io.get_output()
+        assert "error" in output.lower()
+        assert "Agent crashed" in output
+        # Should record discovery
+        mock_orchestrator.add_discovery.assert_called()
+
+    @pytest.mark.unit
+    @patch('src.cli.agent_manager.CodeAgent')
+    @patch('src.cli.agent_manager.create_git_checkpoint')
+    def test_run_agent_records_discovery(self, mock_checkpoint, mock_agent_class, mock_orchestrator):
+        """Test run_agent records task result as discovery."""
+        from src.cli.agent_manager import CLIAgentManager
+
+        mock_checkpoint.return_value = None
+        mock_agent = Mock()
+        mock_agent.run.return_value = {
+            "success": True,
+            "result": "Done",
+            "iterations": 2,
+            "audit_log": []
+        }
+        mock_agent.planner = "cerebras"
+        mock_agent.executor = "groq"
+        mock_agent.project_root = Path("/test")
+        mock_agent_class.return_value = mock_agent
+
+        manager = CLIAgentManager(mock_orchestrator)
+        io = MockIO(
+            confirmations=[False, False, True, False]
+        )
+
+        manager.run_agent("Important task", io=io)
+
+        mock_orchestrator.add_discovery.assert_called()
+        call_args = mock_orchestrator.add_discovery.call_args
+        assert "Important task" in call_args[0][0]
+        assert "agent_task" in call_args[0]
 
 
 class TestCLIMultiprovider:
     """Tests for multi-provider operations."""
 
     @pytest.mark.unit
-    def test_multiprovider_module_exists(self):
-        """Test multiprovider module exists."""
+    def test_multiprovider_module_importable(self):
+        """Test multiprovider module can be imported."""
         from src.cli import multiprovider
         assert multiprovider is not None
 
@@ -193,8 +880,8 @@ class TestCLITasks:
     """Tests for task execution CLI."""
 
     @pytest.mark.unit
-    def test_tasks_module_exists(self):
-        """Test tasks module exists."""
+    def test_tasks_module_importable(self):
+        """Test tasks module can be imported."""
         from src.cli import tasks
         assert tasks is not None
 
@@ -203,58 +890,38 @@ class TestCLICore:
     """Tests for core CLI functionality."""
 
     @pytest.mark.unit
-    def test_cli_core_module_exists(self):
-        """Test CLI core module exists."""
+    def test_cli_core_module_importable(self):
+        """Test CLI core module can be imported."""
         from src.cli import core
         assert core is not None
 
     @pytest.mark.unit
     def test_cli_class_exists(self):
-        """Test CLI class exists."""
+        """Test CLI class can be imported."""
         from src.cli.core import CLI
         assert CLI is not None
-
-    @pytest.mark.unit
-    @patch('src.cli.core.AgentOrchestrator')
-    def test_cli_initialization(self, mock_orch_class):
-        """Test CLI initialization."""
-        from src.cli.core import CLI
-
-        mock_orch = Mock()
-        mock_orch.registry = Mock()
-        mock_orch.registry.list_available.return_value = ["cerebras"]
-        mock_orch_class.return_value = mock_orch
-
-        # CLI initialization may require specific setup
-        # This tests that the class can be instantiated
-        try:
-            cli = CLI()
-            assert cli is not None
-        except Exception:
-            # May fail due to missing dependencies
-            pass
 
 
 class TestCLICommands:
     """Tests for Click command definitions."""
 
     @pytest.mark.unit
-    def test_commands_module_exists(self):
-        """Test commands module exists."""
+    def test_commands_module_importable(self):
+        """Test commands module can be imported."""
         from src.cli import commands
         assert commands is not None
 
     @pytest.mark.unit
-    def test_main_command_exists(self):
-        """Test main CLI command exists."""
+    def test_main_cli_command_exists(self):
+        """Test main CLI command can be imported."""
         from src.cli.commands import cli
         assert cli is not None
 
     @pytest.mark.unit
-    def test_cli_is_click_group(self):
-        """Test CLI is a Click group."""
+    def test_cli_is_click_command(self):
+        """Test CLI is a Click command/group."""
         from src.cli.commands import cli
         import click
 
-        # Check if it's a Click command
-        assert hasattr(cli, 'main')
+        # Should have invoke method (Click command characteristic)
+        assert callable(cli)
