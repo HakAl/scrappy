@@ -1,21 +1,21 @@
 """
 Task classification for routing to appropriate execution strategies.
+
+Refactored to use Strategy Pattern for better maintainability and extensibility.
 """
 
 import re
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Dict, List, Optional, Set
 
 from ..platform_utils import is_windows, validate_command_for_platform
-
-
-class TaskType(Enum):
-    """High-level task categories for execution routing."""
-    DIRECT_COMMAND = "direct_command"      # Simple shell commands, no agent loop
-    CODE_GENERATION = "code_generation"    # Full agent with planning and tools
-    RESEARCH = "research"                  # Fast provider, lightweight research
-    CONVERSATION = "conversation"          # Simple Q&A, no execution needed
+from .classification_strategy import TaskType
+from .classification_strategies import (
+    DirectCommandStrategy,
+    CodeGenerationStrategy,
+    ResearchStrategy,
+    ConversationStrategy,
+)
 
 
 @dataclass
@@ -38,7 +38,10 @@ class ClassifiedTask:
 
 class TaskClassifier:
     """
-    Classifies user tasks into execution strategies.
+    Classifies user tasks into execution strategies using Strategy Pattern.
+
+    Uses pluggable classification strategies for better maintainability.
+    Each strategy encapsulates patterns for one task type.
 
     Priority order:
     1. DIRECT_COMMAND - Simple shell/system commands
@@ -47,174 +50,84 @@ class TaskClassifier:
     4. CONVERSATION - Simple Q&A
     """
 
-    def __init__(self):
+    def __init__(self, strategies: Optional[List] = None):
+        """
+        Initialize classifier with strategies.
+
+        Args:
+            strategies: Optional list of custom strategies to use.
+                       If None, uses default strategies.
+        """
+        if strategies is None:
+            self.strategies = [
+                DirectCommandStrategy(),
+                CodeGenerationStrategy(),
+                ResearchStrategy(),
+                ConversationStrategy(),
+            ]
+        else:
+            self.strategies = strategies
+
+        # Keep backward compatibility by initializing pattern lists
         self._init_patterns()
 
     def _init_patterns(self):
-        """Initialize pattern matchers for each task type."""
+        """
+        Initialize pattern lists for backward compatibility.
 
-        # Direct command patterns - shell commands that need no AI reasoning
-        self.direct_command_patterns = [
-            # Package managers
-            (r'^(pip|pip3)\s+(install|uninstall|freeze|list|show)', 1.0, "pip_command"),
-            (r'^npx\s+', 1.0, "npx_command"),  # npx can run any package, so match broadly
-            (r'^(npm|yarn|pnpm)\s+(install|add|remove|run|build|test|start)', 1.0, "npm_command"),
-            (r'^(cargo|rustup)\s+(install|build|run|test|add|remove)', 1.0, "cargo_command"),
-            (r'^(gem|bundle)\s+(install|exec|update)', 1.0, "gem_command"),
-            (r'^(go)\s+(get|build|run|test|mod)', 1.0, "go_command"),
+        These are now populated from strategies but kept for any code
+        that might reference them directly.
+        """
+        # Populate pattern lists from strategies for backward compatibility
+        self.direct_command_patterns = []
+        self.code_generation_patterns = []
+        self.research_patterns = []
+        self.conversation_patterns = []
 
-            # Git commands
-            (r'^git\s+(status|log|diff|branch|checkout|pull|push|add|commit|stash)', 1.0, "git_command"),
-            (r'^git\s+\S+', 0.9, "git_generic"),
-
-            # System commands
-            (r'^(ls|dir|pwd|cd|mkdir|rmdir|rm|cp|mv|touch|cat|head|tail)\s*', 0.95, "filesystem_command"),
-            (r'^(docker|docker-compose|podman)\s+\S+', 1.0, "docker_command"),
-            (r'^(kubectl|k8s|helm)\s+\S+', 1.0, "kubernetes_command"),
-            (r'^(python|python3|node|ruby|java|javac)\s+\S+', 0.9, "interpreter_command"),
-
-            # Build/test commands
-            # Negative lookahead to avoid matching "make a X" (which is create, not build)
-            (r'^(make|cmake|gradle|mvn)(?!\s+a\s)\s*', 1.0, "build_command"),
-            (r'^pytest\s*', 1.0, "test_command"),
-            (r'^(tox|nox|coverage)\s*', 1.0, "test_command"),
-
-            # Direct command request patterns
-            (r'^run\s+(pip|npm|git|docker|pytest|make)\s+', 0.95, "run_explicit"),
-            (r'^execute\s+', 0.9, "execute_explicit"),
-            (r'^install\s+(\S+)', 0.85, "install_request"),
-            (r'^(start|stop|restart)\s+\S+', 0.8, "service_control"),
-        ]
-
-        # Code generation patterns - requires full agent loop
-        self.code_generation_patterns = [
-            # Explicit code writing
-            (r'\b(write|create|implement|build|develop|add)\s+.*(function|class|method|module|component|feature|endpoint|api|service)', 0.95, "write_code"),
-            (r'\b(write|create|implement)\s+.*\.(py|js|ts|java|cpp|go|rs)\b', 0.9, "write_file"),
-            (r'\brefactor\s+', 0.9, "refactor"),
-            (r'\b(fix|patch|repair)\s+.*(bug|issue|error|problem)', 0.85, "fix_code"),
-            (r'\b(fix|patch|repair)\s+.*(broken|failing|failed)', 0.85, "fix_broken"),
-            (r'\badd\s+.*to\s+', 0.75, "add_feature"),
-            (r'\bmodify\s+', 0.8, "modify_code"),
-            (r'\bupdate\s+.*(code|function|class|implementation)', 0.85, "update_code"),
-            (r'\bchange\s+.*(implementation|behavior|logic)', 0.8, "change_code"),
-
-            # File creation patterns (any file type, not just code)
-            (r'\b(create|generate|write)\s+[\w\-]+\.\w+\b', 0.85, "create_any_file"),
-            (r'\b(create|generate)\s+(requirements|package\.json|setup\.py|config|\.gitignore|\.env|Makefile|Dockerfile)', 0.9, "create_config_file"),
-            (r'^please\s+(create|make|write|generate|add|build)\b', 0.8, "polite_action"),
-            # Match create/make/write commands - removed list from exclusions since we want to create lists too
-            (r'^(create|make|write|generate)\s+', 0.9, "imperative_action"),
-
-            # Multi-step tasks
-            (r'\bthen\s+', 0.7, "multi_step"),
-            (r'\bafter\s+that\s+', 0.7, "multi_step"),
-            (r'\bfirst\s+.*then\s+', 0.85, "explicit_multi_step"),
-            (r'\bstep\s*\d+', 0.8, "numbered_steps"),
-
-            # Complex operations
-            (r'\b(integrate|connect|wire up|hook up)\s+', 0.85, "integration"),
-            (r'\b(migrate|upgrade|convert)\s+', 0.8, "migration"),
-            (r'\b(test|unit test|integration test).*and\s+(fix|update)', 0.9, "test_and_fix"),
-            (r'\bmake sure.*(works|passes|compiles)', 0.75, "verify_task"),
-        ]
-
-        # Research patterns - fast provider, no file modifications
-        self.research_patterns = [
-            # Questions
-            (r'^(what|where|why|how|when|which|who)\s+', 0.8, "question"),
-            (r'\?$', 0.6, "question_mark"),
-
-            # Explanation requests (higher weight to win over create/write actions)
-            (r'\b(explain|describe|tell me about|what is|what are)\s+', 1.0, "explanation"),
-            (r'\bhow does\s+.*work', 1.0, "how_works"),
-            (r'\bwhat does\s+.*do', 1.0, "what_does"),
-            (r'\bhow to\s+', 0.95, "how_to"),
-
-            # Analysis requests
-            (r'\b(analyze|review|check|examine|inspect|look at)\s+', 0.8, "analysis"),
-            (r'\b(find|search|locate|show me)\s+', 0.75, "search"),
-            # Lower priority for listing to allow create/make/write actions to win
-            (r'\b(list|enumerate|summarize|overview)\s+', 0.7, "listing"),
-
-            # Information gathering
-            (r'\b(understand|learn about|tell me)\s+', 0.85, "information"),
-            (r'\bwhat.*architecture', 0.9, "architecture_question"),
-            (r'\bwhat.*structure', 0.85, "structure_question"),
-            (r'\bhow.*organized', 0.85, "organization_question"),
-
-            # Reading/viewing
-            (r'\b(read|view|see|show)\s+.*file', 0.75, "read_file"),
-            (r'\bwhat.*contains', 0.8, "contents_question"),
-        ]
-
-        # Conversation patterns - simple responses
-        self.conversation_patterns = [
-            (r'^(hi|hello|hey|greetings|good morning|good afternoon)', 1.0, "greeting"),
-            (r'^(thanks|thank you|thx)', 1.0, "thanks"),
-            (r'^(yes|no|ok|okay|sure|fine|alright)', 0.9, "acknowledgment"),
-            (r'^(help|what can you do|capabilities)', 0.85, "help_request"),
-            (r'^bye|goodbye|exit|quit', 1.0, "farewell"),
-        ]
+        for strategy in self.strategies:
+            task_type = strategy.task_type()
+            if task_type == TaskType.DIRECT_COMMAND:
+                self.direct_command_patterns = strategy.patterns
+            elif task_type == TaskType.CODE_GENERATION:
+                self.code_generation_patterns = strategy.patterns
+            elif task_type == TaskType.RESEARCH:
+                self.research_patterns = strategy.patterns
+            elif task_type == TaskType.CONVERSATION:
+                self.conversation_patterns = strategy.patterns
 
     def classify(self, user_input: str) -> ClassifiedTask:
         """
-        Classify user input into appropriate task type.
+        Classify user input using pluggable strategies.
+
+        Each strategy evaluates the input and returns a score.
+        The strategy with the highest score determines the task type.
 
         Returns ClassifiedTask with type, confidence, and metadata.
         """
         input_stripped = user_input.strip()
-        input_lower = input_stripped.lower()
 
-        # Track all matches
-        scores: Dict[TaskType, float] = {t: 0.0 for t in TaskType}
-        matched: Dict[TaskType, List[str]] = {t: [] for t in TaskType}
-        extracted_cmd: Optional[str] = None
+        # Evaluate input with all strategies
+        results = {}
+        for strategy in self.strategies:
+            result = strategy.evaluate(input_stripped)
+            results[strategy.task_type()] = result
 
-        # 1. Check for direct commands first (highest priority for simple tasks)
-        for pattern, weight, name in self.direct_command_patterns:
-            match = re.search(pattern, input_lower, re.IGNORECASE)
-            if match:
-                scores[TaskType.DIRECT_COMMAND] += weight
-                matched[TaskType.DIRECT_COMMAND].append(name)
-                if not extracted_cmd:
-                    extracted_cmd = input_stripped
-
-        # 2. Check for code generation patterns
-        for pattern, weight, name in self.code_generation_patterns:
-            if re.search(pattern, input_lower, re.IGNORECASE):
-                scores[TaskType.CODE_GENERATION] += weight
-                matched[TaskType.CODE_GENERATION].append(name)
-
-        # 3. Check for research patterns
-        for pattern, weight, name in self.research_patterns:
-            if re.search(pattern, input_lower, re.IGNORECASE):
-                scores[TaskType.RESEARCH] += weight
-                matched[TaskType.RESEARCH].append(name)
-
-        # 4. Check for conversation patterns
-        for pattern, weight, name in self.conversation_patterns:
-            if re.search(pattern, input_lower, re.IGNORECASE):
-                scores[TaskType.CONVERSATION] += weight
-                matched[TaskType.CONVERSATION].append(name)
-
-        # Normalize scores
-        for task_type in scores:
-            if scores[task_type] > 0:
-                # Cap at 1.0 but consider multiple matches boost confidence
-                scores[task_type] = min(scores[task_type], 1.0)
-
-        # Determine winning task type
-        best_type = max(scores.keys(), key=lambda t: scores[t])
-        best_score = scores[best_type]
+        # Find best match
+        best_type = max(results.keys(), key=lambda t: results[t].confidence)
+        best_result = results[best_type]
 
         # If no patterns matched, default to research (safest)
-        if best_score == 0:
+        if best_result.confidence == 0:
             best_type = TaskType.RESEARCH
             best_score = 0.5
             reasoning = "No specific patterns matched, defaulting to research"
+            matched = []
+            extracted_cmd = None
         else:
-            reasoning = self._generate_reasoning(best_type, matched[best_type])
+            best_score = best_result.confidence
+            reasoning = best_result.reasoning
+            matched = best_result.matched_patterns
+            extracted_cmd = best_result.extracted_command
 
         # Calculate complexity
         complexity = self._calculate_complexity(input_stripped, best_type)
@@ -244,7 +157,7 @@ class TaskClassifier:
             complexity_score=complexity,
             requires_planning=requires_planning,
             requires_tools=requires_tools,
-            matched_patterns=matched[best_type],
+            matched_patterns=matched,
             extracted_files=extracted_files,
             extracted_directories=extracted_dirs
         )
@@ -294,7 +207,9 @@ class TaskClassifier:
         # Multi-step indicators
         multi_step_keywords = ['then', 'after that', 'next', 'and then', 'finally', 'first', 'second']
         multi_step_count = sum(1 for keyword in multi_step_keywords if keyword in input_text.lower())
-        complexity += min(multi_step_count, 2)
+        # Give higher bonus for multi-step tasks (at least +2 if any multi-step detected)
+        if multi_step_count > 0:
+            complexity += min(multi_step_count + 1, 3)
 
         # Action count (only boost for 3+ distinct actions)
         action_words = ['create', 'write', 'update', 'modify', 'delete', 'add', 'remove', 'fix', 'refactor', 'test', 'implement']
@@ -374,11 +289,20 @@ class TaskClassifier:
         # Common file extensions
         file_ext_pattern = r'\b([\w\-./\\]+\.(?:js|jsx|ts|tsx|py|java|cpp|c|h|hpp|rs|go|rb|php|css|scss|html|json|yaml|yml|xml|md|txt|sql|sh|bat|ps1|toml|ini|conf|env))\b'
 
+        # Dotfiles pattern (files starting with dot)
+        dotfile_pattern = r'(?:^|\s)(\.(?:gitignore|env|dockerignore|editorconfig|eslintrc|prettierrc|babelrc|npmrc|gitattributes))\b'
+
         # Find all file references
         for match in re.finditer(file_ext_pattern, input_text, re.IGNORECASE):
             file_ref = match.group(1)
             # Normalize path separators
             file_ref = file_ref.replace('\\', '/')
+            if file_ref not in files:
+                files.append(file_ref)
+
+        # Find dotfiles
+        for match in re.finditer(dotfile_pattern, input_text, re.IGNORECASE):
+            file_ref = match.group(1)
             if file_ref not in files:
                 files.append(file_ref)
 

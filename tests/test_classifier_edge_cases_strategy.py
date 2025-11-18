@@ -1,0 +1,375 @@
+"""
+Edge case tests that expose limitations of regex-based classification.
+
+These tests demonstrate scenarios where the current regex approach struggles:
+1. Pattern maintainability - hard to update/extend
+2. Context-dependent classification - same words, different meanings
+3. Semantic understanding - understanding intent vs pattern matching
+4. Complex priority resolution - when multiple patterns conflict
+
+These tests guide the strategy pattern design by showing what behaviors we need.
+"""
+
+import pytest
+from src.task_router.classifier import TaskClassifier, TaskType
+
+
+class TestContextDependentClassification:
+    """Test cases where context changes classification."""
+
+    @pytest.fixture
+    def classifier(self):
+        return TaskClassifier()
+
+    def test_list_as_verb_vs_noun_create(self, classifier):
+        """'list' as verb (show) vs in 'list structure' (create)."""
+        # List as verb - should be RESEARCH
+        result1 = classifier.classify("list all functions")
+        assert result1.task_type == TaskType.RESEARCH
+
+        # List as noun in creation context - should be CODE_GENERATION
+        result2 = classifier.classify("create a list of users")
+        # Current behavior: might classify as either depending on pattern priority
+        # With strategy pattern: could use context to understand creation intent
+        assert result2.task_type == TaskType.CODE_GENERATION
+
+    def test_make_command_vs_make_build_tool(self, classifier):
+        """'make' as create verb vs 'make' build tool."""
+        # 'make' as create - should be CODE_GENERATION
+        result1 = classifier.classify("make a function")
+        # Current regex has negative lookahead for "make a" to prevent this
+        # But we want this to be CODE_GENERATION
+        assert result1.task_type == TaskType.CODE_GENERATION
+
+        # 'make' as build tool - should be DIRECT_COMMAND
+        result2 = classifier.classify("make build")
+        assert result2.task_type == TaskType.DIRECT_COMMAND
+
+    def test_test_as_noun_vs_pytest_command(self, classifier):
+        """'test' in context of writing tests vs running pytest."""
+        # Writing tests - should be CODE_GENERATION
+        result1 = classifier.classify("write tests for the login function")
+        assert result1.task_type == TaskType.CODE_GENERATION
+
+        # Running tests - should be DIRECT_COMMAND
+        result2 = classifier.classify("pytest tests/")
+        assert result2.task_type == TaskType.DIRECT_COMMAND
+
+
+class TestSemanticIntent:
+    """Test cases requiring semantic understanding of intent."""
+
+    @pytest.fixture
+    def classifier(self):
+        return TaskClassifier()
+
+    def test_rhetorical_question_vs_real_question(self, classifier):
+        """Rhetorical questions in code comments vs real questions."""
+        # Real question - should be RESEARCH
+        result1 = classifier.classify("what does this function do?")
+        assert result1.task_type == TaskType.RESEARCH
+
+        # Request to add question as comment - should be CODE_GENERATION
+        # Current regex will likely classify this as RESEARCH due to "what"
+        result2 = classifier.classify(
+            "add a comment asking 'what should the timeout be?'"
+        )
+        # This is tricky - we want CODE_GENERATION but regex sees "what"
+        # Strategy pattern could analyze full context
+
+    def test_imperative_vs_conditional(self, classifier):
+        """Imperative commands vs conditional questions."""
+        # Imperative - should be CODE_GENERATION
+        result1 = classifier.classify("create the database schema")
+        assert result1.task_type == TaskType.CODE_GENERATION
+
+        # Conditional/planning - might still be CODE_GENERATION but softer
+        result2 = classifier.classify(
+            "should I create the database schema?"
+        )
+        # This is asking for advice, likely CONVERSATION or RESEARCH
+        # Current regex might classify as CODE_GENERATION due to "create"
+
+
+class TestPatternOverlap:
+    """Test cases where multiple patterns overlap."""
+
+    @pytest.fixture
+    def classifier(self):
+        return TaskClassifier()
+
+    def test_explain_how_to_create(self, classifier):
+        """Both 'explain' (RESEARCH) and 'create' (CODE_GENERATION) present."""
+        result = classifier.classify("explain how to create a REST API")
+        # RESEARCH should win due to higher weight for 'explain'
+        assert result.task_type == TaskType.RESEARCH
+        # But confidence should reflect the ambiguity
+        assert 0.7 <= result.confidence <= 1.0
+
+    def test_find_and_fix(self, classifier):
+        """Both 'find' (RESEARCH) and 'fix' (CODE_GENERATION) present."""
+        result = classifier.classify("find and fix the authentication bug")
+        # CODE_GENERATION should likely win since fixing requires code changes
+        # Current implementation accumulates both scores
+        assert result.task_type == TaskType.CODE_GENERATION
+
+    def test_create_then_list(self, classifier):
+        """Multi-step with both CODE_GENERATION and RESEARCH verbs."""
+        result = classifier.classify("create a function then list all its uses")
+        # CODE_GENERATION should win (primary action)
+        assert result.task_type == TaskType.CODE_GENERATION
+        # Should recognize multi-step complexity
+        assert result.complexity_score >= 5
+
+
+class TestExtensibilityLimitations:
+    """Test cases that would be easier with strategy pattern."""
+
+    @pytest.fixture
+    def classifier(self):
+        return TaskClassifier()
+
+    def test_new_package_manager_not_recognized(self, classifier):
+        """New package managers require regex updates."""
+        # Known package manager
+        result1 = classifier.classify("npm install express")
+        assert result1.task_type == TaskType.DIRECT_COMMAND
+
+        # Hypothetical new package manager (not in regex)
+        result2 = classifier.classify("bun install express")
+        # Current: might not classify as DIRECT_COMMAND
+        # With strategy: could register new command patterns dynamically
+
+    def test_domain_specific_commands(self, classifier):
+        """Domain-specific commands hard to add with regex."""
+        # Generic command pattern
+        result = classifier.classify("terraform apply")
+        # Might not recognize terraform without explicit regex
+        # Strategy pattern could allow plugins for domain-specific detection
+
+
+class TestMaintenanceChallenges:
+    """Test cases that demonstrate maintenance difficulties."""
+
+    @pytest.fixture
+    def classifier(self):
+        return TaskClassifier()
+
+    def test_pattern_weight_tuning_fragility(self, classifier):
+        """Small weight changes can break classification."""
+        # These should have similar confidence since they're similar tasks
+        result1 = classifier.classify("create a function")
+        result2 = classifier.classify("write a function")
+        result3 = classifier.classify("implement a function")
+
+        # All should be CODE_GENERATION with similar confidence
+        assert result1.task_type == TaskType.CODE_GENERATION
+        assert result2.task_type == TaskType.CODE_GENERATION
+        assert result3.task_type == TaskType.CODE_GENERATION
+
+        # Confidence should be similar (within 0.2)
+        confidences = [result1.confidence, result2.confidence, result3.confidence]
+        assert max(confidences) - min(confidences) <= 0.2
+
+    def test_ordering_independence(self, classifier):
+        """Classification should be independent of word order (mostly)."""
+        result1 = classifier.classify("fix the bug in user authentication")
+        result2 = classifier.classify("in user authentication fix the bug")
+
+        # Both should classify the same way
+        assert result1.task_type == result2.task_type
+        # Though confidence might differ slightly
+        assert result1.task_type == TaskType.CODE_GENERATION
+
+
+class TestComplexRealWorldScenarios:
+    """Real-world scenarios that stress the classifier."""
+
+    @pytest.fixture
+    def classifier(self):
+        return TaskClassifier()
+
+    def test_multi_sentence_mixed_intent(self, classifier):
+        """Multiple sentences with different intents."""
+        result = classifier.classify(
+            "What is the current API structure? "
+            "Then create a new endpoint for user profiles."
+        )
+        # Primary action is creation (CODE_GENERATION)
+        # But starts with question (RESEARCH)
+        # Should classify based on dominant/final action
+        assert result.task_type == TaskType.CODE_GENERATION
+        assert result.complexity_score >= 5
+
+    def test_negation_handling(self, classifier):
+        """Negations can change meaning."""
+        result1 = classifier.classify("create a function")
+        result2 = classifier.classify("don't create a function")
+
+        # First is clearly CODE_GENERATION
+        assert result1.task_type == TaskType.CODE_GENERATION
+
+        # Second is probably CONVERSATION or request for clarification
+        # Current regex doesn't handle negation well
+        # Might still classify as CODE_GENERATION due to "create" pattern
+
+    def test_correction_or_modification(self, classifier):
+        """Corrections build on previous context."""
+        result = classifier.classify("actually, make it async instead")
+        # Without context, hard to classify
+        # Might default to RESEARCH or low-confidence CODE_GENERATION
+        # Strategy pattern could maintain conversation context
+
+    def test_natural_language_with_code(self, classifier):
+        """Natural language mixed with code snippets."""
+        result = classifier.classify(
+            "the function should return user.get('name', 'Anonymous')"
+        )
+        # This is describing behavior, likely CODE_GENERATION
+        # But no explicit "create/write" verb
+        # Current regex might miss this
+
+
+class TestFallbackBehaviorEdgeCases:
+    """Test edge cases in fallback logic."""
+
+    @pytest.fixture
+    def classifier(self):
+        return TaskClassifier()
+
+    def test_numbers_only(self, classifier):
+        """Input with only numbers."""
+        result = classifier.classify("12345")
+        assert result.task_type == TaskType.RESEARCH
+        assert result.confidence == 0.5
+
+    def test_symbols_only(self, classifier):
+        """Input with only symbols."""
+        result = classifier.classify("!@#$%^&*()")
+        assert result.task_type == TaskType.RESEARCH
+        assert result.confidence == 0.5
+
+    def test_code_snippet_without_context(self, classifier):
+        """Raw code snippet without instruction."""
+        result = classifier.classify("def foo(): pass")
+        # Could be asking what this does (RESEARCH)
+        # Or could be requesting to create it (CODE_GENERATION)
+        # Without context, unclear
+
+    def test_single_word_ambiguous(self, classifier):
+        """Single ambiguous word."""
+        result = classifier.classify("refactor")
+        # Just "refactor" alone - what should this be?
+        # Likely CODE_GENERATION but confidence should be lower
+        assert result.task_type == TaskType.CODE_GENERATION
+        # Single word should have lower confidence than full sentence
+
+
+class TestPriorityEdgeCases:
+    """Test priority resolution in complex scenarios."""
+
+    @pytest.fixture
+    def classifier(self):
+        return TaskClassifier()
+
+    def test_equal_weight_patterns(self, classifier):
+        """When patterns have equal weight, tie-breaking should be consistent."""
+        # Construct input that matches patterns with similar weights
+        result = classifier.classify("explain and create")
+        # Should have deterministic result, not random
+        assert result.task_type in [TaskType.RESEARCH, TaskType.CODE_GENERATION]
+        # Run again to ensure consistency
+        result2 = classifier.classify("explain and create")
+        assert result.task_type == result2.task_type
+
+    def test_many_weak_vs_one_strong(self, classifier):
+        """Many weak patterns vs one strong pattern."""
+        # Many weak patterns for CODE_GENERATION
+        result1 = classifier.classify("add modify update change")
+        assert result1.task_type == TaskType.CODE_GENERATION
+
+        # One strong pattern for RESEARCH
+        result2 = classifier.classify("explain")
+        assert result2.task_type == TaskType.RESEARCH
+
+        # Strong should beat multiple weak (if weights are right)
+        result3 = classifier.classify("explain after you add modify update")
+        # RESEARCH 'explain' has weight 1.0, should win
+        assert result3.task_type == TaskType.RESEARCH
+
+
+class TestMetadataExtractionEdgeCases:
+    """Test edge cases in metadata extraction."""
+
+    @pytest.fixture
+    def classifier(self):
+        return TaskClassifier()
+
+    def test_file_with_spaces(self, classifier):
+        """Filenames with spaces (quoted or not)."""
+        result = classifier.classify('edit "my file.py"')
+        # Should extract file even with quotes
+        # Current regex might not handle quotes
+
+    def test_url_not_file(self, classifier):
+        """URLs should not be extracted as files."""
+        result = classifier.classify("fetch data from http://api.example.com/data.json")
+        # .json in URL should not be extracted as local file
+        # Current implementation might extract "data.json"
+
+    def test_relative_vs_absolute_paths(self, classifier):
+        """Should normalize path separators."""
+        result1 = classifier.classify("edit src/utils.py")
+        result2 = classifier.classify("edit src\\utils.py")
+        # Both should extract same normalized path
+        assert "src/utils.py" in result1.extracted_files
+        assert "src/utils.py" in result2.extracted_files
+
+    def test_hidden_files(self, classifier):
+        """Hidden files starting with dot."""
+        result = classifier.classify("create .gitignore")
+        # Should extract .gitignore
+        assert ".gitignore" in result.extracted_files or "gitignore" in result.reasoning.lower()
+
+
+class TestStrategyPatternMotivation:
+    """
+    Tests that motivate the strategy pattern refactor.
+
+    These demonstrate what a strategy pattern could provide:
+    - Pluggable classification strategies
+    - Context-aware decisions
+    - Easy extension without modifying core code
+    - Testable individual strategies
+    """
+
+    @pytest.fixture
+    def classifier(self):
+        return TaskClassifier()
+
+    def test_would_benefit_from_chain_of_responsibility(self, classifier):
+        """Some inputs need multiple strategy evaluations."""
+        result = classifier.classify(
+            "first, explain the current architecture, "
+            "then create a new module, "
+            "and finally write tests"
+        )
+        # This has three distinct actions of different types
+        # Strategy pattern could use chain of responsibility
+        # Current: picks highest scoring type
+        assert result.task_type == TaskType.CODE_GENERATION
+        assert result.complexity_score >= 7
+
+    def test_would_benefit_from_priority_chain(self, classifier):
+        """Some patterns should short-circuit others."""
+        # Direct commands should short-circuit other analysis
+        result = classifier.classify("pip install requests")
+        assert result.task_type == TaskType.DIRECT_COMMAND
+        # No need to check other patterns after direct command match
+
+    def test_would_benefit_from_custom_strategies(self, classifier):
+        """Domain-specific projects might need custom classification."""
+        # Example: ML project might want special handling for training commands
+        result = classifier.classify("train model on dataset.csv")
+        # Current: might classify as CODE_GENERATION or RESEARCH
+        # Custom strategy: could recognize as ML_TRAINING task type

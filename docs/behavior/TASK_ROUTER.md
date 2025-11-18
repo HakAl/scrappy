@@ -102,46 +102,7 @@ Task Router Assessment
   
   Recommended Fix Strategy
 
-  Phase 1: Make Code Testable
-
-  1. Extract I/O dependencies - Remove direct input() calls, inject interface
-  2. Remove side effects - Extract logging/printing to injected logger
-  3. Add validation layer - Validate inputs at boundaries
-
-  Phase 2: Write Comprehensive Tests (TDD from here)
-
-  1. Write behavior tests first that demonstrate what should happen
-  2. Cover edge cases: empty input, malformed JSON, missing providers, conflicting patterns
-  3. Test failure modes: network errors, invalid configuration, timeout
-  4. Integration tests: Test full routing pipeline end-to-end
-
-
-
-
-
-
-
-  Phase 3: Refactor for Separation of Concerns
-
-  2. Extract from router.py:
-    - MetricsCollector class
-    - IntentClarifier class
-    - ProviderResolver class
-    - JSONExtractor utility
-  3. Simplify classifier - Consider strategy pattern for classification instead of regex soup
-
-  
-  The remaining work would be to:
-  1. Extract ResearchExecutor and AgentExecutor to separate files
-  2. Create __init__.py that exports all strategies
-  3. Update router.py to import from new locations
-  4. Extract MetricsCollector, ProviderResolver, and JSONExtractor classes from router.py
-
-  5. Run all tests to verify
-  
-  we're working to fix task_router and want to complete the following task with TDD:
-  
-  ☐ Extract MetricsCollector class from router.py
+ 
 
 
   Phase 4: Remove Code Duplication
