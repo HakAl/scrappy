@@ -234,21 +234,41 @@ Critical Issues
 **RED**
 
 we're working to improve src\orchestrator the next task is: 
-Write tests - Improve test_task_executor.py
-Add tests that verify actual planning output:
+ Break up core.py - Extract DelegationManager
 
-  def test_plan_returns_valid_steps_for_complex_task(self, executor):
-      # Don't just check mock wasn't called
-      # Verify actual step structure and content
-      result = executor.plan("Implement user auth with OAuth", complexity_score=8)
+  Steps:
+  1. Write tests for DelegationManager first (TDD)
+  2. Create src/orchestrator/delegation.py:
 
-      assert len(result) >= 2
-      assert all('step' in step for step in result)
-      assert all('description' in step for step in result)
+  class DelegationManager:
+      """Handles LLM delegation with retry/fallback logic"""
 
-  def test_plan_handles_malformed_llm_response(self, executor):
-      # Test the JSON recovery logic
-      ...
+      def __init__(
+          self,
+          registry: ProviderRegistry,
+          cache: ResponseCache,
+          rate_tracker: RateLimitTracker,
+          provider_selector: ProviderSelector,
+          output: OutputInterface,
+      ):
+          ...
+
+      def delegate(self, ...) -> LLMResponse:
+          """Extract from core.py:445-673"""
+          ...
+
+      async def delegate_async(self, ...) -> LLMResponse:
+          """Extract from core.py:749-976"""
+          ...
+
+      def delegate_batch(self, ...) -> List[LLMResponse]:
+          """Extract from core.py:978-1016"""
+          ...
+
+  3. Move ~500 lines from core.py to delegation.py
+  4. Update AgentOrchestrator to delegate to DelegationManager
+  5. Run tests to verify behavior unchanged
+can you research the task and implement?
 
 **GREEN**
 
@@ -261,33 +281,11 @@ they're fully tested and ready for integration in src/. can you complete the ref
 
 
   ---
-  Phase 2: Write Tests for Existing Behavior
-
-  ---
-  2.2 Improve test_task_executor.py
-Add tests that verify actual planning output:
-
-  def test_plan_returns_valid_steps_for_complex_task(self, executor):
-      # Don't just check mock wasn't called
-      # Verify actual step structure and content
-      result = executor.plan("Implement user auth with OAuth", complexity_score=8)
-
-      assert len(result) >= 2
-      assert all('step' in step for step in result)
-      assert all('description' in step for step in result)
-
-  def test_plan_handles_malformed_llm_response(self, executor):
-      # Test the JSON recovery logic
-      ...
-
-  ---
   Phase 3: Extract and Decompose God Object
 
   Break up core.py into focused classes
 
   3.1 Extract DelegationManager
-
-  Fixes: Issues #2, #6 (Massive Files, God Objects)
 
   Steps:
   1. Write tests for DelegationManager first (TDD)
