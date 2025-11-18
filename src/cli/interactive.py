@@ -77,7 +77,24 @@ class InteractiveMode:
         self.logger = get_logger("cli.interactive", io=io)
 
     def run(self) -> None:
-        """Run the interactive chat loop."""
+        """
+        Run the interactive chat loop.
+
+        Displays the welcome banner and mode statuses, then enters the main
+        input loop. Requires a TTY (terminal) environment to operate.
+
+        Side Effects:
+            - Checks if running in TTY mode, exits with error if not
+            - Displays welcome banner with available commands
+            - Shows multiline and auto-routing mode statuses
+            - Enters _main_loop which processes user input until exit
+
+        State Changes:
+            - No direct state changes; delegates to _main_loop
+
+        Returns:
+            None
+        """
         io = self.io
 
         # Check if running in interactive environment
@@ -121,7 +138,28 @@ class InteractiveMode:
         self._main_loop()
 
     def _main_loop(self) -> None:
-        """Run the main input loop."""
+        """
+        Run the main input loop.
+
+        Continuously reads user input and processes it until exit is requested.
+        Handles keyboard interrupts and EOF gracefully.
+
+        Side Effects:
+            - Reads input via input_handler.read_interactive_input()
+            - Processes each input through _process_input()
+            - Displays interrupt messages on KeyboardInterrupt
+            - Logs user interrupts and errors
+
+        State Changes:
+            - Delegates state changes to _process_input()
+            - Loop exits when _process_input returns False or EOF received
+
+        Raises:
+            Does not raise; all exceptions are handled internally.
+
+        Returns:
+            None
+        """
         while True:
             try:
                 # Read input
@@ -157,11 +195,30 @@ class InteractiveMode:
         """
         Process user input.
 
+        Handles both slash commands and regular chat input. For commands,
+        delegates to command_router. For chat, uses auto-routing, smart mode,
+        or direct LLM delegation based on current settings.
+
         Args:
             user_input: The user's input string.
 
         Returns:
-            True to continue loop, False to exit.
+            bool: True to continue the loop, False to exit.
+
+        Side Effects:
+            - Commands are routed to command_router.route()
+            - Chat input is:
+              - Routed through task_router if auto_route_mode is enabled
+              - Processed by smart_query if smart_mode is enabled
+              - Sent to orchestrator.delegate() otherwise
+            - Displays response to console with metadata
+            - May use tools for research if query requires it
+            - Prompts for task progression if plan is active
+
+        State Changes:
+            - Appends user message to conversation_history
+            - Appends assistant response to conversation_history
+            - Command routing may change various state attributes
         """
         io = self.io
 
@@ -250,7 +307,26 @@ class InteractiveMode:
         return True
 
     def _handle_eof(self) -> None:
-        """Handle EOF (end of input)."""
+        """
+        Handle EOF (end of input).
+
+        Performs cleanup operations when EOF is received, including auto-saving
+        the session if enabled and displaying usage statistics.
+
+        Side Effects:
+            - Displays EOF message to console
+            - Logs EOF event
+            - Auto-saves session via orchestrator.save_session() if enabled
+            - Displays session save status
+            - Shows usage statistics via display.show_usage()
+            - Displays goodbye message
+
+        State Changes:
+            - Creates session file if auto_save is enabled
+
+        Returns:
+            None
+        """
         io = self.io
 
         io.echo("\n")
@@ -282,8 +358,23 @@ class InteractiveMode:
         """
         Handle general exceptions.
 
+        Displays error messages with appropriate styling based on severity
+        and exception type. Logs errors with structured data.
+
         Args:
             exception: The exception that occurred.
+
+        Side Effects:
+            - Displays error message to console with severity-based styling
+            - Shows suggestion if available in exception
+            - Logs error with structured data (CLIError) or full traceback
+            - Displays help reminder
+
+        State Changes:
+            - None; purely handles display and logging
+
+        Returns:
+            None
         """
         io = self.io
 

@@ -66,7 +66,42 @@ class CLI:
         show_provider_status: bool = False,
         io: Optional[CLIIOProtocol] = None
     ):
-        """Initialize CLI with orchestrator and component handlers."""
+        """
+        Initialize CLI with orchestrator and component handlers.
+
+        Creates an AgentOrchestrator instance and initializes all CLI component
+        handlers (display, session, codebase, tasks, etc.) using the factory.
+
+        Args:
+            brain: Provider name to use as the orchestrator brain. If None, uses
+                the first available provider.
+            auto_explore: If True, automatically explore the codebase on startup.
+            context_aware: If True, enable context-aware features that consider
+                project structure in responses.
+            verbose_selection: If True, display detailed provider selection info
+                during initialization.
+            show_provider_status: If True, display provider availability status
+                instead of default initialization messages.
+            io: IO interface for input/output operations. Defaults to ClickIO.
+
+        Side Effects:
+            - Prints initialization messages to stdout via io interface
+            - Creates and stores AgentOrchestrator instance
+            - Initializes logger for structured logging
+            - May prompt user to restore previous session if one exists
+            - Displays brain/provider status to console
+
+        State Changes:
+            - Sets self.orchestrator to new AgentOrchestrator
+            - Sets self.session_start to current datetime
+            - Sets self.state_manager to new PlanStateManager
+            - Initializes all component handlers (display, session_mgr, etc.)
+            - Sets self.input_handler and self.logger
+
+        Raises:
+            No explicit exceptions, but underlying orchestrator/provider
+            initialization may raise if no providers are available.
+        """
         if io is None:
             io = ClickIO()
         self.io = io
@@ -134,7 +169,29 @@ class CLI:
         io.echo()
 
     def _check_and_offer_session_restore(self, io: Optional[CLIIOProtocol] = None):
-        """Check for existing session and offer to restore it automatically."""
+        """
+        Check for existing session and offer to restore it automatically.
+
+        Looks for a previous session file and prompts the user to restore it.
+        Only operates in interactive (TTY) mode.
+
+        Args:
+            io: IO interface for input/output. Defaults to self.io.
+
+        Side Effects:
+            - Displays session information to console if session exists
+            - Prompts user for confirmation to restore
+            - Calls orchestrator.load_session() if user confirms
+            - Logs session restore outcome
+
+        State Changes:
+            - If restored, updates orchestrator's working memory with previous
+              session data (files, searches, git ops, discoveries)
+            - No state change if user declines or not in interactive mode
+
+        Returns:
+            None
+        """
         if io is None:
             io = self.io
 
@@ -188,7 +245,26 @@ class CLI:
             self.logger.info("Session restore skipped (non-interactive)")
 
     def interactive_mode(self):
-        """Run interactive chat mode."""
+        """
+        Run interactive chat mode.
+
+        Creates an InteractiveMode instance and delegates control to it for
+        the main chat loop. This is the primary entry point for user interaction.
+
+        Side Effects:
+            - Displays welcome banner and command help to console
+            - Runs continuous input loop until user exits
+            - All user interactions are processed through InteractiveMode
+            - Session may be auto-saved on exit depending on settings
+
+        State Changes:
+            - Creates InteractiveMode with shared state_manager
+            - Conversation history, multiline_mode, auto_route_mode, etc.
+              are managed by the InteractiveMode instance
+
+        Returns:
+            None
+        """
         # Create InteractiveMode with shared state manager
         interactive = InteractiveMode(
             io=self.io,
@@ -321,7 +397,31 @@ class CLI:
         return self.state_manager.prompt_task_progression(io)
 
     def _handle_command(self, command: str, io: Optional[CLIIOProtocol] = None) -> bool:
-        """Handle slash commands (delegates to CommandRouter)."""
+        """
+        Handle slash commands by delegating to CommandRouter.
+
+        Parses the command string and routes it to the appropriate handler
+        via a CommandRouter instance. State is synchronized back after routing.
+
+        Args:
+            command: Full command string including the slash prefix and any args.
+            io: IO interface for input/output. Defaults to self.io.
+
+        Returns:
+            bool: True to continue the interactive loop, False to exit.
+
+        Side Effects:
+            - Creates a new CommandRouter instance for each command
+            - Executes the command which may modify files, make API calls, etc.
+            - Output is displayed to console via io interface
+
+        State Changes:
+            - Syncs back conversation_history from router
+            - Syncs back multiline_mode from router
+            - Syncs back auto_route_mode from router
+            - Syncs back smart_mode from router
+            - Syncs back auto_save from router
+        """
         if io is None:
             io = self.io
 
@@ -353,7 +453,33 @@ class CLI:
         return result
 
     def _execute_current_task(self, io: Optional[CLIIOProtocol] = None):
-        """Execute the current task using intelligent routing."""
+        """
+        Execute the current task using intelligent routing.
+
+        Takes the current task from the active plan and routes it through
+        the TaskRouter for execution. Falls back to agent_mgr if routing fails.
+
+        Args:
+            io: IO interface for input/output. Defaults to self.io.
+
+        Side Effects:
+            - Displays task execution status messages to console
+            - Routes task through TaskRouter which may:
+              - Execute shell commands directly
+              - Make LLM API calls for research queries
+              - Run full agent loop for code generation
+            - Logs task execution outcome
+            - Prompts user for next action after completion
+            - Falls back to agent_mgr.run_agent() on routing failure
+
+        State Changes:
+            - Does not modify plan state directly (caller handles progression)
+            - Task execution may modify project files if it's a code task
+            - Updates orchestrator discoveries with task results
+
+        Returns:
+            None
+        """
         if io is None:
             io = self.io
 

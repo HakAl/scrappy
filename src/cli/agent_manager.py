@@ -28,7 +28,40 @@ class CLIAgentManager:
         self.orchestrator = orchestrator
 
     def run_agent(self, task: str, io: Optional[CLIIOProtocol] = None):
-        """Run the code agent on a task with human-in-the-loop approval."""
+        """
+        Run the code agent on a task with human-in-the-loop approval.
+
+        Creates and executes a CodeAgent for the given task, with interactive
+        prompts for safety options like dry-run mode and git checkpoints.
+
+        Args:
+            task: Description of the task for the agent to perform.
+            io: IO interface for input/output. Defaults to ClickIO.
+
+        Side Effects:
+            - Prompts user for dry-run mode and checkpoint creation
+            - May create a git checkpoint before execution
+            - Displays agent configuration and progress to console
+            - Agent may modify project files if not in dry-run mode
+            - Displays audit log summary after execution
+            - May save audit log to file if user requests
+            - May rollback to checkpoint if user requests
+            - Adds discovery to orchestrator's working memory
+
+        State Changes:
+            - Creates temporary CodeAgent instance (not stored)
+            - Updates orchestrator.discoveries with task result
+            - May create new git commits (for checkpoint/rollback)
+            - May modify project files via agent execution
+
+        Raises:
+            KeyboardInterrupt: If user interrupts agent execution.
+            Exception: Any unhandled errors from agent execution are caught
+                and displayed, then recorded as discoveries.
+
+        Returns:
+            None
+        """
         if io is None:
             io = ClickIO()
 

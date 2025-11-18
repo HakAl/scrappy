@@ -14,6 +14,12 @@
 - Diff preview
  - Structured output validation - Pydantic schemas for LLM responses
  - Streaming responses - Token-by-token generation for better UX
+ 
+<!-- maintainence -->
+  1. Add # type: ignore[no-redef] to fallback imports in except blocks
+  2. Consider using a common imports module to avoid the try/except pattern
+  3. Fix the codebase.py Path vs str type issues
+  4. Add type stubs for external dependencies (types-PyYAML, etc.)
 
 
  Code Quality Assessment Summary
@@ -143,10 +149,13 @@
 **RED**
 
 we're working to improve src\cli the next task is: 
-Type Safety & Documentation - Add Complete Type Hints
- - Add return types to all methods
- - Add parameter types where missing
- - Run mypy and fix all errors
+Type Safety & Documentation - Add Docstrings
+ - Document all public methods
+ - Document side effects explicitly
+ - Document state changes
+  Phase 2 - Handler Files (~30 methods)
+  - display.py, session.py, context_manager.py
+  - codebase.py, smart_query.py, multiprovider.py
 can you research the task and implement?
 
 **GREEN**
@@ -164,22 +173,22 @@ CLI Refactoring
 
  Phase 6: Type Safety & Documentation
 
- Code quality polish
-
- 6.1 Add Complete Type Hints
-
- - Add return types to all methods
- - Add parameter types where missing
- - Run mypy and fix all errors
-
  6.2 Add Docstrings
 
  - Document all public methods
  - Document side effects explicitly
  - Document state changes
 
-v
-  1. Add # type: ignore[no-redef] to fallback imports in except blocks
-  2. Consider using a common imports module to avoid the try/except pattern
-  3. Fix the codebase.py Path vs str type issues
-  4. Add type stubs for external dependencies (types-PyYAML, etc.)
+
+
+
+  Phase 2 - Handler Files (~30 methods)
+  - display.py, session.py, context_manager.py
+  - codebase.py, smart_query.py, multiprovider.py
+
+  Phase 3 - Infrastructure (~30 methods)
+  - cache_manager.py, rate_limiter.py, persistence.py
+  - task_router_handler.py, error_recovery.py, exceptions.py
+
+  Phase 4 - Utilities/Config (~10-20 items)
+  - utils/*.py, config/*.py, validators.py, protocols.py, types.py

@@ -72,12 +72,38 @@ class CommandRouter:
         """
         Route a command to its handler.
 
+        Validates the command and dispatches it to the appropriate handler
+        based on the command name. Handles all slash commands including display,
+        session, task, multi-provider, and state commands.
+
         Args:
-            cmd: The command name (e.g., "/help").
-            args: The command arguments.
+            cmd: The command name (e.g., "/help", "/quit", "/plan").
+            args: The command arguments as a single string.
 
         Returns:
-            True to continue the loop, False to exit.
+            bool: True to continue the interactive loop, False to exit
+                (returned by /quit, /exit, /q commands).
+
+        Side Effects:
+            - Validates command input and displays error if invalid
+            - Dispatches to appropriate handler which may:
+              - Display information to console (help, status, providers)
+              - Make API calls to LLM providers
+              - Modify project files (via agent execution)
+              - Save/load session files
+              - Create/modify git checkpoints
+            - Auto-saves session on exit if auto_save is enabled
+            - Shows usage statistics on exit
+
+        State Changes:
+            - /clear: Empties conversation_history
+            - /session: May update conversation_history and auto_save
+            - /plan: May start new plan via state_manager.start_plan()
+            - /autoexec: Toggles state_manager.auto_execute_tasks
+            - /paste, /ml, /multiline: Toggles self.multiline_mode
+            - /auto, /route, /autoroute: Toggles self.auto_route_mode
+            - /smart toggle: Toggles self.smart_mode
+            - /brain: Changes orchestrator.brain
         """
         io = self.io
 
