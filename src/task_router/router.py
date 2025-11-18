@@ -4,7 +4,6 @@ Central task router that dispatches to appropriate execution strategies.
 
 import json
 import time
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
@@ -14,11 +13,14 @@ from .intent_clarifier import (
     IntentClarifierInterface,
     InteractiveClarifier,
 )
+from .json_extractor import JSONExtractor
+from .metrics_collector import MetricsCollector, RouterMetrics
 from .output_handler import (
     ConsoleOutputHandler,
     NullOutputHandler,
     OutputHandlerInterface,
 )
+from .provider_resolver import ProviderResolver
 from .strategies import (
     AgentExecutor,
     ConversationExecutor,
@@ -29,16 +31,6 @@ from .strategies import (
     ResearchExecutor,
 )
 from .validator import InputValidator
-
-
-@dataclass
-class RouterMetrics:
-    """Metrics tracking for task routing."""
-    total_tasks: int = 0
-    tasks_by_type: Dict[str, int] = field(default_factory=dict)
-    avg_execution_time: float = 0.0
-    total_tokens_used: int = 0
-    success_rate: float = 1.0
 
 
 class TaskRouter:
@@ -88,7 +80,8 @@ class TaskRouter:
 
         self.classifier = TaskClassifier()
         self.strategies: Dict[TaskType, ExecutionStrategy] = {}
-        self.metrics = RouterMetrics()
+        self.metrics_collector = MetricsCollector()
+        self.provider_resolver = ProviderResolver(orchestrator=orchestrator)
 
         # Pre/post hooks for extensibility
         self._pre_hooks: List[Callable[[ClassifiedTask], ClassifiedTask]] = []
@@ -291,24 +284,9 @@ What is the user's PRIMARY intent? Respond with JSON only."""
             # Parse response
             response_text = response.content.strip()
 
-            # Extract JSON from response
-            if '```json' in response_text:
-                start = response_text.find('```json') + 7
-                end = response_text.find('```', start)
-                if end > start:
-                    response_text = response_text[start:end].strip()
-            elif '```' in response_text:
-                start = response_text.find('```') + 3
-                end = response_text.find('```', start)
-                if end > start:
-                    response_text = response_text[start:end].strip()
-
-            # Try to find JSON object
-            if '{' in response_text:
-                start = response_text.find('{')
-                end = response_text.rfind('}') + 1
-                if end > start:
-                    response_text = response_text[start:end]
+            # Extract JSON from response using JSONExtractor utility
+            extractor = JSONExtractor()
+            response_text = extractor.extract(response_text)
 
             result = json.loads(response_text)
 
@@ -363,44 +341,7 @@ What is the user's PRIMARY intent? Respond with JSON only."""
         Returns:
             Tuple of (provider_name, model_name) or (None, None) if no resolution needed
         """
-        if not hint or not self.orchestrator:
-            return (None, None)
-
-        try:
-            # Try to use ProviderSelector if available
-            if hasattr(self.orchestrator, 'providers'):
-                from ..orchestrator.provider_selector import ProviderSelector
-                selector = ProviderSelector(self.orchestrator.providers)
-                return selector.select_for_task(hint)
-        except Exception:
-            pass
-
-        # Fallback: simple mapping
-        available = []
-        try:
-            if hasattr(self.orchestrator, 'providers'):
-                available = self.orchestrator.providers.list_available()
-        except Exception:
-            pass
-
-        if hint in ['fast', 'high_volume', 'general']:
-            # Prefer Cerebras > Groq > Gemini
-            if 'cerebras' in available:
-                return ('cerebras', None)
-            elif 'groq' in available:
-                return ('groq', None)
-            elif 'gemini' in available:
-                return ('gemini', None)
-        elif hint == 'quality':
-            # Use 70B models
-            if 'cerebras' in available:
-                return ('cerebras', 'llama-3.3-70b')
-            elif 'groq' in available:
-                return ('groq', 'llama-3.3-70b-versatile')
-            elif 'gemini' in available:
-                return ('gemini', None)
-
-        return (None, None)
+        return self.provider_resolver.resolve(hint)
 
     def route(self, user_input: str) -> ExecutionResult:
         """
@@ -701,26 +642,7 @@ What is the user's PRIMARY intent? Respond with JSON only."""
 
     def _update_metrics(self, task: ClassifiedTask, result: ExecutionResult):
         """Update routing metrics."""
-        self.metrics.total_tasks += 1
-
-        # Track by type
-        type_key = task.task_type.value
-        if type_key not in self.metrics.tasks_by_type:
-            self.metrics.tasks_by_type[type_key] = 0
-        self.metrics.tasks_by_type[type_key] += 1
-
-        # Update average execution time
-        n = self.metrics.total_tasks
-        old_avg = self.metrics.avg_execution_time
-        self.metrics.avg_execution_time = old_avg + (result.execution_time - old_avg) / n
-
-        # Track tokens
-        self.metrics.total_tokens_used += result.tokens_used
-
-        # Update success rate
-        if not result.success:
-            success_count = self.metrics.success_rate * (n - 1)
-            self.metrics.success_rate = success_count / n
+        self.metrics_collector.update(task, result)
 
     def add_pre_hook(self, hook: Callable[[ClassifiedTask], ClassifiedTask]):
         """Add pre-execution hook for task modification."""
@@ -732,7 +654,7 @@ What is the user's PRIMARY intent? Respond with JSON only."""
 
     def get_metrics(self) -> RouterMetrics:
         """Get current routing metrics."""
-        return self.metrics
+        return self.metrics_collector.get_metrics()
 
     def classify_only(self, user_input: str) -> ClassifiedTask:
         """Classify task without executing (for debugging/preview)."""

@@ -123,7 +123,6 @@ Task Router Assessment
 
   Phase 3: Refactor for Separation of Concerns
 
-  1. Split strategies.py - One file per strategy
   2. Extract from router.py:
     - MetricsCollector class
     - IntentClarifier class
@@ -142,11 +141,8 @@ Task Router Assessment
   
   we're working to fix task_router and want to complete the following task with TDD:
   
-  ☐ Split strategies.py into separate files (one per strategy)
   ☐ Extract MetricsCollector class from router.py
-  ☐ Extract ProviderResolver class from router.py
-  ☐ Extract JSONExtractor utility from router.py
-  ☐ Run all tests to verify refactoring didn't break anything
+
 
   Phase 4: Remove Code Duplication
 
