@@ -4,7 +4,7 @@ Test helper classes and utilities.
 Provides mock adapters and utilities for testing the orchestrator and agent.
 """
 
-from typing import List, Optional, Dict, Any, Callable
+from typing import List, Optional, Dict, Any
 from unittest.mock import Mock
 from pathlib import Path
 
@@ -633,6 +633,62 @@ class MockIO:
 # =============================================================================
 # Factory Functions for Common Test Setups
 # =============================================================================
+
+def make_injectable_orchestrator(
+    tmp_path,
+    cache: Optional[Any] = None,
+    rate_tracker: Optional[Any] = None,
+    working_memory: Optional[Any] = None,
+    session_manager: Optional[Any] = None,
+    provider_selector: Optional[Any] = None,
+    auto_register: bool = False
+):
+    """
+    Create a real AgentOrchestrator with injectable mock dependencies.
+
+    This factory enables unit testing the orchestrator with full control
+    over its dependencies while using the actual implementation.
+
+    Args:
+        tmp_path: Temporary directory path for the project
+        cache: Mock cache or None for default
+        rate_tracker: Mock rate tracker or None for default
+        working_memory: Mock working memory or None for default
+        session_manager: Mock session manager or None for default
+        provider_selector: Mock provider selector or None for default
+        auto_register: Whether to auto-register providers (default False for tests)
+
+    Returns:
+        AgentOrchestrator instance with injected dependencies
+
+    Usage:
+        def test_something(tmp_path):
+            mock_cache = Mock(spec=ResponseCache)
+            mock_cache.get.return_value = None
+
+            orch = make_injectable_orchestrator(
+                tmp_path,
+                cache=mock_cache
+            )
+
+            # Test with real orchestrator but mocked cache
+            orch.delegate(...)
+            mock_cache.get.assert_called()
+    """
+    from src.orchestrator.core import AgentOrchestrator
+    from src.orchestrator.output import NullOutput
+
+    return AgentOrchestrator(
+        auto_register=auto_register,
+        project_path=str(tmp_path),
+        cache=cache,
+        rate_tracker=rate_tracker,
+        working_memory=working_memory,
+        session_manager=session_manager,
+        provider_selector=provider_selector,
+        output=NullOutput()
+    )
+
 
 def make_handler_test_setup(
     inputs: Optional[List[str]] = None,

@@ -48,7 +48,13 @@ class AgentOrchestrator:
         cache_ttl_hours: int = 24,
         verbose_selection: bool = False,
         show_provider_status: bool = False,
-        output: Optional[OutputInterface] = None
+        output: Optional[OutputInterface] = None,
+        # Injectable dependencies for testability
+        cache: Optional[ResponseCache] = None,
+        rate_tracker: Optional[RateLimitTracker] = None,
+        working_memory: Optional[WorkingMemory] = None,
+        session_manager: Optional[SessionManager] = None,
+        provider_selector: Optional[ProviderSelector] = None,
     ):
         """
         Initialize orchestrator.
@@ -64,6 +70,11 @@ class AgentOrchestrator:
             verbose_selection: Show detailed provider selection logic
             show_provider_status: Display provider status summary on startup
             output: Output interface for messages (default: ConsoleOutput)
+            cache: Injectable response cache (default: creates new ResponseCache)
+            rate_tracker: Injectable rate limit tracker (default: creates new RateLimitTracker)
+            working_memory: Injectable working memory (default: creates new WorkingMemory)
+            session_manager: Injectable session manager (default: creates new SessionManager)
+            provider_selector: Injectable provider selector (default: creates new ProviderSelector)
         """
         # Core components
         self.output = output or ConsoleOutput()
@@ -84,17 +95,17 @@ class AgentOrchestrator:
         # Initialize codebase context
         self.context = CodebaseContext(project_path)
 
-        # Initialize composed components
-        self.cache = ResponseCache(
+        # Initialize composed components (use injected or create defaults)
+        self.cache = cache or ResponseCache(
             cache_file=str(self.context.project_path / ".llm_response_cache.json"),
             default_ttl_hours=cache_ttl_hours
         )
-        self.rate_tracker = RateLimitTracker(
+        self.rate_tracker = rate_tracker or RateLimitTracker(
             tracker_file=str(self.context.project_path / ".llm_rate_limits.json")
         )
-        self.working_memory = WorkingMemory()
-        self.session_manager = SessionManager(self.context.project_path)
-        self.provider_selector = ProviderSelector(self.registry, verbose=verbose_selection, output=self.output)
+        self.working_memory = working_memory or WorkingMemory()
+        self.session_manager = session_manager or SessionManager(self.context.project_path)
+        self.provider_selector = provider_selector or ProviderSelector(self.registry, verbose=verbose_selection, output=self.output)
 
         # Register providers and set up brain
         if auto_register:

@@ -234,7 +234,27 @@ Critical Issues
 **RED**
 
 we're working to improve src\orchestrator the next task is: 
-Make Code Testable - 
+Make Code Testable - Enable Dependency Injection
+Modify AgentOrchestrator.__init__ signature (core.py:66-107):
+
+  def __init__(
+      self,
+      context: ProjectContext,
+      # ... existing params ...
+      # NEW: injectable dependencies
+      cache: Optional[ResponseCache] = None,
+      rate_tracker: Optional[RateLimitTracker] = None,
+      working_memory: Optional[WorkingMemory] = None,
+      session_manager: Optional[SessionManager] = None,
+      provider_selector: Optional[ProviderSelector] = None,
+      output: Optional[OutputInterface] = None,
+  ):
+      # Create defaults only if not injected
+      self.cache = cache or ResponseCache(...)
+      self.rate_tracker = rate_tracker or RateLimitTracker(...)
+      # etc.
+
+  2. Update tests/helpers.py ConfigurableTestOrchestrator to use injection
 can you research the task and implement?
 
 **GREEN**
@@ -251,16 +271,8 @@ they're fully tested and ready for integration in src/. can you complete the ref
 ---
   Phase 1: Foundation - Make Code Testable
 
-  1.1 Introduce Output Abstraction
-
-  3. Update AgentOrchestrator.__init__ to accept output: OutputInterface = None
-  4. Replace all 40+ print() calls in core.py with self.output.info/warn/error/success
-  5. Update provider_selector.py similarly
-
   ---
   1.2 Enable Dependency Injection
-
-  Fixes: Issue #10 (Tight Coupling)
 
   Steps:
   1. Modify AgentOrchestrator.__init__ signature (core.py:66-107):
