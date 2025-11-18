@@ -159,13 +159,12 @@ TaskClassifier
 
  
 we're working to improve src\task_router the next task is: 
-Improve Architecture - Define clear interfaces - Expand protocol classes
+Improve Architecture - Dependency injection - Pass all dependencies explicitly
 can you research the problem and begin writing tests for the change?
 
 
   Phase 5: Improve Architecture
 
-  1. Define clear interfaces - Expand protocol classes
   2. Dependency injection - Pass all dependencies explicitly
   3. Immutable domain objects - Make ClassifiedTask immutable
   4. Pure functions - Separate calculation from side effects

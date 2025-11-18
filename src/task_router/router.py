@@ -52,7 +52,10 @@ class TaskRouter:
         verbose: bool = True,
         intent_clarifier: Optional[IntentClarifierInterface] = None,
         output_handler: Optional[OutputHandlerInterface] = None,
-        validator: Optional[InputValidator] = None
+        validator: Optional[InputValidator] = None,
+        classifier: Optional[TaskClassifier] = None,
+        metrics_collector: Optional[MetricsCollector] = None,
+        provider_resolver: Optional[ProviderResolver] = None
     ):
         """
         Initialize TaskRouter with execution strategies.
@@ -65,6 +68,9 @@ class TaskRouter:
             intent_clarifier: Injectable clarifier for ambiguous tasks (default: InteractiveClarifier)
             output_handler: Injectable output handler (default: based on verbose)
             validator: Injectable input validator (default: InputValidator)
+            classifier: Injectable task classifier (default: TaskClassifier)
+            metrics_collector: Injectable metrics collector (default: MetricsCollector)
+            provider_resolver: Injectable provider resolver (default: ProviderResolver)
         """
         self.orchestrator = orchestrator
         self.project_root = project_root or Path.cwd()
@@ -78,10 +84,10 @@ class TaskRouter:
         )
         self.validator = validator or InputValidator()
 
-        self.classifier = TaskClassifier()
+        self.classifier = classifier or TaskClassifier()
         self.strategies: Dict[TaskType, ExecutionStrategy] = {}
-        self.metrics_collector = MetricsCollector()
-        self.provider_resolver = ProviderResolver(orchestrator=orchestrator)
+        self.metrics_collector = metrics_collector or MetricsCollector()
+        self.provider_resolver = provider_resolver or ProviderResolver(orchestrator=orchestrator)
 
         # Pre/post hooks for extensibility
         self._pre_hooks: List[Callable[[ClassifiedTask], ClassifiedTask]] = []
