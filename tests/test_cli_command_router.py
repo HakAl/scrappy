@@ -484,12 +484,13 @@ class TestCommandRouter:
         result = router.route("/unknowncommand", "")
 
         output = io.get_output()
-        assert "Unknown command" in output
+        assert "Unknown command" in output or "Invalid command" in output
 
         styled = io.get_styled_outputs()
-        warning_outputs = [s for s in styled if "Unknown" in s['text']]
-        if warning_outputs:
-            assert warning_outputs[0]['fg'] == 'yellow'
+        error_outputs = [s for s in styled if "Unknown" in s['text'] or "Invalid" in s['text']]
+        if error_outputs:
+            # Validation errors are shown in red
+            assert error_outputs[0]['fg'] == 'red'
 
     def test_unknown_command_returns_true(self):
         """Should return True to continue loop for unknown command."""

@@ -22,6 +22,7 @@ from .utils.cli_factory import create_cli_from_context
 from .utils.session_utils import restore_session_to_cli
 from .utils.error_utils import run_with_error_handling
 from .io_interface import ClickIO
+from .validators import validate_path, validate_provider
 
 try:
     from ..agent import CodeAgent, create_git_checkpoint, rollback_to_checkpoint
@@ -92,7 +93,16 @@ def query(ctx, prompt, provider, model, temperature, max_tokens, with_context):
     cli_instance = create_cli_from_context(ctx)
     io = ClickIO()
 
-    target_provider = provider or cli_instance.orchestrator.brain
+    # Validate provider if explicitly specified
+    if provider:
+        provider_validation = validate_provider(provider)
+        if not provider_validation.is_valid:
+            click.secho(f"Invalid provider: {provider_validation.error}", fg="red")
+            sys.exit(1)
+        target_provider = provider_validation.provider
+    else:
+        target_provider = cli_instance.orchestrator.brain
+
     click.echo(f"Querying {target_provider}...\n")
 
     def execute_query():
@@ -264,7 +274,13 @@ def explore(ctx, path, save):
     """Explore and learn about a codebase."""
     cli_instance = create_cli_from_context(ctx)
 
-    path_obj = Path(path).resolve()
+    # Validate path input
+    path_validation = validate_path(path)
+    if not path_validation.is_valid:
+        click.secho(f"Invalid path: {path_validation.error}", fg="red")
+        sys.exit(1)
+
+    path_obj = Path(path_validation.path).resolve()
     if not path_obj.exists():
         click.secho(f"Path does not exist: {path_obj}", fg="red")
         sys.exit(1)

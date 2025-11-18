@@ -16,6 +16,7 @@ from .multiprovider import CLIMultiProvider
 from .smart_query import CLISmartQuery
 from .agent_manager import CLIAgentManager
 from .task_router_handler import CLITaskRouterHandler
+from .validators import validate_command
 from .utils.session_utils import (
     display_session_saved,
     display_session_save_error,
@@ -76,6 +77,16 @@ class CommandRouter:
             True to continue the loop, False to exit.
         """
         io = self.io
+
+        # Validate command input
+        full_command = f"{cmd} {args}".strip() if args else cmd
+        validation_result = validate_command(full_command)
+
+        if not validation_result.is_valid:
+            io.secho(f"Invalid command: {validation_result.error}", fg="red")
+            io.echo("Type /help for available commands.")
+            io.echo()
+            return True
 
         # Exit commands
         if cmd in ["/quit", "/exit", "/q"]:

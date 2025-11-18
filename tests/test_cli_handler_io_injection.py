@@ -1205,13 +1205,13 @@ class TestCLICoreIOInjection:
             cli._handle_command("/unknowncommand", io=io)
 
             output = io.get_output()
-            assert "Unknown command" in output
+            assert "Unknown command" in output or "Invalid command" in output
 
-            # Check yellow warning color
+            # Check red error color for validation errors
             styled = io.get_styled_outputs()
-            warning_outputs = [s for s in styled if "Unknown command" in s['text']]
-            if warning_outputs:
-                assert warning_outputs[0]['fg'] == 'yellow'
+            error_outputs = [s for s in styled if "Unknown command" in s['text'] or "Invalid command" in s['text']]
+            if error_outputs:
+                assert error_outputs[0]['fg'] == 'red'
 
     def test_cli_handle_command_clear_outputs_through_io(self):
         """CLI._handle_command() should output clear confirmation through io."""

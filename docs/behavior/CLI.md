@@ -143,10 +143,11 @@
 **RED**
 
 we're working to improve src\cli the next task is: 
-Eliminate Duplication - Centralize Configuration
- - Create src/cli/config/defaults.py - All default values
- - Create src/cli/config/extensions.py - File extension categories
- - Create src/cli/config/paths.py - Skip directories, config files
+Add Validation & Error Handling - Input Validation Layer
+
+ - Create src/cli/validators.py
+ - Add validators: validate_command(), validate_path(), validate_provider()
+ - Add length limits, empty checks, character validation
 can you research the task and begin writing tests for the change?
 
 **GREEN**
@@ -162,10 +163,6 @@ created:
 
 
 CLI Refactoring
-
- ---
- Phase 3: Eliminate Duplication - DRY principle
-
 
  ---
  Phase 4: Add Validation & Error Handling
