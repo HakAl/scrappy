@@ -9,6 +9,16 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
 from .classifier import ClassifiedTask, TaskClassifier, TaskType
+from .intent_clarifier import (
+    AutoClarifier,
+    IntentClarifierInterface,
+    InteractiveClarifier,
+)
+from .output_handler import (
+    ConsoleOutputHandler,
+    NullOutputHandler,
+    OutputHandlerInterface,
+)
 from .strategies import (
     AgentExecutor,
     ConversationExecutor,
@@ -18,6 +28,7 @@ from .strategies import (
     OrchestratorLike,
     ResearchExecutor,
 )
+from .validator import InputValidator
 
 
 @dataclass
@@ -46,7 +57,10 @@ class TaskRouter:
         orchestrator: Optional[OrchestratorLike] = None,
         project_root: Optional[Path] = None,
         auto_confirm_direct: bool = False,
-        verbose: bool = True
+        verbose: bool = True,
+        intent_clarifier: Optional[IntentClarifierInterface] = None,
+        output_handler: Optional[OutputHandlerInterface] = None,
+        validator: Optional[InputValidator] = None
     ):
         """
         Initialize TaskRouter with execution strategies.
@@ -56,11 +70,21 @@ class TaskRouter:
             project_root: Project directory for file operations
             auto_confirm_direct: Skip confirmation for direct commands
             verbose: Print routing decisions
+            intent_clarifier: Injectable clarifier for ambiguous tasks (default: InteractiveClarifier)
+            output_handler: Injectable output handler (default: based on verbose)
+            validator: Injectable input validator (default: InputValidator)
         """
         self.orchestrator = orchestrator
         self.project_root = project_root or Path.cwd()
         self.auto_confirm_direct = auto_confirm_direct
         self.verbose = verbose
+
+        # Dependency injection - use provided or create defaults
+        self.intent_clarifier = intent_clarifier or InteractiveClarifier()
+        self.output_handler = output_handler or (
+            ConsoleOutputHandler() if verbose else NullOutputHandler()
+        )
+        self.validator = validator or InputValidator()
 
         self.classifier = TaskClassifier()
         self.strategies: Dict[TaskType, ExecutionStrategy] = {}
@@ -153,38 +177,9 @@ class TaskRouter:
         """
         Ask user to clarify their intent when classification is ambiguous.
 
-        Modifies task type based on user response.
+        Uses the injected intent_clarifier to enable testability.
         """
-        print(f"\nIntent Clarification Needed")
-        print(f"   Classified as: {task.task_type.value} (confidence: {task.confidence:.0%})")
-        print(f"   Input: \"{task.original_input}\"")
-        print(f"\nDid you want me to:")
-        print(f"  [1] EXPLAIN how to do this (research/information only)")
-        print(f"  [2] Actually DO this for you (execute/create/modify)")
-        print(f"  [3] Keep current classification ({task.task_type.value})")
-
-        try:
-            choice = input("\nChoice [1/2/3]: ").strip()
-        except (EOFError, KeyboardInterrupt):
-            choice = "3"
-
-        if choice == "1":
-            task.task_type = TaskType.RESEARCH
-            task.reasoning = f"User clarified: research/explain only. Original: {task.reasoning}"
-            task.confidence = 1.0  # User confirmed
-            if self.verbose:
-                print(f"  Switching to RESEARCH mode")
-        elif choice == "2":
-            task.task_type = TaskType.CODE_GENERATION
-            task.reasoning = f"User clarified: execute/create. Original: {task.reasoning}"
-            task.confidence = 1.0  # User confirmed
-            if self.verbose:
-                print(f"  Switching to CODE_GENERATION mode")
-        else:
-            if self.verbose:
-                print(f"  Keeping {task.task_type.value} classification")
-
-        return task
+        return self.intent_clarifier.clarify(task)
 
     def _apply_confidence_escalation(self, task: ClassifiedTask) -> ClassifiedTask:
         """
@@ -215,7 +210,7 @@ class TaskRouter:
             task.task_type = TaskType.CODE_GENERATION
             task.reasoning = f"Escalated from {original_type} due to low confidence ({task.confidence:.2f}) with action indicators"
             if self.verbose:
-                print(f"  ⬆️ Escalated: {original_type} → CODE_GENERATION (low confidence + action words)")
+                self.output_handler.log_info(f"Escalated: {original_type} -> CODE_GENERATION (low confidence + action words)")
 
         return task
 
@@ -236,7 +231,7 @@ class TaskRouter:
             return task
 
         if self.verbose:
-            print(f"  Using LLM for semantic classification...")
+            self.output_handler.log_info("Using LLM for semantic classification...")
 
         # Build a focused prompt for classification
         system_prompt = """You are a task classifier. Analyze the user's request and classify it into ONE of these categories:
@@ -280,7 +275,7 @@ What is the user's PRIMARY intent? Respond with JSON only."""
 
             if not provider_to_use:
                 if self.verbose:
-                    print(f"    No provider available for LLM classification")
+                    self.output_handler.log_info("No provider available for LLM classification")
                 return task
 
             # Make LLM call
@@ -342,19 +337,19 @@ What is the user's PRIMARY intent? Respond with JSON only."""
 
                     if self.verbose:
                         if old_type != new_type.value:
-                            print(f"    LLM reclassified: {old_type} -> {new_type.value} ({llm_confidence:.0%})")
+                            self.output_handler.log_info(f"LLM reclassified: {old_type} -> {new_type.value} ({llm_confidence:.0%})")
                         else:
-                            print(f"    LLM confirmed: {new_type.value} ({llm_confidence:.0%})")
+                            self.output_handler.log_info(f"LLM confirmed: {new_type.value} ({llm_confidence:.0%})")
                 else:
                     if self.verbose:
-                        print(f"    LLM uncertain ({llm_confidence:.0%}), keeping rule-based classification")
+                        self.output_handler.log_info(f"LLM uncertain ({llm_confidence:.0%}), keeping rule-based classification")
 
         except json.JSONDecodeError as e:
             if self.verbose:
-                print(f"    Failed to parse LLM response: {e}")
+                self.output_handler.log_info(f"Failed to parse LLM response: {e}")
         except Exception as e:
             if self.verbose:
-                print(f"    LLM classification failed: {e}")
+                self.output_handler.log_info(f"LLM classification failed: {e}")
 
         return task
 
@@ -415,6 +410,16 @@ What is the user's PRIMARY intent? Respond with JSON only."""
         """
         start_time = time.time()
 
+        # 0. Validate input at boundary
+        is_valid, error_message = self.validator.validate_user_input(user_input)
+        if not is_valid:
+            return ExecutionResult(
+                success=False,
+                output="",
+                error=f"Invalid input: {error_message}",
+                execution_time=time.time() - start_time
+            )
+
         # 1. Classify the task
         classified = self.classifier.classify(user_input)
 
@@ -427,7 +432,7 @@ What is the user's PRIMARY intent? Respond with JSON only."""
         # 3. LLM fallback for low-confidence classifications
         if self.use_llm_classification and classified.confidence < self.confidence_threshold:
             if self.verbose:
-                print(f"  Low confidence ({classified.confidence:.0%}) - trying LLM classification")
+                self.output_handler.log_info(f"Low confidence ({classified.confidence:.0%}) - trying LLM classification")
             classified = self._classify_with_llm(classified)
 
         # 4. Clarify intent if still needed (ask user when ambiguous)
@@ -442,7 +447,11 @@ What is the user's PRIMARY intent? Respond with JSON only."""
         if self.verbose and provider_name:
             model_info = f" ({model_name})" if model_name else ""
             source = "override" if classified.override_provider else "hint"
-            print(f"  Provider: {provider_name}{model_info} ({source}: {provider_hint})")
+            self.output_handler.log_provider_selection(
+                provider=provider_name,
+                model=model_name,
+                source=f"{source}: {provider_hint}"
+            )
 
         # 3. Apply pre-execution hooks
         for hook in self._pre_hooks:
@@ -470,7 +479,7 @@ What is the user's PRIMARY intent? Respond with JSON only."""
 
         # 6. Execute with resolved provider
         if self.verbose:
-            print(f"  Executing with: {strategy.name}")
+            self.output_handler.log_execution_start(strategy.name)
 
         # Pass resolved provider info to strategy if it supports it
         if hasattr(strategy, 'set_provider'):
@@ -515,6 +524,18 @@ What is the user's PRIMARY intent? Respond with JSON only."""
         Returns:
             ExecutionResult with output and metadata
         """
+        start_time = time.time()
+
+        # 0. Validate input at boundary
+        is_valid, error_message = self.validator.validate_user_input(user_input)
+        if not is_valid:
+            return ExecutionResult(
+                success=False,
+                output="",
+                error=f"Invalid input: {error_message}",
+                execution_time=time.time() - start_time
+            )
+
         # Classify first
         classified = self.classifier.classify(user_input)
 
@@ -534,7 +555,7 @@ What is the user's PRIMARY intent? Respond with JSON only."""
         # LLM fallback for low-confidence classifications
         if self.use_llm_classification and classified.confidence < self.confidence_threshold:
             if self.verbose:
-                print(f"  Low confidence ({classified.confidence:.0%}) - trying LLM classification")
+                self.output_handler.log_info(f"Low confidence ({classified.confidence:.0%}) - trying LLM classification")
             classified = self._classify_with_llm(classified)
 
         # Resolve provider (override takes precedence)
@@ -544,7 +565,11 @@ What is the user's PRIMARY intent? Respond with JSON only."""
         if self.verbose and provider_name:
             model_info = f" ({model_name})" if model_name else ""
             source = "override" if classified.override_provider else "hint"
-            print(f"  Provider: {provider_name}{model_info} ({source}: {provider_hint})")
+            self.output_handler.log_provider_selection(
+                provider=provider_name,
+                model=model_name,
+                source=f"{source}: {provider_hint}"
+            )
 
         # Apply pre-execution hooks
         for hook in self._pre_hooks:
@@ -572,7 +597,7 @@ What is the user's PRIMARY intent? Respond with JSON only."""
 
         # Execute with resolved provider
         if self.verbose:
-            print(f"  Executing with: {strategy.name}")
+            self.output_handler.log_execution_start(strategy.name)
 
         if hasattr(strategy, 'set_provider'):
             strategy.set_provider(provider_name, model_name)
@@ -612,7 +637,7 @@ What is the user's PRIMARY intent? Respond with JSON only."""
         if task.task_type in [TaskType.RESEARCH, TaskType.CODE_GENERATION]:
             if not self.orchestrator:
                 if self.verbose:
-                    print(f"  No orchestrator available for {task.task_type}")
+                    self.output_handler.log_info(f"No orchestrator available for {task.task_type}")
                 # Fall back to conversation for unsupported AI tasks
                 return self.strategies.get(TaskType.CONVERSATION)
 
@@ -644,12 +669,12 @@ What is the user's PRIMARY intent? Respond with JSON only."""
             if task.extracted_command:
                 if not self.classifier.is_safe_command(task.extracted_command):
                     if self.verbose:
-                        print(f"  Command blocked: {task.extracted_command}")
+                        self.output_handler.log_info(f"Command blocked: {task.extracted_command}")
                     return False
 
             # Confirm with user
             if self.verbose:
-                print(f"  Command: {task.extracted_command}")
+                self.output_handler.log_info(f"Command: {task.extracted_command}")
                 response = input("  Execute? [y/N]: ").strip().lower()
                 return response in ['y', 'yes']
 
@@ -660,18 +685,19 @@ What is the user's PRIMARY intent? Respond with JSON only."""
         return True
 
     def _log_classification(self, task: ClassifiedTask):
-        """Log classification decision."""
-        print(f"\nTask Classification:")
-        print(f"  Type: {task.task_type.value}")
-        print(f"  Confidence: {task.confidence:.2f}")
-        print(f"  Complexity: {task.complexity_score}/10")
-        print(f"  Reasoning: {task.reasoning}")
+        """Log classification decision using injected output handler."""
+        self.output_handler.log_classification(
+            task_type=task.task_type.value,
+            confidence=task.confidence,
+            complexity=task.complexity_score,
+            reasoning=task.reasoning
+        )
 
         if task.extracted_command:
-            print(f"  Command: {task.extracted_command}")
+            self.output_handler.log_info(f"Command: {task.extracted_command}")
 
         if task.requires_planning:
-            print(f"  Requires planning: Yes")
+            self.output_handler.log_info(f"Requires planning: Yes")
 
     def _update_metrics(self, task: ClassifiedTask, result: ExecutionResult):
         """Update routing metrics."""

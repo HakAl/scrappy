@@ -57,7 +57,8 @@ class TaskClassifier:
         self.direct_command_patterns = [
             # Package managers
             (r'^(pip|pip3)\s+(install|uninstall|freeze|list|show)', 1.0, "pip_command"),
-            (r'^(npm|npx|yarn|pnpm)\s+(install|add|remove|run|build|test|start)', 1.0, "npm_command"),
+            (r'^npx\s+', 1.0, "npx_command"),  # npx can run any package, so match broadly
+            (r'^(npm|yarn|pnpm)\s+(install|add|remove|run|build|test|start)', 1.0, "npm_command"),
             (r'^(cargo|rustup)\s+(install|build|run|test|add|remove)', 1.0, "cargo_command"),
             (r'^(gem|bundle)\s+(install|exec|update)', 1.0, "gem_command"),
             (r'^(go)\s+(get|build|run|test|mod)', 1.0, "go_command"),
@@ -73,7 +74,8 @@ class TaskClassifier:
             (r'^(python|python3|node|ruby|java|javac)\s+\S+', 0.9, "interpreter_command"),
 
             # Build/test commands
-            (r'^(make|cmake|gradle|mvn)\s*', 1.0, "build_command"),
+            # Negative lookahead to avoid matching "make a X" (which is create, not build)
+            (r'^(make|cmake|gradle|mvn)(?!\s+a\s)\s*', 1.0, "build_command"),
             (r'^pytest\s*', 1.0, "test_command"),
             (r'^(tox|nox|coverage)\s*', 1.0, "test_command"),
 
@@ -87,10 +89,11 @@ class TaskClassifier:
         # Code generation patterns - requires full agent loop
         self.code_generation_patterns = [
             # Explicit code writing
-            (r'\b(write|create|implement|build|develop|add)\s+.*(function|class|method|module|component|feature)', 0.95, "write_code"),
+            (r'\b(write|create|implement|build|develop|add)\s+.*(function|class|method|module|component|feature|endpoint|api|service)', 0.95, "write_code"),
             (r'\b(write|create|implement)\s+.*\.(py|js|ts|java|cpp|go|rs)\b', 0.9, "write_file"),
             (r'\brefactor\s+', 0.9, "refactor"),
             (r'\b(fix|patch|repair)\s+.*(bug|issue|error|problem)', 0.85, "fix_code"),
+            (r'\b(fix|patch|repair)\s+.*(broken|failing|failed)', 0.85, "fix_broken"),
             (r'\badd\s+.*to\s+', 0.75, "add_feature"),
             (r'\bmodify\s+', 0.8, "modify_code"),
             (r'\bupdate\s+.*(code|function|class|implementation)', 0.85, "update_code"),
@@ -100,7 +103,8 @@ class TaskClassifier:
             (r'\b(create|generate|write)\s+[\w\-]+\.\w+\b', 0.85, "create_any_file"),
             (r'\b(create|generate)\s+(requirements|package\.json|setup\.py|config|\.gitignore|\.env|Makefile|Dockerfile)', 0.9, "create_config_file"),
             (r'^please\s+(create|make|write|generate|add|build)\b', 0.8, "polite_action"),
-            (r'^(create|make|write|generate)\s+(?!a\s+list|an?\s+overview|a\s+summary)', 0.75, "imperative_action"),
+            # Match create/make/write commands - removed list from exclusions since we want to create lists too
+            (r'^(create|make|write|generate)\s+', 0.9, "imperative_action"),
 
             # Multi-step tasks
             (r'\bthen\s+', 0.7, "multi_step"),
@@ -121,15 +125,17 @@ class TaskClassifier:
             (r'^(what|where|why|how|when|which|who)\s+', 0.8, "question"),
             (r'\?$', 0.6, "question_mark"),
 
-            # Explanation requests
-            (r'\b(explain|describe|tell me about|what is|what are)\s+', 0.9, "explanation"),
-            (r'\bhow does\s+.*work', 0.95, "how_works"),
-            (r'\bwhat does\s+.*do', 0.9, "what_does"),
+            # Explanation requests (higher weight to win over create/write actions)
+            (r'\b(explain|describe|tell me about|what is|what are)\s+', 1.0, "explanation"),
+            (r'\bhow does\s+.*work', 1.0, "how_works"),
+            (r'\bwhat does\s+.*do', 1.0, "what_does"),
+            (r'\bhow to\s+', 0.95, "how_to"),
 
             # Analysis requests
             (r'\b(analyze|review|check|examine|inspect|look at)\s+', 0.8, "analysis"),
             (r'\b(find|search|locate|show me)\s+', 0.75, "search"),
-            (r'\b(list|enumerate|summarize|overview)\s+', 0.8, "listing"),
+            # Lower priority for listing to allow create/make/write actions to win
+            (r'\b(list|enumerate|summarize|overview)\s+', 0.7, "listing"),
 
             # Information gathering
             (r'\b(understand|learn about|tell me)\s+', 0.85, "information"),
@@ -410,8 +416,8 @@ class TaskClassifier:
             r'\bformat\b',         # format
             r'\bdd\s+if=',         # dd command
             r'\bmkfs\b',           # make filesystem
-            r'\b:()\s*{\s*:\|\:&\s*}\s*;',  # fork bomb
-            r'\bchmod\s+-R\s+777\s+/',  # chmod 777 on root
+            r':\s*\(\s*\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;',  # fork bomb - flexible spacing
+            r'\bchmod\s+-r\s+777\s+/',  # chmod 777 on root (lowercase after .lower())
             r'>\s*/dev/sd',        # write to disk
             r'\bwget.*\|\s*bash',  # download and execute
             r'\bcurl.*\|\s*bash',  # download and execute

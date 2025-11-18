@@ -1035,11 +1035,19 @@ class TestClarifyIntent:
 
     @pytest.fixture
     def router(self):
-        return TaskRouter(orchestrator=None, verbose=False)
+        # Use NullClarifier by default to avoid interactive prompts
+        from src.task_router.intent_clarifier import NullClarifier
+        return TaskRouter(
+            orchestrator=None,
+            verbose=False,
+            intent_clarifier=NullClarifier()
+        )
 
     @pytest.mark.unit
-    def test_clarify_intent_choice_1_research(self, router):
+    def test_clarify_intent_choice_1_research(self):
         """Test clarify intent with choice 1 (RESEARCH)."""
+        from src.task_router.intent_clarifier import InteractiveClarifier
+
         task = ClassifiedTask(
             original_input="explain how to create",
             task_type=TaskType.CODE_GENERATION,
@@ -1047,16 +1055,26 @@ class TestClarifyIntent:
             reasoning="Ambiguous"
         )
 
-        with patch('builtins.input', return_value='1'):
-            result = router._clarify_intent(task)
+        # Use injectable clarifier with mocked input
+        mock_input = Mock(return_value='1')
+        clarifier = InteractiveClarifier(input_fn=mock_input)
+        router = TaskRouter(
+            orchestrator=None,
+            verbose=False,
+            intent_clarifier=clarifier
+        )
+
+        result = router._clarify_intent(task)
 
         assert result.task_type == TaskType.RESEARCH
         assert result.confidence == 1.0
         assert "User clarified" in result.reasoning
 
     @pytest.mark.unit
-    def test_clarify_intent_choice_2_code_generation(self, router):
+    def test_clarify_intent_choice_2_code_generation(self):
         """Test clarify intent with choice 2 (CODE_GENERATION)."""
+        from src.task_router.intent_clarifier import InteractiveClarifier
+
         task = ClassifiedTask(
             original_input="explain how to create",
             task_type=TaskType.RESEARCH,
@@ -1064,15 +1082,24 @@ class TestClarifyIntent:
             reasoning="Ambiguous"
         )
 
-        with patch('builtins.input', return_value='2'):
-            result = router._clarify_intent(task)
+        mock_input = Mock(return_value='2')
+        clarifier = InteractiveClarifier(input_fn=mock_input)
+        router = TaskRouter(
+            orchestrator=None,
+            verbose=False,
+            intent_clarifier=clarifier
+        )
+
+        result = router._clarify_intent(task)
 
         assert result.task_type == TaskType.CODE_GENERATION
         assert result.confidence == 1.0
 
     @pytest.mark.unit
-    def test_clarify_intent_choice_3_keep_original(self, router):
+    def test_clarify_intent_choice_3_keep_original(self):
         """Test clarify intent with choice 3 (keep original)."""
+        from src.task_router.intent_clarifier import InteractiveClarifier
+
         task = ClassifiedTask(
             original_input="test",
             task_type=TaskType.RESEARCH,
@@ -1080,15 +1107,24 @@ class TestClarifyIntent:
             reasoning="Original"
         )
 
-        with patch('builtins.input', return_value='3'):
-            result = router._clarify_intent(task)
+        mock_input = Mock(return_value='3')
+        clarifier = InteractiveClarifier(input_fn=mock_input)
+        router = TaskRouter(
+            orchestrator=None,
+            verbose=False,
+            intent_clarifier=clarifier
+        )
+
+        result = router._clarify_intent(task)
 
         assert result.task_type == TaskType.RESEARCH
         assert result.confidence == 0.5  # Unchanged
 
     @pytest.mark.unit
-    def test_clarify_intent_eof_error(self, router):
+    def test_clarify_intent_eof_error(self):
         """Test clarify intent handles EOF error."""
+        from src.task_router.intent_clarifier import InteractiveClarifier
+
         task = ClassifiedTask(
             original_input="test",
             task_type=TaskType.RESEARCH,
@@ -1096,15 +1132,24 @@ class TestClarifyIntent:
             reasoning="Original"
         )
 
-        with patch('builtins.input', side_effect=EOFError):
-            result = router._clarify_intent(task)
+        mock_input = Mock(side_effect=EOFError)
+        clarifier = InteractiveClarifier(input_fn=mock_input)
+        router = TaskRouter(
+            orchestrator=None,
+            verbose=False,
+            intent_clarifier=clarifier
+        )
+
+        result = router._clarify_intent(task)
 
         # Should keep original on EOFError
         assert result.task_type == TaskType.RESEARCH
 
     @pytest.mark.unit
-    def test_clarify_intent_keyboard_interrupt(self, router):
+    def test_clarify_intent_keyboard_interrupt(self):
         """Test clarify intent handles keyboard interrupt."""
+        from src.task_router.intent_clarifier import InteractiveClarifier
+
         task = ClassifiedTask(
             original_input="test",
             task_type=TaskType.RESEARCH,
@@ -1112,8 +1157,15 @@ class TestClarifyIntent:
             reasoning="Original"
         )
 
-        with patch('builtins.input', side_effect=KeyboardInterrupt):
-            result = router._clarify_intent(task)
+        mock_input = Mock(side_effect=KeyboardInterrupt)
+        clarifier = InteractiveClarifier(input_fn=mock_input)
+        router = TaskRouter(
+            orchestrator=None,
+            verbose=False,
+            intent_clarifier=clarifier
+        )
+
+        result = router._clarify_intent(task)
 
         # Should keep original on KeyboardInterrupt
         assert result.task_type == TaskType.RESEARCH
