@@ -141,49 +141,29 @@
 
 
 ---
+RED
 
 we're working to improve src\cli the next task is: 
-Split God Objects - Split session.py (343 lines → 4 modules)
- - src/cli/context_manager.py - Context operations
- - src/cli/cache_manager.py - Cache operations
- - src/cli/rate_limiter.py - Rate limit tracking
- - src/cli/persistence.py - Session save/restore
+
 can you research the task and begin writing tests for the change?
 
+GREEN
 
-we completed the red phase of the task: split src\cli session.py. can you continue with the implementation?
+we completed the red phase of the task: split src\cli . can you continue with the implementation?
 
-we  Successfully implemented all 5 modules for the src/cli/core.py split:
 
-  | Module            | Tests | Description                                                            |
-  |-------------------|-------|------------------------------------------------------------------------|
-  | tool_detector.py  | 35    | Pure function needs_tool_support() for detecting if queries need tools |
-  | input_handler.py  | 32    | InputHandler class for multiline input and command parsing             |
-  | state_manager.py  | 42    | PlanStateManager class for plan state and task progression             |
-  | command_router.py | 48    | CommandRouter class for dispatching commands to handlers               |
-  | interactive.py    | 33    | InteractiveMode class for the main interactive loop                    |
+REFACTOR
 
-  Total: 190 new tests passing
+we
 
-  The new modules are ready for the refactor phase where the original core.py can be updated to use these extracted
-  components. can you finsih the refactoring please?
-
+can you finsih  CLISessionManager to delegate to these new classes (refactor phase of TDD)?
 
 
 CLI Refactoring
 
  Phase 2: Split God Objects -- Address SRP violations
 
- 2.1 Split core.py (808 lines → 5 modules)
-
- - src/cli/input_handler.py - Multiline input, command parsing
- - src/cli/command_router.py - Command routing logic
- - src/cli/state_manager.py - Plan state, task tracking
- - src/cli/interactive.py - Interactive mode loop
- - src/cli/tool_detector.py - Pattern matching for tools
-
  2.2 Split session.py (343 lines → 4 modules)
-
  - src/cli/context_manager.py - Context operations
  - src/cli/cache_manager.py - Cache operations
  - src/cli/rate_limiter.py - Rate limit tracking
