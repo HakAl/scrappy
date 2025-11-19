@@ -132,20 +132,20 @@ class CLIAgentManager:
                         io.secho("Rollback failed", fg="red")
 
             # Save agent task result to working memory
-            self.orchestrator.add_discovery(
+            self.orchestrator.working_memory.add_discovery(
                 f"Agent task '{task[:50]}...': {'completed' if result['success'] else 'incomplete'} in {result['iterations']} iterations",
                 "agent_task"
             )
 
         except KeyboardInterrupt:
             io.echo("\n\nAgent interrupted by user.")
-            self.orchestrator.add_discovery(
+            self.orchestrator.working_memory.add_discovery(
                 f"Agent task '{task[:50]}...' interrupted by user",
                 "agent_task"
             )
         except Exception as e:
             io.secho(f"\nAgent error: {e}", fg="red")
-            self.orchestrator.add_discovery(
+            self.orchestrator.working_memory.add_discovery(
                 f"Agent task '{task[:50]}...' failed: {str(e)[:50]}",
                 "agent_task"
             )

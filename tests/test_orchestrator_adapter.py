@@ -433,19 +433,20 @@ class TestAgentOrchestratorAdapter:
     @pytest.mark.unit
     def test_remember_file_read(self, mock_orchestrator):
         """Test remember_file_read proxy method."""
-        mock_orchestrator.remember_file_read = Mock()
+        mock_working_memory = Mock()
+        mock_orchestrator.working_memory = mock_working_memory
 
         adapter = AgentOrchestratorAdapter(mock_orchestrator)
         adapter.remember_file_read("/path/to/file.py", "file content", 100)
 
-        mock_orchestrator.remember_file_read.assert_called_once_with(
+        mock_working_memory.remember_file_read.assert_called_once_with(
             "/path/to/file.py", "file content", 100
         )
 
     @pytest.mark.unit
-    def test_remember_file_read_no_method(self, mock_orchestrator):
-        """Test remember_file_read when orchestrator doesn't have method."""
-        del mock_orchestrator.remember_file_read
+    def test_remember_file_read_no_working_memory(self, mock_orchestrator):
+        """Test remember_file_read when orchestrator doesn't have working_memory."""
+        del mock_orchestrator.working_memory
 
         adapter = AgentOrchestratorAdapter(mock_orchestrator)
 
@@ -455,19 +456,20 @@ class TestAgentOrchestratorAdapter:
     @pytest.mark.unit
     def test_remember_search(self, mock_orchestrator):
         """Test remember_search proxy method."""
-        mock_orchestrator.remember_search = Mock()
+        mock_working_memory = Mock()
+        mock_orchestrator.working_memory = mock_working_memory
 
         adapter = AgentOrchestratorAdapter(mock_orchestrator)
         adapter.remember_search("test query", ["result1", "result2"])
 
-        mock_orchestrator.remember_search.assert_called_once_with(
+        mock_working_memory.remember_search.assert_called_once_with(
             "test query", ["result1", "result2"]
         )
 
     @pytest.mark.unit
-    def test_remember_search_no_method(self, mock_orchestrator):
-        """Test remember_search when orchestrator doesn't have method."""
-        del mock_orchestrator.remember_search
+    def test_remember_search_no_working_memory(self, mock_orchestrator):
+        """Test remember_search when orchestrator doesn't have working_memory."""
+        del mock_orchestrator.working_memory
 
         adapter = AgentOrchestratorAdapter(mock_orchestrator)
 
@@ -477,19 +479,20 @@ class TestAgentOrchestratorAdapter:
     @pytest.mark.unit
     def test_remember_git_operation(self, mock_orchestrator):
         """Test remember_git_operation proxy method."""
-        mock_orchestrator.remember_git_operation = Mock()
+        mock_working_memory = Mock()
+        mock_orchestrator.working_memory = mock_working_memory
 
         adapter = AgentOrchestratorAdapter(mock_orchestrator)
         adapter.remember_git_operation("commit", "Successfully committed")
 
-        mock_orchestrator.remember_git_operation.assert_called_once_with(
+        mock_working_memory.remember_git_operation.assert_called_once_with(
             "commit", "Successfully committed"
         )
 
     @pytest.mark.unit
-    def test_remember_git_operation_no_method(self, mock_orchestrator):
-        """Test remember_git_operation when orchestrator doesn't have method."""
-        del mock_orchestrator.remember_git_operation
+    def test_remember_git_operation_no_working_memory(self, mock_orchestrator):
+        """Test remember_git_operation when orchestrator doesn't have working_memory."""
+        del mock_orchestrator.working_memory
 
         adapter = AgentOrchestratorAdapter(mock_orchestrator)
 

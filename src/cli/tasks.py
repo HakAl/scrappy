@@ -79,7 +79,7 @@ class CLITaskExecution:
             steps = [steps]  # Convert to list for tracking
 
         # Save plan to working memory
-        self.orchestrator.add_discovery(
+        self.orchestrator.working_memory.add_discovery(
             f"Created plan for '{task}' with {len(steps) if isinstance(steps, list) else 1} steps",
             "task_plan"
         )
@@ -144,7 +144,7 @@ class CLITaskExecution:
             conclusion = str(response)[:200]
 
         # Save reasoning result to working memory
-        self.orchestrator.add_discovery(
+        self.orchestrator.working_memory.add_discovery(
             f"Reasoning on '{question[:50]}...': {conclusion[:100]}...",
             "reasoning"
         )

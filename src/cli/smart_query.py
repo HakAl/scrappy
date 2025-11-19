@@ -351,11 +351,11 @@ Provide a helpful answer based on your understanding of the query intent."""
 
         # Save smart query research to working memory
         if tools_used > 0:
-            self.orchestrator.remember_search(
+            self.orchestrator.working_memory.remember_search(
                 f"smart_query: {query}",
                 research_results[:5]  # Save top 5 research results
             )
-            self.orchestrator.add_discovery(
+            self.orchestrator.working_memory.add_discovery(
                 f"Smart query '{query[:50]}...' classified as {classification.primary_intent.intent.value}, researched {tools_used} sources",
                 "smart_query"
             )

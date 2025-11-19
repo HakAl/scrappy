@@ -99,7 +99,7 @@ class CLIMultiProvider:
         io.echo(synthesis)
 
         # Save synthesis result to working memory
-        self.orchestrator.add_discovery(
+        self.orchestrator.working_memory.add_discovery(
             f"Synthesized {len(results)} provider responses for '{prompt[:50]}...'",
             "synthesis"
         )
@@ -168,7 +168,7 @@ class CLIMultiProvider:
             )
 
             # Save delegation result to working memory
-            self.orchestrator.add_discovery(
+            self.orchestrator.working_memory.add_discovery(
                 f"Delegated '{prompt[:40]}...' to {provider} ({response.tokens_used} tokens)",
                 "delegation"
             )

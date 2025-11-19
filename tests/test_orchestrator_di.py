@@ -194,8 +194,8 @@ class TestDependencyInjection:
             output=NullOutput()
         )
 
-        # Call method that delegates to working memory
-        summary = orch.get_working_memory_summary()
+        # Access working memory directly
+        summary = orch.working_memory.get_summary()
 
         assert summary == {'files_cached': 5}
         mock_memory.get_summary.assert_called_once()

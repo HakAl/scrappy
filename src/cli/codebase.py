@@ -122,7 +122,7 @@ class CLICodebaseAnalysis:
                 bar.update(1)
 
             # Add discovery to working memory
-            self.orchestrator.add_discovery(
+            self.orchestrator.working_memory.add_discovery(
                 f"Explored codebase: {result.get('total_files', 0)} files, {', '.join(result.get('directories', [])[:5])}",
                 str(path)
             )
@@ -140,7 +140,7 @@ class CLICodebaseAnalysis:
                 bar.update(1)
 
             # Still add to working memory as a discovery
-            self.orchestrator.add_discovery(
+            self.orchestrator.working_memory.add_discovery(
                 f"Explored external codebase: {structure.get('total_files', 0)} files",
                 str(path)
             )

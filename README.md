@@ -196,8 +196,6 @@ The system uses a `TaskRouter` to classify user input and route it to the most e
 
 This ensures that simple tasks are instant and free, while complex tasks use the best available model without wasting your quota.
 
-![Architecture Diagram](https://raw.githubusercontent.com/HakAl/scrappy/main/docs/architecture.png)  <!-- You will need to add this image to your repo -->
-
 For more information, please see the detailed documentation:
 *   [Architecture Deep Dive](docs/ARCHITECTURE.md)
 *   [Task Routing Logic](docs/task_routing.md)

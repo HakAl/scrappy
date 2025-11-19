@@ -234,22 +234,8 @@ Critical Issues
 **RED**
 
 we're working to improve src\orchestrator the next task is: 
- Break up core.py - Extract Provider Registration
-
-  1. Create src/orchestrator/registration.py:
-
-  class ProviderRegistrar:
-      """Handles provider auto-registration"""
-
-      def __init__(self, registry: ProviderRegistry, output: OutputInterface):
-          ...
-
-      def auto_register_all(self) -> Dict[str, bool]:
-          """Extract from core.py:113-148"""
-          # Returns success/failure status for each provider
-          ...
-
-  2. Move ~40 lines from core.py
+ Break up core.py - 
+ 
  
 can you research the task and start with tests?
 
@@ -266,32 +252,39 @@ they're fully tested and ready for integration in src/. can you complete the ref
   ---
   Phase 3: Extract and Decompose God Object
 
-  Break up core.py into focused classes
 
-  3.3 Extract Provider Registration
+  2. Extract ProviderStatusReporter (lines 211-263)
 
-  1. Create src/orchestrator/registration.py:
+  print_provider_status() and get_provider_selection_info() are presentation logic - ~50 lines.
 
-  class ProviderRegistrar:
-      """Handles provider auto-registration"""
+  3. Extract UsageReporter (lines 729-777)
 
-      def __init__(self, registry: ProviderRegistry, output: OutputInterface):
-          ...
+  get_usage_report(), get_cache_stats(), clear_cache(), toggle_cache() - cohesive reporting unit - ~50 lines.
 
-      def auto_register_all(self) -> Dict[str, bool]:
-          """Extract from core.py:113-148"""
-          # Returns success/failure status for each provider
-          ...
+  4. Merge Rate Limit Logic into RateLimitTracker (lines 368-438, 837-891)
 
-  2. Move ~40 lines from core.py
+  get_recommended_provider(), is_rate_limited(), get_rate_limit_status(), get_remaining_quota(),
+  check_rate_limit_warnings(), reset_rate_tracking() - these already depend on RateLimitTracker and could be methods
+   on it - ~120 lines.
 
-  ---
-  3.4 Result: Slim AgentOrchestrator
+  5. Move Async Helpers to DelegationManager (lines 674-725)
 
-  After extraction, core.py should be ~400-500 lines:
-  - Constructor with DI
-  - High-level orchestration methods
-  - Delegation to specialized managers
+  multi_provider_query_async() and run_async() - ~50 lines.
+
+  Summary
+
+  | Extraction                    | Lines Saved | Complexity Reduction      |
+  |-------------------------------|-------------|---------------------------|
+  | Remove pass-throughs          | ~25         | High (API simplification) |
+  | Rate limit → RateLimitTracker | ~120        | High                      |
+  | ProviderStatusReporter        | ~50         | Medium                    |
+  | UsageReporter                 | ~50         | Medium                    |
+  | Async → DelegationManager     | ~50         | Low                       |
+
+  Total: ~295 lines (could reduce to ~600 lines)
+
+  The biggest win is merging rate limit logic into RateLimitTracker since it already has all the data. The
+  pass-through removal is quick and cleans up the API. Want me to implement any of these?
 
   ---
   Phase 4: Consolidate and Clean

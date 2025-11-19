@@ -12,6 +12,57 @@ from src.providers.base import LLMResponse
 from src.orchestrator_adapter import NullContext, ContextProvider
 
 
+class MockWorkingMemory:
+    """Mock working memory for testing."""
+
+    def __init__(self):
+        self._data = {
+            'files': {},
+            'searches': [],
+            'git_ops': [],
+            'discoveries': []
+        }
+
+    def remember_file_read(self, path: str, content: str, lines: int = 0):
+        """Store file read in memory."""
+        self._data['files'][path] = {'content': content, 'lines': lines}
+
+    def remember_search(self, query: str, results: list):
+        """Store search results in memory."""
+        self._data['searches'].append({'query': query, 'results': results})
+
+    def remember_git_operation(self, operation: str, output: str):
+        """Store git operation in memory."""
+        self._data['git_ops'].append({'operation': operation, 'output': output})
+
+    def add_discovery(self, finding: str, location: str = ""):
+        """Add a discovery to memory."""
+        self._data['discoveries'].append({'content': finding, 'source': location})
+
+    def get_summary(self) -> dict:
+        """Get summary of working memory."""
+        return {
+            'files_cached': len(self._data['files']),
+            'cached_files': list(self._data['files'].keys()),
+            'recent_searches': len(self._data['searches']),
+            'git_operations': len(self._data['git_ops']),
+            'discoveries': len(self._data['discoveries'])
+        }
+
+    def get_context_string(self) -> str:
+        """Get context string for LLM augmentation."""
+        return ""
+
+    def clear(self):
+        """Clear all working memory."""
+        self._data = {
+            'files': {},
+            'searches': [],
+            'git_ops': [],
+            'discoveries': []
+        }
+
+
 def make_response(
     content: str = '{"thought": "test", "action": "complete", "is_complete": true}',
     provider: str = "mock",
@@ -121,12 +172,9 @@ class ConfigurableTestOrchestrator:
 
         # Storage for discoveries
         self._discoveries = []
-        self._working_memory = {
-            'files': {},
-            'searches': [],
-            'git_ops': [],
-            'discoveries': []
-        }
+        self.working_memory = MockWorkingMemory()
+        # Keep _working_memory as reference for backwards compatibility in tests
+        self._working_memory = self.working_memory._data
 
     def list_available(self) -> List[str]:
         """Return available providers."""
@@ -206,21 +254,15 @@ class ConfigurableTestOrchestrator:
     def add_discovery(self, content: str, source: str = "") -> None:
         """Add a discovery to working memory."""
         self._discoveries.append({'content': content, 'source': source})
-        self._working_memory['discoveries'].append({'content': content, 'source': source})
+        self.working_memory.add_discovery(content, source)
 
     def explore_project(self, force: bool = False) -> dict:
         """Explore the project."""
         return {'status': 'cached' if not force else 'explored', 'total_files': 10}
 
     def get_working_memory_summary(self) -> dict:
-        """Get summary of working memory."""
-        return {
-            'files_cached': len(self._working_memory['files']),
-            'cached_files': list(self._working_memory['files'].keys()),
-            'recent_searches': len(self._working_memory['searches']),
-            'git_operations': len(self._working_memory['git_ops']),
-            'discoveries': len(self._working_memory['discoveries'])
-        }
+        """Get summary of working memory (deprecated, use working_memory.get_summary())."""
+        return self.working_memory.get_summary()
 
     def get_context_status(self) -> dict:
         """Get context status."""
@@ -327,13 +369,10 @@ class ConfigurableTestOrchestrator:
         pass
 
     def clear_working_memory(self) -> None:
-        """Clear working memory."""
-        self._working_memory = {
-            'files': {},
-            'searches': [],
-            'git_ops': [],
-            'discoveries': []
-        }
+        """Clear working memory (deprecated, use working_memory.clear())."""
+        self.working_memory.clear()
+        # Update reference
+        self._working_memory = self.working_memory._data
 
 
 class SimpleLLMAdapter:

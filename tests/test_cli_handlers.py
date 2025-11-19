@@ -536,7 +536,6 @@ class TestCLIAgentManager:
     def mock_orchestrator(self):
         """Create mock orchestrator."""
         orch = ConfigurableTestOrchestrator()
-        orch.add_discovery = Mock()
         return orch
 
     @pytest.mark.unit
@@ -739,8 +738,10 @@ class TestCLIAgentManager:
         output = io.get_output()
         assert "error" in output.lower()
         assert "Agent crashed" in output
-        # Should record discovery
-        mock_orchestrator.add_discovery.assert_called()
+        # Should record discovery in working memory
+        discoveries = mock_orchestrator.working_memory._data['discoveries']
+        assert len(discoveries) > 0
+        assert any("Crashing task" in d['content'] for d in discoveries)
 
     @pytest.mark.unit
     @patch('src.cli.agent_manager.CodeAgent')
@@ -769,9 +770,12 @@ class TestCLIAgentManager:
 
         manager.run_agent("Important task", io=io)
 
-        mock_orchestrator.add_discovery.assert_called()
-        call_args = mock_orchestrator.add_discovery.call_args
-        assert "Important task" in call_args[0][0]
-        assert "agent_task" in call_args[0]
+        # Should record discovery in working memory
+        discoveries = mock_orchestrator.working_memory._data['discoveries']
+        assert len(discoveries) > 0
+        # Find the discovery for this task
+        task_discovery = [d for d in discoveries if "Important task" in d['content']]
+        assert len(task_discovery) > 0
+        assert task_discovery[0]['source'] == "agent_task"
 
 

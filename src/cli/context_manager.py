@@ -77,7 +77,7 @@ class ContextManager:
             io.echo(f"Cache Exists: {'Yes' if status['cache_exists'] else 'No'}")
 
             # Show working memory status
-            mem_status = self.orchestrator.get_working_memory_summary()
+            mem_status = self.orchestrator.working_memory.get_summary()
             io.secho("\nSession Working Memory:", fg="magenta", bold=True)
             io.secho("-" * 50, fg="magenta")
             io.echo(f"Files Cached: {io.style(str(mem_status['files_cached']), fg='cyan')}")
@@ -124,7 +124,7 @@ class ContextManager:
             io.secho("Context cache cleared.", fg="green")
 
         elif args.lower() == "clearmem":
-            self.orchestrator.clear_working_memory()
+            self.orchestrator.working_memory.clear()
             io.secho("Session working memory cleared.", fg="green")
 
         elif args.lower() == "toggle":

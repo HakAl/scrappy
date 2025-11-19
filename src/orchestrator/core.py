@@ -132,7 +132,7 @@ class AgentOrchestrator:
             output=self.output,
             context=self.context,
             context_aware=self.context_aware,
-            get_working_memory_context=self.get_working_memory_context
+            get_working_memory_context=self.working_memory.get_context_string
         )
 
         # Auto-explore if requested
@@ -280,35 +280,6 @@ class AgentOrchestrator:
         """Get current codebase context status."""
         return self.context.get_status()
 
-    # Working Memory (delegates to WorkingMemory)
-
-    def remember_file_read(self, path: str, content: str, lines: int = 0):
-        """Store a file read in working memory."""
-        self.working_memory.remember_file_read(path, content, lines)
-
-    def remember_search(self, query: str, results: list):
-        """Store a search result in working memory."""
-        self.working_memory.remember_search(query, results)
-
-    def remember_git_operation(self, operation: str, output: str):
-        """Store a git operation result in working memory."""
-        self.working_memory.remember_git_operation(operation, output)
-
-    def add_discovery(self, finding: str, location: str = ""):
-        """Add a discovery/learning to working memory."""
-        self.working_memory.add_discovery(finding, location)
-
-    def get_working_memory_summary(self) -> dict:
-        """Get a summary of current working memory state."""
-        return self.working_memory.get_summary()
-
-    def get_working_memory_context(self) -> str:
-        """Build context string from working memory for LLM augmentation."""
-        return self.working_memory.get_context_string()
-
-    def clear_working_memory(self):
-        """Clear all working memory."""
-        self.working_memory.clear()
 
     # Session Management (delegates to SessionManager)
 

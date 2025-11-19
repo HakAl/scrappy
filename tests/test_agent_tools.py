@@ -68,10 +68,12 @@ class TestToolContext:
     def test_remember_file_read_with_orchestrator(self, context):
         """Test remembering file read when orchestrator is present."""
         mock_orch = Mock()
+        mock_working_memory = Mock()
+        mock_orch.working_memory = mock_working_memory
         context.orchestrator = mock_orch
 
         context.remember_file_read("test.py", "content", 10)
-        mock_orch.remember_file_read.assert_called_once_with("test.py", "content", 10)
+        mock_working_memory.remember_file_read.assert_called_once_with("test.py", "content", 10)
 
     @pytest.mark.unit
     def test_remember_file_read_without_orchestrator(self, context):
@@ -83,19 +85,23 @@ class TestToolContext:
     def test_remember_search_with_orchestrator(self, context):
         """Test remembering search when orchestrator is present."""
         mock_orch = Mock()
+        mock_working_memory = Mock()
+        mock_orch.working_memory = mock_working_memory
         context.orchestrator = mock_orch
 
         context.remember_search("TODO", ["file1", "file2"])
-        mock_orch.remember_search.assert_called_once_with("TODO", ["file1", "file2"])
+        mock_working_memory.remember_search.assert_called_once_with("TODO", ["file1", "file2"])
 
     @pytest.mark.unit
     def test_remember_git_operation(self, context):
         """Test remembering git operation."""
         mock_orch = Mock()
+        mock_working_memory = Mock()
+        mock_orch.working_memory = mock_working_memory
         context.orchestrator = mock_orch
 
         context.remember_git_operation("git status", "clean")
-        mock_orch.remember_git_operation.assert_called_once_with("git status", "clean")
+        mock_working_memory.remember_git_operation.assert_called_once_with("git status", "clean")
 
 
 class TestToolBaseClass:

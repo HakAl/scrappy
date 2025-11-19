@@ -129,7 +129,7 @@ class SessionPersistence:
                     io.echo(f"Error reading session: {e}")
 
             # Show current memory stats
-            mem = self.orchestrator.get_working_memory_summary()
+            mem = self.orchestrator.working_memory.get_summary()
             io.secho("\nCurrent Session Memory:", bold=True)
             io.echo(f"  Files in memory: {mem['files_cached']}")
             io.echo(f"  Searches: {mem['recent_searches']}")

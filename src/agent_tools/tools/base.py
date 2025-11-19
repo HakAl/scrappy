@@ -64,17 +64,17 @@ class ToolContext:
     def remember_file_read(self, path: str, content: str, lines: int):
         """Store file read in working memory."""
         if self.orchestrator:
-            self.orchestrator.remember_file_read(path, content, lines)
+            self.orchestrator.working_memory.remember_file_read(path, content, lines)
 
     def remember_search(self, query: str, results: list):
         """Store search results in working memory."""
         if self.orchestrator:
-            self.orchestrator.remember_search(query, results)
+            self.orchestrator.working_memory.remember_search(query, results)
 
     def remember_git_operation(self, operation: str, result: str):
         """Store git operation result in working memory."""
         if self.orchestrator:
-            self.orchestrator.remember_git_operation(operation, result)
+            self.orchestrator.working_memory.remember_git_operation(operation, result)
 
 
 @dataclass
