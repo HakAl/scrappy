@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from ..task_router import TaskRouter, ClassifiedTask
-from ..orchestrator import AgentOrchestrator
+from ..orchestrator.protocols import Orchestrator
 
 
 class CLITaskRouterHandler:
@@ -28,7 +28,7 @@ class CLITaskRouterHandler:
 
     def __init__(
         self,
-        orchestrator: AgentOrchestrator,
+        orchestrator: Orchestrator,
         project_root: Optional[Path] = None,
         auto_confirm: bool = False
     ) -> None:

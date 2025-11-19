@@ -25,7 +25,7 @@ from .utils.session_utils import (
 from .utils.cli_factory import initialize_cli_handlers
 
 if TYPE_CHECKING:
-    from ..orchestrator import AgentOrchestrator
+    from ..orchestrator.protocols import Orchestrator
 
 
 class CommandRouter:
@@ -34,7 +34,7 @@ class CommandRouter:
     def __init__(
         self,
         io: CLIIOProtocol,
-        orchestrator: "AgentOrchestrator",
+        orchestrator: "Orchestrator",
         state_manager: Optional[PlanStateManager] = None
     ) -> None:
         """

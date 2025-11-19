@@ -234,21 +234,24 @@ Critical Issues
 **RED**
 
 we're working to improve src\orchestrator the next task is: 
-Consolidate and Clean - Add Input Validation
+Consolidate and Clean - Remaining task:
 
-  1. Create validation in DelegationManager.delegate():
+  - Update type hints throughout codebase - Optional refactoring to replace AgentOrchestrator type hints with
+  Orchestrator Protocol where appropriate for looser coupling.
 
-  def delegate(self, prompt: str, temperature: float = 0.7, max_tokens: Optional[int] = None, ...):
-      if not prompt or not prompt.strip():
-          raise ValueError("prompt cannot be empty")
-      if not 0.0 <= temperature <= 2.0:
-          raise ValueError(f"temperature must be 0.0-2.0, got {temperature}")
-      if max_tokens is not None and max_tokens <= 0:
-          raise ValueError(f"max_tokens must be positive, got {max_tokens}")
-      ...
+Usage:
 
-  2. Write tests for validation edge cases first
-can you research the task and start with tests?
+  from src.orchestrator import Orchestrator
+
+  def use_orchestrator(orch: Orchestrator) -> Dict:
+      return orch.get_usage_report()
+  Todos
+  ☒ Write tests for Orchestrator Protocol
+  ☒ Create src/orchestrator/protocols.py with Orchestrator Protocol
+  ☒ Verify AgentOrchestrator implements Protocol
+  ☒ Run full test suite to verify no regressions
+  ☐ Update type hints throughout codebase to use Protocol
+can you research the task and start with tests? are new tests needed? 
 
 **GREEN**
 
@@ -264,27 +267,8 @@ they're fully tested and ready for integration in src/. can you complete the ref
   Phase 4: Consolidate and Clean
 
   ---
-  4.2 Add Input Validation
-
-  1. Create validation in DelegationManager.delegate():
-
-  def delegate(self, prompt: str, temperature: float = 0.7, max_tokens: Optional[int] = None, ...):
-      if not prompt or not prompt.strip():
-          raise ValueError("prompt cannot be empty")
-      if not 0.0 <= temperature <= 2.0:
-          raise ValueError(f"temperature must be 0.0-2.0, got {temperature}")
-      if max_tokens is not None and max_tokens <= 0:
-          raise ValueError(f"max_tokens must be positive, got {max_tokens}")
-      ...
-
-  2. Write tests for validation edge cases first
-
-  ---
   4.3 Add Protocol for Orchestrator
 
-  Fixes: Issue #14 (No Clear Abstractions)
-
-  Steps:
   1. Create src/orchestrator/protocols.py:
 
   from typing import Protocol
@@ -328,64 +312,3 @@ they're fully tested and ready for integration in src/. can you complete the ref
   1. Add docstrings to all new classes
   2. Update any architecture docs
   3. Document the DI pattern for future contributors
-
-  ---
-  Timeline-Free Checklist
-
-  Phase 1 Checklist
-
-  - Create OutputInterface protocol and implementations
-  - Write tests for output classes
-  - Replace all print() calls in core.py (40+)
-  - Replace all print() calls in provider_selector.py
-  - Add DI parameters to AgentOrchestrator.__init__
-  - Replace all except Exception: pass (6+ locations)
-  - Update ConfigurableTestOrchestrator in helpers
-
-  Phase 2 Checklist
-
-  - Create tests/test_orchestrator_core.py
-  - Write tests for delegate() method
-  - Write tests for delegate_async() method
-  - Write tests for background task management
-  - Improve test_task_executor.py with behavior tests
-  - Achieve 80%+ coverage of core.py
-
-  Phase 3 Checklist
-
-  - Write tests for DelegationManager
-  - Create delegation.py and extract code
-  - Write tests for BackgroundTaskManager
-  - Create background.py and extract code
-  - Create registration.py and extract code
-  - Verify core.py is now ~400-500 lines
-  - All existing tests still pass
-
-  Phase 4 Checklist
-
-  - Create config.py with centralized constants
-  - Update all references to use centralized config
-  - Add input validation to delegation
-  - Write validation edge case tests
-  - Create Orchestrator protocol
-  - Update type hints to use protocol
-
-  Phase 5 Checklist
-
-  - Run full test suite with coverage
-  - All coverage targets met
-  - Re-enable skipped tests
-  - Add docstrings to new classes
-  - Update architecture documentation
-
-  ---
-  Dependencies Between Phases
-
-  Phase 1 ──→ Phase 2 ──→ Phase 3 ──→ Phase 4 ──→ Phase 5
-     │           │           │           │
-     │           │           │           └─ Can start after Phase 3
-     │           │           └─ Requires Phase 2 tests as safety net
-     │           └─ Requires Phase 1 for testability
-     └─ No dependencies, start immediately
-
-  Note: Phase 4.1 (Centralize Config) can run in parallel with Phase 3 since it's independent.

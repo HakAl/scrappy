@@ -20,7 +20,7 @@ from ..task_router_handler import CLITaskRouterHandler
 
 if TYPE_CHECKING:
     from ..core import CLI
-    from ...orchestrator import AgentOrchestrator
+    from ...orchestrator.protocols import Orchestrator
 
 
 def get_io_interface(
@@ -92,7 +92,7 @@ def extract_context_options(ctx: Any) -> Dict[str, Any]:
     }
 
 
-def initialize_cli_handlers(orchestrator: "AgentOrchestrator", session_start: datetime) -> Dict[str, Any]:
+def initialize_cli_handlers(orchestrator: "Orchestrator", session_start: datetime) -> Dict[str, Any]:
     """
     Create and return all CLI component handlers.
 

@@ -8,7 +8,7 @@ enabling consistent behavior, testability, and type checking across the CLI laye
 from typing import TYPE_CHECKING, Protocol, Dict, runtime_checkable
 
 if TYPE_CHECKING:
-    from ..orchestrator import AgentOrchestrator
+    from ..orchestrator.protocols import Orchestrator
 
 
 @runtime_checkable
@@ -18,7 +18,7 @@ class CLIHandlerProtocol(Protocol):
     All CLI handlers should implement this protocol to ensure consistent
     behavior and enable proper type checking. The protocol defines:
 
-    - orchestrator: Reference to the AgentOrchestrator for LLM operations
+    - orchestrator: Reference to the Orchestrator for LLM operations
     - Lifecycle methods: initialize() and cleanup()
     - Diagnostic methods: get_status() and reset()
 
@@ -45,7 +45,7 @@ class CLIHandlerProtocol(Protocol):
                 ...
     """
 
-    orchestrator: "AgentOrchestrator"
+    orchestrator: "Orchestrator"
 
     def initialize(self) -> None:
         """Initialize the handler.

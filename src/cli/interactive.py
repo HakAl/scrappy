@@ -29,7 +29,7 @@ from .error_recovery import error_recovery_context, graceful_degrade
 from .logging import get_logger, CLILogger
 
 if TYPE_CHECKING:
-    from ..orchestrator import AgentOrchestrator
+    from ..orchestrator.protocols import Orchestrator
 
 
 class InteractiveMode:
@@ -38,7 +38,7 @@ class InteractiveMode:
     def __init__(
         self,
         io: CLIIOProtocol,
-        orchestrator: "AgentOrchestrator",
+        orchestrator: "Orchestrator",
         state_manager: Optional[PlanStateManager] = None
     ) -> None:
         """

@@ -6,6 +6,13 @@
 - 2 audit logs created: 
   - .agent_audit.json
   - .llm_agent_audit.json
+  usually happens because handlers are being added every time the function runs, rather than just once at startup.
+The Fix:
+Check if the logger already has handlers before adding a new one.
+If you are using logging.getLogger(__name__) and also logging.getLogger(), the child logger might be propagating the message up to the root logger, causing it to print twice.
+Fix: Set logger.propagate = False.
+---
+
 - Premature Task Completion: Agent stops after 4 iterations (7 seconds), completing ~5% of the task and declaring success
   - Naive Completion Detection: Any write_file operation triggers "task complete"
 - No Task Decomposition: Doesn't break complex tasks into tracked subtasks

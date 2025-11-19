@@ -29,6 +29,7 @@ from .memory import WorkingMemory
 from .session import SessionManager
 from .task_executor import TaskExecutor
 from .provider_selector import ProviderSelector
+from .protocols import Orchestrator
 
 __all__ = [
     'AgentOrchestrator',
@@ -39,4 +40,5 @@ __all__ = [
     'SessionManager',
     'TaskExecutor',
     'ProviderSelector',
+    'Orchestrator',
 ]

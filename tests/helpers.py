@@ -245,6 +245,17 @@ class ConfigurableTestOrchestrator:
             tokens_used=self.response_tokens
         )
 
+    async def delegate_async(
+        self,
+        provider_name: str,
+        prompt: str = "",
+        **kwargs
+    ) -> LLMResponse:
+        """
+        Async delegate - wraps sync delegate for Protocol compliance.
+        """
+        return self.delegate(provider_name=provider_name, prompt=prompt, **kwargs)
+
     def reset_tracking(self) -> None:
         """Reset call tracking (useful between test phases)."""
         self.delegate_calls = []

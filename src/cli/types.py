@@ -15,9 +15,9 @@ Usage:
 from typing import TYPE_CHECKING, Dict, List
 
 if TYPE_CHECKING:
-    from ..orchestrator import AgentOrchestrator
+    from ..orchestrator.protocols import Orchestrator
 
-#: Type alias for the AgentOrchestrator.
+#: Type alias for the Orchestrator Protocol.
 #:
 #: Used in TYPE_CHECKING blocks to provide type hints without runtime import.
 #: This allows handlers to be typed correctly while avoiding circular imports.
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 #:
 #:     def __init__(self, orchestrator: OrchestratorType) -> None:
 #:         self.orchestrator = orchestrator
-OrchestratorType = "AgentOrchestrator"
+OrchestratorType = "Orchestrator"
 
 #: Type alias for session operation result dictionaries.
 #:
