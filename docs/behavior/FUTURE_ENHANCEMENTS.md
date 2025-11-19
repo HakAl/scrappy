@@ -7,7 +7,6 @@
 - [ ] Streaming execution support
 - [ ] Cost-aware provider selection
 - [ ] Rate limit awareness in routing decisions
-- [ ] Code review feature
 
 
 -------------------------
@@ -15,7 +14,6 @@
   - Batch processing - Run overnight analysis jobs
   - CI/CD integration - Automated code review, documentation generation
   - RAG pipeline - Use local embeddings for semantic search
-
 
 ---
 

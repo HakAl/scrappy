@@ -2,14 +2,6 @@
 
 Allows any registered provider to act as the orchestrator brain. The orchestrator can automatically learns about your codebase and injects relevant context into prompts.
 
-## The Good
-
-  1. test_rate_limiter.py - 1,387 lines of excellent behavior-testing
-  2. tests/helpers.py - Well-designed ConfigurableTestOrchestrator, MockIO
-  3. Type hints throughout
-  4. Good JSON recovery in task_executor.py
-  5. Composition pattern - orchestrator delegates to specialists
-
 ## Issues
 
 <!-- todo -->
@@ -19,30 +11,48 @@ eg:   if complexity_score <= 3:
       return [{"step": "execute", "description": task, "provider_type": "fast"}]
 - Update planning prompt to include: "For simple tasks, return 1-2 steps maximum. Minimize unnecessary steps."
 
+## Dependency Injection Pattern
 
----
+The orchestrator uses constructor injection throughout, enabling testability and loose coupling.
 
-**RED**
+```
+AgentOrchestrator
+    |
+    +-- ProviderRegistry (injected)
+    +-- ResponseCache (injected)
+    +-- RateLimitTracker (injected)
+    +-- ProviderSelector (injected)
+    +-- OutputInterface (injected)
+    |
+    +-- DelegationManager (composed internally)
+    +-- UsageReporter (composed internally)
+    +-- ProviderStatusReporter (composed internally)
+```
 
-we're working to improve src\orchestrator the next task is: 
+## Core Components
 
-can you research the task and start with tests?
+| Component | Responsibility |
+|-----------|----------------|
+| `DelegationManager` | LLM calls, retry/fallback logic, caching |
+| `ProviderSelector` | Provider routing, brain selection |
+| `UsageReporter` | Usage stats, cache management |
+| `ProviderStatusReporter` | Status display, selection info |
+| `OutputInterface` | Abstracted logging (Console/Null/Capturing) |
 
-**GREEN**
+## Key Protocols
 
-we completed the red phase of the task: 
+- `OutputInterface` - Swappable output (production vs test)
+- `Orchestrator` - Type hints for any orchestrator implementation
 
-**REFACTOR**
+## Testing
 
-we created:
-they're fully tested and ready for integration in src/. can you complete the refactor phase of TDD?
+Inject test doubles via constructors:
+```python
+orchestrator = AgentOrchestrator(
+    registry=mock_registry,
+    output=CapturingOutput(),  # Capture instead of print
+    ...
+)
+```
 
-  ---
-  Phase 5: Verify and Document
-
-  ---
-  5.3 Update Documentation
-
-  1. Add docstrings to all new classes
-  2. Update any architecture docs
-  3. Document the DI pattern for future contributors
+See `tests/helpers.py` for `ConfigurableTestOrchestrator`.
