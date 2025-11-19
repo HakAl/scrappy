@@ -25,8 +25,8 @@ import sys
 import io
 from pathlib import Path
 
-# Skip unless explicitly requested
-pytestmark = pytest.mark.skip(reason="Integration test requires API keys and network access")
+# Benchmark test - excluded by default, run with: pytest -m benchmark
+pytestmark = pytest.mark.benchmark
 
 
 def _setup_windows_unicode():
@@ -71,7 +71,6 @@ def clean_test_environment():
 
 
 
-@pytest.mark.skip(reason="Echo command triggers interactive prompts")
 def test_agent_spring_vite_full_stack(clean_test_environment):
     """
     Test the agent's ability to create a full-stack Spring + React app.
