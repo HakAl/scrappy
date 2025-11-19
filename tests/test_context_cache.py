@@ -240,16 +240,16 @@ class TestErrorHandling:
 
     @pytest.mark.unit
     def test_invalid_datetime_handled(self, tmp_path):
-        """load() handles invalid datetime strings."""
+        """load() handles invalid datetime strings by setting to None."""
         cache_file = tmp_path / "cache.json"
         cache_file.write_text('{"explored_at": "not-a-date"}')
 
         cache = ContextCache()
         result = cache.load(cache_file)
 
-        # Should load but keep as string (not crash)
+        # Should load but set invalid datetime to None (not crash)
         assert result is not None
-        assert result['explored_at'] == 'not-a-date'
+        assert result['explored_at'] is None
 
     @pytest.mark.unit
     def test_accepts_path_object(self, tmp_path):

@@ -4,11 +4,14 @@ Codebase context management for the LLM Agent Team.
 Provides automatic project exploration and context augmentation for prompts.
 """
 
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
 from .file_scanner import FileScanner
+
+logger = logging.getLogger(__name__)
 from .cache import ContextCache
 from .platform import PlatformDetector
 from .git_history import GitHistoryReader
@@ -36,6 +39,16 @@ class CodebaseContext:
             project_path: Path to project root. Defaults to current directory.
         """
         self.project_path = Path(project_path or ".").resolve()
+
+        # Validate path
+        self._path_valid = True
+        if not self.project_path.exists():
+            logger.warning(f"Project path does not exist: {self.project_path}")
+            self._path_valid = False
+        elif not self.project_path.is_dir():
+            logger.warning(f"Project path is not a directory: {self.project_path}")
+            self._path_valid = False
+
         self.summary: Optional[str] = None
         self.structure: dict = {}
         self.key_files: dict = {}
@@ -305,11 +318,12 @@ Be concise and technical. No fluff."""
         # Merge markers into structure
         structure.update(markers)
 
-        # Get directories
-        skip_dirs = get_paths_config()
-        for item in self.project_path.iterdir():
-            if item.is_dir() and not item.name.startswith('.') and item.name not in skip_dirs:
-                structure['directories'].append(item.name)
+        # Get directories (only if path is valid)
+        if self._path_valid and self.project_path.exists() and self.project_path.is_dir():
+            skip_dirs = get_paths_config()
+            for item in self.project_path.iterdir():
+                if item.is_dir() and not item.name.startswith('.') and item.name not in skip_dirs:
+                    structure['directories'].append(item.name)
 
         return structure
 

@@ -126,10 +126,13 @@ class ContextCache:
                     try:
                         result[key] = datetime.fromisoformat(value)
                     except ValueError:
-                        # Keep as string if not a valid datetime
-                        result[key] = value
+                        # Invalid datetime format - set to None and log warning
+                        logger.warning(f"Invalid datetime format for '{key}': {value}")
+                        result[key] = None
                 else:
-                    result[key] = value
+                    # Wrong type for datetime field - set to None
+                    logger.warning(f"Expected string for datetime field '{key}', got {type(value).__name__}")
+                    result[key] = None
             elif isinstance(value, dict):
                 result[key] = self._prepare_after_load(value)
             elif isinstance(value, list):
