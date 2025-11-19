@@ -37,69 +37,64 @@
 
 
 we're working to improve src\cli the next task is: 
-Massive Files - Single Responsibility - error_recovery.py 
- Create a new error_recovery/ package with focused modules:
+Massive Files - Single Responsibility validators.py
+Proposed Decomposition: validators/ Package
 
-  src/cli/error_recovery/
-      __init__.py          (~40 lines)  - Re-exports for backward compatibility
-      retry.py             (~100 lines) - retry_operation, safe_operation_with_recovery
-      fallback.py          (~120 lines) - with_fallback, fallback_providers, graceful_degrade
-      circuit_breaker.py   (~120 lines) - CircuitBreaker class
-      context.py           (~380 lines) - All error context managers
+  src/cli/validators/
+      __init__.py       # Re-exports for backward compatibility (~30 lines)
+      base.py           # ValidationError, shared patterns (~50 lines)
+      command.py        # Command validation domain (~120 lines)
+      path.py           # Path validation domain (~160 lines)
+      provider.py       # Provider validation domain (~110 lines)
 
-  Key Points
+  Module Details:
 
-  1. Backward compatibility: __init__.py re-exports all public APIs so existing imports like from
-  src.cli.error_recovery import retry_operation continue to work
-  2. Each module has one reason to change:
-    - retry.py - Changes to retry timing/strategy
-    - fallback.py - Changes to fallback selection logic
-    - circuit_breaker.py - Changes to circuit breaker behavior
-    - context.py - Changes to context manager behavior
-  3. Context managers stay together (380 lines) because they're tightly coupled - _RetryableErrorContext and
-  _SimpleErrorContext are implementations selected by error_recovery_context(). Could be split further later if
-  needed.
-  4. Tests require no changes - all existing imports will still work
+  base.py - Shared infrastructure
+  - ValidationError exception
+  - Shared regex patterns (CONTROL_CHARS_PATTERN, NEWLINE_PATTERN)
+
+  command.py - Command validation
+  - CommandValidationResult dataclass
+  - VALID_COMMANDS set
+  - MAX_COMMAND_LENGTH constant
+  - validate_command() function
+
+  path.py - Path validation
+  - PathValidationResult dataclass
+  - Path constants (MAX_PATH_LENGTH, MAX_PATH_COMPONENT_LENGTH)
+  - Path patterns (WINDOWS_INVALID_CHARS, GLOB_CHARS_PATTERN)
+  - validate_path() function
+
+  provider.py - Provider validation
+  - ProviderValidationResult dataclass
+  - VALID_PROVIDERS set
+  - MAX_PROVIDER_LENGTH constant
+  - validate_provider() function
+
+  __init__.py - Backward compatibility
+  from .base import ValidationError
+  from .command import CommandValidationResult, validate_command, VALID_COMMANDS
+  from .path import PathValidationResult, validate_path
+  from .provider import ProviderValidationResult, validate_provider, VALID_PROVIDERS
+
+  __all__ = [
+      'ValidationError',
+      'CommandValidationResult', 'validate_command', 'VALID_COMMANDS',
+      'PathValidationResult', 'validate_path',
+      'ProviderValidationResult', 'validate_provider', 'VALID_PROVIDERS',
+  ]
 can you research the task and start with tests?
+
 
 help with a plan to decompose?
 start with tests?
 implement
-
- The file has 5 distinct responsibilities that can be cleanly separated:
- 
-  ---
-  Decomposition Plan
-
-  Create a new error_recovery/ package with focused modules:
-
-  src/cli/error_recovery/
-      __init__.py          (~40 lines)  - Re-exports for backward compatibility
-      retry.py             (~100 lines) - retry_operation, safe_operation_with_recovery
-      fallback.py          (~120 lines) - with_fallback, fallback_providers, graceful_degrade
-      circuit_breaker.py   (~120 lines) - CircuitBreaker class
-      context.py           (~380 lines) - All error context managers
-
-  Key Points
-
-  1. Backward compatibility: __init__.py re-exports all public APIs so existing imports like from
-  src.cli.error_recovery import retry_operation continue to work
-  2. Each module has one reason to change:
-    - retry.py - Changes to retry timing/strategy
-    - fallback.py - Changes to fallback selection logic
-    - circuit_breaker.py - Changes to circuit breaker behavior
-    - context.py - Changes to context manager behavior
-  3. Context managers stay together (380 lines) because they're tightly coupled - _RetryableErrorContext and
-  _SimpleErrorContext are implementations selected by error_recovery_context(). Could be split further later if
-  needed.
-  4. Tests require no changes - all existing imports will still work
+---
 
 
   ---
   2. Massive Files - Single Responsibility
 
-  - error_recovery.py - 710 lines
-  - validators.py - 512 lines
   - command_router.py - route() method is 192 lines with 30+ elif branches
 
   ---
