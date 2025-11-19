@@ -446,14 +446,14 @@ class TestCLISmartQuery:
     @pytest.mark.unit
     def test_safe_tool_call_returns_success_on_valid_result(self, mock_orchestrator):
         """Test _safe_tool_call returns success tuple on valid result."""
-        from src.cli.smart_query import CLISmartQuery
+        from src.cli.research_handlers.base import BaseResearchHandler
 
-        smart = CLISmartQuery(mock_orchestrator)
+        handler = BaseResearchHandler()
 
         def good_tool():
             return "Valid result"
 
-        success, result = smart._safe_tool_call(good_tool)
+        success, result = handler._safe_tool_call(good_tool)
 
         assert success is True
         assert result == "Valid result"
@@ -461,14 +461,14 @@ class TestCLISmartQuery:
     @pytest.mark.unit
     def test_safe_tool_call_returns_failure_on_error_result(self, mock_orchestrator):
         """Test _safe_tool_call returns failure when result contains Error."""
-        from src.cli.smart_query import CLISmartQuery
+        from src.cli.research_handlers.base import BaseResearchHandler
 
-        smart = CLISmartQuery(mock_orchestrator)
+        handler = BaseResearchHandler()
 
         def error_tool():
             return "Error: File not found"
 
-        success, result = smart._safe_tool_call(error_tool)
+        success, result = handler._safe_tool_call(error_tool)
 
         assert success is False
         assert "Error" in result
@@ -476,14 +476,14 @@ class TestCLISmartQuery:
     @pytest.mark.unit
     def test_safe_tool_call_handles_exceptions(self, mock_orchestrator):
         """Test _safe_tool_call catches exceptions and returns failure."""
-        from src.cli.smart_query import CLISmartQuery
+        from src.cli.research_handlers.base import BaseResearchHandler
 
-        smart = CLISmartQuery(mock_orchestrator)
+        handler = BaseResearchHandler()
 
         def throwing_tool():
             raise ValueError("Something went wrong")
 
-        success, result = smart._safe_tool_call(throwing_tool)
+        success, result = handler._safe_tool_call(throwing_tool)
 
         assert success is False
         assert "Error:" in result
@@ -492,14 +492,14 @@ class TestCLISmartQuery:
     @pytest.mark.unit
     def test_safe_tool_call_returns_failure_on_none(self, mock_orchestrator):
         """Test _safe_tool_call returns failure when result is None."""
-        from src.cli.smart_query import CLISmartQuery
+        from src.cli.research_handlers.base import BaseResearchHandler
 
-        smart = CLISmartQuery(mock_orchestrator)
+        handler = BaseResearchHandler()
 
         def none_tool():
             return None
 
-        success, result = smart._safe_tool_call(none_tool)
+        success, result = handler._safe_tool_call(none_tool)
 
         assert success is False
 

@@ -37,7 +37,7 @@
 
 
 we're working to improve src\cli the next task is: 
-JSON risk: No error handling around json.dumps() in logging.py:182
+God object: smart_query.smart_query() handles 9 different concerns in one method
 can you research the task and create a plan to fix?
 
 
@@ -50,7 +50,6 @@ implement
   ---
   3-6: Pattern Matching, Duplication, JSON, God Objects
 
-  - JSON risk: No error handling around json.dumps() in logging.py:182
   - God object: smart_query.smart_query() handles 9 different concerns in one method
 
   ---
