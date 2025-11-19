@@ -234,8 +234,9 @@ Critical Issues
 **RED**
 
 we're working to improve src\orchestrator the next task is: 
- Break up core.py - 
- 
+ Break up core.py - Extract ProviderStatusReporter (lines 211-263)
+
+  print_provider_status() and get_provider_selection_info() are presentation logic - ~50 lines.
  
 can you research the task and start with tests?
 
@@ -270,21 +271,6 @@ they're fully tested and ready for integration in src/. can you complete the ref
   5. Move Async Helpers to DelegationManager (lines 674-725)
 
   multi_provider_query_async() and run_async() - ~50 lines.
-
-  Summary
-
-  | Extraction                    | Lines Saved | Complexity Reduction      |
-  |-------------------------------|-------------|---------------------------|
-  | Remove pass-throughs          | ~25         | High (API simplification) |
-  | Rate limit → RateLimitTracker | ~120        | High                      |
-  | ProviderStatusReporter        | ~50         | Medium                    |
-  | UsageReporter                 | ~50         | Medium                    |
-  | Async → DelegationManager     | ~50         | Low                       |
-
-  Total: ~295 lines (could reduce to ~600 lines)
-
-  The biggest win is merging rate limit logic into RateLimitTracker since it already has all the data. The
-  pass-through removal is quick and cleans up the API. Want me to implement any of these?
 
   ---
   Phase 4: Consolidate and Clean

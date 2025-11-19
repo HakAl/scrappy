@@ -28,6 +28,7 @@ from .output import OutputInterface, ConsoleOutput
 from .delegation import DelegationManager
 from .background import BackgroundTaskManager
 from .registration import ProviderRegistrar
+from .status_reporter import ProviderStatusReporter
 
 
 class AgentOrchestrator:
@@ -113,8 +114,18 @@ class AgentOrchestrator:
         if auto_register:
             self._auto_register_providers()
             self._setup_brain(orchestrator_provider)
-            if show_provider_status:
-                self.print_provider_status()
+
+        # Initialize status reporter (after brain is set up)
+        self._status_reporter = ProviderStatusReporter(
+            registry=self.registry,
+            provider_selector=self.provider_selector,
+            output=self.output,
+            brain_name=self._brain_name,
+            verbose_selection=self.verbose_selection
+        )
+
+        if auto_register and show_provider_status:
+            self.print_provider_status()
 
         # Initialize task executor after brain is set up
         self.task_executor = TaskExecutor(
@@ -210,57 +221,11 @@ class AgentOrchestrator:
 
     def print_provider_status(self):
         """Print comprehensive provider status summary."""
-        self.output.info("\n" + "=" * 60)
-        self.output.info("PROVIDER CONFIGURATION SUMMARY")
-        self.output.info("=" * 60)
-
-        available = self.registry.list_available()
-        all_known = ['github_models', 'cerebras', 'groq', 'gemini', 'cohere']
-
-        self.output.info("\nProvider Status:")
-        for provider_name in all_known:
-            if provider_name in available:
-                reason = self.provider_selector._get_brain_selection_reason(provider_name)
-                status_str = f"  [OK] {provider_name:<15} - {reason}"
-            else:
-                status_str = f"  [--] {provider_name:<15} - NOT AVAILABLE (missing API key or package)"
-            self.output.info(status_str)
-
-        self.output.info(f"\nSelected Brain: {self._brain_name}")
-        if self._brain_name:
-            reason = self.provider_selector._get_brain_selection_reason(self._brain_name)
-            self.output.info(f"Selection Reason: {reason}")
-
-        self.output.info("\nSelection Priority: cerebras > groq > gemini")
-        self.output.info("Use --brain <provider> to override auto-selection")
-
-        if self.verbose_selection and self.provider_selector.get_selection_log():
-            self.output.info("\nSelection Log:")
-            for entry in self.provider_selector.get_selection_log():
-                self.output.info(f"  {entry}")
-
-        self.output.info("=" * 60 + "\n")
+        self._status_reporter.print_status()
 
     def get_provider_selection_info(self) -> dict:
         """Get detailed provider selection information."""
-        available = self.registry.list_available()
-        all_known = ['github_models', 'cerebras', 'groq', 'gemini', 'cohere']
-
-        provider_info = {}
-        for provider_name in all_known:
-            provider_info[provider_name] = {
-                'available': provider_name in available,
-                'reason': self.provider_selector._get_brain_selection_reason(provider_name) if provider_name in available else 'not available'
-            }
-
-        return {
-            'available_providers': available,
-            'all_known_providers': all_known,
-            'selected_brain': self._brain_name,
-            'selection_priority': ['cerebras', 'groq', 'gemini'],
-            'provider_details': provider_info,
-            'selection_log': self.provider_selector.get_selection_log()
-        }
+        return self._status_reporter.get_selection_info()
 
     # Context Management
 
