@@ -833,3 +833,151 @@ class TestJSONSerializationSafety:
 
         records = logger.get_records()
         assert len(records) == 1
+
+
+class TestLoggerRegistry:
+    """Test LoggerRegistry for encapsulating global state."""
+
+    @pytest.mark.unit
+    def test_registry_creation(self):
+        """LoggerRegistry should be created with default values."""
+        from src.cli.logging import LoggerRegistry
+
+        registry = LoggerRegistry()
+
+        assert registry._loggers == {}
+        assert registry._default_io is None
+        assert registry._default_level == logging.INFO
+
+    @pytest.mark.unit
+    def test_registry_get_logger_creates_new_logger(self):
+        """Registry get_logger should create new logger instance."""
+        from src.cli.logging import LoggerRegistry
+        from tests.helpers import MockIO
+
+        registry = LoggerRegistry()
+        io = MockIO()
+
+        logger = registry.get_logger("test", io=io)
+
+        assert logger.name == "test"
+        assert logger._io is io
+
+    @pytest.mark.unit
+    def test_registry_get_logger_returns_same_instance(self):
+        """Registry get_logger should return same instance for same name."""
+        from src.cli.logging import LoggerRegistry
+        from tests.helpers import MockIO
+
+        registry = LoggerRegistry()
+        io = MockIO()
+
+        logger1 = registry.get_logger("shared", io=io)
+        logger2 = registry.get_logger("shared")
+
+        assert logger1 is logger2
+
+    @pytest.mark.unit
+    def test_registry_get_logger_uses_defaults(self):
+        """Registry get_logger should use configured defaults."""
+        from src.cli.logging import LoggerRegistry
+        from tests.helpers import MockIO
+
+        registry = LoggerRegistry()
+        io = MockIO()
+        registry.configure(level=logging.DEBUG, io=io)
+
+        logger = registry.get_logger("test")
+
+        assert logger.level == logging.DEBUG
+        assert logger._io is io
+
+    @pytest.mark.unit
+    def test_registry_configure_updates_existing_loggers(self):
+        """Registry configure should update existing loggers."""
+        from src.cli.logging import LoggerRegistry
+        from tests.helpers import MockIO
+
+        registry = LoggerRegistry()
+        io1 = MockIO()
+        io2 = MockIO()
+
+        logger = registry.get_logger("test", io=io1)
+        assert logger.level == logging.INFO
+
+        registry.configure(level=logging.DEBUG, io=io2)
+
+        assert logger.level == logging.DEBUG
+        assert logger._io is io2
+
+    @pytest.mark.unit
+    def test_registry_reset_clears_all_state(self):
+        """Registry reset should clear all loggers and defaults."""
+        from src.cli.logging import LoggerRegistry
+        from tests.helpers import MockIO
+
+        registry = LoggerRegistry()
+        io = MockIO()
+
+        registry.configure(level=logging.DEBUG, io=io)
+        registry.get_logger("test1", io=io)
+        registry.get_logger("test2", io=io)
+
+        registry.reset()
+
+        assert registry._loggers == {}
+        assert registry._default_io is None
+        assert registry._default_level == logging.INFO
+
+    @pytest.mark.unit
+    def test_separate_registries_are_isolated(self):
+        """Separate registries should not affect each other."""
+        from src.cli.logging import LoggerRegistry
+        from tests.helpers import MockIO
+
+        registry1 = LoggerRegistry()
+        registry2 = LoggerRegistry()
+        io = MockIO()
+
+        registry1.configure(level=logging.DEBUG, io=io)
+        registry1.get_logger("test", io=io)
+
+        # Registry2 should be unaffected
+        assert registry2._loggers == {}
+        assert registry2._default_level == logging.INFO
+
+    @pytest.mark.unit
+    def test_reset_logging_resets_default_registry(self):
+        """reset_logging should reset the default global registry."""
+        from src.cli.logging import (
+            configure_logging, get_logger, reset_logging, _default_registry
+        )
+        from tests.helpers import MockIO
+
+        io = MockIO()
+        configure_logging(level=logging.DEBUG, io=io)
+        get_logger("test_module", io=io)
+
+        reset_logging()
+
+        assert _default_registry._loggers == {}
+        assert _default_registry._default_level == logging.INFO
+
+    @pytest.mark.unit
+    def test_module_functions_use_default_registry(self):
+        """Module-level functions should delegate to default registry."""
+        from src.cli.logging import (
+            get_logger, configure_logging, reset_logging, _default_registry
+        )
+        from tests.helpers import MockIO
+
+        reset_logging()  # Start clean
+        io = MockIO()
+
+        configure_logging(level=logging.WARNING, io=io)
+        logger = get_logger("test")
+
+        assert logger.level == logging.WARNING
+        assert "test" in _default_registry._loggers
+
+        reset_logging()  # Clean up

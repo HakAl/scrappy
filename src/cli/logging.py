@@ -71,10 +71,72 @@ def _safe_json_dumps(obj: Any) -> str:
         })
 
 
-# Global logger registry
-_loggers: Dict[str, 'CLILogger'] = {}
-_global_io = None
-_global_level = logging.INFO
+class LoggerRegistry:
+    """
+    Registry for managing CLI loggers.
+
+    Encapsulates logger storage and default configuration to avoid
+    module-level global state. This enables:
+    - Test isolation with separate registries
+    - Easy reset of all loggers
+    - Explicit dependency injection
+    """
+
+    def __init__(self):
+        """Initialize registry with default values."""
+        self._loggers: Dict[str, 'CLILogger'] = {}
+        self._default_io = None
+        self._default_level = logging.INFO
+
+    def get_logger(self, name: str, io: Optional[Any] = None) -> 'CLILogger':
+        """
+        Get or create a logger by name.
+
+        Returns the same instance for the same name.
+
+        Args:
+            name: Logger name
+            io: IO interface (used only on first creation)
+
+        Returns:
+            CLILogger instance
+        """
+        if name not in self._loggers:
+            effective_io = io or self._default_io
+            self._loggers[name] = CLILogger(
+                name=name,
+                io=effective_io,
+                level=self._default_level
+            )
+
+        return self._loggers[name]
+
+    def configure(self, level: int = logging.INFO, io: Optional[Any] = None):
+        """
+        Configure default logging settings.
+
+        Args:
+            level: Default logging level
+            io: Default IO interface
+        """
+        self._default_io = io
+        self._default_level = level
+
+        # Update existing loggers
+        for logger in self._loggers.values():
+            logger.level = level
+            if io:
+                logger._io = io
+
+    def reset(self):
+        """Reset registry to initial state, clearing all loggers."""
+        self._loggers = {}
+        self._default_io = None
+        self._default_level = logging.INFO
+
+
+# Default global registry for backward compatibility
+_default_registry = LoggerRegistry()
 
 
 class CLILogger:
@@ -380,6 +442,7 @@ def get_logger(name: str, io: Optional[Any] = None) -> CLILogger:
     Get or create a logger by name.
 
     Returns the same instance for the same name.
+    Uses the default global registry.
 
     Args:
         name: Logger name
@@ -388,17 +451,7 @@ def get_logger(name: str, io: Optional[Any] = None) -> CLILogger:
     Returns:
         CLILogger instance
     """
-    global _loggers, _global_io, _global_level
-
-    if name not in _loggers:
-        effective_io = io or _global_io
-        _loggers[name] = CLILogger(
-            name=name,
-            io=effective_io,
-            level=_global_level
-        )
-
-    return _loggers[name]
+    return _default_registry.get_logger(name, io)
 
 
 def configure_logging(
@@ -408,17 +461,19 @@ def configure_logging(
     """
     Configure global logging settings.
 
+    Updates the default global registry and all existing loggers.
+
     Args:
         level: Default logging level
         io: Default IO interface
     """
-    global _global_io, _global_level
+    _default_registry.configure(level, io)
 
-    _global_io = io
-    _global_level = level
 
-    # Update existing loggers
-    for logger in _loggers.values():
-        logger.level = level
-        if io:
-            logger._io = io
+def reset_logging():
+    """
+    Reset logging to initial state.
+
+    Clears all loggers and resets defaults. Useful for test isolation.
+    """
+    _default_registry.reset()

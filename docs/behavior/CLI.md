@@ -37,7 +37,8 @@
 
 
 we're working to improve src\cli the next task is: 
-God object: smart_query.smart_query() handles 9 different concerns in one method
+Side Effects, Validation, Coupling
+  - Global state: _loggers, _global_io, _global_level in logging.py
 can you research the task and create a plan to fix?
 
 
@@ -47,21 +48,6 @@ start with tests?
 implement
 ---
 
-  ---
-  3-6: Pattern Matching, Duplication, JSON, God Objects
-
-  - God object: smart_query.smart_query() handles 9 different concerns in one method
-
-  ---
-  7. Shallow Tests
-
-  Example from test_cli_command_router.py:46-55:
-  router.display.show_help.assert_called_once()  # Only verifies call
-  # Never checks that help content was actually correct
-
-  Better pattern from test_cli_input_handler.py:24-31:
-  result = handler.read_multiline_input()
-  assert result == "hello world"  # Verifies actual behavior
 
   ---
   8-10: Side Effects, Validation, Coupling
@@ -70,11 +56,6 @@ implement
   - Validation inconsistent: Some inline checks should use validators.py
   - Tight coupling: InteractiveMode syncs 5 state attributes from CommandRouter
 
-  ---
-  11-13: Test Quality Issues
-
-  - 15 skipped tests across 5 files
-  - Tests mention TDD in docstrings but coverage gaps suggest post-hoc writing
 
   ---
   14-15: Architecture Issues
@@ -82,6 +63,22 @@ implement
   - CLI handlers access orchestrator.context.project_path, agent.planner, etc. directly
   - Configuration split between src/cli/config/ and inline in validators.py:124-145
 
+  ---
+  7. Shallow Tests
+
+  Example from test_cli_command_router.py:46-55:
+  router.display.show_help.assert_called_once()  # Only verifies call
+  # Never checks that help content was actually correct
+  
+  ---
+  11-13: Test Quality Issues
+
+  - 15 skipped tests across 5 files
+  - Tests mention TDD in docstrings but coverage gaps suggest post-hoc writing
+
+  Better pattern from test_cli_input_handler.py:24-31:
+  result = handler.read_multiline_input()
+  assert result == "hello world"  # Verifies actual behavior
 
   ---
   Priority Fixes
