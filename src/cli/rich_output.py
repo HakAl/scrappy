@@ -23,6 +23,7 @@ from rich.rule import Rule
 from rich.text import Text
 from rich.progress import Progress, BarColumn, TextColumn, TaskProgressColumn, SpinnerColumn
 from rich.status import Status
+from rich.prompt import Confirm
 
 
 class ProgressTracker:
@@ -347,18 +348,8 @@ class RichIO:
         Returns:
             True for yes, False for no
         """
-        default_str = "Y/n" if default else "y/N"
-        prompt_text = f"{text} [{default_str}]"
-
-        self._console.print(prompt_text, end=' ')
-
         try:
-            user_input = input().strip().lower()
-
-            if not user_input:
-                return default
-
-            return user_input in ('y', 'yes', 'true', '1')
+            return Confirm.ask(text, default=default, console=self._console)
         except EOFError:
             return default
 

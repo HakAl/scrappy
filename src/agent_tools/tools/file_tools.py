@@ -13,6 +13,12 @@ try:
 except ImportError:
     HAS_CLICK = False
 
+try:
+    from ..formatters.output_formatter import RichDirectoryFormatter
+    HAS_RICH_FORMATTER = True
+except ImportError:
+    HAS_RICH_FORMATTER = False
+
 from .base import Tool, ToolParameter, ToolResult, ToolContext
 
 
@@ -292,6 +298,14 @@ class ListDirectoryTool(Tool):
             skip_dirs = context.config.skip_directories if context.config else ['node_modules', '__pycache__', '.git', 'venv', '.venv']
             allowed_hidden = context.config.allowed_hidden_files if context.config else ['.gitignore', '.env.example']
 
+            # Initialize formatter (prefer Rich over click)
+            formatter = None
+            if HAS_RICH_FORMATTER:
+                try:
+                    formatter = RichDirectoryFormatter()
+                except ImportError:
+                    pass
+
             def build_tree(dir_path: Path, prefix: str = "", current_depth: int = 0):
                 if current_depth > depth:
                     return
@@ -311,8 +325,10 @@ class ListDirectoryTool(Tool):
                     connector = "`-- " if is_last else "|-- "
 
                     if item.is_dir():
-                        # Directory - show in cyan
-                        if HAS_CLICK:
+                        # Directory - show in cyan with bold
+                        if formatter:
+                            dir_name = formatter.format_directory_name(f"{item.name}/")
+                        elif HAS_CLICK:
                             dir_name = click.style(f"{item.name}/", fg='cyan', bold=True)
                         else:
                             dir_name = f"{item.name}/"
@@ -336,7 +352,10 @@ class ListDirectoryTool(Tool):
                             size_str = "?"
 
                         # Color by file type
-                        if HAS_CLICK:
+                        if formatter:
+                            file_name = formatter.format_file_name(item.name, extension=item.suffix)
+                            size_display = formatter.format_file_size(f"({size_str})")
+                        elif HAS_CLICK:
                             if item.suffix in ['.py']:
                                 file_name = click.style(item.name, fg='green')
                             elif item.suffix in ['.js', '.ts', '.jsx', '.tsx']:
@@ -355,11 +374,15 @@ class ListDirectoryTool(Tool):
                         lines.append(f"{prefix}{connector}{file_name} {size_display}")
 
             # Start with the directory name
-            if HAS_CLICK:
+            if formatter:
+                root_name = formatter.format_directory_name(str(target.relative_to(context.project_root)))
+                lines.append(f"{root_name}/")
+            elif HAS_CLICK:
                 root_name = click.style(str(target.relative_to(context.project_root)), fg='cyan', bold=True)
+                lines.append(f"{root_name}/")
             else:
                 root_name = str(target.relative_to(context.project_root))
-            lines.append(f"{root_name}/")
+                lines.append(f"{root_name}/")
 
             build_tree(target)
 

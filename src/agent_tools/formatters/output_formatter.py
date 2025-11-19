@@ -5,13 +5,20 @@ Provides injectable formatters to colorize and style output.
 """
 
 from abc import ABC, abstractmethod
-from typing import Protocol
+from typing import Protocol, Optional
 
 try:
     import click
     HAS_CLICK = True
 except ImportError:
     HAS_CLICK = False
+
+try:
+    from rich.console import Console
+    from rich.text import Text
+    HAS_RICH = True
+except ImportError:
+    HAS_RICH = False
 
 
 class OutputFormatter(Protocol):
@@ -131,3 +138,105 @@ class GitOutputFormatter:
         elif line.startswith('-'):
             return click.style(line, fg='red')
         return line
+
+
+class RichDirectoryFormatter:
+    """
+    Rich-based formatter for directory tree output.
+
+    Provides Rich-styled directory tree output as alternative to click.style.
+    Handles directories, files with extension-based coloring, and file sizes.
+    """
+
+    def __init__(self, console: Optional[Console] = None):
+        """Initialize with optional Rich console.
+
+        Args:
+            console: Optional Rich Console instance. If not provided,
+                    a default console will be created.
+        """
+        if not HAS_RICH:
+            raise ImportError("Rich library is required for RichDirectoryFormatter")
+
+        self._console = console if console is not None else Console()
+
+    def format_directory_name(self, name: str) -> str:
+        """Format directory name in cyan with bold.
+
+        Args:
+            name: Directory name (e.g., "src/")
+
+        Returns:
+            Formatted string with ANSI codes
+        """
+        text = Text(name, style="bold cyan")
+        return self._render_text(text)
+
+    def format_file_name(self, name: str, extension: str = "") -> str:
+        """Format file name with color based on extension.
+
+        Args:
+            name: File name
+            extension: File extension (e.g., ".py", ".js")
+
+        Returns:
+            Formatted string with ANSI codes
+        """
+        # Color mapping by extension
+        if extension in ['.py']:
+            style = "green"
+        elif extension in ['.js', '.ts', '.jsx', '.tsx']:
+            style = "yellow"
+        elif extension in ['.md', '.txt', '.rst']:
+            style = "white"
+        elif extension in ['.json', '.yaml', '.yml', '.toml']:
+            style = "magenta"
+        else:
+            # No special color for other files
+            return name
+
+        text = Text(name, style=style)
+        return self._render_text(text)
+
+    def format_file_size(self, size_str: str) -> str:
+        """Format file size display in dim color.
+
+        Args:
+            size_str: Size string (e.g., "(1.2KB)")
+
+        Returns:
+            Formatted string with ANSI codes
+        """
+        text = Text(size_str, style="bright_black")
+        return self._render_text(text)
+
+    def format_tree_line(self, line: str, is_directory: bool = False, file_extension: str = "") -> str:
+        """Format a single line of directory tree output with Rich styling.
+
+        Args:
+            line: The line to format (e.g., "|-- file.py")
+            is_directory: Whether this line represents a directory
+            file_extension: File extension for extension-based coloring
+
+        Returns:
+            Formatted line with Rich ANSI codes
+        """
+        # This method is provided for compatibility but typically
+        # formatting is done per-component (name, size, etc.)
+        # For now, return the line as-is since formatting happens
+        # at the component level in the actual usage
+        return line
+
+    def _render_text(self, text: Text) -> str:
+        """Render Rich Text object to string with ANSI codes.
+
+        Args:
+            text: Rich Text object
+
+        Returns:
+            String with ANSI escape codes
+        """
+        # Use console to render text with ANSI codes
+        with self._console.capture() as capture:
+            self._console.print(text, end='')
+        return capture.get()

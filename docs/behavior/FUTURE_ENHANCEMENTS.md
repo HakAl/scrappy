@@ -1,5 +1,6 @@
 ## Future Enhancements
 
+WARNING: Ignoring invalid distribution ~crappy-dev (C:\Python313\Lib\site-packages)
 remove built in display truncation
 
 - [ ] Learning from user patterns
@@ -16,8 +17,6 @@ remove built in display truncation
   - Batch processing - Run overnight analysis jobs
   - CI/CD integration - Automated code review, documentation generation
   - RAG pipeline - Use local embeddings for semantic search
-
----
 
 
 ---

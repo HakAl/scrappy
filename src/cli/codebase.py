@@ -4,7 +4,6 @@ Handles scanning, analyzing, and summarizing codebases.
 """
 
 import os
-import click
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
@@ -86,10 +85,10 @@ class CLICodebaseAnalysis:
         if is_current_project:
             # Use orchestrator's context system for proper persistence
             io.echo("Using context-aware exploration...")
-            with click.progressbar(length=2, label="Scanning codebase") as bar:
+            with io.progress(total=2, description="Scanning codebase") as progress:
                 # Step 1: Explore and scan files
                 result = self.orchestrator.context.explore(force=True)
-                bar.update(1)
+                progress.advance(1)
 
                 # Step 2: Generate summary with LLM (this saves to context)
                 def llm_summary(prompt):
@@ -103,7 +102,7 @@ class CLICodebaseAnalysis:
                     return response.content
 
                 summary = self.orchestrator.context.generate_summary(llm_summary)
-                bar.update(1)
+                progress.advance(1)
 
             # Add discovery to working memory
             self.orchestrator.working_memory.add_discovery(
@@ -113,15 +112,15 @@ class CLICodebaseAnalysis:
         else:
             # For external directories, use standalone exploration (legacy behavior)
             io.echo("Exploring external directory (not persisted to context)...")
-            with click.progressbar(length=4, label="Scanning codebase") as bar:
+            with io.progress(total=4, description="Scanning codebase") as progress:
                 source_files = self._find_source_files(path)
-                bar.update(1)
+                progress.advance(1)
                 structure = self._analyze_structure(path, source_files)
-                bar.update(1)
+                progress.advance(1)
                 key_contents = self._read_key_files(path, source_files)
-                bar.update(1)
+                progress.advance(1)
                 summary = self._generate_codebase_summary(path, structure, key_contents)
-                bar.update(1)
+                progress.advance(1)
 
             # Still add to working memory as a discovery
             self.orchestrator.working_memory.add_discovery(

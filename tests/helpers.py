@@ -628,6 +628,8 @@ class MockIO:
         default: bool = False
     ) -> bool:
         """Return preset confirmation or default."""
+        # Capture the prompt text to output buffer for verification
+        self._output_buffer.append(text)
         if self._confirm_index < len(self._confirmations):
             result = self._confirmations[self._confirm_index]
             self._confirm_index += 1
@@ -641,6 +643,38 @@ class MockIO:
             self._input_index += 1
             return result
         return ""
+
+    def progress(self, total: int, description: str = "Progress"):
+        """Return a mock progress context manager.
+
+        Returns a context manager that provides a mock progress tracker
+        compatible with RichIO.progress().
+
+        Args:
+            total: Total number of steps
+            description: Description text for the progress bar
+
+        Returns:
+            Context manager that yields a mock progress tracker
+        """
+        from contextlib import contextmanager
+
+        @contextmanager
+        def _progress_context():
+            # Create a simple mock progress tracker
+            class MockProgressTracker:
+                def __init__(self):
+                    self.current = 0
+
+                def advance(self, amount: int = 1):
+                    self.current += amount
+
+                def update_description(self, description: str):
+                    pass
+
+            yield MockProgressTracker()
+
+        return _progress_context()
 
     def get_output(self) -> str:
         """Get all captured output as a single string."""
@@ -671,6 +705,14 @@ class MockIO:
     def add_confirmation(self, value: bool) -> None:
         """Add a confirmation value to the queue."""
         self._confirmations.append(value)
+
+    def confirmations_used(self) -> int:
+        """Get the number of confirmations that have been used.
+
+        Returns:
+            Number of confirm() calls made
+        """
+        return self._confirm_index
 
     def reset(self) -> None:
         """Reset all state for reuse between tests."""

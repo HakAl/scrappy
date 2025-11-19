@@ -8,6 +8,8 @@ from typing import Optional
 
 from ..task_router import TaskRouter, ClassifiedTask
 from ..orchestrator.protocols import Orchestrator
+from .io_interface import CLIIOProtocol
+from .rich_output import RichIO
 
 
 class CLITaskRouterHandler:
@@ -101,7 +103,7 @@ class CLITaskRouterHandler:
 
         return result
 
-    def handle_classify_only(self, user_input: str):
+    def handle_classify_only(self, user_input: str, io: Optional[CLIIOProtocol] = None):
         """Classify task without executing (preview mode).
 
         Analyzes and classifies the user input to show what routing decision
@@ -110,6 +112,7 @@ class CLITaskRouterHandler:
 
         Args:
             user_input: The user's task description to classify.
+            io: I/O interface for output. If None, uses RichIO.
 
         Returns:
             ClassifiedTask object containing:
@@ -125,72 +128,87 @@ class CLITaskRouterHandler:
                 - matched_patterns: Patterns that influenced classification
 
         Side Effects:
-            - Displays classification details to terminal via click
+            - Displays classification details to terminal via io
             - No state changes or task execution
         """
-        click.secho("\nTask Classification Preview:", fg="cyan")
+        if io is None:
+            io = RichIO()
+
+        io.secho("\nTask Classification Preview:", fg="cyan")
 
         classified = self.router.classify_only(user_input)
-        self._display_classification(classified)
+        self._display_classification(classified, io=io)
 
         return classified
 
-    def handle_route_status(self) -> None:
+    def handle_route_status(self, io: Optional[CLIIOProtocol] = None) -> None:
         """Display router status and metrics.
 
         Shows aggregate statistics about task routing including total tasks,
         breakdown by type, average execution time, token usage, and success rate.
 
+        Args:
+            io: I/O interface for output. If None, uses RichIO.
+
         Returns:
-            None. Results are displayed via click.
+            None. Results are displayed via io.
 
         Side Effects:
-            - Displays formatted metrics to terminal via click
+            - Displays formatted metrics to terminal via io
             - No state changes
         """
+        if io is None:
+            io = RichIO()
+
         metrics = self.router.get_metrics()
 
-        click.secho("\nTask Router Metrics:", fg="cyan", bold=True)
-        click.echo(f"  Total tasks: {metrics.total_tasks}")
+        io.secho("\nTask Router Metrics:", fg="cyan", bold=True)
+        io.echo(f"  Total tasks: {metrics.total_tasks}")
 
         if metrics.tasks_by_type:
-            click.echo("  Tasks by type:")
+            io.echo("  Tasks by type:")
             for task_type, count in metrics.tasks_by_type.items():
-                click.echo(f"    - {task_type}: {count}")
+                io.echo(f"    - {task_type}: {count}")
 
-        click.echo(f"  Avg execution time: {metrics.avg_execution_time:.2f}s")
-        click.echo(f"  Total tokens used: {metrics.total_tokens_used}")
-        click.echo(f"  Success rate: {metrics.success_rate:.1%}")
+        io.echo(f"  Avg execution time: {metrics.avg_execution_time:.2f}s")
+        io.echo(f"  Total tokens used: {metrics.total_tokens_used}")
+        io.echo(f"  Success rate: {metrics.success_rate:.1%}")
 
-    def handle_route_history(self) -> None:
+    def handle_route_history(self, io: Optional[CLIIOProtocol] = None) -> None:
         """Display routing history.
 
         Shows the last 10 routing decisions with input preview, task type,
         success status, and execution time for each.
 
+        Args:
+            io: I/O interface for output. If None, uses RichIO.
+
         Returns:
-            None. Results are displayed via click.
+            None. Results are displayed via io.
 
         Side Effects:
-            - Displays formatted history to terminal via click
+            - Displays formatted history to terminal via io
             - No state changes
         """
+        if io is None:
+            io = RichIO()
+
         if not self.history:
-            click.secho("No routing history yet.", fg="yellow")
+            io.secho("No routing history yet.", fg="yellow")
             return
 
-        click.secho("\nRouting History:", fg="cyan", bold=True)
+        io.secho("\nRouting History:", fg="cyan", bold=True)
 
         for i, entry in enumerate(self.history[-10:], 1):  # Last 10 entries
             classification = entry["classification"]
             result = entry["result"]
 
-            click.echo(f"\n{i}. {entry['input'][:50]}...")
-            click.echo(f"   Type: {classification.get('type', 'unknown')}")
-            click.echo(f"   Success: {'Yes' if result.success else 'No'}")
-            click.echo(f"   Time: {result.execution_time:.2f}s")
+            io.echo(f"\n{i}. {entry['input'][:50]}...")
+            io.echo(f"   Type: {classification.get('type', 'unknown')}")
+            io.echo(f"   Success: {'Yes' if result.success else 'No'}")
+            io.echo(f"   Time: {result.execution_time:.2f}s")
 
-    def _display_result(self, result) -> None:
+    def _display_result(self, result, io: Optional[CLIIOProtocol] = None) -> None:
         """Display execution result to terminal.
 
         Formats and displays the task execution result including success/failure
@@ -205,40 +223,44 @@ class CLITaskRouterHandler:
                 - execution_time: Time in seconds
                 - tokens_used: Optional token count
                 - provider_used: Optional provider name
+            io: I/O interface for output. If None, uses RichIO.
 
         Returns:
-            None. Output is displayed via click.
+            None. Output is displayed via io.
 
         Side Effects:
-            - Displays formatted output to terminal via click
+            - Displays formatted output to terminal via io
             - No state changes
         """
+        if io is None:
+            io = RichIO()
+
         if result.success:
-            click.secho("\nExecution successful", fg="green", bold=True)
+            io.secho("\nExecution successful", fg="green", bold=True)
         else:
-            click.secho("\nExecution failed", fg="red", bold=True)
+            io.secho("\nExecution failed", fg="red", bold=True)
             if result.error:
-                click.secho(f"Error: {result.error}", fg="red")
+                io.secho(f"Error: {result.error}", fg="red")
 
         # Show output
         if result.output:
-            click.echo("\nOutput:")
-            click.echo("-" * 40)
+            io.echo("\nOutput:")
+            io.echo("-" * 40)
             # Truncate long output
             output = result.output
             if len(output) > 2000:
                 output = output[:2000] + "\n... (truncated)"
-            click.echo(output)
-            click.echo("-" * 40)
+            io.echo(output)
+            io.echo("-" * 40)
 
         # Show metadata
-        click.secho(f"\nExecution time: {result.execution_time:.2f}s", fg="cyan")
+        io.secho(f"\nExecution time: {result.execution_time:.2f}s", fg="cyan")
         if result.tokens_used:
-            click.echo(f"Tokens used: {result.tokens_used}")
+            io.echo(f"Tokens used: {result.tokens_used}")
         if result.provider_used:
-            click.echo(f"Provider: {result.provider_used}")
+            io.echo(f"Provider: {result.provider_used}")
 
-    def _display_classification(self, classified: ClassifiedTask) -> None:
+    def _display_classification(self, classified: ClassifiedTask, io: Optional[CLIIOProtocol] = None) -> None:
         """Display classification details to terminal.
 
         Formats and displays task classification information with color-coded
@@ -254,15 +276,19 @@ class CLITaskRouterHandler:
                 - suggested_provider: Optional provider suggestion
                 - requires_planning: bool
                 - requires_tools: bool
-                - matched_patterns: List of pattern strings
+                - matched_patterns: Tuple of pattern strings
+            io: I/O interface for output. If None, uses RichIO.
 
         Returns:
-            None. Output is displayed via click.
+            None. Output is displayed via io.
 
         Side Effects:
-            - Displays formatted classification to terminal via click
+            - Displays formatted classification to terminal via io
             - No state changes
         """
+        if io is None:
+            io = RichIO()
+
         type_colors = {
             "direct_command": "green",
             "code_generation": "yellow",
@@ -272,22 +298,22 @@ class CLITaskRouterHandler:
 
         color = type_colors.get(classified.task_type.value, "white")
 
-        click.echo(f"\n  Task Type: {click.style(classified.task_type.value, fg=color, bold=True)}")
-        click.echo(f"  Confidence: {classified.confidence:.2f}")
-        click.echo(f"  Complexity: {classified.complexity_score}/10")
-        click.echo(f"  Reasoning: {classified.reasoning}")
+        io.echo(f"\n  Task Type: {io.style(classified.task_type.value, fg=color, bold=True)}")
+        io.echo(f"  Confidence: {classified.confidence:.2f}")
+        io.echo(f"  Complexity: {classified.complexity_score}/10")
+        io.echo(f"  Reasoning: {classified.reasoning}")
 
         if classified.extracted_command:
-            click.echo(f"  Extracted command: {classified.extracted_command}")
+            io.echo(f"  Extracted command: {classified.extracted_command}")
 
         if classified.suggested_provider:
-            click.echo(f"  Suggested provider: {classified.suggested_provider}")
+            io.echo(f"  Suggested provider: {classified.suggested_provider}")
 
-        click.echo(f"  Requires planning: {'Yes' if classified.requires_planning else 'No'}")
-        click.echo(f"  Requires tools: {'Yes' if classified.requires_tools else 'No'}")
+        io.echo(f"  Requires planning: {'Yes' if classified.requires_planning else 'No'}")
+        io.echo(f"  Requires tools: {'Yes' if classified.requires_tools else 'No'}")
 
         if classified.matched_patterns:
-            click.echo(f"  Matched patterns: {', '.join(classified.matched_patterns[:5])}")
+            io.echo(f"  Matched patterns: {', '.join(classified.matched_patterns[:5])}")
 
 
 def register_task_router_commands(cli_instance) -> CLITaskRouterHandler:

@@ -3,7 +3,6 @@ Task execution functionality for the CLI.
 Handles planning and reasoning operations.
 """
 
-import click
 from typing import Optional
 
 from .io_interface import CLIIOProtocol
@@ -58,12 +57,12 @@ class CLITaskExecution:
         io.secho(f"\nPlanning: {task}", bold=True)
         io.echo("-" * 50)
 
-        with click.progressbar(length=1, label="Generating plan") as bar:
+        with io.progress(total=1, description="Generating plan") as progress:
             try:
                 steps = self.orchestrator.plan(task)
-                bar.update(1)
+                progress.advance(1)
             except Exception as e:
-                bar.update(1)
+                progress.advance(1)
                 io.secho(f"Error during planning: {e}", fg="red")
                 return []
 
@@ -132,12 +131,12 @@ class CLITaskExecution:
         io.secho(f"\nReasoning about: {question}", bold=True)
         io.echo("-" * 50)
 
-        with click.progressbar(length=1, label="Analyzing") as bar:
+        with io.progress(total=1, description="Analyzing") as progress:
             try:
                 response = self.orchestrator.reason(question)
-                bar.update(1)
+                progress.advance(1)
             except Exception as e:
-                bar.update(1)
+                progress.advance(1)
                 io.secho(f"Error during reasoning: {e}", fg="red")
                 return
 

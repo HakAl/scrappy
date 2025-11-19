@@ -3,7 +3,6 @@ Display and UI-related CLI functionality.
 Handles help, status, listings, and usage statistics.
 """
 
-import click
 from datetime import datetime
 from typing import Optional
 

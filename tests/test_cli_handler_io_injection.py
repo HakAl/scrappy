@@ -329,6 +329,44 @@ class TestCodebaseAnalysisIOInjection:
             summary_file = Path(temp_dir) / "CODEBASE_SUMMARY.md"
             assert summary_file.exists()
 
+    def test_explore_codebase_confirm_prompt_displayed(self):
+        """
+        explore_codebase() should display the save confirmation prompt.
+
+        This test verifies that the [y/n] prompt is actually displayed to the user
+        after the summary, not hidden by progress bar interference.
+
+        Regression test for: Rich integration broke the confirm prompt display
+        when click.progressbar interferes with io.confirm().
+        """
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            io = MockIO(
+                confirmations=[False]  # User says no to saving
+            )
+
+            with patch.object(self.orchestrator.context, 'explore') as mock_explore:
+                mock_explore.return_value = {'total_files': 5, 'directories': ['src']}
+                with patch.object(self.orchestrator.context, 'generate_summary', return_value='Test summary'):
+                    with patch.object(self.orchestrator.context, 'project_path', Path(temp_dir)):
+                        self.analyzer.explore_codebase(temp_dir, io=io)
+
+            # Verify io.confirm was called (which displays the prompt)
+            confirmations_used = io.confirmations_used()
+            assert confirmations_used == 1, \
+                "io.confirm should have been called once for save prompt"
+
+            output = io.get_output()
+            # Prompt text should appear in output
+            assert "Save summary to file?" in output, \
+                "Save confirmation prompt text should be displayed"
+
+            # Verify file was NOT created since user said no
+            summary_file = Path(temp_dir) / "CODEBASE_SUMMARY.md"
+            assert not summary_file.exists(), \
+                "File should not exist when user declines save prompt"
+
 
 # =============================================================================
 # CLIMultiProvider I/O Injection Tests
