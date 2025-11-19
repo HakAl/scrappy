@@ -10,11 +10,11 @@ import asyncio
 import time
 
 try:
-    from ..providers import ProviderRegistry, GroqProvider, CohereProvider, GeminiProvider, CerebrasProvider, GitHubModelsProvider, LLMResponse
+    from ..providers import ProviderRegistry, LLMResponse
     from ..context import CodebaseContext
     from ..utils.errors import is_rate_limit_error, RateLimitError, AllProvidersRateLimitedError
 except ImportError:
-    from providers import ProviderRegistry, GroqProvider, CohereProvider, GeminiProvider, CerebrasProvider, GitHubModelsProvider, LLMResponse
+    from providers import ProviderRegistry, LLMResponse
     from context import CodebaseContext
     from utils.errors import is_rate_limit_error, RateLimitError, AllProvidersRateLimitedError
 
@@ -27,6 +27,7 @@ from .provider_selector import ProviderSelector
 from .output import OutputInterface, ConsoleOutput
 from .delegation import DelegationManager
 from .background import BackgroundTaskManager
+from .registration import ProviderRegistrar
 
 
 class AgentOrchestrator:
@@ -140,40 +141,8 @@ class AgentOrchestrator:
 
     def _auto_register_providers(self):
         """Attempt to register all known providers."""
-        # Try GitHub Models (RECOMMENDED BRAIN - GPT-4o with 10K RPD)
-        try:
-            self.registry.register(GitHubModelsProvider())
-            self.output.success("GitHub Models provider registered (GPT-4o: 10K RPD, 10M TPD)")
-        except Exception as e:
-            self.output.error(f"GitHub Models provider unavailable: {e}")
-
-        # Try Cerebras (primary workhorse - highest quota)
-        try:
-            self.registry.register(CerebrasProvider())
-            self.output.success("Cerebras provider registered (14,400 RPD)")
-        except Exception as e:
-            self.output.error(f"Cerebras provider unavailable: {e}")
-
-        # Try Groq (secondary)
-        try:
-            self.registry.register(GroqProvider())
-            self.output.success("Groq provider registered (7,000 RPD)")
-        except Exception as e:
-            self.output.error(f"Groq provider unavailable: {e}")
-
-        # Try Gemini (with auto-fallback)
-        try:
-            self.registry.register(GeminiProvider())
-            self.output.success("Gemini provider registered (auto-fallback enabled)")
-        except Exception as e:
-            self.output.error(f"Gemini provider unavailable: {e}")
-
-        # Try Cohere (limited - embeddings only)
-        try:
-            self.registry.register(CohereProvider())
-            self.output.success("Cohere provider registered (1,000/month - use sparingly)")
-        except Exception as e:
-            self.output.error(f"Cohere provider unavailable: {e}")
+        registrar = ProviderRegistrar(self.registry, self.output)
+        registrar.auto_register_all()
 
     def _setup_brain(self, preferred_provider: Optional[str] = None):
         """Set up the orchestrator's reasoning brain."""

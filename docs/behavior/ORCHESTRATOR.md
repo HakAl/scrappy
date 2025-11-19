@@ -234,20 +234,23 @@ Critical Issues
 **RED**
 
 we're working to improve src\orchestrator the next task is: 
- Break up core.py - Extract BackgroundTaskManager
+ Break up core.py - Extract Provider Registration
 
-  1. Write tests first
-  2. Create src/orchestrator/background.py:
+  1. Create src/orchestrator/registration.py:
 
-  class BackgroundTaskManager:
-      """Manages async background tasks"""
+  class ProviderRegistrar:
+      """Handles provider auto-registration"""
 
-      # Extract from core.py:1123-1211
-      def submit_background_task(self, ...): ...
-      def get_task_status(self, ...): ...
-      def cancel_task(self, ...): ...
+      def __init__(self, registry: ProviderRegistry, output: OutputInterface):
+          ...
 
-  3. Move ~90 lines from core.py
+      def auto_register_all(self) -> Dict[str, bool]:
+          """Extract from core.py:113-148"""
+          # Returns success/failure status for each provider
+          ...
+
+  2. Move ~40 lines from core.py
+ 
 can you research the task and start with tests?
 
 **GREEN**
@@ -265,26 +268,8 @@ they're fully tested and ready for integration in src/. can you complete the ref
 
   Break up core.py into focused classes
 
-  ---
-  3.2 Extract BackgroundTaskManager
-
-  1. Write tests first
-  2. Create src/orchestrator/background.py:
-
-  class BackgroundTaskManager:
-      """Manages async background tasks"""
-
-      # Extract from core.py:1123-1211
-      def submit_background_task(self, ...): ...
-      def get_task_status(self, ...): ...
-      def cancel_task(self, ...): ...
-
-  3. Move ~90 lines from core.py
-
-  ---
   3.3 Extract Provider Registration
 
-  Steps:
   1. Create src/orchestrator/registration.py:
 
   class ProviderRegistrar:
