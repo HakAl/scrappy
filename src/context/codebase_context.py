@@ -13,63 +13,7 @@ from .cache import ContextCache
 from .platform import PlatformDetector
 from .git_history import GitHistoryReader
 from .project_detector import ProjectDetector
-
-
-def _get_config_defaults():
-    """Lazy import of config defaults to avoid circular imports."""
-    try:
-        from src.cli.config.defaults import (
-            TRUNCATE_RESEARCH_LARGE,
-            TRUNCATE_ERROR_MESSAGE,
-            TRUNCATE_PRIORITY_FILE,
-        )
-    except ImportError:
-        try:
-            from cli.config.defaults import (
-                TRUNCATE_RESEARCH_LARGE,
-                TRUNCATE_ERROR_MESSAGE,
-                TRUNCATE_PRIORITY_FILE,
-            )
-        except ImportError:
-            # Fallback values if imports fail
-            TRUNCATE_RESEARCH_LARGE = 1500
-            TRUNCATE_ERROR_MESSAGE = 500
-            TRUNCATE_PRIORITY_FILE = 3000
-    return TRUNCATE_RESEARCH_LARGE, TRUNCATE_ERROR_MESSAGE, TRUNCATE_PRIORITY_FILE
-
-
-def _get_config_extensions():
-    """Lazy import of config extensions to avoid circular imports."""
-    try:
-        from src.cli.config.extensions import EXTENSIONS_BY_CATEGORY, ENTRY_POINT_FILES
-    except ImportError:
-        try:
-            from cli.config.extensions import EXTENSIONS_BY_CATEGORY, ENTRY_POINT_FILES
-        except ImportError:
-            # Fallback values if imports fail
-            EXTENSIONS_BY_CATEGORY = {
-                'python': ['.py'],
-                'javascript': ['.js', '.jsx', '.ts', '.tsx'],
-                'web': ['.html', '.css', '.scss'],
-                'config': ['.json', '.yaml', '.yml', '.toml', '.ini'],
-                'docs': ['.md', '.rst', '.txt'],
-                'other': []
-            }
-            ENTRY_POINT_FILES = ['main.py', '__main__.py', 'app.py', 'cli.py', 'setup.py']
-    return EXTENSIONS_BY_CATEGORY, ENTRY_POINT_FILES
-
-
-def _get_config_paths():
-    """Lazy import of config paths to avoid circular imports."""
-    try:
-        from src.cli.config.paths import SKIP_DIRS
-    except ImportError:
-        try:
-            from cli.config.paths import SKIP_DIRS
-        except ImportError:
-            # Fallback values if imports fail
-            SKIP_DIRS = {'.git', '__pycache__', 'node_modules', '.venv', 'venv', 'env', '.env', 'dist', 'build'}
-    return SKIP_DIRS
+from .config_loader import get_truncation_defaults, get_extensions_config, get_paths_config
 
 
 class CodebaseContext:
@@ -209,10 +153,11 @@ class CodebaseContext:
 
         # Build file contents section (limited)
         file_contents = ""
-        TRUNCATE_RESEARCH_LARGE, _, _ = _get_config_defaults()
+        defaults = get_truncation_defaults()
+        truncate_limit = defaults['research_large']
         for filename, content in list(self.key_files.items())[:5]:
             # Truncate to avoid token explosion
-            truncated = content[:TRUNCATE_RESEARCH_LARGE] if len(content) > TRUNCATE_RESEARCH_LARGE else content
+            truncated = content[:truncate_limit] if len(content) > truncate_limit else content
             file_contents += f"\n--- {filename} ---\n{truncated}\n"
 
         prompt = f"""Analyze this codebase and provide a concise technical summary.
@@ -327,8 +272,8 @@ Be concise and technical. No fluff."""
         # Check for config-related queries
         if any(word in query_lower for word in ['config', 'setup', 'install', 'dependency', 'require']):
             if 'requirements.txt' in self.key_files:
-                _, TRUNCATE_ERROR_MESSAGE, _ = _get_config_defaults()
-                deps = self.key_files['requirements.txt'][:TRUNCATE_ERROR_MESSAGE]
+                defaults = get_truncation_defaults()
+                deps = self.key_files['requirements.txt'][:defaults['error_message']]
                 relevant_parts.append(f"Dependencies:\n{deps}")
 
         # Check for architecture queries
@@ -361,9 +306,9 @@ Be concise and technical. No fluff."""
         structure.update(markers)
 
         # Get directories
-        SKIP_DIRS = _get_config_paths()
+        skip_dirs = get_paths_config()
         for item in self.project_path.iterdir():
-            if item.is_dir() and not item.name.startswith('.') and item.name not in SKIP_DIRS:
+            if item.is_dir() and not item.name.startswith('.') and item.name not in skip_dirs:
                 structure['directories'].append(item.name)
 
         return structure
@@ -391,18 +336,19 @@ Be concise and technical. No fluff."""
 
         # Read main Python entry points
         py_files = self.file_index.get('python', [])
-        _, ENTRY_POINT_FILES = _get_config_extensions()
-        _, _, TRUNCATE_PRIORITY_FILE = _get_config_defaults()
+        _, entry_point_files = get_extensions_config()
+        defaults = get_truncation_defaults()
+        truncate_priority = defaults['priority_file']
 
-        for entry in ENTRY_POINT_FILES:
+        for entry in entry_point_files:
             for f in py_files:
                 if f.endswith(entry) or f == entry:
                     file_path = self.project_path / f
                     if file_path.exists():
                         try:
                             content = file_path.read_text(encoding='utf-8', errors='ignore')
-                            if len(content) > TRUNCATE_PRIORITY_FILE:
-                                content = content[:TRUNCATE_PRIORITY_FILE] + "\n... (truncated)"
+                            if len(content) > truncate_priority:
+                                content = content[:truncate_priority] + "\n... (truncated)"
                             key_contents[f] = content
                         except Exception:
                             pass

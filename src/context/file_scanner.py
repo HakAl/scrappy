@@ -6,41 +6,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
-
-def _get_config_extensions():
-    """Lazy import of config extensions to avoid circular imports."""
-    try:
-        from src.cli.config.extensions import EXTENSIONS_BY_CATEGORY
-    except ImportError:
-        try:
-            from cli.config.extensions import EXTENSIONS_BY_CATEGORY
-        except ImportError:
-            # Fallback values if imports fail
-            EXTENSIONS_BY_CATEGORY = {
-                'python': ['.py'],
-                'javascript': ['.js', '.jsx', '.ts', '.tsx'],
-                'web': ['.html', '.css', '.scss'],
-                'config': ['.json', '.yaml', '.yml', '.toml', '.ini'],
-                'docs': ['.md', '.rst', '.txt'],
-                'other': []
-            }
-    return EXTENSIONS_BY_CATEGORY
-
-
-def _get_config_paths():
-    """Lazy import of config paths to avoid circular imports."""
-    try:
-        from src.cli.config.paths import SKIP_DIRS
-    except ImportError:
-        try:
-            from cli.config.paths import SKIP_DIRS
-        except ImportError:
-            # Fallback values if imports fail
-            SKIP_DIRS = {
-                '.git', '__pycache__', 'node_modules', '.venv',
-                'venv', 'env', '.env', 'dist', 'build'
-            }
-    return SKIP_DIRS
+from .config_loader import get_extensions_config, get_paths_config
 
 
 class FileScanner:
@@ -74,9 +40,9 @@ class FileScanner:
 
         # Use defaults if not provided
         if extensions_by_category is None:
-            extensions_by_category = _get_config_extensions()
+            extensions_by_category, _ = get_extensions_config()
         if skip_dirs is None:
-            skip_dirs = _get_config_paths()
+            skip_dirs = get_paths_config()
 
         # Initialize result with all categories
         files = {k: [] for k in extensions_by_category}

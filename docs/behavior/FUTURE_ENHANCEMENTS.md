@@ -18,7 +18,87 @@
 ---
 
 
-### 1. The "Holy Grail" of LLM Testing: `VCR.py`
+
+### UI Upgrade: The `Rich` Dashboard
+Since you are building a CLI tool, **`Rich`** is going to be your best friend. It turns your "walls of text" into a dashboard.
+
+Instead of `print(f"Scanning {filename}...")`, try using a **Live Layout**. This gives your user that "hacker movie" feel where they can see the agent "thinking."
+
+```python
+from rich.live import Live
+from rich.layout import Layout
+from rich.panel import Panel
+import time
+
+def make_layout():
+    layout = Layout()
+    layout.split_column(
+        Layout(name="upper"),
+        Layout(name="lower")
+    )
+    layout["upper"].split_row(
+        Layout(Panel("Status: [green]Scanning Files...[/]", title="Agent State"), name="left"),
+        Layout(Panel("Thinking...", title="Thought Process"), name="right"),
+    )
+    layout["lower"].update(Panel("waiting for input...", title="Terminal"))
+    return layout
+
+# Run this loop while your agent is working
+with Live(make_layout(), refresh_per_second=4) as live:
+    # Your agent logic updates the panels dynamically
+    pass
+```
+
+---
+
+## Cache / Config Files
+
+### Advice on "Cache File Names"
+Follow the **Standard Directory Structure** so you don't litter their home folder.
+
+**The "Scrappy" Way (Simple):**
+Just use `~/.scrappy/`. It’s easy to find and delete.
+
+**The "Pro" Way (XDG Standards):**
+Use a library like `platformdirs` to put the cache where the OS expects it (e.g., `~/.cache/scrappy` on Linux, `~/Library/Caches/scrappy` on Mac).
+
+**The Migration Strategy:**
+If you have users (or yourself) with the old `.llm_agent_team` folder, add a tiny migration check at startup:
+
+```python
+from pathlib import Path
+import shutil
+
+OLD_DIR = Path.home() / ".llm_agent_team"
+NEW_DIR = Path.home() / ".scrappy"
+
+def migrate_legacy_data():
+    if OLD_DIR.exists() and not NEW_DIR.exists():
+        print("Migrating legacy data to .scrappy/...")
+        shutil.move(str(OLD_DIR), str(NEW_DIR))
+```
+
+### 3. Cache Naming Convention
+For the actual files inside the cache, avoid generic names like `cache.json` which grow infinitely.
+
+**Recommended Structure:**
+```text
+~/.scrappy/
+  ├── config.json          # API keys (if not env vars)
+  ├── history/             # Chat logs
+  │   ├── 2025-11-18_14-30_fix-auth.jsonl
+  │   └── 2025-11-19_09-00_add-tests.jsonl
+  └── semantic_cache/      # The "Brain"
+      ├── index.faiss      # Vector store (if you add RAG)
+      └── db.sqlite        # Key-Value store of (PromptHash -> Response)
+```
+
+*   **Why SQLite?** It's one file, it handles concurrent writes (mostly), and it's faster than parsing a massive JSON file every time the CLI starts.
+
+---
+
+
+### The "Holy Grail" of LLM Testing: `VCR.py`
 You mentioned "making everything testable." The biggest pain point with testing agents is that LLMs are non-deterministic and expensive. You don't want your test suite to cost $5 every time you run it.
 
 *   **The Solution:** Use **`pytest-recording`** (a wrapper around `VCR.py`).
@@ -86,40 +166,7 @@ def get_standup():
     console.print(Markdown(summary))
 ```
 
-### 3. UI Upgrade: The `Rich` Dashboard
-Since you are building a CLI tool, **`Rich`** is going to be your best friend. It turns your "walls of text" into a dashboard.
-
-Instead of `print(f"Scanning {filename}...")`, try using a **Live Layout**. This gives your user that "hacker movie" feel where they can see the agent "thinking."
-
-```python
-from rich.live import Live
-from rich.layout import Layout
-from rich.panel import Panel
-import time
-
-def make_layout():
-    layout = Layout()
-    layout.split_column(
-        Layout(name="upper"),
-        Layout(name="lower")
-    )
-    layout["upper"].split_row(
-        Layout(Panel("Status: [green]Scanning Files...[/]", title="Agent State"), name="left"),
-        Layout(Panel("Thinking...", title="Thought Process"), name="right"),
-    )
-    layout["lower"].update(Panel("waiting for input...", title="Terminal"))
-    return layout
-
-# Run this loop while your agent is working
-with Live(make_layout(), refresh_per_second=4) as live:
-    # Your agent logic updates the panels dynamically
-    pass
-```
-
-### Quick Feedback on your A/B/C points:
-*   **A (File Scan):** If it's 0.5s, you are golden. Keep it simple.
-*   **B (Instruct Models):** Correct move. Chat models are bad at tool calls; Instruct models (specifically those fine-tuned for function calling like `llama-3-groq-tool-use`) are significantly better.
-*   **C (Circuit Breaker):** The "3-strike" rule is industry standard. You might also want to add a "Temperature Decaying" strategy:
+*   **Circuit Breaker** The "3-strike" rule is industry standard. You might also want to add a "Temperature Decaying" strategy:
     *   Attempt 1: Temp 0.0 (Precise)
     *   Attempt 2: Temp 0.2 (Little creativity)
     *   Attempt 3: Temp 0.5 (Try something different)
@@ -212,7 +259,6 @@ def run_reflexion_loop(task_description, max_retries=3):
 LLMs are often blind to their own syntax errors.
 *   **Add a Linter Step:** Before even running the test, run `flake8` or `ruff` on the generated code.
 *   If `ruff` fails, don't even count it as a "retry." Just auto-feed the syntax error back to the cheap model. It fixes syntax instantly. This saves your "Smart Model" budget for logic errors, not missing colons.
-
 
 
 Since you are about to implement this "Self-Healing" loop, I have one **critical warning** that will save you days of debugging and prevents your users from getting angry.
@@ -500,50 +546,6 @@ If you can't access the DeepSeek distilled models easily, **Qwen 2.5 Coder 7B In
 ---
 
 
-
-### 2. Advice on "Cache File Names"
-You mentioned future work on cache names. Since you are building a CLI tool that people might install globally, you should follow the **Standard Directory Structure** so you don't litter their home folder.
-
-**The "Scrappy" Way (Simple):**
-Just use `~/.scrappy/`. It’s easy to find and delete.
-
-**The "Pro" Way (XDG Standards):**
-Use a library like `platformdirs` to put the cache where the OS expects it (e.g., `~/.cache/scrappy` on Linux, `~/Library/Caches/scrappy` on Mac).
-
-**The Migration Strategy:**
-If you have users (or yourself) with the old `.llm_agent_team` folder, add a tiny migration check at startup:
-
-```python
-from pathlib import Path
-import shutil
-
-OLD_DIR = Path.home() / ".llm_agent_team"
-NEW_DIR = Path.home() / ".scrappy"
-
-def migrate_legacy_data():
-    if OLD_DIR.exists() and not NEW_DIR.exists():
-        print("📦 Migrating legacy data to .scrappy/...")
-        shutil.move(str(OLD_DIR), str(NEW_DIR))
-```
-
-### 3. Cache Naming Convention
-For the actual files inside the cache, avoid generic names like `cache.json` which grow infinitely.
-
-**Recommended Structure:**
-```text
-~/.scrappy/
-  ├── config.json          # API keys (if not env vars)
-  ├── history/             # Chat logs
-  │   ├── 2025-11-18_14-30_fix-auth.jsonl
-  │   └── 2025-11-19_09-00_add-tests.jsonl
-  └── semantic_cache/      # The "Brain"
-      ├── index.faiss      # Vector store (if you add RAG)
-      └── db.sqlite        # Key-Value store of (PromptHash -> Response)
-```
-
-*   **Why SQLite?** It's one file, it handles concurrent writes (mostly), and it's faster than parsing a massive JSON file every time the CLI starts.
-
----
 
 **Model-Based Evaluation**
 
