@@ -59,8 +59,8 @@ WEB_PATTERNS: List[re.Pattern] = [
 # project organization.
 
 CODEBASE_PATTERNS: List[re.Pattern] = [
-    # File/directory existence questions
-    re.compile(r'\b(does|do|is|are|has|have|where)\b.*\b(file|directory|folder|code|class|function|method)\b'),
+    # File/directory existence questions (requires determiner for specificity)
+    re.compile(r'\b(does|do|is|are|has|have|where)\b.*\b(the|a|an|this|that|my|our|any|which|each)\s+\w*\s*(file|directory|folder|code|class|function|method)\b'),
 
     # File/directory content questions
     re.compile(r'\b(file|directory|folder)\b.*\b(contain|have|include|exist)\b'),
@@ -80,14 +80,15 @@ CODEBASE_PATTERNS: List[re.Pattern] = [
     # Structure/architecture questions
     re.compile(r'\b(structure|architecture|layout|organization)\b.*\b(of|in)\b.*\b(project|codebase|code)\b'),
 
-    # How is organized/structured questions
-    re.compile(r'\bhow\s+(is|are)\b.*\b(organized|structured|laid out)\b'),
+    # How is organized/structured questions (supports contractions)
+    re.compile(r'\bhow\s*(is|are|\'s)\b.*\b(organized|structured|laid out)\b'),
 
-    # Does have/contain/include questions
-    re.compile(r'\b(does|do)\b.*\b(have|contain|include|use|import)\b'),
+    # Does have/contain/include questions (requires code-related subject)
+    # Note: "it" is allowed but "this" alone is too generic
+    re.compile(r'\b(does|do)\b.*\b(the\s+)?(file|code|module|class|function|project|codebase|it)\b.*\b(have|contain|include|use|import)\b'),
 
-    # Where is/are questions
-    re.compile(r'\bwhere\s+(is|are|does|do)\b'),
+    # Where is/are questions (requires codebase context)
+    re.compile(r'\bwhere\s+(is|are|does|do)\b.*\b(files?|functions?|class|code|tests?|modules?|directory|folder|methods?|variables?|config|import)\b'),
 
     # Where tests/files/code is/are questions
     re.compile(r'\bwhere\b.*\b(tests?|files?|code)\b.*\b(is|are)\b'),
@@ -97,6 +98,9 @@ CODEBASE_PATTERNS: List[re.Pattern] = [
 
     # File extension patterns
     re.compile(r'\b\w+\.(js|py|ts|tsx|jsx|java|cpp|c|h|rs|go|rb|php|css|html|json|yaml|yml|md|txt)\b'),
+
+    # Dotfile and relative path patterns (.gitignore, .env, ../, ./)
+    re.compile(r'(?:^|\s)\.{1,2}(?:/\.?\w+)*'),
 ]
 
 
@@ -108,7 +112,18 @@ CODEBASE_PATTERNS: List[re.Pattern] = [
 URL_PATTERN: re.Pattern = re.compile(r'https?://')
 
 # File path pattern (e.g., "src/main", "frontend/app")
-PATH_PATTERN: re.Pattern = re.compile(r'\b\w+/\w+')
+# Excludes common false positives: fractions, async/await, and/or, etc.
+PATH_PATTERN: re.Pattern = re.compile(
+    r'(?!'
+    # Exclude numeric fractions
+    r'\d+/\d+'
+    # Exclude common word pairs that aren't paths
+    r'|async/await|and/or|either/or|yes/no|true/false'
+    r'|input/output|read/write|client/server|request/response'
+    r')'
+    # Match word/word pattern for actual paths
+    r'\b[a-zA-Z_]\w*/\w+'
+)
 
 
 # =============================================================================
@@ -159,6 +174,7 @@ PATTERN_DESCRIPTIONS: dict = {
         10: "Where tests/files/code is/are questions",
         11: "Find in code/project patterns",
         12: "File extension patterns",
+        13: "Dotfile and relative path patterns",
     },
     'url': "Direct HTTP/HTTPS URL detection",
     'path': "File path pattern detection (e.g., src/main)",

@@ -37,58 +37,16 @@
 
 
 we're working to improve src\cli the next task is: 
-Massive Files - Single Responsibility command_router.py
- Command Router Decomposition Plan
-
- Strategy: Command Registry Pattern
-
- Replace 30+ elif branches with dictionary-based dispatch
-
- Implementation Steps
-
- 1. Create handler methods for each command:
-   - _handle_exit(args) - quit/exit/q
-   - _handle_help(args), _handle_status(args), etc. - display commands
-   - _handle_plan(args), _handle_reason(args), _handle_agent(args) - task commands
-   - _handle_smart(args) - smart query with toggle logic
-   - _handle_auto(args) - auto-route with subcommands
-   - _handle_clear(args), _handle_autoexec(args), _handle_multiline(args) - state commands
- 2. Build command registry in __init__:
- self._command_registry = {
-     "/quit": self._handle_exit,
-     "/exit": self._handle_exit,
-     "/help": self._handle_help,
-     # ... all commands
- }
- 3. Simplify route() to ~30 lines:
-   - Validate command (keep existing)
-   - Lookup handler in registry
-   - Call handler with args
-   - Handle unknown commands
- 4. Write tests first (TDD):
-   - Test registry dispatch works
-   - Test each handler method independently
-   - Test unknown command handling
-
- Result
-
- - route(): 231 lines → ~30 lines
- - Clear separation of concerns
- - Easy to add/modify commands
- - Each handler independently testable
-can you research the task and start with tests?
+Fragile patterns: 25+ regex patterns in config/patterns.py with limited edge case tests
+can you research the task and create a plan to fix?
 
 
 help with a plan to decompose?
+create a plan to fix?
 start with tests?
 implement
 ---
 
-
-  ---
-  2. Massive Files - Single Responsibility
-
-  - command_router.py - route() method is 192 lines with 30+ elif branches
 
   ---
   3-6: Pattern Matching, Duplication, JSON, God Objects

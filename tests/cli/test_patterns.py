@@ -93,10 +93,10 @@ class TestPatternCounts:
         )
 
     def test_codebase_patterns_count(self):
-        """CODEBASE_PATTERNS should contain exactly 13 patterns."""
+        """CODEBASE_PATTERNS should contain exactly 14 patterns."""
         from src.cli.config.patterns import CODEBASE_PATTERNS
-        assert len(CODEBASE_PATTERNS) == 13, (
-            f"Expected 13 codebase patterns, got {len(CODEBASE_PATTERNS)}"
+        assert len(CODEBASE_PATTERNS) == 14, (
+            f"Expected 14 codebase patterns, got {len(CODEBASE_PATTERNS)}"
         )
 
 
@@ -298,9 +298,9 @@ class TestCodebasePatternMatching:
         """Pattern should match 'does contain' questions."""
         test_cases = [
             "does it have tests",
-            "does this contain imports",
+            "does the code contain imports",
             "does the code include logging",
-            "do they use async",
+            "does it use async",
         ]
         for text in test_cases:
             matched = any(p.search(text.lower()) for p in self.patterns)
@@ -584,3 +584,312 @@ class TestPackageKeywordsAndActionVerbs:
         assert 'find' in ACTION_KEYWORDS
         assert 'show' in ACTION_KEYWORDS
         assert 'what' in ACTION_KEYWORDS
+
+
+class TestPathPatternFalsePositives:
+    """Tests for PATH_PATTERN false positive cases.
+
+    PATH_PATTERN should match file paths like 'src/main' but NOT:
+    - Fractions like '2/3'
+    - Code constructs like 'async/await'
+    - Alternatives like 'and/or'
+    - Technical terms like 'input/output'
+    """
+
+    def setup_method(self):
+        """Import path pattern for testing."""
+        from src.cli.config.patterns import PATH_PATTERN
+        self.pattern = PATH_PATTERN
+
+    @pytest.mark.parametrize("text", [
+        "use 2/3 of the memory",
+        "1/2 of the work is done",
+        "ratio is 3/4",
+        "split 50/50",
+    ])
+    def test_should_not_match_fractions(self, text):
+        """PATH_PATTERN should not match numeric fractions."""
+        assert not self.pattern.search(text), f"Should not match fraction: {text}"
+
+    @pytest.mark.parametrize("text", [
+        "use async/await syntax",
+        "async/await is supported",
+        "prefer async/await over callbacks",
+    ])
+    def test_should_not_match_async_await(self, text):
+        """PATH_PATTERN should not match async/await code construct."""
+        assert not self.pattern.search(text), f"Should not match: {text}"
+
+    @pytest.mark.parametrize("text", [
+        "use and/or conditions",
+        "either/or choice",
+        "yes/no question",
+        "true/false values",
+    ])
+    def test_should_not_match_alternatives(self, text):
+        """PATH_PATTERN should not match alternative expressions."""
+        assert not self.pattern.search(text), f"Should not match: {text}"
+
+    @pytest.mark.parametrize("text", [
+        "input/output operations",
+        "read/write access",
+        "client/server architecture",
+        "request/response cycle",
+    ])
+    def test_should_not_match_technical_pairs(self, text):
+        """PATH_PATTERN should not match technical term pairs."""
+        assert not self.pattern.search(text), f"Should not match: {text}"
+
+    @pytest.mark.parametrize("text", [
+        "src/main",
+        "tests/unit",
+        "lib/utils",
+        "frontend/app",
+        "src/components/Button",
+        "config/settings.py",
+    ])
+    def test_should_match_valid_paths(self, text):
+        """PATH_PATTERN should still match valid file paths."""
+        assert self.pattern.search(text), f"Should match valid path: {text}"
+
+
+class TestCodebasePattern9FalsePositives:
+    """Tests for CODEBASE_PATTERN[9] false positive cases.
+
+    Pattern 9 is 'where is/are/does/do' - it should match codebase queries
+    but NOT general 'where is' questions unrelated to code.
+    """
+
+    def setup_method(self):
+        """Import codebase patterns for testing."""
+        from src.cli.config.patterns import CODEBASE_PATTERNS
+        self.pattern = CODEBASE_PATTERNS[9]
+
+    @pytest.mark.parametrize("text", [
+        "where is the nearest coffee shop",
+        "where is my car",
+        "where is the bathroom",
+        "where are you from",
+        "where are my keys",
+        "where does the sun rise",
+        "where does this road lead",
+        "where do you live",
+    ])
+    def test_should_not_match_non_code_questions(self, text):
+        """Pattern should not match general 'where is' questions."""
+        assert not self.pattern.search(text.lower()), f"Should not match: {text}"
+
+    @pytest.mark.parametrize("text", [
+        "where is the function defined",
+        "where is the main file",
+        "where are the tests",
+        "where is the class",
+        "where does it import this",
+        "where is the code for authentication",
+    ])
+    def test_should_match_code_questions(self, text):
+        """Pattern should still match codebase-related 'where is' questions."""
+        # Note: These may need pattern 10 or 0 to match properly
+        from src.cli.config.patterns import CODEBASE_PATTERNS
+        matched = any(p.search(text.lower()) for p in CODEBASE_PATTERNS)
+        assert matched, f"Should match code question: {text}"
+
+
+class TestCodebasePattern8FalsePositives:
+    """Tests for CODEBASE_PATTERN[8] false positive cases.
+
+    Pattern 8 is 'does/do have/contain/include/use/import' - it should match
+    code queries but NOT general questions about things having properties.
+    """
+
+    def setup_method(self):
+        """Import codebase patterns for testing."""
+        from src.cli.config.patterns import CODEBASE_PATTERNS
+        self.pattern = CODEBASE_PATTERNS[8]
+
+    @pytest.mark.parametrize("text", [
+        "does Python have good performance",
+        "does this car have leather seats",
+        "do dictionaries contain keys",
+        "does this approach have any downsides",
+        "do they use good practices",
+        "does anyone have experience with this",
+        "do you have time to help",
+    ])
+    def test_should_not_match_non_code_questions(self, text):
+        """Pattern should not match general 'does have' questions."""
+        assert not self.pattern.search(text.lower()), f"Should not match: {text}"
+
+    @pytest.mark.parametrize("text", [
+        "does the file have imports",
+        "does this module contain tests",
+        "does the code include error handling",
+        "does it use async",
+        "does this class import logging",
+    ])
+    def test_should_match_code_questions(self, text):
+        """Pattern should still match codebase-related questions."""
+        from src.cli.config.patterns import CODEBASE_PATTERNS
+        matched = any(p.search(text.lower()) for p in CODEBASE_PATTERNS)
+        assert matched, f"Should match code question: {text}"
+
+
+class TestCodebasePattern0FalsePositives:
+    """Tests for CODEBASE_PATTERN[0] false positive cases.
+
+    Pattern 0 matches questions about files/directories/code existence.
+    It should NOT match unrelated sentences that happen to contain these words.
+    """
+
+    def setup_method(self):
+        """Import codebase patterns for testing."""
+        from src.cli.config.patterns import CODEBASE_PATTERNS
+        self.pattern = CODEBASE_PATTERNS[0]
+
+    @pytest.mark.parametrize("text", [
+        "where should I go to learn about making code better",
+        "does anyone know what good code looks like",
+        "is there a better way to write code in general",
+        "where can I find tutorials about code",
+        "does Python have cleaner code than Java",
+        "are there conventions for writing clean code",
+    ])
+    def test_should_not_match_general_code_discussion(self, text):
+        """Pattern should not match general discussions about code."""
+        assert not self.pattern.search(text.lower()), f"Should not match: {text}"
+
+    @pytest.mark.parametrize("text", [
+        "does the config file exist",
+        "where is the main function",
+        "is there a directory called tests",
+        "are there any class definitions",
+        "has the code been updated",
+    ])
+    def test_should_match_specific_code_queries(self, text):
+        """Pattern should still match specific codebase queries."""
+        assert self.pattern.search(text.lower()), f"Should match: {text}"
+
+
+class TestEdgeCasesContractions:
+    """Tests for contraction handling in patterns."""
+
+    def setup_method(self):
+        """Import patterns for testing."""
+        from src.cli.config.patterns import CODEBASE_PATTERNS
+        self.patterns = CODEBASE_PATTERNS
+
+    @pytest.mark.parametrize("text", [
+        "what's in the file",
+        "where's the function",
+        "how's the code structured",
+        "what's inside the directory",
+    ])
+    def test_contractions_should_match(self, text):
+        """Patterns should handle common contractions."""
+        matched = any(p.search(text.lower()) for p in self.patterns)
+        assert matched, f"Should match contraction: {text}"
+
+
+class TestEdgeCasesSpecialPaths:
+    """Tests for special characters and edge cases in file paths."""
+
+    def setup_method(self):
+        """Import patterns for testing."""
+        from src.cli.config.patterns import CODEBASE_PATTERNS
+        self.patterns = CODEBASE_PATTERNS
+
+    @pytest.mark.parametrize("text", [
+        "check .gitignore",
+        "look at .env file",
+        "read ../.env",
+        "check ../config",
+    ])
+    def test_dotfiles_should_match(self, text):
+        """Patterns should match dotfiles and relative paths."""
+        matched = any(p.search(text.lower()) for p in self.patterns)
+        assert matched, f"Should match: {text}"
+
+    @pytest.mark.parametrize("text", [
+        "check my-file.py",
+        "look at my_file.py",
+        "read test-config.json",
+        "see user_data.yaml",
+    ])
+    def test_special_chars_in_filenames(self, text):
+        """File extension pattern should match hyphens and underscores."""
+        from src.cli.config.patterns import CODEBASE_PATTERNS
+        # Pattern 12 is file extensions
+        pattern = CODEBASE_PATTERNS[12]
+        assert pattern.search(text.lower()), f"Should match: {text}"
+
+
+class TestURLPatternEdgeCases:
+    """Tests for URL pattern edge cases."""
+
+    def setup_method(self):
+        """Import URL pattern for testing."""
+        from src.cli.config.patterns import URL_PATTERN
+        self.pattern = URL_PATTERN
+
+    def test_url_embedded_in_text(self):
+        """Should find URL within surrounding text."""
+        text = "check out https://example.com/docs for more info"
+        assert self.pattern.search(text), f"Should match embedded URL"
+
+    def test_multiple_urls_in_text(self):
+        """Should find URLs when multiple are present."""
+        text = "visit https://example.com or http://other.com"
+        matches = self.pattern.findall(text)
+        assert len(matches) == 2, f"Should find 2 URLs, found {len(matches)}"
+
+    def test_uppercase_url(self):
+        """Should match uppercase URL (when lowercased)."""
+        text = "HTTPS://EXAMPLE.COM"
+        assert self.pattern.search(text.lower()), f"Should match uppercase URL when lowercased"
+
+
+class TestBoundaryConditions:
+    """Tests for boundary conditions and edge cases."""
+
+    def setup_method(self):
+        """Import patterns for testing."""
+        from src.cli.config.patterns import (
+            WEB_PATTERNS, CODEBASE_PATTERNS, URL_PATTERN, PATH_PATTERN
+        )
+        self.web_patterns = WEB_PATTERNS
+        self.codebase_patterns = CODEBASE_PATTERNS
+        self.url_pattern = URL_PATTERN
+        self.path_pattern = PATH_PATTERN
+
+    def test_whitespace_only_no_match(self):
+        """Whitespace-only strings should not match."""
+        test_cases = ["   ", "\t", "\n", "  \t\n  "]
+        for text in test_cases:
+            for pattern in self.web_patterns + self.codebase_patterns:
+                assert not pattern.search(text), f"Should not match whitespace"
+
+    def test_single_character_no_match(self):
+        """Single characters should not match patterns."""
+        for char in "abcdefghijklmnopqrstuvwxyz0123456789":
+            for pattern in self.web_patterns:
+                assert not pattern.search(char), f"Web pattern matched single char: {char}"
+
+    def test_very_long_input(self):
+        """Patterns should handle very long input without hanging."""
+        long_text = "fetch the docs " * 1000
+        # Should complete quickly without catastrophic backtracking
+        for pattern in self.web_patterns:
+            pattern.search(long_text)  # Just verify it completes
+
+    def test_special_regex_chars_escaped(self):
+        """Special regex characters in input should be handled safely."""
+        test_cases = [
+            "what about file.py?",
+            "check (config).json",
+            "look at [bracket].py",
+            "file with * wildcard",
+        ]
+        for text in test_cases:
+            # Should not raise exceptions
+            for pattern in self.codebase_patterns:
+                pattern.search(text.lower())

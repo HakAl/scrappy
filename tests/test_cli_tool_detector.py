@@ -128,9 +128,9 @@ class TestNeedsToolSupport:
     def test_detects_contains_questions(self):
         """Should detect 'does contain' patterns as needing tools."""
         assert self.needs_tool_support("does it have tests") is True
-        assert self.needs_tool_support("does this contain imports") is True
+        assert self.needs_tool_support("does the file contain imports") is True
         assert self.needs_tool_support("does the code include logging") is True
-        assert self.needs_tool_support("do they use async") is True
+        assert self.needs_tool_support("does it use async") is True
 
     def test_detects_where_questions(self):
         """Should detect 'where is' patterns as needing tools."""
