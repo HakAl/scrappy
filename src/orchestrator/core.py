@@ -29,6 +29,7 @@ from .delegation import DelegationManager
 from .background import BackgroundTaskManager
 from .registration import ProviderRegistrar
 from .status_reporter import ProviderStatusReporter
+from .usage_reporter import UsageReporter
 
 
 class AgentOrchestrator:
@@ -109,6 +110,14 @@ class AgentOrchestrator:
         self.working_memory = working_memory or WorkingMemory()
         self.session_manager = session_manager or SessionManager(self.context.project_path)
         self.provider_selector = provider_selector or ProviderSelector(self.registry, verbose=verbose_selection, output=self.output)
+
+        # Initialize usage reporter
+        self.usage_reporter = UsageReporter(
+            cache=self.cache,
+            task_history=self.task_history,
+            created_at=self.created_at,
+            caching_enabled=self.caching_enabled
+        )
 
         # Register providers and set up brain
         if auto_register:
@@ -660,57 +669,26 @@ class AgentOrchestrator:
             # No event loop, create a new one
             return asyncio.run(coro)
 
-    # Usage and Cache Statistics
+    # Usage and Cache Statistics (delegates to UsageReporter)
 
     def get_usage_report(self) -> dict:
         """Get usage statistics for current session."""
-        if not self.task_history:
-            return {'message': 'No tasks executed yet', 'cache_stats': self.cache.get_stats()}
-
-        by_provider = {}
-        cached_hits = 0
-        for task in self.task_history:
-            provider = task['provider']
-            if provider not in by_provider:
-                by_provider[provider] = {
-                    'count': 0,
-                    'total_tokens': 0,
-                    'total_latency_ms': 0,
-                    'cached_hits': 0,
-                }
-            by_provider[provider]['count'] += 1
-            by_provider[provider]['total_tokens'] += task['tokens_used']
-            by_provider[provider]['total_latency_ms'] += task['latency_ms']
-
-            if task.get('cached', False):
-                by_provider[provider]['cached_hits'] += 1
-                cached_hits += 1
-
-        for provider, stats in by_provider.items():
-            stats['avg_tokens'] = stats['total_tokens'] / stats['count']
-            stats['avg_latency_ms'] = stats['total_latency_ms'] / stats['count']
-
-        return {
-            'total_tasks': len(self.task_history),
-            'cached_hits': cached_hits,
-            'api_calls': len(self.task_history) - cached_hits,
-            'by_provider': by_provider,
-            'session_duration': str(datetime.now() - self.created_at),
-            'cache_stats': self.cache.get_stats(),
-        }
+        return self.usage_reporter.get_usage_report()
 
     def get_cache_stats(self) -> dict:
         """Get cache statistics."""
-        return self.cache.get_stats()
+        return self.usage_reporter.get_cache_stats()
 
     def clear_cache(self):
         """Clear the response cache."""
-        self.cache.clear()
+        self.usage_reporter.clear_cache()
 
     def toggle_cache(self) -> bool:
         """Toggle caching on/off. Returns new state."""
-        self.caching_enabled = not self.caching_enabled
-        return self.caching_enabled
+        result = self.usage_reporter.toggle_cache()
+        # Keep orchestrator's caching_enabled in sync
+        self.caching_enabled = self.usage_reporter.caching_enabled
+        return result
 
     # Background Task Management (delegates to BackgroundTaskManager)
 

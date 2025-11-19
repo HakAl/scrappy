@@ -234,9 +234,9 @@ Critical Issues
 **RED**
 
 we're working to improve src\orchestrator the next task is: 
- Break up core.py - Extract ProviderStatusReporter (lines 211-263)
+ Break up core.py - Extract UsageReporter (lines 729-777)
 
-  print_provider_status() and get_provider_selection_info() are presentation logic - ~50 lines.
+  get_usage_report(), get_cache_stats(), clear_cache(), toggle_cache() - cohesive reporting unit - ~50 lines.
  
 can you research the task and start with tests?
 
@@ -252,11 +252,6 @@ they're fully tested and ready for integration in src/. can you complete the ref
 
   ---
   Phase 3: Extract and Decompose God Object
-
-
-  2. Extract ProviderStatusReporter (lines 211-263)
-
-  print_provider_status() and get_provider_selection_info() are presentation logic - ~50 lines.
 
   3. Extract UsageReporter (lines 729-777)
 
