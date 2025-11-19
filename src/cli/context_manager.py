@@ -5,7 +5,8 @@ Handles project context, exploration, and working memory.
 
 from typing import Optional
 
-from .io_interface import CLIIOProtocol, ClickIO
+from .io_interface import CLIIOProtocol
+from .rich_output import RichIO
 from .validators import validate_subcommand
 
 
@@ -51,7 +52,7 @@ class ContextManager:
             None
         """
         if io is None:
-            io = ClickIO()
+            io = RichIO()
 
         # Validate subcommand
         validation = validate_subcommand("context", args)

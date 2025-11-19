@@ -18,6 +18,8 @@ from .smart_query import CLISmartQuery
 from .task_router_handler import CLITaskRouterHandler
 from .tasks import CLITaskExecution
 from .utils.session_utils import display_session_save_error
+from .interactive_banner import render_welcome_banner
+from .rich_output import RichIO
 
 from .exceptions import (
     CLIError,
@@ -104,35 +106,35 @@ class InteractiveMode:
             io.echo("Use one-shot commands instead (e.g., scrappy query 'your question')")
             return
 
-        # Show welcome banner
-        io.secho("=" * 60, fg="cyan")
-        io.secho("Scrappy - Interactive Mode", fg="cyan", bold=True)
-        io.secho("=" * 60, fg="cyan")
-        io.echo("Commands:")
-        io.echo(f"  {io.style('/help', fg='yellow')}          - Show all commands")
-        io.echo(f"  {io.style('/auto', fg='yellow')}          - Toggle auto-routing (task-aware execution)")
-        io.echo(f"  {io.style('/plan', fg='yellow')} <task>   - Create a task plan")
-        io.echo(f"  {io.style('/reason', fg='yellow')} <q>    - Reason about a question")
-        io.echo(f"  {io.style('/agent', fg='yellow')} <task>  - Run code agent (with human approval)")
-        io.echo(f"  {io.style('/smart', fg='yellow')} <q>     - Research-first query (uses tools)")
-        io.echo(f"  {io.style('/context', fg='yellow')}       - Manage codebase context")
-        io.echo(f"  {io.style('/autoexec', fg='yellow')}      - Toggle auto-execute for plan tasks")
-        io.echo(f"  {io.style('/status', fg='yellow')}        - Show system status")
-        io.echo(f"  {io.style('/quit', fg='yellow')}          - Exit the CLI")
-        io.echo(f"  {io.style('(any text)', fg='bright_white')}     - Chat with current brain")
-        io.secho("=" * 60, fg="cyan")
-
-        # Show mode statuses
-        if self.multiline_mode:
-            io.secho("Multiline input: ON (end line with \\ to continue, /ml to toggle)", fg="green")
+        # Show welcome banner with Rich Panel
+        # Use RichIO if available, otherwise fall back to basic io
+        if isinstance(io, RichIO):
+            render_welcome_banner(io, self.multiline_mode, self.auto_route_mode)
         else:
-            io.secho("Multiline input: OFF (/ml to toggle)", fg="yellow")
+            # Fallback for non-Rich IO (e.g., testing)
+            io.secho("=" * 60, fg="cyan")
+            io.secho("Scrappy - Interactive Mode", fg="cyan", bold=True)
+            io.secho("=" * 60, fg="cyan")
+            io.echo("Commands:")
+            io.echo(f"  {io.style('/help', fg='yellow')}          - Show all commands")
+            io.echo(f"  {io.style('/auto', fg='yellow')}          - Toggle auto-routing")
+            io.echo(f"  {io.style('/plan', fg='yellow')} <task>   - Create a task plan")
+            io.echo(f"  {io.style('/agent', fg='yellow')} <task>  - Run code agent")
+            io.echo(f"  {io.style('/smart', fg='yellow')} <q>     - Research-first query")
+            io.echo(f"  {io.style('/status', fg='yellow')}        - Show system status")
+            io.echo(f"  {io.style('/quit', fg='yellow')}          - Exit the CLI")
+            io.secho("=" * 60, fg="cyan")
 
-        if self.auto_route_mode:
-            io.secho("Auto-routing: ON (task-aware execution)", fg="green")
-        else:
-            io.secho("Auto-routing: OFF (/auto to enable)", fg="yellow")
-        io.echo()
+            if self.multiline_mode:
+                io.secho("Multiline input: ON", fg="green")
+            else:
+                io.secho("Multiline input: OFF", fg="yellow")
+
+            if self.auto_route_mode:
+                io.secho("Auto-routing: ON", fg="green")
+            else:
+                io.secho("Auto-routing: OFF", fg="yellow")
+            io.echo()
 
         # Run main loop
         self._main_loop()

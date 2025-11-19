@@ -8,7 +8,8 @@ extracting configuration from Click contexts.
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Optional, Dict
 
-from ..io_interface import CLIIOProtocol, ClickIO, TestIO
+from ..io_interface import CLIIOProtocol, TestIO
+from ..rich_output import RichIO
 from ..display import CLIDisplay
 from ..session import CLISessionManager
 from ..codebase import CLICodebaseAnalysis
@@ -41,7 +42,7 @@ def get_io_interface(
         return io
     if test_mode:
         return TestIO()
-    return ClickIO()
+    return RichIO()
 
 
 def create_context_state(ctx: Any) -> Dict[str, Any]:

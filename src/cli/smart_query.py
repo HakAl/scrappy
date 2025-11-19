@@ -7,7 +7,8 @@ from typing import Optional
 
 from ..agent import CodeAgent
 from ..intent_classifier import IntentClassifier, get_research_actions
-from .io_interface import CLIIOProtocol, ClickIO
+from .io_interface import CLIIOProtocol
+from .rich_output import RichIO
 from .prompt_builder import PromptBuilder
 from .research_handlers import create_default_registry
 
@@ -55,7 +56,7 @@ class CLISmartQuery:
                 token usage, and latency.
         """
         if io is None:
-            io = ClickIO()
+            io = RichIO()
 
         io.secho("\n[Smart Query] Analyzing intent...", fg="cyan", bold=True)
 

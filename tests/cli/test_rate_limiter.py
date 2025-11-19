@@ -589,17 +589,17 @@ class TestRateLimiterTimeFormatting:
 class TestRateLimiterDefaultIO:
     """Tests for default IO behavior."""
 
-    def test_uses_click_io_when_io_not_provided(self):
-        """Should use ClickIO as default when io parameter is None."""
+    def test_uses_rich_io_when_io_not_provided(self):
+        """Should use RichIO as default when io parameter is None."""
         from src.cli.rate_limiter import RateLimiter
 
         orchestrator = ConfigurableTestOrchestrator()
         limiter = RateLimiter(orchestrator)
 
         try:
-            with patch('src.cli.rate_limiter.ClickIO') as mock_click:
+            with patch('src.cli.rate_limiter.RichIO') as mock_rich:
                 mock_io = MockIO()
-                mock_click.return_value = mock_io
+                mock_rich.return_value = mock_io
                 limiter.show_rate_limits(args="", io=None)
         except ImportError:
             pass

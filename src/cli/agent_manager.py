@@ -6,7 +6,8 @@ Handles running and managing code execution agents with human approval.
 from typing import Optional
 
 from ..agent import CodeAgent, create_git_checkpoint, rollback_to_checkpoint
-from .io_interface import CLIIOProtocol, ClickIO
+from .io_interface import CLIIOProtocol
+from .rich_output import RichIO
 
 
 class CLIAgentManager:
@@ -56,7 +57,7 @@ class CLIAgentManager:
             None
         """
         if io is None:
-            io = ClickIO()
+            io = RichIO()
 
         io.secho(f"\nCode Agent - Task: {task}", bold=True)
         io.echo("-" * 60)

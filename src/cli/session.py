@@ -5,7 +5,8 @@ Handles context, cache, rate limits, and session persistence.
 
 from typing import Any, Dict, List, Optional
 
-from .io_interface import CLIIOProtocol, ClickIO
+from .io_interface import CLIIOProtocol
+from .rich_output import RichIO
 from .context_manager import ContextManager
 from .cache_manager import CacheManager
 from .rate_limiter import RateLimiter

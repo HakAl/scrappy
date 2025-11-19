@@ -289,7 +289,8 @@ class TestCLIDisplay:
         display.show_help()
 
         captured = capsys.readouterr()
-        assert "Available Commands:" in captured.out
+        # Check for title (may be in table or plain text format)
+        assert "Available Commands" in captured.out
         assert "/help" in captured.out
         assert "/quit" in captured.out
         assert "/providers" in captured.out
@@ -301,10 +302,11 @@ class TestCLIDisplay:
         display.show_help()
 
         captured = capsys.readouterr()
-        assert "Chat & Conversation:" in captured.out
-        assert "Task Operations:" in captured.out
-        assert "Provider Management:" in captured.out
-        assert "Context Management:" in captured.out
+        # Check for category names (may be bold or plain text)
+        assert "Chat & Conversation" in captured.out
+        assert "Task Operations" in captured.out
+        assert "Provider Management" in captured.out
+        assert "Context Management" in captured.out
 
     @pytest.mark.unit
     def test_show_status_displays_brain(self, display, capsys):
@@ -312,7 +314,8 @@ class TestCLIDisplay:
         display.show_status()
 
         captured = capsys.readouterr()
-        assert "System Status:" in captured.out
+        # Check for title (may be in panel or plain text format)
+        assert "System Status" in captured.out
         assert "cerebras" in captured.out
 
     @pytest.mark.unit
@@ -368,8 +371,9 @@ class TestCLIDisplay:
         display.show_usage()
 
         captured = capsys.readouterr()
-        assert "Usage Statistics:" in captured.out
-        assert "Total Tasks:" in captured.out
+        # Check for title (may be in panel or plain text format)
+        assert "Usage" in captured.out
+        assert "Total Tasks" in captured.out
 
     @pytest.mark.unit
     def test_list_models_all_providers(self, display, mock_orchestrator, capsys):

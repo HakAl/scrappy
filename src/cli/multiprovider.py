@@ -5,7 +5,8 @@ Handles synthesis and delegation across multiple providers.
 
 from typing import Optional
 
-from .io_interface import CLIIOProtocol, ClickIO
+from .io_interface import CLIIOProtocol
+from .rich_output import RichIO
 from .validators import is_empty_or_whitespace, validate_provider
 
 
@@ -41,7 +42,7 @@ class CLIMultiProvider:
             None
         """
         if io is None:
-            io = ClickIO()
+            io = RichIO()
 
         io.secho("\nSynthesis Mode", bold=True)
         io.echo("-" * 50)
@@ -123,7 +124,7 @@ class CLIMultiProvider:
             None
         """
         if io is None:
-            io = ClickIO()
+            io = RichIO()
 
         if not args:
             io.echo("Usage: /delegate <provider> <prompt>")

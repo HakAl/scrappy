@@ -1,5 +1,7 @@
 ## Future Enhancements
 
+remove built in display truncation
+
 - [ ] Learning from user patterns
 - [ ] Provider performance tracking
 - [ ] Automatic strategy tuning based on success rates
@@ -17,37 +19,6 @@
 
 ---
 
-
-
-### UI Upgrade: The `Rich` Dashboard
-Since you are building a CLI tool, **`Rich`** is going to be your best friend. It turns your "walls of text" into a dashboard.
-
-Instead of `print(f"Scanning {filename}...")`, try using a **Live Layout**. This gives your user that "hacker movie" feel where they can see the agent "thinking."
-
-```python
-from rich.live import Live
-from rich.layout import Layout
-from rich.panel import Panel
-import time
-
-def make_layout():
-    layout = Layout()
-    layout.split_column(
-        Layout(name="upper"),
-        Layout(name="lower")
-    )
-    layout["upper"].split_row(
-        Layout(Panel("Status: [green]Scanning Files...[/]", title="Agent State"), name="left"),
-        Layout(Panel("Thinking...", title="Thought Process"), name="right"),
-    )
-    layout["lower"].update(Panel("waiting for input...", title="Terminal"))
-    return layout
-
-# Run this loop while your agent is working
-with Live(make_layout(), refresh_per_second=4) as live:
-    # Your agent logic updates the panels dynamically
-    pass
-```
 
 ---
 

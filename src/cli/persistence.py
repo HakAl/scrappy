@@ -6,7 +6,8 @@ Handles saving, loading, and managing session state.
 import json
 from typing import Any, Dict, List, Optional
 
-from .io_interface import CLIIOProtocol, ClickIO
+from .io_interface import CLIIOProtocol
+from .rich_output import RichIO
 from .utils.session_utils import display_session_load_error
 from .validators import validate_subcommand
 
@@ -94,7 +95,7 @@ class SessionPersistence:
             >>> history = result['conversation_history']  # Restored history
         """
         if io is None:
-            io = ClickIO()
+            io = RichIO()
 
         result = {
             'conversation_history': conversation_history,

@@ -6,7 +6,8 @@ Handles display and reset of API rate limit usage.
 from typing import Optional
 import logging
 
-from .io_interface import CLIIOProtocol, ClickIO
+from .io_interface import CLIIOProtocol
+from .rich_output import RichIO
 from .validators import validate_subcommand
 
 logger = logging.getLogger(__name__)
@@ -130,7 +131,7 @@ class RateLimiter:
             >>> rate_limiter.show_rate_limits("reset openai")  # Reset openai only
         """
         if io is None:
-            io = ClickIO()
+            io = RichIO()
 
         # Validate subcommand
         validation = validate_subcommand("limits", args)

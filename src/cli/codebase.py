@@ -9,7 +9,8 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional
 
-from .io_interface import CLIIOProtocol, ClickIO
+from .io_interface import CLIIOProtocol
+from .rich_output import RichIO
 from .config.defaults import (
     MAX_TOKENS_SUMMARY,
     TEMPERATURE_LOW,
@@ -62,7 +63,7 @@ class CLICodebaseAnalysis:
             None
         """
         if io is None:
-            io = ClickIO()
+            io = RichIO()
 
         if not path:
             path = io.prompt("Directory to explore", default=".")

@@ -16,7 +16,8 @@ from .multiprovider import CLIMultiProvider
 from .smart_query import CLISmartQuery
 from .agent_manager import CLIAgentManager
 from .task_router_handler import CLITaskRouterHandler
-from .io_interface import CLIIOProtocol, ClickIO
+from .io_interface import CLIIOProtocol
+from .rich_output import RichIO
 from .tool_detector import needs_tool_support
 from .input_handler import InputHandler
 from .state_manager import PlanStateManager
@@ -78,7 +79,7 @@ class CLI:
             initialization may raise if no providers are available.
         """
         if io is None:
-            io = ClickIO()
+            io = RichIO()
         self.io = io
 
         io.secho("Initializing Scrappy...", fg="cyan")

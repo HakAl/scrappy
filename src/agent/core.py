@@ -8,11 +8,16 @@ import json
 import re
 import subprocess
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional, Union, Any
 
 from ..agent_config import AgentConfig
 from ..agent_tools.tools import ToolRegistry, ToolContext
 from ..agent_tools.tools.command_tool import ShellCommandExecutor
+
+# Import IO interfaces - avoid circular import by importing module directly
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from ..cli.io_interface import CLIIOProtocol
 
 
 def safe_print(*args, **kwargs):
@@ -76,7 +81,8 @@ class CodeAgent:
         orchestrator: Union[OrchestratorAdapter, object],
         project_path: Optional[str] = None,
         config: Optional[AgentConfig] = None,
-        tool_registry: Optional[ToolRegistry] = None
+        tool_registry: Optional[ToolRegistry] = None,
+        io: Optional[Any] = None  # CLIIOProtocol - Any to avoid circular import
     ):
         """
         Initialize the code agent.
@@ -87,7 +93,16 @@ class CodeAgent:
             project_path: Root directory to sandbox operations (default: cwd)
             config: AgentConfig instance (uses defaults if not provided)
             tool_registry: ToolRegistry instance (creates default if not provided)
+            io: IO interface for output (defaults to RichIO)
         """
+        # Initialize IO first so we can use it for output
+        # Import at runtime to avoid circular import
+        if io is None:
+            from ..cli.rich_output import RichIO
+            self.io = RichIO()
+        else:
+            self.io = io
+
         # Wrap orchestrator in adapter if needed
         if isinstance(orchestrator, OrchestratorAdapter):
             self.adapter = orchestrator
@@ -111,7 +126,7 @@ class CodeAgent:
         self._response_parser: ResponseParser = UnifiedResponseParser()
 
         # Create tool context
-        safe_print("Preparing agent tools...")
+        self._show_progress("Preparing agent tools...")
         self.tool_context = ToolContext(
             project_root=self.project_root,
             dry_run=self.dry_run,
@@ -154,7 +169,7 @@ class CodeAgent:
         self._command_executor = ShellCommandExecutor(self.config)
 
         # Use orchestrator's intelligent provider selection
-        safe_print("Selecting AI providers...")
+        self._show_progress("Selecting AI providers...")
         available = self.adapter.list_providers()
 
         # Store orchestrator reference for dynamic provider selection
@@ -267,6 +282,81 @@ class CodeAgent:
         """Log an action to the audit trail."""
         self._audit_logger.log_action(action, params, result, approved)
 
+    # ========== Rich Output Helper Methods ==========
+
+    def _show_thinking(self, text: str) -> None:
+        """Display thinking/reasoning output in a blue-bordered panel."""
+        if not text or not text.strip():
+            return
+        if hasattr(self.io, 'panel'):
+            self.io.panel(text, title="Thinking", border_style="blue")
+        else:
+            self.io.secho(f"[Thinking] {text}", fg="blue")
+
+    def _show_tool_request(self, tool_name: str, params: dict) -> None:
+        """Display tool request as a formatted table."""
+        if hasattr(self.io, 'table'):
+            headers = ["Property", "Value"]
+            rows = [["Tool", tool_name]]
+            for key, value in params.items():
+                # Truncate long values for display
+                str_value = str(value)
+                if len(str_value) > 100:
+                    str_value = str_value[:100] + "..."
+                rows.append([key, str_value])
+            self.io.table(headers, rows, title="Tool Request")
+        else:
+            self.io.secho(f"Tool: {tool_name}", fg="cyan", bold=True)
+            self.io.echo(f"Parameters: {json.dumps(params, indent=2)}")
+
+    def _show_command(self, command: str) -> None:
+        """Display command in syntax-highlighted block."""
+        if hasattr(self.io, 'syntax'):
+            self.io.syntax(command, language="shell")
+        else:
+            self.io.secho(f"$ {command}", fg="yellow")
+
+    def _show_error(self, message: str) -> None:
+        """Display error in red-bordered panel."""
+        if hasattr(self.io, 'panel'):
+            self.io.panel(message, title="Error", border_style="red")
+        else:
+            self.io.secho(f"Error: {message}", fg="red")
+
+    def _show_result(self, result: str, title: str = "Result") -> None:
+        """Display result in green-bordered panel."""
+        if hasattr(self.io, 'panel'):
+            self.io.panel(result, title=title, border_style="green")
+        else:
+            self.io.secho(f"{title}: {result}", fg="green")
+
+    def _show_warning(self, message: str) -> None:
+        """Display warning in yellow-bordered panel."""
+        if hasattr(self.io, 'panel'):
+            self.io.panel(message, title="Warning", border_style="yellow")
+        else:
+            self.io.secho(f"Warning: {message}", fg="yellow")
+
+    def _show_progress(self, message: str) -> None:
+        """Display progress/status message."""
+        self.io.secho(message, fg="cyan")
+
+    def _show_provider_status(self, provider: str, message: str, color: str = "cyan") -> None:
+        """Display provider status message."""
+        self.io.secho(f"[{provider}] {message}", fg=color)
+
+    def _show_rule(self, title: Optional[str] = None) -> None:
+        """Display horizontal rule separator."""
+        if hasattr(self.io, 'rule'):
+            self.io.rule(title)
+        else:
+            if title:
+                self.io.echo(f"\n{'='*60}")
+                self.io.echo(f" {title} ")
+                self.io.echo(f"{'='*60}")
+            else:
+                self.io.echo(f"\n{'='*60}")
+
     def _tool_run_command(self, command: str) -> str:
         """Run a shell command using the extracted command executor."""
         # Check for interactive commands BEFORE delegating to executor
@@ -274,17 +364,20 @@ class CodeAgent:
         cmd_lower = command.lower()
         for pattern in self.config.interactive_commands:
             if pattern in cmd_lower:
-                safe_print(f"Warning: '{pattern}' may require interactive input")
+                self._show_warning(f"'{pattern}' may require interactive input")
                 # Suggest workarounds for common cases
                 if 'npx' in cmd_lower:
-                    safe_print("   Tip: Add '-y' flag to skip prompts: npx -y create-react-app ...")
+                    self.io.echo("   Tip: Add '-y' flag to skip prompts: npx -y create-react-app ...")
                 # Ask if user wants interactive mode
                 try:
-                    use_interactive = input("   Run in interactive mode (you can respond to prompts)? [Y/n]: ").strip().lower()
+                    use_interactive = self.io.prompt(
+                        "   Run in interactive mode (you can respond to prompts)?",
+                        default="y"
+                    ).strip().lower()
                     if use_interactive != 'n':
                         return self._run_command_interactive(command)
                 except (KeyboardInterrupt, EOFError):
-                    safe_print("\n   Skipping interactive mode, running with captured output...")
+                    self.io.echo("\n   Skipping interactive mode, running with captured output...")
                 break
 
         # Delegate to the command executor for all other processing
@@ -296,11 +389,9 @@ class CodeAgent:
         Run a command in interactive mode - passes I/O directly to terminal.
         User can respond to prompts directly.
         """
-        safe_print(f"\n{'='*60}")
-        safe_print(f"Running in INTERACTIVE MODE")
-        safe_print(f"Command: {command}")
-        safe_print(f"You can respond to any prompts. Output goes directly to terminal.")
-        safe_print(f"{'='*60}\n")
+        self._show_rule("INTERACTIVE MODE")
+        self._show_command(command)
+        self.io.echo("You can respond to any prompts. Output goes directly to terminal.")
 
         try:
             # Run command with direct terminal I/O (no capture)
@@ -313,9 +404,9 @@ class CodeAgent:
                 # This allows interactive prompts to work
             )
 
-            safe_print(f"\n{'='*60}")
-            safe_print(f"Command finished with exit code: {result.returncode}")
-            safe_print(f"{'='*60}\n")
+            self._show_rule()
+            self.io.secho(f"Command finished with exit code: {result.returncode}",
+                         fg="green" if result.returncode == 0 else "red")
 
             if result.returncode == 0:
                 return f"Command completed successfully (exit code 0). Output was displayed directly to terminal."
@@ -323,9 +414,8 @@ class CodeAgent:
                 return f"Command finished with exit code {result.returncode}. Check terminal output for details."
 
         except KeyboardInterrupt:
-            safe_print(f"\n{'='*60}")
-            safe_print(f"Command stopped by user (Ctrl+C)")
-            safe_print(f"{'='*60}\n")
+            self._show_rule()
+            self.io.secho("Command stopped by user (Ctrl+C)", fg="yellow")
 
             # Provide context-aware message based on command type
             cmd_lower = command.lower()
@@ -439,26 +529,46 @@ class CodeAgent:
         # Auto-approve safe read-only operations
         safe_actions = ['read_file', 'list_files', 'list_directory', 'search_files', 'search_code', 'git_status', 'git_log', 'git_diff']
         if action in safe_actions:
-            safe_print(f"Agent wants to: {action}")
-            safe_print(f"Parameters: {json.dumps(params, indent=2)}")
-            safe_print("Auto-approved (safe operation)")
+            # Display tool request with auto-approval status
+            display_params = params.copy()
+            display_params['_status'] = 'Auto-approved (safe operation)'
+            self._show_tool_request(action, params)
+            self.io.secho("Auto-approved (safe operation)", fg="green")
             return True
 
-        safe_print(f"\nAgent wants to: {action}")
-        safe_print(f"Parameters: {json.dumps(params, indent=2)}")
+        # Display tool request for approval
+        self._show_tool_request(action, params)
 
         # Show preview for write operations
         if action == 'write_file' and 'content' in params:
             content = params['content']
             max_preview = self.config.write_preview_truncation
             preview = content[:max_preview] + "..." if len(content) > max_preview else content
-            safe_print(f"\nContent preview:\n{preview}")
+            if hasattr(self.io, 'syntax'):
+                # Try to detect language from file extension
+                file_path = params.get('path', '')
+                lang = 'text'
+                if file_path.endswith('.py'):
+                    lang = 'python'
+                elif file_path.endswith(('.js', '.jsx')):
+                    lang = 'javascript'
+                elif file_path.endswith(('.ts', '.tsx')):
+                    lang = 'typescript'
+                elif file_path.endswith('.json'):
+                    lang = 'json'
+                elif file_path.endswith(('.yml', '.yaml')):
+                    lang = 'yaml'
+                elif file_path.endswith('.md'):
+                    lang = 'markdown'
+                self.io.echo("\nContent preview:")
+                self.io.syntax(preview, language=lang)
+            else:
+                self.io.echo(f"\nContent preview:\n{preview}")
 
         try:
-            response = input("Allow? [y/N]: ").strip().lower()
-            return response in ('y', 'yes')
+            return self.io.confirm("Allow?", default=False)
         except (KeyboardInterrupt, EOFError):
-            safe_print("\nAction cancelled.")
+            self.io.echo("\nAction cancelled.")
             raise  # Re-raise to stop the agent loop
 
     # ========== Decoupled Agent Loop Methods ==========
@@ -488,9 +598,9 @@ class CodeAgent:
 
         # Show progress indicator during API call
         if state.iteration == 1:
-            safe_print(f"[{current_provider}] Analyzing task (this may take a moment)...")
+            self._show_provider_status(current_provider, "Analyzing task (this may take a moment)...")
         else:
-            safe_print(f"[{current_provider}] Thinking...")
+            self._show_provider_status(current_provider, "Thinking...")
 
         # Build the prompt with conversation history for multi-turn
         if len(state.messages) == 2:
@@ -603,7 +713,7 @@ class CodeAgent:
         # Report latency on first call (helps user understand wait times)
         if state.iteration == 1:
             elapsed = time.time() - start_time
-            safe_print(f"[{actual_provider}] Response received ({elapsed:.1f}s)")
+            self._show_provider_status(actual_provider, f"Response received ({elapsed:.1f}s)", color="green")
 
         return AgentThought(
             raw_response=response.content,
@@ -658,14 +768,15 @@ class CodeAgent:
         Returns:
             ActionResult with execution details
         """
-        safe_print(f"\nThought: {action.thought}")
+        # Display thinking in panel
+        self._show_thinking(action.thought)
 
         # Handle parse failure - provide feedback to LLM to retry with valid JSON
         if action.action == 'retry_parse':
             # Show what the LLM actually returned for debugging
             raw_response = action.parameters.get('raw_response', 'No response captured')
-            safe_print(f"Response parsing failed. LLM returned:\n{raw_response[:300]}...")
-            safe_print("Requesting JSON format retry...")
+            self._show_error(f"Response parsing failed. LLM returned:\n{raw_response[:300]}...")
+            self.io.secho("Requesting JSON format retry...", fg="yellow")
             error_msg = (
                 "Your previous response could not be parsed as JSON. "
                 "You MUST respond with ONLY a valid JSON object (no other text). "
@@ -701,7 +812,7 @@ class CodeAgent:
 
         # Handle unknown actions
         if action.action not in self.tools and action.action != 'complete' and action.action != 'error':
-            safe_print(f"Unknown action: {action.action}")
+            self._show_error(f"Unknown action: {action.action}")
             return ActionResult(
                 success=False,
                 output=f"Unknown action '{action.action}'. Available tools: {', '.join(self.tools.keys())}",
@@ -718,7 +829,7 @@ class CodeAgent:
             approved = self._get_user_confirmation(action.action, action.parameters)
 
         if not approved:
-            safe_print("Action denied by user")
+            self.io.secho("Action denied by user", fg="yellow")
             self._log_action(action.action, action.parameters, "Denied by user", False)
             return ActionResult(
                 success=False,
@@ -732,7 +843,7 @@ class CodeAgent:
         # Check for duplicate actions - prevent infinite loops
         duplicate_warning = self._check_duplicate_action(action, state)
         if duplicate_warning:
-            safe_print(f"[Duplicate Action Warning] {duplicate_warning}")
+            self._show_warning(f"Duplicate Action: {duplicate_warning}")
             # Return warning to LLM instead of executing
             return ActionResult(
                 success=False,
@@ -748,12 +859,18 @@ class CodeAgent:
             command = action.parameters.get('command', '')
             retry_warning = self._check_retry_pattern(command, state.failed_commands)
             if retry_warning:
-                safe_print(f"[Retry Warning] {retry_warning}")
+                self._show_warning(f"Retry Pattern: {retry_warning}")
                 # Add warning to state for next iteration
                 state.retry_warnings.append(retry_warning)
 
         # Execute the tool
-        safe_print(f"Executing: {action.action}")
+        self.io.secho(f"Executing: {action.action}", fg="cyan", bold=True)
+
+        # Show command in syntax block for run_command
+        if action.action == 'run_command':
+            cmd = action.parameters.get('command', '')
+            if cmd:
+                self._show_command(cmd)
         tool_result = self.tools[action.action](**action.parameters)
 
         # Track failed commands for retry detection
@@ -768,7 +885,7 @@ class CodeAgent:
                     'approach': approach,
                     'iteration': state.iteration
                 })
-                safe_print(f"   [Tracked] Failed '{approach}' approach - will suggest alternatives")
+                self.io.secho(f"   [Tracked] Failed '{approach}' approach - will suggest alternatives", fg="yellow")
 
                 # Check if this is a scaffolding approach
                 scaffolding_approaches = [
@@ -791,7 +908,7 @@ class CodeAgent:
                             f"For React: write_file to create package.json, App.jsx, etc."
                         )
                         state.retry_warnings.append(warning)
-                        safe_print(f"   [MANDATORY] Switching to write_file strategy after scaffolding failure")
+                        self.io.secho("   [MANDATORY] Switching to write_file strategy after scaffolding failure", fg="red", bold=True)
 
                 # If same approach failed twice, inject strong warning
                 approach_failures = sum(1 for f in state.failed_commands if f['approach'] == approach)
@@ -803,11 +920,22 @@ class CodeAgent:
                     )
                     state.retry_warnings.append(warning)
 
+        # Display result
         max_display = self.config.result_display_truncation
         if len(tool_result) > max_display:
-            safe_print(f"Result: {tool_result[:max_display]}...")
+            display_result = tool_result[:max_display] + "... [truncated]"
         else:
-            safe_print(f"Result: {tool_result}")
+            display_result = tool_result
+
+        # Use panel for results if available
+        if hasattr(self.io, 'panel'):
+            # Determine result style based on content
+            if 'Error' in tool_result or 'failed' in tool_result.lower():
+                self.io.panel(display_result, title="Result", border_style="red")
+            else:
+                self.io.panel(display_result, title="Result", border_style="green")
+        else:
+            self.io.echo(f"Result: {display_result}")
 
         self._log_action(action.action, action.parameters, tool_result, True)
 
@@ -848,8 +976,8 @@ class CodeAgent:
             ]
 
             if not meaningful_actions and not self.dry_run:
-                safe_print(f"\nWarning: Agent declared completion without performing any file operations.")
-                safe_print("Requesting agent to actually execute the task...")
+                self._show_warning("Agent declared completion without performing any file operations.")
+                self.io.echo("Requesting agent to actually execute the task...")
                 return EvaluationResult(
                     is_complete=False,
                     should_continue=True,
@@ -857,7 +985,8 @@ class CodeAgent:
                 )
 
             final_result = action.result_text or 'Task completed'
-            safe_print(f"\nResult: {final_result}")
+            self._show_rule("Task Complete")
+            self._show_result(final_result, title="Final Result")
             self._log_action('complete', {}, final_result, True)
 
             return EvaluationResult(
@@ -1028,15 +1157,16 @@ class CodeAgent:
 
         # Concise header
         task_preview = task[:80] + "..." if len(task) > 80 else task
-        safe_print(f"\n[Agent] {task_preview}")
+        self._show_rule("Agent Task")
+        self.io.secho(task_preview, fg="white", bold=True)
         if self.dry_run:
-            safe_print("[DRY RUN MODE]")
+            self.io.secho("[DRY RUN MODE]", fg="yellow", bold=True)
 
         # Build initial context
-        safe_print("Building context...")
+        self._show_progress("Building context...")
 
         # System prompt for agent - use PromptBuilder for context-aware construction
-        safe_print("Preparing system prompt...")
+        self._show_progress("Preparing system prompt...")
         from src.agent.prompt_builder import PromptBuilder
 
         # Create PromptBuilder with tool registry for unified prompt generation
@@ -1074,13 +1204,13 @@ class CodeAgent:
         )
 
         # Main agent loop - decoupled stages with crash safety
-        safe_print("Starting agent loop...")
+        self._show_progress("Starting agent loop...")
         try:
             while state.iteration < state.max_iterations:
                 state.iteration += 1
                 # Minimal iteration indicator (only show on first iteration)
                 if state.iteration == 1:
-                    safe_print(f"Working...")
+                    self.io.secho("Working...", fg="cyan")
 
                 # Stage 1: Think - LLM generates next thought/action
                 thought = self._think(state)
@@ -1127,12 +1257,14 @@ class CodeAgent:
             }
         except KeyboardInterrupt:
             # User cancelled - save partial state
-            safe_print("\nAgent interrupted by user. Saving audit log...")
+            self.io.echo("")  # New line
+            self._show_warning("Agent interrupted by user. Saving audit log...")
             self._audit_logger.mark_complete(False, "Interrupted by user (KeyboardInterrupt)")
             raise  # Re-raise to let caller handle
         except Exception as e:
             # Unexpected error - save partial state for debugging
-            safe_print(f"\nAgent error: {str(e)}. Saving audit log...")
+            self.io.echo("")  # New line
+            self._show_error(f"Agent error: {str(e)}\nSaving audit log...")
             self._audit_logger.mark_complete(False, f"Error: {str(e)}")
             raise  # Re-raise to let caller handle
 

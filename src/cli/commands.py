@@ -21,7 +21,7 @@ from .core import CLI
 from .utils.cli_factory import create_cli_from_context
 from .utils.session_utils import restore_session_to_cli
 from .utils.error_utils import run_with_error_handling, run_with_recovery
-from .io_interface import ClickIO
+from .rich_output import RichIO
 from .validators import validate_path, validate_provider
 from .exceptions import (
     CLIError,
@@ -75,7 +75,7 @@ def cli(ctx, brain, auto_explore, no_context, resume, no_save, show_providers, v
 
         # Resume previous session if requested
         if resume:
-            io = ClickIO()
+            io = RichIO()
             restore_session_to_cli(cli_instance, io)
 
         cli_instance.interactive_mode()
@@ -92,7 +92,7 @@ def cli(ctx, brain, auto_explore, no_context, resume, no_save, show_providers, v
 def query(ctx, prompt, provider, model, temperature, max_tokens, with_context):
     """Send a one-shot query to the orchestrator."""
     cli_instance = create_cli_from_context(ctx)
-    io = ClickIO()
+    io = RichIO()
 
     # Validate provider if explicitly specified
     if provider:
@@ -152,7 +152,7 @@ def plan(ctx, task, max_steps):
 def reason(ctx, question, context, evidence):
     """Reason about a question with evidence."""
     cli_instance = create_cli_from_context(ctx)
-    io = ClickIO()
+    io = RichIO()
     click.echo(f"Reasoning: {question}\n")
 
     def execute_reasoning():
@@ -252,7 +252,7 @@ def interactive(ctx, resume):
     cli_instance = create_cli_from_context(ctx)
 
     if resume:
-        io = ClickIO()
+        io = RichIO()
         restore_session_to_cli(cli_instance, io)
 
     cli_instance.interactive_mode()

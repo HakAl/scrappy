@@ -6,7 +6,8 @@ Handles planning and reasoning operations.
 import click
 from typing import Optional
 
-from .io_interface import CLIIOProtocol, ClickIO
+from .io_interface import CLIIOProtocol
+from .rich_output import RichIO
 
 
 class CLITaskExecution:
@@ -52,7 +53,7 @@ class CLITaskExecution:
             Does not raise; catches exceptions internally and displays error.
         """
         if io is None:
-            io = ClickIO()
+            io = RichIO()
 
         io.secho(f"\nPlanning: {task}", bold=True)
         io.echo("-" * 50)
@@ -126,7 +127,7 @@ class CLITaskExecution:
             Does not raise; catches exceptions internally and displays error.
         """
         if io is None:
-            io = ClickIO()
+            io = RichIO()
 
         io.secho(f"\nReasoning about: {question}", bold=True)
         io.echo("-" * 50)

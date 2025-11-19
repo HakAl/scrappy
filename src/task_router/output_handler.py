@@ -8,6 +8,30 @@ between console, file, buffer, or silent output.
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
+from rich.console import Console
+from rich.table import Table
+from rich.text import Text
+
+
+def format_complexity_bar(complexity: int, width: int = 10) -> str:
+    """
+    Format complexity as a visual progress bar with percentage.
+
+    Args:
+        complexity: Complexity value from 0-10
+        complexity: Complexity value from 0-10
+        width: Width of the progress bar in characters
+
+    Returns:
+        Formatted string like "###======= 30%"
+    """
+    percentage = complexity * 10
+    filled = int(width * complexity / 10)
+    empty = width - filled
+
+    bar = "#" * filled + "=" * empty
+    return f"{bar} {percentage}%"
+
 
 class OutputHandlerInterface(ABC):
     """
@@ -246,3 +270,106 @@ class FileOutputHandler(OutputHandlerInterface):
     def log_info(self, message: str) -> None:
         """Write info message to file."""
         self._write(f"  {message}")
+
+
+class RichOutputHandler(OutputHandlerInterface):
+    """
+    Rich-enhanced output handler with formatted tables.
+
+    Displays task classification information in visually appealing
+    Rich tables with progress bars for complexity and styled output.
+    """
+
+    def __init__(self, console: Optional[Console] = None):
+        """
+        Initialize Rich output handler.
+
+        Args:
+            console: Optional Rich Console instance for testing.
+                    If not provided, creates a default console.
+        """
+        self._console = console if console is not None else Console()
+        self._classification_data: dict = {}
+
+    def log_classification(
+        self,
+        task_type: str,
+        confidence: float,
+        complexity: int,
+        reasoning: str
+    ) -> None:
+        """
+        Display classification as a Rich table.
+
+        Creates a formatted table with:
+        - Task type
+        - Confidence as percentage
+        - Complexity as visual progress bar
+        - Reasoning text
+        """
+        # Store for potential integration with provider/strategy
+        self._classification_data = {
+            'task_type': task_type,
+            'confidence': confidence,
+            'complexity': complexity,
+            'reasoning': reasoning
+        }
+
+        # Create classification table
+        table = Table(title="Task Classification", show_header=True)
+        table.add_column("Field", style="cyan")
+        table.add_column("Value", style="white")
+
+        # Add rows
+        table.add_row("Type", task_type)
+        table.add_row("Confidence", f"{int(confidence * 100)}%")
+        table.add_row("Complexity", format_complexity_bar(complexity))
+        table.add_row("Reasoning", reasoning)
+
+        self._console.print(table)
+
+    def log_provider_selection(
+        self,
+        provider: str,
+        model: Optional[str],
+        source: str
+    ) -> None:
+        """
+        Display provider selection information.
+
+        Shows provider name, model (if provided), and selection source.
+        """
+        # Build provider info text
+        if model:
+            provider_text = f"{provider} ({model})"
+        else:
+            provider_text = provider
+
+        # Create a simple styled output
+        text = Text()
+        text.append("Provider: ", style="cyan")
+        text.append(provider_text, style="green")
+        text.append(f" [{source}]", style="dim")
+
+        self._console.print(text)
+
+    def log_execution_start(self, strategy_name: str) -> None:
+        """
+        Display execution strategy information.
+
+        Shows the strategy being used for task execution.
+        """
+        text = Text()
+        text.append("Strategy: ", style="cyan")
+        text.append(strategy_name, style="yellow")
+
+        self._console.print(text)
+
+    def log_info(self, message: str) -> None:
+        """
+        Display general info message.
+
+        Args:
+            message: The info message to display
+        """
+        self._console.print(f"  {message}")

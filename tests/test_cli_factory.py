@@ -69,19 +69,19 @@ class TestCreateCLIFromContext:
 
         assert cli.io is io
 
-    def test_creates_clickio_when_no_io_provided(self):
-        """Should create ClickIO when no IO is provided."""
+    def test_creates_richio_when_no_io_provided(self):
+        """Should create RichIO when no IO is provided."""
         from src.cli.utils.cli_factory import create_cli_from_context
-        from src.cli.io_interface import ClickIO
+        from src.cli.rich_output import RichIO
 
         ctx = Mock()
         ctx.obj = {'brain': 'groq'}
 
-        # Don't provide IO - should create ClickIO
-        with patch.object(ClickIO, 'secho'):  # Prevent actual output
-            with patch.object(ClickIO, 'echo'):
+        # Don't provide IO - should create RichIO
+        with patch.object(RichIO, 'secho'):  # Prevent actual output
+            with patch.object(RichIO, 'echo'):
                 cli = create_cli_from_context(ctx)
-                assert isinstance(cli.io, ClickIO)
+                assert isinstance(cli.io, RichIO)
 
     def test_handles_none_obj_in_context(self):
         """Should handle when ctx.obj is None."""
@@ -243,14 +243,14 @@ class TestGetIOInterface:
 
         assert isinstance(result, TestIO)
 
-    def test_creates_clickio_by_default(self):
-        """Should create ClickIO when no IO provided and not test mode."""
+    def test_creates_richio_by_default(self):
+        """Should create RichIO when no IO provided and not test mode."""
         from src.cli.utils.cli_factory import get_io_interface
-        from src.cli.io_interface import ClickIO
+        from src.cli.rich_output import RichIO
 
         result = get_io_interface()
 
-        assert isinstance(result, ClickIO)
+        assert isinstance(result, RichIO)
 
     def test_provided_io_takes_precedence_over_test_mode(self):
         """Provided IO should be used even if test_mode is True."""

@@ -5,7 +5,8 @@ Handles response caching statistics and operations.
 
 from typing import Optional
 
-from .io_interface import CLIIOProtocol, ClickIO
+from .io_interface import CLIIOProtocol
+from .rich_output import RichIO
 from .validators import validate_subcommand
 
 
@@ -60,7 +61,7 @@ class CacheManager:
             >>> cache_mgr.manage_cache("toggle")  # Toggle on/off
         """
         if io is None:
-            io = ClickIO()
+            io = RichIO()
 
         # Validate subcommand
         validation = validate_subcommand("cache", args)

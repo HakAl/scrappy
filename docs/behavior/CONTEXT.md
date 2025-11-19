@@ -11,19 +11,8 @@
 CodebaseContext is a 840-line god object with multiple responsibilities that would benefit from decomposition. The
    tests are better than average but don't fully prove correctness.
 
-**RED**
 
 we're working to improve src\context\ the next task is: 
-No Validation ⚠️ Present
-
-  No path validation (context.py:93):
-  self.project_path = Path(project_path or ".").resolve()
-  # Accepts non-existent paths without warning
-
-  No cache structure validation (context.py:565-574):
-  cache_data = json.load(f)
-  if cache_data.get('explored_at'):  # Assumes structure is correct
-      self.explored_at = datetime.fromisoformat(cache_data['explored_at'])
 
 can you research the task and start with tests?
 
