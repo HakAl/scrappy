@@ -26,6 +26,7 @@ from .task_executor import TaskExecutor
 from .provider_selector import ProviderSelector
 from .output import OutputInterface, ConsoleOutput
 from .delegation import DelegationManager
+from .background import BackgroundTaskManager
 
 
 class AgentOrchestrator:
@@ -90,8 +91,7 @@ class AgentOrchestrator:
         self._show_provider_status = show_provider_status
 
         # Background task management (for fire-and-forget operations)
-        self._background_tasks: set = set()
-        self._background_errors: list = []
+        self.background_manager = BackgroundTaskManager()
 
         # Initialize codebase context
         self.context = CodebaseContext(project_path)
@@ -807,9 +807,9 @@ class AgentOrchestrator:
         self.caching_enabled = not self.caching_enabled
         return self.caching_enabled
 
-    # Background Task Management
+    # Background Task Management (delegates to BackgroundTaskManager)
 
-    def _schedule_background_task(self, coro):
+    def _schedule_background_task(self, coro) -> str:
         """
         Schedule a coroutine as a background task (fire-and-forget).
 
@@ -818,25 +818,11 @@ class AgentOrchestrator:
 
         Args:
             coro: Coroutine to execute in background
+
+        Returns:
+            str: Task ID for tracking/cancellation
         """
-        task = asyncio.create_task(coro)
-
-        # Add to tracking set (prevents garbage collection)
-        self._background_tasks.add(task)
-
-        # Remove from set when done and capture any errors
-        def on_done(t):
-            self._background_tasks.discard(t)
-            if t.exception():
-                self._background_errors.append({
-                    'timestamp': datetime.now().isoformat(),
-                    'error': str(t.exception()),
-                    'type': type(t.exception()).__name__
-                })
-                # Keep only last 50 errors
-                self._background_errors = self._background_errors[-50:]
-
-        task.add_done_callback(on_done)
+        return self.background_manager.submit_background_task(coro)
 
     async def wait_for_background_tasks(self, timeout: float = 5.0) -> dict:
         """
@@ -850,35 +836,7 @@ class AgentOrchestrator:
         Returns:
             Dict with completion status
         """
-        if not self._background_tasks:
-            return {
-                'status': 'no_pending',
-                'completed': 0,
-                'errors': len(self._background_errors)
-            }
-
-        pending_count = len(self._background_tasks)
-
-        try:
-            # Wait for all tasks with timeout
-            done, pending = await asyncio.wait(
-                self._background_tasks,
-                timeout=timeout,
-                return_when=asyncio.ALL_COMPLETED
-            )
-
-            return {
-                'status': 'completed' if not pending else 'timeout',
-                'completed': len(done),
-                'pending': len(pending),
-                'errors': len(self._background_errors)
-            }
-        except Exception as e:
-            return {
-                'status': 'error',
-                'error': str(e),
-                'pending': pending_count
-            }
+        return await self.background_manager.wait_for_background_tasks(timeout)
 
     def get_background_task_status(self) -> dict:
         """
@@ -887,15 +845,23 @@ class AgentOrchestrator:
         Returns:
             Dict with pending task count and recent errors
         """
-        return {
-            'pending_tasks': len(self._background_tasks),
-            'recent_errors': self._background_errors[-10:],
-            'total_errors': len(self._background_errors)
-        }
+        return self.background_manager.get_task_status()
 
     def clear_background_errors(self):
         """Clear the background error log."""
-        self._background_errors.clear()
+        self.background_manager.clear_background_errors()
+
+    def cancel_background_task(self, task_id: str) -> bool:
+        """
+        Cancel a pending background task.
+
+        Args:
+            task_id: ID returned from _schedule_background_task
+
+        Returns:
+            True if task was found and cancelled, False otherwise
+        """
+        return self.background_manager.cancel_task(task_id)
 
     # Rate Limit Management
 

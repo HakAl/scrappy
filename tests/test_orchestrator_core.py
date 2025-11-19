@@ -1033,7 +1033,8 @@ class TestAgentOrchestratorBackgroundTasks:
         status = orch.get_background_task_status()
         assert status['pending_tasks'] == 1
 
-    def test_clear_background_errors(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_clear_background_errors(self, tmp_path):
         """Test that background errors can be cleared."""
         mock_cache = Mock(spec=ResponseCache)
         mock_tracker = Mock(spec=RateLimitTracker)
@@ -1050,10 +1051,14 @@ class TestAgentOrchestratorBackgroundTasks:
             output=NullOutput()
         )
 
-        # Add some mock errors
-        orch._background_errors = [
-            {'timestamp': '2024-01-01', 'error': 'Test error', 'type': 'ValueError'}
-        ]
+        # Submit a failing task to generate an error
+        async def failing_task():
+            raise ValueError("Test error")
+
+        orch._schedule_background_task(failing_task())
+
+        # Wait for task to complete and capture error
+        await asyncio.sleep(0.01)
 
         assert orch.get_background_task_status()['total_errors'] == 1
 

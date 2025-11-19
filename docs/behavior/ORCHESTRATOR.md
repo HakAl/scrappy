@@ -234,41 +234,21 @@ Critical Issues
 **RED**
 
 we're working to improve src\orchestrator the next task is: 
- Break up core.py - Extract DelegationManager
+ Break up core.py - Extract BackgroundTaskManager
 
-  Steps:
-  1. Write tests for DelegationManager first (TDD)
-  2. Create src/orchestrator/delegation.py:
+  1. Write tests first
+  2. Create src/orchestrator/background.py:
 
-  class DelegationManager:
-      """Handles LLM delegation with retry/fallback logic"""
+  class BackgroundTaskManager:
+      """Manages async background tasks"""
 
-      def __init__(
-          self,
-          registry: ProviderRegistry,
-          cache: ResponseCache,
-          rate_tracker: RateLimitTracker,
-          provider_selector: ProviderSelector,
-          output: OutputInterface,
-      ):
-          ...
+      # Extract from core.py:1123-1211
+      def submit_background_task(self, ...): ...
+      def get_task_status(self, ...): ...
+      def cancel_task(self, ...): ...
 
-      def delegate(self, ...) -> LLMResponse:
-          """Extract from core.py:445-673"""
-          ...
-
-      async def delegate_async(self, ...) -> LLMResponse:
-          """Extract from core.py:749-976"""
-          ...
-
-      def delegate_batch(self, ...) -> List[LLMResponse]:
-          """Extract from core.py:978-1016"""
-          ...
-
-  3. Move ~500 lines from core.py to delegation.py
-  4. Update AgentOrchestrator to delegate to DelegationManager
-  5. Run tests to verify behavior unchanged
-can you research the task and implement?
+  3. Move ~90 lines from core.py
+can you research the task and start with tests?
 
 **GREEN**
 
@@ -285,45 +265,9 @@ they're fully tested and ready for integration in src/. can you complete the ref
 
   Break up core.py into focused classes
 
-  3.1 Extract DelegationManager
-
-  Steps:
-  1. Write tests for DelegationManager first (TDD)
-  2. Create src/orchestrator/delegation.py:
-
-  class DelegationManager:
-      """Handles LLM delegation with retry/fallback logic"""
-
-      def __init__(
-          self,
-          registry: ProviderRegistry,
-          cache: ResponseCache,
-          rate_tracker: RateLimitTracker,
-          provider_selector: ProviderSelector,
-          output: OutputInterface,
-      ):
-          ...
-
-      def delegate(self, ...) -> LLMResponse:
-          """Extract from core.py:445-673"""
-          ...
-
-      async def delegate_async(self, ...) -> LLMResponse:
-          """Extract from core.py:749-976"""
-          ...
-
-      def delegate_batch(self, ...) -> List[LLMResponse]:
-          """Extract from core.py:978-1016"""
-          ...
-
-  3. Move ~500 lines from core.py to delegation.py
-  4. Update AgentOrchestrator to delegate to DelegationManager
-  5. Run tests to verify behavior unchanged
-
   ---
   3.2 Extract BackgroundTaskManager
 
-  Steps:
   1. Write tests first
   2. Create src/orchestrator/background.py:
 
