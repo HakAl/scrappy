@@ -316,6 +316,12 @@ class CLILogger:
         if self._file_handler:
             self._file_handler.flush()
 
+    def close(self):
+        """Close the logger and release any file handles."""
+        if self._file_handler:
+            self._file_handler.close()
+            self._file_handler = None
+
 
 def get_logger(name: str, io: Optional[Any] = None) -> CLILogger:
     """

@@ -68,13 +68,275 @@ class CommandRouter:
         self.agent_mgr = handlers['agent_mgr']
         self.task_router = handlers['task_router']
 
+        # Build command registry for dispatch
+        self._command_registry = {
+            # Exit commands
+            "/quit": self._handle_exit,
+            "/exit": self._handle_exit,
+            "/q": self._handle_exit,
+            # Display commands
+            "/help": self._handle_help,
+            "/status": self._handle_status,
+            "/providers": self._handle_providers,
+            "/brain": self._handle_brain,
+            "/usage": self._handle_usage,
+            "/models": self._handle_models,
+            # Session commands
+            "/context": self._handle_context,
+            "/cache": self._handle_cache,
+            "/session": self._handle_session,
+            "/limits": self._handle_limits,
+            # Task commands
+            "/plan": self._handle_plan,
+            "/reason": self._handle_reason,
+            "/agent": self._handle_agent,
+            # Multi-provider commands
+            "/synthesize": self._handle_synthesize,
+            "/delegate": self._handle_delegate,
+            # Smart query commands
+            "/smart": self._handle_smart,
+            # Codebase commands
+            "/explore": self._handle_explore,
+            # Task router commands
+            "/classify": self._handle_classify,
+            # State commands
+            "/clear": self._handle_clear,
+            "/autoexec": self._handle_autoexec,
+            "/paste": self._handle_multiline,
+            "/ml": self._handle_multiline,
+            "/multiline": self._handle_multiline,
+            "/auto": self._handle_auto,
+            "/route": self._handle_auto,
+            "/autoroute": self._handle_auto,
+            # Tasks list command
+            "/tasks": self._handle_tasks,
+        }
+
+    # =========================================================================
+    # Command Handler Methods
+    # =========================================================================
+
+    def _handle_exit(self, args: str) -> bool:
+        """Handle exit commands (/quit, /exit, /q)."""
+        io = self.io
+        if self.auto_save:
+            try:
+                session_file = self.orchestrator.save_session(self.conversation_history)
+                display_session_saved(io, session_file, len(self.conversation_history), with_help=True)
+            except Exception as e:
+                display_session_save_error(io, e)
+        else:
+            display_session_not_saved_warning(io)
+
+        self.display.show_usage()
+        io.secho("\nGoodbye!", fg="cyan", bold=True)
+        return False
+
+    def _handle_help(self, args: str) -> bool:
+        """Handle /help command."""
+        self.display.show_help()
+        return True
+
+    def _handle_status(self, args: str) -> bool:
+        """Handle /status command."""
+        self.display.show_status()
+        return True
+
+    def _handle_providers(self, args: str) -> bool:
+        """Handle /providers command."""
+        self.display.list_providers()
+        return True
+
+    def _handle_brain(self, args: str) -> bool:
+        """Handle /brain command."""
+        self.display.switch_brain(args)
+        return True
+
+    def _handle_usage(self, args: str) -> bool:
+        """Handle /usage command."""
+        self.display.show_usage()
+        return True
+
+    def _handle_models(self, args: str) -> bool:
+        """Handle /models command."""
+        self.display.list_models(args)
+        return True
+
+    def _handle_context(self, args: str) -> bool:
+        """Handle /context command."""
+        self.session_mgr.manage_context(args, io=self.io)
+        return True
+
+    def _handle_cache(self, args: str) -> bool:
+        """Handle /cache command."""
+        self.session_mgr.manage_cache(args, io=self.io)
+        return True
+
+    def _handle_session(self, args: str) -> bool:
+        """Handle /session command."""
+        result = self.session_mgr.manage_session(args, self.conversation_history, self.auto_save, io=self.io)
+        if result.get('conversation_history') is not None:
+            self.conversation_history = result['conversation_history']
+        if result.get('auto_save') is not None:
+            self.auto_save = result['auto_save']
+        return True
+
+    def _handle_limits(self, args: str) -> bool:
+        """Handle /limits command."""
+        self.session_mgr.show_rate_limits(args, io=self.io)
+        return True
+
+    def _handle_plan(self, args: str) -> bool:
+        """Handle /plan command."""
+        io = self.io
+        if not args:
+            io.echo("Usage: /plan <task description>")
+        else:
+            steps = self.tasks.plan_task(args)
+            if steps and len(steps) > 0:
+                if io.confirm("Start working on this plan?", default=True):
+                    self.state_manager.start_plan(steps)
+                    io.echo()
+                    self.state_manager.show_current_task(io)
+        return True
+
+    def _handle_reason(self, args: str) -> bool:
+        """Handle /reason command."""
+        io = self.io
+        if not args:
+            io.echo("Usage: /reason <question>")
+        else:
+            self.tasks.reason(args)
+        return True
+
+    def _handle_agent(self, args: str) -> bool:
+        """Handle /agent command."""
+        io = self.io
+        if not args:
+            io.echo("Usage: /agent <task description>")
+        else:
+            self.agent_mgr.run_agent(args, io=io)
+            if self.state_manager.plan_active:
+                self.state_manager.prompt_task_progression(io)
+        return True
+
+    def _handle_synthesize(self, args: str) -> bool:
+        """Handle /synthesize command."""
+        self.multiprovider.synthesize_mode(io=self.io)
+        return True
+
+    def _handle_delegate(self, args: str) -> bool:
+        """Handle /delegate command."""
+        self.multiprovider.delegate_mode(args, io=self.io)
+        return True
+
+    def _handle_smart(self, args: str) -> bool:
+        """Handle /smart command."""
+        io = self.io
+        if not args:
+            status = io.style("ON", fg="green") if self.smart_mode else io.style("OFF", fg="yellow")
+            io.echo(f"Smart query mode: {status}")
+            io.echo("Usage: /smart <query> or /smart toggle")
+        elif args.lower() == "toggle":
+            self.smart_mode = not self.smart_mode
+            status = "enabled" if self.smart_mode else "disabled"
+            io.secho(f"Smart query mode {status}.", fg="green" if self.smart_mode else "yellow")
+            if self.smart_mode:
+                io.echo("All queries will now use tools for research (higher quota usage).")
+        else:
+            self.smart.smart_query(args)
+        return True
+
+    def _handle_explore(self, args: str) -> bool:
+        """Handle /explore command."""
+        self.codebase.explore_codebase(args, io=self.io)
+        return True
+
+    def _handle_classify(self, args: str) -> bool:
+        """Handle /classify command."""
+        io = self.io
+        if not args:
+            io.echo("Usage: /classify <task description>")
+            io.echo("  Preview how a task would be classified without executing.")
+        else:
+            self.task_router.handle_classify_only(args)
+        return True
+
+    def _handle_clear(self, args: str) -> bool:
+        """Handle /clear command."""
+        self.conversation_history.clear()
+        self.io.secho("Conversation history cleared.", fg="green")
+        return True
+
+    def _handle_autoexec(self, args: str) -> bool:
+        """Handle /autoexec command."""
+        io = self.io
+        self.state_manager.auto_execute_tasks = not self.state_manager.auto_execute_tasks
+        status = io.style("ENABLED", fg="green") if self.state_manager.auto_execute_tasks else io.style("DISABLED", fg="red")
+        io.echo(f"Auto-execute tasks: {status}")
+        if self.state_manager.auto_execute_tasks:
+            io.echo("  Tasks in plans will be automatically executed using intelligent routing")
+            io.echo("  (DIRECT_COMMAND -> immediate, RESEARCH -> fast LLM, CODE_GEN -> agent with approval)")
+        else:
+            io.echo("  Tasks in plans will wait for manual execution")
+        return True
+
+    def _handle_multiline(self, args: str) -> bool:
+        """Handle multiline commands (/paste, /ml, /multiline)."""
+        io = self.io
+        self.multiline_mode = not self.multiline_mode
+        if self.multiline_mode:
+            io.secho("Multiline input mode: ON", fg="green", bold=True)
+            io.echo("  - End a line with \\ to continue on next line")
+            io.echo("  - Press Enter normally to send (no double-enter needed)")
+            io.echo("  - Commands still work on the first line")
+        else:
+            io.secho("Multiline input mode: OFF", fg="yellow", bold=True)
+            io.echo("  - Single line input (press Enter to send)")
+            io.echo("  - Each line is processed separately")
+        return True
+
+    def _handle_auto(self, args: str) -> bool:
+        """Handle auto-routing commands (/auto, /route, /autoroute)."""
+        io = self.io
+        if not args:
+            self.auto_route_mode = not self.auto_route_mode
+            if self.auto_route_mode:
+                io.secho("Auto-routing mode: ON", fg="green", bold=True)
+                io.echo("  Tasks are automatically classified and routed:")
+                io.echo("  - Direct commands (pip, git) -> Shell execution")
+                io.echo("  - Code generation -> Full agent loop with planning")
+                io.echo("  - Research queries -> Fast provider (Cerebras)")
+                io.echo("  - Simple chat -> Instant responses")
+            else:
+                io.secho("Auto-routing mode: OFF", fg="yellow", bold=True)
+                io.echo("  All input goes to default chat mode.")
+        elif args.lower() == "status":
+            self.task_router.handle_route_status()
+        elif args.lower() == "history":
+            self.task_router.handle_route_history()
+        else:
+            io.echo("Usage: /auto [status|history]")
+            io.echo("  /auto         - Toggle auto-routing mode")
+            io.echo("  /auto status  - Show routing metrics")
+            io.echo("  /auto history - Show routing history")
+        return True
+
+    def _handle_tasks(self, args: str) -> bool:
+        """Handle /tasks command."""
+        io = self.io
+        if not self.state_manager.plan_active or not self.state_manager.active_plan:
+            io.secho("No active plan. Use /plan <task> to create one.", fg="yellow")
+        else:
+            self.state_manager.show_all_tasks(io)
+        return True
+
     def route(self, cmd: str, args: str) -> bool:
         """
         Route a command to its handler.
 
         Validates the command and dispatches it to the appropriate handler
-        based on the command name. Handles all slash commands including display,
-        session, task, multi-provider, and state commands.
+        based on the command name using registry-based dispatch.
 
         Args:
             cmd: The command name (e.g., "/help", "/quit", "/plan").
@@ -83,27 +345,6 @@ class CommandRouter:
         Returns:
             bool: True to continue the interactive loop, False to exit
                 (returned by /quit, /exit, /q commands).
-
-        Side Effects:
-            - Validates command input and displays error if invalid
-            - Dispatches to appropriate handler which may:
-              - Display information to console (help, status, providers)
-              - Make API calls to LLM providers
-              - Modify project files (via agent execution)
-              - Save/load session files
-              - Create/modify git checkpoints
-            - Auto-saves session on exit if auto_save is enabled
-            - Shows usage statistics on exit
-
-        State Changes:
-            - /clear: Empties conversation_history
-            - /session: May update conversation_history and auto_save
-            - /plan: May start new plan via state_manager.start_plan()
-            - /autoexec: Toggles state_manager.auto_execute_tasks
-            - /paste, /ml, /multiline: Toggles self.multiline_mode
-            - /auto, /route, /autoroute: Toggles self.auto_route_mode
-            - /smart toggle: Toggles self.smart_mode
-            - /brain: Changes orchestrator.brain
         """
         io = self.io
 
@@ -117,186 +358,15 @@ class CommandRouter:
             io.echo()
             return True
 
-        # Exit commands
-        if cmd in ["/quit", "/exit", "/q"]:
-            # Auto-save session on exit if enabled
-            if self.auto_save:
-                try:
-                    session_file = self.orchestrator.save_session(self.conversation_history)
-                    display_session_saved(io, session_file, len(self.conversation_history), with_help=True)
-                except Exception as e:
-                    display_session_save_error(io, e)
-            else:
-                display_session_not_saved_warning(io)
-
-            self.display.show_usage()
-            io.secho("\nGoodbye!", fg="cyan", bold=True)
-            return False
-
-        # Display commands
-        elif cmd == "/help":
-            self.display.show_help()
-
-        elif cmd == "/status":
-            self.display.show_status()
-
-        elif cmd == "/providers":
-            self.display.list_providers()
-
-        elif cmd == "/brain":
-            self.display.switch_brain(args)
-
-        elif cmd == "/usage":
-            self.display.show_usage()
-
-        elif cmd == "/models":
-            self.display.list_models(args)
-
-        # Session commands
-        elif cmd == "/context":
-            self.session_mgr.manage_context(args, io=io)
-
-        elif cmd == "/cache":
-            self.session_mgr.manage_cache(args, io=io)
-
-        elif cmd == "/session":
-            result = self.session_mgr.manage_session(args, self.conversation_history, self.auto_save, io=io)
-            # Update state if changed
-            if result.get('conversation_history') is not None:
-                self.conversation_history = result['conversation_history']
-            if result.get('auto_save') is not None:
-                self.auto_save = result['auto_save']
-
-        elif cmd == "/limits":
-            self.session_mgr.show_rate_limits(args, io=io)
-
-        # Task commands
-        elif cmd == "/plan":
-            if not args:
-                io.echo("Usage: /plan <task description>")
-            else:
-                steps = self.tasks.plan_task(args)
-                if steps and len(steps) > 0:
-                    # Prompt to start tracking
-                    if io.confirm("Start working on this plan?", default=True):
-                        self.state_manager.start_plan(steps)
-                        io.echo()
-                        self.state_manager.show_current_task(io)
-
-        elif cmd == "/reason":
-            if not args:
-                io.echo("Usage: /reason <question>")
-            else:
-                self.tasks.reason(args)
-
-        elif cmd == "/agent":
-            if not args:
-                io.echo("Usage: /agent <task description>")
-            else:
-                self.agent_mgr.run_agent(args, io=io)
-                # Prompt for task progression if plan is active
-                if self.state_manager.plan_active:
-                    self.state_manager.prompt_task_progression(io)
-
-        # Multi-provider commands
-        elif cmd == "/synthesize":
-            self.multiprovider.synthesize_mode(io=io)
-
-        elif cmd == "/delegate":
-            self.multiprovider.delegate_mode(args, io=io)
-
-        # Smart query commands
-        elif cmd == "/smart":
-            if not args:
-                # Show smart mode status
-                status = io.style("ON", fg="green") if self.smart_mode else io.style("OFF", fg="yellow")
-                io.echo(f"Smart query mode: {status}")
-                io.echo("Usage: /smart <query> or /smart toggle")
-            elif args.lower() == "toggle":
-                self.smart_mode = not self.smart_mode
-                status = "enabled" if self.smart_mode else "disabled"
-                io.secho(f"Smart query mode {status}.", fg="green" if self.smart_mode else "yellow")
-                if self.smart_mode:
-                    io.echo("All queries will now use tools for research (higher quota usage).")
-            else:
-                self.smart.smart_query(args)
-
-        # Codebase commands
-        elif cmd == "/explore":
-            self.codebase.explore_codebase(args, io=io)
-
-        # Task router commands
-        elif cmd == "/classify":
-            if not args:
-                io.echo("Usage: /classify <task description>")
-                io.echo("  Preview how a task would be classified without executing.")
-            else:
-                self.task_router.handle_classify_only(args)
-
-        # State commands
-        elif cmd == "/clear":
-            self.conversation_history.clear()
-            io.secho("Conversation history cleared.", fg="green")
-
-        elif cmd == "/autoexec":
-            # Toggle auto-execute for plan tasks
-            self.state_manager.auto_execute_tasks = not self.state_manager.auto_execute_tasks
-            status = io.style("ENABLED", fg="green") if self.state_manager.auto_execute_tasks else io.style("DISABLED", fg="red")
-            io.echo(f"Auto-execute tasks: {status}")
-            if self.state_manager.auto_execute_tasks:
-                io.echo("  Tasks in plans will be automatically executed using intelligent routing")
-                io.echo("  (DIRECT_COMMAND -> immediate, RESEARCH -> fast LLM, CODE_GEN -> agent with approval)")
-            else:
-                io.echo("  Tasks in plans will wait for manual execution")
-
-        elif cmd in ["/paste", "/ml", "/multiline"]:
-            # Toggle multiline input mode
-            self.multiline_mode = not self.multiline_mode
-            if self.multiline_mode:
-                io.secho("Multiline input mode: ON", fg="green", bold=True)
-                io.echo("  - End a line with \\ to continue on next line")
-                io.echo("  - Press Enter normally to send (no double-enter needed)")
-                io.echo("  - Commands still work on the first line")
-            else:
-                io.secho("Multiline input mode: OFF", fg="yellow", bold=True)
-                io.echo("  - Single line input (press Enter to send)")
-                io.echo("  - Each line is processed separately")
-
-        elif cmd in ["/auto", "/route", "/autoroute"]:
-            if not args:
-                # Toggle auto-routing mode
-                self.auto_route_mode = not self.auto_route_mode
-                if self.auto_route_mode:
-                    io.secho("Auto-routing mode: ON", fg="green", bold=True)
-                    io.echo("  Tasks are automatically classified and routed:")
-                    io.echo("  - Direct commands (pip, git) -> Shell execution")
-                    io.echo("  - Code generation -> Full agent loop with planning")
-                    io.echo("  - Research queries -> Fast provider (Cerebras)")
-                    io.echo("  - Simple chat -> Instant responses")
-                else:
-                    io.secho("Auto-routing mode: OFF", fg="yellow", bold=True)
-                    io.echo("  All input goes to default chat mode.")
-            elif args.lower() == "status":
-                self.task_router.handle_route_status()
-            elif args.lower() == "history":
-                self.task_router.handle_route_history()
-            else:
-                io.echo("Usage: /auto [status|history]")
-                io.echo("  /auto         - Toggle auto-routing mode")
-                io.echo("  /auto status  - Show routing metrics")
-                io.echo("  /auto history - Show routing history")
-
-        # Tasks list command
-        elif cmd == "/tasks":
-            if not self.state_manager.plan_active or not self.state_manager.active_plan:
-                io.secho("No active plan. Use /plan <task> to create one.", fg="yellow")
-            else:
-                self.state_manager.show_all_tasks(io)
+        # Dispatch via registry
+        handler = self._command_registry.get(cmd)
+        if handler:
+            result = handler(args)
+            io.echo()
+            return result
 
         # Unknown command
-        else:
-            io.secho(f"Unknown command: {cmd}", fg="yellow")
-            io.echo("Type /help for available commands.")
-
+        io.secho(f"Unknown command: {cmd}", fg="yellow")
+        io.echo("Type /help for available commands.")
         io.echo()
         return True

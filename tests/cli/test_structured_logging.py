@@ -443,6 +443,8 @@ class TestFileHandler:
         content = log_file.read_text()
         assert "Test message" in content
 
+        logger.close()
+
     @pytest.mark.unit
     def test_file_output_is_structured(self, tmp_path):
         """File output should be structured JSON lines."""
@@ -462,6 +464,8 @@ class TestFileHandler:
             # Each line should be valid JSON
             data = json.loads(line)
             assert "message" in data
+
+        logger.close()
 
 
 class TestLoggerFactory:
@@ -576,6 +580,8 @@ class TestLogRotation:
         # Should have created backup files
         log_files = list(tmp_path.glob("test.log*"))
         assert len(log_files) > 1
+
+        logger.close()
 
 
 class TestFilterAndSampling:

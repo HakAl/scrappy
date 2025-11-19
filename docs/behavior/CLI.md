@@ -37,52 +37,45 @@
 
 
 we're working to improve src\cli the next task is: 
-Massive Files - Single Responsibility validators.py
-Proposed Decomposition: validators/ Package
+Massive Files - Single Responsibility command_router.py
+ Command Router Decomposition Plan
 
-  src/cli/validators/
-      __init__.py       # Re-exports for backward compatibility (~30 lines)
-      base.py           # ValidationError, shared patterns (~50 lines)
-      command.py        # Command validation domain (~120 lines)
-      path.py           # Path validation domain (~160 lines)
-      provider.py       # Provider validation domain (~110 lines)
+ Strategy: Command Registry Pattern
 
-  Module Details:
+ Replace 30+ elif branches with dictionary-based dispatch
 
-  base.py - Shared infrastructure
-  - ValidationError exception
-  - Shared regex patterns (CONTROL_CHARS_PATTERN, NEWLINE_PATTERN)
+ Implementation Steps
 
-  command.py - Command validation
-  - CommandValidationResult dataclass
-  - VALID_COMMANDS set
-  - MAX_COMMAND_LENGTH constant
-  - validate_command() function
+ 1. Create handler methods for each command:
+   - _handle_exit(args) - quit/exit/q
+   - _handle_help(args), _handle_status(args), etc. - display commands
+   - _handle_plan(args), _handle_reason(args), _handle_agent(args) - task commands
+   - _handle_smart(args) - smart query with toggle logic
+   - _handle_auto(args) - auto-route with subcommands
+   - _handle_clear(args), _handle_autoexec(args), _handle_multiline(args) - state commands
+ 2. Build command registry in __init__:
+ self._command_registry = {
+     "/quit": self._handle_exit,
+     "/exit": self._handle_exit,
+     "/help": self._handle_help,
+     # ... all commands
+ }
+ 3. Simplify route() to ~30 lines:
+   - Validate command (keep existing)
+   - Lookup handler in registry
+   - Call handler with args
+   - Handle unknown commands
+ 4. Write tests first (TDD):
+   - Test registry dispatch works
+   - Test each handler method independently
+   - Test unknown command handling
 
-  path.py - Path validation
-  - PathValidationResult dataclass
-  - Path constants (MAX_PATH_LENGTH, MAX_PATH_COMPONENT_LENGTH)
-  - Path patterns (WINDOWS_INVALID_CHARS, GLOB_CHARS_PATTERN)
-  - validate_path() function
+ Result
 
-  provider.py - Provider validation
-  - ProviderValidationResult dataclass
-  - VALID_PROVIDERS set
-  - MAX_PROVIDER_LENGTH constant
-  - validate_provider() function
-
-  __init__.py - Backward compatibility
-  from .base import ValidationError
-  from .command import CommandValidationResult, validate_command, VALID_COMMANDS
-  from .path import PathValidationResult, validate_path
-  from .provider import ProviderValidationResult, validate_provider, VALID_PROVIDERS
-
-  __all__ = [
-      'ValidationError',
-      'CommandValidationResult', 'validate_command', 'VALID_COMMANDS',
-      'PathValidationResult', 'validate_path',
-      'ProviderValidationResult', 'validate_provider', 'VALID_PROVIDERS',
-  ]
+ - route(): 231 lines → ~30 lines
+ - Clear separation of concerns
+ - Easy to add/modify commands
+ - Each handler independently testable
 can you research the task and start with tests?
 
 
