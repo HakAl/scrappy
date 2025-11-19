@@ -6,7 +6,7 @@ Our goal is to get your computer ready so you can use the main **[5-Minute Quick
 
 1.  A command-line tool (the "terminal") ready to use.
 2.  The Python programming language installed.
-3.  The `llm-team` project code downloaded to your machine.
+3.  The `scrappy` project code downloaded to your machine.
 
 Let's begin!
 
@@ -38,7 +38,7 @@ Great! You should now have a window with a blinking cursor. This is your termina
 
 ## Step 2: Install Python
 
-`llm-team` is a Python application, so you need to have Python installed on your computer. Let's check if you already have it and install it if you don't.
+`scrappy` is a Python application, so you need to have Python installed on your computer. Let's check if you already have it and install it if you don't.
 
 ### For Windows Users:
 
@@ -71,7 +71,7 @@ If you see version numbers for both, you have successfully installed Python. Con
 
 ## Step 3: Get the Project Code
 
-Now, you need to download the `llm-team` code to your computer.
+Now, you need to download the `scrappy` code to your computer.
 
 1.  Go to the [project's repository page on GitHub](https://github.com/HakAl/llm_agent_team).
 2.  Look for a green "<> Code" button. Click it.

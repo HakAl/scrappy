@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "llm-team"
+name = "scrappy-dev"
 version = "0.1.0"
 description = "Multi-provider LLM orchestration with swappable brain and codebase context awareness"
 readme = "README.md"
@@ -45,12 +45,12 @@ dev = [
 ]
 
 [project.scripts]
-llm-team = "src.cli:main"
+scrappy = "src.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/yourusername/llm-team"
-Repository = "https://github.com/yourusername/llm-team"
-Issues = "https://github.com/yourusername/llm-team/issues"
+Homepage = "https://github.com/yourusername/scrappy-dev"
+Repository = "https://github.com/yourusername/scrappy-dev"
+Issues = "https://github.com/yourusername/scrappy-dev/issues"
 
 [tool.setuptools]
 packages = ["src", "src.providers"]

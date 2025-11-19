@@ -1,6 +1,6 @@
 # 5-Minute Quickstart
 
-Get running with LLM Team in 5 minutes. No fluff.
+Get running with Scrappy in 5 minutes. No fluff.
 
 First time setting up a development tool?
 Before you start, make sure you have Python and pip installed and are comfortable with a command line terminal. If not, no worries! Follow our **[Complete Beginner's Setup Guide](BEGINNERS.md)** to get everything you need.
@@ -39,7 +39,7 @@ export GROQ_API_KEY="your-key-here"
 cd ~/my-project
 
 # Start (learns your codebase automatically)
-llm-team --auto-explore
+scrappy --auto-explore
 ```
 
 That's it. You're in.
@@ -75,16 +75,16 @@ You: /quit
 
 ```bash
 # Quick question
-llm-team query "What is Docker?"
+scrappy query "What is Docker?"
 
 # Question about your code
-llm-team query "How should I fix the auth bug?" --with-context
+scrappy query "How should I fix the auth bug?" --with-context
 
 # Plan something
-llm-team plan "Build REST API"
+scrappy plan "Build REST API"
 
 # AI writes code
-llm-team agent "Add input validation"
+scrappy agent "Add input validation"
 ```
 
 ---
@@ -114,5 +114,5 @@ llm-team agent "Add input validation"
 **"No module named..."**
 → Run `pip install -e .` from the llm_agent_team directory.
 
-**Command not found: llm-team**
+**Command not found: scrappy**
 → Run `pip install -e .` again, or use `python llm_team.py` instead.

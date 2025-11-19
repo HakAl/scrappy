@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Click command handlers for the LLM Agent Team CLI.
+Click command handlers for the Scrappy CLI.
 Provides the main entry point and subcommands.
 """
 
@@ -51,7 +51,7 @@ except ImportError:
 @click.option("--verbose-selection", "-v", is_flag=True, help="Show verbose provider selection logic")
 @click.pass_context
 def cli(ctx, brain, auto_explore, no_context, resume, no_save, show_providers, verbose_selection):
-    """LLM Agent Team CLI - Multi-provider orchestrator interface.
+    """Scrappy CLI - Multi-provider orchestrator interface.
 
     Start interactive mode by running without arguments, or use subcommands
     for one-shot operations.
@@ -364,7 +364,7 @@ def agent(ctx, task, dry_run, no_checkpoint, auto_confirm, max_iterations):
     your explicit approval unless --auto-confirm is used.
 
     Example:
-        llm-team agent "Add a health check endpoint to the Flask app"
+        scrappy agent "Add a health check endpoint to the Flask app"
     """
     cli_instance = create_cli_from_context(ctx)
 

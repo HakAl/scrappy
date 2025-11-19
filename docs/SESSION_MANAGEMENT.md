@@ -1,19 +1,19 @@
 # Session Management
 
-LLM Agent Team supports session persistence, allowing you to save your working state and resume later. This includes conversation history, file reads, searches, and discoveries - everything the LLM needs to maintain context across sessions.
+Scrappy supports session persistence, allowing you to save your working state and resume later. This includes conversation history, file reads, searches, and discoveries - everything the LLM needs to maintain context across sessions.
 
 ## Quick Start
 
 ```bash
 # Start a session
-llm-team
+scrappy
 > /smart what is the main entry point?
 > /agent fix the auth bug
 > /quit
 # Session auto-saved!
 
 # Resume later
-llm-team --resume
+scrappy --resume
 # Conversation and context restored!
 ```
 
@@ -33,9 +33,9 @@ Sessions are automatically saved when you exit with `/quit`. This includes:
 ### Resume Previous Session
 
 ```bash
-llm-team --resume
+scrappy --resume
 # or
-llm-team -r
+scrappy -r
 ```
 
 On resume, you'll see:
@@ -58,7 +58,7 @@ Last conversation:
 If you don't want to save the session:
 
 ```bash
-llm-team --no-save
+scrappy --no-save
 ```
 
 Or toggle during session:
@@ -252,13 +252,13 @@ This file contains:
 
 ```bash
 # Day 1
-llm-team
+scrappy
 > /smart how does the payment system work?
 > /agent add stripe integration
 > /quit
 
 # Day 2
-llm-team --resume
+scrappy --resume
 # LLM remembers previous context
 > continue with the stripe integration
 ```
@@ -266,27 +266,27 @@ llm-team --resume
 ### Long Debugging Sessions
 
 ```bash
-llm-team
+scrappy
 > /smart where is the memory leak?
 > /agent analyze heap dumps
 # Take a break
 > /quit
 
 # Resume later
-llm-team --resume
+scrappy --resume
 # All debugging context preserved
 ```
 
 ### Code Review Workflow
 
 ```bash
-llm-team
+scrappy
 > /smart review recent changes
 > what security issues do you see?
 > /quit
 
 # Later
-llm-team --resume
+scrappy --resume
 > let's fix the SQL injection you found
 ```
 

@@ -101,12 +101,12 @@ class InteractiveMode:
         if not sys.stdin.isatty():
             io.secho("Error: Interactive mode requires a TTY (terminal).", fg="red", bold=True)
             io.echo("Cannot run interactive mode without stdin.")
-            io.echo("Use one-shot commands instead (e.g., llm-team query 'your question')")
+            io.echo("Use one-shot commands instead (e.g., scrappy query 'your question')")
             return
 
         # Show welcome banner
         io.secho("=" * 60, fg="cyan")
-        io.secho("LLM Agent Team - Interactive Mode", fg="cyan", bold=True)
+        io.secho("Scrappy - Interactive Mode", fg="cyan", bold=True)
         io.secho("=" * 60, fg="cyan")
         io.echo("Commands:")
         io.echo(f"  {io.style('/help', fg='yellow')}          - Show all commands")

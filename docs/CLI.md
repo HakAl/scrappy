@@ -1,23 +1,23 @@
 # CLI Reference Guide
 
-Complete reference for the LLM Agent Team command-line interface.
+Complete reference for the Scrappy command-line interface.
 
 ## Command Quick Reference
 
 | Command | Description | Section |
 |---------|-------------|---------|
-| `llm-team` | Start interactive chat mode | [Interactive Mode](#interactive-mode-default) |
-| `llm-team query` | Send one-shot query | [query](#query---send-a-single-query) |
-| `llm-team plan` | Break down task into steps | [plan](#plan---create-task-plans) |
-| `llm-team reason` | Analyze with evidence | [reason](#reason---complex-reasoning) |
-| `llm-team agent` | AI writes code with approval | [agent](#agent---code-agent-with-human-approval) |
-| `llm-team smart` | Research-first query with tools | [smart](#smart---research-first-query) |
-| `llm-team explore` | Analyze codebase structure | [explore](#explore---codebase-analysis) |
-| `llm-team context` | View context status | [context](#context---view-context-status) |
-| `llm-team status` | System status | [status](#status---system-status) |
-| `llm-team providers` | List available providers | [providers](#providers---list-providers) |
-| `llm-team models` | List available models | [models](#models---list-models) |
-| `llm-team usage` | Show usage statistics | [usage](#usage---usage-statistics) |
+| `scrappy` | Start interactive chat mode | [Interactive Mode](#interactive-mode-default) |
+| `scrappy query` | Send one-shot query | [query](#query---send-a-single-query) |
+| `scrappy plan` | Break down task into steps | [plan](#plan---create-task-plans) |
+| `scrappy reason` | Analyze with evidence | [reason](#reason---complex-reasoning) |
+| `scrappy agent` | AI writes code with approval | [agent](#agent---code-agent-with-human-approval) |
+| `scrappy smart` | Research-first query with tools | [smart](#smart---research-first-query) |
+| `scrappy explore` | Analyze codebase structure | [explore](#explore---codebase-analysis) |
+| `scrappy context` | View context status | [context](#context---view-context-status) |
+| `scrappy status` | System status | [status](#status---system-status) |
+| `scrappy providers` | List available providers | [providers](#providers---list-providers) |
+| `scrappy models` | List available models | [models](#models---list-models) |
+| `scrappy usage` | Show usage statistics | [usage](#usage---usage-statistics) |
 
 **Interactive Mode Commands:** [Slash Commands](#interactive-mode-commands) | [Context](#context-management) | [Cache](#cache-management) | [Session](#session-management)
 
@@ -42,10 +42,10 @@ export CEREBRAS_API_KEY=your_key
 export GROQ_API_KEY=your_key
 
 # Start interactive mode
-python llm_team.py
+python scrappy.py
 
 # Start with auto-exploration (recommended for new projects)
-python llm_team.py --auto-explore
+python scrappy.py --auto-explore
 
 # One-time setup (from project directory)
 cd llm_agent_team
@@ -53,15 +53,15 @@ pip install -e .
 
 # Now use from anywhere!
 cd ~/any-project
-llm-team --auto-explore    # Learns about current directory
-llm-team query "How do I add auth?"
-llm-team agent "Fix the login bug"
+scrappy --auto-explore    # Learns about current directory
+scrappy query "How do I add auth?"
+scrappy agent "Fix the login bug"
 ```
 
 ## Global Options
 
 ```bash
-python llm_team.py [OPTIONS] [COMMAND]
+python scrappy.py [OPTIONS] [COMMAND]
 ```
 
 | Option | Short | Description |
@@ -75,24 +75,24 @@ python llm_team.py [OPTIONS] [COMMAND]
 **Examples:**
 ```bash
 # Use Groq as brain
-python llm_team.py --brain groq
+python scrappy.py --brain groq
 
 # Auto-explore and use context
-python llm_team.py --auto-explore
+python scrappy.py --auto-explore
 
 # Disable context awareness
-python llm_team.py --no-context
+python scrappy.py --no-context
 
 # Resume previous session
-python llm_team.py --resume
+python scrappy.py --resume
 # or
-llm-team -r
+scrappy -r
 
 # Start without auto-saving
-python llm_team.py --no-save
+python scrappy.py --no-save
 
 # Combine options
-python llm_team.py -b groq -a -r
+python scrappy.py -b groq -a -r
 ```
 
 ## Commands
@@ -102,14 +102,14 @@ python llm_team.py -b groq -a -r
 Start the interactive chat interface:
 
 ```bash
-python llm_team.py
+python scrappy.py
 # or explicitly
-python llm_team.py interactive
+python scrappy.py interactive
 ```
 
 **Startup Output:**
 ```
-Initializing LLM Agent Team...
+Initializing Scrappy...
 [OK] Cerebras provider registered (14,400 RPD)
 [OK] Groq provider registered (7,000 RPD)
 [BRAIN] Using cerebras as orchestrator brain
@@ -118,7 +118,7 @@ Available providers: cerebras, groq
 Context: Not explored (use /context to explore)
 
 ============================================================
-LLM Agent Team - Interactive Mode
+Scrappy - Interactive Mode
 ============================================================
 ```
 
@@ -127,7 +127,7 @@ LLM Agent Team - Interactive Mode
 #### `query` - Send a Single Query
 
 ```bash
-python llm_team.py query "Your question here"
+python scrappy.py query "Your question here"
 ```
 
 **Options:**
@@ -142,16 +142,16 @@ python llm_team.py query "Your question here"
 **Examples:**
 ```bash
 # Basic query
-python llm_team.py query "What is machine learning?"
+python scrappy.py query "What is machine learning?"
 
 # Use specific provider
-python llm_team.py query "Explain Docker" --provider groq
+python scrappy.py query "Explain Docker" --provider groq
 
 # With codebase context
-python llm_team.py query "How should I fix the auth bug?" --with-context
+python scrappy.py query "How should I fix the auth bug?" --with-context
 
 # Custom parameters
-python llm_team.py query "Write a haiku" -t 0.9 --max-tokens 50
+python scrappy.py query "Write a haiku" -t 0.9 --max-tokens 50
 ```
 
 #### `plan` - Create Task Plans
@@ -159,7 +159,7 @@ python llm_team.py query "Write a haiku" -t 0.9 --max-tokens 50
 Break down complex tasks into actionable steps:
 
 ```bash
-python llm_team.py plan "Your task description"
+python scrappy.py plan "Your task description"
 ```
 
 **Options:**
@@ -169,7 +169,7 @@ python llm_team.py plan "Your task description"
 
 **Example:**
 ```bash
-python llm_team.py plan "Implement JWT authentication for REST API"
+python scrappy.py plan "Implement JWT authentication for REST API"
 ```
 
 **Output:**
@@ -193,7 +193,7 @@ python llm_team.py plan "Implement JWT authentication for REST API"
 Analyze questions with evidence-based reasoning:
 
 ```bash
-python llm_team.py reason "Your question" [OPTIONS]
+python scrappy.py reason "Your question" [OPTIONS]
 ```
 
 **Options:**
@@ -204,7 +204,7 @@ python llm_team.py reason "Your question" [OPTIONS]
 
 **Example:**
 ```bash
-python llm_team.py reason "Should we use Redis or PostgreSQL for caching?" \
+python scrappy.py reason "Should we use Redis or PostgreSQL for caching?" \
   --context "E-commerce platform with 10K daily users" \
   --evidence "Need sub-millisecond reads" \
   --evidence "Data is temporary session info" \
@@ -227,7 +227,7 @@ Confidence: high
 Analyze a project directory:
 
 ```bash
-python llm_team.py explore [PATH] [OPTIONS]
+python scrappy.py explore [PATH] [OPTIONS]
 ```
 
 **Options:**
@@ -238,13 +238,13 @@ python llm_team.py explore [PATH] [OPTIONS]
 **Examples:**
 ```bash
 # Explore current directory
-python llm_team.py explore
+python scrappy.py explore
 
 # Explore specific path
-python llm_team.py explore /path/to/project
+python scrappy.py explore /path/to/project
 
 # Save summary to file
-python llm_team.py explore . --save
+python scrappy.py explore . --save
 ```
 
 **Output includes:**
@@ -260,7 +260,7 @@ python llm_team.py explore . --save
 Run an AI code agent that can read, write, and modify files with your explicit approval:
 
 ```bash
-python llm_team.py agent "Your task description" [OPTIONS]
+python scrappy.py agent "Your task description" [OPTIONS]
 ```
 
 **Options:**
@@ -274,19 +274,19 @@ python llm_team.py agent "Your task description" [OPTIONS]
 **Examples:**
 ```bash
 # Basic task
-python llm_team.py agent "Add a health check endpoint to the Flask app"
+python scrappy.py agent "Add a health check endpoint to the Flask app"
 
 # Preview changes without executing
-python llm_team.py agent "Refactor the auth module" --dry-run
+python scrappy.py agent "Refactor the auth module" --dry-run
 
 # Limit iterations
-python llm_team.py agent "Fix the login bug" --max-iterations 5
+python scrappy.py agent "Fix the login bug" --max-iterations 5
 
 # Skip git checkpoint (not recommended)
-python llm_team.py agent "Update docstrings" --no-checkpoint
+python scrappy.py agent "Update docstrings" --no-checkpoint
 
 # Auto-confirm (dangerous - use only for trusted tasks)
-python llm_team.py agent "Format all Python files" --auto-confirm
+python scrappy.py agent "Format all Python files" --auto-confirm
 ```
 
 **Output:**
@@ -377,7 +377,7 @@ The agent has access to these tools:
 Perform intelligent queries that automatically gather context using tools before answering:
 
 ```bash
-python llm_team.py smart "Your query here"
+python scrappy.py smart "Your query here"
 ```
 
 **Features:**
@@ -389,13 +389,13 @@ python llm_team.py smart "Your query here"
 **Examples:**
 ```bash
 # Find project structure
-python llm_team.py smart "What files are in this project?"
+python scrappy.py smart "What files are in this project?"
 
 # Understand specific code
-python llm_team.py smart "How does the CodeAgent class work?"
+python scrappy.py smart "How does the CodeAgent class work?"
 
 # Locate functionality
-python llm_team.py smart "Where is authentication implemented?"
+python scrappy.py smart "Where is authentication implemented?"
 ```
 
 **Output:**
@@ -445,7 +445,7 @@ All queries will now use tools for research (higher quota usage).
 Show current codebase context:
 
 ```bash
-python llm_team.py context
+python scrappy.py context
 ```
 
 #### `status` - System Status
@@ -453,7 +453,7 @@ python llm_team.py context
 Show orchestrator status:
 
 ```bash
-python llm_team.py status
+python scrappy.py status
 ```
 
 #### `providers` - List Providers
@@ -461,7 +461,7 @@ python llm_team.py status
 Show all available providers with details:
 
 ```bash
-python llm_team.py providers
+python scrappy.py providers
 ```
 
 #### `models` - List Models
@@ -470,10 +470,10 @@ Show available models:
 
 ```bash
 # All models
-python llm_team.py models
+python scrappy.py models
 
 # Specific provider
-python llm_team.py models cerebras
+python scrappy.py models cerebras
 ```
 
 #### `usage` - Usage Statistics
@@ -481,7 +481,7 @@ python llm_team.py models cerebras
 Show session usage statistics:
 
 ```bash
-python llm_team.py usage
+python scrappy.py usage
 ```
 
 ## Interactive Mode Commands
@@ -667,20 +667,20 @@ Contains:
 
 ```bash
 # Auto-explore on startup
-python llm_team.py --auto-explore
+python scrappy.py --auto-explore
 
 # Manual exploration in interactive mode
 You: /context explore
 
 # One-shot with context
-python llm_team.py query "Fix bug" --with-context
+python scrappy.py query "Fix bug" --with-context
 ```
 
 ### Disabling Context
 
 ```bash
 # Disable for entire session
-python llm_team.py --no-context
+python scrappy.py --no-context
 
 # Toggle in interactive mode
 You: /context toggle
@@ -801,7 +801,7 @@ Default priority: Cerebras > Groq > Gemini
 
 ```bash
 # Specify brain
-python llm_team.py --brain groq
+python scrappy.py --brain groq
 
 # Switch brain in interactive mode
 You: /brain gemini
@@ -813,7 +813,7 @@ You: /brain gemini
 
 ```bash
 # 1. Start with auto-explore for new project
-python llm_team.py --auto-explore
+python scrappy.py --auto-explore
 
 # 2. Use context-aware queries
 You: /context explore
@@ -825,10 +825,10 @@ You: /plan Add rate limiting middleware
 
 ```bash
 # One-off questions
-python llm_team.py query "Explain async/await in Python"
+python scrappy.py query "Explain async/await in Python"
 
 # With specific model
-python llm_team.py query "Complex analysis..." --provider groq --model llama-3.3-70b-versatile
+python scrappy.py query "Complex analysis..." --provider groq --model llama-3.3-70b-versatile
 ```
 
 ### Multi-Provider Synthesis
@@ -853,7 +853,7 @@ You: /reason Should we refactor the monolith to microservices?
 
 Or with CLI:
 ```bash
-python llm_team.py reason "Monolith vs microservices?" \
+python scrappy.py reason "Monolith vs microservices?" \
   --context "Startup with 5 developers" \
   --evidence "Need to ship MVP in 2 months" \
   --evidence "Team has limited DevOps experience" \
@@ -929,23 +929,23 @@ Rollback to checkpoint? [y/N]: n
 **One-shot agent:**
 ```bash
 # Dry run first to see what would happen
-python llm_team.py agent "Add logging to all API endpoints" --dry-run
+python scrappy.py agent "Add logging to all API endpoints" --dry-run
 
 # Then run for real
-python llm_team.py agent "Add logging to all API endpoints"
+python scrappy.py agent "Add logging to all API endpoints"
 ```
 
 ## Tips and Best Practices
 
 ### 1. Use Auto-Explore for New Projects
 ```bash
-python llm_team.py -a
+python scrappy.py -a
 ```
 This builds context immediately, making all queries more informed.
 
 ### 2. Leverage Context for Code Questions
 ```bash
-python llm_team.py query "Where should I add the new endpoint?" -c
+python scrappy.py query "Where should I add the new endpoint?" -c
 ```
 
 ### 3. Plan Before Implementing
@@ -975,10 +975,10 @@ Re-scan after adding new modules or restructuring.
 ### 7. Use Code Agent for Complex Tasks
 ```bash
 # Always dry-run first for safety
-python llm_team.py agent "Refactor auth module" --dry-run
+python scrappy.py agent "Refactor auth module" --dry-run
 
 # Use git checkpoint (default) for easy rollback
-python llm_team.py agent "Add new feature"
+python scrappy.py agent "Add new feature"
 
 # Review audit logs after completion
 cat .agent_audit.json
@@ -987,7 +987,7 @@ cat .agent_audit.json
 ### 8. Combine Agent with Context
 ```bash
 # Explore first so agent understands project
-python llm_team.py --auto-explore
+python scrappy.py --auto-explore
 
 # Then agent has full context
 You: /agent Add rate limiting middleware
@@ -1054,9 +1054,9 @@ rm .llm_team_context.json
 ### Full Interactive Session
 
 ```
-$ python llm_team.py --auto-explore
+$ python scrappy.py --auto-explore
 
-Initializing LLM Agent Team...
+Initializing Scrappy...
 [OK] Cerebras provider registered (14,400 RPD)
 [OK] Groq provider registered (7,000 RPD)
 [BRAIN] Using cerebras as orchestrator brain
@@ -1068,7 +1068,7 @@ Available providers: cerebras, groq
 Context: llm_agent_team (cached)
 
 ============================================================
-LLM Agent Team - Interactive Mode
+Scrappy - Interactive Mode
 ============================================================
 
 You: /context
@@ -1111,16 +1111,16 @@ Goodbye!
 
 ```bash
 # Explore project
-python llm_team.py explore . --save
+python scrappy.py explore . --save
 
 # Query with context
-python llm_team.py query "What testing framework should I add?" -c
+python scrappy.py query "What testing framework should I add?" -c
 
 # Plan implementation
-python llm_team.py plan "Add pytest test suite"
+python scrappy.py plan "Add pytest test suite"
 
 # Reason about decision
-python llm_team.py reason "pytest vs unittest?" \
+python scrappy.py reason "pytest vs unittest?" \
   --evidence "Need fixtures" \
   --evidence "Team prefers readable syntax"
 ```

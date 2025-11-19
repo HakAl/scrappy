@@ -344,7 +344,7 @@ print(orch.get_usage_report()) # Shows session usage by provider
 1. **GitHub Models limit** (COMMON - after ~10 calls):
    - Agent crashes with "Too many requests" error
    - **NO automatic fallback** - agent fails completely
-   - **Fix**: Restart agent with `llm-team agent "task" --brain cerebras` or `--brain gemini`
+   - **Fix**: Restart agent with `scrappy agent "task" --brain cerebras` or `--brain gemini`
    - **Prevention**: Don't use GitHub Models as planner for multi-step tasks
 2. **Cerebras daily limit**: Switch to Groq (7,000 RPD remaining)
 3. **Groq daily limit**: Switch to Gemini (auto-fallback)

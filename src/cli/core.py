@@ -1,6 +1,6 @@
 """
 Core CLI functionality.
-Main entry point and command routing for the LLM Agent Team CLI.
+Main entry point and command routing for the Scrappy CLI.
 """
 
 import sys
@@ -55,7 +55,7 @@ except ImportError:
 
 
 class CLI:
-    """Interactive CLI for the LLM Agent Team."""
+    """Interactive CLI for the Scrappy."""
 
     def __init__(
         self,
@@ -106,7 +106,7 @@ class CLI:
             io = ClickIO()
         self.io = io
 
-        io.secho("Initializing LLM Agent Team...", fg="cyan")
+        io.secho("Initializing Scrappy...", fg="cyan")
 
         # Show verbose selection info if requested
         if verbose_selection:

@@ -1,4 +1,4 @@
-# LLM Team: The Free AI Coding Assistant
+# Scrappy: The Free AI Coding Assistant
 
 A powerful, context-aware coding assistant for everyone—students, learners, and developers who can't afford paid AI subscriptions.
 
@@ -13,7 +13,7 @@ Paid AI tools like ChatGPT Plus ($20/month) and Claude Pro ($20/month) are fanta
 *   **Developers** in regions where $20 is significant or payments are blocked.
 *   **Anyone** on a tight budget who wants to build and learn.
 
-LLM Team exists to make powerful AI coding assistance accessible to anyone, anywhere.
+Scrappy exists to make powerful AI coding assistance accessible to anyone, anywhere.
 
 ---
 
@@ -57,7 +57,7 @@ Navigate to any of your coding projects and run the assistant. It will automatic
 
 ```bash
 cd ~/path/to/your-project
-llm-team --auto-explore
+scrappy --auto-explore
 ```
 
 You can now ask questions, plan features, or even have the AI write code for you.
@@ -125,18 +125,18 @@ This isn't just a simple wrapper around APIs. It's a smart, resilient system.
 
 ## Command-Line Interface (CLI)
 
-You can use `llm-team` for quick, one-shot commands or in a persistent, interactive session.
+You can use `scrappy` for quick, one-shot commands or in a persistent, interactive session.
 
 #### **Starting an Interactive Session**
 ```bash
 # Start and auto-explore the current directory
-llm-team --auto-explore
+scrappy --auto-explore
 
 # Resume your last session (history and context are saved)
-llm-team --resume
+scrappy --resume
 
 # Start with a specific provider as the main "brain"
-llm-team --brain groq
+scrappy --brain groq
 ```
 
 #### **Interactive Commands**
@@ -155,13 +155,13 @@ You: /quit               # Exit the session
 #### **One-Shot Commands**
 ```bash
 # Ask a quick question with codebase context
-llm-team query "How should I fix the auth bug?" --with-context
+scrappy query "How should I fix the auth bug?" --with-context
 
 # Plan a feature without starting a session
-llm-team plan "Build a REST API with authentication"
+scrappy plan "Build a REST API with authentication"
 
 # Let the agent work on a task directly
-llm-team agent "Add a health check endpoint to the Flask app" --dry-run
+scrappy agent "Add a health check endpoint to the Flask app" --dry-run
 ```
 For a full command reference, see the [CLI Documentation](docs/CLI.md).
 
