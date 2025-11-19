@@ -4,6 +4,7 @@ Provides research-first queries using tools to gather context.
 """
 
 import click
+from typing import Optional
 
 try:
     from ..agent import CodeAgent
@@ -14,6 +15,7 @@ try:
         TRUNCATE_FILE_CONTENT,
     )
     from .config.extensions import DEPENDENCY_FILES, CONFIGURATION_FILES
+    from .io_interface import CLIIOProtocol, ClickIO
 except ImportError:
     import sys
     import os
@@ -26,6 +28,7 @@ except ImportError:
         TRUNCATE_FILE_CONTENT,
     )
     from cli.config.extensions import DEPENDENCY_FILES, CONFIGURATION_FILES
+    from cli.io_interface import CLIIOProtocol, ClickIO
 
 
 class CLISmartQuery:
@@ -64,7 +67,7 @@ class CLISmartQuery:
         except Exception as e:
             return False, f"Error: {str(e)}"
 
-    def smart_query(self, query: str):
+    def smart_query(self, query: str, io: Optional[CLIIOProtocol] = None):
         """Perform a smart query using tools to gather context before answering.
 
         Classifies the query intent, executes relevant research actions using
@@ -77,13 +80,14 @@ class CLISmartQuery:
 
         Args:
             query: The user's question or query string.
+            io: I/O interface for output. If None, uses ClickIO.
 
         State Changes:
             - Saves research results to orchestrator working memory
             - Adds discovery to orchestrator with query classification info
 
         Side Effects:
-            - Writes progress messages to stdout via click
+            - Writes progress messages to stdout via io
             - Reads files and searches codebase using CodeAgent tools
             - Makes LLM API call to generate response
 
@@ -91,28 +95,31 @@ class CLISmartQuery:
             LLMResponse: The response object containing the answer, provider info,
                 token usage, and latency.
         """
-        click.secho("\n[Smart Query] Analyzing intent...", fg="cyan", bold=True)
+        if io is None:
+            io = ClickIO()
+
+        io.secho("\n[Smart Query] Analyzing intent...", fg="cyan", bold=True)
 
         # Classify the query intent
         classification = self.classifier.classify(query)
 
         # Display classification info
-        click.echo(f"  Primary intent: {classification.primary_intent.intent.value} "
-                   f"(confidence: {classification.primary_intent.confidence:.2f})")
+        io.echo(f"  Primary intent: {classification.primary_intent.intent.value} "
+                f"(confidence: {classification.primary_intent.confidence:.2f})")
 
         if classification.secondary_intents:
             secondary_str = ", ".join([
                 f"{i.intent.value}({i.confidence:.2f})"
                 for i in classification.secondary_intents[:3]
             ])
-            click.echo(f"  Secondary intents: {secondary_str}")
+            io.echo(f"  Secondary intents: {secondary_str}")
 
         if classification.entities:
             for entity_type, values in classification.entities.items():
                 if values:
-                    click.echo(f"  Extracted {entity_type}: {', '.join(values[:5])}")
+                    io.echo(f"  Extracted {entity_type}: {', '.join(values[:5])}")
 
-        click.secho("\n[Smart Query] Researching...", fg="cyan", bold=True)
+        io.secho("\n[Smart Query] Researching...", fg="cyan", bold=True)
 
         # Create a research agent (read-only)
         agent = CodeAgent(self.orchestrator)
@@ -129,14 +136,14 @@ class CLISmartQuery:
             intent = action['intent']
 
             if intent == QueryIntent.FILE_STRUCTURE:
-                click.echo("  - Checking directory structure...")
+                io.echo("  - Checking directory structure...")
                 try:
                     result = agent._tool_list_directory(".", depth=2)
                     if result and "Error" not in result:
                         research_results.append(f"Directory Structure:\n{result}")
                         tools_used += 1
                 except Exception as e:
-                    click.echo(f"    (Warning: Could not list directory: {e})")
+                    io.echo(f"    (Warning: Could not list directory: {e})")
 
             elif intent == QueryIntent.CODE_SEARCH:
                 # Search for extracted entities first
@@ -145,7 +152,7 @@ class CLISmartQuery:
                 # Search for class names
                 for class_name in classification.entities.get('class_name', [])[:3]:
                     if class_name not in searched:
-                        click.echo(f"  - Searching for class '{class_name}'...")
+                        io.echo(f"  - Searching for class '{class_name}'...")
                         success, result = self._safe_tool_call(agent._tool_search_code, f"class {class_name}", "*.py")
                         if success and "No matches" not in result:
                             research_results.append(f"Class '{class_name}':\n{result[:TRUNCATE_RESEARCH_LARGE]}")
@@ -155,7 +162,7 @@ class CLISmartQuery:
                 # Search for function names
                 for func_name in classification.entities.get('function_name', [])[:3]:
                     if func_name not in searched:
-                        click.echo(f"  - Searching for function '{func_name}'...")
+                        io.echo(f"  - Searching for function '{func_name}'...")
                         success, result = self._safe_tool_call(agent._tool_search_code, f"def {func_name}", "*.py")
                         if success and "No matches" not in result:
                             research_results.append(f"Function '{func_name}':\n{result[:TRUNCATE_RESEARCH_LARGE]}")
@@ -166,7 +173,7 @@ class CLISmartQuery:
                 if not searched and classification.keywords:
                     for keyword in classification.keywords[:3]:
                         if len(keyword) > 3:
-                            click.echo(f"  - Searching for '{keyword}'...")
+                            io.echo(f"  - Searching for '{keyword}'...")
                             success, result = self._safe_tool_call(agent._tool_search_code, keyword, "*.py")
                             if success and "No matches" not in result:
                                 research_results.append(f"Code containing '{keyword}':\n{result[:TRUNCATE_RESEARCH_LARGE]}")
@@ -176,28 +183,28 @@ class CLISmartQuery:
             elif intent == QueryIntent.CODE_EXPLANATION:
                 # Read specific files if paths are extracted
                 for file_path in classification.entities.get('file_path', [])[:2]:
-                    click.echo(f"  - Reading file '{file_path}'...")
+                    io.echo(f"  - Reading file '{file_path}'...")
                     success, result = self._safe_tool_call(agent._tool_read_file, file_path, max_lines=100)
                     if success:
                         research_results.append(f"File '{file_path}':\n{result[:TRUNCATE_FILE_CONTENT]}")
                         tools_used += 1
 
             elif intent == QueryIntent.GIT_HISTORY:
-                click.echo("  - Checking git history...")
+                io.echo("  - Checking git history...")
                 success, result = self._safe_tool_call(agent._tool_git_log, n=10)
                 if success:
                     research_results.append(f"Recent Commits:\n{result}")
                     tools_used += 1
 
                 # Also check git status
-                click.echo("  - Checking git status...")
+                io.echo("  - Checking git status...")
                 success, result = self._safe_tool_call(agent._tool_git_status)
                 if success:
                     research_results.append(f"Git Status:\n{result}")
                     tools_used += 1
 
             elif intent == QueryIntent.DEPENDENCY_INFO:
-                click.echo("  - Checking dependencies...")
+                io.echo("  - Checking dependencies...")
                 # Check for common dependency files
                 for dep_file in DEPENDENCY_FILES[:4]:
                     success, result = self._safe_tool_call(agent._tool_read_file, dep_file, max_lines=50)
@@ -208,14 +215,14 @@ class CLISmartQuery:
 
                 # Search for specific package imports
                 for pkg in classification.entities.get('package_name', [])[:3]:
-                    click.echo(f"  - Searching for '{pkg}' usage...")
+                    io.echo(f"  - Searching for '{pkg}' usage...")
                     success, result = self._safe_tool_call(agent._tool_search_code, f"import {pkg}", "*.py")
                     if success and "No matches" not in result:
                         research_results.append(f"Usage of '{pkg}':\n{result[:TRUNCATE_RESEARCH_MEDIUM]}")
                         tools_used += 1
 
             elif intent == QueryIntent.ARCHITECTURE:
-                click.echo("  - Analyzing project architecture...")
+                io.echo("  - Analyzing project architecture...")
                 success, result = self._safe_tool_call(agent._tool_list_directory, ".", depth=3)
                 if success:
                     research_results.append(f"Project Structure:\n{result}")
@@ -232,7 +239,7 @@ class CLISmartQuery:
             elif intent == QueryIntent.BUG_INVESTIGATION:
                 # Search for error types mentioned
                 for error_type in classification.entities.get('error_type', [])[:3]:
-                    click.echo(f"  - Searching for '{error_type}'...")
+                    io.echo(f"  - Searching for '{error_type}'...")
                     success, result = self._safe_tool_call(agent._tool_search_code, error_type, "*.py")
                     if success and "No matches" not in result:
                         research_results.append(f"Error '{error_type}' occurrences:\n{result[:TRUNCATE_RESEARCH_LARGE]}")
@@ -240,14 +247,14 @@ class CLISmartQuery:
 
                 # Check for error handling patterns
                 if not classification.entities.get('error_type'):
-                    click.echo("  - Searching for error handling...")
+                    io.echo("  - Searching for error handling...")
                     success, result = self._safe_tool_call(agent._tool_search_code, "except|raise|Error", "*.py")
                     if success and "No matches" not in result:
                         research_results.append(f"Error handling patterns:\n{result[:TRUNCATE_RESEARCH_LARGE]}")
                         tools_used += 1
 
             elif intent == QueryIntent.TESTING:
-                click.echo("  - Finding test files...")
+                io.echo("  - Finding test files...")
                 success, result = self._safe_tool_call(agent._tool_list_directory, ".", depth=3)
                 if success:
                     # Filter for test directories/files
@@ -260,14 +267,14 @@ class CLISmartQuery:
                         tools_used += 1
 
                 # Search for test patterns
-                click.echo("  - Searching for test patterns...")
+                io.echo("  - Searching for test patterns...")
                 success, result = self._safe_tool_call(agent._tool_search_code, "def test_|class Test", "*.py")
                 if success and "No matches" not in result:
                     research_results.append(f"Test definitions:\n{result[:TRUNCATE_RESEARCH_LARGE]}")
                     tools_used += 1
 
             elif intent == QueryIntent.CONFIGURATION:
-                click.echo("  - Checking configuration files...")
+                io.echo("  - Checking configuration files...")
                 for config_file in CONFIGURATION_FILES:
                     success, result = self._safe_tool_call(agent._tool_read_file, config_file, max_lines=100)
                     if success and "not found" not in result.lower():
@@ -275,14 +282,14 @@ class CLISmartQuery:
                         tools_used += 1
 
                 # Search for config usage
-                click.echo("  - Searching for config usage...")
+                io.echo("  - Searching for config usage...")
                 success, result = self._safe_tool_call(agent._tool_search_code, "config|CONFIG|settings|Settings", "*.py")
                 if success and "No matches" not in result:
                     research_results.append(f"Configuration usage:\n{result[:TRUNCATE_RESEARCH_LARGE]}")
                     tools_used += 1
 
             elif intent == QueryIntent.SECURITY:
-                click.echo("  - Checking security patterns...")
+                io.echo("  - Checking security patterns...")
                 for pattern in ['auth', 'permission', 'token', 'password', 'encrypt']:
                     success, result = self._safe_tool_call(agent._tool_search_code, pattern, "*.py")
                     if success and "No matches" not in result:
@@ -292,7 +299,7 @@ class CLISmartQuery:
                             break
 
             elif intent == QueryIntent.DOCUMENTATION:
-                click.echo("  - Searching documentation...")
+                io.echo("  - Searching documentation...")
                 success, result = self._safe_tool_call(agent._tool_list_directory, ".", depth=2)
                 if success:
                     doc_lines = [
@@ -307,7 +314,7 @@ class CLISmartQuery:
         if self.orchestrator.context.summary:
             research_results.insert(0, f"Project Summary:\n{self.orchestrator.context.summary}")
 
-        click.echo(f"  - Gathered {tools_used} research results")
+        io.echo(f"  - Gathered {tools_used} research results")
 
         # Build enhanced prompt with classification context
         classification_context = f"""Query Classification:
@@ -336,15 +343,15 @@ User Question: {query}
 
 Provide a helpful answer based on your understanding of the query intent."""
 
-        click.secho("\nAssistant: ", fg="blue", bold=True, nl=False)
+        io.secho("\nAssistant: ", fg="blue", bold=True, nl=False)
         response = self.orchestrator.delegate(
             self.orchestrator.brain,
             prompt,
             system_prompt="You are a helpful AI assistant with access to codebase research and query intent classification. Use the classification context and research findings to give specific, accurate answers. Always explain your reasoning based on the evidence found."
         )
 
-        click.echo(response.content)
-        click.secho(
+        io.echo(response.content)
+        io.secho(
             f"[{response.provider}/{response.model} | {response.tokens_used} tokens | {response.latency_ms:.0f}ms | {tools_used} tools used]",
             fg="cyan"
         )

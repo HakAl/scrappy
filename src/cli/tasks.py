@@ -4,6 +4,9 @@ Handles planning and reasoning operations.
 """
 
 import click
+from typing import Optional
+
+from .io_interface import CLIIOProtocol, ClickIO
 
 
 class CLITaskExecution:
@@ -17,7 +20,7 @@ class CLITaskExecution:
         """
         self.orchestrator = orchestrator
 
-    def plan_task(self, task: str):
+    def plan_task(self, task: str, io: Optional[CLIIOProtocol] = None):
         """
         Create a task plan.
 
@@ -26,6 +29,7 @@ class CLITaskExecution:
 
         Args:
             task: Description of the task to plan.
+            io: I/O interface for output. If None, uses ClickIO.
 
         Returns:
             list: List of plan steps (dicts with 'step', 'description', etc.)
@@ -47,8 +51,11 @@ class CLITaskExecution:
         Raises:
             Does not raise; catches exceptions internally and displays error.
         """
-        click.secho(f"\nPlanning: {task}", bold=True)
-        click.echo("-" * 50)
+        if io is None:
+            io = ClickIO()
+
+        io.secho(f"\nPlanning: {task}", bold=True)
+        io.echo("-" * 50)
 
         with click.progressbar(length=1, label="Generating plan") as bar:
             try:
@@ -56,25 +63,25 @@ class CLITaskExecution:
                 bar.update(1)
             except Exception as e:
                 bar.update(1)
-                click.secho(f"Error during planning: {e}", fg="red")
+                io.secho(f"Error during planning: {e}", fg="red")
                 return []
 
-        click.echo()
+        io.echo()
         plan_summary = ""
         if isinstance(steps, list):
             for i, step in enumerate(steps, 1):
                 if isinstance(step, dict):
-                    click.secho(f"{i}. {step.get('step', 'Step')}", bold=True)
-                    click.echo(f"   {step.get('description', '')}")
+                    io.secho(f"{i}. {step.get('step', 'Step')}", bold=True)
+                    io.echo(f"   {step.get('description', '')}")
                     if 'provider_type' in step:
-                        click.secho(f"   [Recommended: {step['provider_type']}]", fg="cyan")
+                        io.secho(f"   [Recommended: {step['provider_type']}]", fg="cyan")
                     plan_summary += f"{i}. {step.get('step', 'Step')}\n"
                 else:
-                    click.echo(f"{i}. {step}")
+                    io.echo(f"{i}. {step}")
                     plan_summary += f"{i}. {step}\n"
-                click.echo()
+                io.echo()
         else:
-            click.echo(steps)
+            io.echo(steps)
             plan_summary = str(steps)
             steps = [steps]  # Convert to list for tracking
 
@@ -86,7 +93,7 @@ class CLITaskExecution:
 
         return steps if isinstance(steps, list) else []
 
-    def reason(self, question: str):
+    def reason(self, question: str, io: Optional[CLIIOProtocol] = None):
         """
         Perform reasoning on a question.
 
@@ -96,6 +103,7 @@ class CLITaskExecution:
 
         Args:
             question: The question to reason about.
+            io: I/O interface for output. If None, uses ClickIO.
 
         Returns:
             None (displays results to console).
@@ -117,8 +125,11 @@ class CLITaskExecution:
         Raises:
             Does not raise; catches exceptions internally and displays error.
         """
-        click.secho(f"\nReasoning about: {question}", bold=True)
-        click.echo("-" * 50)
+        if io is None:
+            io = ClickIO()
+
+        io.secho(f"\nReasoning about: {question}", bold=True)
+        io.echo("-" * 50)
 
         with click.progressbar(length=1, label="Analyzing") as bar:
             try:
@@ -126,21 +137,21 @@ class CLITaskExecution:
                 bar.update(1)
             except Exception as e:
                 bar.update(1)
-                click.secho(f"Error during reasoning: {e}", fg="red")
+                io.secho(f"Error during reasoning: {e}", fg="red")
                 return
 
-        click.echo()
+        io.echo()
         conclusion = ""
         if isinstance(response, dict):
-            click.echo(f"Question: {response.get('question', question)}")
-            click.secho(f"\nAnalysis:", bold=True)
-            click.echo(response.get('analysis', ''))
-            click.secho(f"\nConclusion: ", bold=True, nl=False)
+            io.echo(f"Question: {response.get('question', question)}")
+            io.secho(f"\nAnalysis:", bold=True)
+            io.echo(response.get('analysis', ''))
+            io.secho(f"\nConclusion: ", bold=True, nl=False)
             conclusion = response.get('conclusion', '')
-            click.echo(conclusion)
-            click.echo(f"Confidence: {response.get('confidence', 'N/A')}")
+            io.echo(conclusion)
+            io.echo(f"Confidence: {response.get('confidence', 'N/A')}")
         else:
-            click.echo(response)
+            io.echo(response)
             conclusion = str(response)[:200]
 
         # Save reasoning result to working memory
