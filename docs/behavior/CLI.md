@@ -37,31 +37,67 @@
 
 
 we're working to improve src\cli the next task is: 
-Poor Testability - Interactive I/O
+Massive Files - Single Responsibility - error_recovery.py 
+ Create a new error_recovery/ package with focused modules:
 
-  Still problematic in:
-  - display.py:36-41 - Uses click.secho() directly
-  - tasks.py:50-51 - Uses click.secho()/click.echo() directly
-  - smart_query.py:94, 339 - Bypasses CLIIOProtocol
+  src/cli/error_recovery/
+      __init__.py          (~40 lines)  - Re-exports for backward compatibility
+      retry.py             (~100 lines) - retry_operation, safe_operation_with_recovery
+      fallback.py          (~120 lines) - with_fallback, fallback_providers, graceful_degrade
+      circuit_breaker.py   (~120 lines) - CircuitBreaker class
+      context.py           (~380 lines) - All error context managers
 
-  Despite having the excellent CLIIOProtocol abstraction, these files still call click directly.
+  Key Points
+
+  1. Backward compatibility: __init__.py re-exports all public APIs so existing imports like from
+  src.cli.error_recovery import retry_operation continue to work
+  2. Each module has one reason to change:
+    - retry.py - Changes to retry timing/strategy
+    - fallback.py - Changes to fallback selection logic
+    - circuit_breaker.py - Changes to circuit breaker behavior
+    - context.py - Changes to context manager behavior
+  3. Context managers stay together (380 lines) because they're tightly coupled - _RetryableErrorContext and
+  _SimpleErrorContext are implementations selected by error_recovery_context(). Could be split further later if
+  needed.
+  4. Tests require no changes - all existing imports will still work
 can you research the task and start with tests?
 
+help with a plan to decompose?
+start with tests?
+implement
 
+ The file has 5 distinct responsibilities that can be cleanly separated:
+ 
   ---
-  1. Poor Testability - Interactive I/O
+  Decomposition Plan
 
-  Still problematic in:
-  - display.py:36-41 - Uses click.secho() directly
-  - tasks.py:50-51 - Uses click.secho()/click.echo() directly
-  - smart_query.py:94, 339 - Bypasses CLIIOProtocol
+  Create a new error_recovery/ package with focused modules:
 
-  Despite having the excellent CLIIOProtocol abstraction, these files still call click directly.
+  src/cli/error_recovery/
+      __init__.py          (~40 lines)  - Re-exports for backward compatibility
+      retry.py             (~100 lines) - retry_operation, safe_operation_with_recovery
+      fallback.py          (~120 lines) - with_fallback, fallback_providers, graceful_degrade
+      circuit_breaker.py   (~120 lines) - CircuitBreaker class
+      context.py           (~380 lines) - All error context managers
+
+  Key Points
+
+  1. Backward compatibility: __init__.py re-exports all public APIs so existing imports like from
+  src.cli.error_recovery import retry_operation continue to work
+  2. Each module has one reason to change:
+    - retry.py - Changes to retry timing/strategy
+    - fallback.py - Changes to fallback selection logic
+    - circuit_breaker.py - Changes to circuit breaker behavior
+    - context.py - Changes to context manager behavior
+  3. Context managers stay together (380 lines) because they're tightly coupled - _RetryableErrorContext and
+  _SimpleErrorContext are implementations selected by error_recovery_context(). Could be split further later if
+  needed.
+  4. Tests require no changes - all existing imports will still work
+
 
   ---
   2. Massive Files - Single Responsibility
 
-  Worst offenders:
   - error_recovery.py - 710 lines
   - validators.py - 512 lines
   - command_router.py - route() method is 192 lines with 30+ elif branches
