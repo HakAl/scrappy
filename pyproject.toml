@@ -52,8 +52,9 @@ Homepage = "https://github.com/yourusername/scrappy-dev"
 Repository = "https://github.com/yourusername/scrappy-dev"
 Issues = "https://github.com/yourusername/scrappy-dev/issues"
 
-[tool.setuptools]
-packages = ["src", "src.providers"]
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
 
 [tool.setuptools.package-data]
 "*" = ["*.md", "*.json"]

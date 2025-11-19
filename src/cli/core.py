@@ -7,51 +7,26 @@ import sys
 from datetime import datetime
 from typing import Optional
 
-try:
-    from ..orchestrator import AgentOrchestrator
-    from .display import CLIDisplay
-    from .session import CLISessionManager
-    from .codebase import CLICodebaseAnalysis
-    from .tasks import CLITaskExecution
-    from .multiprovider import CLIMultiProvider
-    from .smart_query import CLISmartQuery
-    from .agent_manager import CLIAgentManager
-    from .task_router_handler import CLITaskRouterHandler
-    from .io_interface import CLIIOProtocol, ClickIO
-    from .tool_detector import needs_tool_support
-    from .input_handler import InputHandler
-    from .state_manager import PlanStateManager
-    from .command_router import CommandRouter
-    from .interactive import InteractiveMode
-    from .utils.session_utils import display_previous_session_detected
-    from .utils.cli_factory import initialize_cli_handlers
-    from .exceptions import CLIError, SessionError, TaskExecutionError
-    from .error_recovery import graceful_degrade, error_recovery_context
-    from .logging import get_logger
-except ImportError:
-    # Allow running as script
-    import os
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from orchestrator import AgentOrchestrator
-    from cli.display import CLIDisplay
-    from cli.session import CLISessionManager
-    from cli.codebase import CLICodebaseAnalysis
-    from cli.tasks import CLITaskExecution
-    from cli.multiprovider import CLIMultiProvider
-    from cli.smart_query import CLISmartQuery
-    from cli.agent_manager import CLIAgentManager
-    from cli.task_router_handler import CLITaskRouterHandler
-    from cli.io_interface import CLIIOProtocol, ClickIO
-    from cli.tool_detector import needs_tool_support
-    from cli.input_handler import InputHandler
-    from cli.state_manager import PlanStateManager
-    from cli.command_router import CommandRouter
-    from cli.interactive import InteractiveMode
-    from cli.utils.session_utils import display_previous_session_detected
-    from cli.utils.cli_factory import initialize_cli_handlers
-    from cli.exceptions import CLIError, SessionError, TaskExecutionError
-    from cli.error_recovery import graceful_degrade, error_recovery_context
-    from cli.logging import get_logger
+from ..orchestrator import AgentOrchestrator
+from .display import CLIDisplay
+from .session import CLISessionManager
+from .codebase import CLICodebaseAnalysis
+from .tasks import CLITaskExecution
+from .multiprovider import CLIMultiProvider
+from .smart_query import CLISmartQuery
+from .agent_manager import CLIAgentManager
+from .task_router_handler import CLITaskRouterHandler
+from .io_interface import CLIIOProtocol, ClickIO
+from .tool_detector import needs_tool_support
+from .input_handler import InputHandler
+from .state_manager import PlanStateManager
+from .command_router import CommandRouter
+from .interactive import InteractiveMode
+from .utils.session_utils import display_previous_session_detected
+from .utils.cli_factory import initialize_cli_handlers
+from .exceptions import CLIError, SessionError, TaskExecutionError
+from .error_recovery import graceful_degrade, error_recovery_context
+from .logging import get_logger
 
 
 class CLI:

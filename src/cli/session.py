@@ -5,21 +5,11 @@ Handles context, cache, rate limits, and session persistence.
 
 from typing import Any, Dict, List, Optional
 
-try:
-    from .io_interface import CLIIOProtocol, ClickIO
-    from .context_manager import ContextManager
-    from .cache_manager import CacheManager
-    from .rate_limiter import RateLimiter
-    from .persistence import SessionPersistence
-except ImportError:
-    import sys
-    import os
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from cli.io_interface import CLIIOProtocol, ClickIO  # type: ignore[no-redef]
-    from cli.context_manager import ContextManager  # type: ignore[no-redef]
-    from cli.cache_manager import CacheManager  # type: ignore[no-redef]
-    from cli.rate_limiter import RateLimiter  # type: ignore[no-redef]
-    from cli.persistence import SessionPersistence  # type: ignore[no-redef]
+from .io_interface import CLIIOProtocol, ClickIO
+from .context_manager import ContextManager
+from .cache_manager import CacheManager
+from .rate_limiter import RateLimiter
+from .persistence import SessionPersistence
 
 
 class CLISessionManager:

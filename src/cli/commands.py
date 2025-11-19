@@ -31,14 +31,7 @@ from .exceptions import (
     FileOperationError,
 )
 from .logging import get_logger
-
-try:
-    from ..agent import CodeAgent, create_git_checkpoint, rollback_to_checkpoint
-except ImportError:
-    import sys as _sys
-    import os as _os
-    _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
-    from agent import CodeAgent, create_git_checkpoint, rollback_to_checkpoint
+from ..agent import CodeAgent, create_git_checkpoint, rollback_to_checkpoint
 
 
 @click.group(invoke_without_command=True)

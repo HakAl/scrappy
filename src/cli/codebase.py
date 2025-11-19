@@ -9,36 +9,19 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional
 
-try:
-    from .io_interface import CLIIOProtocol, ClickIO
-    from .config.defaults import (
-        MAX_TOKENS_SUMMARY,
-        TEMPERATURE_LOW,
-        TRUNCATE_PRIORITY_FILE,
-        TRUNCATE_FILE_CONTENT,
-    )
-    from .config.extensions import (
-        EXTENSIONS_BY_CATEGORY,
-        PRIORITY_FILES,
-        ENTRY_POINT_FILES,
-    )
-    from .config.paths import SKIP_DIRS
-except ImportError:
-    import sys
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from cli.io_interface import CLIIOProtocol, ClickIO
-    from cli.config.defaults import (
-        MAX_TOKENS_SUMMARY,
-        TEMPERATURE_LOW,
-        TRUNCATE_PRIORITY_FILE,
-        TRUNCATE_FILE_CONTENT,
-    )
-    from cli.config.extensions import (
-        EXTENSIONS_BY_CATEGORY,
-        PRIORITY_FILES,
-        ENTRY_POINT_FILES,
-    )
-    from cli.config.paths import SKIP_DIRS
+from .io_interface import CLIIOProtocol, ClickIO
+from .config.defaults import (
+    MAX_TOKENS_SUMMARY,
+    TEMPERATURE_LOW,
+    TRUNCATE_PRIORITY_FILE,
+    TRUNCATE_FILE_CONTENT,
+)
+from .config.extensions import (
+    EXTENSIONS_BY_CATEGORY,
+    PRIORITY_FILES,
+    ENTRY_POINT_FILES,
+)
+from .config.paths import SKIP_DIRS
 
 
 class CLICodebaseAnalysis:

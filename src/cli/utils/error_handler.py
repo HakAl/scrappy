@@ -12,13 +12,7 @@ from typing import Any, Callable, Optional, Tuple, Union
 import json
 import traceback
 
-try:
-    from ..io_interface import CLIIOProtocol
-except ImportError:
-    import sys
-    import os
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from io_interface import CLIIOProtocol
+from ..io_interface import CLIIOProtocol
 
 
 class ErrorSeverity(IntEnum):

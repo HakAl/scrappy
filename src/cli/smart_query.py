@@ -6,29 +6,15 @@ Provides research-first queries using tools to gather context.
 import click
 from typing import Optional
 
-try:
-    from ..agent import CodeAgent
-    from ..intent_classifier import IntentClassifier, QueryIntent, get_research_actions
-    from .config.defaults import (
-        TRUNCATE_RESEARCH_LARGE,
-        TRUNCATE_RESEARCH_MEDIUM,
-        TRUNCATE_FILE_CONTENT,
-    )
-    from .config.extensions import DEPENDENCY_FILES, CONFIGURATION_FILES
-    from .io_interface import CLIIOProtocol, ClickIO
-except ImportError:
-    import sys
-    import os
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from agent import CodeAgent
-    from intent_classifier import IntentClassifier, QueryIntent, get_research_actions
-    from cli.config.defaults import (
-        TRUNCATE_RESEARCH_LARGE,
-        TRUNCATE_RESEARCH_MEDIUM,
-        TRUNCATE_FILE_CONTENT,
-    )
-    from cli.config.extensions import DEPENDENCY_FILES, CONFIGURATION_FILES
-    from cli.io_interface import CLIIOProtocol, ClickIO
+from ..agent import CodeAgent
+from ..intent_classifier import IntentClassifier, QueryIntent, get_research_actions
+from .config.defaults import (
+    TRUNCATE_RESEARCH_LARGE,
+    TRUNCATE_RESEARCH_MEDIUM,
+    TRUNCATE_FILE_CONTENT,
+)
+from .config.extensions import DEPENDENCY_FILES, CONFIGURATION_FILES
+from .io_interface import CLIIOProtocol, ClickIO
 
 
 class CLISmartQuery:

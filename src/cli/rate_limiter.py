@@ -6,13 +6,7 @@ Handles display and reset of API rate limit usage.
 from typing import Optional
 import logging
 
-try:
-    from .io_interface import CLIIOProtocol, ClickIO
-except ImportError:
-    import sys
-    import os
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from cli.io_interface import CLIIOProtocol, ClickIO
+from .io_interface import CLIIOProtocol, ClickIO
 
 logger = logging.getLogger(__name__)
 

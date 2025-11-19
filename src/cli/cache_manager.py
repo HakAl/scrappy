@@ -5,13 +5,7 @@ Handles response caching statistics and operations.
 
 from typing import Optional
 
-try:
-    from .io_interface import CLIIOProtocol, ClickIO
-except ImportError:
-    import sys
-    import os
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from cli.io_interface import CLIIOProtocol, ClickIO
+from .io_interface import CLIIOProtocol, ClickIO
 
 
 class CacheManager:

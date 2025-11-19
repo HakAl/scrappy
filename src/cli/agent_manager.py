@@ -5,15 +5,8 @@ Handles running and managing code execution agents with human approval.
 
 from typing import Optional
 
-try:
-    from ..agent import CodeAgent, create_git_checkpoint, rollback_to_checkpoint
-    from .io_interface import CLIIOProtocol, ClickIO
-except ImportError:
-    import sys
-    import os
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from agent import CodeAgent, create_git_checkpoint, rollback_to_checkpoint
-    from cli.io_interface import CLIIOProtocol, ClickIO
+from ..agent import CodeAgent, create_git_checkpoint, rollback_to_checkpoint
+from .io_interface import CLIIOProtocol, ClickIO
 
 
 class CLIAgentManager:

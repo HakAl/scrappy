@@ -37,7 +37,7 @@
 
 
 we're working to improve src\cli the next task is: 
-Fragile patterns: 25+ regex patterns in config/patterns.py with limited edge case tests
+Duplicated imports: Try/except fallback pattern in ~10 files
 can you research the task and create a plan to fix?
 
 
@@ -47,11 +47,9 @@ start with tests?
 implement
 ---
 
-
   ---
   3-6: Pattern Matching, Duplication, JSON, God Objects
 
-  - Fragile patterns: 25+ regex patterns in config/patterns.py with limited edge case tests
   - Duplicated imports: Try/except fallback pattern in ~10 files
   - JSON risk: No error handling around json.dumps() in logging.py:182
   - God object: smart_query.smart_query() handles 9 different concerns in one method

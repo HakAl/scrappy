@@ -6,15 +6,8 @@ Handles saving, loading, and managing session state.
 import json
 from typing import Any, Dict, List, Optional
 
-try:
-    from .io_interface import CLIIOProtocol, ClickIO
-    from .utils.session_utils import display_session_load_error
-except ImportError:
-    import sys
-    import os
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from cli.io_interface import CLIIOProtocol, ClickIO  # type: ignore[no-redef]
-    from cli.utils.session_utils import display_session_load_error  # type: ignore[no-redef]
+from .io_interface import CLIIOProtocol, ClickIO
+from .utils.session_utils import display_session_load_error
 
 
 class SessionPersistence:
