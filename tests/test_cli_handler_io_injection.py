@@ -937,7 +937,7 @@ class TestCLICoreIOInjection:
 
             output = io.get_output()
             assert "Initializing" in output
-            assert "LLM Agent Team" in output
+            assert "Scrappy" in output
 
     def test_cli_init_outputs_brain_info(self):
         """CLI.__init__() should output brain info through io."""

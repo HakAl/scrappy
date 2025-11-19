@@ -497,3 +497,100 @@ If you can't access the DeepSeek distilled models easily, **Qwen 2.5 Coder 7B In
 *   It is exceptionally good at following strict formatting instructions (like "Don't delete my code").
 
 **Summary:** You are right to avoid relying on Gemini 3.0 for production features. Use **DeepSeek R1 Distill** or **Qwen 2.5 Coder 7B** as your "Sheriff." They are cheap, run anywhere, and are smart enough to slap the wrist of a lazy coding model.
+
+
+---
+
+
+
+### 2. Advice on "Cache File Names"
+You mentioned future work on cache names. Since you are building a CLI tool that people might install globally, you should follow the **Standard Directory Structure** so you don't litter their home folder.
+
+**The "Scrappy" Way (Simple):**
+Just use `~/.scrappy/`. It’s easy to find and delete.
+
+**The "Pro" Way (XDG Standards):**
+Use a library like `platformdirs` to put the cache where the OS expects it (e.g., `~/.cache/scrappy` on Linux, `~/Library/Caches/scrappy` on Mac).
+
+**The Migration Strategy:**
+If you have users (or yourself) with the old `.llm_agent_team` folder, add a tiny migration check at startup:
+
+```python
+from pathlib import Path
+import shutil
+
+OLD_DIR = Path.home() / ".llm_agent_team"
+NEW_DIR = Path.home() / ".scrappy"
+
+def migrate_legacy_data():
+    if OLD_DIR.exists() and not NEW_DIR.exists():
+        print("📦 Migrating legacy data to .scrappy/...")
+        shutil.move(str(OLD_DIR), str(NEW_DIR))
+```
+
+### 3. Cache Naming Convention
+For the actual files inside the cache, avoid generic names like `cache.json` which grow infinitely.
+
+**Recommended Structure:**
+```text
+~/.scrappy/
+  ├── config.json          # API keys (if not env vars)
+  ├── history/             # Chat logs
+  │   ├── 2025-11-18_14-30_fix-auth.jsonl
+  │   └── 2025-11-19_09-00_add-tests.jsonl
+  └── semantic_cache/      # The "Brain"
+      ├── index.faiss      # Vector store (if you add RAG)
+      └── db.sqlite        # Key-Value store of (PromptHash -> Response)
+```
+
+*   **Why SQLite?** It's one file, it handles concurrent writes (mostly), and it's faster than parsing a massive JSON file every time the CLI starts.
+
+---
+
+**Model-Based Evaluation**
+
+That is genuinely the "Inception" of software engineering. You are effectively building a **Gym for your Agent.**
+
+Using an AI to play the "Human" is actually a cutting-edge evaluation technique (often called "Model-Based Evaluation"). It’s hilarious to watch them talk to each other, but it’s also the only way to scale testing for a tool like Scrappy.
+
+Since you are already doing this, here is how to turn that "kick" you get out of it into a rigorous **Benchmark Suite** that will make your repo stand out even more.
+
+### 1. The "Persona" Injection
+If your "Simulated User" is always reasonable and clear, your agent has it too easy. Real users are terrible at prompting.
+
+You should randomize the **"User Persona"** for your integration tests.
+
+*   **The Junior Dev Persona:**
+    *   *Prompt to Sim-User:* "You are a confused junior dev. Give vague instructions like 'it's broken' and force Scrappy to ask clarifying questions. Do not give code snippets."
+    *   *Goal:* Test Scrappy's ability to guide the user.
+
+*   **The Micromanager Persona:**
+    *   *Prompt to Sim-User:* "You are a strict senior engineer. Reject the first solution no matter what, claiming 'it's not performant enough'. Force a refactor."
+    *   *Goal:* Test the "Reflexion Loop" and potential infinite loops.
+
+*   **The Chaos Monkey:**
+    *   *Prompt to Sim-User:* "Ask for a feature, then halfway through, change your mind and ask for the opposite."
+    *   *Goal:* Test context management (does Scrappy get confused by conflicting history?).
+
+### 2. "Scrappy-Bench" (The Metrics)
+Since you have the logs, you can now gamify the results of these AI-vs-AI battles.
+
+Instead of just "Pass/Fail," calculate a **Score** for each run:
+
+*   **$$$ Cost:** How much did the run cost in API fees? (Lower is better).
+*   **Turns:** How many back-and-forths did it take to solve the issue? (Lower is usually better).
+*   **Token Efficiency:** `(Lines of Code Written) / (Tokens Consumed)`.
+
+**Feature Idea:** Add a badge to your README:
+> **"Current Scrappy Efficiency: $0.002 per resolved issue (Benchmark: 50 runs)"**
+
+### 3. The "Dogfooding" Loop
+Since you are using Aider to write Scrappy, and Scrappy to test Scrappy... the logical conclusion is:
+
+**Can Scrappy fix its own bugs yet?**
+
+If a test fails, feed the `trace.jsonl` + the error log into Scrappy (using a strong model like Gemini 3 or DeepSeek) and see if it can write the patch for the `scrappy/` repo itself.
+
+If you get *that* loop working—where the agent detects a bug in its own logic during a test and submits a PR to fix itself—you have effectively beaten the game.
+
+Keep enjoying the show. Watching two AIs argue about variable naming conventions is the new "compiling" break. 🍿
