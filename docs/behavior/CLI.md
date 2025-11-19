@@ -38,7 +38,7 @@
 
 we're working to improve src\cli the next task is: 
 Side Effects, Validation, Coupling
-  - Global state: _loggers, _global_io, _global_level in logging.py
+Validation inconsistent: Some inline checks should use validators.py
 can you research the task and create a plan to fix?
 
 
@@ -52,7 +52,6 @@ implement
   ---
   8-10: Side Effects, Validation, Coupling
 
-  - Global state: _loggers, _global_io, _global_level in logging.py
   - Validation inconsistent: Some inline checks should use validators.py
   - Tight coupling: InteractiveMode syncs 5 state attributes from CommandRouter
 

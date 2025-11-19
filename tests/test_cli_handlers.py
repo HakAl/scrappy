@@ -350,7 +350,8 @@ class TestCLIDisplay:
         display.switch_brain("invalid_provider")
 
         captured = capsys.readouterr()
-        assert "not available" in captured.out
+        # Invalid provider names fail validation with "Unknown provider" error
+        assert "unknown provider" in captured.out.lower()
         # Brain should not change
         assert mock_orchestrator.brain == original_brain
 
@@ -392,7 +393,8 @@ class TestCLIDisplay:
         display.list_models("nonexistent")
 
         captured = capsys.readouterr()
-        assert "not available" in captured.out
+        # Invalid provider names fail validation with "Unknown provider" error
+        assert "unknown provider" in captured.out.lower()
 
 
 class TestCLISession:

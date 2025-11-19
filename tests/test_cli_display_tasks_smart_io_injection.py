@@ -276,11 +276,12 @@ class TestDisplayIOInjection:
         self.display.switch_brain("invalid_provider", io=io)
 
         output = io.get_output()
-        assert "not available" in output
+        # Invalid provider names fail validation with "Unknown provider" error
+        assert "unknown provider" in output.lower()
 
         # Check red color for error
         styled = io.get_styled_outputs()
-        error_outputs = [s for s in styled if "not available" in s['text']]
+        error_outputs = [s for s in styled if "unknown provider" in s['text'].lower()]
         if error_outputs:
             assert error_outputs[0]['fg'] == 'red'
 
@@ -386,16 +387,17 @@ class TestDisplayIOInjection:
         io = MockIO()
 
         self.orchestrator.providers = MagicMock()
-        self.orchestrator.providers.list_available.return_value = ['openai']
+        self.orchestrator.providers.list_available.return_value = ['cerebras']
 
         self.display.list_models("invalid", io=io)
 
         output = io.get_output()
-        assert "not available" in output
+        # Invalid provider names fail validation with "Unknown provider" error
+        assert "unknown provider" in output.lower()
 
         # Check red color for error
         styled = io.get_styled_outputs()
-        error_outputs = [s for s in styled if "not available" in s['text']]
+        error_outputs = [s for s in styled if "unknown provider" in s['text'].lower()]
         if error_outputs:
             assert error_outputs[0]['fg'] == 'red'
 
@@ -407,10 +409,10 @@ class TestDisplayIOInjection:
         mock_provider.available_models = ['model1', 'model2']
         mock_provider.default_model = 'model1'
         self.orchestrator.providers = MagicMock()
-        self.orchestrator.providers.list_available.return_value = ['openai']
+        self.orchestrator.providers.list_available.return_value = ['cerebras']
         self.orchestrator.providers.get.return_value = mock_provider
 
-        self.display.list_models("openai", io=io)
+        self.display.list_models("cerebras", io=io)
 
         output = io.get_output()
         assert "default" in output.lower()

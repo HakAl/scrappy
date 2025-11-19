@@ -6,6 +6,7 @@ Handles synthesis and delegation across multiple providers.
 from typing import Optional
 
 from .io_interface import CLIIOProtocol, ClickIO
+from .validators import is_empty_or_whitespace, validate_provider
 
 
 class CLIMultiProvider:
@@ -47,7 +48,7 @@ class CLIMultiProvider:
         io.echo("This will query multiple providers and synthesize their responses.")
 
         prompt = io.prompt("Enter your question")
-        if not prompt:
+        if is_empty_or_whitespace(prompt):
             io.echo("No question provided.")
             return
 
@@ -137,23 +138,23 @@ class CLIMultiProvider:
                 return
             provider, prompt = parts
 
-        if not provider or not prompt:
+        if is_empty_or_whitespace(provider) or is_empty_or_whitespace(prompt):
             io.secho("Both provider and prompt are required.", fg="yellow")
             return
 
-        provider = provider.lower().strip()
+        # Validate provider with availability check
         available = self.orchestrator.providers.list_available()
+        validation = validate_provider(provider, available_providers=available)
 
-        if provider not in available:
-            io.secho(f"Provider '{provider}' not available.", fg="red")
-            io.echo(f"Available: {', '.join(available)}")
+        if not validation.is_valid:
+            io.secho(f"{validation.error}", fg="red")
             return
 
-        io.echo(f"\nDelegating to {provider}...")
+        io.echo(f"\nDelegating to {validation.provider}...")
 
         try:
-            response = self.orchestrator.delegate(provider, prompt)
-            io.secho(f"\nResponse from {provider}:", bold=True)
+            response = self.orchestrator.delegate(validation.provider, prompt)
+            io.secho(f"\nResponse from {validation.provider}:", bold=True)
             io.echo("-" * 50)
             io.echo(response.content)
             io.secho(
@@ -163,7 +164,7 @@ class CLIMultiProvider:
 
             # Save delegation result to working memory
             self.orchestrator.working_memory.add_discovery(
-                f"Delegated '{prompt[:40]}...' to {provider} ({response.tokens_used} tokens)",
+                f"Delegated '{prompt[:40]}...' to {validation.provider} ({response.tokens_used} tokens)",
                 "delegation"
             )
         except Exception as e:

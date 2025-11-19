@@ -46,7 +46,10 @@ VALID_PROVIDERS = {
 MAX_PROVIDER_LENGTH = 50
 
 
-def validate_provider(provider_input: str) -> ProviderValidationResult:
+def validate_provider(
+    provider_input: str,
+    available_providers: Optional[List[str]] = None
+) -> ProviderValidationResult:
     """Validate a provider name and normalize it.
 
     Performs comprehensive validation including:
@@ -56,10 +59,13 @@ def validate_provider(provider_input: str) -> ProviderValidationResult:
     - Space rejection
     - Alphanumeric and underscore only (must start with letter)
     - Validation against VALID_PROVIDERS set
+    - Optional availability check against runtime provider list
 
     Args:
         provider_input: The provider name to validate (e.g., "cerebras", "Groq").
             Case-insensitive; will be normalized to lowercase.
+        available_providers: Optional list of currently available providers.
+            If provided, validates that the provider is in this list.
 
     Returns:
         ProviderValidationResult with:
@@ -79,6 +85,10 @@ def validate_provider(provider_input: str) -> ProviderValidationResult:
         True
         >>> result.provider
         'cerebras'
+
+        >>> result = validate_provider("cerebras", available_providers=["groq"])
+        >>> result.is_valid
+        False
     """
     # Handle None input
     if provider_input is None:
@@ -140,6 +150,18 @@ def validate_provider(provider_input: str) -> ProviderValidationResult:
             is_valid=False,
             error=f"Unknown provider: {provider_lower}. Valid providers are: {', '.join(sorted(VALID_PROVIDERS))}"
         )
+
+    # Check availability if a list is provided
+    if available_providers is not None:
+        # Normalize available providers for comparison
+        available_normalized = [p.strip().lower() for p in available_providers]
+
+        if provider_lower not in available_normalized:
+            available_display = ', '.join(sorted(available_normalized)) if available_normalized else 'none'
+            return ProviderValidationResult(
+                is_valid=False,
+                error=f"Provider '{provider_lower}' is not available. Available providers: {available_display}"
+            )
 
     return ProviderValidationResult(
         is_valid=True,

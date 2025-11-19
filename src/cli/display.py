@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Optional
 
 from .io_interface import CLIIOProtocol, ClickIO
+from .validators import validate_provider
 
 
 class CLIDisplay:
@@ -195,17 +196,17 @@ class CLIDisplay:
             io.echo("Usage: /brain <provider_name>")
             return
 
-        provider_name = provider_name.lower().strip()
+        # Validate provider with availability check
         available = self.orchestrator.providers.list_available()
+        validation = validate_provider(provider_name, available_providers=available)
 
-        if provider_name not in available:
-            io.secho(f"Provider '{provider_name}' not available.", fg="red")
-            io.echo(f"Available: {', '.join(available)}")
+        if not validation.is_valid:
+            io.secho(f"{validation.error}", fg="red")
             return
 
         old_brain = self.orchestrator.brain
-        self.orchestrator.brain = provider_name
-        io.secho(f"Brain switched: {old_brain} -> {provider_name}", fg="green")
+        self.orchestrator.brain = validation.provider
+        io.secho(f"Brain switched: {old_brain} -> {validation.provider}", fg="green")
 
     def show_usage(self, io: Optional[CLIIOProtocol] = None):
         """Display usage statistics for the current session.
@@ -276,15 +277,16 @@ class CLIDisplay:
             io = ClickIO()
 
         if provider_name:
-            provider_name = provider_name.lower().strip()
+            # Validate provider with availability check
             available = self.orchestrator.providers.list_available()
+            validation = validate_provider(provider_name, available_providers=available)
 
-            if provider_name not in available:
-                io.secho(f"Provider '{provider_name}' not available.", fg="red")
+            if not validation.is_valid:
+                io.secho(f"{validation.error}", fg="red")
                 return
 
-            provider = self.orchestrator.providers.get(provider_name)
-            io.secho(f"\n{provider_name.upper()} Models:", bold=True)
+            provider = self.orchestrator.providers.get(validation.provider)
+            io.secho(f"\n{validation.provider.upper()} Models:", bold=True)
             io.echo("-" * 50)
             for model in provider.available_models:
                 if model == provider.default_model:

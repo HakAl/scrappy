@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 
 from .io_interface import CLIIOProtocol, ClickIO
 from .utils.session_utils import display_session_load_error
+from .validators import validate_subcommand
 
 
 class SessionPersistence:
@@ -100,7 +101,20 @@ class SessionPersistence:
             'auto_save': auto_save
         }
 
-        if not args:
+        # Validate subcommand
+        validation = validate_subcommand("session", args)
+        if not validation.is_valid:
+            io.secho(validation.error, fg="red")
+            io.echo("Usage: /session [save|load|clear|toggle]")
+            io.echo("  (no args)  - Show session info")
+            io.echo("  save       - Save current session to disk")
+            io.echo("  load       - Load saved session")
+            io.echo("  clear      - Delete saved session file")
+            io.echo("  toggle     - Toggle auto-save on/off")
+            io.echo(f"\nAuto-save: {io.style('ON' if auto_save else 'OFF', fg='green' if auto_save else 'yellow')}")
+            return result
+
+        if validation.subcommand == "":
             # Show session info
             session_file = self.orchestrator.context.project_path / ".llm_team_session.json"
             io.secho("\nSession Management:", fg="magenta", bold=True)
@@ -131,7 +145,7 @@ class SessionPersistence:
             io.echo(f"  Conversation: {len(conversation_history or [])} messages")
             io.echo(f"  Auto-save: {io.style('ON' if auto_save else 'OFF', fg='green' if auto_save else 'yellow')}")
 
-        elif args.lower() == "save":
+        elif validation.subcommand == "save":
             try:
                 session_file = self.orchestrator.save_session(conversation_history or [])
                 io.secho(f"Session saved to: {session_file}", fg="green")
@@ -139,7 +153,7 @@ class SessionPersistence:
             except Exception as e:
                 io.secho(f"Error saving session: {e}", fg="red")
 
-        elif args.lower() == "load":
+        elif validation.subcommand == "load":
             load_result = self.orchestrator.load_session()
             if load_result['status'] == 'loaded':
                 io.secho(f"Session loaded from {load_result['saved_at']}", fg="green")
@@ -156,11 +170,11 @@ class SessionPersistence:
             else:
                 display_session_load_error(io, load_result)
 
-        elif args.lower() == "clear":
+        elif validation.subcommand == "clear":
             self.orchestrator.clear_session()
             io.secho("Saved session cleared.", fg="green")
 
-        elif args.lower() == "toggle":
+        elif validation.subcommand == "toggle":
             result['auto_save'] = not auto_save
             status = io.style("ON", fg="green") if result['auto_save'] else io.style("OFF", fg="yellow")
             io.echo(f"Auto-save on exit: {status}")
@@ -168,14 +182,5 @@ class SessionPersistence:
                 io.echo("Session will be saved automatically on /quit")
             else:
                 io.echo("Session will NOT be saved on /quit (use '/session save' manually)")
-
-        else:
-            io.echo("Usage: /session [save|load|clear|toggle]")
-            io.echo("  (no args)  - Show session info")
-            io.echo("  save       - Save current session to disk")
-            io.echo("  load       - Load saved session")
-            io.echo("  clear      - Delete saved session file")
-            io.echo("  toggle     - Toggle auto-save on/off")
-            io.echo(f"\nAuto-save: {io.style('ON' if auto_save else 'OFF', fg='green' if auto_save else 'yellow')}")
 
         return result

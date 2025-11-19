@@ -6,6 +6,7 @@ Handles project context, exploration, and working memory.
 from typing import Optional
 
 from .io_interface import CLIIOProtocol, ClickIO
+from .validators import validate_subcommand
 
 
 class ContextManager:
@@ -52,7 +53,21 @@ class ContextManager:
         if io is None:
             io = ClickIO()
 
-        if not args:
+        # Validate subcommand
+        validation = validate_subcommand("context", args)
+        if not validation.is_valid:
+            io.secho(validation.error, fg="red")
+            io.echo("Usage: /context [explore|refresh|clear|clearmem|toggle|add]")
+            io.echo("  (no args)  - Show context status and working memory")
+            io.echo("  explore    - Explore project (uses cache if available)")
+            io.echo("  refresh    - Force re-exploration")
+            io.echo("  clear      - Clear cached context")
+            io.echo("  clearmem   - Clear session working memory")
+            io.echo("  toggle     - Toggle context-aware prompts")
+            io.echo("  add <path> - Add file to context")
+            return
+
+        if validation.subcommand == "":
             # Show context status
             status = self.orchestrator.get_context_status()
             io.secho("\nContext Status:", fg="cyan", bold=True)
@@ -90,7 +105,7 @@ class ContextManager:
                     io.secho("\nProject Summary:", bold=True)
                     io.echo(summary)
 
-        elif args.lower() == "explore":
+        elif validation.subcommand == "explore":
             io.echo("Exploring current project...")
             result = self.orchestrator.explore_project(force=False)
             if result['status'] == 'cached':
@@ -103,7 +118,7 @@ class ContextManager:
                 io.secho("\nGenerated Summary:", bold=True)
                 io.echo(summary)
 
-        elif args.lower() == "refresh":
+        elif validation.subcommand == "refresh":
             io.echo("Force re-exploring project...")
             result = self.orchestrator.explore_project(force=True)
             io.secho(f"Found {result['total_files']} files.", fg="green")
@@ -113,24 +128,24 @@ class ContextManager:
                 io.secho("\nGenerated Summary:", bold=True)
                 io.echo(summary)
 
-        elif args.lower() == "clear":
+        elif validation.subcommand == "clear":
             self.orchestrator.context.clear_cache()
             io.secho("Context cache cleared.", fg="green")
 
-        elif args.lower() == "clearmem":
+        elif validation.subcommand == "clearmem":
             self.orchestrator.working_memory.clear()
             io.secho("Session working memory cleared.", fg="green")
 
-        elif args.lower() == "toggle":
+        elif validation.subcommand == "toggle":
             self.orchestrator.context_aware = not self.orchestrator.context_aware
             status = "enabled" if self.orchestrator.context_aware else "disabled"
             io.secho(f"Context awareness {status}.", fg="green" if self.orchestrator.context_aware else "yellow")
 
-        else:
-            io.echo("Usage: /context [explore|refresh|clear|clearmem|toggle]")
-            io.echo("  (no args)  - Show context status and working memory")
-            io.echo("  explore    - Explore project (uses cache if available)")
-            io.echo("  refresh    - Force re-exploration")
-            io.echo("  clear      - Clear cached context")
-            io.echo("  clearmem   - Clear session working memory")
-            io.echo("  toggle     - Toggle context-aware prompts")
+        elif validation.subcommand == "add":
+            # Handle add with path argument
+            if not validation.args:
+                io.secho("Error: 'add' requires a file path argument", fg="red")
+                io.echo("Usage: /context add <path>")
+            else:
+                io.echo(f"Adding to context: {validation.args}")
+                # The actual add logic would go here

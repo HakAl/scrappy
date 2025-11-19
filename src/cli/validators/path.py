@@ -47,7 +47,12 @@ WINDOWS_INVALID_CHARS = re.compile(r'[<>"|?*]')
 GLOB_CHARS_PATTERN = re.compile(r'[*?]')
 
 
-def validate_path(path_input: str) -> PathValidationResult:
+def validate_path(
+    path_input: str,
+    check_exists: bool = False,
+    must_be_dir: bool = False,
+    must_be_file: bool = False
+) -> PathValidationResult:
     """Validate a file or directory path and normalize it.
 
     Performs comprehensive validation including:
@@ -57,10 +62,15 @@ def validate_path(path_input: str) -> PathValidationResult:
     - Glob character rejection (use actual paths, not patterns)
     - Windows-invalid character detection
     - Path traversal security check (max 3 levels of ..)
+    - Optional existence check
+    - Optional directory/file type check
 
     Args:
         path_input: The path string to validate. Can be relative or absolute.
             Forward and back slashes are normalized for the current OS.
+        check_exists: If True, verify the path exists on the filesystem.
+        must_be_dir: If True, verify the path is a directory (implies check_exists).
+        must_be_file: If True, verify the path is a file (implies check_exists).
 
     Returns:
         PathValidationResult with:
@@ -68,6 +78,9 @@ def validate_path(path_input: str) -> PathValidationResult:
         - path: Normalized path with cleaned separators
         - error: Description of failure if invalid
         - warnings: Security concerns like excessive traversal
+
+    Raises:
+        ValueError: If both must_be_dir and must_be_file are True.
 
     Side Effects:
         None. This is a pure validation function.
@@ -79,7 +92,13 @@ def validate_path(path_input: str) -> PathValidationResult:
         >>> result = validate_path("src//cli/validators.py")
         >>> result.path
         'src/cli/validators.py'
+
+        >>> result = validate_path("/tmp/mydir", must_be_dir=True)
+        >>> result.is_valid  # True if /tmp/mydir exists and is a directory
     """
+    # Check for conflicting options
+    if must_be_dir and must_be_file:
+        raise ValueError("Path cannot be both a directory and a file")
     warnings: List[str] = []
 
     # Handle None input
@@ -185,6 +204,39 @@ def validate_path(path_input: str) -> PathValidationResult:
             error="Excessive path traversal detected (more than 3 levels)",
             warnings=warnings
         )
+
+    # Semantic checks (existence, directory, file)
+    # must_be_dir or must_be_file imply check_exists
+    if must_be_dir or must_be_file:
+        check_exists = True
+
+    if check_exists:
+        from pathlib import Path
+        path_obj = Path(final_path)
+
+        if not path_obj.exists():
+            return PathValidationResult(
+                is_valid=False,
+                path=final_path,
+                error=f"Path does not exist: {final_path}",
+                warnings=warnings if warnings else None
+            )
+
+        if must_be_dir and not path_obj.is_dir():
+            return PathValidationResult(
+                is_valid=False,
+                path=final_path,
+                error=f"Path is not a directory: {final_path}",
+                warnings=warnings if warnings else None
+            )
+
+        if must_be_file and not path_obj.is_file():
+            return PathValidationResult(
+                is_valid=False,
+                path=final_path,
+                error=f"Path is not a file: {final_path}",
+                warnings=warnings if warnings else None
+            )
 
     return PathValidationResult(
         is_valid=True,

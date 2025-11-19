@@ -13,6 +13,7 @@ import json
 import traceback
 
 from ..io_interface import CLIIOProtocol
+from ..validators import is_empty_or_whitespace
 
 
 class ErrorSeverity(IntEnum):
@@ -55,7 +56,7 @@ def format_error(
     message = str(exception)
 
     # Handle empty or very short messages - add context
-    if not message or message.strip() == "":
+    if is_empty_or_whitespace(message):
         message = f"Unknown error ({type(exception).__name__})"
     elif len(message) <= 5:
         # Very short messages need more context

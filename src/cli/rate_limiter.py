@@ -7,6 +7,7 @@ from typing import Optional
 import logging
 
 from .io_interface import CLIIOProtocol, ClickIO
+from .validators import validate_subcommand
 
 logger = logging.getLogger(__name__)
 
@@ -131,17 +132,30 @@ class RateLimiter:
         if io is None:
             io = ClickIO()
 
-        if args.lower() == "reset":
-            if io.confirm("Reset all rate limit tracking data?", default=False):
-                self.orchestrator.reset_rate_tracking()
-                io.secho("Rate limit tracking data reset.", fg="green")
+        # Validate subcommand
+        validation = validate_subcommand("limits", args)
+        if not validation.is_valid:
+            io.secho(validation.error, fg="red")
+            io.echo("Usage: /limits [reset [provider]|<provider>]")
+            io.echo("  (no args)     - Show all providers' usage")
+            io.echo("  reset         - Reset all tracking data")
+            io.echo("  reset <name>  - Reset specific provider")
+            io.echo("  <provider>    - Show specific provider only")
             return
 
-        if args.lower().startswith("reset "):
-            provider_name = args[6:].strip()
-            if io.confirm(f"Reset rate limit tracking for {provider_name}?", default=False):
-                self.orchestrator.reset_rate_tracking(provider_name)
-                io.secho(f"Rate limit tracking for {provider_name} reset.", fg="green")
+        # Handle reset subcommand
+        if validation.subcommand == "reset":
+            if validation.args:
+                # Reset specific provider
+                provider_name = validation.args
+                if io.confirm(f"Reset rate limit tracking for {provider_name}?", default=False):
+                    self.orchestrator.reset_rate_tracking(provider_name)
+                    io.secho(f"Rate limit tracking for {provider_name} reset.", fg="green")
+            else:
+                # Reset all
+                if io.confirm("Reset all rate limit tracking data?", default=False):
+                    self.orchestrator.reset_rate_tracking()
+                    io.secho("Rate limit tracking data reset.", fg="green")
             return
 
         # Get rate limit status
@@ -158,12 +172,12 @@ class RateLimiter:
 
         # Filter by provider if specified
         providers_to_show = status.get('providers', {})
-        if args and args.lower() not in ['reset']:
-            provider_filter = args.lower().strip()
+        if validation.args:
+            provider_filter = validation.args.lower().strip()
             if provider_filter in providers_to_show:
                 providers_to_show = {provider_filter: providers_to_show[provider_filter]}
             else:
-                io.secho(f"Provider '{args}' not found in tracking data.", fg="yellow")
+                io.secho(f"Provider '{validation.args}' not found in tracking data.", fg="yellow")
                 return
 
         if not providers_to_show:

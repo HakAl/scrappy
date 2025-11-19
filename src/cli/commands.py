@@ -283,8 +283,8 @@ def explore(ctx, path, save):
     """Explore and learn about a codebase."""
     cli_instance = create_cli_from_context(ctx)
 
-    # Validate path input
-    path_validation = validate_path(path)
+    # Validate path input with existence and directory checks
+    path_validation = validate_path(path, check_exists=True, must_be_dir=True)
     if not path_validation.is_valid:
         error = FileOperationError(
             f"Invalid path: {path_validation.error}",
@@ -296,25 +296,6 @@ def explore(ctx, path, save):
         sys.exit(1)
 
     path_obj = Path(path_validation.path).resolve()
-    if not path_obj.exists():
-        error = FileOperationError(
-            f"Path does not exist: {path_obj}",
-            path=path_obj,
-            operation="explore"
-        )
-        click.secho(f"Error: {error}", fg="red")
-        click.echo(f"Suggestion: Check that the path exists and is spelled correctly.")
-        sys.exit(1)
-
-    if not path_obj.is_dir():
-        error = FileOperationError(
-            f"Not a directory: {path_obj}",
-            path=path_obj,
-            operation="explore"
-        )
-        click.secho(f"Error: {error}", fg="red")
-        click.echo(f"Suggestion: Provide a directory path, not a file.")
-        sys.exit(1)
 
     click.secho(f"\nExploring: {path_obj}", bold=True)
     click.echo("-" * 50)

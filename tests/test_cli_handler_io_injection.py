@@ -478,20 +478,20 @@ class TestMultiProviderIOInjection:
         io = MockIO(confirmations=[])
 
         self.orchestrator.providers = MagicMock()
-        self.orchestrator.providers.list_available.return_value = ['openai']
+        self.orchestrator.providers.list_available.return_value = ['cerebras']
 
         mock_response = MagicMock()
         mock_response.content = "Test response"
-        mock_response.model = "gpt-4"
+        mock_response.model = "llama3"
         mock_response.tokens_used = 50
         mock_response.latency_ms = 100
 
         self.orchestrator.delegate = MagicMock(return_value=mock_response)
 
-        self.multi.delegate_mode("openai test prompt", io=io)
+        self.multi.delegate_mode("cerebras test prompt", io=io)
 
         output = io.get_output()
-        assert "Response from openai" in output
+        assert "Response from cerebras" in output
         assert "Test response" in output
 
     def test_delegate_mode_usage_message(self):
@@ -522,16 +522,17 @@ class TestMultiProviderIOInjection:
         io = MockIO(confirmations=[])
 
         self.orchestrator.providers = MagicMock()
-        self.orchestrator.providers.list_available.return_value = ['openai']
+        self.orchestrator.providers.list_available.return_value = ['cerebras']
 
         self.multi.delegate_mode("unknown test prompt", io=io)
 
         output = io.get_output()
-        assert "not available" in output
+        # "unknown" is not in VALID_PROVIDERS, so it fails validation
+        assert "unknown provider" in output.lower()
 
         # Check red color for error
         styled = io.get_styled_outputs()
-        error_outputs = [s for s in styled if "not available" in s['text']]
+        error_outputs = [s for s in styled if "unknown provider" in s['text'].lower()]
         if error_outputs:
             assert error_outputs[0]['fg'] == 'red'
 
@@ -540,10 +541,10 @@ class TestMultiProviderIOInjection:
         io = MockIO(confirmations=[])
 
         self.orchestrator.providers = MagicMock()
-        self.orchestrator.providers.list_available.return_value = ['openai']
+        self.orchestrator.providers.list_available.return_value = ['cerebras']
         self.orchestrator.delegate = MagicMock(side_effect=Exception("API error"))
 
-        self.multi.delegate_mode("openai test", io=io)
+        self.multi.delegate_mode("cerebras test", io=io)
 
         output = io.get_output()
         assert "Error" in output

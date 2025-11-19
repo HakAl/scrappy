@@ -6,6 +6,7 @@ Handles response caching statistics and operations.
 from typing import Optional
 
 from .io_interface import CLIIOProtocol, ClickIO
+from .validators import validate_subcommand
 
 
 class CacheManager:
@@ -61,7 +62,17 @@ class CacheManager:
         if io is None:
             io = ClickIO()
 
-        if not args:
+        # Validate subcommand
+        validation = validate_subcommand("cache", args)
+        if not validation.is_valid:
+            io.secho(validation.error, fg="red")
+            io.echo("Usage: /cache [clear|toggle]")
+            io.echo("  (no args)  - Show cache statistics")
+            io.echo("  clear      - Clear all cached responses")
+            io.echo("  toggle     - Toggle caching on/off")
+            return
+
+        if validation.subcommand == "":
             # Show cache status
             stats = self.orchestrator.get_cache_stats()
             io.secho("\nCache Statistics:", bold=True)
@@ -80,17 +91,11 @@ class CacheManager:
             io.echo(f"Cache File: {stats.get('cache_file', 'N/A')}")
             io.echo(f"Caching: {io.style('Enabled' if self.orchestrator.caching_enabled else 'Disabled', fg='green' if self.orchestrator.caching_enabled else 'red')}")
 
-        elif args.lower() == "clear":
+        elif validation.subcommand == "clear":
             self.orchestrator.clear_cache()
             io.secho("Response cache cleared.", fg="green")
 
-        elif args.lower() == "toggle":
+        elif validation.subcommand == "toggle":
             new_state = self.orchestrator.toggle_cache()
             status = "enabled" if new_state else "disabled"
             io.secho(f"Response caching {status}.", fg="green" if new_state else "yellow")
-
-        else:
-            io.echo("Usage: /cache [clear|toggle]")
-            io.echo("  (no args)  - Show cache statistics")
-            io.echo("  clear      - Clear all cached responses")
-            io.echo("  toggle     - Toggle caching on/off")
