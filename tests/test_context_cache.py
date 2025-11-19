@@ -304,6 +304,153 @@ class TestErrorHandling:
         assert loaded == data
 
 
+class TestCacheErrorLogging:
+    """Tests for error logging and recovery visibility."""
+
+    @pytest.mark.unit
+    def test_save_logs_warning_on_permission_error(self, tmp_path, caplog):
+        """save() logs a warning when write fails due to permissions."""
+        import logging
+        cache_file = tmp_path / "cache.json"
+        cache = ContextCache()
+
+        # Create a directory with the same name to cause a write error
+        cache_file.mkdir()
+
+        with caplog.at_level(logging.WARNING):
+            cache.save(cache_file, {'key': 'value'})
+
+        # Should log a warning with file path
+        assert len(caplog.records) > 0
+        assert 'cache' in caplog.text.lower() or str(cache_file) in caplog.text
+
+    @pytest.mark.unit
+    def test_save_logs_warning_on_serialization_error(self, tmp_path, caplog):
+        """save() logs a warning when data cannot be serialized."""
+        import logging
+        cache_file = tmp_path / "cache.json"
+        cache = ContextCache()
+
+        # Create unserializable data
+        data = {'bad': object()}
+
+        with caplog.at_level(logging.WARNING):
+            cache.save(cache_file, data)
+
+        # Should log a warning
+        assert len(caplog.records) > 0
+
+    @pytest.mark.unit
+    def test_load_logs_warning_on_corrupted_json(self, tmp_path, caplog):
+        """load() logs a warning when JSON is corrupted."""
+        import logging
+        cache_file = tmp_path / "cache.json"
+        cache_file.write_text("not valid json {")
+
+        cache = ContextCache()
+
+        with caplog.at_level(logging.WARNING):
+            result = cache.load(cache_file)
+
+        # Should return None
+        assert result is None
+        # Should log a warning about the corruption
+        assert len(caplog.records) > 0
+        assert 'json' in caplog.text.lower() or 'corrupt' in caplog.text.lower() or 'invalid' in caplog.text.lower()
+
+    @pytest.mark.unit
+    def test_load_logs_warning_on_io_error(self, tmp_path, caplog, monkeypatch):
+        """load() logs a warning when file read fails."""
+        import logging
+        cache_file = tmp_path / "cache.json"
+        cache_file.write_text('{"key": "value"}')
+
+        cache = ContextCache()
+
+        # Mock open to raise IOError
+        def mock_open(*args, **kwargs):
+            raise IOError("Disk read error")
+
+        monkeypatch.setattr("builtins.open", mock_open)
+
+        with caplog.at_level(logging.WARNING):
+            result = cache.load(cache_file)
+
+        # Should return None
+        assert result is None
+        # Should log a warning
+        assert len(caplog.records) > 0
+
+    @pytest.mark.unit
+    def test_save_log_includes_file_path(self, tmp_path, caplog):
+        """save() warning includes the file path for debugging."""
+        import logging
+        cache_file = tmp_path / "my_cache.json"
+        cache = ContextCache()
+
+        # Create unserializable data to trigger error
+        data = {'bad': object()}
+
+        with caplog.at_level(logging.WARNING):
+            cache.save(cache_file, data)
+
+        # Log should mention the file path
+        assert len(caplog.records) > 0
+        # Either the full path or filename should be in the log
+        log_text = caplog.text.lower()
+        assert 'my_cache' in log_text or str(cache_file).lower() in log_text
+
+    @pytest.mark.unit
+    def test_load_log_includes_error_context(self, tmp_path, caplog):
+        """load() warning includes error context for debugging."""
+        import logging
+        cache_file = tmp_path / "broken.json"
+        cache_file.write_text("{invalid json")
+
+        cache = ContextCache()
+
+        with caplog.at_level(logging.WARNING):
+            cache.load(cache_file)
+
+        # Log should provide context about what went wrong
+        assert len(caplog.records) > 0
+        log_text = caplog.text.lower()
+        # Should mention either the file or the error type
+        assert 'broken' in log_text or 'json' in log_text or 'decode' in log_text
+
+    @pytest.mark.unit
+    def test_save_still_returns_gracefully_after_logging(self, tmp_path, caplog):
+        """save() returns without raising even after logging error."""
+        import logging
+        cache_file = tmp_path / "cache.json"
+        cache = ContextCache()
+
+        # Create unserializable data
+        data = {'bad': object()}
+
+        with caplog.at_level(logging.WARNING):
+            # Should not raise
+            result = cache.save(cache_file, data)
+
+        # Should return None (implicit)
+        assert result is None
+
+    @pytest.mark.unit
+    def test_load_still_returns_none_after_logging(self, tmp_path, caplog):
+        """load() returns None gracefully after logging error."""
+        import logging
+        cache_file = tmp_path / "cache.json"
+        cache_file.write_text("corrupted")
+
+        cache = ContextCache()
+
+        with caplog.at_level(logging.WARNING):
+            result = cache.load(cache_file)
+
+        # Should return None without raising
+        assert result is None
+
+
 class TestCacheIntegration:
     """Integration-style tests mimicking CodebaseContext usage."""
 

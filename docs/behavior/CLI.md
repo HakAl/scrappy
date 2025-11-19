@@ -77,10 +77,3 @@ implement
   assert result == "hello world"  # Verifies actual behavior
 
   ---
-  Priority Fixes
-
-  1. Convert direct click calls to use io parameter in display.py, tasks.py, smart_query.py
-  2. Split CommandRouter.route() into command-specific handlers or a dispatch table
-  3. Add behavior assertions to tests - verify outputs, not just mock calls
-  4. Consolidate configuration into src/cli/config/
-  5. Add JSON error handling in logging.py

@@ -3,9 +3,12 @@ Context caching for persistence between sessions.
 """
 
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
+
+logger = logging.getLogger(__name__)
 
 
 class ContextCache:
@@ -40,8 +43,8 @@ class ContextCache:
 
             with open(cache_file, 'w', encoding='utf-8') as f:
                 json.dump(serializable_data, f, indent=2)
-        except Exception:
-            pass  # Caching is optional, don't raise errors
+        except Exception as e:
+            logger.warning(f"Failed to save cache to {cache_file}: {e}")
 
     def load(self, cache_file) -> Optional[dict]:
         """
@@ -67,7 +70,11 @@ class ContextCache:
 
             # Restore datetime fields
             return self._prepare_after_load(data)
-        except (json.JSONDecodeError, Exception):
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to load cache from {cache_file}: invalid JSON - {e}")
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to load cache from {cache_file}: {e}")
             return None
 
     def clear(self, cache_file) -> None:

@@ -5,6 +5,7 @@
 ## Issues
 
 <!-- EXISITING ISSUE -->
+- if no path provided explore should explore current dir no extra prompt
 - context summary file always written, doesn't respect user choice
 - Auto-explore Stale Context: Uses cached context from llm_team itself, not the new project
 
@@ -13,20 +14,8 @@ CodebaseContext is a 840-line god object with multiple responsibilities that wou
 
 **RED**
 
-we're working to improve src\context\ the next tasks are: 
-
-can you research the task and start with tests?
-
-help with a plan to decompose?
-create a plan to fix?
-start with tests?
----
-
-
-  Critical Issues Found
-
-
-  5. Complex JSON Parsing with No Error Recovery ⚠️ Silent failures
+we're working to improve src\context\ the next task is: 
+Complex JSON Parsing with No Error Recovery ⚠️ Silent failures
 
   context.py:557-580:
   def _save_cache(self):
@@ -42,6 +31,27 @@ start with tests?
           pass  # Cache loading is optional - SILENT FAILURE
 
   No logging, no notification that cache failed.
+can you research the task and start with tests?
+
+help with a plan to decompose?
+create a plan to fix?
+start with tests?
+---
+
+
+  Critical Issues Found
+
+
+  9. No Validation ⚠️ Present
+
+  No path validation (context.py:93):
+  self.project_path = Path(project_path or ".").resolve()
+  # Accepts non-existent paths without warning
+
+  No cache structure validation (context.py:565-574):
+  cache_data = json.load(f)
+  if cache_data.get('explored_at'):  # Assumes structure is correct
+      self.explored_at = datetime.fromisoformat(cache_data['explored_at'])
 
 
   ---
@@ -59,16 +69,6 @@ start with tests?
       if not self.structure:
           self.explore()  # Hidden side effect
 
-  9. No Validation ⚠️ Present
-
-  No path validation (context.py:93):
-  self.project_path = Path(project_path or ".").resolve()
-  # Accepts non-existent paths without warning
-
-  No cache structure validation (context.py:565-574):
-  cache_data = json.load(f)
-  if cache_data.get('explored_at'):  # Assumes structure is correct
-      self.explored_at = datetime.fromisoformat(cache_data['explored_at'])
 
   10. Tight Coupling ⚠️ Present
 
