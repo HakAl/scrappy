@@ -234,34 +234,7 @@ Critical Issues
 **RED**
 
 we're working to improve src\orchestrator the next task is: 
- Break up core.py - Move Async Helpers to DelegationManager (lines 674-725)
-
-  multi_provider_query_async() and run_async() - ~50 lines.
-can you research the task and start with tests?
-
-**GREEN**
-
-we completed the red phase of the task: 
-
-**REFACTOR**
-
-we created:
-they're fully tested and ready for integration in src/. can you complete the refactor phase of TDD?
-
-
-  ---
-  Phase 3: Extract and Decompose God Object
-
-  5. Move Async Helpers to DelegationManager (lines 674-725)
-
-  multi_provider_query_async() and run_async() - ~50 lines.
-
-  ---
-  Phase 4: Consolidate and Clean
-
-  4.1 Centralize Configuration
-
-  1. Create src/orchestrator/config.py:
+Consolidate and Clean - Create src/orchestrator/config.py:
 
   # Single source of truth for provider configuration
   PROVIDER_PRIORITY = ['cerebras', 'groq', 'gemini', 'cohere', 'github_models']
@@ -289,12 +262,25 @@ they're fully tested and ready for integration in src/. can you complete the ref
     - core.py:221, 250, 389-392
     - provider_selector.py:211, 229-237, 254
 
+can you research the task and start with tests?
+
+**GREEN**
+
+we completed the red phase of the task: 
+
+**REFACTOR**
+
+we created:
+they're fully tested and ready for integration in src/. can you complete the refactor phase of TDD?
+
+
+  ---
+  Phase 4: Consolidate and Clean
+
+
   ---
   4.2 Add Input Validation
 
-  Fixes: Issue #9 (No Validation)
-
-  Steps:
   1. Create validation in DelegationManager.delegate():
 
   def delegate(self, prompt: str, temperature: float = 0.7, max_tokens: Optional[int] = None, ...):

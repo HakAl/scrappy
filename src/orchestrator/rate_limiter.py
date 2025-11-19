@@ -20,6 +20,8 @@ if TYPE_CHECKING:
     from ..providers import ProviderLimits
     from .output import OutputInterface
 
+from .config import TASK_PREFERENCES
+
 
 class RateLimitTracker:
     """
@@ -492,17 +494,8 @@ class RateLimitTracker:
         if not available:
             return None
 
-        # Define provider preferences by task type
-        # Cerebras llama-3.3-70b preferred for planning (best quality/speed balance)
-        # Groq llama-4-scout-17b-16e-instruct as secondary option
-        task_preferences = {
-            'planning': ['cerebras', 'groq', 'gemini'],
-            'execution': ['cerebras', 'groq', 'gemini'],
-            'quick': ['cerebras', 'groq'],
-            'general': ['cerebras', 'groq', 'gemini']
-        }
-
-        preferences = task_preferences.get(task_type, task_preferences['general'])
+        # Get provider preferences for task type from config
+        preferences = TASK_PREFERENCES.get(task_type, TASK_PREFERENCES['general'])
 
         # Filter out rate-limited providers
         for provider_name in preferences:

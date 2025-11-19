@@ -14,6 +14,7 @@ except ImportError:
     from providers.base import ModelType
 
 from .output import OutputInterface, ConsoleOutput
+from .config import BRAIN_PRIORITY, FALLBACK_PRIORITY, get_provider_reason
 
 
 class ProviderSelector:
@@ -212,7 +213,7 @@ class ProviderSelector:
         # Default priority: cerebras > groq > gemini
         # NOTE: GitHub Models excluded due to aggressive rate limiting (crashes after ~10 requests)
         # GitHub Models is NOT suitable for orchestrator brain or agent planner roles
-        priority = ['cerebras', 'groq', 'gemini']
+        priority = BRAIN_PRIORITY
         self._log(f"Auto-selection priority: {' > '.join(priority)}")
 
         for provider_name in priority:
@@ -232,14 +233,7 @@ class ProviderSelector:
 
     def _get_brain_selection_reason(self, provider_name: str) -> str:
         """Get human-readable reason for brain selection."""
-        reasons = {
-            'cerebras': '14,400 RPD - highest daily quota',
-            'groq': '7,000 RPD - fast and reliable',
-            'gemini': 'auto-fallback enabled',
-            'cohere': '1,000/month - limited quota',
-            'github_models': '10K RPD but aggressive rate limiting'
-        }
-        return reasons.get(provider_name, 'available')
+        return get_provider_reason(provider_name)
 
     def get_provider_for_fallback(self, exclude: list[str] = None) -> Optional[str]:
         """
@@ -255,7 +249,7 @@ class ProviderSelector:
         available = self.registry.list_available()
 
         # Priority order for fallback
-        priority = ['cerebras', 'groq', 'gemini']
+        priority = FALLBACK_PRIORITY
 
         for provider_name in priority:
             if provider_name in available and provider_name not in exclude:
