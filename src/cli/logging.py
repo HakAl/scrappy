@@ -19,6 +19,58 @@ from typing import Any, Dict, List, Optional
 from .utils.error_handler import ErrorCategory, ErrorSeverity
 
 
+class SafeJSONEncoder(json.JSONEncoder):
+    """JSON encoder that handles non-serializable types gracefully."""
+
+    def default(self, obj):
+        """Convert non-serializable objects to string representations."""
+        # Handle datetime objects
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+
+        # Handle bytes
+        if isinstance(obj, bytes):
+            try:
+                return obj.decode('utf-8')
+            except UnicodeDecodeError:
+                return f"<bytes: {len(obj)} bytes>"
+
+        # Handle sets
+        if isinstance(obj, set):
+            return list(obj)
+
+        # Handle Path objects
+        if isinstance(obj, Path):
+            return str(obj)
+
+        # Handle functions/callables
+        if callable(obj):
+            return f"<{type(obj).__name__}: {getattr(obj, '__name__', 'anonymous')}>"
+
+        # Handle objects with __dict__
+        if hasattr(obj, '__dict__'):
+            return f"<{type(obj).__name__}>"
+
+        # Fallback: convert to string
+        try:
+            return str(obj)
+        except Exception:
+            return f"<non-serializable: {type(obj).__name__}>"
+
+
+def _safe_json_dumps(obj: Any) -> str:
+    """Safely serialize object to JSON string, handling non-serializable types."""
+    try:
+        return json.dumps(obj, cls=SafeJSONEncoder)
+    except Exception as e:
+        # Last resort fallback if even the custom encoder fails
+        return json.dumps({
+            "error": "serialization_failed",
+            "error_message": str(e),
+            "type": str(type(obj))
+        })
+
+
 # Global logger registry
 _loggers: Dict[str, 'CLILogger'] = {}
 _global_io = None
@@ -181,7 +233,7 @@ class CLILogger:
 
         # Output to file
         if self._file_handler:
-            msg = json.dumps(record) + "\n"
+            msg = _safe_json_dumps(record) + "\n"
             # Use emit-like behavior for proper rotation
             if self._file_handler.shouldRollover(logging.LogRecord(
                 name=self.name, level=level, pathname="", lineno=0,
@@ -194,7 +246,7 @@ class CLILogger:
         # Output to IO
         if self._io:
             if self._structured_only:
-                self._io.echo(json.dumps(record))
+                self._io.echo(_safe_json_dumps(record))
             else:
                 self._output_formatted(level_name, message)
 
@@ -285,7 +337,7 @@ class CLILogger:
 
     def export_json(self) -> str:
         """Export all records as JSON string."""
-        return json.dumps(self._records)
+        return _safe_json_dumps(self._records)
 
     @contextmanager
     def context(self, **kwargs):

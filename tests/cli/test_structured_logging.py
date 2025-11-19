@@ -625,3 +625,211 @@ class TestFilterAndSampling:
         records = logger.get_records()
         # Should have approximately 50% (with some variance)
         assert 20 < len(records) < 80
+
+
+class TestJSONSerializationSafety:
+    """Test that json.dumps() handles non-serializable data gracefully."""
+
+    @pytest.mark.unit
+    def test_logger_handles_datetime_in_extra(self):
+        """Logger should handle datetime objects in extra without crashing."""
+        from src.cli.logging import CLILogger
+        from tests.helpers import MockIO
+        from datetime import datetime
+
+        io = MockIO()
+        logger = CLILogger("test", io=io)
+
+        # datetime is not JSON serializable by default
+        logger.info("Test", extra={"timestamp": datetime.now()})
+
+        # Should not crash, should have logged something
+        records = logger.get_records()
+        assert len(records) == 1
+        # The datetime should be converted to a string representation
+        assert "timestamp" in records[0]["extra"]
+
+    @pytest.mark.unit
+    def test_logger_handles_set_in_extra(self):
+        """Logger should handle set objects in extra without crashing."""
+        from src.cli.logging import CLILogger
+        from tests.helpers import MockIO
+
+        io = MockIO()
+        logger = CLILogger("test", io=io)
+
+        # set is not JSON serializable
+        logger.info("Test", extra={"items": {1, 2, 3}})
+
+        records = logger.get_records()
+        assert len(records) == 1
+        assert "items" in records[0]["extra"]
+
+    @pytest.mark.unit
+    def test_logger_handles_custom_object_in_extra(self):
+        """Logger should handle custom objects in extra without crashing."""
+        from src.cli.logging import CLILogger
+        from tests.helpers import MockIO
+
+        class CustomObject:
+            def __init__(self):
+                self.value = 42
+
+        io = MockIO()
+        logger = CLILogger("test", io=io)
+
+        logger.info("Test", extra={"obj": CustomObject()})
+
+        records = logger.get_records()
+        assert len(records) == 1
+        assert "obj" in records[0]["extra"]
+
+    @pytest.mark.unit
+    def test_logger_handles_bytes_in_extra(self):
+        """Logger should handle bytes objects in extra without crashing."""
+        from src.cli.logging import CLILogger
+        from tests.helpers import MockIO
+
+        io = MockIO()
+        logger = CLILogger("test", io=io)
+
+        logger.info("Test", extra={"data": b"binary data"})
+
+        records = logger.get_records()
+        assert len(records) == 1
+        assert "data" in records[0]["extra"]
+
+    @pytest.mark.unit
+    def test_file_output_handles_non_serializable(self, tmp_path):
+        """File output should handle non-serializable data without crashing."""
+        from src.cli.logging import CLILogger
+        from tests.helpers import MockIO
+        from datetime import datetime
+
+        log_file = tmp_path / "test.log"
+        io = MockIO()
+        logger = CLILogger("test", io=io, log_file=log_file)
+
+        # This should not crash even with non-serializable data
+        logger.info("Test", extra={"timestamp": datetime.now()})
+        logger.flush()
+
+        # File should exist and contain data
+        assert log_file.exists()
+        content = log_file.read_text()
+        assert "Test" in content
+
+        logger.close()
+
+    @pytest.mark.unit
+    def test_structured_output_handles_non_serializable(self):
+        """Structured output mode should handle non-serializable data."""
+        from src.cli.logging import CLILogger
+        from tests.helpers import MockIO
+        from datetime import datetime
+
+        io = MockIO()
+        logger = CLILogger("test", io=io, structured_only=True)
+
+        # This should not crash
+        logger.info("Test", extra={"timestamp": datetime.now()})
+
+        # Should have produced output
+        output = io.get_output()
+        assert len(output) > 0
+        # Output should be valid JSON
+        data = json.loads(output.strip())
+        assert data["message"] == "Test"
+
+    @pytest.mark.unit
+    def test_export_json_handles_non_serializable(self):
+        """export_json should handle non-serializable data without crashing."""
+        from src.cli.logging import CLILogger
+        from tests.helpers import MockIO
+        from datetime import datetime
+
+        io = MockIO()
+        logger = CLILogger("test", io=io)
+
+        logger.info("Test 1", extra={"timestamp": datetime.now()})
+        logger.info("Test 2", extra={"items": {1, 2, 3}})
+
+        # This should not crash
+        json_output = logger.export_json()
+
+        # Should be valid JSON
+        data = json.loads(json_output)
+        assert len(data) == 2
+        assert data[0]["message"] == "Test 1"
+
+    @pytest.mark.unit
+    def test_logger_handles_nested_non_serializable(self):
+        """Logger should handle nested non-serializable objects."""
+        from src.cli.logging import CLILogger
+        from tests.helpers import MockIO
+        from datetime import datetime
+
+        io = MockIO()
+        logger = CLILogger("test", io=io)
+
+        # Nested structure with non-serializable data
+        logger.info("Test", extra={
+            "metadata": {
+                "created": datetime.now(),
+                "tags": {"a", "b", "c"}
+            }
+        })
+
+        records = logger.get_records()
+        assert len(records) == 1
+
+    @pytest.mark.unit
+    def test_logger_handles_function_in_extra(self):
+        """Logger should handle function objects in extra without crashing."""
+        from src.cli.logging import CLILogger
+        from tests.helpers import MockIO
+
+        def my_func():
+            pass
+
+        io = MockIO()
+        logger = CLILogger("test", io=io)
+
+        logger.info("Test", extra={"callback": my_func})
+
+        records = logger.get_records()
+        assert len(records) == 1
+        assert "callback" in records[0]["extra"]
+
+    @pytest.mark.unit
+    def test_bound_context_with_non_serializable(self):
+        """Bound context with non-serializable data should not crash."""
+        from src.cli.logging import CLILogger
+        from tests.helpers import MockIO
+        from datetime import datetime
+
+        io = MockIO()
+        logger = CLILogger("test", io=io)
+
+        # Bind non-serializable context
+        bound = logger.bind(start_time=datetime.now())
+        bound.info("Test message")
+
+        records = logger.get_records()
+        assert len(records) == 1
+
+    @pytest.mark.unit
+    def test_context_manager_with_non_serializable(self):
+        """Context manager with non-serializable data should not crash."""
+        from src.cli.logging import CLILogger
+        from tests.helpers import MockIO
+        from datetime import datetime
+
+        io = MockIO()
+        logger = CLILogger("test", io=io)
+
+        with logger.context(start_time=datetime.now()):
+            logger.info("Test message")
+
+        records = logger.get_records()
+        assert len(records) == 1
