@@ -431,3 +431,192 @@ class RateLimitTracker:
         if provider in self._usage.get('providers', {}):
             del self._usage['providers'][provider]
             self._save_tracker()
+
+    def reset_rate_tracking(self, provider_name: Optional[str] = None):
+        """
+        Reset rate tracking data.
+
+        Args:
+            provider_name: Specific provider to reset, or None for all
+        """
+        if provider_name:
+            self.reset_provider(provider_name)
+        else:
+            self.clear()
+
+    def is_rate_limited(self, provider_name: str, registry) -> bool:
+        """
+        Check if a provider is currently rate limited.
+
+        Args:
+            provider_name: Name of provider to check
+            registry: Provider registry for looking up provider info
+
+        Returns:
+            True if provider is rate limited, False otherwise
+        """
+        provider = registry.get(provider_name)
+        if not provider:
+            return False
+
+        limits = provider.get_limits()
+        if not limits:
+            return False
+
+        # Get default model for this provider
+        model = getattr(provider, 'default_model', 'default')
+
+        # Check remaining quota
+        remaining = self.get_remaining_quota(provider_name, model, limits)
+
+        # Consider rate limited if no requests remaining today or this month
+        if remaining.get('requests_remaining_today') == 0:
+            return True
+        if remaining.get('requests_remaining_month') == 0:
+            return True
+
+        return False
+
+    def get_recommended_provider(self, task_type: str, registry) -> Optional[str]:
+        """
+        Get recommended provider based on task type and current rate limit status.
+
+        Args:
+            task_type: Type of task ('planning', 'execution', 'quick', 'general')
+            registry: Provider registry for looking up available providers
+
+        Returns:
+            Provider name or None if no providers available
+        """
+        available = registry.list_available()
+        if not available:
+            return None
+
+        # Define provider preferences by task type
+        # Cerebras llama-3.3-70b preferred for planning (best quality/speed balance)
+        # Groq llama-4-scout-17b-16e-instruct as secondary option
+        task_preferences = {
+            'planning': ['cerebras', 'groq', 'gemini'],
+            'execution': ['cerebras', 'groq', 'gemini'],
+            'quick': ['cerebras', 'groq'],
+            'general': ['cerebras', 'groq', 'gemini']
+        }
+
+        preferences = task_preferences.get(task_type, task_preferences['general'])
+
+        # Filter out rate-limited providers
+        for provider_name in preferences:
+            if provider_name not in available:
+                continue
+
+            # Check rate limit status
+            if self.is_rate_limited(provider_name, registry):
+                continue
+
+            return provider_name
+
+        # Fallback: return first available provider even if rate-limited
+        return available[0] if available else None
+
+    def get_rate_limit_status_extended(self, registry) -> dict:
+        """
+        Get current rate limit usage for all providers with limits info.
+
+        Args:
+            registry: Provider registry for looking up provider info
+
+        Returns:
+            Dict with usage status including limits and remaining quota
+        """
+        status = self.get_all_usage_summary()
+
+        for provider_name in status.get('providers', {}):
+            try:
+                provider = registry.get(provider_name)
+                if not provider:
+                    continue
+
+                limits = provider.get_limits()
+                if not limits:
+                    status['providers'][provider_name]['limits'] = {}
+                    status['providers'][provider_name]['remaining'] = {}
+                    continue
+
+                remaining = self.get_remaining_quota(
+                    provider_name, provider.default_model, limits
+                )
+                status['providers'][provider_name]['limits'] = {
+                    'requests_per_day': limits.requests_per_day,
+                    'requests_per_month': limits.requests_per_month,
+                    'tokens_per_day': limits.tokens_per_day,
+                    'tokens_per_minute': limits.tokens_per_minute,
+                }
+                status['providers'][provider_name]['remaining'] = remaining
+            except Exception:
+                # Handle errors gracefully - set empty limits/remaining
+                status['providers'][provider_name]['limits'] = {}
+                status['providers'][provider_name]['remaining'] = {}
+
+        return status
+
+    def check_all_warnings(self, registry) -> list[str]:
+        """
+        Check for any approaching rate limits across all providers.
+
+        Args:
+            registry: Provider registry for looking up provider info
+
+        Returns:
+            List of warning messages
+        """
+        warnings = []
+        for provider_name in registry.list_available():
+            try:
+                provider = registry.get(provider_name)
+                if not provider:
+                    continue
+
+                limits = provider.get_limits()
+                if not limits:
+                    continue
+
+                usage = self.get_usage(provider_name)
+                for model in usage.keys():
+                    warning_info = self.is_limit_approaching(provider_name, model, limits)
+                    if warning_info.get('message'):
+                        warnings.append(warning_info['message'])
+            except Exception:
+                # Skip providers that have errors
+                continue
+
+        return warnings
+
+    def get_remaining_quota_for_provider(
+        self,
+        provider_name: str,
+        registry,
+        model: Optional[str] = None
+    ) -> dict:
+        """
+        Get remaining quota for a specific provider.
+
+        Args:
+            provider_name: Name of the provider
+            registry: Provider registry for looking up provider info
+            model: Specific model (uses provider default if None)
+
+        Returns:
+            Dict with remaining quota information
+
+        Raises:
+            ValueError: If provider is not available
+        """
+        provider = registry.get(provider_name)
+        if provider is None:
+            raise ValueError(f"Provider '{provider_name}' not available")
+
+        limits = provider.get_limits()
+        if model is None:
+            model = provider.default_model
+
+        return self.get_remaining_quota(provider_name, model, limits)

@@ -320,35 +320,7 @@ class AgentOrchestrator:
         Returns:
             Provider name or None if no providers available
         """
-        available = self.registry.list_available()
-        if not available:
-            return None
-
-        # Define provider preferences by task type
-        # Cerebras llama-3.3-70b preferred for planning (best quality/speed balance)
-        # Groq llama-4-scout-17b-16e-instruct as secondary option
-        task_preferences = {
-            'planning': ['cerebras', 'groq', 'gemini'],  # Cerebras 70b for quality+speed
-            'execution': ['cerebras', 'groq', 'gemini'],  # Speed
-            'quick': ['cerebras', 'groq'],  # Fast responses
-            'general': ['cerebras', 'groq', 'gemini']  # Balanced
-        }
-
-        preferences = task_preferences.get(task_type, task_preferences['general'])
-
-        # Filter out rate-limited providers
-        for provider_name in preferences:
-            if provider_name not in available:
-                continue
-
-            # Check rate limit status
-            if self.is_rate_limited(provider_name):
-                continue
-
-            return provider_name
-
-        # Fallback: return first available provider even if rate-limited
-        return available[0] if available else None
+        return self.rate_tracker.get_recommended_provider(task_type, self.registry)
 
     def is_rate_limited(self, provider_name: str) -> bool:
         """
@@ -360,27 +332,7 @@ class AgentOrchestrator:
         Returns:
             True if provider is rate limited, False otherwise
         """
-        provider = self.registry.get(provider_name)
-        if not provider:
-            return False
-
-        limits = provider.get_limits()
-        if not limits:
-            return False
-
-        # Get default model for this provider
-        model = getattr(provider, 'default_model', 'default')
-
-        # Check remaining quota
-        remaining = self.rate_tracker.get_remaining_quota(provider_name, model, limits)
-
-        # Consider rate limited if no requests remaining today or this month
-        if remaining.get('requests_remaining_today') == 0:
-            return True
-        if remaining.get('requests_remaining_month') == 0:
-            return True
-
-        return False
+        return self.rate_tracker.is_rate_limited(provider_name, self.registry)
 
     # Delegation
 
@@ -750,59 +702,21 @@ class AgentOrchestrator:
 
     def get_rate_limit_status(self) -> dict:
         """Get current rate limit usage for all providers."""
-        status = self.rate_tracker.get_all_usage_summary()
-
-        for provider_name in status.get('providers', {}):
-            try:
-                provider = self.registry.get(provider_name)
-                limits = provider.get_limits()
-                remaining = self.rate_tracker.get_remaining_quota(
-                    provider_name, provider.default_model, limits
-                )
-                status['providers'][provider_name]['limits'] = {
-                    'requests_per_day': limits.requests_per_day,
-                    'requests_per_month': limits.requests_per_month,
-                    'tokens_per_day': limits.tokens_per_day,
-                    'tokens_per_minute': limits.tokens_per_minute,
-                }
-                status['providers'][provider_name]['remaining'] = remaining
-            except Exception as e:
-                self.output.warn(f"Failed to get rate limit status for {provider_name}: {e}")
-
-        return status
+        return self.rate_tracker.get_rate_limit_status_extended(self.registry)
 
     def get_remaining_quota(self, provider_name: str, model: Optional[str] = None) -> dict:
         """Get remaining quota for a specific provider."""
-        provider = self.registry.get(provider_name)
-        if provider is None:
-            raise ValueError(f"Provider '{provider_name}' not available")
-        limits = provider.get_limits()
-        if model is None:
-            model = provider.default_model
-        return self.rate_tracker.get_remaining_quota(provider_name, model, limits)
+        return self.rate_tracker.get_remaining_quota_for_provider(
+            provider_name, self.registry, model
+        )
 
     def check_rate_limit_warnings(self) -> list[str]:
         """Check for any approaching rate limits across all providers."""
-        warnings = []
-        for provider_name in self.registry.list_available():
-            try:
-                provider = self.registry.get(provider_name)
-                limits = provider.get_limits()
-                usage = self.rate_tracker.get_usage(provider_name)
-                for model in usage.keys():
-                    warning_info = self.rate_tracker.is_limit_approaching(provider_name, model, limits)
-                    if warning_info.get('message'):
-                        warnings.append(warning_info['message'])
-            except Exception as e:
-                self.output.warn(f"Failed to check rate limit warnings for {provider_name}: {e}")
-        return warnings
+        return self.rate_tracker.check_all_warnings(self.registry)
 
     def reset_rate_tracking(self, provider_name: Optional[str] = None):
         """Reset rate tracking data."""
-        if provider_name:
-            self.rate_tracker.reset_provider(provider_name)
-        else:
-            self.rate_tracker.clear()
+        self.rate_tracker.reset_rate_tracking(provider_name)
 
     def recommend_provider(self, requirements: dict) -> str:
         """Recommend best provider based on requirements."""

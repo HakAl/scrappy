@@ -419,6 +419,7 @@ class TestAgentOrchestratorDelegate:
             'requests_today_remaining': 100
         }
         mock_tracker.is_limit_approaching.return_value = {}
+        mock_tracker.get_recommended_provider.return_value = 'cerebras'
 
         mock_memory = Mock(spec=WorkingMemory)
         mock_memory.get_context_string.return_value = ""
@@ -1145,6 +1146,7 @@ class TestAgentOrchestratorDelegateEdgeCases:
         """Test that delegating with no available providers raises error."""
         mock_cache = Mock(spec=ResponseCache)
         mock_tracker = Mock(spec=RateLimitTracker)
+        mock_tracker.get_recommended_provider.return_value = None
         mock_memory = Mock(spec=WorkingMemory)
         mock_selector = Mock(spec=ProviderSelector)
 

@@ -234,10 +234,10 @@ Critical Issues
 **RED**
 
 we're working to improve src\orchestrator the next task is: 
- Break up core.py - Extract UsageReporter (lines 729-777)
+ Break up core.py - Merge Rate Limit Logic into RateLimitTracker (lines 368-438, 837-891)
 
-  get_usage_report(), get_cache_stats(), clear_cache(), toggle_cache() - cohesive reporting unit - ~50 lines.
- 
+  get_recommended_provider(), is_rate_limited(), get_rate_limit_status(), get_remaining_quota(),
+  check_rate_limit_warnings(), reset_rate_tracking() - these already depend on RateLimitTracker and could be methods on it - ~120 lines.
 can you research the task and start with tests?
 
 **GREEN**
@@ -252,10 +252,6 @@ they're fully tested and ready for integration in src/. can you complete the ref
 
   ---
   Phase 3: Extract and Decompose God Object
-
-  3. Extract UsageReporter (lines 729-777)
-
-  get_usage_report(), get_cache_stats(), clear_cache(), toggle_cache() - cohesive reporting unit - ~50 lines.
 
   4. Merge Rate Limit Logic into RateLimitTracker (lines 368-438, 837-891)
 
