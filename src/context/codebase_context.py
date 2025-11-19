@@ -4,14 +4,15 @@ Codebase context management for the LLM Agent Team.
 Provides automatic project exploration and context augmentation for prompts.
 """
 
-import json
-import os
-import shutil
-import subprocess
-import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+
+from .file_scanner import FileScanner
+from .cache import ContextCache
+from .platform import PlatformDetector
+from .git_history import GitHistoryReader
+from .project_detector import ProjectDetector
 
 
 def _get_config_defaults():
@@ -99,9 +100,12 @@ class CodebaseContext:
         self.explored_at: Optional[datetime] = None
         self.cache_file = self.project_path / ".llm_team_context.json"
 
-        # Cached platform and tool detection
-        self._platform: Optional[str] = None
-        self._tool_cache: dict = {}
+        # Component instances
+        self._file_scanner = FileScanner()
+        self._cache = ContextCache()
+        self._platform_detector = PlatformDetector()
+        self._git_history_reader = GitHistoryReader()
+        self._project_detector = ProjectDetector(self.project_path)
 
         # Try to load cached context
         self._load_cache()
@@ -337,75 +341,26 @@ Be concise and technical. No fluff."""
 
     def _scan_files(self) -> dict:
         """Scan project for source files."""
-        EXTENSIONS_BY_CATEGORY, _ = _get_config_extensions()
-        SKIP_DIRS = _get_config_paths()
-        files = {k: [] for k in EXTENSIONS_BY_CATEGORY}
-
-        for root, dirs, filenames in os.walk(self.project_path):
-            dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.startswith('.')]
-
-            try:
-                rel_root = Path(root).relative_to(self.project_path)
-            except ValueError:
-                continue
-
-            for filename in filenames:
-                if filename.startswith('.'):
-                    continue
-
-                file_path = str(rel_root / filename) if str(rel_root) != '.' else filename
-                ext = Path(filename).suffix.lower()
-
-                categorized = False
-                for category, exts in EXTENSIONS_BY_CATEGORY.items():
-                    if ext in exts:
-                        files[category].append(file_path)
-                        categorized = True
-                        break
-
-                if not categorized:
-                    files['other'].append(file_path)
-
-        return files
+        return self._file_scanner.scan_files(self.project_path)
 
     def _analyze_structure(self) -> dict:
         """Analyze project structure using file_index data."""
-        # Build list of all files for marker detection
-        all_files = []
-        for file_list in self.file_index.values():
-            all_files.extend(file_list)
+        # Update project detector with current file index
+        self._project_detector.set_file_index(self.file_index)
 
-        # Helper to check if marker exists anywhere in tree
-        def has_marker(marker_name):
-            return any(f.endswith(marker_name) or f == marker_name for f in all_files)
-
-        # Helper to check if marker exists in root only
-        def has_root_marker(marker_name):
-            return marker_name in all_files
+        # Get markers from project detector
+        markers = self._project_detector.detect_markers()
 
         structure = {
             'total_files': sum(len(f) for f in self.file_index.values()),
             'by_type': {k: len(v) for k, v in self.file_index.items()},
-            'has_readme': has_root_marker('README.md') or has_root_marker('README'),
-            # Project markers - check anywhere in tree (supports monorepos)
-            'has_requirements': has_marker('requirements.txt'),
-            'has_package_json': has_marker('package.json'),
-            'has_pyproject': has_marker('pyproject.toml'),
-            'has_git': (self.project_path / '.git').exists(),
-            # Java/JVM project markers
-            'has_pom_xml': has_marker('pom.xml'),
-            'has_build_gradle': has_marker('build.gradle') or has_marker('build.gradle.kts'),
-            # Rust project marker
-            'has_cargo_toml': has_marker('Cargo.toml'),
-            # Go project marker
-            'has_go_mod': has_marker('go.mod'),
-            # Ruby project marker
-            'has_gemfile': has_marker('Gemfile'),
-            # .NET project marker
-            'has_csproj': any(f.endswith('.csproj') or f.endswith('.sln') for f in all_files),
             'directories': [],
         }
 
+        # Merge markers into structure
+        structure.update(markers)
+
+        # Get directories
         SKIP_DIRS = _get_config_paths()
         for item in self.project_path.iterdir():
             if item.is_dir() and not item.name.startswith('.') and item.name not in SKIP_DIRS:
@@ -457,132 +412,39 @@ Be concise and technical. No fluff."""
 
     def _get_git_history(self) -> dict:
         """Get git history information."""
-        git_info = {}
-
-        try:
-            # Get recent commits
-            result = subprocess.run(
-                ['git', 'log', '--oneline', '-20', '--decorate'],
-                cwd=self.project_path,
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            if result.returncode == 0:
-                git_info['recent_commits'] = result.stdout.strip().split('\n')[:20]
-
-            # Get active branches
-            result = subprocess.run(
-                ['git', 'branch', '-a', '--no-color'],
-                cwd=self.project_path,
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            if result.returncode == 0:
-                branches = [b.strip().lstrip('* ') for b in result.stdout.strip().split('\n')]
-                git_info['branches'] = branches[:10]
-
-            # Get current branch
-            result = subprocess.run(
-                ['git', 'branch', '--show-current'],
-                cwd=self.project_path,
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            if result.returncode == 0:
-                git_info['current_branch'] = result.stdout.strip()
-
-            # Get contributors (top 5)
-            result = subprocess.run(
-                ['git', 'shortlog', '-sn', '--no-merges', 'HEAD'],
-                cwd=self.project_path,
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            if result.returncode == 0:
-                contributors = []
-                for line in result.stdout.strip().split('\n')[:5]:
-                    line = line.strip()
-                    if line:
-                        parts = line.split('\t')
-                        if len(parts) >= 2:
-                            contributors.append({'commits': int(parts[0].strip()), 'name': parts[1].strip()})
-                git_info['top_contributors'] = contributors
-
-            # Get files changed in last 10 commits
-            result = subprocess.run(
-                ['git', 'diff', '--name-only', 'HEAD~10..HEAD'],
-                cwd=self.project_path,
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            if result.returncode == 0:
-                changed = list(set(result.stdout.strip().split('\n')))
-                git_info['recently_changed_files'] = changed[:20]
-
-            # Get repository age (first commit date)
-            result = subprocess.run(
-                ['git', 'log', '--reverse', '--format=%ci', '-1'],
-                cwd=self.project_path,
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            if result.returncode == 0:
-                git_info['first_commit_date'] = result.stdout.strip()
-
-        except (subprocess.TimeoutExpired, Exception):
-            pass  # Git info is optional
-
-        return git_info
+        return self._git_history_reader.get_history(self.project_path)
 
     def _save_cache(self):
         """Save context to disk cache."""
-        try:
-            cache_data = {
-                'explored_at': self.explored_at.isoformat() if self.explored_at else None,
-                'summary': self.summary,
-                'structure': self.structure,
-                'file_index': self.file_index,
-                'git_history': self.git_history,
-                # Don't cache key_files content - too large
-            }
-
-            with open(self.cache_file, 'w', encoding='utf-8') as f:
-                json.dump(cache_data, f, indent=2)
-        except Exception:
-            pass  # Caching is optional
+        cache_data = {
+            'explored_at': self.explored_at,
+            'summary': self.summary,
+            'structure': self.structure,
+            'file_index': self.file_index,
+            'git_history': self.git_history,
+            # Don't cache key_files content - too large
+        }
+        self._cache.save(self.cache_file, cache_data)
 
     def _load_cache(self):
         """Load context from disk cache."""
-        if not self.cache_file.exists():
+        cache_data = self._cache.load(self.cache_file)
+        if cache_data is None:
             return
 
-        try:
-            with open(self.cache_file, 'r', encoding='utf-8') as f:
-                cache_data = json.load(f)
+        self.explored_at = cache_data.get('explored_at')
+        self.summary = cache_data.get('summary')
+        self.structure = cache_data.get('structure', {})
+        self.file_index = cache_data.get('file_index', {})
+        self.git_history = cache_data.get('git_history', {})
 
-            if cache_data.get('explored_at'):
-                self.explored_at = datetime.fromisoformat(cache_data['explored_at'])
-            self.summary = cache_data.get('summary')
-            self.structure = cache_data.get('structure', {})
-            self.file_index = cache_data.get('file_index', {})
-            self.git_history = cache_data.get('git_history', {})
-
-            # Re-read key files if we have structure
-            if self.structure:
-                self.key_files = self._read_key_files()
-        except Exception:
-            pass  # Cache loading is optional
+        # Re-read key files if we have structure
+        if self.structure:
+            self.key_files = self._read_key_files()
 
     def clear_cache(self):
         """Clear the cached context."""
-        if self.cache_file.exists():
-            self.cache_file.unlink()
+        self._cache.clear(self.cache_file)
 
         self.summary = None
         self.structure = {}
@@ -633,25 +495,9 @@ Be concise and technical. No fluff."""
         if not self.structure:
             self.explore()
 
-        # Priority order for project type detection
-        if self.structure.get('has_requirements') or self.structure.get('has_pyproject'):
-            return 'python'
-        elif self.structure.get('has_pom_xml'):
-            return 'java'
-        elif self.structure.get('has_build_gradle'):
-            return 'java'
-        elif self.structure.get('has_package_json'):
-            return 'nodejs'
-        elif self.structure.get('has_cargo_toml'):
-            return 'rust'
-        elif self.structure.get('has_go_mod'):
-            return 'go'
-        elif self.structure.get('has_gemfile'):
-            return 'ruby'
-        elif self.structure.get('has_csproj'):
-            return 'dotnet'
-        else:
-            return 'unknown'
+        # Ensure project detector has current file index
+        self._project_detector.set_file_index(self.file_index)
+        return self._project_detector.get_project_type()
 
     def get_platform(self) -> str:
         """
@@ -660,17 +506,7 @@ Be concise and technical. No fluff."""
         Returns:
             Platform identifier: 'windows', 'darwin', 'linux', or 'unix'
         """
-        if self._platform is None:
-            if sys.platform == 'win32':
-                self._platform = 'windows'
-            elif sys.platform == 'darwin':
-                self._platform = 'darwin'
-            elif sys.platform.startswith('linux'):
-                self._platform = 'linux'
-            else:
-                self._platform = 'unix'
-
-        return self._platform
+        return self._platform_detector.get_platform()
 
     def has_tool(self, tool_name: str) -> bool:
         """
@@ -682,10 +518,7 @@ Be concise and technical. No fluff."""
         Returns:
             True if tool is available, False otherwise
         """
-        if tool_name not in self._tool_cache:
-            self._tool_cache[tool_name] = shutil.which(tool_name) is not None
-
-        return self._tool_cache[tool_name]
+        return self._platform_detector.has_tool(tool_name)
 
     def get_languages(self) -> list:
         """
@@ -697,17 +530,8 @@ Be concise and technical. No fluff."""
         if not self.file_index:
             self.explore()
 
-        languages = []
-        if self.file_index.get('python'):
-            languages.append('python')
-        if self.file_index.get('javascript'):
-            languages.append('javascript')
-        # Note: javascript category includes .ts, .tsx files
-        if any(f.endswith('.ts') or f.endswith('.tsx') for f in self.file_index.get('javascript', [])):
-            if 'typescript' not in languages:
-                languages.append('typescript')
-
-        return languages
+        self._project_detector.set_file_index(self.file_index)
+        return self._project_detector.get_languages()
 
     def get_language_stats(self) -> dict:
         """
@@ -719,7 +543,8 @@ Be concise and technical. No fluff."""
         if not self.file_index:
             self.explore()
 
-        return {k: len(v) for k, v in self.file_index.items() if v}
+        self._project_detector.set_file_index(self.file_index)
+        return self._project_detector.get_language_stats()
 
     def get_primary_language(self) -> str:
         """
@@ -728,16 +553,11 @@ Be concise and technical. No fluff."""
         Returns:
             Language with most files, or 'unknown' if no code files
         """
-        stats = self.get_language_stats()
+        if not self.file_index:
+            self.explore()
 
-        # Only consider actual code languages
-        code_languages = {k: v for k, v in stats.items()
-                         if k in ('python', 'javascript') and v > 0}
-
-        if not code_languages:
-            return 'unknown'
-
-        return max(code_languages.items(), key=lambda x: x[1])[0]
+        self._project_detector.set_file_index(self.file_index)
+        return self._project_detector.get_primary_language()
 
     def find_project_markers(self) -> list:
         """
@@ -749,28 +569,8 @@ Be concise and technical. No fluff."""
         if not self.file_index:
             self.explore()
 
-        marker_names = {
-            'package.json', 'requirements.txt', 'pyproject.toml', 'setup.py',
-            'pom.xml', 'build.gradle', 'build.gradle.kts',
-            'Cargo.toml', 'go.mod', 'Gemfile', 'composer.json'
-        }
-
-        markers = []
-        for file_path in self.file_index.get('config', []):
-            if any(file_path.endswith(marker) for marker in marker_names):
-                markers.append(file_path)
-
-        # Also check 'other' category for markers not in config
-        for file_path in self.file_index.get('other', []):
-            if any(file_path.endswith(marker) for marker in marker_names):
-                markers.append(file_path)
-
-        # Also check 'docs' category (requirements.txt has .txt extension)
-        for file_path in self.file_index.get('docs', []):
-            if any(file_path.endswith(marker) for marker in marker_names):
-                markers.append(file_path)
-
-        return markers
+        self._project_detector.set_file_index(self.file_index)
+        return self._project_detector.find_project_markers()
 
     def get_marker_locations(self) -> dict:
         """
@@ -779,25 +579,11 @@ Be concise and technical. No fluff."""
         Returns:
             Dict mapping directory path to marker filename
         """
-        markers = self.find_project_markers()
-        locations = {}
+        if not self.file_index:
+            self.explore()
 
-        for marker_path in markers:
-            # Get directory containing the marker
-            if '/' in marker_path or '\\' in marker_path:
-                # Normalize to forward slashes for consistency
-                normalized = marker_path.replace('\\', '/')
-                parts = normalized.rsplit('/', 1)
-                directory = parts[0]
-                marker_name = parts[1]
-            else:
-                # Marker in root directory
-                directory = '.'
-                marker_name = marker_path
-
-            locations[directory] = marker_name
-
-        return locations
+        self._project_detector.set_file_index(self.file_index)
+        return self._project_detector.get_marker_locations()
 
     def get_sub_projects(self) -> dict:
         """
@@ -806,34 +592,8 @@ Be concise and technical. No fluff."""
         Returns:
             Dict mapping subdirectory name to project type
         """
-        marker_locations = self.get_marker_locations()
-        sub_projects = {}
+        if not self.file_index:
+            self.explore()
 
-        # Map marker files to project types
-        marker_to_type = {
-            'package.json': 'nodejs',
-            'requirements.txt': 'python',
-            'pyproject.toml': 'python',
-            'setup.py': 'python',
-            'pom.xml': 'java',
-            'build.gradle': 'java',
-            'build.gradle.kts': 'java',
-            'Cargo.toml': 'rust',
-            'go.mod': 'go',
-            'Gemfile': 'ruby',
-            'composer.json': 'php',
-        }
-
-        for directory, marker in marker_locations.items():
-            if directory != '.':  # Skip root
-                project_type = marker_to_type.get(marker, 'unknown')
-                # Use the top-level directory name as key
-                top_dir = directory.split('/')[0] if '/' in directory else directory
-                # If we already have this directory, keep the first one found
-                if top_dir not in sub_projects:
-                    sub_projects[top_dir] = project_type
-                # For nested paths like services/auth-api, also track the full path
-                if '/' in directory:
-                    sub_projects[directory] = project_type
-
-        return sub_projects
+        self._project_detector.set_file_index(self.file_index)
+        return self._project_detector.get_sub_projects()

@@ -38,7 +38,6 @@
 
 we're working to improve src\cli the next task is: 
 Side Effects, Validation, Coupling
-Validation inconsistent: Some inline checks should use validators.py
 can you research the task and create a plan to fix?
 
 
@@ -52,9 +51,7 @@ implement
   ---
   8-10: Side Effects, Validation, Coupling
 
-  - Validation inconsistent: Some inline checks should use validators.py
   - Tight coupling: InteractiveMode syncs 5 state attributes from CommandRouter
-
 
   ---
   14-15: Architecture Issues
