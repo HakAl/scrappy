@@ -57,3 +57,5 @@ htmlcov/
 # LLM Team cache and session files
 .llm_*
 .agent_audit.json
+
+.claude
