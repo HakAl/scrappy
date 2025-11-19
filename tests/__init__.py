@@ -1,1 +1,1 @@
-# Test suite for llm_agent_team
+# Test suite for scrappy

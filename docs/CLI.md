@@ -48,7 +48,7 @@ python scrappy.py
 python scrappy.py --auto-explore
 
 # One-time setup (from project directory)
-cd llm_agent_team
+cd scrappy
 pip install -e .
 
 # Now use from anywhere!
@@ -702,7 +702,7 @@ and Gemini (auto-fallback). Uses swappable brain architecture for planning
 and reasoning tasks.
 
 Structure:
-Project: llm_agent_team
+Project: scrappy
 Files: 25 total
 Languages: python, docs, config
 
@@ -1065,7 +1065,7 @@ Initializing Scrappy...
 [CONTEXT] Generated project summary
 Brain: cerebras
 Available providers: cerebras, groq
-Context: llm_agent_team (cached)
+Context: scrappy (cached)
 
 ============================================================
 Scrappy - Interactive Mode
@@ -1074,7 +1074,7 @@ Scrappy - Interactive Mode
 You: /context
 Context Status:
 --------------------------------------------------
-Project: /path/to/llm_agent_team
+Project: /path/to/scrappy
 Explored: Yes
 Has Summary: Yes
 ...

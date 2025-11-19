@@ -71,11 +71,11 @@ class TestRateLimitRecovery:
     @pytest.fixture
     def mock_orchestrator(self):
         """Create orchestrator with mocked providers."""
-        with patch('src.orchestrator.core.GroqProvider') as mock_groq, \
-             patch('src.orchestrator.core.CerebrasProvider') as mock_cerebras, \
-             patch('src.orchestrator.core.GeminiProvider') as mock_gemini, \
-             patch('src.orchestrator.core.CohereProvider') as mock_cohere, \
-             patch('src.orchestrator.core.GitHubModelsProvider') as mock_github:
+        with patch('src.orchestrator.registration.GroqProvider') as mock_groq, \
+             patch('src.orchestrator.registration.CerebrasProvider') as mock_cerebras, \
+             patch('src.orchestrator.registration.GeminiProvider') as mock_gemini, \
+             patch('src.orchestrator.registration.CohereProvider') as mock_cohere, \
+             patch('src.orchestrator.registration.GitHubModelsProvider') as mock_github:
 
             # Set up mock providers
             mock_groq_instance = MagicMock()

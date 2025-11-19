@@ -24,8 +24,8 @@ Get up and running with AI-powered coding assistance in your own terminal.
 **1. Install the Tool**
 Clone the repository and install the command-line tool.
 ```bash
-git clone https://github.com/HakAl/llm_agent_team
-cd llm_agent_team
+git clone https://github.com/HakAl/scrappy
+cd scrappy
 pip install -e .
 ```
 
@@ -47,7 +47,7 @@ export CEREBRAS_API_KEY=your_key_here
 export GROQ_API_KEY=your_key_here
 export GEMINI_API_KEY=your_key_here
 
-# Option B: Create a .env file in the llm_agent_team directory
+# Option B: Create a .env file in the scrappy directory
 # CEREBRAS_API_KEY=your_key_here
 # GROQ_API_KEY=your_key_here
 ```
@@ -196,7 +196,7 @@ The system uses a `TaskRouter` to classify user input and route it to the most e
 
 This ensures that simple tasks are instant and free, while complex tasks use the best available model without wasting your quota.
 
-![Architecture Diagram](https://raw.githubusercontent.com/HakAl/llm_agent_team/main/docs/architecture.png)  <!-- You will need to add this image to your repo -->
+![Architecture Diagram](https://raw.githubusercontent.com/HakAl/scrappy/main/docs/architecture.png)  <!-- You will need to add this image to your repo -->
 
 For more information, please see the detailed documentation:
 *   [Architecture Deep Dive](docs/ARCHITECTURE.md)

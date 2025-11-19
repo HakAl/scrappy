@@ -275,7 +275,7 @@ def apply_diff(file_path, search_block, replace_block):
     return False
 ```
 
-### Why this fits `llm_agent_team`:
+### Why this fits `scrappy`:
 1.  **Saves Tokens:** You aren't streaming back 500 lines of unchanged code. You stream back 5 lines.
 2.  **Safety:** If the `SEARCH` block isn't found, the agent **does nothing**. It doesn't accidentally overwrite the file with garbage. It fails safe.
 3.  **Speed:** Smaller output = faster inference = snappier "Daily Standup" or "Quick Fix" feel.

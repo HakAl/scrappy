@@ -14,7 +14,7 @@ Pick at least one:
 ## 2. Install (1 min)
 
 ```bash
-cd llm_agent_team
+cd scrappy
 pip install -e .
 ```
 
@@ -112,7 +112,7 @@ scrappy agent "Add input validation"
 → API key not set. Check step 3.
 
 **"No module named..."**
-→ Run `pip install -e .` from the llm_agent_team directory.
+→ Run `pip install -e .` from the scrappy directory.
 
 **Command not found: scrappy**
 → Run `pip install -e .` again, or use `python llm_team.py` instead.

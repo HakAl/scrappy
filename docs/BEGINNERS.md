@@ -73,12 +73,12 @@ If you see version numbers for both, you have successfully installed Python. Con
 
 Now, you need to download the `scrappy` code to your computer.
 
-1.  Go to the [project's repository page on GitHub](https://github.com/HakAl/llm_agent_team).
+1.  Go to the [project's repository page on GitHub](https://github.com/HakAl/scrappy).
 2.  Look for a green "<> Code" button. Click it.
 3.  In the dropdown menu, click **"Download ZIP"**.
 4.  Save the file to a memorable location, like your **Desktop**.
-5.  Find the downloaded ZIP file (e.g., `llm_agent_team-main.zip`) and **unzip it**. You can usually do this by right-clicking and selecting "Extract All..." or "Unzip".
-6.  You will now have a folder. Rename it to something simple: `llm_agent_team`.
+5.  Find the downloaded ZIP file (e.g., `scrappy-main.zip`) and **unzip it**. You can usually do this by right-clicking and selecting "Extract All..." or "Unzip".
+6.  You will now have a folder. Rename it to something simple: `scrappy`.
 
 ---
 
@@ -87,9 +87,9 @@ Now, you need to download the `scrappy` code to your computer.
 You're almost there! Now we'll use the terminal to navigate into the project folder and install the application.
 
 1.  **Navigate to the Folder:** In your terminal, you'll use the `cd` (Change Directory) command.
-    *   If you saved the `llm_agent_team` folder on your Desktop, you would type:
+    *   If you saved the `scrappy` folder on your Desktop, you would type:
         ```bash
-        cd Desktop/llm_agent_team
+        cd Desktop/scrappy
         ```
     *   *Pro Tip: On Mac or Linux, you can type `cd ` (with a space) and then drag the folder from Finder directly into the terminal window. It will paste the correct path for you!*
 

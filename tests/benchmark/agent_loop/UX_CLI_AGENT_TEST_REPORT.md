@@ -73,7 +73,7 @@ Initializing LLM Agent Team...
 Agent Configuration:
   Planner (smart tasks): github
   Executor (fast tasks): cerebras
-  Project root: C:\Users\anyth\MINE\dev\llm_agent_team
+  Project root: C:\Users\anyth\MINE\dev\scrappy
   Max iterations: 50
   WARNING: Auto-confirm enabled - no approval prompts
 ```
