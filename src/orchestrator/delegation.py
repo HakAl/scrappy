@@ -107,6 +107,14 @@ class DelegationManager:
             RateLimitError: If proactive quota check fails
             Exception: Other non-rate-limit errors
         """
+        # Input validation
+        if not prompt or not prompt.strip():
+            raise ValueError("prompt cannot be empty")
+        if not 0.0 <= temperature <= 2.0:
+            raise ValueError(f"temperature must be 0.0-2.0, got {temperature}")
+        if max_tokens <= 0:
+            raise ValueError(f"max_tokens must be positive, got {max_tokens}")
+
         # Determine settings
         should_use_context = use_context if use_context is not None else self.context_aware
         should_use_cache = use_cache if use_cache is not None else True

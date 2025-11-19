@@ -234,34 +234,20 @@ Critical Issues
 **RED**
 
 we're working to improve src\orchestrator the next task is: 
-Consolidate and Clean - Create src/orchestrator/config.py:
+Consolidate and Clean - Add Input Validation
 
-  # Single source of truth for provider configuration
-  PROVIDER_PRIORITY = ['cerebras', 'groq', 'gemini', 'cohere', 'github_models']
+  1. Create validation in DelegationManager.delegate():
 
-  PROVIDER_INFO = {
-      'cerebras': {
-          'quota': '14,400 RPD',
-          'description': 'highest daily quota',
-      },
-      'groq': {
-          'quota': '7,000 RPD',
-          'description': 'fast and reliable',
-      },
-      # ...
-  }
+  def delegate(self, prompt: str, temperature: float = 0.7, max_tokens: Optional[int] = None, ...):
+      if not prompt or not prompt.strip():
+          raise ValueError("prompt cannot be empty")
+      if not 0.0 <= temperature <= 2.0:
+          raise ValueError(f"temperature must be 0.0-2.0, got {temperature}")
+      if max_tokens is not None and max_tokens <= 0:
+          raise ValueError(f"max_tokens must be positive, got {max_tokens}")
+      ...
 
-  TASK_PREFERENCES = {
-      'planning': ['cerebras', 'groq', 'gemini'],
-      'execution': ['cerebras', 'groq', 'gemini'],
-      'quick': ['cerebras', 'groq'],
-      'general': ['cerebras', 'groq', 'gemini'],
-  }
-
-  2. Update all references in:
-    - core.py:221, 250, 389-392
-    - provider_selector.py:211, 229-237, 254
-
+  2. Write tests for validation edge cases first
 can you research the task and start with tests?
 
 **GREEN**
@@ -276,7 +262,6 @@ they're fully tested and ready for integration in src/. can you complete the ref
 
   ---
   Phase 4: Consolidate and Clean
-
 
   ---
   4.2 Add Input Validation

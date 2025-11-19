@@ -1404,3 +1404,271 @@ class TestDelegationManagerRunAsync:
         assert len(results) == 2
         assert "cerebras" in results
         assert "groq" in results
+
+
+class TestDelegationManagerInputValidation:
+    """Tests for DelegationManager.delegate() input validation."""
+
+    def test_delegate_raises_error_for_empty_prompt(self):
+        """Test that delegate raises ValueError for empty prompt string."""
+        from src.orchestrator.delegation import DelegationManager
+
+        registry = make_mock_registry()
+        mock_provider = make_mock_provider("cerebras")
+        registry.register(mock_provider)
+
+        mock_cache, mock_tracker, mock_selector = make_standard_mocks()
+
+        manager = DelegationManager(
+            registry=registry,
+            cache=mock_cache,
+            rate_tracker=mock_tracker,
+            provider_selector=mock_selector,
+            output=NullOutput()
+        )
+
+        with pytest.raises(ValueError) as exc_info:
+            manager.delegate(
+                provider_name="cerebras",
+                prompt=""
+            )
+
+        assert "prompt cannot be empty" in str(exc_info.value)
+        mock_provider.chat.assert_not_called()
+
+    def test_delegate_raises_error_for_whitespace_only_prompt(self):
+        """Test that delegate raises ValueError for whitespace-only prompt."""
+        from src.orchestrator.delegation import DelegationManager
+
+        registry = make_mock_registry()
+        mock_provider = make_mock_provider("cerebras")
+        registry.register(mock_provider)
+
+        mock_cache, mock_tracker, mock_selector = make_standard_mocks()
+
+        manager = DelegationManager(
+            registry=registry,
+            cache=mock_cache,
+            rate_tracker=mock_tracker,
+            provider_selector=mock_selector,
+            output=NullOutput()
+        )
+
+        with pytest.raises(ValueError) as exc_info:
+            manager.delegate(
+                provider_name="cerebras",
+                prompt="   \t\n  "
+            )
+
+        assert "prompt cannot be empty" in str(exc_info.value)
+        mock_provider.chat.assert_not_called()
+
+    def test_delegate_raises_error_for_temperature_below_zero(self):
+        """Test that delegate raises ValueError for temperature < 0.0."""
+        from src.orchestrator.delegation import DelegationManager
+
+        registry = make_mock_registry()
+        mock_provider = make_mock_provider("cerebras")
+        registry.register(mock_provider)
+
+        mock_cache, mock_tracker, mock_selector = make_standard_mocks()
+
+        manager = DelegationManager(
+            registry=registry,
+            cache=mock_cache,
+            rate_tracker=mock_tracker,
+            provider_selector=mock_selector,
+            output=NullOutput()
+        )
+
+        with pytest.raises(ValueError) as exc_info:
+            manager.delegate(
+                provider_name="cerebras",
+                prompt="Test prompt",
+                temperature=-0.1
+            )
+
+        assert "temperature must be 0.0-2.0" in str(exc_info.value)
+        assert "-0.1" in str(exc_info.value)
+        mock_provider.chat.assert_not_called()
+
+    def test_delegate_raises_error_for_temperature_above_two(self):
+        """Test that delegate raises ValueError for temperature > 2.0."""
+        from src.orchestrator.delegation import DelegationManager
+
+        registry = make_mock_registry()
+        mock_provider = make_mock_provider("cerebras")
+        registry.register(mock_provider)
+
+        mock_cache, mock_tracker, mock_selector = make_standard_mocks()
+
+        manager = DelegationManager(
+            registry=registry,
+            cache=mock_cache,
+            rate_tracker=mock_tracker,
+            provider_selector=mock_selector,
+            output=NullOutput()
+        )
+
+        with pytest.raises(ValueError) as exc_info:
+            manager.delegate(
+                provider_name="cerebras",
+                prompt="Test prompt",
+                temperature=2.5
+            )
+
+        assert "temperature must be 0.0-2.0" in str(exc_info.value)
+        assert "2.5" in str(exc_info.value)
+        mock_provider.chat.assert_not_called()
+
+    def test_delegate_raises_error_for_zero_max_tokens(self):
+        """Test that delegate raises ValueError for max_tokens = 0."""
+        from src.orchestrator.delegation import DelegationManager
+
+        registry = make_mock_registry()
+        mock_provider = make_mock_provider("cerebras")
+        registry.register(mock_provider)
+
+        mock_cache, mock_tracker, mock_selector = make_standard_mocks()
+
+        manager = DelegationManager(
+            registry=registry,
+            cache=mock_cache,
+            rate_tracker=mock_tracker,
+            provider_selector=mock_selector,
+            output=NullOutput()
+        )
+
+        with pytest.raises(ValueError) as exc_info:
+            manager.delegate(
+                provider_name="cerebras",
+                prompt="Test prompt",
+                max_tokens=0
+            )
+
+        assert "max_tokens must be positive" in str(exc_info.value)
+        assert "0" in str(exc_info.value)
+        mock_provider.chat.assert_not_called()
+
+    def test_delegate_raises_error_for_negative_max_tokens(self):
+        """Test that delegate raises ValueError for negative max_tokens."""
+        from src.orchestrator.delegation import DelegationManager
+
+        registry = make_mock_registry()
+        mock_provider = make_mock_provider("cerebras")
+        registry.register(mock_provider)
+
+        mock_cache, mock_tracker, mock_selector = make_standard_mocks()
+
+        manager = DelegationManager(
+            registry=registry,
+            cache=mock_cache,
+            rate_tracker=mock_tracker,
+            provider_selector=mock_selector,
+            output=NullOutput()
+        )
+
+        with pytest.raises(ValueError) as exc_info:
+            manager.delegate(
+                provider_name="cerebras",
+                prompt="Test prompt",
+                max_tokens=-100
+            )
+
+        assert "max_tokens must be positive" in str(exc_info.value)
+        assert "-100" in str(exc_info.value)
+        mock_provider.chat.assert_not_called()
+
+    def test_delegate_accepts_valid_temperature_boundaries(self):
+        """Test that delegate accepts valid temperature at boundaries (0.0 and 2.0)."""
+        from src.orchestrator.delegation import DelegationManager
+
+        registry = make_mock_registry()
+        mock_provider = make_mock_provider("cerebras")
+        registry.register(mock_provider)
+
+        mock_cache, mock_tracker, mock_selector = make_standard_mocks()
+
+        manager = DelegationManager(
+            registry=registry,
+            cache=mock_cache,
+            rate_tracker=mock_tracker,
+            provider_selector=mock_selector,
+            output=NullOutput()
+        )
+
+        # Test temperature = 0.0
+        result, _ = manager.delegate(
+            provider_name="cerebras",
+            prompt="Test prompt",
+            temperature=0.0
+        )
+        assert result.content == "Test response"
+
+        # Test temperature = 2.0
+        result, _ = manager.delegate(
+            provider_name="cerebras",
+            prompt="Test prompt",
+            temperature=2.0
+        )
+        assert result.content == "Test response"
+
+    def test_delegate_accepts_valid_max_tokens(self):
+        """Test that delegate accepts valid positive max_tokens."""
+        from src.orchestrator.delegation import DelegationManager
+
+        registry = make_mock_registry()
+        mock_provider = make_mock_provider("cerebras")
+        registry.register(mock_provider)
+
+        mock_cache, mock_tracker, mock_selector = make_standard_mocks()
+
+        manager = DelegationManager(
+            registry=registry,
+            cache=mock_cache,
+            rate_tracker=mock_tracker,
+            provider_selector=mock_selector,
+            output=NullOutput()
+        )
+
+        # Test max_tokens = 1
+        result, _ = manager.delegate(
+            provider_name="cerebras",
+            prompt="Test prompt",
+            max_tokens=1
+        )
+        assert result.content == "Test response"
+
+        # Test max_tokens = 10000
+        result, _ = manager.delegate(
+            provider_name="cerebras",
+            prompt="Test prompt",
+            max_tokens=10000
+        )
+        assert result.content == "Test response"
+
+    def test_delegate_accepts_valid_prompt_with_whitespace(self):
+        """Test that delegate accepts prompts with leading/trailing whitespace but content."""
+        from src.orchestrator.delegation import DelegationManager
+
+        registry = make_mock_registry()
+        mock_provider = make_mock_provider("cerebras")
+        registry.register(mock_provider)
+
+        mock_cache, mock_tracker, mock_selector = make_standard_mocks()
+
+        manager = DelegationManager(
+            registry=registry,
+            cache=mock_cache,
+            rate_tracker=mock_tracker,
+            provider_selector=mock_selector,
+            output=NullOutput()
+        )
+
+        result, _ = manager.delegate(
+            provider_name="cerebras",
+            prompt="  Test prompt with whitespace  "
+        )
+
+        assert result.content == "Test response"
+        mock_provider.chat.assert_called_once()
