@@ -1025,3 +1025,382 @@ class TestDelegationManagerCacheControl:
         assert result.content == "Test response"
         mock_provider.chat.assert_called_once()
         mock_cache.get.assert_not_called()
+
+
+class TestDelegationManagerMultiProviderQueryAsync:
+    """Tests for DelegationManager.multi_provider_query_async() method."""
+
+    @pytest.mark.asyncio
+    async def test_multi_provider_query_returns_responses_from_all_providers(self):
+        """Test that multi_provider_query_async queries all specified providers."""
+        from src.orchestrator.delegation import DelegationManager
+
+        registry = make_mock_registry()
+        provider1 = make_mock_async_provider("cerebras")
+        provider1.chat.return_value = LLMResponse(
+            content="Cerebras response",
+            model="cerebras-model",
+            provider="cerebras",
+            tokens_used=100,
+            input_tokens=50,
+            output_tokens=50,
+            latency_ms=100.0,
+            raw_response={},
+            metadata={},
+            timestamp=datetime.now()
+        )
+        provider2 = make_mock_async_provider("groq")
+        provider2.chat.return_value = LLMResponse(
+            content="Groq response",
+            model="groq-model",
+            provider="groq",
+            tokens_used=100,
+            input_tokens=50,
+            output_tokens=50,
+            latency_ms=100.0,
+            raw_response={},
+            metadata={},
+            timestamp=datetime.now()
+        )
+
+        registry.register(provider1)
+        registry.register(provider2)
+
+        mock_cache, mock_tracker, mock_selector = make_standard_mocks()
+
+        manager = DelegationManager(
+            registry=registry,
+            cache=mock_cache,
+            rate_tracker=mock_tracker,
+            provider_selector=mock_selector,
+            output=NullOutput()
+        )
+
+        results = await manager.multi_provider_query_async(
+            prompt="Test prompt",
+            providers=["cerebras", "groq"]
+        )
+
+        assert len(results) == 2
+        assert "cerebras" in results
+        assert "groq" in results
+        assert results["cerebras"][0].content == "Cerebras response"
+        assert results["groq"][0].content == "Groq response"
+
+    @pytest.mark.asyncio
+    async def test_multi_provider_query_uses_all_available_providers_by_default(self):
+        """Test that multi_provider_query_async uses all available providers when none specified."""
+        from src.orchestrator.delegation import DelegationManager
+
+        registry = make_mock_registry()
+        provider1 = make_mock_async_provider("cerebras")
+        provider2 = make_mock_async_provider("groq")
+
+        registry.register(provider1)
+        registry.register(provider2)
+
+        mock_cache, mock_tracker, mock_selector = make_standard_mocks()
+
+        manager = DelegationManager(
+            registry=registry,
+            cache=mock_cache,
+            rate_tracker=mock_tracker,
+            provider_selector=mock_selector,
+            output=NullOutput()
+        )
+
+        results = await manager.multi_provider_query_async(
+            prompt="Test prompt"
+        )
+
+        assert len(results) == 2
+        assert "cerebras" in results
+        assert "groq" in results
+
+    @pytest.mark.asyncio
+    async def test_multi_provider_query_handles_provider_failure(self):
+        """Test that multi_provider_query_async handles individual provider failures gracefully."""
+        from src.orchestrator.delegation import DelegationManager
+
+        registry = make_mock_registry()
+        provider1 = make_mock_async_provider("cerebras")
+        provider2 = make_mock_async_provider("groq")
+        provider2.chat_async = AsyncMock(side_effect=Exception("Provider error"))
+
+        registry.register(provider1)
+        registry.register(provider2)
+
+        mock_cache, mock_tracker, mock_selector = make_standard_mocks()
+        output = CapturingOutput()
+
+        manager = DelegationManager(
+            registry=registry,
+            cache=mock_cache,
+            rate_tracker=mock_tracker,
+            provider_selector=mock_selector,
+            output=output
+        )
+
+        results = await manager.multi_provider_query_async(
+            prompt="Test prompt",
+            providers=["cerebras", "groq"]
+        )
+
+        # Should return successful provider only
+        assert len(results) == 1
+        assert "cerebras" in results
+        assert "groq" not in results
+        # Should have logged the error
+        assert any("groq failed" in msg for msg in output.get_by_level('warn'))
+
+    @pytest.mark.asyncio
+    async def test_multi_provider_query_passes_kwargs(self):
+        """Test that multi_provider_query_async passes kwargs to delegate_async."""
+        from src.orchestrator.delegation import DelegationManager
+
+        registry = make_mock_registry()
+        mock_provider = make_mock_async_provider("cerebras")
+        registry.register(mock_provider)
+
+        mock_cache, mock_tracker, mock_selector = make_standard_mocks()
+
+        manager = DelegationManager(
+            registry=registry,
+            cache=mock_cache,
+            rate_tracker=mock_tracker,
+            provider_selector=mock_selector,
+            output=NullOutput()
+        )
+
+        await manager.multi_provider_query_async(
+            prompt="Test prompt",
+            providers=["cerebras"],
+            temperature=0.5,
+            max_tokens=500
+        )
+
+        call_args = mock_provider.chat_async.call_args
+        assert call_args[1]['temperature'] == 0.5
+        assert call_args[1]['max_tokens'] == 500
+
+    @pytest.mark.asyncio
+    async def test_multi_provider_query_executes_in_parallel(self):
+        """Test that multi_provider_query_async executes queries in parallel."""
+        from src.orchestrator.delegation import DelegationManager
+
+        registry = make_mock_registry()
+        provider1 = make_mock_async_provider("cerebras")
+        provider2 = make_mock_async_provider("groq")
+
+        # Track execution order
+        execution_times = []
+
+        async def delayed_response_1(**kwargs):
+            execution_times.append(("cerebras_start", asyncio.get_event_loop().time()))
+            await asyncio.sleep(0.02)
+            execution_times.append(("cerebras_end", asyncio.get_event_loop().time()))
+            return provider1.chat.return_value
+
+        async def delayed_response_2(**kwargs):
+            execution_times.append(("groq_start", asyncio.get_event_loop().time()))
+            await asyncio.sleep(0.02)
+            execution_times.append(("groq_end", asyncio.get_event_loop().time()))
+            return provider2.chat.return_value
+
+        provider1.chat_async = AsyncMock(side_effect=delayed_response_1)
+        provider2.chat_async = AsyncMock(side_effect=delayed_response_2)
+
+        registry.register(provider1)
+        registry.register(provider2)
+
+        mock_cache, mock_tracker, mock_selector = make_standard_mocks()
+
+        manager = DelegationManager(
+            registry=registry,
+            cache=mock_cache,
+            rate_tracker=mock_tracker,
+            provider_selector=mock_selector,
+            output=NullOutput()
+        )
+
+        results = await manager.multi_provider_query_async(
+            prompt="Test prompt",
+            providers=["cerebras", "groq"]
+        )
+
+        assert len(results) == 2
+        # Both should have started before either ended (parallel execution)
+        start_times = [t[1] for t in execution_times if "start" in t[0]]
+        end_times = [t[1] for t in execution_times if "end" in t[0]]
+        # All starts should happen before all ends in parallel execution
+        assert max(start_times) < min(end_times)
+
+    @pytest.mark.asyncio
+    async def test_multi_provider_query_returns_empty_dict_when_all_fail(self):
+        """Test that multi_provider_query_async returns empty dict when all providers fail."""
+        from src.orchestrator.delegation import DelegationManager
+
+        registry = make_mock_registry()
+        provider1 = make_mock_async_provider("cerebras")
+        provider1.chat_async = AsyncMock(side_effect=Exception("Error 1"))
+        provider2 = make_mock_async_provider("groq")
+        provider2.chat_async = AsyncMock(side_effect=Exception("Error 2"))
+
+        registry.register(provider1)
+        registry.register(provider2)
+
+        mock_cache, mock_tracker, mock_selector = make_standard_mocks()
+
+        manager = DelegationManager(
+            registry=registry,
+            cache=mock_cache,
+            rate_tracker=mock_tracker,
+            provider_selector=mock_selector,
+            output=NullOutput()
+        )
+
+        results = await manager.multi_provider_query_async(
+            prompt="Test prompt",
+            providers=["cerebras", "groq"]
+        )
+
+        assert results == {}
+
+
+class TestDelegationManagerRunAsync:
+    """Tests for DelegationManager.run_async() method."""
+
+    def test_run_async_executes_coroutine(self):
+        """Test that run_async executes a coroutine and returns result."""
+        from src.orchestrator.delegation import DelegationManager
+
+        registry = make_mock_registry()
+        mock_provider = make_mock_async_provider("cerebras")
+        registry.register(mock_provider)
+
+        mock_cache, mock_tracker, mock_selector = make_standard_mocks()
+
+        manager = DelegationManager(
+            registry=registry,
+            cache=mock_cache,
+            rate_tracker=mock_tracker,
+            provider_selector=mock_selector,
+            output=NullOutput()
+        )
+
+        async def test_coro():
+            return "async result"
+
+        result = manager.run_async(test_coro())
+
+        assert result == "async result"
+
+    def test_run_async_with_delegate_async(self):
+        """Test that run_async works with delegate_async coroutine."""
+        from src.orchestrator.delegation import DelegationManager
+
+        registry = make_mock_registry()
+        mock_provider = make_mock_async_provider("cerebras")
+        registry.register(mock_provider)
+
+        mock_cache, mock_tracker, mock_selector = make_standard_mocks()
+
+        manager = DelegationManager(
+            registry=registry,
+            cache=mock_cache,
+            rate_tracker=mock_tracker,
+            provider_selector=mock_selector,
+            output=NullOutput()
+        )
+
+        result, task_record = manager.run_async(
+            manager.delegate_async("cerebras", "Test prompt")
+        )
+
+        assert result.content == "Test response"
+        assert task_record['async'] is True
+        mock_provider.chat_async.assert_called_once()
+
+    def test_run_async_with_batch_delegate_async(self):
+        """Test that run_async works with batch_delegate_async."""
+        from src.orchestrator.delegation import DelegationManager
+
+        registry = make_mock_registry()
+        mock_provider = make_mock_async_provider("cerebras")
+        registry.register(mock_provider)
+
+        mock_cache, mock_tracker, mock_selector = make_standard_mocks()
+
+        manager = DelegationManager(
+            registry=registry,
+            cache=mock_cache,
+            rate_tracker=mock_tracker,
+            provider_selector=mock_selector,
+            output=NullOutput()
+        )
+
+        tasks = [
+            {'prompt': 'Task 1'},
+            {'prompt': 'Task 2'}
+        ]
+
+        results = manager.run_async(
+            manager.batch_delegate_async(tasks, "cerebras")
+        )
+
+        assert len(results) == 2
+        assert mock_provider.chat_async.call_count == 2
+
+    def test_run_async_propagates_exceptions(self):
+        """Test that run_async propagates exceptions from coroutine."""
+        from src.orchestrator.delegation import DelegationManager
+
+        registry = make_mock_registry()
+        mock_cache, mock_tracker, mock_selector = make_standard_mocks()
+
+        manager = DelegationManager(
+            registry=registry,
+            cache=mock_cache,
+            rate_tracker=mock_tracker,
+            provider_selector=mock_selector,
+            output=NullOutput()
+        )
+
+        async def failing_coro():
+            raise ValueError("Test error")
+
+        with pytest.raises(ValueError) as exc_info:
+            manager.run_async(failing_coro())
+
+        assert "Test error" in str(exc_info.value)
+
+    def test_run_async_with_multi_provider_query(self):
+        """Test that run_async works with multi_provider_query_async."""
+        from src.orchestrator.delegation import DelegationManager
+
+        registry = make_mock_registry()
+        provider1 = make_mock_async_provider("cerebras")
+        provider2 = make_mock_async_provider("groq")
+        registry.register(provider1)
+        registry.register(provider2)
+
+        mock_cache, mock_tracker, mock_selector = make_standard_mocks()
+
+        manager = DelegationManager(
+            registry=registry,
+            cache=mock_cache,
+            rate_tracker=mock_tracker,
+            provider_selector=mock_selector,
+            output=NullOutput()
+        )
+
+        results = manager.run_async(
+            manager.multi_provider_query_async(
+                prompt="Test prompt",
+                providers=["cerebras", "groq"]
+            )
+        )
+
+        assert len(results) == 2
+        assert "cerebras" in results
+        assert "groq" in results

@@ -234,10 +234,9 @@ Critical Issues
 **RED**
 
 we're working to improve src\orchestrator the next task is: 
- Break up core.py - Merge Rate Limit Logic into RateLimitTracker (lines 368-438, 837-891)
+ Break up core.py - Move Async Helpers to DelegationManager (lines 674-725)
 
-  get_recommended_provider(), is_rate_limited(), get_rate_limit_status(), get_remaining_quota(),
-  check_rate_limit_warnings(), reset_rate_tracking() - these already depend on RateLimitTracker and could be methods on it - ~120 lines.
+  multi_provider_query_async() and run_async() - ~50 lines.
 can you research the task and start with tests?
 
 **GREEN**
@@ -253,12 +252,6 @@ they're fully tested and ready for integration in src/. can you complete the ref
   ---
   Phase 3: Extract and Decompose God Object
 
-  4. Merge Rate Limit Logic into RateLimitTracker (lines 368-438, 837-891)
-
-  get_recommended_provider(), is_rate_limited(), get_rate_limit_status(), get_remaining_quota(),
-  check_rate_limit_warnings(), reset_rate_tracking() - these already depend on RateLimitTracker and could be methods
-   on it - ~120 lines.
-
   5. Move Async Helpers to DelegationManager (lines 674-725)
 
   multi_provider_query_async() and run_async() - ~50 lines.
@@ -268,9 +261,6 @@ they're fully tested and ready for integration in src/. can you complete the ref
 
   4.1 Centralize Configuration
 
-  Fixes: Issues #4, #15 (Duplicated Code, Scattered Config)
-
-  Steps:
   1. Create src/orchestrator/config.py:
 
   # Single source of truth for provider configuration

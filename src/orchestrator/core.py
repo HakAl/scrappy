@@ -573,7 +573,7 @@ class AgentOrchestrator:
         prompt: str,
         providers: list[str] = None,
         **kwargs
-    ) -> dict[str, LLMResponse]:
+    ) -> dict[str, tuple]:
         """
         Query multiple providers in parallel for the same prompt.
 
@@ -585,21 +585,11 @@ class AgentOrchestrator:
             **kwargs: Additional arguments passed to delegate_async
 
         Returns:
-            Dict mapping provider name to LLMResponse
+            Dict mapping provider name to (LLMResponse, task_record) tuple
         """
-        if providers is None:
-            providers = self.registry.list_available()
-
-        async def query_provider(provider_name):
-            try:
-                response = await self.delegate_async(provider_name, prompt, **kwargs)
-                return provider_name, response
-            except Exception as e:
-                self.output.warn(f"{provider_name} failed: {e}")
-                return provider_name, None
-
-        results = await asyncio.gather(*[query_provider(p) for p in providers])
-        return {name: response for name, response in results if response is not None}
+        return await self.delegation_manager.multi_provider_query_async(
+            prompt, providers, **kwargs
+        )
 
     def run_async(self, coro):
         """
@@ -608,18 +598,7 @@ class AgentOrchestrator:
         Usage:
             results = orch.run_async(orch.batch_delegate_async(tasks))
         """
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # If we're already in an async context, create a new task
-                import nest_asyncio
-                nest_asyncio.apply()
-                return loop.run_until_complete(coro)
-            else:
-                return loop.run_until_complete(coro)
-        except RuntimeError:
-            # No event loop, create a new one
-            return asyncio.run(coro)
+        return self.delegation_manager.run_async(coro)
 
     # Usage and Cache Statistics (delegates to UsageReporter)
 
