@@ -5,6 +5,8 @@ Provides a dynamic dashboard layout with panels for:
 - Thought process (LLM reasoning)
 - Terminal output (command output)
 - Context info (active files, tokens)
+
+This module implements DashboardProtocol for live agent visualization.
 """
 
 from typing import List, Optional
@@ -16,7 +18,16 @@ from io import StringIO
 
 
 class RichDashboard:
-    """Live dashboard for displaying agent activity."""
+    """Live dashboard for displaying agent activity.
+
+    Implements DashboardProtocol for protocol-based dependency injection
+    and testing. Provides real-time visualization of agent operations
+    across four panels: agent state, thought process, terminal output,
+    and context tracking.
+
+    The dashboard is designed for use with Rich.Live for dynamic updates
+    during long-running agent operations.
+    """
 
     VALID_STATES = {"idle", "thinking", "executing", "scanning"}
     MAX_TERMINAL_LINES = 100

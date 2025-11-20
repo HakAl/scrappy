@@ -9,6 +9,9 @@ from typing import Protocol, Dict, Any, List, Optional, Callable, runtime_checka
 from pathlib import Path
 from datetime import datetime
 
+# Import FileSystemProtocol from infrastructure to avoid duplication
+from ..infrastructure.protocols import FileSystemProtocol
+
 
 @runtime_checkable
 class AuditLoggerProtocol(Protocol):
@@ -489,131 +492,6 @@ class CheckpointManagerProtocol(Protocol):
 
         Returns:
             True if deleted, False if not found
-        """
-        ...
-
-
-@runtime_checkable
-class FileSystemProtocol(Protocol):
-    """
-    Protocol for file system operations.
-
-    Abstracts file system operations to enable testing without
-    real file I/O and support different storage backends.
-
-    Implementations:
-    - RealFileSystem: Standard file system operations via pathlib
-    - InMemoryFileSystem: In-memory file system for testing
-    - SandboxedFileSystem: Restricted file system with path validation
-
-    Example:
-        def read_config(fs: FileSystemProtocol, path: str) -> str:
-            return fs.read_file(path)
-
-        def write_output(fs: FileSystemProtocol, path: str, data: str) -> None:
-            fs.write_file(path, data)
-    """
-
-    def read_file(self, path: str) -> str:
-        """
-        Read file contents.
-
-        Args:
-            path: File path to read
-
-        Returns:
-            File contents as string
-
-        Raises:
-            FileNotFoundError: If file does not exist
-            PermissionError: If file cannot be read
-        """
-        ...
-
-    def write_file(self, path: str, content: str) -> None:
-        """
-        Write content to file.
-
-        Args:
-            path: File path to write
-            content: Content to write
-
-        Raises:
-            PermissionError: If file cannot be written
-        """
-        ...
-
-    def exists(self, path: str) -> bool:
-        """
-        Check if path exists.
-
-        Args:
-            path: Path to check
-
-        Returns:
-            True if path exists, False otherwise
-        """
-        ...
-
-    def is_file(self, path: str) -> bool:
-        """
-        Check if path is a file.
-
-        Args:
-            path: Path to check
-
-        Returns:
-            True if path is a file, False otherwise
-        """
-        ...
-
-    def is_dir(self, path: str) -> bool:
-        """
-        Check if path is a directory.
-
-        Args:
-            path: Path to check
-
-        Returns:
-            True if path is a directory, False otherwise
-        """
-        ...
-
-    def mkdir(self, path: str, parents: bool = False, exist_ok: bool = False) -> None:
-        """
-        Create directory.
-
-        Args:
-            path: Directory path to create
-            parents: Create parent directories if needed
-            exist_ok: Don't raise error if directory exists
-
-        Raises:
-            FileExistsError: If directory exists and exist_ok is False
-        """
-        ...
-
-    def resolve(self, path: str) -> Path:
-        """
-        Resolve path to absolute path.
-
-        Args:
-            path: Path to resolve
-
-        Returns:
-            Resolved absolute path
-        """
-        ...
-
-    def join_path(self, *parts: str) -> str:
-        """
-        Join path components.
-
-        Args:
-            *parts: Path components to join
-
-        Returns:
-            Joined path as string
         """
         ...
 

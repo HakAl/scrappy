@@ -39,6 +39,8 @@ RATE_LIMIT_CRITICAL = 0.90  # Critical threshold (90%)
 # Display defaults
 MAX_DISPLAY_MESSAGES = 4  # Max messages to display in UI
 PROGRESS_BAR_WIDTH = 20  # Width of progress bars
+DASHBOARD_ENABLED = True  # Enable live dashboard display by default
+DASHBOARD_REFRESH_RATE = 4  # Dashboard refresh rate (updates per second)
 
 # Separator widths for console output
 SEPARATOR_WIDTH_NARROW = 40  # Narrow separators

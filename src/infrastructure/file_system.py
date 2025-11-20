@@ -108,6 +108,23 @@ class RealFileSystem:
         """Resolve path to absolute path."""
         return str(Path(path).resolve())
 
+    def join_path(self, *parts: str) -> str:
+        """
+        Join path components.
+
+        Args:
+            *parts: Path components to join
+
+        Returns:
+            Joined path as string
+        """
+        if not parts:
+            return ""
+        result = Path(parts[0])
+        for part in parts[1:]:
+            result = result / part
+        return str(result)
+
 
 class InMemoryFileSystem:
     """
@@ -371,6 +388,24 @@ class InMemoryFileSystem:
     def resolve(self, path: str) -> str:
         """Resolve path to absolute path."""
         return self._normalize_path(path)
+
+    def join_path(self, *parts: str) -> str:
+        """
+        Join path components.
+
+        Args:
+            *parts: Path components to join
+
+        Returns:
+            Joined path as string
+        """
+        if not parts:
+            return ""
+        # Use Path for joining, then normalize
+        result = Path(parts[0])
+        for part in parts[1:]:
+            result = result / part
+        return self._normalize_path(str(result))
 
     def clear(self) -> None:
         """Clear all files and directories (useful for test cleanup)."""

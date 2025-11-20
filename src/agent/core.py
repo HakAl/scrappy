@@ -135,10 +135,11 @@ class CodeAgent:
         self.orch = self.adapter
 
         # Resolve project root using file system abstraction
+        # Infrastructure file system returns str, convert to Path for compatibility
         if project_path:
-            self.project_root = self._file_system.resolve(project_path)
+            self.project_root = Path(self._file_system.resolve(project_path))
         else:
-            self.project_root = self._file_system.resolve(".")
+            self.project_root = Path(self._file_system.resolve("."))
 
         self.config = config or AgentConfig()
         self.dry_run = False
@@ -245,7 +246,7 @@ class CodeAgent:
 
     def _create_default_file_system(self):
         """Create default file system."""
-        from .file_system import RealFileSystem
+        from ..infrastructure.file_system import RealFileSystem
         return RealFileSystem()
 
     def _create_default_platform_utils(self):

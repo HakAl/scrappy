@@ -8,6 +8,8 @@ from typing import Optional
 from ..agent import CodeAgent, create_git_checkpoint, rollback_to_checkpoint
 from .io_interface import CLIIOProtocol
 from .rich_output import RichIO
+from .display_manager import DisplayManager
+from .protocols import DisplayManagerProtocol
 
 
 class CLIAgentManager:
@@ -21,7 +23,12 @@ class CLIAgentManager:
         """
         self.orchestrator = orchestrator
 
-    def run_agent(self, task: str, io: Optional[CLIIOProtocol] = None):
+    def run_agent(
+        self,
+        task: str,
+        io: Optional[CLIIOProtocol] = None,
+        display: Optional[DisplayManagerProtocol] = None
+    ):
         """
         Run the code agent on a task with human-in-the-loop approval.
 
@@ -30,7 +37,8 @@ class CLIAgentManager:
 
         Args:
             task: Description of the task for the agent to perform.
-            io: IO interface for input/output. Defaults to ClickIO.
+            io: IO interface for input/output. Deprecated, use display instead.
+            display: Display manager for coordinated output. Creates default if not provided.
 
         Side Effects:
             - Prompts user for dry-run mode and checkpoint creation
@@ -41,6 +49,7 @@ class CLIAgentManager:
             - May save audit log to file if user requests
             - May rollback to checkpoint if user requests
             - Adds discovery to orchestrator's working memory
+            - Updates dashboard if dashboard mode is enabled
 
         State Changes:
             - Creates temporary CodeAgent instance (not stored)
@@ -56,11 +65,23 @@ class CLIAgentManager:
         Returns:
             None
         """
-        if io is None:
-            io = RichIO()
+        # Support backward compatibility with io parameter
+        if display is None:
+            if io is None:
+                display = DisplayManager(dashboard_enabled=False)
+            else:
+                display = DisplayManager(io=io, dashboard_enabled=False)
+
+        io = display.get_io()
+        dashboard = display.get_dashboard()
 
         io.secho(f"\nCode Agent - Task: {task}", bold=True)
         io.echo("-" * 60)
+
+        # Update dashboard if enabled
+        if dashboard:
+            dashboard.set_state("idle", "Awaiting user input")
+            dashboard.update_thought_process(f"Task: {task}")
 
         # Safety options
         dry_run = io.confirm("Run in dry-run mode? (no actual changes)", default=False)
@@ -93,8 +114,15 @@ class CLIAgentManager:
             return
 
         # Run agent
+        if dashboard:
+            dashboard.set_state("executing", "Running code agent...")
+            dashboard.update_thought_process(f"Executing task: {task}\n\nAgent analyzing requirements...")
+
         try:
             result = agent.run(task)
+
+            if dashboard:
+                dashboard.set_state("idle", "Task completed")
 
             io.echo("\n" + "=" * 60)
             if result['success']:

@@ -11,6 +11,8 @@ from .io_interface import CLIIOProtocol
 from .rich_output import RichIO
 from .prompt_builder import PromptBuilder
 from .research_handlers import create_default_registry
+from .display_manager import DisplayManager
+from .protocols import DisplayManagerProtocol
 
 
 class CLISmartQuery:
@@ -48,7 +50,12 @@ class CLISmartQuery:
         """Create default research handler registry."""
         return create_default_registry()
 
-    def smart_query(self, query: str, io: Optional[CLIIOProtocol] = None):
+    def smart_query(
+        self,
+        query: str,
+        io: Optional[CLIIOProtocol] = None,
+        display: Optional[DisplayManagerProtocol] = None
+    ):
         """Perform a smart query using tools to gather context before answering.
 
         Classifies the query intent, executes relevant research actions using
@@ -61,7 +68,8 @@ class CLISmartQuery:
 
         Args:
             query: The user's question or query string.
-            io: I/O interface for output. If None, uses ClickIO.
+            io: I/O interface for output. Deprecated, use display instead.
+            display: Display manager for coordinated output. Creates default if not provided.
 
         State Changes:
             - Saves research results to orchestrator working memory
@@ -71,21 +79,38 @@ class CLISmartQuery:
             - Writes progress messages to stdout via io
             - Reads files and searches codebase using CodeAgent tools
             - Makes LLM API call to generate response
+            - Updates dashboard if dashboard mode is enabled
 
         Returns:
             LLMResponse: The response object containing the answer, provider info,
                 token usage, and latency.
         """
-        if io is None:
-            io = RichIO()
+        # Support backward compatibility with io parameter
+        if display is None:
+            if io is None:
+                display = DisplayManager(dashboard_enabled=False)
+            else:
+                display = DisplayManager(io=io, dashboard_enabled=False)
+
+        io = display.get_io()
+        dashboard = display.get_dashboard()
 
         io.secho("\n[Smart Query] Analyzing intent...", fg="cyan", bold=True)
+
+        # Update dashboard if enabled
+        if dashboard:
+            dashboard.set_state("thinking", "Analyzing query intent...")
+            dashboard.update_thought_process(f"Query: {query}")
 
         # Classify the query intent
         classification = self.classifier.classify(query)
 
         # Display classification info
         self._display_classification(classification, io)
+
+        if dashboard:
+            dashboard.append_thought(f"\nPrimary intent: {classification.primary_intent.intent.value}")
+            dashboard.set_state("scanning", "Researching codebase...")
 
         io.secho("\n[Smart Query] Researching...", fg="cyan", bold=True)
 
@@ -109,12 +134,19 @@ class CLISmartQuery:
                 research_results.extend(results)
                 tools_used += len(results)
 
+                if dashboard:
+                    dashboard.append_terminal(f"Researched: {intent} ({len(results)} results)")
+
         # Get project summary if available
         project_summary = None
         if self.orchestrator.context.summary:
             project_summary = self.orchestrator.context.summary
 
         io.echo(f"  - Gathered {tools_used} research results")
+
+        if dashboard:
+            dashboard.set_state("thinking", "Generating response...")
+            dashboard.append_thought(f"\nGathered {tools_used} research results")
 
         # Build prompt using PromptBuilder
         prompt = self.prompt_builder.build(
@@ -137,6 +169,10 @@ class CLISmartQuery:
             f"[{response.provider}/{response.model} | {response.tokens_used} tokens | {response.latency_ms:.0f}ms | {tools_used} tools used]",
             fg="cyan"
         )
+
+        if dashboard:
+            dashboard.set_state("idle", "Query complete")
+            dashboard.update_context([], response.tokens_used)
 
         # Save smart query research to working memory
         self._save_to_memory(query, classification, research_results, tools_used)

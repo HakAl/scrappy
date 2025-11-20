@@ -7,3 +7,9 @@
 ---
 
 3 failing tests in: test_agent_checkpoint.py
+
+---
+
+todos in: tests/providers/test_github_models_provider.py
+todos in: tests/providers/test_cohere_provider.py
+todos in: tests/providers/test_cerebras_provider.py

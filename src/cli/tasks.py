@@ -7,6 +7,8 @@ from typing import Optional
 
 from .io_interface import CLIIOProtocol
 from .rich_output import RichIO
+from .display_manager import DisplayManager
+from .protocols import DisplayManagerProtocol
 
 
 class CLITaskExecution:
@@ -20,7 +22,12 @@ class CLITaskExecution:
         """
         self.orchestrator = orchestrator
 
-    def plan_task(self, task: str, io: Optional[CLIIOProtocol] = None):
+    def plan_task(
+        self,
+        task: str,
+        io: Optional[CLIIOProtocol] = None,
+        display: Optional[DisplayManagerProtocol] = None
+    ):
         """
         Create a task plan.
 
@@ -29,7 +36,8 @@ class CLITaskExecution:
 
         Args:
             task: Description of the task to plan.
-            io: I/O interface for output. If None, uses ClickIO.
+            io: I/O interface for output. Deprecated, use display instead.
+            display: Display manager for coordinated output. Creates default if not provided.
 
         Returns:
             list: List of plan steps (dicts with 'step', 'description', etc.)
@@ -44,6 +52,7 @@ class CLITaskExecution:
             - Displays formatted plan with numbered steps to console
             - Displays recommended provider for each step if available
             - Adds discovery to orchestrator's working memory
+            - Updates dashboard if dashboard mode is enabled
 
         State Changes:
             - Updates orchestrator.discoveries with plan summary
@@ -51,19 +60,39 @@ class CLITaskExecution:
         Raises:
             Does not raise; catches exceptions internally and displays error.
         """
-        if io is None:
-            io = RichIO()
+        # Support backward compatibility with io parameter
+        if display is None:
+            if io is None:
+                display = DisplayManager(dashboard_enabled=False)
+            else:
+                display = DisplayManager(io=io, dashboard_enabled=False)
+
+        io = display.get_io()
+        dashboard = display.get_dashboard()
 
         io.secho(f"\nPlanning: {task}", bold=True)
         io.echo("-" * 50)
+
+        # Update dashboard if enabled
+        if dashboard:
+            dashboard.set_state("thinking", "Generating plan...")
+            dashboard.update_thought_process(f"Planning task: {task}")
 
         with io.progress(total=1, description="Generating plan") as progress:
             try:
                 steps = self.orchestrator.plan(task)
                 progress.advance(1)
+
+                if dashboard:
+                    dashboard.set_state("idle", "Plan generated")
             except Exception as e:
                 progress.advance(1)
                 io.secho(f"Error during planning: {e}", fg="red")
+
+                if dashboard:
+                    dashboard.set_state("idle", "Planning failed")
+                    dashboard.append_terminal(f"Error: {e}")
+
                 return []
 
         io.echo()
@@ -93,7 +122,12 @@ class CLITaskExecution:
 
         return steps if isinstance(steps, list) else []
 
-    def reason(self, question: str, io: Optional[CLIIOProtocol] = None):
+    def reason(
+        self,
+        question: str,
+        io: Optional[CLIIOProtocol] = None,
+        display: Optional[DisplayManagerProtocol] = None
+    ):
         """
         Perform reasoning on a question.
 
@@ -103,7 +137,8 @@ class CLITaskExecution:
 
         Args:
             question: The question to reason about.
-            io: I/O interface for output. If None, uses ClickIO.
+            io: I/O interface for output. Deprecated, use display instead.
+            display: Display manager for coordinated output. Creates default if not provided.
 
         Returns:
             None (displays results to console).
@@ -118,6 +153,7 @@ class CLITaskExecution:
               - Confidence level
             - Adds discovery to orchestrator's working memory with
               truncated question and conclusion
+            - Updates dashboard if dashboard mode is enabled
 
         State Changes:
             - Updates orchestrator.discoveries with reasoning result
@@ -125,19 +161,39 @@ class CLITaskExecution:
         Raises:
             Does not raise; catches exceptions internally and displays error.
         """
-        if io is None:
-            io = RichIO()
+        # Support backward compatibility with io parameter
+        if display is None:
+            if io is None:
+                display = DisplayManager(dashboard_enabled=False)
+            else:
+                display = DisplayManager(io=io, dashboard_enabled=False)
+
+        io = display.get_io()
+        dashboard = display.get_dashboard()
 
         io.secho(f"\nReasoning about: {question}", bold=True)
         io.echo("-" * 50)
+
+        # Update dashboard if enabled
+        if dashboard:
+            dashboard.set_state("thinking", "Analyzing question...")
+            dashboard.update_thought_process(f"Reasoning about: {question}")
 
         with io.progress(total=1, description="Analyzing") as progress:
             try:
                 response = self.orchestrator.reason(question)
                 progress.advance(1)
+
+                if dashboard:
+                    dashboard.set_state("idle", "Analysis complete")
             except Exception as e:
                 progress.advance(1)
                 io.secho(f"Error during reasoning: {e}", fg="red")
+
+                if dashboard:
+                    dashboard.set_state("idle", "Reasoning failed")
+                    dashboard.append_terminal(f"Error: {e}")
+
                 return
 
         io.echo()

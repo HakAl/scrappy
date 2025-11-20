@@ -210,6 +210,18 @@ class FileSystemProtocol(Protocol):
         """
         ...
 
+    def join_path(self, *parts: str) -> str:
+        """
+        Join path components.
+
+        Args:
+            *parts: Path components to join
+
+        Returns:
+            Joined path as string
+        """
+        ...
+
 
 class HTTPClientProtocol(Protocol):
     """
