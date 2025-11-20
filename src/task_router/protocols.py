@@ -2,12 +2,13 @@
 Task router protocols.
 
 Defines abstract interfaces for task classification, clarification,
-routing, and metrics collection.
+routing, metrics collection, and intent classification.
 """
 
 from typing import Protocol, Dict, Any, List, Optional, runtime_checkable
 from enum import Enum
 from datetime import datetime
+from dataclasses import dataclass
 
 
 @runtime_checkable
@@ -341,5 +342,197 @@ class MetricsCollectorProtocol(Protocol):
         Args:
             histogram_name: Name of histogram
             value: Value to record
+        """
+        ...
+
+
+# Intent Classification Protocols
+
+class QueryIntent(Enum):
+    """All possible intent classifications."""
+    FILE_STRUCTURE = "file_structure"
+    CODE_SEARCH = "code_search"
+    CODE_EXPLANATION = "code_explanation"
+    GIT_HISTORY = "git_history"
+    DEPENDENCY_INFO = "dependency_info"
+    ARCHITECTURE = "architecture"
+    BUG_INVESTIGATION = "bug_investigation"
+    TESTING = "testing"
+    PERFORMANCE = "performance"
+    DOCUMENTATION = "documentation"
+    REFACTORING = "refactoring"
+    SECURITY = "security"
+    CONFIGURATION = "configuration"
+    GENERAL = "general"
+
+
+@dataclass
+class IntentResult:
+    """Result of intent classification."""
+    intent: QueryIntent
+    confidence: float
+    metadata: Dict[str, Any]
+
+
+@dataclass
+class Action:
+    """Represents a concrete action to execute."""
+    tool: str
+    func: str
+    args: Dict[str, Any]
+
+
+@runtime_checkable
+class IntentClassifierProtocol(Protocol):
+    """
+    Classifies user queries into intents.
+
+    Abstracts intent classification logic to enable testing with
+    controlled classifications and support different strategies
+    (regex-based, LLM-based, embedding-based, hybrid).
+
+    Implementations:
+    - RegexIntentClassifier: Pattern-based classification
+    - LLMClassifier: LLM-based classification
+    - HybridClassifier: Combines multiple classifiers with fallback
+
+    Example:
+        def classify_query(classifier: IntentClassifierProtocol, query: str) -> IntentResult:
+            result = classifier.classify(query)
+            if result.confidence > 0.6:
+                # High confidence, proceed
+                return result
+            # Low confidence, may need clarification
+            return result
+    """
+
+    def classify(self, query: str) -> IntentResult:
+        """
+        Classifies a query into an intent with confidence score.
+
+        Args:
+            query: User's query string
+
+        Returns:
+            IntentResult containing:
+            - intent: Classified intent enum
+            - confidence: Confidence score (0.0 to 1.0)
+            - metadata: Additional classification metadata (e.g., matched patterns)
+        """
+        ...
+
+
+@runtime_checkable
+class EntityExtractorProtocol(Protocol):
+    """
+    Extracts structured entities from queries.
+
+    Abstracts entity extraction to enable testing with controlled
+    extractions and support different extraction strategies.
+
+    Implementations:
+    - RegexEntityExtractor: Pattern-based entity extraction
+    - NEREntityExtractor: Named Entity Recognition based extraction
+
+    Example:
+        def extract_info(extractor: EntityExtractorProtocol, query: str) -> Dict[str, List[str]]:
+            entities = extractor.extract(query)
+            if 'file_path' in entities:
+                # Found file paths in query
+                process_files(entities['file_path'])
+            return entities
+    """
+
+    def extract(self, query: str) -> Dict[str, List[str]]:
+        """
+        Extracts entities like filenames, classes, functions, etc.
+
+        Args:
+            query: User's query string
+
+        Returns:
+            Dictionary mapping entity types to lists of extracted values:
+            - file_path: File paths found in query
+            - function_name: Function names found
+            - class_name: Class names found
+            - error_type: Error types mentioned
+            - package_name: Package names mentioned
+            - keyword: Domain keywords found
+        """
+        ...
+
+
+@runtime_checkable
+class ActionResolverProtocol(Protocol):
+    """
+    Maps intent + entities to executable actions.
+
+    Abstracts action resolution to enable testing with controlled
+    resolutions and support different resolution strategies.
+
+    Implementations:
+    - DefaultActionResolver: Standard intent-to-action mapping
+    - ContextAwareResolver: Uses conversation context for resolution
+
+    Example:
+        def resolve_action(
+            resolver: ActionResolverProtocol,
+            result: IntentResult,
+            entities: Dict[str, List[str]]
+        ) -> Action:
+            action = resolver.resolve(result, entities)
+            # Execute the action
+            execute_action(action)
+            return action
+    """
+
+    def resolve(self, result: IntentResult, entities: Dict[str, List[str]]) -> Action:
+        """
+        Converts classification results into a concrete system action.
+
+        Args:
+            result: Intent classification result
+            entities: Extracted entities from query
+
+        Returns:
+            Action object containing:
+            - tool: Tool to invoke (e.g., 'FileSystem', 'CodeSearch')
+            - func: Function to call on the tool
+            - args: Arguments to pass to the function
+        """
+        ...
+
+
+@runtime_checkable
+class IntentServiceProtocol(Protocol):
+    """
+    Facade for end-to-end intent processing.
+
+    Coordinates intent classification, entity extraction, and action
+    resolution into a single pipeline. This is the main entry point
+    for intent processing.
+
+    Implementations:
+    - IntentService: Standard implementation coordinating all components
+
+    Example:
+        def process_user_query(service: IntentServiceProtocol, query: str) -> Action:
+            # Full pipeline: classify -> extract -> resolve
+            action = service.process_query(query)
+            # Action is ready to execute
+            return action
+    """
+
+    def process_query(self, query: str) -> Action:
+        """
+        Full pipeline: classify intent -> extract entities -> resolve to action.
+
+        This is the main entry point for processing user queries.
+
+        Args:
+            query: User's query string
+
+        Returns:
+            Action object ready to be executed
         """
         ...

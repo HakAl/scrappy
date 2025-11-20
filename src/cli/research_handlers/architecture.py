@@ -4,10 +4,9 @@ Handler for ARCHITECTURE intent research.
 
 from typing import List, Any
 
-from ...intent_classifier import QueryIntent, ClassificationResult
 from ..io_interface import CLIIOProtocol
 from ..config.defaults import TRUNCATE_RESEARCH_MEDIUM
-from .base import BaseResearchHandler
+from .base import QueryIntent, ClassificationResult, BaseResearchHandler
 
 
 class ArchitectureHandler(BaseResearchHandler):

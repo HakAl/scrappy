@@ -2,11 +2,35 @@
 Base protocol and utilities for research handlers.
 """
 
-from typing import Protocol, List, Tuple, Any
+from typing import Protocol, List, Tuple, Any, Dict
 from abc import abstractmethod
+from dataclasses import dataclass, field
 
-from ...intent_classifier import QueryIntent, ClassificationResult
+from src.task_router.protocols import QueryIntent, IntentResult
 from ..io_interface import CLIIOProtocol
+
+# Re-export for backward compatibility
+__all__ = ['QueryIntent', 'ClassificationResult', 'ResearchHandler', 'BaseResearchHandler']
+
+
+@dataclass
+class ClassificationResult:
+    """
+    Compatibility wrapper for handler interface.
+
+    Wraps IntentResult and entities into the format expected by handlers.
+    This allows handlers to access classification.entities and classification.keywords
+    without needing to change their implementation.
+    """
+    query: str
+    intent_result: IntentResult
+    entities: Dict[str, List[str]] = field(default_factory=dict)
+    keywords: List[str] = field(default_factory=list)
+
+    @property
+    def primary_intent(self):
+        """Compatibility property to access intent from IntentResult."""
+        return self.intent_result
 
 
 class ResearchHandler(Protocol):

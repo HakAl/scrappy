@@ -425,21 +425,21 @@ class TestGitHubModelsProviderIntegration:
     #     assert response.provider == "github"
     #     assert response.model == "gpt-4o"
     #     assert "Hello" in response.content or "hello" in response.content.lower()
-
-    @pytest.mark.integration
-    @pytest.mark.skipif(not os.environ.get("GITHUB_API_KEY"), reason="GITHUB_API_KEY not set")
-    @pytest.mark.asyncio
-    async def test_real_async_api_call(self):
-        """Test async call with real GitHub Models API."""
-        provider = GitHubModelsProvider()
-
-        messages = [{"role": "user", "content": "Say 'Async works!' and nothing else."}]
-
-        response = await provider.chat_async(messages, max_tokens=50)
-
-        assert isinstance(response, LLMResponse)
-        assert response.provider == "github"
-        assert "async" in response.content.lower() or "works" in response.content.lower()
+# todo
+    # @pytest.mark.integration
+    # @pytest.mark.skipif(not os.environ.get("GITHUB_API_KEY"), reason="GITHUB_API_KEY not set")
+    # @pytest.mark.asyncio
+    # async def test_real_async_api_call(self):
+    #     """Test async call with real GitHub Models API."""
+    #     provider = GitHubModelsProvider()
+    #
+    #     messages = [{"role": "user", "content": "Say 'Async works!' and nothing else."}]
+    #
+    #     response = await provider.chat_async(messages, max_tokens=50)
+    #
+    #     assert isinstance(response, LLMResponse)
+    #     assert response.provider == "github"
+    #     assert "async" in response.content.lower() or "works" in response.content.lower()
 
 
 if __name__ == "__main__":

@@ -6,11 +6,13 @@ Provides research-first queries using tools to gather context.
 from typing import Optional
 
 from ..agent import CodeAgent
-from ..intent_classifier import IntentClassifier, get_research_actions
+from src.task_router.intent import RegexIntentClassifier, RegexEntityExtractor
+from src.task_router.protocols import IntentResult
 from .io_interface import CLIIOProtocol
 from .rich_output import RichIO
 from .prompt_builder import PromptBuilder
 from .research_handlers import create_default_registry
+from .research_handlers.base import ClassificationResult
 from .display_manager import DisplayManager
 from .protocols import DisplayManagerProtocol
 
@@ -21,7 +23,8 @@ class CLISmartQuery:
     def __init__(
         self,
         orchestrator,
-        classifier: Optional[IntentClassifier] = None,
+        classifier: Optional[RegexIntentClassifier] = None,
+        entity_extractor: Optional[RegexEntityExtractor] = None,
         prompt_builder: Optional[PromptBuilder] = None,
         handler_registry: Optional[dict] = None
     ):
@@ -30,17 +33,23 @@ class CLISmartQuery:
         Args:
             orchestrator: The AgentOrchestrator instance
             classifier: Optional intent classifier
+            entity_extractor: Optional entity extractor
             prompt_builder: Optional prompt builder
             handler_registry: Optional research handler registry
         """
         self.orchestrator = orchestrator
         self.classifier = classifier or self._create_default_classifier()
+        self.entity_extractor = entity_extractor or self._create_default_extractor()
         self.prompt_builder = prompt_builder or self._create_default_prompt_builder()
         self.handler_registry = handler_registry or self._create_default_handler_registry()
 
-    def _create_default_classifier(self) -> IntentClassifier:
+    def _create_default_classifier(self) -> RegexIntentClassifier:
         """Create default intent classifier."""
-        return IntentClassifier()
+        return RegexIntentClassifier()
+
+    def _create_default_extractor(self) -> RegexEntityExtractor:
+        """Create default entity extractor."""
+        return RegexEntityExtractor()
 
     def _create_default_prompt_builder(self) -> PromptBuilder:
         """Create default prompt builder."""
@@ -102,14 +111,23 @@ class CLISmartQuery:
             dashboard.set_state("thinking", "Analyzing query intent...")
             dashboard.update_thought_process(f"Query: {query}")
 
-        # Classify the query intent
-        classification = self.classifier.classify(query)
+        # Classify the query intent and extract entities
+        intent_result = self.classifier.classify(query)
+        entities = self.entity_extractor.extract(query)
+
+        # Create classification result wrapper for handlers
+        classification = ClassificationResult(
+            query=query,
+            intent_result=intent_result,
+            entities=entities,
+            keywords=[]  # Keywords can be extracted from metadata if needed
+        )
 
         # Display classification info
         self._display_classification(classification, io)
 
         if dashboard:
-            dashboard.append_thought(f"\nPrimary intent: {classification.primary_intent.intent.value}")
+            dashboard.append_thought(f"\nPrimary intent: {intent_result.intent.value}")
             dashboard.set_state("scanning", "Researching codebase...")
 
         io.secho("\n[Smart Query] Researching...", fg="cyan", bold=True)
@@ -121,21 +139,15 @@ class CLISmartQuery:
         research_results = []
         tools_used = 0
 
-        # Get recommended research actions
-        actions = get_research_actions(classification)
+        # Execute research using handler for the classified intent
+        handler = self.handler_registry.get_handler(intent_result.intent)
+        if handler:
+            results = handler.execute(agent, classification, io)
+            research_results.extend(results)
+            tools_used += len(results)
 
-        # Execute research using handler registry
-        for action in actions:
-            intent = action['intent']
-            handler = self.handler_registry.get_handler(intent)
-
-            if handler:
-                results = handler.execute(agent, classification, io)
-                research_results.extend(results)
-                tools_used += len(results)
-
-                if dashboard:
-                    dashboard.append_terminal(f"Researched: {intent} ({len(results)} results)")
+            if dashboard:
+                dashboard.append_terminal(f"Researched: {intent_result.intent} ({len(results)} results)")
 
         # Get project summary if available
         project_summary = None
@@ -179,22 +191,15 @@ class CLISmartQuery:
 
         return response
 
-    def _display_classification(self, classification, io: CLIIOProtocol) -> None:
+    def _display_classification(self, classification: ClassificationResult, io: CLIIOProtocol) -> None:
         """Display classification information to the user.
 
         Args:
             classification: The classification result
             io: IO interface for output
         """
-        io.echo(f"  Primary intent: {classification.primary_intent.intent.value} "
-                f"(confidence: {classification.primary_intent.confidence:.2f})")
-
-        if classification.secondary_intents:
-            secondary_str = ", ".join([
-                f"{i.intent.value}({i.confidence:.2f})"
-                for i in classification.secondary_intents[:3]
-            ])
-            io.echo(f"  Secondary intents: {secondary_str}")
+        io.echo(f"  Primary intent: {classification.intent_result.intent.value} "
+                f"(confidence: {classification.intent_result.confidence:.2f})")
 
         if classification.entities:
             for entity_type, values in classification.entities.items():
@@ -204,7 +209,7 @@ class CLISmartQuery:
     def _save_to_memory(
         self,
         query: str,
-        classification,
+        classification: ClassificationResult,
         research_results: list,
         tools_used: int
     ) -> None:
@@ -222,6 +227,6 @@ class CLISmartQuery:
                 research_results[:5]  # Save top 5 research results
             )
             self.orchestrator.working_memory.add_discovery(
-                f"Smart query '{query[:50]}...' classified as {classification.primary_intent.intent.value}, researched {tools_used} sources",
+                f"Smart query '{query[:50]}...' classified as {classification.intent_result.intent.value}, researched {tools_used} sources",
                 "smart_query"
             )

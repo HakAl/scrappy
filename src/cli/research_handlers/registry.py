@@ -4,8 +4,7 @@ Registry for research handlers.
 
 from typing import Dict, List, Optional
 
-from ...intent_classifier import QueryIntent
-from .base import ResearchHandler
+from .base import QueryIntent, ResearchHandler
 
 
 class ResearchHandlerRegistry:

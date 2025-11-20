@@ -8,7 +8,8 @@ import pytest
 from unittest.mock import Mock, MagicMock
 from typing import List
 
-from src.intent_classifier import QueryIntent, ClassificationResult, IntentMatch
+from src.task_router.protocols import QueryIntent, IntentResult
+from src.cli.research_handlers.base import ClassificationResult
 from src.cli.io_interface import CLIIOProtocol
 
 
@@ -59,15 +60,14 @@ def mock_io():
 @pytest.fixture
 def sample_classification():
     """Create a sample classification result for testing."""
+    intent_result = IntentResult(
+        intent=QueryIntent.CODE_SEARCH,
+        confidence=0.9,
+        metadata={'matched_patterns': ["where is .+ defined"]}
+    )
     return ClassificationResult(
         query="Where is the CodeAgent class defined?",
-        primary_intent=IntentMatch(
-            intent=QueryIntent.CODE_SEARCH,
-            confidence=0.9,
-            matched_patterns=["where is .+ defined"],
-            extracted_entities={'class_name': ['CodeAgent']}
-        ),
-        secondary_intents=[],
+        intent_result=intent_result,
         entities={'class_name': ['CodeAgent'], 'function_name': []},
         keywords=['CodeAgent', 'class', 'defined']
     )
@@ -175,9 +175,10 @@ class TestCodeSearchHandler:
 
         classification = ClassificationResult(
             query="Find the CodeAgent class",
-            primary_intent=IntentMatch(
+            intent_result=IntentResult(
                 intent=QueryIntent.CODE_SEARCH,
-                confidence=0.9
+                confidence=0.9,
+                metadata={}
             ),
             entities={'class_name': ['CodeAgent'], 'function_name': []},
             keywords=['CodeAgent']
@@ -197,9 +198,10 @@ class TestCodeSearchHandler:
 
         classification = ClassificationResult(
             query="Find the process_data function",
-            primary_intent=IntentMatch(
+            intent_result=IntentResult(
                 intent=QueryIntent.CODE_SEARCH,
-                confidence=0.9
+                confidence=0.9,
+                metadata={}
             ),
             entities={'class_name': [], 'function_name': ['process_data']},
             keywords=['process_data']
@@ -218,9 +220,10 @@ class TestCodeSearchHandler:
 
         classification = ClassificationResult(
             query="Search for authentication logic",
-            primary_intent=IntentMatch(
+            intent_result=IntentResult(
                 intent=QueryIntent.CODE_SEARCH,
-                confidence=0.9
+                confidence=0.9,
+                metadata={}
             ),
             entities={'class_name': [], 'function_name': []},
             keywords=['authentication', 'logic']
@@ -243,9 +246,10 @@ class TestCodeSearchHandler:
 
         classification = ClassificationResult(
             query="Find all imports",
-            primary_intent=IntentMatch(
+            intent_result=IntentResult(
                 intent=QueryIntent.CODE_SEARCH,
-                confidence=0.9
+                confidence=0.9,
+                metadata={}
             ),
             entities={'class_name': ['Import']},
             keywords=['import']
@@ -374,7 +378,7 @@ class TestHandlerIntegration:
 
         classification = ClassificationResult(
             query="Show files",
-            primary_intent=IntentMatch(intent=QueryIntent.FILE_STRUCTURE, confidence=0.9),
+            intent_result=IntentResult(intent=QueryIntent.FILE_STRUCTURE, confidence=0.9, metadata={}),
             entities={},
             keywords=[]
         )

@@ -6,7 +6,7 @@ Constructs prompts with classification context and research results.
 
 from typing import List, Optional
 
-from ..intent_classifier import ClassificationResult
+from .research_handlers.base import ClassificationResult
 
 
 class PromptBuilder:
@@ -101,7 +101,7 @@ Provide a helpful answer based on your understanding of the query intent."""
             keywords_str = "none"
 
         return f"""Query Classification:
-- Primary Intent: {classification.primary_intent.intent.value} (confidence: {classification.primary_intent.confidence:.2f})
+- Primary Intent: {classification.intent_result.intent.value} (confidence: {classification.intent_result.confidence:.2f})
 - Key entities: {entities_str}
 - Keywords: {keywords_str}"""
 

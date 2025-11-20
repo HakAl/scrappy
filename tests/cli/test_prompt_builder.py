@@ -3,7 +3,8 @@ Tests for PromptBuilder used by smart_query.
 """
 
 import pytest
-from src.intent_classifier import QueryIntent, ClassificationResult, IntentMatch
+from src.task_router.protocols import QueryIntent, IntentResult
+from src.cli.research_handlers.base import ClassificationResult
 
 
 class TestPromptBuilder:
@@ -15,9 +16,10 @@ class TestPromptBuilder:
 
         classification = ClassificationResult(
             query="Where is the CodeAgent class?",
-            primary_intent=IntentMatch(
+            intent_result=IntentResult(
                 intent=QueryIntent.CODE_SEARCH,
-                confidence=0.9
+                confidence=0.9,
+                metadata={}
             ),
             entities={'class_name': ['CodeAgent']},
             keywords=['CodeAgent']
@@ -45,9 +47,10 @@ class TestPromptBuilder:
 
         classification = ClassificationResult(
             query="What is this project?",
-            primary_intent=IntentMatch(
+            intent_result=IntentResult(
                 intent=QueryIntent.ARCHITECTURE,
-                confidence=0.7
+                confidence=0.7,
+                metadata={}
             ),
             entities={},
             keywords=['project']
@@ -70,9 +73,10 @@ class TestPromptBuilder:
 
         classification = ClassificationResult(
             query="Find authentication code",
-            primary_intent=IntentMatch(
+            intent_result=IntentResult(
                 intent=QueryIntent.CODE_SEARCH,
-                confidence=0.85
+                confidence=0.85,
+                metadata={}
             ),
             entities={'function_name': ['authenticate']},
             keywords=['authentication', 'code']
@@ -99,9 +103,10 @@ class TestPromptBuilder:
 
         classification = ClassificationResult(
             query="How does auth work?",
-            primary_intent=IntentMatch(
+            intent_result=IntentResult(
                 intent=QueryIntent.CODE_EXPLANATION,
-                confidence=0.9
+                confidence=0.9,
+                metadata={}
             ),
             entities={},
             keywords=['auth']
@@ -123,9 +128,10 @@ class TestPromptBuilder:
 
         classification = ClassificationResult(
             query="Show me tests",
-            primary_intent=IntentMatch(
+            intent_result=IntentResult(
                 intent=QueryIntent.TESTING,
-                confidence=0.9
+                confidence=0.9,
+                metadata={}
             ),
             entities={},
             keywords=['tests']
@@ -165,9 +171,10 @@ class TestPromptBuilder:
 
         classification = ClassificationResult(
             query="What is this?",
-            primary_intent=IntentMatch(
+            intent_result=IntentResult(
                 intent=QueryIntent.ARCHITECTURE,
-                confidence=0.6
+                confidence=0.6,
+                metadata={}
             ),
             entities={},
             keywords=[]
@@ -193,9 +200,10 @@ class TestPromptBuilderEdgeCases:
 
         classification = ClassificationResult(
             query="Show everything",
-            primary_intent=IntentMatch(
+            intent_result=IntentResult(
                 intent=QueryIntent.FILE_STRUCTURE,
-                confidence=0.9
+                confidence=0.9,
+                metadata={}
             ),
             entities={},
             keywords=[]
@@ -221,9 +229,10 @@ class TestPromptBuilderEdgeCases:
 
         classification = ClassificationResult(
             query='Search for "error" in *.py files',
-            primary_intent=IntentMatch(
+            intent_result=IntentResult(
                 intent=QueryIntent.CODE_SEARCH,
-                confidence=0.9
+                confidence=0.9,
+                metadata={}
             ),
             entities={},
             keywords=['error']
@@ -244,14 +253,11 @@ class TestPromptBuilderEdgeCases:
 
         classification = ClassificationResult(
             query="How does the auth system work and where is it tested?",
-            primary_intent=IntentMatch(
+            intent_result=IntentResult(
                 intent=QueryIntent.CODE_EXPLANATION,
-                confidence=0.8
+                confidence=0.8,
+                metadata={'secondary_intents': ['TESTING', 'SECURITY']}
             ),
-            secondary_intents=[
-                IntentMatch(intent=QueryIntent.TESTING, confidence=0.6),
-                IntentMatch(intent=QueryIntent.SECURITY, confidence=0.4)
-            ],
             entities={'function_name': ['auth']},
             keywords=['auth', 'system', 'tested']
         )

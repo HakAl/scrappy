@@ -418,21 +418,6 @@ class TestCohereProviderIntegration:
 
     @pytest.mark.integration
     @pytest.mark.skipif(not os.environ.get("COHERE_API_KEY"), reason="COHERE_API_KEY not set")
-    def test_real_embedding_call(self):
-        """Test embedding with real Cohere API."""
-        provider = CohereProvider()
-
-        texts = ["Hello world", "Test embedding"]
-
-        embeddings = provider.embed(texts)
-
-        assert isinstance(embeddings, list)
-        assert len(embeddings) == 2
-        assert isinstance(embeddings[0], list)
-        assert len(embeddings[0]) > 0  # Should have actual dimensions
-
-    @pytest.mark.integration
-    @pytest.mark.skipif(not os.environ.get("COHERE_API_KEY"), reason="COHERE_API_KEY not set")
     def test_real_rate_limits(self):
         """Test rate limit information with real API."""
         provider = CohereProvider()

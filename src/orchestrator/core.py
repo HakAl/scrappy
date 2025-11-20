@@ -572,15 +572,18 @@ class AgentOrchestrator:
         **kwargs
     ) -> LLMResponse:
         """Delegate a task with automatic intent classification for semantic caching."""
-        from intent_classifier import IntentClassifier
+        from src.task_router.intent import RegexIntentClassifier, RegexEntityExtractor
 
-        classifier = IntentClassifier()
-        classification_result = classifier.classify(prompt)
+        classifier = RegexIntentClassifier()
+        extractor = RegexEntityExtractor()
+
+        intent_result = classifier.classify(prompt)
+        entities = extractor.extract(prompt)
 
         intent_classification = {
-            'intent': classification_result.primary_intent.intent.value,
-            'entities': classification_result.entities,
-            'keywords': classification_result.keywords
+            'intent': intent_result.intent.value,
+            'entities': entities,
+            'keywords': []  # Keywords can be extracted from metadata if needed
         }
 
         return self.delegate(

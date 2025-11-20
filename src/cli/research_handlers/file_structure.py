@@ -4,9 +4,8 @@ Handler for FILE_STRUCTURE intent research.
 
 from typing import List, Any
 
-from ...intent_classifier import QueryIntent, ClassificationResult
 from ..io_interface import CLIIOProtocol
-from .base import BaseResearchHandler
+from .base import QueryIntent, ClassificationResult, BaseResearchHandler
 
 
 class FileStructureHandler(BaseResearchHandler):

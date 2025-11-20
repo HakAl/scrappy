@@ -710,3 +710,29 @@ This refactoring transforms a brittle, monolithic intent classifier into a flexi
 5. **Composability:** Build complex behavior from simple pieces (HybridClassifier)
 
 This design will scale as your agent grows in sophistication.
+
+
+  🚀 Next Steps (for future work)
+
+  Phase 6: Migrate Callers - Update the 16 files importing intent_classifier to use the new API directly
+
+  Phase 7: Remove Adapter - Delete the backward compatibility adapter once all callers migrated
+
+  💡 Usage
+
+  New Code (Recommended):
+  from src.task_router.intent import IntentService
+
+  service = IntentService()
+  action = service.process_query("show me the file structure")
+  # action.tool == 'FileSystem'
+  # action.func == 'list_directory'
+
+  Old Code (Still Works):
+  from src.intent_classifier import IntentClassifier
+
+  classifier = IntentClassifier()  # Uses new implementation
+  result = classifier.classify("show me the file structure")
+
+  The refactoring successfully transforms a 420-line god class into a flexible, testable, extensible system
+  following industry best practices!
