@@ -737,8 +737,6 @@ class TestCommandStreamingExecution:
     def test_truncates_long_output(self, mock_popen, agent_with_config):
         """Should truncate output exceeding max_command_output."""
         # Update the executor's max_output directly (it caches config at init)
-        agent_with_config._command_executor.max_output = 100
-
         mock_process = MagicMock()
         # Generate output longer than limit
         long_line = "X" * 200 + "\n"

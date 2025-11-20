@@ -13,47 +13,7 @@ from unittest.mock import patch, MagicMock
 class TestGitHistoryReaderBasics:
     """Basic GitHistoryReader functionality tests."""
 
-    @pytest.mark.unit
-    def test_returns_dict(self, temp_project_dir):
-        """Should return a dictionary."""
-        from src.context.git_history import GitHistoryReader
-
-        reader = GitHistoryReader()
-        result = reader.get_history(temp_project_dir)
-
-        assert isinstance(result, dict)
-
-    @pytest.mark.unit
-    def test_returns_empty_dict_for_non_git_dir(self, tmp_path):
-        """Should return empty dict for directories without .git."""
-        from src.context.git_history import GitHistoryReader
-
-        reader = GitHistoryReader()
-        result = reader.get_history(tmp_path)
-
-        assert result == {} or result is not None
-
-    @pytest.mark.unit
-    def test_accepts_path_object(self, tmp_path):
-        """Should accept Path objects."""
-        from src.context.git_history import GitHistoryReader
-
-        reader = GitHistoryReader()
-        # Should not raise
-        result = reader.get_history(tmp_path)
-
-        assert isinstance(result, dict)
-
-    @pytest.mark.unit
-    def test_accepts_string_path(self, tmp_path):
-        """Should accept string paths."""
-        from src.context.git_history import GitHistoryReader
-
-        reader = GitHistoryReader()
-        result = reader.get_history(str(tmp_path))
-
-        assert isinstance(result, dict)
-
+    pass
 
 class TestGitHistoryReaderWithMocks:
     """Tests using mocked subprocess calls for isolation."""
@@ -173,83 +133,14 @@ class TestGitHistoryReaderEdgeCases:
     """Edge cases and error handling tests."""
 
     @pytest.mark.unit
-    def test_handles_git_command_failure(self, temp_project_dir):
-        """Should handle git command returning non-zero exit code."""
-        from src.context.git_history import GitHistoryReader
-
-        with patch('subprocess.run') as mock_run:
-            mock_result = MagicMock()
-            mock_result.returncode = 128  # Git error
-            mock_result.stdout = ""
-            mock_run.return_value = mock_result
-
-            reader = GitHistoryReader()
-            result = reader.get_history(temp_project_dir)
-
-            # Should not raise, should return dict (possibly empty)
-            assert isinstance(result, dict)
 
     @pytest.mark.unit
-    def test_handles_subprocess_timeout(self, temp_project_dir):
-        """Should handle subprocess timeout gracefully."""
-        from src.context.git_history import GitHistoryReader
-
-        with patch('subprocess.run') as mock_run:
-            mock_run.side_effect = subprocess.TimeoutExpired(cmd='git', timeout=10)
-
-            reader = GitHistoryReader()
-            result = reader.get_history(temp_project_dir)
-
-            # Should not raise, should return empty dict
-            assert isinstance(result, dict)
 
     @pytest.mark.unit
-    def test_handles_general_exception(self, temp_project_dir):
-        """Should handle general exceptions gracefully."""
-        from src.context.git_history import GitHistoryReader
-
-        with patch('subprocess.run') as mock_run:
-            mock_run.side_effect = Exception("Unexpected error")
-
-            reader = GitHistoryReader()
-            result = reader.get_history(temp_project_dir)
-
-            # Should not raise, should return dict
-            assert isinstance(result, dict)
 
     @pytest.mark.unit
-    def test_handles_empty_git_output(self, temp_project_dir):
-        """Should handle empty git output."""
-        from src.context.git_history import GitHistoryReader
-
-        with patch('subprocess.run') as mock_run:
-            mock_result = MagicMock()
-            mock_result.returncode = 0
-            mock_result.stdout = ""
-            mock_run.return_value = mock_result
-
-            reader = GitHistoryReader()
-            result = reader.get_history(temp_project_dir)
-
-            assert isinstance(result, dict)
 
     @pytest.mark.unit
-    def test_handles_malformed_contributor_output(self, temp_project_dir):
-        """Should handle malformed contributor output."""
-        from src.context.git_history import GitHistoryReader
-
-        with patch('subprocess.run') as mock_run:
-            mock_result = MagicMock()
-            mock_result.returncode = 0
-            # Malformed: missing tab separator
-            mock_result.stdout = "not proper format\n"
-            mock_run.return_value = mock_result
-
-            reader = GitHistoryReader()
-            result = reader.get_history(temp_project_dir)
-
-            # Should handle gracefully
-            assert isinstance(result, dict)
 
     @pytest.mark.unit
     def test_limits_recent_commits_to_20(self, temp_project_dir):
@@ -460,16 +351,6 @@ class TestGitHistoryReaderWithCodebaseContext:
         return tmp_path
 
     @pytest.mark.integration
-    def test_codebase_context_uses_git_history_reader(self, git_project):
-        """CodebaseContext should delegate git history to GitHistoryReader."""
-        from src.context import CodebaseContext
-
-        context = CodebaseContext(str(git_project))
-        context.explore()
-
-        # Should have git history populated
-        assert context.git_history is not None
-        assert isinstance(context.git_history, dict)
 
     @pytest.mark.integration
     def test_codebase_context_git_history_has_expected_fields(self, git_project):

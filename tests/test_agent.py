@@ -4,7 +4,7 @@ Tests for CodeAgent - execution flows, action parsing, and tool orchestration.
 import pytest
 from unittest.mock import Mock, MagicMock, patch, call
 from pathlib import Path
-from dataclasses import asdict
+from dataclasses import 
 import json
 
 from src.agent import (
@@ -12,7 +12,6 @@ from src.agent import (
     AgentThought,
     AgentAction,
     ActionResult,
-    EvaluationResult,
     ConversationState
 )
 from src.agent_config import AgentConfig
@@ -283,4 +282,3 @@ class TestAgentToolExecution:
         """Test that tool name map is populated."""
         assert len(agent._tool_name_map) > 0
         assert "read_file" in agent._tool_name_map
-

@@ -386,8 +386,6 @@ class TestPersistenceClear:
 
         orchestrator = ConfigurableTestOrchestrator()
         clear_called = []
-        orchestrator.clear_session = lambda: clear_called.append(True)
-
         persistence = SessionPersistence(orchestrator)
         io = MockIO()
 

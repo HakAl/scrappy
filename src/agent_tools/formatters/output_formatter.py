@@ -163,7 +163,11 @@ class RichDirectoryFormatter:
         if not HAS_RICH:
             raise ImportError("Rich library is required for RichDirectoryFormatter")
 
-        self._console = console if console is not None else Console()
+        self._console = console if console is not None else self._create_default_console()
+
+    def _create_default_console(self) -> Console:
+        """Create default Rich console."""
+        return Console()
 
     def format_directory_name(self, name: str) -> str:
         """Format directory name in cyan with bold.

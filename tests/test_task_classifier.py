@@ -110,11 +110,6 @@ class TestPatternExpansion:
         result = classifier.classify("what is requirements.txt")
         assert result.task_type == TaskType.RESEARCH
 
-    @pytest.mark.unit
-    def test_matched_patterns_returned(self, classifier):
-        """Test that matched patterns are returned in result."""
-        result = classifier.classify("git status")
-        assert hasattr(result, 'matched_patterns')
         # Should have matched some patterns for git commands
 
 

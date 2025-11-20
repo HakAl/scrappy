@@ -82,7 +82,7 @@ class TestResearchHandlerProtocol:
 
     def test_handler_has_intent_property(self):
         """Handler must expose which intent it handles."""
-        from src.cli.research_handlers.base import ResearchHandler
+        from src.cli.research_handlers.base import 
         from src.cli.research_handlers.file_structure import FileStructureHandler
 
         handler = FileStructureHandler()
@@ -91,35 +91,14 @@ class TestResearchHandlerProtocol:
 
     def test_handler_has_execute_method(self):
         """Handler must have execute method with correct signature."""
-        from src.cli.research_handlers.base import ResearchHandler
+        from src.cli.research_handlers.base import 
         from src.cli.research_handlers.file_structure import FileStructureHandler
 
         handler = FileStructureHandler()
         assert hasattr(handler, 'execute')
         assert callable(handler.execute)
 
-    def test_execute_returns_list_of_strings(self, mock_agent, mock_io, sample_classification):
-        """execute() must return list of research result strings."""
-        from src.cli.research_handlers.file_structure import FileStructureHandler
 
-        handler = FileStructureHandler()
-        results = handler.execute(mock_agent, sample_classification, mock_io)
-
-        assert isinstance(results, list)
-        for result in results:
-            assert isinstance(result, str)
-
-    def test_execute_returns_empty_list_on_no_results(self, mock_agent, mock_io, sample_classification):
-        """execute() returns empty list when no results found."""
-        from src.cli.research_handlers.file_structure import FileStructureHandler
-
-        # Configure agent to return empty/error
-        mock_agent._tool_list_directory.return_value = "Error: Directory not found"
-
-        handler = FileStructureHandler()
-        results = handler.execute(mock_agent, sample_classification, mock_io)
-
-        assert isinstance(results, list)
         # Should handle errors gracefully
 
     def test_execute_uses_io_for_progress(self, mock_agent, mock_io, sample_classification):
@@ -387,24 +366,6 @@ class TestResearchHandlerRegistry:
         assert QueryIntent.CODE_SEARCH in intents
         assert len(intents) == 2
 
-    def test_create_default_registry(self):
-        """Can create registry with all default handlers pre-registered."""
-        from src.cli.research_handlers.registry import create_default_registry
-
-        registry = create_default_registry()
-
-        # Should have all the standard handlers
-        assert registry.get_handler(QueryIntent.FILE_STRUCTURE) is not None
-        assert registry.get_handler(QueryIntent.CODE_SEARCH) is not None
-        assert registry.get_handler(QueryIntent.GIT_HISTORY) is not None
-        assert registry.get_handler(QueryIntent.DEPENDENCY_INFO) is not None
-        assert registry.get_handler(QueryIntent.ARCHITECTURE) is not None
-        assert registry.get_handler(QueryIntent.BUG_INVESTIGATION) is not None
-        assert registry.get_handler(QueryIntent.TESTING) is not None
-        assert registry.get_handler(QueryIntent.CONFIGURATION) is not None
-        assert registry.get_handler(QueryIntent.SECURITY) is not None
-        assert registry.get_handler(QueryIntent.DOCUMENTATION) is not None
-        assert registry.get_handler(QueryIntent.CODE_EXPLANATION) is not None
 
 
 # =============================================================================

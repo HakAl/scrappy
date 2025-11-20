@@ -10,6 +10,7 @@ from pathlib import Path
 
 from src.providers.base import LLMResponse
 from src.orchestrator_adapter import NullContext, ContextProvider
+from src.infrastructure import InMemoryFileSystem, FileSystemProtocol
 
 
 class MockWorkingMemory:
@@ -256,12 +257,6 @@ class ConfigurableTestOrchestrator:
         """
         return self.delegate(provider_name=provider_name, prompt=prompt, **kwargs)
 
-    def reset_tracking(self) -> None:
-        """Reset call tracking (useful between test phases)."""
-        self.delegate_calls = []
-        self.call_count = 0
-        self.providers_used = []
-
     def add_discovery(self, content: str, source: str = "") -> None:
         """Add a discovery to working memory."""
         self._discoveries.append({'content': content, 'source': source})
@@ -274,17 +269,8 @@ class ConfigurableTestOrchestrator:
     def get_working_memory_summary(self) -> dict:
         """Get summary of working memory (deprecated, use working_memory.get_summary())."""
         return self.working_memory.get_summary()
+   'cache_exists': False
 
-    def get_context_status(self) -> dict:
-        """Get context status."""
-        return {
-            'project_path': self.context.project_path,
-            'is_explored': self.context.is_explored(),
-            'has_summary': bool(self.context.get_summary()),
-            'explored_at': None,
-            'total_files': 10,
-            'cache_file': '/test/.cache',
-            'cache_exists': False
         }
 
     def get_cache_stats(self) -> dict:
@@ -309,21 +295,9 @@ class ConfigurableTestOrchestrator:
     def clear_cache(self) -> None:
         """Clear the response cache."""
         pass
+   'providers': {}
 
-    def get_rate_limit_status(self) -> dict:
-        """Get rate limit status."""
-        return {
-            'last_reset': {'daily': 'N/A', 'monthly': 'N/A'},
-            'providers': {}
         }
-
-    def check_rate_limit_warnings(self) -> list:
-        """Check for rate limit warnings."""
-        return []
-
-    def reset_rate_tracking(self, provider: str = None) -> None:
-        """Reset rate limit tracking."""
-        pass
 
     def status(self) -> dict:
         """Get orchestrator status."""
@@ -374,152 +348,11 @@ class ConfigurableTestOrchestrator:
             'discoveries_restored': 1,
             'conversation_history': []
         }
-
-    def clear_session(self) -> None:
-        """Clear the saved session."""
-        pass
-
-    def clear_working_memory(self) -> None:
-        """Clear working memory (deprecated, use working_memory.clear())."""
-        self.working_memory.clear()
-        # Update reference
-        self._working_memory = self.working_memory._data
+   provider=self._provider_name
 
 
-class SimpleLLMAdapter:
-    """
-    Simple adapter for testing or single-provider scenarios.
 
-    This adapter allows using the agent with just a single LLM function,
-    without needing the full orchestrator infrastructure.
-    """
-
-    def __init__(
-        self,
-        llm_func,
-        provider_name: str = "default",
-        context_provider: Optional[ContextProvider] = None
-    ):
-        """
-        Initialize with a simple LLM function.
-
-        Args:
-            llm_func: Function that takes (prompt, system_prompt, max_tokens, temperature)
-                      and returns a string response
-            provider_name: Name to identify this provider
-            context_provider: Optional context provider
-        """
-        self._llm_func = llm_func
-        self._provider_name = provider_name
-        self._context = context_provider or NullContext()
-
-    @property
-    def context(self) -> ContextProvider:
-        """Get the context provider."""
-        return self._context
-
-    def list_providers(self) -> List[str]:
-        """Return single provider."""
-        return [self._provider_name]
-
-    def delegate(
-        self,
-        provider: str,
-        prompt: str,
-        system_prompt: Optional[str] = None,
-        max_tokens: int = 1500,
-        temperature: float = 0.3,
-        use_context: bool = False
-    ) -> LLMResponse:
-        """Call the LLM function."""
-        # Ignore provider name, use our single function
-        content = self._llm_func(
-            prompt,
-            system_prompt=system_prompt,
-            max_tokens=max_tokens,
-            temperature=temperature
         )
-
-        return LLMResponse(
-            content=content,
-            model="",
-            provider=self._provider_name
-        )
-
-
-class MockOrchestratorAdapter:
-    """
-    Mock adapter for testing purposes.
-
-    Allows setting up predetermined responses for testing agent behavior.
-    """
-
-    def __init__(self, responses: Optional[List[str]] = None):
-        """
-        Initialize with optional list of responses.
-
-        Args:
-            responses: List of responses to return in order
-        """
-        self._responses = responses or []
-        self._call_index = 0
-        self._context = NullContext()
-        self._calls = []  # Track all calls for assertions
-
-    @property
-    def context(self) -> ContextProvider:
-        """Get the context provider."""
-        return self._context
-
-    def list_providers(self) -> List[str]:
-        """Return mock provider."""
-        return ["mock"]
-
-    def add_response(self, response: str) -> None:
-        """Add a response to the queue."""
-        self._responses.append(response)
-
-    def delegate(
-        self,
-        provider: str,
-        prompt: str,
-        system_prompt: Optional[str] = None,
-        max_tokens: int = 1500,
-        temperature: float = 0.3,
-        use_context: bool = False
-    ) -> LLMResponse:
-        """Return next mock response."""
-        # Track the call
-        self._calls.append({
-            'provider': provider,
-            'prompt': prompt,
-            'system_prompt': system_prompt,
-            'max_tokens': max_tokens,
-            'temperature': temperature,
-            'use_context': use_context
-        })
-
-        if self._call_index >= len(self._responses):
-            # Default completion response if no more responses
-            content = '{"thought": "No more responses", "action": "complete", "is_complete": true, "result": "Mock completed"}'
-        else:
-            content = self._responses[self._call_index]
-            self._call_index += 1
-
-        return LLMResponse(
-            content=content,
-            model="",
-            provider="mock"
-        )
-
-    def get_calls(self) -> List[dict]:
-        """Get all calls made to delegate()."""
-        return self._calls
-
-    def reset(self) -> None:
-        """Reset the adapter state."""
-        self._call_index = 0
-        self._calls = []
 
 
 class MockIO:
@@ -725,62 +558,6 @@ class MockIO:
 # =============================================================================
 # Factory Functions for Common Test Setups
 # =============================================================================
-
-def make_injectable_orchestrator(
-    tmp_path,
-    cache: Optional[Any] = None,
-    rate_tracker: Optional[Any] = None,
-    working_memory: Optional[Any] = None,
-    session_manager: Optional[Any] = None,
-    provider_selector: Optional[Any] = None,
-    auto_register: bool = False
-):
-    """
-    Create a real AgentOrchestrator with injectable mock dependencies.
-
-    This factory enables unit testing the orchestrator with full control
-    over its dependencies while using the actual implementation.
-
-    Args:
-        tmp_path: Temporary directory path for the project
-        cache: Mock cache or None for default
-        rate_tracker: Mock rate tracker or None for default
-        working_memory: Mock working memory or None for default
-        session_manager: Mock session manager or None for default
-        provider_selector: Mock provider selector or None for default
-        auto_register: Whether to auto-register providers (default False for tests)
-
-    Returns:
-        AgentOrchestrator instance with injected dependencies
-
-    Usage:
-        def test_something(tmp_path):
-            mock_cache = Mock(spec=ResponseCache)
-            mock_cache.get.return_value = None
-
-            orch = make_injectable_orchestrator(
-                tmp_path,
-                cache=mock_cache
-            )
-
-            # Test with real orchestrator but mocked cache
-            orch.delegate(...)
-            mock_cache.get.assert_called()
-    """
-    from src.orchestrator.core import AgentOrchestrator
-    from src.orchestrator.output import NullOutput
-
-    return AgentOrchestrator(
-        auto_register=auto_register,
-        project_path=str(tmp_path),
-        cache=cache,
-        rate_tracker=rate_tracker,
-        working_memory=working_memory,
-        session_manager=session_manager,
-        provider_selector=provider_selector,
-        output=NullOutput()
-    )
-
 
 def make_handler_test_setup(
     inputs: Optional[List[str]] = None,
@@ -1182,3 +959,8 @@ def assert_delegate_called_with(
     ]
     default_msg = f"No delegate call matched criteria. Calls: {call_summaries}"
     raise AssertionError(msg or default_msg)
+
+
+# =============================================================================
+# File System Test Helpers
+# =============================================================================

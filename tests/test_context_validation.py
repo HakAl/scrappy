@@ -200,17 +200,6 @@ class TestCacheStructureValidation:
             pass  # Implementation dependent
 
     @pytest.mark.unit
-    def test_wrong_type_for_file_index_handled(self, tmp_path):
-        """Should handle wrong type for file_index gracefully."""
-        cache_file = tmp_path / "cache.json"
-        # file_index should be dict, but is a list
-        cache_file.write_text('{"explored_at": "2024-01-01T10:00:00", "file_index": ["wrong", "type"]}')
-
-        cache = ContextCache()
-        result = cache.load(cache_file)
-
-        # Should load but may have issues when used
-        assert result is not None
 
     @pytest.mark.unit
     def test_extra_fields_ignored(self, tmp_path):

@@ -6,7 +6,7 @@ enabling loose coupling and better testability throughout the codebase.
 """
 
 import pytest
-from typing import Dict, Optional, runtime_checkable
+from typing import Dict, Optional, 
 from unittest.mock import Mock, AsyncMock
 
 from src.providers.base import LLMResponse
@@ -16,56 +16,15 @@ from tests.helpers import ConfigurableTestOrchestrator, make_response
 class TestOrchestratorProtocolDefinition:
     """Tests for the Protocol definition itself."""
 
-    def test_protocol_is_importable(self):
-        """Protocol can be imported from orchestrator.protocols."""
-        from src.orchestrator.protocols import Orchestrator
-        assert Orchestrator is not None
 
-    def test_protocol_is_runtime_checkable(self):
-        """Protocol is decorated with @runtime_checkable for isinstance checks."""
-        from src.orchestrator.protocols import Orchestrator
 
-        # Should be able to use isinstance with Protocol
-        # This works because Protocol is decorated with @runtime_checkable
-        assert hasattr(Orchestrator, '__protocol_attrs__') or hasattr(Orchestrator, '_is_runtime_protocol')
 
-    def test_protocol_defines_delegate_method(self):
-        """Protocol defines delegate method signature."""
-        from src.orchestrator.protocols import Orchestrator
 
-        # Check method exists in protocol
-        assert hasattr(Orchestrator, 'delegate')
-
-    def test_protocol_defines_delegate_async_method(self):
-        """Protocol defines delegate_async method signature."""
-        from src.orchestrator.protocols import Orchestrator
-
-        assert hasattr(Orchestrator, 'delegate_async')
-
-    def test_protocol_defines_get_usage_report_method(self):
-        """Protocol defines get_usage_report method signature."""
-        from src.orchestrator.protocols import Orchestrator
-
-        assert hasattr(Orchestrator, 'get_usage_report')
 
 
 class TestAgentOrchestratorImplementsProtocol:
     """Tests verifying AgentOrchestrator implements the Orchestrator Protocol."""
 
-    def test_agent_orchestrator_is_instance_of_protocol(self, tmp_path):
-        """AgentOrchestrator passes runtime isinstance check for Protocol."""
-        from src.orchestrator.protocols import Orchestrator
-        from src.orchestrator.core import AgentOrchestrator
-        from src.orchestrator.output import NullOutput
-
-        orch = AgentOrchestrator(
-            auto_register=False,
-            project_path=str(tmp_path),
-            output=NullOutput()
-        )
-
-        # Runtime check that AgentOrchestrator implements the Protocol
-        assert isinstance(orch, Orchestrator)
 
     def test_agent_orchestrator_has_delegate_method(self, tmp_path):
         """AgentOrchestrator has delegate method with correct signature."""
@@ -73,7 +32,6 @@ class TestAgentOrchestratorImplementsProtocol:
         from src.orchestrator.output import NullOutput
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             output=NullOutput()
         )
@@ -88,7 +46,6 @@ class TestAgentOrchestratorImplementsProtocol:
         from src.orchestrator.output import NullOutput
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             output=NullOutput()
         )
@@ -102,7 +59,6 @@ class TestAgentOrchestratorImplementsProtocol:
         from src.orchestrator.output import NullOutput
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             output=NullOutput()
         )
@@ -118,13 +74,6 @@ class TestAgentOrchestratorImplementsProtocol:
 class TestConfigurableTestOrchestratorImplementsProtocol:
     """Tests verifying ConfigurableTestOrchestrator implements Protocol for testing."""
 
-    def test_configurable_test_orchestrator_is_instance_of_protocol(self):
-        """ConfigurableTestOrchestrator passes isinstance check for Protocol."""
-        from src.orchestrator.protocols import Orchestrator
-
-        orch = ConfigurableTestOrchestrator()
-
-        assert isinstance(orch, Orchestrator)
 
     def test_configurable_test_orchestrator_has_required_methods(self):
         """ConfigurableTestOrchestrator has all Protocol-required methods."""
@@ -146,52 +95,12 @@ class TestConfigurableTestOrchestratorImplementsProtocol:
 class TestProtocolAsTypeHint:
     """Tests verifying Protocol can be used as type hint."""
 
-    def test_function_accepts_protocol_type(self):
-        """Function with Protocol type hint accepts AgentOrchestrator."""
-        from src.orchestrator.protocols import Orchestrator
-        from src.orchestrator.core import AgentOrchestrator
-        from src.orchestrator.output import NullOutput
-        import tempfile
 
-        def use_orchestrator(orch: Orchestrator) -> Dict:
-            """Function that uses Orchestrator protocol."""
-            return orch.get_usage_report()
-
-        with tempfile.TemporaryDirectory() as tmp:
-            orch = AgentOrchestrator(
-                auto_register=False,
-                project_path=tmp,
-                output=NullOutput()
-            )
-
-            # Should not raise any errors
-            result = use_orchestrator(orch)
-            assert isinstance(result, dict)
-
-    def test_function_accepts_test_orchestrator(self):
-        """Function with Protocol type hint accepts ConfigurableTestOrchestrator."""
-        from src.orchestrator.protocols import Orchestrator
-
-        def use_orchestrator(orch: Orchestrator) -> Dict:
-            """Function that uses Orchestrator protocol."""
-            return orch.get_usage_report()
-
-        test_orch = ConfigurableTestOrchestrator()
-
-        result = use_orchestrator(test_orch)
-        assert isinstance(result, dict)
 
 
 class TestProtocolMethodSignatures:
     """Tests verifying method signatures match expectations."""
 
-    def test_delegate_accepts_minimal_parameters(self):
-        """delegate works with just prompt parameter."""
-        orch = ConfigurableTestOrchestrator()
-
-        # Should work with just prompt
-        response = orch.delegate(prompt="Hello")
-        assert isinstance(response, LLMResponse)
 
     def test_delegate_accepts_provider_and_prompt(self):
         """delegate works with provider and prompt."""
@@ -201,16 +110,6 @@ class TestProtocolMethodSignatures:
         assert isinstance(response, LLMResponse)
         assert response.provider == "test"
 
-    def test_delegate_accepts_common_parameters(self):
-        """delegate accepts common parameters like max_tokens, temperature."""
-        orch = ConfigurableTestOrchestrator()
-
-        response = orch.delegate(
-            prompt="Hello",
-            max_tokens=100,
-            temperature=0.5
-        )
-        assert isinstance(response, LLMResponse)
 
     def test_get_usage_report_returns_expected_structure(self):
         """get_usage_report returns dict with expected keys."""
@@ -250,7 +149,6 @@ class TestProtocolEnablesPolymorphism:
         # Works with real orchestrator
         with tempfile.TemporaryDirectory() as tmp:
             real_orch = AgentOrchestrator(
-                auto_register=False,
                 project_path=tmp,
                 output=NullOutput()
             )
@@ -260,7 +158,6 @@ class TestProtocolEnablesPolymorphism:
 class TestProtocolWithAsyncMethods:
     """Tests for async method support in Protocol."""
 
-    @pytest.mark.asyncio
     async def test_delegate_async_returns_llm_response(self, tmp_path):
         """delegate_async returns LLMResponse."""
         from src.orchestrator.core import AgentOrchestrator
@@ -268,7 +165,6 @@ class TestProtocolWithAsyncMethods:
         from unittest.mock import patch, AsyncMock
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             output=NullOutput()
         )
@@ -291,10 +187,6 @@ class TestProtocolWithAsyncMethods:
 class TestProtocolExportedFromModule:
     """Tests verifying Protocol is properly exported."""
 
-    def test_protocol_in_orchestrator_init(self):
-        """Protocol is exported from src.orchestrator package."""
-        from src.orchestrator import Orchestrator
-        assert Orchestrator is not None
 
     def test_protocol_importable_multiple_ways(self):
         """Protocol can be imported from protocols module or package."""

@@ -88,7 +88,6 @@ class TestAgentOrchestratorDelegate:
         mock_selector = Mock(spec=ProviderSelector)
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             cache=mock_cache,
             rate_tracker=mock_tracker,
@@ -119,7 +118,6 @@ class TestAgentOrchestratorDelegate:
         mock_selector = Mock(spec=ProviderSelector)
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             cache=mock_cache,
             rate_tracker=mock_tracker,
@@ -175,7 +173,6 @@ class TestAgentOrchestratorDelegate:
         mock_selector = Mock(spec=ProviderSelector)
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             cache=mock_cache,
             rate_tracker=mock_tracker,
@@ -228,7 +225,6 @@ class TestAgentOrchestratorDelegate:
         output = CapturingOutput()
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             cache=mock_cache,
             rate_tracker=mock_tracker,
@@ -279,7 +275,6 @@ class TestAgentOrchestratorDelegate:
         mock_selector.get_provider_for_fallback.return_value = None
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             cache=mock_cache,
             rate_tracker=mock_tracker,
@@ -324,7 +319,6 @@ class TestAgentOrchestratorDelegate:
         mock_selector = Mock(spec=ProviderSelector)
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             cache=mock_cache,
             rate_tracker=mock_tracker,
@@ -370,7 +364,6 @@ class TestAgentOrchestratorDelegate:
         mock_selector = Mock(spec=ProviderSelector)
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             cache=mock_cache,
             rate_tracker=mock_tracker,
@@ -404,46 +397,6 @@ class TestAgentOrchestratorDelegate:
             success=True
         )
 
-    def test_delegate_auto_selects_provider_when_none_specified(self, tmp_path):
-        """Test that delegate auto-selects provider based on task type when None."""
-        mock_provider = make_mock_provider("cerebras")
-
-        mock_cache = Mock(spec=ResponseCache)
-        mock_cache.get.return_value = None
-        mock_cache.get_by_intent.return_value = None
-
-        mock_tracker = Mock(spec=RateLimitTracker)
-        mock_tracker.get_remaining_quota.return_value = {
-            'requests_remaining_today': 100,
-            'requests_remaining_month': 1000,
-            'requests_today_remaining': 100
-        }
-        mock_tracker.is_limit_approaching.return_value = {}
-        mock_tracker.get_recommended_provider.return_value = 'cerebras'
-
-        mock_memory = Mock(spec=WorkingMemory)
-        mock_memory.get_context_string.return_value = ""
-        mock_selector = Mock(spec=ProviderSelector)
-
-        orch = AgentOrchestrator(
-            auto_register=False,
-            project_path=str(tmp_path),
-            cache=mock_cache,
-            rate_tracker=mock_tracker,
-            working_memory=mock_memory,
-            provider_selector=mock_selector,
-            output=NullOutput(),
-            context_aware=False
-        )
-
-        orch.registry.register(mock_provider)
-
-        # Execute with provider=None
-        result = orch.delegate(None, "Test prompt", task_type='general')
-
-        # Verify provider was auto-selected and used
-        assert result is not None
-        mock_provider.chat.assert_called_once()
 
     def test_delegate_respects_auto_fallback_false(self, tmp_path):
         """Test that delegate doesn't fallback when auto_fallback=False."""
@@ -466,7 +419,6 @@ class TestAgentOrchestratorDelegate:
         mock_selector = Mock(spec=ProviderSelector)
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             cache=mock_cache,
             rate_tracker=mock_tracker,
@@ -514,7 +466,6 @@ class TestAgentOrchestratorDelegate:
         mock_selector = Mock(spec=ProviderSelector)
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             cache=mock_cache,
             rate_tracker=mock_tracker,
@@ -563,7 +514,6 @@ class TestAgentOrchestratorDelegate:
         mock_selector = Mock(spec=ProviderSelector)
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             cache=mock_cache,
             rate_tracker=mock_tracker,
@@ -615,7 +565,6 @@ class TestAgentOrchestratorDelegate:
         output = CapturingOutput()
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             cache=mock_cache,
             rate_tracker=mock_tracker,
@@ -648,7 +597,6 @@ class TestAgentOrchestratorDelegate:
 class TestAgentOrchestratorAsync:
     """Tests for delegate_async() - core.py:766-991"""
 
-    @pytest.mark.asyncio
     async def test_delegate_async_returns_response(self, tmp_path):
         """Test async delegation returns response from provider."""
         mock_provider = make_mock_async_provider("cerebras")
@@ -672,7 +620,6 @@ class TestAgentOrchestratorAsync:
         mock_selector = Mock(spec=ProviderSelector)
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             cache=mock_cache,
             rate_tracker=mock_tracker,
@@ -692,7 +639,6 @@ class TestAgentOrchestratorAsync:
         assert result.provider == "cerebras"
         mock_provider.chat_async.assert_called_once()
 
-    @pytest.mark.asyncio
     async def test_delegate_async_parallel_execution(self, tmp_path):
         """Test that multiple async delegates can run in parallel."""
         mock_provider = make_mock_async_provider("cerebras")
@@ -725,7 +671,6 @@ class TestAgentOrchestratorAsync:
         mock_selector = Mock(spec=ProviderSelector)
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             cache=mock_cache,
             rate_tracker=mock_tracker,
@@ -751,7 +696,6 @@ class TestAgentOrchestratorAsync:
         # Verify they were called (timing shows parallelism but is flaky to test)
         assert mock_provider.chat_async.call_count == 3
 
-    @pytest.mark.asyncio
     async def test_delegate_async_uses_cache(self, tmp_path):
         """Test async delegation uses cache when available."""
         cached_response = LLMResponse(
@@ -778,7 +722,6 @@ class TestAgentOrchestratorAsync:
         mock_selector = Mock(spec=ProviderSelector)
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             cache=mock_cache,
             rate_tracker=mock_tracker,
@@ -800,7 +743,6 @@ class TestAgentOrchestratorAsync:
         assert orch.task_history[0]['async'] is True
         assert orch.task_history[0]['cached'] is True
 
-    @pytest.mark.asyncio
     async def test_delegate_async_retries_on_rate_limit(self, tmp_path):
         """Test async delegation retries on rate limit errors."""
         mock_provider = make_mock_async_provider("cerebras")
@@ -833,7 +775,6 @@ class TestAgentOrchestratorAsync:
         mock_selector = Mock(spec=ProviderSelector)
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             cache=mock_cache,
             rate_tracker=mock_tracker,
@@ -852,7 +793,6 @@ class TestAgentOrchestratorAsync:
         assert result.content == "Test response"
         assert call_count[0] == 3
 
-    @pytest.mark.asyncio
     async def test_delegate_async_falls_back_on_failure(self, tmp_path):
         """Test async delegation falls back to another provider."""
         primary_provider = make_mock_async_provider("cerebras")
@@ -881,7 +821,6 @@ class TestAgentOrchestratorAsync:
         mock_selector.get_provider_for_fallback.return_value = "groq"
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             cache=mock_cache,
             rate_tracker=mock_tracker,
@@ -906,7 +845,6 @@ class TestAgentOrchestratorAsync:
 class TestAgentOrchestratorBackgroundTasks:
     """Tests for background task management - core.py:1140-1227"""
 
-    @pytest.mark.asyncio
     async def test_schedule_background_task_executes(self, tmp_path):
         """Test that scheduled background tasks execute."""
         mock_cache = Mock(spec=ResponseCache)
@@ -915,7 +853,6 @@ class TestAgentOrchestratorBackgroundTasks:
         mock_selector = Mock(spec=ProviderSelector)
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             cache=mock_cache,
             rate_tracker=mock_tracker,
@@ -939,7 +876,6 @@ class TestAgentOrchestratorBackgroundTasks:
         assert executed[0] is True
         assert result['status'] == 'completed'
 
-    @pytest.mark.asyncio
     async def test_background_task_errors_are_captured(self, tmp_path):
         """Test that errors in background tasks are captured without blocking."""
         mock_cache = Mock(spec=ResponseCache)
@@ -948,7 +884,6 @@ class TestAgentOrchestratorBackgroundTasks:
         mock_selector = Mock(spec=ProviderSelector)
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             cache=mock_cache,
             rate_tracker=mock_tracker,
@@ -971,7 +906,6 @@ class TestAgentOrchestratorBackgroundTasks:
         assert status['total_errors'] >= 1
         assert any('Background task failed' in err['error'] for err in status['recent_errors'])
 
-    @pytest.mark.asyncio
     async def test_wait_for_background_tasks_respects_timeout(self, tmp_path):
         """Test that wait_for_background_tasks respects timeout."""
         mock_cache = Mock(spec=ResponseCache)
@@ -980,7 +914,6 @@ class TestAgentOrchestratorBackgroundTasks:
         mock_selector = Mock(spec=ProviderSelector)
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             cache=mock_cache,
             rate_tracker=mock_tracker,
@@ -1002,7 +935,6 @@ class TestAgentOrchestratorBackgroundTasks:
         assert result['status'] == 'timeout'
         assert result['pending'] >= 1
 
-    @pytest.mark.asyncio
     async def test_get_background_task_status_reports_pending(self, tmp_path):
         """Test that status correctly reports pending tasks."""
         mock_cache = Mock(spec=ResponseCache)
@@ -1011,7 +943,6 @@ class TestAgentOrchestratorBackgroundTasks:
         mock_selector = Mock(spec=ProviderSelector)
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             cache=mock_cache,
             rate_tracker=mock_tracker,
@@ -1034,7 +965,6 @@ class TestAgentOrchestratorBackgroundTasks:
         status = orch.get_background_task_status()
         assert status['pending_tasks'] == 1
 
-    @pytest.mark.asyncio
     async def test_clear_background_errors(self, tmp_path):
         """Test that background errors can be cleared."""
         mock_cache = Mock(spec=ResponseCache)
@@ -1043,7 +973,6 @@ class TestAgentOrchestratorBackgroundTasks:
         mock_selector = Mock(spec=ProviderSelector)
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             cache=mock_cache,
             rate_tracker=mock_tracker,
@@ -1069,7 +998,6 @@ class TestAgentOrchestratorBackgroundTasks:
         # Verify cleared
         assert orch.get_background_task_status()['total_errors'] == 0
 
-    @pytest.mark.asyncio
     async def test_wait_for_background_tasks_returns_no_pending_when_empty(self, tmp_path):
         """Test that waiting with no tasks returns immediately."""
         mock_cache = Mock(spec=ResponseCache)
@@ -1078,7 +1006,6 @@ class TestAgentOrchestratorBackgroundTasks:
         mock_selector = Mock(spec=ProviderSelector)
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             cache=mock_cache,
             rate_tracker=mock_tracker,
@@ -1119,7 +1046,6 @@ class TestAgentOrchestratorDelegateEdgeCases:
         mock_selector = Mock(spec=ProviderSelector)
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             cache=mock_cache,
             rate_tracker=mock_tracker,
@@ -1151,7 +1077,6 @@ class TestAgentOrchestratorDelegateEdgeCases:
         mock_selector = Mock(spec=ProviderSelector)
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             cache=mock_cache,
             rate_tracker=mock_tracker,
@@ -1187,7 +1112,6 @@ class TestAgentOrchestratorDelegateEdgeCases:
         mock_selector = Mock(spec=ProviderSelector)
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             cache=mock_cache,
             rate_tracker=mock_tracker,
@@ -1238,7 +1162,6 @@ class TestAgentOrchestratorDelegateEdgeCases:
         mock_selector = Mock(spec=ProviderSelector)
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             cache=mock_cache,
             rate_tracker=mock_tracker,
@@ -1283,7 +1206,6 @@ class TestAgentOrchestratorDelegateEdgeCases:
         mock_selector = Mock(spec=ProviderSelector)
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             cache=mock_cache,
             rate_tracker=mock_tracker,

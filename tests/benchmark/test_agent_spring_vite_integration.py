@@ -26,14 +26,6 @@ import io
 from pathlib import Path
 
 # Benchmark test - excluded by default, run with: pytest -m benchmark
-pytestmark = pytest.mark.benchmark
-
-
-def _setup_windows_unicode():
-    """Fix Windows Unicode issues - only call when actually running tests."""
-    if sys.platform == 'win32':
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 
 @pytest.fixture
@@ -241,8 +233,6 @@ if __name__ == "__main__":
     import sys
 
     # Remove the skip marker for direct execution
-    test_agent_spring_vite_full_stack.__pytest_mark__ = None
-
     # Create a simple fixture substitute
     project_root = Path(__file__).parent.parent
 

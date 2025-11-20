@@ -582,17 +582,6 @@ class TestDisplayLastConversationMessages:
 
         assert any(s['fg'] == 'cyan' for s in styled)
 
-    def test_handles_empty_conversation(self):
-        """Should handle empty conversation gracefully."""
-        from src.cli.utils.session_utils import display_last_conversation_messages
-
-        io = MockIO()
-
-        display_last_conversation_messages(io, [])
-        output = io.get_output()
-
-        # Should not error, may or may not display header
-        assert output is not None
 
     def test_handles_missing_role(self):
         """Should handle messages with missing role key."""

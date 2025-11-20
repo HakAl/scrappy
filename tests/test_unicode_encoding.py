@@ -59,8 +59,6 @@ def test_safe_print_fallback_with_encoding_error():
         def flush(self):
             pass
 
-    mock_stdout = MockStdout()
-
     # Test with problematic text
     with patch('builtins.print') as mock_print:
         # Make print raise UnicodeEncodeError for emojis
@@ -88,8 +86,8 @@ def test_utf8_environment_variables():
         # Add parent directory to path to find scrappy
         parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         sys.path.insert(0, parent_dir)
+        import   # This triggers the encoding setup
 
-        import scrappy  # This triggers the encoding setup
 
         # Check that environment variables are set
         assert os.environ.get('PYTHONUTF8') == '1', "PYTHONUTF8 should be set to '1'"

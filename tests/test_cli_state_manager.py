@@ -508,25 +508,8 @@ class TestPlanStateManagerTaskExecution:
 class TestPlanStateManagerModuleStructure:
     """Tests for state_manager module structure."""
 
-    def test_module_imports_successfully(self):
-        """Module should import without errors."""
-        from src.cli import state_manager
-        assert state_manager is not None
 
-    def test_plan_state_manager_class_exists(self):
-        """PlanStateManager class should exist."""
-        from src.cli.state_manager import PlanStateManager
-        assert PlanStateManager is not None
 
-    def test_has_required_attributes(self):
-        """Should have required state attributes."""
-        from src.cli.state_manager import PlanStateManager
-        manager = PlanStateManager()
-
-        assert hasattr(manager, 'active_plan')
-        assert hasattr(manager, 'current_task_index')
-        assert hasattr(manager, 'plan_active')
-        assert hasattr(manager, 'auto_execute_tasks')
 
     def test_has_required_methods(self):
         """Should have required methods."""

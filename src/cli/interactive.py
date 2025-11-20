@@ -41,7 +41,14 @@ class InteractiveMode:
         self,
         io: CLIIOProtocol,
         orchestrator: "Orchestrator",
-        state_manager: Optional[PlanStateManager] = None
+        state_manager: PlanStateManager,
+        input_handler: InputHandler,
+        command_router: CommandRouter,
+        display: CLIDisplay,
+        smart: CLISmartQuery,
+        task_router: CLITaskRouterHandler,
+        tasks: CLITaskExecution,
+        logger: CLILogger
     ) -> None:
         """
         Initialize InteractiveMode.
@@ -49,17 +56,25 @@ class InteractiveMode:
         Args:
             io: The IO interface for input/output.
             orchestrator: The agent orchestrator.
-            state_manager: Optional plan state manager.
+            state_manager: Plan state manager.
+            input_handler: Input handler for reading user input.
+            command_router: Command router for slash commands.
+            display: Display handler for showing information.
+            smart: Smart query handler for tool-assisted queries.
+            task_router: Task router handler for auto-routing.
+            tasks: Task execution handler.
+            logger: Logger for structured logging.
         """
         self.io = io
         self.orchestrator = orchestrator
-
-        # Initialize state manager
-        self.state_manager = state_manager or PlanStateManager()
-
-        # Initialize component handlers
-        self.input_handler = InputHandler(io)
-        self.command_router = CommandRouter(io, orchestrator, state_manager=self.state_manager)
+        self.state_manager = state_manager
+        self.input_handler = input_handler
+        self.command_router = command_router
+        self.display = display
+        self.smart = smart
+        self.task_router = task_router
+        self.tasks = tasks
+        self.logger = logger
 
         # State attributes (sync from command_router for convenience)
         self.conversation_history: List[Dict[str, str]] = self.command_router.conversation_history
@@ -67,16 +82,6 @@ class InteractiveMode:
         self.auto_route_mode: bool = self.command_router.auto_route_mode
         self.smart_mode: bool = self.command_router.smart_mode
         self.auto_save: bool = self.command_router.auto_save
-
-        # Component handlers
-        self.session_start = datetime.now()
-        self.display = CLIDisplay(orchestrator, self.session_start)
-        self.smart = CLISmartQuery(orchestrator)
-        self.task_router = CLITaskRouterHandler(orchestrator)
-        self.tasks = CLITaskExecution(orchestrator)
-
-        # Logger for structured logging
-        self.logger = get_logger("cli.interactive", io=io)
 
     def run(self) -> None:
         """

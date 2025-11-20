@@ -490,28 +490,8 @@ class TestMetricsCollectorReturnedData:
     """Test that MetricsCollector returns correct data structure."""
 
     @pytest.mark.unit
-    def test_get_metrics_returns_router_metrics_instance(self):
-        """Test that get_metrics returns RouterMetrics dataclass."""
-        from src.task_router.metrics_collector import MetricsCollector, RouterMetrics
-
-        collector = MetricsCollector()
-        metrics = collector.get_metrics()
-
-        assert isinstance(metrics, RouterMetrics)
 
     @pytest.mark.unit
-    def test_metrics_has_all_required_fields(self):
-        """Test that returned metrics has all required fields."""
-        from src.task_router.metrics_collector import MetricsCollector
-
-        collector = MetricsCollector()
-        metrics = collector.get_metrics()
-
-        assert hasattr(metrics, 'total_tasks')
-        assert hasattr(metrics, 'tasks_by_type')
-        assert hasattr(metrics, 'avg_execution_time')
-        assert hasattr(metrics, 'total_tokens_used')
-        assert hasattr(metrics, 'success_rate')
 
     @pytest.mark.unit
     def test_metrics_reflects_current_state(self):

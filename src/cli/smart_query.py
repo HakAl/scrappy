@@ -16,16 +16,37 @@ from .research_handlers import create_default_registry
 class CLISmartQuery:
     """Handles smart queries with tool-based research."""
 
-    def __init__(self, orchestrator):
+    def __init__(
+        self,
+        orchestrator,
+        classifier: Optional[IntentClassifier] = None,
+        prompt_builder: Optional[PromptBuilder] = None,
+        handler_registry: Optional[dict] = None
+    ):
         """Initialize smart query handler.
 
         Args:
             orchestrator: The AgentOrchestrator instance
+            classifier: Optional intent classifier
+            prompt_builder: Optional prompt builder
+            handler_registry: Optional research handler registry
         """
         self.orchestrator = orchestrator
-        self.classifier = IntentClassifier()
-        self.prompt_builder = PromptBuilder()
-        self.handler_registry = create_default_registry()
+        self.classifier = classifier or self._create_default_classifier()
+        self.prompt_builder = prompt_builder or self._create_default_prompt_builder()
+        self.handler_registry = handler_registry or self._create_default_handler_registry()
+
+    def _create_default_classifier(self) -> IntentClassifier:
+        """Create default intent classifier."""
+        return IntentClassifier()
+
+    def _create_default_prompt_builder(self) -> PromptBuilder:
+        """Create default prompt builder."""
+        return PromptBuilder()
+
+    def _create_default_handler_registry(self) -> dict:
+        """Create default research handler registry."""
+        return create_default_registry()
 
     def smart_query(self, query: str, io: Optional[CLIIOProtocol] = None):
         """Perform a smart query using tools to gather context before answering.

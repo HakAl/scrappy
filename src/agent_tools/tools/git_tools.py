@@ -21,7 +21,11 @@ class GitTool(Tool):
         Args:
             formatter: OutputFormatter for colorizing output (default: GitOutputFormatter)
         """
-        self._formatter = formatter or GitOutputFormatter()
+        self._formatter = formatter or self._create_default_formatter()
+
+    def _create_default_formatter(self) -> OutputFormatter:
+        """Create default git output formatter."""
+        return GitOutputFormatter()
 
     def _run_git_command(
         self,

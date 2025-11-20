@@ -141,13 +141,6 @@ class TestGetPathsConfig:
     """Tests for get_paths_config function."""
 
     @pytest.mark.unit
-    def test_returns_set(self):
-        """Test that function returns a set of skip directories."""
-        from src.context.config_loader import get_paths_config
-
-        result = get_paths_config()
-
-        assert isinstance(result, set)
 
     @pytest.mark.unit
     def test_includes_common_skip_dirs(self):
@@ -186,47 +179,7 @@ class TestGetPathsConfig:
 class TestConfigLoaderConsistency:
     """Tests for consistency between config_loader and existing behavior."""
 
-    @pytest.mark.unit
-    def test_file_scanner_compatibility(self):
-        """Test that config_loader can replace file_scanner's functions."""
-        from src.context.config_loader import get_extensions_config, get_paths_config
-
-        extensions, _ = get_extensions_config()
-        skip_dirs = get_paths_config()
-
-        # These are used by FileScanner
-        assert isinstance(extensions, dict)
-        assert isinstance(skip_dirs, set)
-
-        # Check that categories map to lists
-        for category, exts in extensions.items():
-            assert isinstance(exts, list), f"{category} should map to list"
-
-    @pytest.mark.unit
-    def test_codebase_context_compatibility(self):
-        """Test that config_loader can replace codebase_context's functions."""
-        from src.context.config_loader import (
-            get_truncation_defaults,
-            get_extensions_config,
-            get_paths_config,
-        )
-
-        # These patterns are used in codebase_context.py
-        defaults = get_truncation_defaults()
-        research_large = defaults['research_large']
-        error_message = defaults['error_message']
-        priority_file = defaults['priority_file']
-
-        extensions, entry_points = get_extensions_config()
-        skip_dirs = get_paths_config()
-
-        # All should be valid
-        assert isinstance(research_large, int)
-        assert isinstance(error_message, int)
-        assert isinstance(priority_file, int)
-        assert isinstance(entry_points, list)
-        assert isinstance(skip_dirs, set)
-
+    pass
 
 class TestEdgeCases:
     """Tests for edge cases and error handling."""

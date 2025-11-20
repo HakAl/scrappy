@@ -49,19 +49,20 @@ class ResponseCache:
         self,
         cache_file: Optional[str] = None,
         default_ttl_hours: int = 24,
-        output: Optional['OutputInterface'] = None
+        output: Optional['OutputInterface'] = None,
+        auto_load: bool = False
     ):
         """
-        Initialize response cache.
+        Initialize response cache (dependencies only - NO file I/O by default).
+
+        Call restore_from_disk() after construction to load cached data from disk.
 
         Args:
             cache_file: Path to persistent cache file (optional)
             default_ttl_hours: Default time-to-live for cache entries in hours
             output: Output interface for error reporting (optional)
+            auto_load: If True, automatically load cache in constructor (for backwards compatibility)
         """
-        # Import here to avoid circular imports
-        from .output import NullOutput
-
         self._cache: dict = {}
         self._intent_cache: dict = {}  # Separate cache for intent-based lookups
         self._stats = {
@@ -73,11 +74,29 @@ class ResponseCache:
         }
         self.default_ttl = timedelta(hours=default_ttl_hours)
         self.cache_file = Path(cache_file) if cache_file else None
-        self.output = output or NullOutput()
+        self.output = output or self._create_default_output()
 
-        # Load persistent cache if available
+        # Auto-load cache if requested (for backwards compatibility)
+        if auto_load and self.cache_file and self.cache_file.exists():
+            self._load_cache()
+
+    def restore_from_disk(self):
+        """
+        Restore cache from disk file.
+
+        Call this after construction to load previously cached data.
+
+        Returns:
+            self (for method chaining)
+        """
         if self.cache_file and self.cache_file.exists():
             self._load_cache()
+        return self
+
+    def _create_default_output(self) -> 'OutputInterface':
+        """Create default output interface."""
+        from .output import NullOutput
+        return NullOutput()
 
     def _normalize_text(self, text: str) -> str:
         """

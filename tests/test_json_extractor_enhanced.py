@@ -416,16 +416,6 @@ This will fetch the API documentation for you.'''
         assert result["tool"] == "web_fetch"
         assert result["parameters"]["url"] == "https://api.example.com"
 
-    def test_parse_malformed_json_with_trailing_comma(self):
-        """Try to parse JSON with trailing comma (common LLM mistake)."""
-        # Note: This may or may not work - trailing commas are invalid JSON
-        response = '{"key": "value",}'
-
-        extractor = JSONExtractor()
-        result = extractor.parse(response)
-
-        # Should either fix it or return None gracefully
-        assert result is None or isinstance(result, dict)
 
 
 class TestBackwardsCompatibility:

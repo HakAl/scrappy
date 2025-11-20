@@ -23,6 +23,79 @@ from tests.helpers import (
 )
 
 
+from datetime import datetime
+from src.cli.utils.cli_factory import initialize_cli_handlers
+from src.cli.state_manager import PlanStateManager
+from src.cli.input_handler import InputHandler
+from src.cli.logging import get_logger
+
+
+def create_test_interactive_mode(io, orchestrator):
+    """Helper to create InteractiveMode with all dependencies."""
+    session_start = datetime.now()
+    handlers = initialize_cli_handlers(orchestrator, session_start)
+
+    # Import here to avoid circular imports
+    from src.cli.interactive import InteractiveMode
+    from src.cli.command_router import CommandRouter
+
+    state_manager = PlanStateManager()
+    input_handler = InputHandler(io)
+    logger = get_logger('cli.interactive', io=io)
+
+    # Create command router with all handlers
+    command_router = CommandRouter(
+        io=io,
+        orchestrator=orchestrator,
+        display=handlers['display'],
+        session_mgr=handlers['session_mgr'],
+        codebase=handlers['codebase'],
+        tasks=handlers['tasks'],
+        multiprovider=handlers['multiprovider'],
+        smart=handlers['smart'],
+        agent_mgr=handlers['agent_mgr'],
+        task_router=handlers['task_router'],
+        state_manager=state_manager
+    )
+
+    return InteractiveMode(
+        io=io,
+        orchestrator=orchestrator,
+        state_manager=state_manager,
+        input_handler=input_handler,
+        command_router=command_router,
+        display=handlers['display'],
+        smart=handlers['smart'],
+        task_router=handlers['task_router'],
+        tasks=handlers['tasks'],
+        logger=logger
+    )
+
+
+
+
+def create_test_command_router(io, orchestrator):
+    """Helper to create CommandRouter with all dependencies."""
+    from datetime import datetime
+    from src.cli.command_router import CommandRouter
+    from src.cli.state_manager import PlanStateManager
+
+    session_start = datetime.now()
+    handlers = initialize_cli_handlers(orchestrator, session_start)
+
+    return CommandRouter(
+        io=io,
+        orchestrator=orchestrator,
+        display=handlers['display'],
+        session_mgr=handlers['session_mgr'],
+        codebase=handlers['codebase'],
+        tasks=handlers['tasks'],
+        multiprovider=handlers['multiprovider'],
+        smart=handlers['smart'],
+        agent_mgr=handlers['agent_mgr'],
+        task_router=handlers['task_router']
+    )
+
 # =============================================================================
 # Session Lifecycle Flow Tests
 # =============================================================================
@@ -39,7 +112,7 @@ class TestSessionStartupFlow:
         """Startup should display banner, commands, and mode statuses."""
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
-        mode = self.InteractiveMode(io, orchestrator)
+        mode = create_test_interactive_mode(io, orchestrator)
 
         with patch('sys.stdin.isatty', return_value=True):
             with patch.object(mode, '_main_loop', return_value=None):
@@ -64,7 +137,7 @@ class TestSessionStartupFlow:
         """Should indicate multiline mode is ON at startup."""
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
-        mode = self.InteractiveMode(io, orchestrator)
+        mode = create_test_interactive_mode(io, orchestrator)
         mode.multiline_mode = True
 
         with patch('sys.stdin.isatty', return_value=True):
@@ -79,7 +152,7 @@ class TestSessionStartupFlow:
         """Should indicate auto-routing mode is ON at startup."""
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
-        mode = self.InteractiveMode(io, orchestrator)
+        mode = create_test_interactive_mode(io, orchestrator)
         mode.auto_route_mode = True
 
         with patch('sys.stdin.isatty', return_value=True):
@@ -105,7 +178,7 @@ class TestSessionExitFlow:
         """Exit with auto_save should save session and show confirmation."""
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
-        router = self.CommandRouter(io, orchestrator)
+        router = create_test_command_router(io, orchestrator)
         router.auto_save = True
         orchestrator.save_session = MagicMock(return_value="/test/session.json")
 
@@ -125,7 +198,7 @@ class TestSessionExitFlow:
         """Exit without auto_save should show warning."""
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
-        router = self.CommandRouter(io, orchestrator)
+        router = create_test_command_router(io, orchestrator)
         router.auto_save = False
         orchestrator.save_session = MagicMock()
 
@@ -139,7 +212,7 @@ class TestSessionExitFlow:
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
         orchestrator.save_session = MagicMock(return_value="/test/session.json")
-        mode = self.InteractiveMode(io, orchestrator)
+        mode = create_test_interactive_mode(io, orchestrator)
         mode.auto_save = True
         mode.display = MagicMock()
 
@@ -167,7 +240,7 @@ class TestPlanCreationFlow:
         """Plan command should create plan and start tracking on confirmation."""
         io = MockIO(confirmations=[True])  # Confirm to start plan
         orchestrator = ConfigurableTestOrchestrator()
-        router = self.CommandRouter(io, orchestrator)
+        router = create_test_command_router(io, orchestrator)
 
         # Mock task planner to return steps
         router.tasks = MagicMock()
@@ -192,7 +265,7 @@ class TestPlanCreationFlow:
         """Plan command without confirmation should not start tracking."""
         io = MockIO(confirmations=[False])  # Decline to start plan
         orchestrator = ConfigurableTestOrchestrator()
-        router = self.CommandRouter(io, orchestrator)
+        router = create_test_command_router(io, orchestrator)
 
         router.tasks = MagicMock()
         router.tasks.plan_task.return_value = [
@@ -209,7 +282,7 @@ class TestPlanCreationFlow:
         """Plan command without args should show usage."""
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
-        router = self.CommandRouter(io, orchestrator)
+        router = create_test_command_router(io, orchestrator)
 
         router.route("/plan", "")
 
@@ -373,7 +446,7 @@ class TestModeTogglingFlow:
         """Should toggle multiline mode and show status."""
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
-        router = self.CommandRouter(io, orchestrator)
+        router = create_test_command_router(io, orchestrator)
         initial = router.multiline_mode
 
         router.route("/ml", "")
@@ -387,7 +460,7 @@ class TestModeTogglingFlow:
         """Toggling multiline should show usage instructions."""
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
-        router = self.CommandRouter(io, orchestrator)
+        router = create_test_command_router(io, orchestrator)
         router.multiline_mode = False  # Start OFF
 
         router.route("/ml", "")
@@ -401,7 +474,7 @@ class TestModeTogglingFlow:
         """Should toggle auto-routing mode and show status."""
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
-        router = self.CommandRouter(io, orchestrator)
+        router = create_test_command_router(io, orchestrator)
         initial = router.auto_route_mode
 
         router.route("/auto", "")
@@ -415,7 +488,7 @@ class TestModeTogglingFlow:
         """Toggling auto-route ON should explain classification behavior."""
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
-        router = self.CommandRouter(io, orchestrator)
+        router = create_test_command_router(io, orchestrator)
         router.auto_route_mode = False  # Start OFF
 
         router.route("/auto", "")
@@ -429,7 +502,7 @@ class TestModeTogglingFlow:
         """Should toggle smart mode and show status."""
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
-        router = self.CommandRouter(io, orchestrator)
+        router = create_test_command_router(io, orchestrator)
         initial = router.smart_mode
 
         router.route("/smart", "toggle")
@@ -443,7 +516,7 @@ class TestModeTogglingFlow:
         """Should toggle auto-execute mode and show status."""
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
-        router = self.CommandRouter(io, orchestrator)
+        router = create_test_command_router(io, orchestrator)
         initial = router.state_manager.auto_execute_tasks
 
         router.route("/autoexec", "")
@@ -470,7 +543,7 @@ class TestCommandExecutionFlow:
         """Clear command should clear conversation history."""
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
-        router = self.CommandRouter(io, orchestrator)
+        router = create_test_command_router(io, orchestrator)
         router.conversation_history = [
             {'role': 'user', 'content': 'hello'},
             {'role': 'assistant', 'content': 'hi'}
@@ -487,7 +560,7 @@ class TestCommandExecutionFlow:
         """Tasks command without active plan should show warning."""
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
-        router = self.CommandRouter(io, orchestrator)
+        router = create_test_command_router(io, orchestrator)
 
         router.route("/tasks", "")
 
@@ -498,7 +571,7 @@ class TestCommandExecutionFlow:
         """Tasks command with active plan should show task list."""
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
-        router = self.CommandRouter(io, orchestrator)
+        router = create_test_command_router(io, orchestrator)
         router.state_manager.start_plan([
             {'step': 'Task 1'},
             {'step': 'Task 2'}
@@ -514,7 +587,7 @@ class TestCommandExecutionFlow:
         """Unknown command should show error message."""
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
-        router = self.CommandRouter(io, orchestrator)
+        router = create_test_command_router(io, orchestrator)
 
         router.route("/unknowncmd", "")
 
@@ -539,7 +612,7 @@ class TestChatWithAutoRouteFlow:
         """Chat should add messages to conversation history."""
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
-        mode = self.InteractiveMode(io, orchestrator)
+        mode = create_test_interactive_mode(io, orchestrator)
         mode.auto_route_mode = True
         mode.task_router = MagicMock()
         mode.task_router.handle_auto_route.return_value = MagicMock(
@@ -570,7 +643,7 @@ class TestSessionManagementFlow:
         """Session load should restore conversation history."""
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
-        router = self.CommandRouter(io, orchestrator)
+        router = create_test_command_router(io, orchestrator)
         router.session_mgr = MagicMock()
         router.session_mgr.manage_session.return_value = {
             'conversation_history': [
@@ -587,7 +660,7 @@ class TestSessionManagementFlow:
         """Session toggle should toggle auto-save setting."""
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
-        router = self.CommandRouter(io, orchestrator)
+        router = create_test_command_router(io, orchestrator)
         initial = router.auto_save
         router.session_mgr = MagicMock()
         router.session_mgr.manage_session.return_value = {
@@ -618,7 +691,7 @@ class TestErrorHandlingFlow:
         """CLI error should show error message and suggestion."""
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
-        mode = self.InteractiveMode(io, orchestrator)
+        mode = create_test_interactive_mode(io, orchestrator)
 
         from src.cli.exceptions import CLIError, ErrorSeverity
         error = CLIError(
@@ -637,7 +710,7 @@ class TestErrorHandlingFlow:
         """Provider error should show provider information."""
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
-        mode = self.InteractiveMode(io, orchestrator)
+        mode = create_test_interactive_mode(io, orchestrator)
 
         from src.cli.exceptions import ProviderError
         error = ProviderError(
@@ -655,7 +728,7 @@ class TestErrorHandlingFlow:
         """General exception should show error message."""
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
-        mode = self.InteractiveMode(io, orchestrator)
+        mode = create_test_interactive_mode(io, orchestrator)
 
         mode._handle_error(Exception("Something went wrong"))
 
@@ -667,7 +740,7 @@ class TestErrorHandlingFlow:
         """After error, should show help hint to continue."""
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
-        mode = self.InteractiveMode(io, orchestrator)
+        mode = create_test_interactive_mode(io, orchestrator)
 
         mode._handle_error(Exception("Test"))
 
@@ -693,7 +766,7 @@ class TestCompleteUserWorkflows:
         """Complete workflow: create plan -> execute tasks -> complete."""
         io = MockIO(confirmations=[True], inputs=["1", "1", "1"])
         orchestrator = ConfigurableTestOrchestrator()
-        router = self.CommandRouter(io, orchestrator)
+        router = create_test_command_router(io, orchestrator)
 
         # Create plan
         router.tasks = MagicMock()
@@ -722,7 +795,7 @@ class TestCompleteUserWorkflows:
         """Complete workflow: toggle modes and verify state changes."""
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
-        router = self.CommandRouter(io, orchestrator)
+        router = create_test_command_router(io, orchestrator)
 
         # Record initial states
         initial_multiline = router.multiline_mode
@@ -749,7 +822,7 @@ class TestCompleteUserWorkflows:
         """Chat while plan active should prompt for task progression."""
         io = MockIO(inputs=["2"])  # Stay on task
         orchestrator = ConfigurableTestOrchestrator()
-        mode = self.InteractiveMode(io, orchestrator)
+        mode = create_test_interactive_mode(io, orchestrator)
         mode.state_manager.start_plan([
             {'step': 'Task 1'},
             {'step': 'Task 2'}
@@ -870,7 +943,7 @@ class TestSideEffects:
         """Clear command should actually empty the list."""
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
-        router = self.CommandRouter(io, orchestrator)
+        router = create_test_command_router(io, orchestrator)
         router.conversation_history.append({'role': 'user', 'content': 'test'})
 
         router.route("/clear", "")
@@ -881,7 +954,7 @@ class TestSideEffects:
         """Quit command should return False to signal exit."""
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
-        router = self.CommandRouter(io, orchestrator)
+        router = create_test_command_router(io, orchestrator)
         router.auto_save = False
 
         result = router.route("/quit", "")
@@ -892,7 +965,7 @@ class TestSideEffects:
         """Non-exit commands should return True to continue."""
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
-        router = self.CommandRouter(io, orchestrator)
+        router = create_test_command_router(io, orchestrator)
 
         result = router.route("/help", "")
         assert result is True
@@ -907,7 +980,7 @@ class TestSideEffects:
         """Invalid command should return True to continue."""
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
-        router = self.CommandRouter(io, orchestrator)
+        router = create_test_command_router(io, orchestrator)
 
         result = router.route("/invalidcmd", "")
 

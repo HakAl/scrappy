@@ -17,13 +17,6 @@ from src.agent_config import AgentConfig
 
 
 # Suppress safe_print output during tests
-@pytest.fixture(autouse=True)
-def suppress_safe_print():
-    """Suppress all safe_print output during tests."""
-    with patch('src.agent_tools.tools.command_tool.safe_print'):
-        yield
-
-
 class TestCommandToolInterface:
     """Tests for the CommandTool as a Tool interface."""
 
@@ -226,7 +219,6 @@ class TestInteractiveCommandDetection:
     def setup_method(self):
         """Set up test fixtures."""
         self.config = AgentConfig()
-        self.config.interactive_commands = ["npm init", "npx", "yarn create"]
         self.project_root = Path("/test/project")
         self.context = ToolContext(
             project_root=self.project_root,
@@ -558,14 +550,11 @@ class TestTimeoutHandling:
     def setup_method(self):
         """Set up test fixtures."""
         self.config = AgentConfig()
-        self.config.command_timeout = 120
-
     def test_uses_configured_timeout(self):
         """Should respect configured command timeout."""
         from src.agent_tools.tools.command_tool import ShellCommandExecutor
 
         config = AgentConfig()
-        config.command_timeout = 300  # 5 minutes
         executor = ShellCommandExecutor(config)
 
         assert executor.timeout == 300
@@ -591,7 +580,6 @@ class TestTimeoutHandling:
         from src.agent_tools.tools.command_tool import ShellCommandExecutor
 
         config = AgentConfig()
-        config.max_command_output = 50
         executor = ShellCommandExecutor(config)
 
         long_output = "A" * 100
@@ -608,14 +596,11 @@ class TestStreamingOutput:
     def setup_method(self):
         """Set up test fixtures."""
         self.config = AgentConfig()
-        self.config.max_command_output = 10000
-
     def test_truncates_very_long_output(self):
         """Should truncate output exceeding max size."""
         from src.agent_tools.tools.command_tool import ShellCommandExecutor
 
         config = AgentConfig()
-        config.max_command_output = 100  # Very small limit
         executor = ShellCommandExecutor(config)
 
         # Generate long output
@@ -652,8 +637,6 @@ class TestLongRunningCommandDetection:
     def setup_method(self):
         """Set up test fixtures."""
         self.config = AgentConfig()
-        self.config.long_running_commands = ["npm install", "docker build", "pip install"]
-
     def test_detects_npm_install_as_long_running(self):
         """Should detect npm install as long-running."""
         from src.agent_tools.tools.command_tool import ShellCommandExecutor

@@ -64,7 +64,8 @@ class TaskRouter:
         validator: Optional[InputValidator] = None,
         classifier: Optional[TaskClassifier] = None,
         metrics_collector: Optional[MetricsCollector] = None,
-        provider_resolver: Optional[ProviderResolver] = None
+        provider_resolver: Optional[ProviderResolver] = None,
+        strategies: Optional[Dict[TaskType, ExecutionStrategy]] = None
     ):
         """
         Initialize TaskRouter with execution strategies.
@@ -80,6 +81,7 @@ class TaskRouter:
             classifier: Injectable task classifier (default: TaskClassifier)
             metrics_collector: Injectable metrics collector (default: MetricsCollector)
             provider_resolver: Injectable provider resolver (default: ProviderResolver)
+            strategies: Injectable execution strategies (default: created via factory)
         """
         self.orchestrator = orchestrator
         self.project_root = project_root or Path.cwd()
@@ -94,9 +96,13 @@ class TaskRouter:
         self.validator = validator or InputValidator()
 
         self.classifier = classifier or TaskClassifier()
-        self.strategies: Dict[TaskType, ExecutionStrategy] = {}
         self.metrics_collector = metrics_collector or MetricsCollector()
         self.provider_resolver = provider_resolver or ProviderResolver(orchestrator=orchestrator)
+
+        # Inject strategies or use defaults
+        self.strategies: Dict[TaskType, ExecutionStrategy] = (
+            strategies or self._create_default_strategies()
+        )
 
         # Pre/post hooks for extensibility
         self._pre_hooks: List[Callable[[ClassifiedTask], ClassifiedTask]] = []
@@ -108,36 +114,38 @@ class TaskRouter:
         self.escalate_on_low_confidence = True
         self.use_llm_classification = True  # Use LLM for low-confidence cases
 
-        self._setup_strategies()
+    def _create_default_strategies(self) -> Dict[TaskType, ExecutionStrategy]:
+        """Create default execution strategies (factory method for defaults only)."""
+        strategies: Dict[TaskType, ExecutionStrategy] = {}
 
-    def _setup_strategies(self):
-        """Initialize execution strategies."""
         # Direct command executor (no AI needed)
-        self.strategies[TaskType.DIRECT_COMMAND] = DirectExecutor(
+        strategies[TaskType.DIRECT_COMMAND] = DirectExecutor(
             working_dir=self.project_root,
             require_confirmation=not self.auto_confirm_direct
         )
 
         # Conversation handler
-        self.strategies[TaskType.CONVERSATION] = ConversationExecutor(
+        strategies[TaskType.CONVERSATION] = ConversationExecutor(
             orchestrator=self.orchestrator
         )
 
         # AI-powered strategies (require orchestrator)
         if self.orchestrator:
             # Provider will be resolved dynamically per task
-            self.strategies[TaskType.RESEARCH] = ResearchExecutor(
+            strategies[TaskType.RESEARCH] = ResearchExecutor(
                 orchestrator=self.orchestrator,
                 project_root=self.project_root,
                 max_tool_iterations=3
             )
 
-            self.strategies[TaskType.CODE_GENERATION] = AgentExecutor(
+            strategies[TaskType.CODE_GENERATION] = AgentExecutor(
                 orchestrator=self.orchestrator,
                 project_root=self.project_root,
                 max_iterations=10,
                 require_approval=True
             )
+
+        return strategies
 
     def _needs_intent_clarification(self, task: ClassifiedTask) -> bool:
         """

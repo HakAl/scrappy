@@ -29,6 +29,7 @@ from .memory import WorkingMemory
 from .session import SessionManager
 from .task_executor import TaskExecutor
 from .provider_selector import ProviderSelector
+from .context_manager import ContextManager
 from .protocols import (
     Orchestrator,
     CacheProtocol,
@@ -48,6 +49,7 @@ from .manager_protocols import (
     UsageReporterProtocol,
     StatusReporterProtocol,
     ProviderRegistrarProtocol,
+    ContextManagerProtocol,
 )
 
 __all__ = [
@@ -60,6 +62,7 @@ __all__ = [
     'SessionManager',
     'TaskExecutor',
     'ProviderSelector',
+    'ContextManager',
     # Protocols
     'Orchestrator',
     'CacheProtocol',
@@ -77,4 +80,5 @@ __all__ = [
     'UsageReporterProtocol',
     'StatusReporterProtocol',
     'ProviderRegistrarProtocol',
+    'ContextManagerProtocol',
 ]

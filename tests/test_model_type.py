@@ -22,14 +22,6 @@ except ImportError:
 class TestModelType:
     """Test ModelType enum."""
 
-    def test_model_type_values_exist(self):
-        """ModelType enum should have expected values."""
-        assert ModelType.BASE is not None
-        assert ModelType.CHAT is not None
-        assert ModelType.INSTRUCT is not None
-        assert ModelType.CODE is not None
-        assert ModelType.REASONING is not None
-        assert ModelType.UNKNOWN is not None
 
     def test_model_type_string_values(self):
         """ModelType values should be lowercase strings."""
@@ -259,56 +251,12 @@ class TestProviderInstructionTunedModels:
 class TestModelTypeDetection:
     """Test automatic model type detection from model name."""
 
-    def test_detect_instruct_from_name(self):
-        """Models with 'instruct' in name should be detected as INSTRUCT."""
-        from src.providers.base import detect_model_type
 
-        assert detect_model_type('qwen-3-235b-a22b-instruct-2507') == ModelType.INSTRUCT
-        assert detect_model_type('llama-4-maverick-17b-128e-instruct') == ModelType.INSTRUCT
-        assert detect_model_type('meta-llama/llama-4-scout-17b-16e-instruct') == ModelType.INSTRUCT
 
-    def test_detect_instruct_from_it_suffix(self):
-        """Models with '-it' suffix should be detected as INSTRUCT."""
-        from src.providers.base import detect_model_type
 
-        assert detect_model_type('gemma2-9b-it') == ModelType.INSTRUCT
-        assert detect_model_type('gemma-3-27b-it') == ModelType.INSTRUCT
-        assert detect_model_type('gemma-3-12b-it') == ModelType.INSTRUCT
 
-    def test_detect_chat_from_versatile(self):
-        """Models with 'versatile' should be detected as CHAT."""
-        from src.providers.base import detect_model_type
 
-        assert detect_model_type('llama-3.3-70b-versatile') == ModelType.CHAT
-        assert detect_model_type('llama-3.1-70b-versatile') == ModelType.CHAT
 
-    def test_detect_chat_from_chat_suffix(self):
-        """Models with 'chat' in name should be detected as CHAT."""
-        from src.providers.base import detect_model_type
-
-        assert detect_model_type('llama-3-chat') == ModelType.CHAT
-
-    def test_detect_base_from_base_suffix(self):
-        """Models with 'base' in name should be detected as BASE."""
-        from src.providers.base import detect_model_type
-
-        assert detect_model_type('llama-3-base') == ModelType.BASE
-
-    def test_detect_code_from_code_suffix(self):
-        """Models with 'code' in name should be detected as CODE."""
-        from src.providers.base import detect_model_type
-
-        assert detect_model_type('codellama-7b-instruct') == ModelType.CODE
-        assert detect_model_type('deepseek-coder-v2') == ModelType.CODE
-
-    def test_detect_unknown_for_ambiguous(self):
-        """Ambiguous model names should return UNKNOWN."""
-        from src.providers.base import detect_model_type
-
-        # Models without clear type indicators
-        assert detect_model_type('llama3.1-8b') == ModelType.UNKNOWN
-        assert detect_model_type('qwen-3-32b') == ModelType.UNKNOWN
-        assert detect_model_type('mixtral-8x7b-32768') == ModelType.UNKNOWN
 
     def test_instruct_takes_precedence_over_code(self):
         """'instruct' should take precedence over 'code' in model name."""

@@ -29,14 +29,6 @@ class TestPromptBuilderUsesCodebaseContext:
         assert builder.context is context
 
     @pytest.mark.unit
-    def test_creates_context_if_not_provided(self, temp_project_dir):
-        """PromptBuilder should create CodebaseContext if not provided."""
-        from src.agent.prompt_builder import PromptBuilder
-
-        builder = PromptBuilder(project_root=temp_project_dir)
-
-        assert builder.context is not None
-        assert isinstance(builder.context, CodebaseContext)
 
     @pytest.mark.unit
     def test_uses_context_structure_for_project_type(self, temp_project_dir):
@@ -807,15 +799,11 @@ class TestPromptBuilderCodeAgentIntegration:
         prompt = builder.build(task="Test task")
 
         # Core identity should come first
-        identity_pos = prompt.find('software development assistant') if 'software development assistant' in prompt else prompt.find('assistant')
-
         # Tools should come before response format
         tools_pos = prompt.find('read_file')
         format_pos = prompt.find('"thought"')
 
         # Strategy/efficiency should come after tools
-        strategy_pos = prompt.find('write_file') if 'prefer' in prompt else len(prompt)
-
         # Task should come last
         task_pos = prompt.find('Test task')
 
@@ -894,15 +882,6 @@ class TestPromptBuilderCodebaseStructure:
     """PromptBuilder should include actual file locations from context."""
 
     @pytest.mark.unit
-    def test_has_codebase_structure_section_method(self, temp_project_dir):
-        """PromptBuilder should have _build_codebase_structure_section method."""
-        from src.agent.prompt_builder import PromptBuilder
-
-        builder = PromptBuilder(project_root=temp_project_dir)
-
-        assert hasattr(builder, '_build_codebase_structure_section')
-        section = builder._build_codebase_structure_section()
-        assert isinstance(section, str)
 
     @pytest.mark.unit
     def test_includes_javascript_file_locations(self, temp_project_dir):

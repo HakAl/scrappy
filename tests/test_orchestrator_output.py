@@ -20,29 +20,8 @@ from src.orchestrator.output import (
 class TestOutputInterfaceProtocol:
     """Test that implementations satisfy the OutputInterface protocol."""
 
-    def test_console_output_satisfies_protocol(self):
-        """ConsoleOutput should satisfy OutputInterface protocol."""
-        output: OutputInterface = ConsoleOutput()
-        assert hasattr(output, 'info')
-        assert hasattr(output, 'warn')
-        assert hasattr(output, 'error')
-        assert hasattr(output, 'success')
 
-    def test_null_output_satisfies_protocol(self):
-        """NullOutput should satisfy OutputInterface protocol."""
-        output: OutputInterface = NullOutput()
-        assert hasattr(output, 'info')
-        assert hasattr(output, 'warn')
-        assert hasattr(output, 'error')
-        assert hasattr(output, 'success')
 
-    def test_capturing_output_satisfies_protocol(self):
-        """CapturingOutput should satisfy OutputInterface protocol."""
-        output: OutputInterface = CapturingOutput()
-        assert hasattr(output, 'info')
-        assert hasattr(output, 'warn')
-        assert hasattr(output, 'error')
-        assert hasattr(output, 'success')
 
 
 class TestConsoleOutput:

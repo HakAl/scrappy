@@ -27,7 +27,6 @@ class TestGroqProviderToolCalling:
         with patch.dict('os.environ', {'GROQ_API_KEY': 'test-key'}):
             from src.providers.groq_provider import GroqProvider
             provider = GroqProvider()
-            provider._client = mock_groq_client
             return provider
 
     @pytest.mark.unit
@@ -53,7 +52,6 @@ class TestGroqProviderToolCalling:
         mock_response.choices[0].message.tool_calls = [
             MagicMock(id="call_abc123", function=mock_function)
         ]
-        mock_response.choices[0].finish_reason = "tool_calls"
         mock_response.usage = MagicMock(
             prompt_tokens=50,
             completion_tokens=20
@@ -95,7 +93,6 @@ class TestGroqProviderToolCalling:
                 )
             )
         ]
-        mock_response.choices[0].finish_reason = "tool_calls"
         mock_response.usage = MagicMock(prompt_tokens=60, completion_tokens=30)
 
         mock_groq_client.chat.completions.create.return_value = mock_response
@@ -116,7 +113,6 @@ class TestGroqProviderToolCalling:
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = "I don't need to use any tools."
         mock_response.choices[0].message.tool_calls = None
-        mock_response.choices[0].finish_reason = "stop"
         mock_response.usage = MagicMock(prompt_tokens=40, completion_tokens=15)
 
         mock_groq_client.chat.completions.create.return_value = mock_response
@@ -136,7 +132,6 @@ class TestGroqProviderToolCalling:
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = ""
         mock_response.choices[0].message.tool_calls = None
-        mock_response.choices[0].finish_reason = "stop"
         mock_response.usage = MagicMock(prompt_tokens=30, completion_tokens=10)
 
         mock_groq_client.chat.completions.create.return_value = mock_response
@@ -166,7 +161,6 @@ class TestGroqProviderToolCalling:
                 )
             )
         ]
-        mock_response.choices[0].finish_reason = "tool_calls"
         mock_response.usage = MagicMock(prompt_tokens=70, completion_tokens=40)
 
         mock_groq_client.chat.completions.create.return_value = mock_response
@@ -192,7 +186,6 @@ class TestGroqProviderToolCalling:
                 function=MagicMock(name="test", arguments='{}')
             )
         ]
-        mock_response.choices[0].finish_reason = "tool_calls"
         mock_response.usage = MagicMock(prompt_tokens=50, completion_tokens=25)
 
         mock_groq_client.chat.completions.create.return_value = mock_response
@@ -227,7 +220,6 @@ class TestCerebrasProviderToolCalling:
         with patch.dict('os.environ', {'CEREBRAS_API_KEY': 'test-key'}):
             from src.providers.cerebras_provider import CerebrasProvider
             provider = CerebrasProvider()
-            provider._client = mock_cerebras_client
             return provider
 
     @pytest.mark.unit
@@ -250,7 +242,6 @@ class TestCerebrasProviderToolCalling:
         mock_response.choices[0].message.tool_calls = [
             MagicMock(id="call_search", function=mock_function)
         ]
-        mock_response.choices[0].finish_reason = "tool_calls"
         mock_response.usage = MagicMock(prompt_tokens=45, completion_tokens=22)
 
         mock_cerebras_client.chat.completions.create.return_value = mock_response
@@ -272,7 +263,6 @@ class TestCerebrasProviderToolCalling:
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = "The answer is 42."
         mock_response.choices[0].message.tool_calls = None
-        mock_response.choices[0].finish_reason = "stop"
         mock_response.usage = MagicMock(prompt_tokens=30, completion_tokens=10)
 
         mock_cerebras_client.chat.completions.create.return_value = mock_response
@@ -297,7 +287,6 @@ class TestCerebrasProviderToolCalling:
                 function=MagicMock(name="test", arguments='{}')
             )
         ]
-        mock_response.choices[0].finish_reason = "tool_calls"
         mock_response.usage = MagicMock(prompt_tokens=35, completion_tokens=15)
 
         mock_cerebras_client.chat.completions.create.return_value = mock_response
@@ -317,7 +306,6 @@ class TestCerebrasProviderToolCalling:
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = ""
         mock_response.choices[0].message.tool_calls = None
-        mock_response.choices[0].finish_reason = "stop"
         mock_response.usage = MagicMock(prompt_tokens=20, completion_tokens=5)
 
         mock_cerebras_client.chat.completions.create.return_value = mock_response

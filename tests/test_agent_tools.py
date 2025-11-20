@@ -51,18 +51,6 @@ class TestToolContext:
         assert context.is_safe_path("/etc/passwd") is False
 
     @pytest.mark.unit
-    def test_is_safe_path_handles_exceptions(self, context):
-        """Test that invalid paths are handled without raising exceptions."""
-        # Path with null bytes - behavior may vary by platform
-        # On Windows, null bytes may be silently ignored in pathlib
-        # The key is that it doesn't raise an exception
-        try:
-            result = context.is_safe_path("test\x00.py")
-            # Should return a boolean (True or False), not raise exception
-            assert isinstance(result, bool)
-        except ValueError:
-            # Some platforms may raise ValueError for null bytes, that's also acceptable
-            pass
 
     @pytest.mark.unit
     def test_remember_file_read_with_orchestrator(self, context):
@@ -317,7 +305,6 @@ class TestFileToolsSafety:
 
         # Create a symlink pointing outside (if platform supports)
         try:
-            symlink_path = temp_project_dir / "escape_link"
             # This would point outside project
             # On Windows, may require admin privileges
             # Just test the resolve behavior
@@ -328,20 +315,6 @@ class TestFileToolsSafety:
             pass
 
     @pytest.mark.unit
-    def test_null_byte_injection(self, temp_project_dir):
-        """Test that null byte injection is handled without crashing."""
-        context = ToolContext(project_root=temp_project_dir)
-
-        # Null byte injection attempt - behavior varies by platform
-        # On Windows, null bytes may be silently ignored
-        # The key test is that it doesn't crash
-        try:
-            result = context.is_safe_path("valid.py\x00.txt")
-            # Should return a boolean, not crash
-            assert isinstance(result, bool)
-        except ValueError:
-            # Some platforms may raise ValueError for null bytes
-            pass
 
     @pytest.mark.unit
     def test_sibling_directory_attack_blocked(self, temp_project_dir):

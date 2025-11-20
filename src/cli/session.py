@@ -16,17 +16,28 @@ from .persistence import SessionPersistence
 class CLISessionManager:
     """Manages session state, caching, and persistence."""
 
-    def __init__(self, orchestrator: Any) -> None:
+    def __init__(
+        self,
+        orchestrator: Any,
+        context_manager: ContextManager,
+        cache_manager: CacheManager,
+        rate_limiter: RateLimiter,
+        session_persistence: SessionPersistence
+    ) -> None:
         """Initialize session manager.
 
         Args:
             orchestrator: The AgentOrchestrator instance
+            context_manager: Context manager for codebase context
+            cache_manager: Cache manager for response caching
+            rate_limiter: Rate limiter for tracking usage
+            session_persistence: Session persistence for saving/loading
         """
         self.orchestrator = orchestrator
-        self._context_manager = ContextManager(orchestrator)
-        self._cache_manager = CacheManager(orchestrator)
-        self._rate_limiter = RateLimiter(orchestrator)
-        self._session_persistence = SessionPersistence(orchestrator)
+        self._context_manager = context_manager
+        self._cache_manager = cache_manager
+        self._rate_limiter = rate_limiter
+        self._session_persistence = session_persistence
 
     def manage_context(self, args: str = "", io: Optional[CLIIOProtocol] = None) -> None:
         """Manage codebase context through the context manager.

@@ -54,24 +54,28 @@ class ResearchExecutor(ProviderAwareStrategy):
         orchestrator: OrchestratorLike,
         preferred_provider: str = "cerebras",
         project_root: Optional[Path] = None,
-        max_tool_iterations: int = 3
+        max_tool_iterations: int = 3,
+        tool_registry: Optional["ToolRegistry"] = None,
+        tool_context: Optional["ToolContext"] = None
     ):
         super().__init__(orchestrator)
         self.preferred_provider = preferred_provider
-        self.project_root = project_root or Path.cwd()
+        self.project_root = project_root or self._get_default_project_root()
         self.max_tool_iterations = max_tool_iterations
-        self._tool_registry = None
-        self._tool_context = None
 
-    def _setup_tools(self):
-        """Initialize tool registry with read-only tools."""
-        if self._tool_registry is not None:
-            return
+        # Inject dependencies or create defaults
+        self._tool_registry = tool_registry or self._create_default_tool_registry()
+        self._tool_context = tool_context or self._create_default_tool_context()
 
+    def _get_default_project_root(self) -> Path:
+        """Get default project root directory."""
+        return Path.cwd()
+
+    def _create_default_tool_registry(self) -> Optional["ToolRegistry"]:
+        """Create default tool registry with read-only tools."""
         try:
             from ..agent_tools.tools import (
                 ToolRegistry,
-                ToolContext,
                 ReadFileTool,
                 ListFilesTool,
                 ListDirectoryTool,
@@ -84,28 +88,37 @@ class ResearchExecutor(ProviderAwareStrategy):
             )
             from ..agent_tools.tools.web_tools import WebFetchTool, WebSearchTool
 
-            self._tool_registry = ToolRegistry()
-            self._tool_registry.register(ReadFileTool())
-            self._tool_registry.register(ListFilesTool())
-            self._tool_registry.register(ListDirectoryTool())
-            self._tool_registry.register(SearchCodeTool())
-            self._tool_registry.register(GitLogTool())
-            self._tool_registry.register(GitDiffTool())
-            self._tool_registry.register(GitBlameTool())
-            self._tool_registry.register(GitShowTool())
-            self._tool_registry.register(GitRecentChangesTool())
-            self._tool_registry.register(WebFetchTool())
-            self._tool_registry.register(WebSearchTool())
+            registry = ToolRegistry()
+            registry.register(ReadFileTool())
+            registry.register(ListFilesTool())
+            registry.register(ListDirectoryTool())
+            registry.register(SearchCodeTool())
+            registry.register(GitLogTool())
+            registry.register(GitDiffTool())
+            registry.register(GitBlameTool())
+            registry.register(GitShowTool())
+            registry.register(GitRecentChangesTool())
+            registry.register(WebFetchTool())
+            registry.register(WebSearchTool())
 
-            self._tool_context = ToolContext(
+            return registry
+        except ImportError:
+            # Tools not available, proceed without them
+            return None
+
+    def _create_default_tool_context(self) -> Optional["ToolContext"]:
+        """Create default tool context."""
+        try:
+            from ..agent_tools.tools import ToolContext
+
+            return ToolContext(
                 project_root=self.project_root,
                 dry_run=False,
                 orchestrator=self.orchestrator if hasattr(self.orchestrator, 'remember_file_read') else None
             )
-        except ImportError as e:
+        except ImportError:
             # Tools not available, proceed without them
-            self._tool_registry = None
-            self._tool_context = None
+            return None
 
     def _auto_explore_if_needed(self, task: ClassifiedTask):
         """Auto-trigger codebase exploration for file-related queries."""
@@ -261,9 +274,6 @@ class ResearchExecutor(ProviderAwareStrategy):
         start_time = time.time()
         total_tokens = 0
         tool_calls_made = []
-
-        # Setup tools
-        self._setup_tools()
 
         # Auto-explore codebase if needed for file-related queries
         self._auto_explore_if_needed(task)

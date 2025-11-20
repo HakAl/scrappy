@@ -51,7 +51,6 @@ from ..orchestrator_adapter import (
     AgentOrchestratorAdapter,
 )
 from ..agent_tools.registry_factory import create_default_registry
-from ..platform_utils import get_platform_name, is_windows, validate_command_for_platform
 
 from .types import (
     AgentThought,
@@ -82,10 +81,16 @@ class CodeAgent:
         project_path: Optional[str] = None,
         config: Optional[AgentConfig] = None,
         tool_registry: Optional[ToolRegistry] = None,
-        io: Optional[Any] = None  # CLIIOProtocol - Any to avoid circular import
+        io: Optional[Any] = None,  # CLIIOProtocol - Any to avoid circular import
+        file_system: Optional[Any] = None,  # FileSystemProtocol
+        platform_utils: Optional[Any] = None,  # PlatformUtilsProtocol
+        audit_logger: Optional[Any] = None,  # AuditLoggerProtocol
+        response_parser: Optional[Any] = None,  # ResponseParserProtocol
+        tool_context: Optional[Any] = None,  # ToolContextProtocol
+        command_executor: Optional[Any] = None,  # ShellCommandExecutor
     ):
         """
-        Initialize the code agent.
+        Initialize the code agent with dependency injection.
 
         Args:
             orchestrator: OrchestratorAdapter instance or AgentOrchestrator
@@ -94,14 +99,30 @@ class CodeAgent:
             config: AgentConfig instance (uses defaults if not provided)
             tool_registry: ToolRegistry instance (creates default if not provided)
             io: IO interface for output (defaults to RichIO)
+            file_system: FileSystemProtocol implementation (defaults to RealFileSystem)
+            platform_utils: PlatformUtilsProtocol implementation (defaults to RealPlatformUtils)
+            audit_logger: AuditLoggerProtocol implementation (defaults to AuditLogger)
+            response_parser: ResponseParserProtocol implementation (defaults to UnifiedResponseParser)
+            tool_context: ToolContextProtocol implementation (created if not provided)
+            command_executor: ShellCommandExecutor instance (created if not provided)
         """
-        # Initialize IO first so we can use it for output
-        # Import at runtime to avoid circular import
-        if io is None:
-            from ..cli.rich_output import RichIO
-            self.io = RichIO()
-        else:
-            self.io = io
+        # Initialize dependencies with defaults via factory methods
+        # This allows testing with mock dependencies while providing
+        # sensible defaults for production use
+
+        # Store config for factory methods
+        self._initial_config = config
+        self._initial_orchestrator = orchestrator
+        self._initial_project_path = project_path
+
+        # IO interface
+        self.io = io or self._create_default_io()
+
+        # File system
+        self._file_system = file_system or self._create_default_file_system()
+
+        # Platform utilities
+        self._platform_utils = platform_utils or self._create_default_platform_utils()
 
         # Wrap orchestrator in adapter if needed
         if isinstance(orchestrator, OrchestratorAdapter):
@@ -113,32 +134,27 @@ class CodeAgent:
         # Keep orch as alias for backward compatibility
         self.orch = self.adapter
 
-        self.project_root = Path(project_path or ".").resolve()
+        # Resolve project root using file system abstraction
+        if project_path:
+            self.project_root = self._file_system.resolve(project_path)
+        else:
+            self.project_root = self._file_system.resolve(".")
+
         self.config = config or AgentConfig()
         self.dry_run = False
 
-        # Initialize audit logger
-        self._audit_logger = AuditLogger(
-            max_result_length=self.config.audit_log_result_truncation
-        )
+        # Audit logger
+        self._audit_logger = audit_logger or self._create_default_audit_logger()
 
-        # Initialize response parser (auto-detects JSON vs native tool calls)
-        self._response_parser: ResponseParser = UnifiedResponseParser()
+        # Response parser
+        self._response_parser: ResponseParser = response_parser or self._create_default_response_parser()
 
-        # Create tool context
+        # Tool context
         self._show_progress("Preparing agent tools...")
-        self.tool_context = ToolContext(
-            project_root=self.project_root,
-            dry_run=self.dry_run,
-            config=self.config,
-            orchestrator=orchestrator  # Pass original for tool context
-        )
+        self.tool_context = tool_context or self._create_default_tool_context()
 
-        # Setup tool registry
-        if tool_registry is not None:
-            self.tool_registry = tool_registry
-        else:
-            self.tool_registry = create_default_registry()
+        # Tool registry
+        self.tool_registry = tool_registry or self._create_default_tool_registry()
 
         # Build tools mapping for backward compatibility
         self.tools = {
@@ -165,8 +181,8 @@ class CodeAgent:
             'git_blame': 'git_blame',
         })
 
-        # Create command executor (extracted from inline implementation)
-        self._command_executor = ShellCommandExecutor(self.config)
+        # Command executor
+        self._command_executor = command_executor or self._create_default_command_executor()
 
         # Use orchestrator's intelligent provider selection
         self._show_progress("Selecting AI providers...")
@@ -219,6 +235,48 @@ class CodeAgent:
                         break
             if self.executor is None:
                 self.executor = self.planner
+
+    # Factory methods for default dependencies
+
+    def _create_default_io(self):
+        """Create default IO interface."""
+        from ..cli.rich_output import RichIO
+        return RichIO()
+
+    def _create_default_file_system(self):
+        """Create default file system."""
+        from .file_system import RealFileSystem
+        return RealFileSystem()
+
+    def _create_default_platform_utils(self):
+        """Create default platform utilities."""
+        from .platform_adapter import RealPlatformUtils
+        return RealPlatformUtils()
+
+    def _create_default_audit_logger(self):
+        """Create default audit logger."""
+        return AuditLogger(max_result_length=self.config.audit_log_result_truncation)
+
+    def _create_default_response_parser(self):
+        """Create default response parser."""
+        return UnifiedResponseParser()
+
+    def _create_default_tool_context(self):
+        """Create default tool context."""
+        return ToolContext(
+            project_root=self.project_root,
+            dry_run=self.dry_run,
+            config=self.config,
+            orchestrator=self._initial_orchestrator
+        )
+
+    def _create_default_tool_registry(self):
+        """Create default tool registry."""
+        return create_default_registry()
+
+    def _create_default_command_executor(self):
+        """Create default shell command executor."""
+        return ShellCommandExecutor(self.config)
 
     def __getattr__(self, name: str):
         """Dynamic attribute resolution for _tool_* methods.

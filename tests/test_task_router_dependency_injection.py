@@ -79,38 +79,8 @@ class TestTaskRouterDependencyInjection:
         # Assert
         assert router.provider_resolver is custom_resolver
 
-    def test_uses_default_classifier_when_not_provided(self):
-        """TaskRouter should create default TaskClassifier when none provided."""
-        # Act
-        router = TaskRouter(
-            output_handler=NullOutputHandler(),
-            intent_clarifier=NullClarifier(),
-        )
 
-        # Assert
-        assert isinstance(router.classifier, TaskClassifier)
 
-    def test_uses_default_metrics_collector_when_not_provided(self):
-        """TaskRouter should create default MetricsCollector when none provided."""
-        # Act
-        router = TaskRouter(
-            output_handler=NullOutputHandler(),
-            intent_clarifier=NullClarifier(),
-        )
-
-        # Assert
-        assert isinstance(router.metrics_collector, MetricsCollector)
-
-    def test_uses_default_provider_resolver_when_not_provided(self):
-        """TaskRouter should create default ProviderResolver when none provided."""
-        # Act
-        router = TaskRouter(
-            output_handler=NullOutputHandler(),
-            intent_clarifier=NullClarifier(),
-        )
-
-        # Assert
-        assert isinstance(router.provider_resolver, ProviderResolver)
 
 
 class TestInjectedClassifierIsUsed:

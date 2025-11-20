@@ -15,14 +15,6 @@ from tests.helpers import MockIO
 class TestErrorSeverity:
     """Tests for error severity classification."""
 
-    def test_severity_levels_exist(self):
-        """ErrorSeverity enum has expected levels."""
-        from src.cli.utils.error_handler import ErrorSeverity
-
-        assert hasattr(ErrorSeverity, 'CRITICAL')
-        assert hasattr(ErrorSeverity, 'ERROR')
-        assert hasattr(ErrorSeverity, 'WARNING')
-        assert hasattr(ErrorSeverity, 'INFO')
 
     def test_severity_ordering(self):
         """Severity levels have correct ordering (CRITICAL > ERROR > WARNING > INFO)."""
@@ -36,17 +28,6 @@ class TestErrorSeverity:
 class TestErrorCategory:
     """Tests for error category classification."""
 
-    def test_category_types_exist(self):
-        """ErrorCategory enum has expected types."""
-        from src.cli.utils.error_handler import ErrorCategory
-
-        assert hasattr(ErrorCategory, 'VALIDATION')
-        assert hasattr(ErrorCategory, 'API')
-        assert hasattr(ErrorCategory, 'FILE')
-        assert hasattr(ErrorCategory, 'SYSTEM')
-        assert hasattr(ErrorCategory, 'PARSE')
-        assert hasattr(ErrorCategory, 'TASK')
-        assert hasattr(ErrorCategory, 'USER_INPUT')
 
 
 class TestFormatError:

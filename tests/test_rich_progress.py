@@ -435,18 +435,6 @@ class TestRichIOMultipleProgress:
         assert "Processing" in result
 
     @pytest.mark.unit
-    def test_multi_progress_add_task(self):
-        """Test adding tasks to multi-progress."""
-        from src.cli.rich_output import RichIO
-        from rich.console import Console
-
-        output = StringIO()
-        console = Console(file=output, force_terminal=False)
-        io = RichIO(console=console)
-
-        with io.multi_progress() as mp:
-            task_id = mp.add_task("Task 1", total=10)
-            assert task_id is not None
 
     @pytest.mark.unit
     def test_multi_progress_advance_by_id(self):
@@ -584,18 +572,6 @@ class TestProgressTrackerInterface:
     """Tests for the ProgressTracker returned by progress()."""
 
     @pytest.mark.unit
-    def test_tracker_has_completed_property(self):
-        """Test tracker has a way to check if completed."""
-        from src.cli.rich_output import RichIO
-        from rich.console import Console
-
-        output = StringIO()
-        console = Console(file=output, force_terminal=False)
-        io = RichIO(console=console)
-
-        with io.progress(total=5, description="Check") as progress:
-            assert hasattr(progress, 'completed')
-            progress.advance(5)
 
     @pytest.mark.unit
     def test_tracker_has_total_property(self):

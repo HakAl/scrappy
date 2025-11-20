@@ -22,7 +22,7 @@ class MockLLMResponse:
     tokens_used: int = 100
     model: str = "mock-model"
     provider: str = "mock"
-    cached: bool = False
+    : bool = False
 
 
 @pytest.fixture
@@ -71,42 +71,4 @@ def temp_project_dir(tmp_path):
     return tmp_path
 
 
-@pytest.fixture
-def sample_codebase_context(temp_project_dir):
-    """Create a sample codebase context."""
-    from src.context import CodebaseContext
-    return CodebaseContext(project_root=temp_project_dir)
-
-
-@pytest.fixture
-def isolated_orchestrator(mock_registry, temp_project_dir):
-    """Create an isolated orchestrator for testing without real API calls."""
-    from src.orchestrator.core import AgentOrchestrator
-
-    with patch('src.orchestrator.core.ProviderRegistry', return_value=mock_registry):
-        with patch('src.orchestrator.core.CodebaseContext'):
-            orch = AgentOrchestrator.__new__(AgentOrchestrator)
-            orch.registry = mock_registry
-            orch._brain = mock_registry.get("mock")
-            orch._brain_name = "mock"
-            orch.task_history = []
-            orch.codebase_context = None
-            orch.verbose = False
-            orch.working_memory = Mock()
-            orch.session_manager = Mock()
-            orch.cache = Mock()
-            orch.cache.get.return_value = None
-            orch.rate_tracker = Mock()
-            orch.rate_tracker.can_call.return_value = True
-            orch.provider_selector = Mock()
-            orch.task_executor = Mock()
-            return orch
-
-
 # Markers for conditional test execution
-def pytest_configure(config):
-    """Register custom markers."""
-    config.addinivalue_line("markers", "unit: Unit tests")
-    config.addinivalue_line("markers", "integration: Integration tests")
-    config.addinivalue_line("markers", "slow: Slow running tests")
-    config.addinivalue_line("markers", "requires_api: Tests requiring API keys")

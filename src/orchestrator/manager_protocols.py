@@ -7,8 +7,14 @@ specific concerns like delegation, task execution, background tasks, and reporti
 
 from typing import Protocol, Dict, Any, List, Optional, Callable, Coroutine, runtime_checkable
 from datetime import datetime
+from pathlib import Path
 
 from ..providers.base import LLMResponse, LLMProvider
+
+try:
+    from ..context import CodebaseContextProtocol
+except ImportError:
+    from context import CodebaseContextProtocol
 
 
 @runtime_checkable
@@ -173,80 +179,79 @@ class BackgroundTaskManagerProtocol(Protocol):
     actual concurrency and support different execution models.
 
     Implementations:
-    - BackgroundTaskManager: Async background tasks
+    - BackgroundTaskManager: Async background tasks with error tracking
     - SyncBackgroundManager: Synchronous execution for testing
     - NullBackgroundManager: No-op for testing
 
     Example:
-        def schedule_cleanup(manager: BackgroundTaskManagerProtocol) -> None:
-            manager.submit(cleanup_function)
+        async def cleanup():
+            await asyncio.sleep(0.1)
+
+        manager = BackgroundTaskManager()
+        task_id = manager.submit_background_task(cleanup())
+        await manager.wait_for_background_tasks()
     """
 
-    def submit(
-        self,
-        func: Callable[..., Any],
-        *args: Any,
-        **kwargs: Any,
-    ) -> Any:
+    def submit_background_task(self, coro: Coroutine[Any, Any, Any]) -> str:
         """
-        Submit function for background execution.
+        Schedule a coroutine as a background task (fire-and-forget).
+
+        The task runs without blocking the caller. Errors are captured
+        but don't affect the main flow.
 
         Args:
-            func: Function to execute
-            *args: Positional arguments
-            **kwargs: Keyword arguments
+            coro: Coroutine to execute in background
 
         Returns:
-            Task handle or future
+            str: Unique task ID for tracking/cancellation
         """
         ...
 
-    def submit_async(
-        self,
-        coro: Coroutine[Any, Any, Any],
-    ) -> Any:
+    def get_task_status(self) -> Dict[str, Any]:
         """
-        Submit coroutine for background execution.
-
-        Args:
-            coro: Coroutine to execute
-
-        Returns:
-            Task handle or future
-        """
-        ...
-
-    def wait_all(self, timeout: Optional[float] = None) -> None:
-        """
-        Wait for all background tasks to complete.
-
-        Args:
-            timeout: Maximum time to wait in seconds
-
-        Raises:
-            TimeoutError: If timeout exceeded
-        """
-        ...
-
-    def cancel_all(self) -> int:
-        """
-        Cancel all pending background tasks.
-
-        Returns:
-            Number of tasks cancelled
-        """
-        ...
-
-    def get_status(self) -> Dict[str, Any]:
-        """
-        Get background task status.
+        Get status of background task processing.
 
         Returns:
             Dictionary containing:
-            - pending: Number of pending tasks
-            - running: Number of running tasks
+            - pending_tasks: Number of pending tasks
+            - recent_errors: List of recent errors (last 10)
+            - total_errors: Total number of errors captured
+        """
+        ...
+
+    async def wait_for_background_tasks(self, timeout: float = 5.0) -> Dict[str, Any]:
+        """
+        Wait for all pending background tasks to complete.
+
+        Useful for testing or graceful shutdown.
+
+        Args:
+            timeout: Maximum seconds to wait
+
+        Returns:
+            Dictionary containing:
+            - status: 'no_pending' | 'completed' | 'timeout' | 'error'
             - completed: Number of completed tasks
-            - failed: Number of failed tasks
+            - pending: Number of still-pending tasks (if timeout)
+            - errors: Number of errors captured
+        """
+        ...
+
+    def cancel_task(self, task_id: str) -> bool:
+        """
+        Cancel a pending background task.
+
+        Args:
+            task_id: ID returned from submit_background_task
+
+        Returns:
+            True if task was found and cancelled, False otherwise
+        """
+        ...
+
+    def clear_background_errors(self) -> None:
+        """
+        Clear the background error log.
         """
         ...
 
@@ -424,5 +429,84 @@ class ProviderRegistrarProtocol(Protocol):
 
         Returns:
             Number of providers currently registered
+        """
+        ...
+
+
+@runtime_checkable
+class ContextManagerProtocol(Protocol):
+    """
+    Protocol for orchestrator-level context management coordination.
+
+    Adds orchestration concerns (logging, task executor integration,
+    lifecycle policies) on top of CodebaseContext. Does NOT duplicate
+    CodebaseContext functionality - instead coordinates context operations
+    with other orchestrator components.
+
+    Implementations:
+    - ContextManager: Full coordination with logging and task integration
+    - MockContextManager: Returns preset context for testing
+    - NullContextManager: No-op context manager
+
+    Example:
+        def setup_context(manager: ContextManagerProtocol) -> None:
+            manager.auto_explore()
+            prompt = manager.context.augment_prompt("explain this code")
+    """
+
+    @property
+    def context(self) -> CodebaseContextProtocol:
+        """
+        Access underlying codebase context.
+
+        Direct context operations should use this property:
+        - context.augment_prompt(prompt)
+        - context.get_file_count()
+        - context.add_files(files)
+        - context.is_explored()
+        - context.get_status()
+
+        Returns:
+            The underlying CodebaseContext instance
+        """
+        ...
+
+    def auto_explore(self) -> Dict[str, Any]:
+        """
+        Orchestrator-level auto-exploration on startup.
+
+        Coordinates:
+        - Check if context is cached (via context.is_explored())
+        - Log status via OutputInterface
+        - Trigger exploration if needed (via context.explore())
+        - Generate summary via TaskExecutor if exploration occurred
+        - Log results
+
+        Returns:
+            Dictionary containing:
+            - status: 'cached' | 'explored' | 'skipped'
+            - total_files: Number of files found (if explored)
+            - cache_used: Whether cached data was used
+        """
+        ...
+
+    def explore_project(self, force: bool = False) -> Dict[str, Any]:
+        """
+        Orchestrator-level manual exploration trigger.
+
+        Coordinates:
+        - Clear cache if force=True (via context.clear_cache())
+        - Trigger exploration (via context.explore())
+        - Generate summary via TaskExecutor if exploration occurred
+        - Log results via OutputInterface
+
+        Args:
+            force: Force re-exploration even if cached
+
+        Returns:
+            Dictionary containing:
+            - status: 'explored' | 'cached' | 'failed'
+            - total_files: Number of files found
+            - error: Error message if status is 'failed'
         """
         ...

@@ -478,8 +478,6 @@ class TestMultiProviderIOInjection:
         mock_response.tokens_used = 100
 
         self.orchestrator.delegate = MagicMock(return_value=mock_response)
-        self.orchestrator.synthesize = MagicMock(return_value="Synthesized result")
-
         self.multi.synthesize_mode(io=io)
 
         output = io.get_output()
@@ -613,7 +611,6 @@ class TestSessionManagerIOInjection:
         io = MockIO(confirmations=[])
 
         # Mock get_context_status
-        self.orchestrator.get_context_status = MagicMock(return_value={
             'project_path': '/test',
             'is_explored': True,
             'has_summary': False,
@@ -640,7 +637,6 @@ class TestSessionManagerIOInjection:
         """manage_context() should output context status through io."""
         io = MockIO(confirmations=[])
 
-        self.orchestrator.get_context_status = MagicMock(return_value={
             'project_path': '/test/project',
             'is_explored': True,
             'has_summary': True,
@@ -743,11 +739,9 @@ class TestSessionManagerIOInjection:
         """show_rate_limits() should accept an io parameter."""
         io = MockIO(confirmations=[])
 
-        self.orchestrator.get_rate_limit_status = MagicMock(return_value={
             'last_reset': {'daily': 'N/A', 'monthly': 'N/A'},
             'providers': {}
         })
-        self.orchestrator.check_rate_limit_warnings = MagicMock(return_value=[])
         self.orchestrator.context = MagicMock()
         self.orchestrator.context.project_path = Path('/test')
 
@@ -760,7 +754,6 @@ class TestSessionManagerIOInjection:
         """show_rate_limits() should display warnings through io."""
         io = MockIO(confirmations=[])
 
-        self.orchestrator.get_rate_limit_status = MagicMock(return_value={
             'last_reset': {'daily': '2024-01-01', 'monthly': '2024-01-01'},
             'providers': {
                 'openai': {
@@ -770,7 +763,6 @@ class TestSessionManagerIOInjection:
                 }
             }
         })
-        self.orchestrator.check_rate_limit_warnings = MagicMock(return_value=[
             "High usage warning"
         ])
         self.orchestrator.context = MagicMock()

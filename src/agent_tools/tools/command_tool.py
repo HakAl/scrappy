@@ -700,15 +700,24 @@ class CommandTool(Tool):
     security, platform, and convenience features.
     """
 
-    def __init__(self, config: "AgentConfig"):
+    def __init__(
+        self,
+        config: "AgentConfig",
+        executor: Optional[ShellCommandExecutor] = None
+    ):
         """
         Initialize CommandTool with configuration.
 
         Args:
             config: AgentConfig with command settings
+            executor: Injectable shell command executor (default: creates new ShellCommandExecutor)
         """
         self._config = config
-        self._executor = ShellCommandExecutor(config)
+        self._executor = executor or self._create_default_executor()
+
+    def _create_default_executor(self) -> ShellCommandExecutor:
+        """Create default shell command executor."""
+        return ShellCommandExecutor(self._config)
 
     @property
     def name(self) -> str:

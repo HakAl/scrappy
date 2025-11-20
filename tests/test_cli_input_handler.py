@@ -280,22 +280,8 @@ class TestInputHandler:
 class TestInputHandlerModuleStructure:
     """Tests for input_handler module structure."""
 
-    def test_module_imports_successfully(self):
-        """Module should import without errors."""
-        from src.cli import input_handler
-        assert input_handler is not None
 
-    def test_input_handler_class_exists(self):
-        """InputHandler class should exist."""
-        from src.cli.input_handler import InputHandler
-        assert InputHandler is not None
 
-    def test_input_handler_accepts_io(self):
-        """InputHandler should accept io parameter."""
-        from src.cli.input_handler import InputHandler
-        io = MockIO()
-        handler = InputHandler(io)
-        assert handler is not None
 
     def test_has_read_multiline_input_method(self):
         """InputHandler should have read_multiline_input method."""

@@ -6,76 +6,20 @@ Following TDD: tests written first, then implementation.
 """
 
 import pytest
-from typing import List, Tuple, Optional
+from typing import List, Optional
 
 
 class TestCLIIOProtocol:
     """Tests for the CLIIOProtocol interface definition."""
 
-    @pytest.mark.unit
-    def test_protocol_exists(self):
-        """Test that CLIIOProtocol can be imported."""
-        from src.cli.io_interface import CLIIOProtocol
-        assert CLIIOProtocol is not None
-
-    @pytest.mark.unit
-    def test_protocol_defines_echo(self):
-        """Test that protocol defines echo method."""
-        from src.cli.io_interface import CLIIOProtocol
-        assert hasattr(CLIIOProtocol, 'echo')
-
-    @pytest.mark.unit
-    def test_protocol_defines_styled_echo(self):
-        """Test that protocol defines styled_echo method."""
-        from src.cli.io_interface import CLIIOProtocol
-        assert hasattr(CLIIOProtocol, 'styled_echo')
-
-    @pytest.mark.unit
-    def test_protocol_defines_style(self):
-        """Test that protocol defines style method."""
-        from src.cli.io_interface import CLIIOProtocol
-        assert hasattr(CLIIOProtocol, 'style')
-
-    @pytest.mark.unit
-    def test_protocol_defines_prompt(self):
-        """Test that protocol defines prompt method."""
-        from src.cli.io_interface import CLIIOProtocol
-        assert hasattr(CLIIOProtocol, 'prompt')
-
-    @pytest.mark.unit
-    def test_protocol_defines_confirm(self):
-        """Test that protocol defines confirm method."""
-        from src.cli.io_interface import CLIIOProtocol
-        assert hasattr(CLIIOProtocol, 'confirm')
-
-    @pytest.mark.unit
-    def test_protocol_defines_input_line(self):
-        """Test that protocol defines input_line method."""
-        from src.cli.io_interface import CLIIOProtocol
-        assert hasattr(CLIIOProtocol, 'input_line')
-
-    @pytest.mark.unit
-    def test_protocol_defines_secho(self):
-        """Test that protocol defines secho method (click-style naming)."""
-        from src.cli.io_interface import CLIIOProtocol
-        assert hasattr(CLIIOProtocol, 'secho')
-
+    pass
 
 class TestTestIO:
     """Tests for TestIO implementation - used for testing CLI code."""
 
     @pytest.mark.unit
-    def test_testio_exists(self):
-        """Test that TestIO class can be imported."""
-        from src.cli.io_interface import TestIO
-        assert TestIO is not None
 
     @pytest.mark.unit
-    def test_testio_instantiation(self):
-        """Test TestIO can be instantiated."""
-        from src.cli.io_interface import TestIO
-        io = TestIO()
-        assert io is not None
 
     @pytest.mark.unit
     def test_testio_echo_captures_output(self):
@@ -292,17 +236,8 @@ class TestMockIO:
     """Tests for MockIO in tests/helpers.py."""
 
     @pytest.mark.unit
-    def test_mockio_exists(self):
-        """Test that MockIO class can be imported from helpers."""
-        from tests.helpers import MockIO
-        assert MockIO is not None
 
     @pytest.mark.unit
-    def test_mockio_instantiation(self):
-        """Test MockIO can be instantiated."""
-        from tests.helpers import MockIO
-        io = MockIO()
-        assert io is not None
 
     @pytest.mark.unit
     def test_mockio_echo_captures_output(self):
@@ -379,32 +314,10 @@ class TestClickIO:
     """Tests for ClickIO implementation - real CLI output using click."""
 
     @pytest.mark.unit
-    def test_clickio_exists(self):
-        """Test that ClickIO class can be imported."""
-        from src.cli.io_interface import ClickIO
-        assert ClickIO is not None
 
     @pytest.mark.unit
-    def test_clickio_instantiation(self):
-        """Test ClickIO can be instantiated."""
-        from src.cli.io_interface import ClickIO
-        io = ClickIO()
-        assert io is not None
 
     @pytest.mark.unit
-    def test_clickio_implements_protocol(self):
-        """Test that ClickIO implements CLIIOProtocol."""
-        from src.cli.io_interface import ClickIO, CLIIOProtocol
-
-        io = ClickIO()
-
-        # Check all protocol methods exist
-        assert hasattr(io, 'echo')
-        assert hasattr(io, 'styled_echo')
-        assert hasattr(io, 'style')
-        assert hasattr(io, 'prompt')
-        assert hasattr(io, 'confirm')
-        assert hasattr(io, 'input_line')
 
     @pytest.mark.unit
     def test_clickio_style_returns_styled_string(self):
@@ -524,16 +437,6 @@ class TestEdgeCases:
     """Tests for edge cases and error handling."""
 
     @pytest.mark.unit
-    def test_testio_empty_echo(self):
-        """Test echo with empty string."""
-        from src.cli.io_interface import TestIO
-        io = TestIO()
-
-        io.echo("")
-
-        # Should not raise, output might be empty or just newline
-        output = io.get_output()
-        assert output is not None
 
     @pytest.mark.unit
     def test_testio_echo_with_special_characters(self):

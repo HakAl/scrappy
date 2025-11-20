@@ -33,12 +33,7 @@ class PromptBuilder:
             project_root: Path to project root (creates new context if context not provided)
             tool_registry: ToolRegistry instance for dynamic tool descriptions
         """
-        if context is not None:
-            self.context = context
-        elif project_root is not None:
-            self.context = CodebaseContext(str(project_root))
-        else:
-            self.context = CodebaseContext()
+        self.context = context or self._create_default_context(project_root)
 
         # Tool registry for dynamic tool descriptions
         self.tool_registry = tool_registry
@@ -46,6 +41,12 @@ class PromptBuilder:
         # Custom sections
         self._custom_sections = {}
         self._section_overrides = {}
+
+    def _create_default_context(self, project_root: Optional[Path] = None) -> CodebaseContext:
+        """Create default codebase context."""
+        if project_root is not None:
+            return CodebaseContext(str(project_root))
+        return CodebaseContext()
 
     @property
     def platform(self) -> str:

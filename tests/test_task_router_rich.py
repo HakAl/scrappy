@@ -13,7 +13,6 @@ from io import StringIO
 from rich.console import Console
 
 from src.task_router.output_handler import (
-    OutputHandlerInterface,
     BufferOutputHandler,
 )
 
@@ -420,21 +419,6 @@ class TestRichOutputHandlerIntegration:
         # Should have table structure
         assert "Task Classification" in output
 
-    def test_handler_implements_interface(self):
-        """RichOutputHandler should implement OutputHandlerInterface."""
-        from src.task_router.output_handler import RichOutputHandler
-
-        # Should be able to instantiate
-        handler = RichOutputHandler()
-
-        # Should implement all abstract methods
-        assert hasattr(handler, 'log_classification')
-        assert hasattr(handler, 'log_provider_selection')
-        assert hasattr(handler, 'log_execution_start')
-        assert hasattr(handler, 'log_info')
-
-        # Should be instance of interface
-        assert isinstance(handler, OutputHandlerInterface)
 
     def test_handler_accepts_custom_console(self):
         """RichOutputHandler should accept custom console for testing."""

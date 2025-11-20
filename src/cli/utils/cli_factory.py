@@ -18,6 +18,10 @@ from ..multiprovider import CLIMultiProvider
 from ..smart_query import CLISmartQuery
 from ..agent_manager import CLIAgentManager
 from ..task_router_handler import CLITaskRouterHandler
+from ..context_manager import ContextManager
+from ..cache_manager import CacheManager
+from ..rate_limiter import RateLimiter
+from ..persistence import SessionPersistence
 
 if TYPE_CHECKING:
     from ..core import CLI
@@ -104,9 +108,24 @@ def initialize_cli_handlers(orchestrator: "Orchestrator", session_start: datetim
     Returns:
         Dict with all 8 standard handlers
     """
+    # Create session manager dependencies first
+    context_manager = ContextManager(orchestrator)
+    cache_manager = CacheManager(orchestrator)
+    rate_limiter = RateLimiter(orchestrator)
+    session_persistence = SessionPersistence(orchestrator)
+
+    # Create session manager with all dependencies
+    session_mgr = CLISessionManager(
+        orchestrator=orchestrator,
+        context_manager=context_manager,
+        cache_manager=cache_manager,
+        rate_limiter=rate_limiter,
+        session_persistence=session_persistence
+    )
+
     return {
         'display': CLIDisplay(orchestrator, session_start),
-        'session_mgr': CLISessionManager(orchestrator),
+        'session_mgr': session_mgr,
         'codebase': CLICodebaseAnalysis(orchestrator),
         'tasks': CLITaskExecution(orchestrator),
         'multiprovider': CLIMultiProvider(orchestrator),
@@ -131,7 +150,7 @@ def create_cli_from_context(ctx: Any, io: Optional[CLIIOProtocol] = None) -> "CL
 
     options = extract_context_options(ctx)
 
-    return CLI(
+    cli = CLI(
         brain=options['brain'],
         auto_explore=options['auto_explore'],
         context_aware=options['context_aware'],
@@ -139,6 +158,8 @@ def create_cli_from_context(ctx: Any, io: Optional[CLIIOProtocol] = None) -> "CL
         show_provider_status=options['show_provider_status'],
         io=io
     )
+    cli.initialize()
+    return cli
 
 
 def create_cli(config: Dict[str, Any], io: Optional[CLIIOProtocol] = None) -> "CLI":
@@ -165,7 +186,7 @@ def create_cli(config: Dict[str, Any], io: Optional[CLIIOProtocol] = None) -> "C
     """
     from ..core import CLI
 
-    return CLI(
+    cli = CLI(
         brain=config.get('brain'),
         auto_explore=config.get('auto_explore', False),
         context_aware=config.get('context_aware', True),
@@ -173,3 +194,5 @@ def create_cli(config: Dict[str, Any], io: Optional[CLIIOProtocol] = None) -> "C
         show_provider_status=config.get('show_provider_status', False),
         io=io
     )
+    cli.initialize()
+    return cli

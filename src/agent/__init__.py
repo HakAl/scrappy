@@ -22,7 +22,11 @@ from .protocols import (
     ToolRegistryProtocol,
     ToolContextProtocol,
     CheckpointManagerProtocol,
+    FileSystemProtocol,
+    PlatformUtilsProtocol,
 )
+from .file_system import RealFileSystem, InMemoryFileSystem
+from .platform_adapter import RealPlatformUtils, MockPlatformUtils
 
 __all__ = [
     # Core agent
@@ -49,4 +53,12 @@ __all__ = [
     'ToolRegistryProtocol',
     'ToolContextProtocol',
     'CheckpointManagerProtocol',
+    'FileSystemProtocol',
+    'PlatformUtilsProtocol',
+    # File system implementations
+    'RealFileSystem',
+    'InMemoryFileSystem',
+    # Platform implementations
+    'RealPlatformUtils',
+    'MockPlatformUtils',
 ]

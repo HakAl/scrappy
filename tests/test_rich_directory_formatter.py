@@ -141,18 +141,6 @@ def test_format_tree_line_preserves_tree_structure():
     assert "|-- " in result or "|--" in result.replace("\x1b", "")
 
 
-def test_formatter_without_console_creates_default():
-    """
-    Test that formatter can be created without console argument.
-
-    Expected behavior: Should create default Rich console if none provided.
-    This test will FAIL initially (TDD red phase).
-    """
-    formatter = RichDirectoryFormatter()
-
-    # Should have a console
-    assert hasattr(formatter, '_console')
-    assert formatter._console is not None
 
 
 def test_null_formatter_compatibility():

@@ -22,7 +22,6 @@ class TestTimestampParsing:
 
         # Setup mock orchestrator with valid timestamp
         orchestrator = ConfigurableTestOrchestrator()
-        orchestrator.get_rate_limit_status = Mock(return_value={
             'last_reset': {'daily': 'N/A', 'monthly': 'N/A'},
             'providers': {
                 'groq': {
@@ -39,8 +38,6 @@ class TestTimestampParsing:
                 }
             }
         })
-        orchestrator.check_rate_limit_warnings = Mock(return_value=[])
-
         rate_limiter = RateLimiter(orchestrator)
         io = MockIO()
 
@@ -56,7 +53,6 @@ class TestTimestampParsing:
         from src.cli.rate_limiter import RateLimiter
 
         orchestrator = ConfigurableTestOrchestrator()
-        orchestrator.get_rate_limit_status = Mock(return_value={
             'last_reset': {'daily': 'N/A', 'monthly': 'N/A'},
             'providers': {
                 'groq': {
@@ -73,8 +69,6 @@ class TestTimestampParsing:
                 }
             }
         })
-        orchestrator.check_rate_limit_warnings = Mock(return_value=[])
-
         rate_limiter = RateLimiter(orchestrator)
         io = MockIO()
 
@@ -90,7 +84,6 @@ class TestTimestampParsing:
         from src.cli.rate_limiter import RateLimiter
 
         orchestrator = ConfigurableTestOrchestrator()
-        orchestrator.get_rate_limit_status = Mock(return_value={
             'last_reset': {'daily': 'N/A', 'monthly': 'N/A'},
             'providers': {
                 'groq': {
@@ -107,8 +100,6 @@ class TestTimestampParsing:
                 }
             }
         })
-        orchestrator.check_rate_limit_warnings = Mock(return_value=[])
-
         rate_limiter = RateLimiter(orchestrator)
         io = MockIO()
 
@@ -124,7 +115,6 @@ class TestTimestampParsing:
         from src.cli.rate_limiter import RateLimiter
 
         orchestrator = ConfigurableTestOrchestrator()
-        orchestrator.get_rate_limit_status = Mock(return_value={
             'last_reset': {'daily': 'N/A', 'monthly': 'N/A'},
             'providers': {
                 'groq': {
@@ -141,8 +131,6 @@ class TestTimestampParsing:
                 }
             }
         })
-        orchestrator.check_rate_limit_warnings = Mock(return_value=[])
-
         rate_limiter = RateLimiter(orchestrator)
         io = MockIO()
 
@@ -160,7 +148,6 @@ class TestTimestampParsing:
         from src.cli.rate_limiter import RateLimiter
 
         orchestrator = ConfigurableTestOrchestrator()
-        orchestrator.get_rate_limit_status = Mock(return_value={
             'last_reset': {'daily': 'N/A', 'monthly': 'N/A'},
             'providers': {
                 'groq': {
@@ -177,8 +164,6 @@ class TestTimestampParsing:
                 }
             }
         })
-        orchestrator.check_rate_limit_warnings = Mock(return_value=[])
-
         rate_limiter = RateLimiter(orchestrator)
         io = MockIO()
 
@@ -195,7 +180,6 @@ class TestTimestampParsing:
         from src.cli.rate_limiter import RateLimiter
 
         orchestrator = ConfigurableTestOrchestrator()
-        orchestrator.get_rate_limit_status = Mock(return_value={
             'last_reset': {'daily': 'N/A', 'monthly': 'N/A'},
             'providers': {
                 'groq': {
@@ -212,8 +196,6 @@ class TestTimestampParsing:
                 }
             }
         })
-        orchestrator.check_rate_limit_warnings = Mock(return_value=[])
-
         rate_limiter = RateLimiter(orchestrator)
         io = MockIO()
 
@@ -229,7 +211,6 @@ class TestTimestampParsing:
         from src.cli.rate_limiter import RateLimiter
 
         orchestrator = ConfigurableTestOrchestrator()
-        orchestrator.get_rate_limit_status = Mock(return_value={
             'last_reset': {'daily': 'N/A', 'monthly': 'N/A'},
             'providers': {
                 'groq': {
@@ -246,8 +227,6 @@ class TestTimestampParsing:
                 }
             }
         })
-        orchestrator.check_rate_limit_warnings = Mock(return_value=[])
-
         rate_limiter = RateLimiter(orchestrator)
         io = MockIO()
 
@@ -256,5 +235,3 @@ class TestTimestampParsing:
 
         output = io.get_output()
         assert "llama-3.1-8b" in output
-
-

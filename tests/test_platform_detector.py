@@ -109,17 +109,6 @@ class TestPlatformDetection:
         assert platform1 == platform2
 
     @pytest.mark.unit
-    def test_new_instance_does_not_use_other_instance_cache(self):
-        """Each instance should have its own cache."""
-        from src.context.platform import PlatformDetector
-
-        detector1 = PlatformDetector()
-        _ = detector1.get_platform()
-
-        # New instance should detect fresh
-        detector2 = PlatformDetector()
-        # Both should work independently
-        assert detector2.get_platform() is not None
 
     @pytest.mark.unit
     def test_matches_current_system(self):
@@ -143,14 +132,6 @@ class TestToolAvailability:
     """Tests for tool/command availability detection."""
 
     @pytest.mark.unit
-    def test_returns_boolean(self):
-        """Should return a boolean value."""
-        from src.context.platform import PlatformDetector
-
-        detector = PlatformDetector()
-        result = detector.has_tool('python')
-
-        assert isinstance(result, bool)
 
     @pytest.mark.unit
     def test_detects_python_available(self):

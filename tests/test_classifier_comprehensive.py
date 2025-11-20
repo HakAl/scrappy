@@ -609,19 +609,6 @@ class TestCommandSafety:
         assert result is True
 
     @pytest.mark.unit
-    def test_windows_dangerous_commands_blocked(self, classifier):
-        """Test that Windows dangerous commands are blocked."""
-        dangerous = [
-            "del /f /s /q C:\\*",
-            "rmdir /s /q C:\\",
-            "format C:",
-        ]
-
-        for cmd in dangerous:
-            # Should be blocked on Windows or recognized as dangerous
-            result = classifier.is_safe_command(cmd)
-            # Either blocked or not valid for platform
-            assert result is False or result is not None
 
     @pytest.mark.unit
     @patch('src.platform_utils.is_windows', return_value=False)

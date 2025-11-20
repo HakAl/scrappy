@@ -749,7 +749,6 @@ class TestAsyncMethods:
     """Tests for async methods."""
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
     async def test_record_request_async(self, tmp_path):
         """Test async request recording."""
         tracker_path = tmp_path / "tracker.json"
@@ -766,7 +765,6 @@ class TestAsyncMethods:
         assert usage['tokens_today'] == 150
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
     async def test_record_request_async_with_error(self):
         """Test async request recording with error."""
         tracker = RateLimitTracker()
@@ -782,7 +780,6 @@ class TestAsyncMethods:
         assert usage['errors'][0]['message'] == 'Test error'
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
     async def test_load_tracker_async(self, tmp_path):
         """Test async tracker loading."""
         tracker_path = tmp_path / "tracker.json"
@@ -925,7 +922,6 @@ class TestConcurrentAccess:
     """Tests for concurrent access and race conditions."""
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
     async def test_concurrent_async_writes_preserve_all_requests(self):
         """Test that concurrent async writes don't lose data."""
         import asyncio
@@ -956,7 +952,6 @@ class TestConcurrentAccess:
             assert usage['tokens_today'] == 150, f"provider_{suffix} lost tokens"
 
     @pytest.mark.asyncio
-    @pytest.mark.unit
     async def test_concurrent_writes_to_same_provider(self):
         """Test concurrent writes to same provider/model accumulate correctly."""
         import asyncio

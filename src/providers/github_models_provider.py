@@ -77,25 +77,40 @@ class GitHubModelsProvider(LLMProvider):
 
     BASE_URL = "https://models.github.ai/inference"
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        client: Optional["OpenAI"] = None,
+        initial_limits: Optional[ProviderLimits] = None
+    ):
         """
         Initialize GitHub Models provider.
 
         Args:
             api_key: GitHub PAT with models scope (defaults to GITHUB_API_KEY env var)
+            client: Optional OpenAI client instance
+            initial_limits: Optional initial provider limits
         """
         if not OPENAI_AVAILABLE:
             raise_package_not_installed('openai')
 
         self._api_key = api_key or os.environ.get('GITHUB_API_KEY')
-        if not self._api_key:
+        if not self._api_key and client is None:
             raise_env_var_not_found('GITHUB_API_KEY')
 
-        self._client = OpenAI(
+        self._client = client or self._create_default_client()
+        self._last_limits = initial_limits or self._create_default_limits()
+
+    def _create_default_client(self) -> "OpenAI":
+        """Create default OpenAI client."""
+        return OpenAI(
             api_key=self._api_key,
             base_url=self.BASE_URL
         )
-        self._last_limits = ProviderLimits()
+
+    def _create_default_limits(self) -> ProviderLimits:
+        """Create default provider limits."""
+        return ProviderLimits()
 
     @property
     def name(self) -> str:

@@ -30,6 +30,8 @@ from .background import BackgroundTaskManager
 from .registration import ProviderRegistrar
 from .status_reporter import ProviderStatusReporter
 from .usage_reporter import UsageReporter
+from .context_manager import ContextManager
+from .manager_protocols import ContextManagerProtocol, BackgroundTaskManagerProtocol
 
 
 class AgentOrchestrator:
@@ -38,126 +40,137 @@ class AgentOrchestrator:
 
     Usage with Claude Code as reasoning layer:
         orch = AgentOrchestrator()
+        orch.initialize(auto_register=True)
         result = orch.delegate('groq', 'Summarize this text: ...')
         embeddings = orch.providers.get('cohere').embed(['text1', 'text2'])
     """
 
     def __init__(
         self,
-        auto_register: bool = True,
-        orchestrator_provider: Optional[str] = None,
         project_path: Optional[str] = None,
-        auto_explore: bool = False,
         context_aware: bool = True,
         enable_cache: bool = True,
         cache_ttl_hours: int = 24,
         verbose_selection: bool = False,
-        show_provider_status: bool = False,
         output: Optional[OutputInterface] = None,
         # Injectable dependencies for testability
+        registry: Optional[ProviderRegistry] = None,
+        codebase_context: Optional[CodebaseContext] = None,
         cache: Optional[ResponseCache] = None,
         rate_tracker: Optional[RateLimitTracker] = None,
         working_memory: Optional[WorkingMemory] = None,
         session_manager: Optional[SessionManager] = None,
         provider_selector: Optional[ProviderSelector] = None,
+        usage_reporter: Optional[UsageReporter] = None,
+        status_reporter: Optional[ProviderStatusReporter] = None,
+        task_executor: Optional[TaskExecutor] = None,
+        context_manager: Optional[ContextManagerProtocol] = None,
+        delegation_manager: Optional[DelegationManager] = None,
+        background_manager: Optional[BackgroundTaskManagerProtocol] = None,
     ):
         """
-        Initialize orchestrator.
+        Initialize orchestrator (dependencies only - NO side effects).
+
+        Call initialize() after construction to set up providers and brain.
 
         Args:
-            auto_register: Automatically register available providers
-            orchestrator_provider: Provider to use as the "brain" for planning/reasoning
             project_path: Path to project for context awareness
-            auto_explore: Automatically explore codebase on init
             context_aware: Enable context-augmented prompts
             enable_cache: Enable response caching
             cache_ttl_hours: Time-to-live for cache entries in hours
             verbose_selection: Show detailed provider selection logic
-            show_provider_status: Display provider status summary on startup
             output: Output interface for messages (default: ConsoleOutput)
+            registry: Injectable provider registry (default: creates new ProviderRegistry)
+            codebase_context: Injectable codebase context (default: creates new CodebaseContext)
             cache: Injectable response cache (default: creates new ResponseCache)
             rate_tracker: Injectable rate limit tracker (default: creates new RateLimitTracker)
             working_memory: Injectable working memory (default: creates new WorkingMemory)
             session_manager: Injectable session manager (default: creates new SessionManager)
             provider_selector: Injectable provider selector (default: creates new ProviderSelector)
+            usage_reporter: Injectable usage reporter (default: creates new UsageReporter)
+            status_reporter: Injectable status reporter (default: creates new ProviderStatusReporter)
+            task_executor: Injectable task executor (default: creates new TaskExecutor)
+            context_manager: Injectable context manager (default: creates new ContextManager)
+            delegation_manager: Injectable delegation manager (default: creates new DelegationManager)
+            background_manager: Injectable background task manager (default: creates new BackgroundTaskManager)
         """
+        # Store config for factory methods
+        self._project_path = project_path
+        self._cache_ttl_hours = cache_ttl_hours
+        self._verbose_selection = verbose_selection
+
         # Core components
-        self.output = output or ConsoleOutput()
-        self.registry = ProviderRegistry()
+        self.output = output or self._create_default_output()
+        self.registry = registry or self._create_default_registry()
         self.task_history: list[dict] = []
         self.created_at = datetime.now()
         self._brain = None
-        self._brain_name = orchestrator_provider
+        self._brain_name = None
         self.context_aware = context_aware
         self.caching_enabled = enable_cache
         self.verbose_selection = verbose_selection
-        self._show_provider_status = show_provider_status
 
-        # Background task management (for fire-and-forget operations)
-        self.background_manager = BackgroundTaskManager()
+        # Initialize dependencies using injected or factory methods
+        self.background_manager = background_manager or self._create_default_background_manager()
 
-        # Initialize codebase context
-        self.context = CodebaseContext(project_path)
+        # Codebase context (needed for other components)
+        _codebase_context = codebase_context or self._create_default_codebase_context()
 
-        # Initialize composed components (use injected or create defaults)
-        self.cache = cache or ResponseCache(
-            cache_file=str(self.context.project_path / ".llm_response_cache.json"),
-            default_ttl_hours=cache_ttl_hours
-        )
-        self.rate_tracker = rate_tracker or RateLimitTracker(
-            tracker_file=str(self.context.project_path / ".llm_rate_limits.json")
-        )
-        self.working_memory = working_memory or WorkingMemory()
-        self.session_manager = session_manager or SessionManager(self.context.project_path)
-        self.provider_selector = provider_selector or ProviderSelector(self.registry, verbose=verbose_selection, output=self.output)
+        # Composed components
+        self.cache = cache or self._create_default_cache(_codebase_context)
+        self.rate_tracker = rate_tracker or self._create_default_rate_tracker(_codebase_context)
+        self.working_memory = working_memory or self._create_default_working_memory()
+        self.session_manager = session_manager or self._create_default_session_manager(_codebase_context)
+        self.provider_selector = provider_selector or self._create_default_provider_selector()
+        self.usage_reporter = usage_reporter or self._create_default_usage_reporter()
 
-        # Initialize usage reporter
-        self.usage_reporter = UsageReporter(
-            cache=self.cache,
-            task_history=self.task_history,
-            created_at=self.created_at,
-            caching_enabled=self.caching_enabled
-        )
+        # Initialize status reporter (can be created now, will use current brain state)
+        self._status_reporter = status_reporter or self._create_default_status_reporter()
 
+        # Initialize task executor
+        self.task_executor = task_executor or self._create_default_task_executor()
+
+        # Initialize context manager (after task_executor since it needs summary generation)
+        self.context_manager = context_manager or self._create_default_context_manager(_codebase_context)
+
+        # Initialize delegation manager
+        self.delegation_manager = delegation_manager or self._create_default_delegation_manager()
+
+    def initialize(
+        self,
+        auto_register: bool = True,
+        orchestrator_provider: Optional[str] = None,
+        auto_explore: bool = False,
+        show_provider_status: bool = False,
+    ):
+        """
+        Initialize orchestrator with providers and brain setup.
+
+        Call this after construction to perform setup operations.
+
+        Args:
+            auto_register: Automatically register available providers
+            orchestrator_provider: Provider to use as the "brain" for planning/reasoning
+            auto_explore: Automatically explore codebase after initialization
+            show_provider_status: Display provider status summary on startup
+
+        Returns:
+            self (for method chaining)
+        """
         # Register providers and set up brain
         if auto_register:
             self._auto_register_providers()
             self._setup_brain(orchestrator_provider)
 
-        # Initialize status reporter (after brain is set up)
-        self._status_reporter = ProviderStatusReporter(
-            registry=self.registry,
-            provider_selector=self.provider_selector,
-            output=self.output,
-            brain_name=self._brain_name,
-            verbose_selection=self.verbose_selection
-        )
-
+        # Show provider status if requested
         if auto_register and show_provider_status:
             self.print_provider_status()
 
-        # Initialize task executor after brain is set up
-        self.task_executor = TaskExecutor(
-            get_brain_provider=lambda: self._brain,
-            get_brain_name=lambda: self._brain_name,
-            record_task=lambda task: self.task_history.append(task)
-        )
-
-        # Initialize delegation manager
-        self.delegation_manager = DelegationManager(
-            registry=self.registry,
-            cache=self.cache,
-            rate_tracker=self.rate_tracker,
-            provider_selector=self.provider_selector,
-            output=self.output,
-            context=self.context,
-            context_aware=self.context_aware,
-            get_working_memory_context=self.working_memory.get_context_string
-        )
-
         # Auto-explore if requested
         if auto_explore and self._brain:
-            self._auto_explore()
+            self.context_manager.auto_explore()
+
+        return self
 
     def _auto_register_providers(self):
         """Attempt to register all known providers."""
@@ -172,21 +185,106 @@ class AgentOrchestrator:
         except RuntimeError as e:
             self.output.warn(str(e))
 
-    def _auto_explore(self):
-        """Automatically explore the codebase if not already explored."""
-        if self.context.is_explored():
-            self.output.info(f"[CONTEXT] Loaded cached context for {self.context.project_path.name}")
-            return
+    # Factory methods for default dependencies
 
-        self.output.info(f"[CONTEXT] Exploring codebase: {self.context.project_path}")
-        result = self.context.explore()
+    def _create_default_output(self) -> OutputInterface:
+        """Create default output interface."""
+        return ConsoleOutput()
 
-        if result['status'] == 'explored':
-            self.output.info(f"[CONTEXT] Found {result['total_files']} files")
-            self.context.generate_summary(self.task_executor.generate_context_summary)
-            self.output.info("[CONTEXT] Generated project summary")
+    def _create_default_registry(self) -> ProviderRegistry:
+        """Create default provider registry."""
+        return ProviderRegistry()
+
+    def _create_default_background_manager(self) -> BackgroundTaskManagerProtocol:
+        """Create default background task manager."""
+        return BackgroundTaskManager()
+
+    def _create_default_codebase_context(self) -> CodebaseContext:
+        """Create default codebase context."""
+        return CodebaseContext(self._project_path)
+
+    def _create_default_cache(self, codebase_context: CodebaseContext) -> ResponseCache:
+        """Create default response cache."""
+        return ResponseCache(
+            cache_file=str(codebase_context.project_path / ".llm_response_cache.json"),
+            default_ttl_hours=self._cache_ttl_hours
+        )
+
+    def _create_default_rate_tracker(self, codebase_context: CodebaseContext) -> RateLimitTracker:
+        """Create default rate limit tracker."""
+        return RateLimitTracker(
+            tracker_file=str(codebase_context.project_path / ".llm_rate_limits.json")
+        )
+
+    def _create_default_working_memory(self) -> WorkingMemory:
+        """Create default working memory."""
+        return WorkingMemory()
+
+    def _create_default_session_manager(self, codebase_context: CodebaseContext) -> SessionManager:
+        """Create default session manager."""
+        return SessionManager(codebase_context.project_path)
+
+    def _create_default_provider_selector(self) -> ProviderSelector:
+        """Create default provider selector."""
+        return ProviderSelector(self.registry, verbose=self._verbose_selection, output=self.output)
+
+    def _create_default_usage_reporter(self) -> UsageReporter:
+        """Create default usage reporter."""
+        return UsageReporter(cache=self.cache, created_at=self.created_at)
+
+    def _create_default_status_reporter(self) -> ProviderStatusReporter:
+        """Create default status reporter."""
+        return ProviderStatusReporter(
+            registry=self.registry,
+            provider_selector=self.provider_selector,
+            output=self.output,
+            brain_name=self._brain_name,
+            verbose_selection=self.verbose_selection
+        )
+
+    def _create_default_task_executor(self) -> TaskExecutor:
+        """Create default task executor."""
+        return TaskExecutor(
+            get_brain_provider=lambda: self._brain,
+            get_brain_name=lambda: self._brain_name,
+            record_task=lambda task: self.task_history.append(task)
+        )
+
+    def _create_default_context_manager(self, codebase_context: CodebaseContext) -> ContextManager:
+        """Create default context manager."""
+        return ContextManager(
+            context=codebase_context,
+            output=self.output,
+            generate_summary_func=self.task_executor.generate_context_summary
+        )
+
+    def _create_default_delegation_manager(self) -> DelegationManager:
+        """Create default delegation manager."""
+        return DelegationManager(
+            registry=self.registry,
+            cache=self.cache,
+            rate_tracker=self.rate_tracker,
+            provider_selector=self.provider_selector,
+            output=self.output,
+            context=self.context_manager.context,
+            context_aware=self.context_aware,
+            get_working_memory_context=self.working_memory.get_context_string
+        )
 
     # Provider Management
+
+    @property
+    def context(self):
+        """
+        Access the underlying codebase context.
+
+        For backward compatibility, provides direct access to CodebaseContext.
+        New code should prefer using context_manager for orchestration-level operations.
+
+        Returns:
+            CodebaseContext instance
+        """
+        return self.context_manager.context
 
     @property
     def providers(self) -> ProviderRegistry:
@@ -239,19 +337,19 @@ class AgentOrchestrator:
     # Context Management
 
     def explore_project(self, force: bool = False) -> dict:
-        """Manually trigger project exploration."""
-        if force:
-            self.context.clear_cache()
+        """
+        Manually trigger project exploration.
 
-        result = self.context.explore(force=force)
-
-        if result['status'] == 'explored' or force:
-            self.context.generate_summary(self.task_executor.generate_context_summary)
-
-        return result
+        Delegates to ContextManager for orchestration-level coordination.
+        """
+        return self.context_manager.explore_project(force=force)
 
     def get_context_status(self) -> dict:
-        """Get current codebase context status."""
+        """
+        Get current codebase context status.
+
+        Delegates directly to the underlying CodebaseContext.
+        """
         return self.context.get_status()
 
 
@@ -402,8 +500,24 @@ class AgentOrchestrator:
             **kwargs
         )
 
-        # Record task in history
-        self.task_history.append(task_record)
+        # Record task in usage reporter (if task_record has required fields)
+        if task_record and 'provider' in task_record:
+            self.usage_reporter.record(
+                provider=task_record['provider'],
+                tokens_used=task_record.get('tokens_used', 0),
+                cached=task_record.get('cached', False),
+                metadata={
+                    'latency_ms': task_record.get('latency_ms', 0),
+                    'model': task_record.get('model', ''),
+                    'context_augmented': task_record.get('context_augmented', False),
+                    'fallback': task_record.get('fallback', False),
+                    'attempts': task_record.get('attempts', 1),
+                }
+            )
+
+        # Keep task_history for backward compatibility (session save/load)
+        if task_record:
+            self.task_history.append(task_record)
 
         return response
 
@@ -534,8 +648,25 @@ class AgentOrchestrator:
             **kwargs
         )
 
-        # Record task in history
-        self.task_history.append(task_record)
+        # Record task in usage reporter (if task_record has required fields)
+        if task_record and 'provider' in task_record:
+            self.usage_reporter.record(
+                provider=task_record['provider'],
+                tokens_used=task_record.get('tokens_used', 0),
+                cached=task_record.get('cached', False),
+                metadata={
+                    'latency_ms': task_record.get('latency_ms', 0),
+                    'model': task_record.get('model', ''),
+                    'context_augmented': task_record.get('context_augmented', False),
+                    'fallback': task_record.get('fallback', False),
+                    'attempts': task_record.get('attempts', 1),
+                    'async': task_record.get('async', True),
+                }
+            )
+
+        # Keep task_history for backward compatibility (session save/load)
+        if task_record:
+            self.task_history.append(task_record)
 
         return response
 
@@ -615,11 +746,14 @@ class AgentOrchestrator:
         self.usage_reporter.clear_cache()
 
     def toggle_cache(self) -> bool:
-        """Toggle caching on/off. Returns new state."""
-        result = self.usage_reporter.toggle_cache()
-        # Keep orchestrator's caching_enabled in sync
-        self.caching_enabled = self.usage_reporter.caching_enabled
-        return result
+        """
+        Toggle caching on/off. Returns new state.
+
+        Note: This toggles the orchestrator's caching preference.
+        Use clear_cache() to clear existing cached responses.
+        """
+        self.caching_enabled = not self.caching_enabled
+        return self.caching_enabled
 
     # Background Task Management (delegates to BackgroundTaskManager)
 
@@ -703,5 +837,7 @@ class AgentOrchestrator:
 
 
 def create_orchestrator() -> AgentOrchestrator:
-    """Factory function to create an orchestrator."""
-    return AgentOrchestrator(auto_register=True)
+    """Factory function to create an initialized orchestrator."""
+    orch = AgentOrchestrator()
+    orch.initialize(auto_register=True)
+    return orch

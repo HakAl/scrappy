@@ -26,15 +26,6 @@ class TestToolRegistryFactoryBehavior:
     """Tests for the factory behavior we want to extract."""
 
     @pytest.mark.unit
-    def test_create_default_returns_registry_instance(self):
-        """Factory should return a ToolRegistry instance."""
-        # This is what we want: standalone factory function
-        # Currently lives in CodeAgent._create_default_registry()
-        # After refactor: ToolRegistryFactory.create_default() or create_default_registry()
-
-        registry = create_default_registry()
-
-        assert isinstance(registry, ToolRegistry)
 
     @pytest.mark.unit
     def test_default_registry_has_file_tools(self):

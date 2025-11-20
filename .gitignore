@@ -59,3 +59,9 @@ htmlcov/
 .agent_audit.json
 
 .claude
+
+/NUL
+/nul
+/CON
+/con
+nul

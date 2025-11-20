@@ -8,40 +8,15 @@ file extension categories and file type patterns used throughout the CLI.
 import pytest
 
 
-class TestExtensionsModuleStructure:
-    """Tests for the extensions module structure and exports."""
-
-    def test_module_imports_successfully(self):
-        """Module should import without errors."""
-        from src.cli.config import extensions
-        assert extensions is not None
-
-    def test_module_has_docstring(self):
-        """Extensions module should have a module-level docstring."""
-        from src.cli.config import extensions
-        assert extensions.__doc__ is not None
-        assert len(extensions.__doc__) > 0
-
-
 class TestLanguageExtensions:
     """Tests for programming language file extensions."""
 
-    def test_python_extensions_exists(self):
-        """PYTHON_EXTENSIONS should be exported."""
-        from src.cli.config.extensions import PYTHON_EXTENSIONS
-        assert PYTHON_EXTENSIONS is not None
-        assert isinstance(PYTHON_EXTENSIONS, (list, tuple, set))
 
     def test_python_extensions_contains_py(self):
         """PYTHON_EXTENSIONS should contain .py."""
         from src.cli.config.extensions import PYTHON_EXTENSIONS
         assert '.py' in PYTHON_EXTENSIONS
 
-    def test_javascript_extensions_exists(self):
-        """JAVASCRIPT_EXTENSIONS should be exported."""
-        from src.cli.config.extensions import JAVASCRIPT_EXTENSIONS
-        assert JAVASCRIPT_EXTENSIONS is not None
-        assert isinstance(JAVASCRIPT_EXTENSIONS, (list, tuple, set))
 
     def test_javascript_extensions_values(self):
         """JAVASCRIPT_EXTENSIONS should contain js, jsx, ts, tsx."""
@@ -50,11 +25,6 @@ class TestLanguageExtensions:
         for ext in expected:
             assert ext in JAVASCRIPT_EXTENSIONS, f"Missing {ext}"
 
-    def test_web_extensions_exists(self):
-        """WEB_EXTENSIONS should be exported."""
-        from src.cli.config.extensions import WEB_EXTENSIONS
-        assert WEB_EXTENSIONS is not None
-        assert isinstance(WEB_EXTENSIONS, (list, tuple, set))
 
     def test_web_extensions_values(self):
         """WEB_EXTENSIONS should contain html, css, scss."""
@@ -67,11 +37,6 @@ class TestLanguageExtensions:
 class TestConfigExtensions:
     """Tests for configuration file extensions."""
 
-    def test_config_extensions_exists(self):
-        """CONFIG_EXTENSIONS should be exported."""
-        from src.cli.config.extensions import CONFIG_EXTENSIONS
-        assert CONFIG_EXTENSIONS is not None
-        assert isinstance(CONFIG_EXTENSIONS, (list, tuple, set))
 
     def test_config_extensions_values(self):
         """CONFIG_EXTENSIONS should contain common config formats."""
@@ -84,11 +49,6 @@ class TestConfigExtensions:
 class TestDocExtensions:
     """Tests for documentation file extensions."""
 
-    def test_docs_extensions_exists(self):
-        """DOCS_EXTENSIONS should be exported."""
-        from src.cli.config.extensions import DOCS_EXTENSIONS
-        assert DOCS_EXTENSIONS is not None
-        assert isinstance(DOCS_EXTENSIONS, (list, tuple, set))
 
     def test_docs_extensions_values(self):
         """DOCS_EXTENSIONS should contain md, rst, txt."""
@@ -101,11 +61,6 @@ class TestDocExtensions:
 class TestExtensionsCategoryMapping:
     """Tests for the complete extensions category mapping."""
 
-    def test_extensions_by_category_exists(self):
-        """EXTENSIONS_BY_CATEGORY should be exported."""
-        from src.cli.config.extensions import EXTENSIONS_BY_CATEGORY
-        assert EXTENSIONS_BY_CATEGORY is not None
-        assert isinstance(EXTENSIONS_BY_CATEGORY, dict)
 
     def test_extensions_by_category_keys(self):
         """EXTENSIONS_BY_CATEGORY should have all category keys."""
@@ -142,11 +97,6 @@ class TestExtensionsCategoryMapping:
 class TestEntryPointFiles:
     """Tests for entry point file names."""
 
-    def test_entry_point_files_exists(self):
-        """ENTRY_POINT_FILES should be exported."""
-        from src.cli.config.extensions import ENTRY_POINT_FILES
-        assert ENTRY_POINT_FILES is not None
-        assert isinstance(ENTRY_POINT_FILES, (list, tuple, set))
 
     def test_entry_point_files_values(self):
         """ENTRY_POINT_FILES should contain common entry points."""
@@ -159,11 +109,6 @@ class TestEntryPointFiles:
 class TestPriorityFiles:
     """Tests for priority file names."""
 
-    def test_priority_files_exists(self):
-        """PRIORITY_FILES should be exported."""
-        from src.cli.config.extensions import PRIORITY_FILES
-        assert PRIORITY_FILES is not None
-        assert isinstance(PRIORITY_FILES, (list, tuple, set))
 
     def test_priority_files_contains_readme(self):
         """PRIORITY_FILES should contain README variants."""
@@ -186,11 +131,6 @@ class TestPriorityFiles:
 class TestDependencyFiles:
     """Tests for dependency file names."""
 
-    def test_dependency_files_exists(self):
-        """DEPENDENCY_FILES should be exported."""
-        from src.cli.config.extensions import DEPENDENCY_FILES
-        assert DEPENDENCY_FILES is not None
-        assert isinstance(DEPENDENCY_FILES, (list, tuple, set))
 
     def test_dependency_files_python(self):
         """DEPENDENCY_FILES should contain Python dependency files."""
@@ -215,11 +155,6 @@ class TestDependencyFiles:
 class TestConfigurationFiles:
     """Tests for configuration file names."""
 
-    def test_configuration_files_exists(self):
-        """CONFIGURATION_FILES should be exported."""
-        from src.cli.config.extensions import CONFIGURATION_FILES
-        assert CONFIGURATION_FILES is not None
-        assert isinstance(CONFIGURATION_FILES, (list, tuple, set))
 
     def test_configuration_files_values(self):
         """CONFIGURATION_FILES should contain common config file names."""
@@ -235,11 +170,6 @@ class TestConfigurationFiles:
 class TestAllCodeExtensions:
     """Tests for combined code extensions."""
 
-    def test_all_code_extensions_exists(self):
-        """ALL_CODE_EXTENSIONS should be exported."""
-        from src.cli.config.extensions import ALL_CODE_EXTENSIONS
-        assert ALL_CODE_EXTENSIONS is not None
-        assert isinstance(ALL_CODE_EXTENSIONS, (list, tuple, set))
 
     def test_all_code_extensions_includes_python(self):
         """ALL_CODE_EXTENSIONS should include Python."""

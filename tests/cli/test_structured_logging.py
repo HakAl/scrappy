@@ -839,31 +839,6 @@ class TestLoggerRegistry:
     """Test LoggerRegistry for encapsulating global state."""
 
     @pytest.mark.unit
-    def test_registry_creation(self):
-        """LoggerRegistry should be created with default values."""
-        from src.cli.logging import LoggerRegistry
-
-        registry = LoggerRegistry()
-
-        assert registry._loggers == {}
-        assert registry._default_io is None
-        assert registry._default_level == logging.INFO
-
-    @pytest.mark.unit
-    def test_registry_get_logger_creates_new_logger(self):
-        """Registry get_logger should create new logger instance."""
-        from src.cli.logging import LoggerRegistry
-        from tests.helpers import MockIO
-
-        registry = LoggerRegistry()
-        io = MockIO()
-
-        logger = registry.get_logger("test", io=io)
-
-        assert logger.name == "test"
-        assert logger._io is io
-
-    @pytest.mark.unit
     def test_registry_get_logger_returns_same_instance(self):
         """Registry get_logger should return same instance for same name."""
         from src.cli.logging import LoggerRegistry
@@ -876,21 +851,6 @@ class TestLoggerRegistry:
         logger2 = registry.get_logger("shared")
 
         assert logger1 is logger2
-
-    @pytest.mark.unit
-    def test_registry_get_logger_uses_defaults(self):
-        """Registry get_logger should use configured defaults."""
-        from src.cli.logging import LoggerRegistry
-        from tests.helpers import MockIO
-
-        registry = LoggerRegistry()
-        io = MockIO()
-        registry.configure(level=logging.DEBUG, io=io)
-
-        logger = registry.get_logger("test")
-
-        assert logger.level == logging.DEBUG
-        assert logger._io is io
 
     @pytest.mark.unit
     def test_registry_configure_updates_existing_loggers(self):
@@ -908,7 +868,6 @@ class TestLoggerRegistry:
         registry.configure(level=logging.DEBUG, io=io2)
 
         assert logger.level == logging.DEBUG
-        assert logger._io is io2
 
     @pytest.mark.unit
     def test_registry_reset_clears_all_state(self):

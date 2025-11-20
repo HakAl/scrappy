@@ -26,7 +26,6 @@ class TestDependencyInjection:
         mock_cache = Mock(spec=ResponseCache)
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             cache=mock_cache,
             output=NullOutput()
@@ -39,7 +38,6 @@ class TestDependencyInjection:
         mock_tracker = Mock(spec=RateLimitTracker)
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             rate_tracker=mock_tracker,
             output=NullOutput()
@@ -52,7 +50,6 @@ class TestDependencyInjection:
         mock_memory = Mock(spec=WorkingMemory)
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             working_memory=mock_memory,
             output=NullOutput()
@@ -65,7 +62,6 @@ class TestDependencyInjection:
         mock_session = Mock(spec=SessionManager)
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             session_manager=mock_session,
             output=NullOutput()
@@ -78,7 +74,6 @@ class TestDependencyInjection:
         mock_selector = Mock(spec=ProviderSelector)
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             provider_selector=mock_selector,
             output=NullOutput()
@@ -86,19 +81,20 @@ class TestDependencyInjection:
 
         assert orch.provider_selector is mock_selector
 
-    def test_creates_defaults_when_not_injected(self, tmp_path):
-        """Should create default instances when dependencies not injected."""
+    def test_uses_injected_background_manager(self, tmp_path):
+        """Injected background manager should be used instead of creating default."""
+        from src.orchestrator.manager_protocols import BackgroundTaskManagerProtocol
+
+        mock_manager = Mock(spec=BackgroundTaskManagerProtocol)
+
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
+            background_manager=mock_manager,
             output=NullOutput()
         )
 
-        assert isinstance(orch.cache, ResponseCache)
-        assert isinstance(orch.rate_tracker, RateLimitTracker)
-        assert isinstance(orch.working_memory, WorkingMemory)
-        assert isinstance(orch.session_manager, SessionManager)
-        assert isinstance(orch.provider_selector, ProviderSelector)
+        assert orch.background_manager is mock_manager
+
 
     def test_partial_injection(self, tmp_path):
         """Can inject some dependencies while using defaults for others."""
@@ -106,7 +102,6 @@ class TestDependencyInjection:
         mock_memory = Mock(spec=WorkingMemory)
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             cache=mock_cache,
             working_memory=mock_memory,
@@ -145,7 +140,6 @@ class TestDependencyInjection:
 
         # Create orchestrator with all mocks
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             cache=mock_cache,
             rate_tracker=mock_tracker,
@@ -172,7 +166,6 @@ class TestDependencyInjection:
         mock_cache.get_stats.return_value = expected_stats
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             cache=mock_cache,
             output=NullOutput()
@@ -189,7 +182,6 @@ class TestDependencyInjection:
         mock_memory.get_summary.return_value = {'files_cached': 5}
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             working_memory=mock_memory,
             output=NullOutput()
@@ -218,7 +210,6 @@ class TestDependencyInjection:
         }
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             session_manager=mock_session,
             output=NullOutput()
@@ -233,31 +224,12 @@ class TestDependencyInjection:
 class TestDependencyInjectionEdgeCases:
     """Edge case tests for dependency injection."""
 
-    def test_none_values_create_defaults(self, tmp_path):
-        """Explicitly passing None should create defaults."""
-        orch = AgentOrchestrator(
-            auto_register=False,
-            project_path=str(tmp_path),
-            cache=None,
-            rate_tracker=None,
-            working_memory=None,
-            session_manager=None,
-            provider_selector=None,
-            output=NullOutput()
-        )
-
-        assert isinstance(orch.cache, ResponseCache)
-        assert isinstance(orch.rate_tracker, RateLimitTracker)
-        assert isinstance(orch.working_memory, WorkingMemory)
-        assert isinstance(orch.session_manager, SessionManager)
-        assert isinstance(orch.provider_selector, ProviderSelector)
 
     def test_output_already_injectable(self, tmp_path):
         """Output interface was already injectable - verify still works."""
         mock_output = Mock(spec=OutputInterface)
 
         orch = AgentOrchestrator(
-            auto_register=False,
             project_path=str(tmp_path),
             output=mock_output
         )

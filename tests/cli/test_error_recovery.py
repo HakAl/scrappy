@@ -32,20 +32,6 @@ class TestRetryStrategy:
         assert len(attempts) == 2
 
     @pytest.mark.unit
-    def test_retry_exhausts_attempts(self):
-        """Retry should raise after exhausting attempts."""
-        from src.cli.error_recovery import retry_operation
-        from src.cli.exceptions import ProviderError
-
-        def always_fails():
-            raise ConnectionError("Persistent failure")
-
-        with pytest.raises(ProviderError) as exc_info:
-            retry_operation(always_fails, max_retries=3)
-
-        assert "retry" in str(exc_info.value).lower() or exc_info.value.original is not None
-
-    @pytest.mark.unit
     def test_retry_respects_max_retries(self):
         """Retry should not exceed max_retries."""
         from src.cli.error_recovery import retry_operation

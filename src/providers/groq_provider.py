@@ -65,22 +65,37 @@ class GroqProvider(LLMProvider):
         },
     }
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        client: Optional["Groq"] = None,
+        initial_limits: Optional[ProviderLimits] = None
+    ):
         """
         Initialize Groq provider.
 
         Args:
             api_key: Groq API key (defaults to GROQ_API_KEY env var)
+            client: Optional Groq client instance
+            initial_limits: Optional initial provider limits
         """
         if not GROQ_AVAILABLE:
             raise_package_not_installed('groq')
 
         self._api_key = api_key or os.environ.get('GROQ_API_KEY')
-        if not self._api_key:
+        if not self._api_key and client is None:
             raise_env_var_not_found('GROQ_API_KEY')
 
-        self._client = Groq(api_key=self._api_key)
-        self._last_limits = ProviderLimits()
+        self._client = client or self._create_default_client()
+        self._last_limits = initial_limits or self._create_default_limits()
+
+    def _create_default_client(self) -> "Groq":
+        """Create default Groq client."""
+        return Groq(api_key=self._api_key)
+
+    def _create_default_limits(self) -> ProviderLimits:
+        """Create default provider limits."""
+        return ProviderLimits()
 
     @property
     def name(self) -> str:

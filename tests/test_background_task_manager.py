@@ -9,6 +9,33 @@ import asyncio
 from datetime import datetime
 
 
+class TestBackgroundTaskManagerProtocolCompliance:
+    """Test that BackgroundTaskManager implements BackgroundTaskManagerProtocol."""
+
+
+    def test_has_all_protocol_methods(self):
+        """BackgroundTaskManager has all methods defined in protocol."""
+        from src.orchestrator.background import BackgroundTaskManager
+
+        manager = BackgroundTaskManager()
+
+        # Verify all protocol methods exist
+        assert hasattr(manager, 'submit_background_task')
+        assert callable(manager.submit_background_task)
+
+        assert hasattr(manager, 'get_task_status')
+        assert callable(manager.get_task_status)
+
+        assert hasattr(manager, 'wait_for_background_tasks')
+        assert callable(manager.wait_for_background_tasks)
+
+        assert hasattr(manager, 'cancel_task')
+        assert callable(manager.cancel_task)
+
+        assert hasattr(manager, 'clear_background_errors')
+        assert callable(manager.clear_background_errors)
+
+
 class TestBackgroundTaskManagerInit:
     """Test BackgroundTaskManager initialization."""
 
@@ -38,7 +65,6 @@ class TestBackgroundTaskManagerInit:
 class TestSubmitBackgroundTask:
     """Test submitting background tasks."""
 
-    @pytest.mark.asyncio
     async def test_submit_task_tracks_pending(self):
         """Submitted task appears in pending count."""
         from src.orchestrator.background import BackgroundTaskManager
@@ -65,7 +91,6 @@ class TestSubmitBackgroundTask:
         status = manager.get_task_status()
         assert status['pending_tasks'] == 0
 
-    @pytest.mark.asyncio
     async def test_submit_multiple_tasks(self):
         """Can submit and track multiple concurrent tasks."""
         from src.orchestrator.background import BackgroundTaskManager
@@ -92,7 +117,6 @@ class TestSubmitBackgroundTask:
         status = manager.get_task_status()
         assert status['pending_tasks'] == 0
 
-    @pytest.mark.asyncio
     async def test_completed_task_removed_from_tracking(self):
         """Tasks are automatically removed when they complete."""
         from src.orchestrator.background import BackgroundTaskManager
@@ -110,7 +134,6 @@ class TestSubmitBackgroundTask:
         status = manager.get_task_status()
         assert status['pending_tasks'] == 0
 
-    @pytest.mark.asyncio
     async def test_task_error_captured(self):
         """Errors in tasks are captured without crashing."""
         from src.orchestrator.background import BackgroundTaskManager
@@ -135,7 +158,6 @@ class TestSubmitBackgroundTask:
         assert error['type'] == "ValueError"
         assert 'timestamp' in error
 
-    @pytest.mark.asyncio
     async def test_multiple_errors_captured(self):
         """Multiple task errors are all captured."""
         from src.orchestrator.background import BackgroundTaskManager
@@ -154,7 +176,6 @@ class TestSubmitBackgroundTask:
         status = manager.get_task_status()
         assert status['total_errors'] == 3
 
-    @pytest.mark.asyncio
     async def test_error_log_limited_to_50(self):
         """Error log is capped at 50 entries."""
         from src.orchestrator.background import BackgroundTaskManager
@@ -177,7 +198,6 @@ class TestSubmitBackgroundTask:
 class TestWaitForBackgroundTasks:
     """Test waiting for background tasks to complete."""
 
-    @pytest.mark.asyncio
     async def test_wait_with_no_tasks(self):
         """Waiting with no tasks returns immediately."""
         from src.orchestrator.background import BackgroundTaskManager
@@ -190,7 +210,6 @@ class TestWaitForBackgroundTasks:
         assert result['completed'] == 0
         assert result['errors'] == 0
 
-    @pytest.mark.asyncio
     async def test_wait_completes_all_tasks(self):
         """Wait returns when all tasks complete."""
         from src.orchestrator.background import BackgroundTaskManager
@@ -213,7 +232,6 @@ class TestWaitForBackgroundTasks:
         assert result['completed'] == 3
         assert len(results) == 3
 
-    @pytest.mark.asyncio
     async def test_wait_timeout(self):
         """Wait times out if tasks take too long."""
         from src.orchestrator.background import BackgroundTaskManager
@@ -231,7 +249,6 @@ class TestWaitForBackgroundTasks:
         assert result['pending'] == 1
         assert result['completed'] == 0
 
-    @pytest.mark.asyncio
     async def test_wait_with_mixed_success_and_failure(self):
         """Wait handles mix of successful and failed tasks."""
         from src.orchestrator.background import BackgroundTaskManager
@@ -258,7 +275,6 @@ class TestWaitForBackgroundTasks:
 class TestCancelTask:
     """Test cancelling background tasks."""
 
-    @pytest.mark.asyncio
     async def test_cancel_pending_task(self):
         """Can cancel a pending task."""
         from src.orchestrator.background import BackgroundTaskManager
@@ -281,7 +297,6 @@ class TestCancelTask:
         await asyncio.sleep(0.01)
         assert manager.get_task_status()['pending_tasks'] == 0
 
-    @pytest.mark.asyncio
     async def test_cancel_nonexistent_task(self):
         """Cancelling nonexistent task returns False."""
         from src.orchestrator.background import BackgroundTaskManager
@@ -291,7 +306,6 @@ class TestCancelTask:
         cancelled = manager.cancel_task("nonexistent-id")
         assert cancelled is False
 
-    @pytest.mark.asyncio
     async def test_cancel_already_completed_task(self):
         """Cancelling completed task returns False."""
         from src.orchestrator.background import BackgroundTaskManager
@@ -312,7 +326,6 @@ class TestCancelTask:
 class TestGetTaskStatus:
     """Test getting task status."""
 
-    @pytest.mark.asyncio
     async def test_status_shows_pending_count(self):
         """Status accurately reflects pending task count."""
         from src.orchestrator.background import BackgroundTaskManager
@@ -335,7 +348,6 @@ class TestGetTaskStatus:
         await asyncio.sleep(0.01)
         assert manager.get_task_status()['pending_tasks'] == 0
 
-    @pytest.mark.asyncio
     async def test_status_shows_recent_errors_limited(self):
         """Status shows only last 10 errors in recent_errors."""
         from src.orchestrator.background import BackgroundTaskManager
@@ -359,7 +371,6 @@ class TestGetTaskStatus:
 class TestClearBackgroundErrors:
     """Test clearing background errors."""
 
-    @pytest.mark.asyncio
     async def test_clear_removes_all_errors(self):
         """Clear removes all captured errors."""
         from src.orchestrator.background import BackgroundTaskManager
@@ -397,7 +408,6 @@ class TestClearBackgroundErrors:
 class TestTaskIdTracking:
     """Test task ID generation and tracking."""
 
-    @pytest.mark.asyncio
     async def test_submit_returns_task_id(self):
         """Submit returns a task ID."""
         from src.orchestrator.background import BackgroundTaskManager
@@ -413,7 +423,6 @@ class TestTaskIdTracking:
         assert isinstance(task_id, str)
         assert len(task_id) > 0
 
-    @pytest.mark.asyncio
     async def test_task_ids_are_unique(self):
         """Each submitted task gets a unique ID."""
         from src.orchestrator.background import BackgroundTaskManager
@@ -438,7 +447,6 @@ class TestTaskIdTracking:
 class TestIntegrationScenarios:
     """Integration tests for realistic usage scenarios."""
 
-    @pytest.mark.asyncio
     async def test_fire_and_forget_logging(self):
         """Can use for fire-and-forget operations like logging."""
         from src.orchestrator.background import BackgroundTaskManager
@@ -464,7 +472,6 @@ class TestIntegrationScenarios:
         assert len(logged) == 3
         assert set(logged) == {"user_action", "api_call", "response"}
 
-    @pytest.mark.asyncio
     async def test_graceful_shutdown(self):
         """Can gracefully shutdown with pending tasks."""
         from src.orchestrator.background import BackgroundTaskManager
@@ -484,7 +491,6 @@ class TestIntegrationScenarios:
         assert result['status'] == 'completed'
         assert manager.get_task_status()['pending_tasks'] == 0
 
-    @pytest.mark.asyncio
     async def test_error_resilience(self):
         """Manager remains functional after task errors."""
         from src.orchestrator.background import BackgroundTaskManager

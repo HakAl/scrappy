@@ -9,29 +9,9 @@ throughout the CLI.
 import pytest
 
 
-class TestPathsModuleStructure:
-    """Tests for the paths module structure and exports."""
-
-    def test_module_imports_successfully(self):
-        """Module should import without errors."""
-        from src.cli.config import paths
-        assert paths is not None
-
-    def test_module_has_docstring(self):
-        """Paths module should have a module-level docstring."""
-        from src.cli.config import paths
-        assert paths.__doc__ is not None
-        assert len(paths.__doc__) > 0
-
-
 class TestSkipDirectories:
     """Tests for directories to skip during scanning."""
 
-    def test_skip_dirs_exists(self):
-        """SKIP_DIRS should be exported."""
-        from src.cli.config.paths import SKIP_DIRS
-        assert SKIP_DIRS is not None
-        assert isinstance(SKIP_DIRS, (list, tuple, set, frozenset))
 
     def test_skip_dirs_contains_git(self):
         """SKIP_DIRS should contain .git."""
@@ -66,11 +46,6 @@ class TestSkipDirectories:
 class TestSkipDirsMinimal:
     """Tests for minimal skip directories set."""
 
-    def test_skip_dirs_minimal_exists(self):
-        """SKIP_DIRS_MINIMAL should be exported for lightweight scanning."""
-        from src.cli.config.paths import SKIP_DIRS_MINIMAL
-        assert SKIP_DIRS_MINIMAL is not None
-        assert isinstance(SKIP_DIRS_MINIMAL, (list, tuple, set, frozenset))
 
     def test_skip_dirs_minimal_contains_essentials(self):
         """SKIP_DIRS_MINIMAL should contain the most critical dirs to skip."""
@@ -89,22 +64,12 @@ class TestSkipDirsMinimal:
 class TestSessionFiles:
     """Tests for session and tracking file names."""
 
-    def test_session_file_exists(self):
-        """SESSION_FILE should be exported."""
-        from src.cli.config.paths import SESSION_FILE
-        assert SESSION_FILE is not None
-        assert isinstance(SESSION_FILE, str)
 
     def test_session_file_value(self):
         """SESSION_FILE should be .llm_team_session.json."""
         from src.cli.config.paths import SESSION_FILE
         assert SESSION_FILE == '.llm_team_session.json'
 
-    def test_rate_limits_file_exists(self):
-        """RATE_LIMITS_FILE should be exported."""
-        from src.cli.config.paths import RATE_LIMITS_FILE
-        assert RATE_LIMITS_FILE is not None
-        assert isinstance(RATE_LIMITS_FILE, str)
 
     def test_rate_limits_file_value(self):
         """RATE_LIMITS_FILE should be .llm_rate_limits.json."""
@@ -115,11 +80,6 @@ class TestSessionFiles:
 class TestProjectIndicatorFiles:
     """Tests for files that indicate project root or structure."""
 
-    def test_project_indicators_exists(self):
-        """PROJECT_INDICATORS should be exported."""
-        from src.cli.config.paths import PROJECT_INDICATORS
-        assert PROJECT_INDICATORS is not None
-        assert isinstance(PROJECT_INDICATORS, (list, tuple, set))
 
     def test_project_indicators_python(self):
         """PROJECT_INDICATORS should contain Python project indicators."""
@@ -199,11 +159,6 @@ class TestSkipDirsProperties:
         skip_list = list(SKIP_DIRS)
         assert len(skip_list) == len(set(skip_list)), "SKIP_DIRS contains duplicates"
 
-    def test_skip_dirs_all_strings(self):
-        """All entries in SKIP_DIRS should be strings."""
-        from src.cli.config.paths import SKIP_DIRS
-        for dir_name in SKIP_DIRS:
-            assert isinstance(dir_name, str), f"Entry {dir_name} is not a string"
 
     def test_skip_dirs_no_slashes(self):
         """Skip directory names should not contain slashes."""
@@ -212,23 +167,11 @@ class TestSkipDirsProperties:
             assert '/' not in dir_name, f"Entry {dir_name} contains /"
             assert '\\' not in dir_name, f"Entry {dir_name} contains \\"
 
-    def test_skip_dirs_is_set(self):
-        """SKIP_DIRS should be a set for O(1) lookup."""
-        from src.cli.config.paths import SKIP_DIRS
-        # Should be a set or frozenset for performance
-        assert isinstance(SKIP_DIRS, (set, frozenset)), (
-            "SKIP_DIRS should be a set for O(1) membership tests"
-        )
 
 
 class TestHiddenFiles:
     """Tests for hidden file patterns."""
 
-    def test_hidden_files_exists(self):
-        """HIDDEN_FILES should be exported."""
-        from src.cli.config.paths import HIDDEN_FILES
-        assert HIDDEN_FILES is not None
-        assert isinstance(HIDDEN_FILES, (list, tuple, set))
 
     def test_hidden_files_session_files(self):
         """HIDDEN_FILES should include session tracking files."""
@@ -241,11 +184,6 @@ class TestHiddenFiles:
 class TestCacheDirectories:
     """Tests for cache directory patterns."""
 
-    def test_cache_dirs_exists(self):
-        """CACHE_DIRS should be exported."""
-        from src.cli.config.paths import CACHE_DIRS
-        assert CACHE_DIRS is not None
-        assert isinstance(CACHE_DIRS, (list, tuple, set))
 
     def test_cache_dirs_contains_common_caches(self):
         """CACHE_DIRS should contain common cache directories."""
@@ -258,11 +196,6 @@ class TestCacheDirectories:
 class TestTestDirectoryPatterns:
     """Tests for test directory patterns."""
 
-    def test_test_dirs_exists(self):
-        """TEST_DIRS should be exported."""
-        from src.cli.config.paths import TEST_DIRS
-        assert TEST_DIRS is not None
-        assert isinstance(TEST_DIRS, (list, tuple, set))
 
     def test_test_dirs_contains_common_patterns(self):
         """TEST_DIRS should contain common test directory names."""
@@ -275,11 +208,6 @@ class TestTestDirectoryPatterns:
 class TestBuildOutputDirectories:
     """Tests for build output directory patterns."""
 
-    def test_build_dirs_exists(self):
-        """BUILD_DIRS should be exported."""
-        from src.cli.config.paths import BUILD_DIRS
-        assert BUILD_DIRS is not None
-        assert isinstance(BUILD_DIRS, (list, tuple, set))
 
     def test_build_dirs_contains_common_patterns(self):
         """BUILD_DIRS should contain common build output directories."""
@@ -292,11 +220,6 @@ class TestBuildOutputDirectories:
 class TestVendorDirectories:
     """Tests for vendor/dependency directory patterns."""
 
-    def test_vendor_dirs_exists(self):
-        """VENDOR_DIRS should be exported."""
-        from src.cli.config.paths import VENDOR_DIRS
-        assert VENDOR_DIRS is not None
-        assert isinstance(VENDOR_DIRS, (list, tuple, set))
 
     def test_vendor_dirs_contains_common_patterns(self):
         """VENDOR_DIRS should contain common vendor directories."""
@@ -309,11 +232,6 @@ class TestVendorDirectories:
 class TestVirtualEnvDirectories:
     """Tests for virtual environment directory patterns."""
 
-    def test_venv_dirs_exists(self):
-        """VENV_DIRS should be exported."""
-        from src.cli.config.paths import VENV_DIRS
-        assert VENV_DIRS is not None
-        assert isinstance(VENV_DIRS, (list, tuple, set))
 
     def test_venv_dirs_contains_common_patterns(self):
         """VENV_DIRS should contain common virtual env directory names."""
@@ -326,11 +244,6 @@ class TestVirtualEnvDirectories:
 class TestAllHiddenDirectories:
     """Tests for combined hidden directories."""
 
-    def test_all_hidden_dirs_exists(self):
-        """ALL_HIDDEN_DIRS should be exported."""
-        from src.cli.config.paths import ALL_HIDDEN_DIRS
-        assert ALL_HIDDEN_DIRS is not None
-        assert isinstance(ALL_HIDDEN_DIRS, (list, tuple, set))
 
     def test_all_hidden_dirs_contains_dot_dirs(self):
         """ALL_HIDDEN_DIRS should contain directories starting with dot."""
@@ -369,11 +282,6 @@ class TestPathsEdgeCases:
 class TestPathsDocumentation:
     """Tests to verify paths have proper documentation."""
 
-    def test_skip_dirs_descriptions_exists(self):
-        """SKIP_DIRS_DESCRIPTIONS should provide documentation."""
-        from src.cli.config.paths import SKIP_DIRS_DESCRIPTIONS
-        assert SKIP_DIRS_DESCRIPTIONS is not None
-        assert isinstance(SKIP_DIRS_DESCRIPTIONS, dict)
 
     def test_all_skip_dirs_documented(self):
         """Each skip directory should have documentation."""

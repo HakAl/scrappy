@@ -164,16 +164,6 @@ class TestJSONExtractorFailureModes:
 
         assert result == ""
 
-    def test_extract_with_no_json_returns_original_or_empty(self):
-        """When no JSON is found, behavior should be predictable."""
-        response = "This is just plain text with no JSON at all."
-
-        extractor = JSONExtractor()
-        result = extractor.extract(response)
-
-        # Should return empty or original - but should be consistent
-        # This tests the contract of the extractor
-        assert isinstance(result, str)
 
     def test_extract_with_malformed_code_block(self):
         """Handle code block with missing closing marker."""
@@ -187,15 +177,6 @@ No closing marker here!'''
         # Should still find the JSON object
         assert '{' in result and '}' in result
 
-    def test_extract_with_only_opening_brace(self):
-        """Handle input with only opening brace, no closing."""
-        response = "Here is broken JSON: {"
-
-        extractor = JSONExtractor()
-        result = extractor.extract(response)
-
-        # Should handle gracefully - either empty or partial
-        assert isinstance(result, str)
 
     def test_extract_from_whitespace_only(self):
         """Handle whitespace-only input."""

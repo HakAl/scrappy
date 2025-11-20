@@ -31,16 +31,36 @@ class CodebaseContext:
         augmented_prompt = context.augment_prompt("Fix the bug in auth")
     """
 
-    def __init__(self, project_path: Optional[str] = None):
+    def __init__(
+        self,
+        project_path: Optional[str] = None,
+        file_scanner: Optional[FileScanner] = None,
+        cache: Optional[ContextCache] = None,
+        platform_detector: Optional[PlatformDetector] = None,
+        git_history_reader: Optional[GitHistoryReader] = None,
+        project_detector: Optional[ProjectDetector] = None,
+        auto_load_cache: bool = False
+    ):
         """
-        Initialize codebase context.
+        Initialize codebase context (dependencies only - NO file I/O by default).
+
+        Call restore_from_cache() after construction to load cached context from disk.
 
         Args:
             project_path: Path to project root. Defaults to current directory.
+            file_scanner: Injectable file scanner (default: creates new FileScanner)
+            cache: Injectable context cache (default: creates new ContextCache)
+            platform_detector: Injectable platform detector (default: creates new PlatformDetector)
+            git_history_reader: Injectable git history reader (default: creates new GitHistoryReader)
+            project_detector: Injectable project detector (default: creates from project_path)
+            auto_load_cache: If True, automatically load cache in constructor (for backwards compatibility)
         """
+        # Store config for factory methods
+        self._initial_project_path = project_path
+
         self.project_path = Path(project_path or ".").resolve()
 
-        # Validate path
+        # Validate path (path checks are minimal side effects, needed for safety)
         self._path_valid = True
         if not self.project_path.exists():
             logger.warning(f"Project path does not exist: {self.project_path}")
@@ -57,15 +77,50 @@ class CodebaseContext:
         self.explored_at: Optional[datetime] = None
         self.cache_file = self.project_path / ".llm_team_context.json"
 
-        # Component instances
-        self._file_scanner = FileScanner()
-        self._cache = ContextCache()
-        self._platform_detector = PlatformDetector()
-        self._git_history_reader = GitHistoryReader()
-        self._project_detector = ProjectDetector(self.project_path)
+        # Component instances using factory methods
+        self._file_scanner = file_scanner or self._create_default_file_scanner()
+        self._cache = cache or self._create_default_cache()
+        self._platform_detector = platform_detector or self._create_default_platform_detector()
+        self._git_history_reader = git_history_reader or self._create_default_git_history_reader()
+        self._project_detector = project_detector or self._create_default_project_detector()
 
-        # Try to load cached context
+        # Auto-load cache if requested (for backwards compatibility)
+        if auto_load_cache:
+            self._load_cache()
+
+    def restore_from_cache(self):
+        """
+        Restore context from cached file on disk.
+
+        Call this after construction to load previously cached context data.
+
+        Returns:
+            self (for method chaining)
+        """
         self._load_cache()
+        return self
+
+    # Factory methods for default dependencies
+
+    def _create_default_file_scanner(self) -> FileScanner:
+        """Create default file scanner."""
+        return FileScanner()
+
+    def _create_default_cache(self) -> ContextCache:
+        """Create default context cache."""
+        return ContextCache()
+
+    def _create_default_platform_detector(self) -> PlatformDetector:
+        """Create default platform detector."""
+        return PlatformDetector()
+
+    def _create_default_git_history_reader(self) -> GitHistoryReader:
+        """Create default git history reader."""
+        return GitHistoryReader()
+
+    def _create_default_project_detector(self) -> ProjectDetector:
+        """Create default project detector."""
+        return ProjectDetector(self.project_path)
 
     def is_explored(self) -> bool:
         """Check if the codebase has been explored."""

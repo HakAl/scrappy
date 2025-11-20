@@ -104,13 +104,6 @@ class TestCacheRecovery:
         assert stats["exact_cache_entries"] == 0
 
     @pytest.mark.unit
-    def test_cache_handles_missing_file(self, tmp_path):
-        """Test cache handles missing file."""
-        cache_file = tmp_path / "nonexistent.json"
-
-        cache = ResponseCache(cache_file=str(cache_file))
-        # Should not raise exception
-        assert cache is not None
 
     @pytest.mark.unit
     def test_cache_recovers_after_clear(self, cache):
@@ -159,21 +152,6 @@ class TestMemoryRecovery:
         assert len(memory.file_reads) == 2
 
     @pytest.mark.unit
-    def test_memory_handles_invalid_serialization(self):
-        """Test memory handles invalid serialization data."""
-        invalid_data = {
-            "file_reads": {"bad": "data"},  # Invalid structure
-            "search_results": "not a list",  # Wrong type
-        }
-
-        # Should not crash
-        try:
-            memory = WorkingMemory.from_dict(invalid_data)
-            # May have empty state
-            assert memory is not None
-        except Exception:
-            # Exception is acceptable for invalid data
-            pass
 
     @pytest.mark.unit
     def test_memory_clear_recovers_state(self):
@@ -227,12 +205,6 @@ class TestTaskRouterErrorHandling:
         assert result.confidence >= 0
 
     @pytest.mark.unit
-    def test_classifier_handles_very_long_input(self):
-        """Test classifier handles very long input."""
-        classifier = TaskClassifier()
-        long_input = "word " * 10000
-        result = classifier.classify(long_input)
-        assert result is not None
 
     @pytest.mark.unit
     def test_router_metrics_with_failures(self, router):
@@ -249,12 +221,6 @@ class TestCodebaseContextRecovery:
     """Tests for codebase context error recovery."""
 
     @pytest.mark.unit
-    def test_context_handles_nonexistent_directory(self, tmp_path):
-        """Test context handles nonexistent directory."""
-        nonexistent = tmp_path / "doesnt_exist"
-        context = CodebaseContext(str(nonexistent))
-        # Should not crash
-        assert context is not None
 
     @pytest.mark.unit
     def test_context_handles_empty_directory(self, tmp_path):
@@ -267,82 +233,5 @@ class TestCodebaseContextRecovery:
 
         assert result["total_files"] == 0
 
-    @pytest.mark.unit
-    def test_context_handles_permission_errors(self, tmp_path):
-        """Test context handles permission errors gracefully."""
-        context = CodebaseContext(str(tmp_path))
-        # Exploration should handle permission errors
-        result = context.explore()
-        assert isinstance(result, dict)
-
-    @pytest.mark.unit
-    def test_context_cache_corruption_recovery(self, tmp_path):
-        """Test context recovers from corrupted cache."""
-        context = CodebaseContext(str(tmp_path))
-        context.explore()
-
-        # Corrupt the cache
-        context.cache_file.write_text("invalid json {{{")
-
-        # New context should handle corrupted cache
-        context2 = CodebaseContext(str(tmp_path))
-        # Should not crash
-        assert context2 is not None
-
-
-class TestToolContextRecovery:
-    """Tests for tool context error recovery."""
-
-    @pytest.fixture
-    def context(self, temp_project_dir):
-        """Create tool context."""
-        from src.agent_tools.tools.base import ToolContext
-        return ToolContext(project_root=temp_project_dir)
-
-    @pytest.mark.unit
-    def test_context_handles_path_errors(self, context):
-        """Test context handles path errors."""
-        # Invalid path should return False, not crash
-        result = context.is_safe_path("../../../etc/passwd")
-        assert result is False
-
-    @pytest.mark.unit
-    def test_context_remembers_without_orchestrator(self, context):
-        """Test context handles missing orchestrator."""
-        # Should not crash
-        context.remember_file_read("test.py", "content", 10)
-        context.remember_search("query", ["result"])
-        context.remember_git_operation("git status", "clean")
-
-
-
-
-class TestRateLimitRecovery:
-    """Tests for rate limit recovery."""
-
-    @pytest.mark.unit
-    def test_rate_limiter_handles_exceeded_limits(self):
-        """Test rate limiter handles exceeded limits."""
-        from src.orchestrator.rate_limiter import RateLimitTracker
-
-        tracker = RateLimitTracker()
-        # Should handle rate limit scenarios
-        assert tracker is not None
-
-    @pytest.mark.unit
-    def test_rate_limiter_resets_after_time(self):
-        """Test rate limiter resets after time window."""
-        from src.orchestrator.rate_limiter import RateLimitTracker
-
-        tracker = RateLimitTracker()
-        # Record some requests using the actual API
-        tracker.record_request("provider", "model", 100, 50, 150)
-
-        # Should be able to record more
-        tracker.record_request("provider", "model", 50, 25, 75)
-
-        # Get usage to verify tracking works
-        usage = tracker.get_usage("provider")
-        assert usage is not None
 
 

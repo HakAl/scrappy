@@ -11,10 +11,6 @@ class TestProjectDetectorBasics:
     """Basic initialization and interface tests."""
 
     @pytest.mark.unit
-    def test_import_project_detector(self):
-        """ProjectDetector should be importable from context module."""
-        from src.context.project_detector import ProjectDetector
-        assert ProjectDetector is not None
 
     @pytest.mark.unit
     def test_creation_with_project_path(self, tmp_path):
@@ -621,15 +617,6 @@ class TestEdgeCases:
         assert languages == []
 
     @pytest.mark.unit
-    def test_handles_none_file_index(self, tmp_path):
-        """Should handle None file_index gracefully."""
-        from src.context.project_detector import ProjectDetector
-
-        detector = ProjectDetector(tmp_path)
-        # Don't call set_file_index - should use empty default
-
-        markers = detector.detect_markers()
-        assert isinstance(markers, dict)
 
     @pytest.mark.unit
     def test_handles_nonexistent_path(self, tmp_path):

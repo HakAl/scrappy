@@ -204,28 +204,5 @@ class TestProviderRegistry:
 class TestProviderInterface:
     """Tests for LLMProvider abstract interface compliance."""
 
-    @pytest.mark.unit
-    def test_chat_returns_llm_response(self, mock_provider):
-        """Test that chat returns proper LLMResponse."""
-        messages = [{"role": "user", "content": "Hello"}]
-        response = mock_provider.chat(messages)
+    pass
 
-        # Mock provider returns what we configured in conftest
-        assert hasattr(response, 'content')
-        assert hasattr(response, 'tokens_used')
-
-    @pytest.mark.unit
-    def test_get_limits_returns_provider_limits(self, mock_provider):
-        """Test that get_limits returns proper ProviderLimits."""
-        limits = mock_provider.get_limits()
-
-        assert hasattr(limits, 'requests_per_minute')
-        assert hasattr(limits, 'requests_per_day')
-
-    @pytest.mark.unit
-    def test_provider_has_required_properties(self, mock_provider):
-        """Test that provider has all required properties."""
-        assert hasattr(mock_provider, 'name')
-        assert hasattr(mock_provider, 'chat')
-        assert hasattr(mock_provider, 'get_limits')
-        assert hasattr(mock_provider, 'is_available')

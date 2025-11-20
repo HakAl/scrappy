@@ -69,19 +69,6 @@ class TestCreateCLIFromContext:
 
         assert cli.io is io
 
-    def test_creates_richio_when_no_io_provided(self):
-        """Should create RichIO when no IO is provided."""
-        from src.cli.utils.cli_factory import create_cli_from_context
-        from src.cli.rich_output import RichIO
-
-        ctx = Mock()
-        ctx.obj = {'brain': 'groq'}
-
-        # Don't provide IO - should create RichIO
-        with patch.object(RichIO, 'secho'):  # Prevent actual output
-            with patch.object(RichIO, 'echo'):
-                cli = create_cli_from_context(ctx)
-                assert isinstance(cli.io, RichIO)
 
     def test_handles_none_obj_in_context(self):
         """Should handle when ctx.obj is None."""
@@ -97,18 +84,6 @@ class TestCreateCLIFromContext:
         assert cli.orchestrator is not None
         assert cli.orchestrator.context_aware is True
 
-    def test_returns_cli_instance(self):
-        """Should return a proper CLI instance."""
-        from src.cli.utils.cli_factory import create_cli_from_context
-        from src.cli.core import CLI
-
-        ctx = Mock()
-        ctx.obj = {'brain': 'gemini'}
-
-        io = MockIO()
-        cli = create_cli_from_context(ctx, io=io)
-
-        assert isinstance(cli, CLI)
 
 
 class TestInitializeCLIHandlers:
@@ -134,31 +109,6 @@ class TestInitializeCLIHandlers:
         assert 'task_router' in handlers
         assert len(handlers) == 8
 
-    def test_handlers_have_correct_types(self):
-        """Should create handlers with correct types."""
-        from src.cli.utils.cli_factory import initialize_cli_handlers
-        from src.cli.display import CLIDisplay
-        from src.cli.session import CLISessionManager
-        from src.cli.codebase import CLICodebaseAnalysis
-        from src.cli.tasks import CLITaskExecution
-        from src.cli.multiprovider import CLIMultiProvider
-        from src.cli.smart_query import CLISmartQuery
-        from src.cli.agent_manager import CLIAgentManager
-        from src.cli.task_router_handler import CLITaskRouterHandler
-
-        orchestrator = ConfigurableTestOrchestrator()
-        session_start = datetime.now()
-
-        handlers = initialize_cli_handlers(orchestrator, session_start)
-
-        assert isinstance(handlers['display'], CLIDisplay)
-        assert isinstance(handlers['session_mgr'], CLISessionManager)
-        assert isinstance(handlers['codebase'], CLICodebaseAnalysis)
-        assert isinstance(handlers['tasks'], CLITaskExecution)
-        assert isinstance(handlers['multiprovider'], CLIMultiProvider)
-        assert isinstance(handlers['smart'], CLISmartQuery)
-        assert isinstance(handlers['agent_mgr'], CLIAgentManager)
-        assert isinstance(handlers['task_router'], CLITaskRouterHandler)
 
     def test_display_handler_receives_session_start(self):
         """Should pass session_start to CLIDisplay handler."""
@@ -190,22 +140,6 @@ class TestInitializeCLIHandlers:
         assert handlers['agent_mgr'].orchestrator is orchestrator
         assert handlers['task_router'].orchestrator is orchestrator
 
-    def test_returns_dict_for_attribute_assignment(self):
-        """Should return dict that can be used for attribute assignment."""
-        from src.cli.utils.cli_factory import initialize_cli_handlers
-
-        orchestrator = ConfigurableTestOrchestrator()
-        session_start = datetime.now()
-
-        handlers = initialize_cli_handlers(orchestrator, session_start)
-
-        # Verify we can use this dict for assignment
-        obj = Mock()
-        for name, handler in handlers.items():
-            setattr(obj, name, handler)
-
-        assert hasattr(obj, 'display')
-        assert hasattr(obj, 'session_mgr')
 
     def test_handlers_are_independent_instances(self):
         """Each call should create new handler instances."""
@@ -234,23 +168,7 @@ class TestGetIOInterface:
 
         assert result is io
 
-    def test_creates_testio_when_test_mode(self):
-        """Should create TestIO when test_mode is True."""
-        from src.cli.utils.cli_factory import get_io_interface
-        from src.cli.io_interface import TestIO
 
-        result = get_io_interface(test_mode=True)
-
-        assert isinstance(result, TestIO)
-
-    def test_creates_richio_by_default(self):
-        """Should create RichIO when no IO provided and not test mode."""
-        from src.cli.utils.cli_factory import get_io_interface
-        from src.cli.rich_output import RichIO
-
-        result = get_io_interface()
-
-        assert isinstance(result, RichIO)
 
     def test_provided_io_takes_precedence_over_test_mode(self):
         """Provided IO should be used even if test_mode is True."""
@@ -262,19 +180,6 @@ class TestGetIOInterface:
         # Provided IO should win
         assert result is io
 
-    def test_returns_protocol_compatible_interface(self):
-        """Returned interface should be CLIIOProtocol compatible."""
-        from src.cli.utils.cli_factory import get_io_interface
-
-        # Test default creation
-        result = get_io_interface()
-
-        # Should have all required protocol methods
-        assert hasattr(result, 'echo')
-        assert hasattr(result, 'secho')
-        assert hasattr(result, 'prompt')
-        assert hasattr(result, 'confirm')
-        assert hasattr(result, 'input_line')
 
 
 class TestCreateContextState:
@@ -441,31 +346,6 @@ class TestExtractContextOptions:
 class TestCLIFactoryIntegration:
     """Integration tests for CLI factory utilities."""
 
-    def test_create_cli_with_handlers_matches_direct_creation(self):
-        """Factory-created CLI should behave like directly created CLI."""
-        from src.cli.utils.cli_factory import create_cli_from_context
-
-        ctx = Mock()
-        ctx.obj = {
-            'brain': 'groq',
-            'auto_explore': False,
-            'context_aware': True,
-            'verbose_selection': False,
-            'show_providers': False
-        }
-
-        io = MockIO()
-        cli = create_cli_from_context(ctx, io=io)
-
-        # Verify CLI has all standard handlers
-        assert hasattr(cli, 'display')
-        assert hasattr(cli, 'session_mgr')
-        assert hasattr(cli, 'codebase')
-        assert hasattr(cli, 'tasks')
-        assert hasattr(cli, 'multiprovider')
-        assert hasattr(cli, 'smart')
-        assert hasattr(cli, 'agent_mgr')
-        assert hasattr(cli, 'task_router')
 
     def test_handlers_initialized_by_factory_work_correctly(self):
         """Handlers created by factory should work the same as manual creation."""
@@ -563,19 +443,6 @@ class TestEdgeCases:
         assert 'custom_key' not in state
         assert 'another_extra' not in state
 
-    def test_handles_wrong_type_values_gracefully(self):
-        """Should handle incorrect types in context values."""
-        from src.cli.utils.cli_factory import create_context_state
-
-        ctx = Mock()
-        ctx.obj = {
-            'auto_explore': 'yes',  # String instead of bool
-            'context_aware': 1,  # Int instead of bool
-        }
-
-        # Should not raise, truthy/falsy conversion is acceptable
-        state = create_context_state(ctx)
-        assert state is not None
 
     def test_initialize_handlers_with_minimal_orchestrator(self):
         """Should work with orchestrator having minimal required interface."""

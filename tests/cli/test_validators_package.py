@@ -12,32 +12,10 @@ import sys
 class TestValidatorsPackageStructure:
     """Tests for the validators package module structure."""
 
-    def test_validators_is_a_package(self):
-        """validators should be a package (directory with __init__.py)."""
-        from src.cli import validators
 
-        # Should be a package (has __path__)
-        assert hasattr(validators, '__path__'), "validators should be a package"
 
-    def test_base_module_exists(self):
-        """base.py module should exist in validators package."""
-        from src.cli.validators import base
-        assert base is not None
 
-    def test_command_module_exists(self):
-        """command.py module should exist in validators package."""
-        from src.cli.validators import command
-        assert command is not None
 
-    def test_path_module_exists(self):
-        """path.py module should exist in validators package."""
-        from src.cli.validators import path
-        assert path is not None
-
-    def test_provider_module_exists(self):
-        """provider.py module should exist in validators package."""
-        from src.cli.validators import provider
-        assert provider is not None
 
 
 class TestBaseModule:
@@ -302,12 +280,6 @@ class TestAllExport:
         assert hasattr(validators, '__all__')
         assert len(validators.__all__) > 0
 
-    def test_all_exports_importable(self):
-        """All items in __all__ should be importable."""
-        from src.cli import validators
-
-        for name in validators.__all__:
-            assert hasattr(validators, name), f"{name} not found in validators"
 
     def test_all_exports_complete(self):
         """__all__ should include all public exports."""

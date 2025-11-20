@@ -12,10 +12,16 @@ from .protocols import (
     EnvironmentProtocol,
     ConfigLoaderProtocol,
 )
+from .file_system import (
+    RealFileSystem,
+    InMemoryFileSystem,
+)
 
 __all__ = [
     "FileSystemProtocol",
     "HTTPClientProtocol",
     "EnvironmentProtocol",
     "ConfigLoaderProtocol",
+    "RealFileSystem",
+    "InMemoryFileSystem",
 ]

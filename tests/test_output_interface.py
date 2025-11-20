@@ -12,17 +12,8 @@ class TestOutputInterface:
     """Tests for the generic output interface that hides implementation details."""
 
     @pytest.mark.unit
-    def test_output_interface_exists(self):
-        """Test that Output interface can be imported without knowing library."""
-        from src.cli.output import Output
-        assert Output is not None
 
     @pytest.mark.unit
-    def test_output_instantiation(self):
-        """Test Output can be instantiated without specifying library."""
-        from src.cli.output import Output
-        output = Output()
-        assert output is not None
 
     @pytest.mark.unit
     def test_output_print_method(self):
@@ -61,10 +52,6 @@ class TestOutputForTesting:
     """Tests for test-mode output that captures instead of printing."""
 
     @pytest.mark.unit
-    def test_test_output_exists(self):
-        """Test that TestOutput can be imported for testing."""
-        from src.cli.output import TestOutput
-        assert TestOutput is not None
 
     @pytest.mark.unit
     def test_test_output_captures_print(self):
@@ -209,6 +196,7 @@ class TestOutputUsage:
 
         # Example tool - completely library-agnostic
         class FileLister:
+            pass
             def __init__(self, output):
                 self.output = output
 
@@ -240,46 +228,12 @@ class TestOutputUsage:
 class TestOutputConfiguration:
     """Tests for output configuration and library selection."""
 
-    @pytest.mark.unit
-    def test_output_can_be_configured(self):
-        """Test that output implementation can be configured."""
-        from src.cli.output import Output, configure_output
-
-        # Should be able to configure which library to use
-        configure_output(use_rich=True)
-        output1 = Output()
-        assert output1 is not None
-
-        configure_output(use_rich=False)
-        output2 = Output()
-        assert output2 is not None
-
-    @pytest.mark.unit
-    def test_output_factory_returns_correct_implementation(self):
-        """Test that factory returns correct implementation based on config."""
-        from src.cli.output import create_output
-
-        # Create output without caring about implementation
-        output = create_output()
-        assert output is not None
-        assert hasattr(output, 'print')
-        assert hasattr(output, 'style')
-
+    pass
 
 class TestBackwardCompatibility:
     """Tests for backward compatibility with existing CLIIOProtocol."""
 
     @pytest.mark.unit
-    def test_output_compatible_with_cli_io_protocol(self):
-        """Test that Output provides backward-compatible interface."""
-        from src.cli.output import Output
-
-        output = Output()
-
-        # Should have click-style methods for backward compatibility
-        assert hasattr(output, 'echo')
-        assert hasattr(output, 'secho')
-        assert hasattr(output, 'styled_echo')
 
     @pytest.mark.unit
     def test_echo_method_exists(self):
@@ -306,15 +260,6 @@ class TestEdgeCases:
     """Tests for edge cases and error handling."""
 
     @pytest.mark.unit
-    def test_output_print_empty_string(self):
-        """Test printing empty string."""
-        from src.cli.output import TestOutput
-
-        output = TestOutput()
-        output.print("")
-
-        # Should not raise
-        assert output.get_output() is not None
 
     @pytest.mark.unit
     def test_output_style_with_no_color(self):

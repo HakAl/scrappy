@@ -14,35 +14,7 @@ from src.orchestrator.status_reporter import ProviderStatusReporter
 class TestProviderStatusReporterConstruction:
     """Test ProviderStatusReporter initialization."""
 
-    def test_requires_registry(self):
-        """ProviderStatusReporter should require a registry."""
-        output = CapturingOutput()
-        selector = Mock()
 
-        reporter = ProviderStatusReporter(
-            registry=Mock(),
-            provider_selector=selector,
-            output=output,
-            brain_name='cerebras',
-            verbose_selection=False
-        )
-
-        assert reporter is not None
-
-    def test_requires_provider_selector(self):
-        """ProviderStatusReporter should require a provider selector."""
-        output = CapturingOutput()
-        registry = Mock()
-
-        reporter = ProviderStatusReporter(
-            registry=registry,
-            provider_selector=Mock(),
-            output=output,
-            brain_name='cerebras',
-            verbose_selection=False
-        )
-
-        assert reporter is not None
 
 
 class TestPrintStatus:

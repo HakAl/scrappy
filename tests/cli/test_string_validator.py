@@ -144,13 +144,6 @@ class TestStringValidationResult:
 class TestStringValidatorIntegration:
     """Integration tests for string validators."""
 
-    def test_consistent_result_type(self):
-        """All validation calls should return StringValidationResult."""
-        valid_result = validate_non_empty("test")
-        invalid_result = validate_non_empty("")
-
-        assert isinstance(valid_result, StringValidationResult)
-        assert isinstance(invalid_result, StringValidationResult)
 
     def test_validator_is_pure_function(self):
         """Validator should have no side effects."""

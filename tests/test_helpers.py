@@ -56,16 +56,6 @@ class TestMockIOExisting:
 class TestFactoryFunctions:
     """Tests for factory functions that create common test setups."""
 
-    def test_make_handler_test_setup_returns_io_and_orchestrator(self):
-        """make_handler_test_setup should return MockIO and ConfigurableTestOrchestrator."""
-        from tests.helpers import make_handler_test_setup
-
-        io, orch = make_handler_test_setup()
-
-        # Should return proper types
-        from tests.helpers import MockIO, ConfigurableTestOrchestrator
-        assert isinstance(io, MockIO)
-        assert isinstance(orch, ConfigurableTestOrchestrator)
 
     def test_make_handler_test_setup_accepts_inputs(self):
         """make_handler_test_setup should accept inputs and confirmations."""

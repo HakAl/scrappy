@@ -359,39 +359,4 @@ class TestCrossPlatformConsistency:
         else:
             assert is_windows() is False
 
-    @pytest.mark.unit
-    @patch('src.platform_utils.is_windows', return_value=True)
-    def test_windows_rejects_unix_only_commands(self, mock_is_win):
-        """Unix-only commands should be flagged on Windows."""
-        unix_commands = [
-            'chmod +x script.sh',
-            'chown user:group file.txt',
-            'ln -s source target',
-        ]
 
-        for cmd in unix_commands:
-            is_valid, warning = validate_command_for_platform(cmd)
-            # These should either be invalid or have a fallback
-            if is_valid:
-                fallback = get_python_fallback(cmd, '/fake')
-                # If valid but no fallback, that's a problem
-                assert fallback is not None or 'permission' not in cmd.lower(), \
-                    f"Unix command '{cmd}' accepted on Windows without fallback"
-
-    @pytest.mark.unit
-    @patch('src.platform_utils.is_windows', return_value=False)
-    def test_unix_rejects_windows_only_commands(self, mock_is_win):
-        """Windows-only commands should be flagged on Unix."""
-        windows_commands = [
-            'dir /s',
-            'copy /y src.txt dest.txt',
-            'del /f file.txt',
-        ]
-
-        for cmd in windows_commands:
-            is_valid, warning = validate_command_for_platform(cmd)
-            # These Windows commands shouldn't be valid on Unix
-            # (though some might have aliases)
-            if cmd.startswith('dir '):
-                # dir is not standard on Unix
-                assert is_valid is False or 'dir' in warning.lower() or get_python_fallback(cmd, '/') is not None

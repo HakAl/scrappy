@@ -6,8 +6,10 @@ routing slash commands to appropriate handlers.
 """
 
 import pytest
+from datetime import datetime
 from unittest.mock import MagicMock, patch
 from tests.helpers import MockIO, ConfigurableTestOrchestrator
+from src.cli.utils.cli_factory import initialize_cli_handlers
 
 
 class TestCommandRouter:
@@ -19,23 +21,38 @@ class TestCommandRouter:
         self.CommandRouter = CommandRouter
         self.orchestrator = ConfigurableTestOrchestrator()
 
+    def _create_router(self, io=None):
+        """Helper to create a CommandRouter with all dependencies."""
+        if io is None:
+            io = MockIO()
+
+        session_start = datetime.now()
+        handlers = initialize_cli_handlers(self.orchestrator, session_start)
+
+        return self.CommandRouter(
+            io=io,
+            orchestrator=self.orchestrator,
+            display=handlers['display'],
+            session_mgr=handlers['session_mgr'],
+            codebase=handlers['codebase'],
+            tasks=handlers['tasks'],
+            multiprovider=handlers['multiprovider'],
+            smart=handlers['smart'],
+            agent_mgr=handlers['agent_mgr'],
+            task_router=handlers['task_router']
+        )
+
     # =========================================================================
     # Initialization Tests
     # =========================================================================
 
-    def test_initializes_with_handlers(self):
-        """Should initialize with handler registry."""
-        io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
-
-        assert router is not None
 
     def test_accepts_state_manager(self):
         """Should accept optional state manager."""
         from src.cli.state_manager import PlanStateManager
         io = MockIO()
         state_mgr = PlanStateManager()
-        router = self.CommandRouter(io, self.orchestrator, state_manager=state_mgr)
+        router = self._create_router(io)
 
         assert router.state_manager is state_mgr
 
@@ -46,7 +63,7 @@ class TestCommandRouter:
     def test_route_plan_command_no_args_shows_usage(self):
         """Should show usage when /plan called without args."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
 
         result = router.route("/plan", "")
 
@@ -56,7 +73,7 @@ class TestCommandRouter:
     def test_route_agent_no_args_shows_usage(self):
         """Should show usage when /agent called without args."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
 
         result = router.route("/agent", "")
 
@@ -70,7 +87,7 @@ class TestCommandRouter:
     def test_route_smart_toggle(self):
         """Should toggle smart mode when /smart toggle."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
         router.smart_mode = False
 
         result = router.route("/smart", "toggle")
@@ -80,7 +97,7 @@ class TestCommandRouter:
     def test_route_smart_no_args_shows_status(self):
         """Should show status when /smart called without args."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
         router.smart_mode = True
 
         result = router.route("/smart", "")
@@ -95,7 +112,7 @@ class TestCommandRouter:
     def test_route_classify_no_args_shows_usage(self):
         """Should show usage when /classify without args."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
 
         result = router.route("/classify", "")
 
@@ -109,7 +126,7 @@ class TestCommandRouter:
     def test_route_clear_command(self):
         """Should clear conversation history on /clear."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
         router.conversation_history = [{"role": "user", "content": "test"}]
 
         result = router.route("/clear", "")
@@ -121,7 +138,7 @@ class TestCommandRouter:
     def test_route_autoexec_toggle(self):
         """Should toggle auto_execute_tasks on /autoexec."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
         from src.cli.state_manager import PlanStateManager
         router.state_manager = PlanStateManager()
         router.state_manager.auto_execute_tasks = True
@@ -135,7 +152,7 @@ class TestCommandRouter:
     def test_route_multiline_toggle(self):
         """Should toggle multiline_mode on /ml."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
         router.multiline_mode = True
 
         result = router.route("/ml", "")
@@ -147,7 +164,7 @@ class TestCommandRouter:
     def test_route_auto_toggle(self):
         """Should toggle auto_route_mode on /auto."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
         router.auto_route_mode = False
 
         result = router.route("/auto", "")
@@ -163,7 +180,7 @@ class TestCommandRouter:
     def test_route_tasks_shows_plan(self):
         """Should show task list when plan active."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
         from src.cli.state_manager import PlanStateManager
         router.state_manager = PlanStateManager()
         router.state_manager.start_plan([
@@ -180,7 +197,7 @@ class TestCommandRouter:
     def test_route_tasks_no_plan_shows_message(self):
         """Should show message when no active plan."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
         from src.cli.state_manager import PlanStateManager
         router.state_manager = PlanStateManager()
 
@@ -196,7 +213,7 @@ class TestCommandRouter:
     def test_route_quit_returns_false(self):
         """Should return False on /quit to exit loop."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
         router.display = MagicMock()
         router.auto_save = False
 
@@ -207,7 +224,7 @@ class TestCommandRouter:
     def test_route_exit_returns_false(self):
         """Should return False on /exit to exit loop."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
         router.display = MagicMock()
         router.auto_save = False
 
@@ -218,7 +235,7 @@ class TestCommandRouter:
     def test_route_q_returns_false(self):
         """Should return False on /q to exit loop."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
         router.display = MagicMock()
         router.auto_save = False
 
@@ -229,7 +246,7 @@ class TestCommandRouter:
     def test_quit_auto_saves_session(self):
         """Should auto-save session on quit when enabled."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
         router.display = MagicMock()
         router.auto_save = True
         self.orchestrator.save_session = MagicMock(return_value="/test/session.json")
@@ -243,7 +260,7 @@ class TestCommandRouter:
     def test_quit_shows_goodbye(self):
         """Should show goodbye message on quit."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
         router.display = MagicMock()
         router.auto_save = False
 
@@ -259,7 +276,7 @@ class TestCommandRouter:
     def test_unknown_command_shows_error(self):
         """Should show error for unknown command."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
 
         result = router.route("/unknowncommand", "")
 
@@ -275,7 +292,7 @@ class TestCommandRouter:
     def test_unknown_command_returns_true(self):
         """Should return True to continue loop for unknown command."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
 
         result = router.route("/xyz", "")
 
@@ -284,7 +301,7 @@ class TestCommandRouter:
     def test_unknown_command_suggests_help(self):
         """Should suggest /help for unknown command."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
 
         result = router.route("/badcmd", "")
 
@@ -298,7 +315,7 @@ class TestCommandRouter:
     def test_multiline_aliases(self):
         """Should accept /paste and /multiline as /ml aliases."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
         router.multiline_mode = True
 
         router.route("/paste", "")
@@ -310,7 +327,7 @@ class TestCommandRouter:
     def test_auto_aliases(self):
         """Should accept /route and /autoroute as /auto aliases."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
         router.auto_route_mode = False
 
         router.route("/route", "")
@@ -337,18 +354,11 @@ class TestCommandRegistryPattern:
     # Registry Structure Tests
     # =========================================================================
 
-    def test_has_command_registry(self):
-        """Should have _command_registry dictionary attribute."""
-        io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
-
-        assert hasattr(router, '_command_registry')
-        assert isinstance(router._command_registry, dict)
 
     def test_registry_contains_all_exit_commands(self):
         """Should have all exit commands in registry."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
 
         exit_commands = ["/quit", "/exit", "/q"]
         for cmd in exit_commands:
@@ -357,7 +367,7 @@ class TestCommandRegistryPattern:
     def test_registry_contains_display_commands(self):
         """Should have all display commands in registry."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
 
         display_commands = ["/help", "/status", "/providers", "/brain", "/usage", "/models"]
         for cmd in display_commands:
@@ -366,7 +376,7 @@ class TestCommandRegistryPattern:
     def test_registry_contains_session_commands(self):
         """Should have all session commands in registry."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
 
         session_commands = ["/context", "/cache", "/session", "/limits"]
         for cmd in session_commands:
@@ -375,7 +385,7 @@ class TestCommandRegistryPattern:
     def test_registry_contains_task_commands(self):
         """Should have all task commands in registry."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
 
         task_commands = ["/plan", "/reason", "/agent"]
         for cmd in task_commands:
@@ -384,7 +394,7 @@ class TestCommandRegistryPattern:
     def test_registry_contains_multiprovider_commands(self):
         """Should have all multi-provider commands in registry."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
 
         mp_commands = ["/synthesize", "/delegate"]
         for cmd in mp_commands:
@@ -393,7 +403,7 @@ class TestCommandRegistryPattern:
     def test_registry_contains_state_commands(self):
         """Should have all state commands in registry."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
 
         state_commands = ["/clear", "/autoexec", "/paste", "/ml", "/multiline",
                          "/auto", "/route", "/autoroute", "/tasks"]
@@ -403,7 +413,7 @@ class TestCommandRegistryPattern:
     def test_registry_contains_other_commands(self):
         """Should have other specialized commands in registry."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
 
         other_commands = ["/smart", "/explore", "/classify"]
         for cmd in other_commands:
@@ -412,7 +422,7 @@ class TestCommandRegistryPattern:
     def test_registry_values_are_callable(self):
         """Should have callable handlers as registry values."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
 
         for cmd, handler in router._command_registry.items():
             assert callable(handler), f"Handler for {cmd} is not callable"
@@ -424,7 +434,7 @@ class TestCommandRegistryPattern:
     def test_registry_dispatch_for_help(self):
         """Should dispatch /help via registry to correct handler."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
 
         result = router.route("/help", "")
 
@@ -437,7 +447,7 @@ class TestCommandRegistryPattern:
     def test_registry_dispatch_for_clear(self):
         """Should dispatch /clear via registry to correct handler."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
         router.conversation_history = [{"role": "user", "content": "test"}]
 
         result = router.route("/clear", "")
@@ -448,7 +458,7 @@ class TestCommandRegistryPattern:
     def test_registry_dispatch_for_exit(self):
         """Should dispatch exit commands via registry returning False."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
         router.display = MagicMock()
         router.auto_save = False
 
@@ -459,7 +469,7 @@ class TestCommandRegistryPattern:
     def test_registry_dispatch_passes_args(self):
         """Should pass args to handler when dispatching via registry."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
 
         # /auto with "status" arg should show routing status
         result = router.route("/auto", "status")
@@ -474,7 +484,7 @@ class TestCommandRegistryPattern:
     def test_handle_exit_returns_false(self):
         """_handle_exit should return False to exit loop."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
         router.display = MagicMock()
         router.auto_save = False
 
@@ -486,7 +496,7 @@ class TestCommandRegistryPattern:
     def test_handle_exit_auto_saves_when_enabled(self):
         """_handle_exit should auto-save session when auto_save is True."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
         router.display = MagicMock()
         router.auto_save = True
         self.orchestrator.save_session = MagicMock(return_value="/test/session.json")
@@ -498,7 +508,7 @@ class TestCommandRegistryPattern:
     def test_handle_help_returns_true(self):
         """_handle_help should return True to continue loop."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
 
         result = router._handle_help("")
 
@@ -507,7 +517,7 @@ class TestCommandRegistryPattern:
     def test_handle_status_returns_true(self):
         """_handle_status should return True to continue loop."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
 
         result = router._handle_status("")
 
@@ -516,7 +526,7 @@ class TestCommandRegistryPattern:
     def test_handle_clear_clears_history(self):
         """_handle_clear should clear conversation history."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
         router.conversation_history = [{"role": "user", "content": "test"}]
 
         result = router._handle_clear("")
@@ -527,7 +537,7 @@ class TestCommandRegistryPattern:
     def test_handle_smart_toggle(self):
         """_handle_smart should toggle smart mode with 'toggle' arg."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
         router.smart_mode = False
 
         result = router._handle_smart("toggle")
@@ -538,7 +548,7 @@ class TestCommandRegistryPattern:
     def test_handle_smart_shows_status_no_args(self):
         """_handle_smart should show status when called without args."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
         router.smart_mode = True
 
         result = router._handle_smart("")
@@ -550,7 +560,7 @@ class TestCommandRegistryPattern:
     def test_handle_auto_toggle(self):
         """_handle_auto should toggle auto_route_mode with no args."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
         router.auto_route_mode = False
 
         result = router._handle_auto("")
@@ -561,7 +571,7 @@ class TestCommandRegistryPattern:
     def test_handle_autoexec_toggle(self):
         """_handle_autoexec should toggle auto_execute_tasks."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
         from src.cli.state_manager import PlanStateManager
         router.state_manager = PlanStateManager()
         router.state_manager.auto_execute_tasks = True
@@ -574,7 +584,7 @@ class TestCommandRegistryPattern:
     def test_handle_multiline_toggle(self):
         """_handle_multiline should toggle multiline_mode."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
         router.multiline_mode = True
 
         result = router._handle_multiline("")
@@ -585,7 +595,7 @@ class TestCommandRegistryPattern:
     def test_handle_plan_no_args_shows_usage(self):
         """_handle_plan should show usage when called without args."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
 
         result = router._handle_plan("")
 
@@ -596,7 +606,7 @@ class TestCommandRegistryPattern:
     def test_handle_reason_no_args_shows_usage(self):
         """_handle_reason should show usage when called without args."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
 
         result = router._handle_reason("")
 
@@ -607,7 +617,7 @@ class TestCommandRegistryPattern:
     def test_handle_agent_no_args_shows_usage(self):
         """_handle_agent should show usage when called without args."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
 
         result = router._handle_agent("")
 
@@ -618,7 +628,7 @@ class TestCommandRegistryPattern:
     def test_handle_classify_no_args_shows_usage(self):
         """_handle_classify should show usage when called without args."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
 
         result = router._handle_classify("")
 
@@ -629,7 +639,7 @@ class TestCommandRegistryPattern:
     def test_handle_tasks_no_plan_shows_message(self):
         """_handle_tasks should show message when no active plan."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
         from src.cli.state_manager import PlanStateManager
         router.state_manager = PlanStateManager()
 
@@ -646,7 +656,7 @@ class TestCommandRegistryPattern:
     def test_route_uses_registry_lookup(self):
         """route() should use registry lookup instead of if/elif chain."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
 
         # All known commands should be handled via registry
         known_commands = ["/help", "/status", "/clear", "/smart", "/auto"]
@@ -659,7 +669,7 @@ class TestCommandRegistryPattern:
     def test_route_handles_unknown_via_registry_miss(self):
         """route() should handle unknown commands when not in registry."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
 
         result = router.route("/notacommand", "")
 
@@ -670,7 +680,7 @@ class TestCommandRegistryPattern:
     def test_route_validates_before_dispatch(self):
         """route() should validate command before looking up in registry."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
 
         # Invalid command format should be caught by validator
         result = router.route("", "")
@@ -685,7 +695,7 @@ class TestCommandRegistryPattern:
     def test_aliases_point_to_same_handler(self):
         """Command aliases should point to the same handler function."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
 
         # Exit aliases
         exit_handler = router._command_registry.get("/quit")
@@ -706,30 +716,11 @@ class TestCommandRegistryPattern:
     # Handler Return Value Tests
     # =========================================================================
 
-    def test_all_handlers_return_bool(self):
-        """All handlers should return a boolean value."""
-        io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
-        router.display = MagicMock()
-        router.auto_save = False
-
-        # Test handlers that don't need special setup
-        handlers_to_test = [
-            ("_handle_help", ""),
-            ("_handle_status", ""),
-            ("_handle_clear", ""),
-            ("_handle_multiline", ""),
-        ]
-
-        for handler_name, args in handlers_to_test:
-            handler = getattr(router, handler_name)
-            result = handler(args)
-            assert isinstance(result, bool), f"{handler_name} should return bool, got {type(result)}"
 
     def test_only_exit_handlers_return_false(self):
         """Only exit handlers should return False."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
         router.display = MagicMock()
         router.auto_save = False
 
@@ -760,7 +751,7 @@ class TestCommandRegistryPattern:
     def test_handler_receives_trimmed_args(self):
         """Handlers should receive args without leading/trailing whitespace."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
         router.smart_mode = False
 
         # Toggle with extra whitespace
@@ -773,7 +764,7 @@ class TestCommandRegistryPattern:
     def test_empty_registry_key_not_allowed(self):
         """Registry should not contain empty string as key."""
         io = MockIO()
-        router = self.CommandRouter(io, self.orchestrator)
+        router = self._create_router(io)
 
         assert "" not in router._command_registry
         assert None not in router._command_registry

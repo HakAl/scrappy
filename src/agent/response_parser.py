@@ -309,10 +309,28 @@ class UnifiedResponseParser(ResponseParser):
     modern native tool calling without changing the agent loop.
     """
 
-    def __init__(self):
-        """Initialize with both parser types."""
-        self._json_parser = JSONResponseParser()
-        self._native_parser = NativeToolCallParser()
+    def __init__(
+        self,
+        json_parser: Optional[JSONResponseParser] = None,
+        native_parser: Optional['NativeToolCallParser'] = None
+    ):
+        """
+        Initialize with both parser types.
+
+        Args:
+            json_parser: Injectable JSON parser (default: creates new JSONResponseParser)
+            native_parser: Injectable native tool call parser (default: creates new NativeToolCallParser)
+        """
+        self._json_parser = json_parser or self._create_default_json_parser()
+        self._native_parser = native_parser or self._create_default_native_parser()
+
+    def _create_default_json_parser(self) -> JSONResponseParser:
+        """Create default JSON response parser."""
+        return JSONResponseParser()
+
+    def _create_default_native_parser(self) -> 'NativeToolCallParser':
+        """Create default native tool call parser."""
+        return NativeToolCallParser()
 
     def parse(self, response) -> ParseResult:
         """

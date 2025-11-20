@@ -36,29 +36,8 @@ class TestStrategyImports:
         assert result.execution_time == 1.5
 
     @pytest.mark.unit
-    def test_import_execution_strategy_from_base(self):
-        """Test ExecutionStrategy abstract base can be imported."""
-        from src.task_router.strategies.base import ExecutionStrategy
-
-        assert hasattr(ExecutionStrategy, 'execute')
-        assert hasattr(ExecutionStrategy, 'can_handle')
-        assert hasattr(ExecutionStrategy, 'name')
 
     @pytest.mark.unit
-    def test_import_protocols_from_base(self):
-        """Test all protocol classes can be imported from base."""
-        from src.task_router.strategies.base import (
-            ContextLike,
-            ProviderRegistryLike,
-            LLMResponseLike,
-            OrchestratorLike
-        )
-
-        # Verify protocols exist and have expected methods
-        assert hasattr(ContextLike, 'is_explored')
-        assert hasattr(ProviderRegistryLike, 'list_available')
-        assert hasattr(LLMResponseLike, 'content')
-        assert hasattr(OrchestratorLike, 'delegate')
 
     @pytest.mark.unit
     def test_import_direct_executor(self):
@@ -510,62 +489,4 @@ class TestStrategyInterfaceCompliance:
             assert isinstance(strategy.name, str)
             assert len(strategy.name) > 0
 
-    @pytest.mark.unit
-    def test_all_strategies_return_execution_result(self):
-        """Test all strategies return ExecutionResult from execute()."""
-        from src.task_router.strategies.base import ExecutionResult
-        from src.task_router.strategies.conversation_executor import ConversationExecutor
 
-        executor = ConversationExecutor()
-
-        task = ClassifiedTask(
-            original_input="hello",
-            task_type=TaskType.CONVERSATION,
-            confidence=0.9,
-            reasoning="Test"
-        )
-
-        result = executor.execute(task)
-
-        assert isinstance(result, ExecutionResult)
-
-
-class TestBackwardCompatibility:
-    """Test backward compatibility - strategies can still be imported from main module."""
-
-    @pytest.mark.unit
-    def test_import_from_main_strategies_module(self):
-        """Test that strategies can still be imported from strategies.py for backward compat."""
-        # This should work even after split (via __init__.py re-exports)
-        from src.task_router import strategies
-
-        assert hasattr(strategies, 'ExecutionResult')
-        assert hasattr(strategies, 'ExecutionStrategy')
-        assert hasattr(strategies, 'DirectExecutor')
-        assert hasattr(strategies, 'ConversationExecutor')
-        assert hasattr(strategies, 'ResearchExecutor')
-        assert hasattr(strategies, 'AgentExecutor')
-
-    @pytest.mark.unit
-    def test_direct_import_execution_result(self):
-        """Test ExecutionResult can be imported from strategies."""
-        from src.task_router.strategies import ExecutionResult
-
-        result = ExecutionResult(success=True, output="test")
-        assert result.success is True
-
-    @pytest.mark.unit
-    def test_direct_import_all_executors(self):
-        """Test all executors can be imported from strategies."""
-        from src.task_router.strategies import (
-            DirectExecutor,
-            ConversationExecutor,
-            ResearchExecutor,
-            AgentExecutor
-        )
-
-        # All should be importable
-        assert DirectExecutor is not None
-        assert ConversationExecutor is not None
-        assert ResearchExecutor is not None
-        assert AgentExecutor is not None

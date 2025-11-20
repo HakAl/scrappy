@@ -11,17 +11,8 @@ class TestFileScannerBasics:
     """Basic file scanning functionality."""
 
     @pytest.mark.unit
-    def test_scanner_creation(self):
-        """FileScanner can be instantiated."""
-        scanner = FileScanner()
-        assert scanner is not None
 
     @pytest.mark.unit
-    def test_scan_returns_dict(self, tmp_path):
-        """scan_files returns a dictionary."""
-        scanner = FileScanner()
-        result = scanner.scan_files(tmp_path)
-        assert isinstance(result, dict)
 
     @pytest.mark.unit
     def test_scan_empty_directory(self, tmp_path):
@@ -343,16 +334,6 @@ class TestEdgeCases:
         assert sum(len(v) for v in result.values()) == 0
 
     @pytest.mark.unit
-    def test_handles_file_as_path(self, tmp_path):
-        """Scanner handles being given a file instead of directory."""
-        file_path = tmp_path / "file.py"
-        file_path.write_text("")
-
-        scanner = FileScanner()
-        result = scanner.scan_files(file_path)
-
-        # Should handle gracefully
-        assert isinstance(result, dict)
 
     @pytest.mark.unit
     def test_handles_deeply_nested_structure(self, tmp_path):

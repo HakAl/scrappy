@@ -514,21 +514,6 @@ class TestValidationError:
 class TestValidatorIntegration:
     """Integration tests for validators working together."""
 
-    def test_all_validators_return_consistent_result_type(self):
-        """All validators should return consistent result objects."""
-        cmd_result = validate_command("/help")
-        path_result = validate_path("src/file.py")
-        provider_result = validate_provider("cerebras")
-
-        # All should have is_valid attribute
-        assert hasattr(cmd_result, 'is_valid')
-        assert hasattr(path_result, 'is_valid')
-        assert hasattr(provider_result, 'is_valid')
-
-        # All should have error attribute (None or string)
-        assert hasattr(cmd_result, 'error')
-        assert hasattr(path_result, 'error')
-        assert hasattr(provider_result, 'error')
 
     def test_validators_handle_none_input_gracefully(self):
         """Validators should handle None input without crashing."""

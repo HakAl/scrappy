@@ -5,10 +5,12 @@ input handler, and CLI commands.
 """
 
 import pytest
+from datetime import datetime
 from unittest.mock import Mock, patch
 from tests.helpers import MockIO, ConfigurableTestOrchestrator
 from src.cli.command_router import CommandRouter
 from src.cli.input_handler import InputHandler
+from src.cli.utils.cli_factory import initialize_cli_handlers
 
 
 class TestCommandRouterValidation:
@@ -18,7 +20,24 @@ class TestCommandRouterValidation:
         """Set up test fixtures."""
         self.io = MockIO()
         self.orchestrator = ConfigurableTestOrchestrator()
-        self.router = CommandRouter(self.io, self.orchestrator)
+
+        # Create all required handlers
+        session_start = datetime.now()
+        handlers = initialize_cli_handlers(self.orchestrator, session_start)
+
+        # Create router with all dependencies
+        self.router = CommandRouter(
+            io=self.io,
+            orchestrator=self.orchestrator,
+            display=handlers['display'],
+            session_mgr=handlers['session_mgr'],
+            codebase=handlers['codebase'],
+            tasks=handlers['tasks'],
+            multiprovider=handlers['multiprovider'],
+            smart=handlers['smart'],
+            agent_mgr=handlers['agent_mgr'],
+            task_router=handlers['task_router']
+        )
 
     def test_valid_help_command_routes_successfully(self):
         """Valid /help command should route without validation error."""

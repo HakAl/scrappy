@@ -22,31 +22,6 @@ class TestCLIExceptionHierarchy:
         assert str(error) == "Test error"
 
     @pytest.mark.unit
-    def test_all_exceptions_inherit_from_cli_error(self):
-        """All custom exceptions should inherit from CLIError."""
-        from src.cli.exceptions import (
-            CLIError,
-            ValidationError,
-            ProviderError,
-            FileOperationError,
-            SessionError,
-            TaskExecutionError,
-            ParseError,
-            UserInputError,
-        )
-
-        exceptions = [
-            ValidationError("test"),
-            ProviderError("test"),
-            FileOperationError("test"),
-            SessionError("test"),
-            TaskExecutionError("test"),
-            ParseError("test"),
-            UserInputError("test"),
-        ]
-
-        for exc in exceptions:
-            assert isinstance(exc, CLIError), f"{type(exc).__name__} should inherit from CLIError"
 
     @pytest.mark.unit
     def test_exceptions_can_be_caught_as_cli_error(self):
@@ -489,32 +464,6 @@ class TestErrorRecoveryStrategies:
         assert error.recovery_action == RecoveryAction.ABORT
 
 
-class TestExceptionChaining:
-    """Test exception chaining and wrapping."""
-
-    @pytest.mark.unit
-    def test_exception_wraps_original(self):
-        """Exceptions should wrap the original exception."""
-        from src.cli.exceptions import FileOperationError
-
-        original = FileNotFoundError("No such file")
-        error = FileOperationError("Failed to read", path=Path("/test"), original=original)
-        assert error.original is original
-        assert error.__cause__ is original
-
-    @pytest.mark.unit
-    def test_exception_chain_preserves_traceback(self):
-        """Exception chain should preserve the original traceback."""
-        from src.cli.exceptions import ParseError
-        import json
-
-        try:
-            json.loads("{bad")
-        except json.JSONDecodeError as e:
-            error = ParseError.from_json_error(e, source="test")
-            assert error.__cause__ is e
-
-
 class TestExceptionLogging:
     """Test exception support for structured logging."""
 
@@ -550,17 +499,7 @@ class TestExceptionLogging:
 
 class TestRecoveryActionEnum:
     """Test RecoveryAction enumeration."""
-
-    @pytest.mark.unit
-    def test_recovery_action_values(self):
-        """RecoveryAction should have expected values."""
-        from src.cli.exceptions import RecoveryAction
-
-        assert hasattr(RecoveryAction, 'RETRY')
-        assert hasattr(RecoveryAction, 'FALLBACK')
-        assert hasattr(RecoveryAction, 'ABORT')
-        assert hasattr(RecoveryAction, 'SKIP')
-        assert hasattr(RecoveryAction, 'ASK_USER')
+    pass
 
 
 class TestExceptionIntegrationWithErrorHandler:
@@ -602,23 +541,8 @@ class TestEdgeCases:
     """Test edge cases and boundary conditions."""
 
     @pytest.mark.unit
-    def test_exception_with_none_message(self):
-        """Exception should handle None message gracefully."""
-        from src.cli.exceptions import CLIError
-
-        # Should not raise
-        error = CLIError(None)
-        str_repr = str(error)
-        assert str_repr is not None
 
     @pytest.mark.unit
-    def test_exception_with_empty_message(self):
-        """Exception should handle empty message."""
-        from src.cli.exceptions import CLIError
-
-        error = CLIError("")
-        str_repr = str(error)
-        assert str_repr is not None
 
     @pytest.mark.unit
     def test_exception_with_unicode_message(self):

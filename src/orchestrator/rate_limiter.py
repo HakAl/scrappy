@@ -37,27 +37,47 @@ class RateLimitTracker:
     def __init__(
         self,
         tracker_file: Optional[str] = None,
-        output: Optional['OutputInterface'] = None
+        output: Optional['OutputInterface'] = None,
+        auto_load: bool = False
     ):
         """
-        Initialize rate limit tracker.
+        Initialize rate limit tracker (dependencies only - NO file I/O by default).
+
+        Call restore_from_disk() after construction to load tracking data from disk.
 
         Args:
             tracker_file: Path to persistent tracker file (optional)
             output: Output interface for error reporting (optional)
+            auto_load: If True, automatically load tracker in constructor (for backwards compatibility)
         """
-        # Import here to avoid circular imports
-        from .output import NullOutput
-
         self._usage: dict = {}
         self.tracker_file = Path(tracker_file) if tracker_file else None
-        self.output = output or NullOutput()
+        self.output = output or self._create_default_output()
 
-        # Load existing data if available
+        # Initialize empty tracking structure
+        self._initialize_empty()
+
+        # Auto-load tracker if requested (for backwards compatibility)
+        if auto_load and self.tracker_file and self.tracker_file.exists():
+            self._load_tracker()
+
+    def restore_from_disk(self):
+        """
+        Restore tracking data from disk file.
+
+        Call this after construction to load previously persisted tracking data.
+
+        Returns:
+            self (for method chaining)
+        """
         if self.tracker_file and self.tracker_file.exists():
             self._load_tracker()
-        else:
-            self._initialize_empty()
+        return self
+
+    def _create_default_output(self) -> 'OutputInterface':
+        """Create default output interface."""
+        from .output import NullOutput
+        return NullOutput()
 
     def _initialize_empty(self):
         """Initialize empty tracking structure."""

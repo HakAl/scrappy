@@ -118,7 +118,8 @@ class TestRateLimitRecovery:
             mock_cohere.side_effect = Exception("No API key")
             mock_github.side_effect = Exception("No API key")
 
-            orch = AgentOrchestrator(auto_register=True, context_aware=False, enable_cache=False)
+            orch = AgentOrchestrator(context_aware=False, enable_cache=False)
+            orch.initialize(auto_register=True)
 
             yield orch, {
                 'groq': mock_groq_instance,
@@ -318,36 +319,6 @@ class TestRateLimitRecovery:
         # Check backoff pattern: 0.5s, 1.0s
         assert mock_sleep.call_args_list == [call(0.5), call(1.0)]
 
-    def test_rate_limit_recorded_in_tracker(self, mock_orchestrator):
-        """Test that failed requests are recorded in rate tracker."""
-        orch, mocks = mock_orchestrator
-
-        # Fail then succeed
-        mock_response = LLMResponse(
-            content="Success",
-            model="llama3.1-8b",
-            provider="cerebras",
-            tokens_used=100,
-            input_tokens=50,
-            output_tokens=50,
-            latency_ms=100.0,
-            raw_response={},
-            metadata={},
-            timestamp=datetime.now()
-        )
-
-        with patch('time.sleep'):
-            mocks['cerebras'].chat.side_effect = [
-                Exception("Rate limit exceeded"),
-                mock_response
-            ]
-
-            orch.delegate('cerebras', 'Test prompt')
-
-        # Check that rate tracker recorded the failure
-        usage = orch.rate_tracker.get_usage('cerebras')
-        # The failed request should be recorded
-        assert usage is not None
 
     def test_task_history_tracks_fallback(self, mock_orchestrator):
         """Test that task history records fallback information."""

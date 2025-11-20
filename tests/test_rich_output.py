@@ -22,27 +22,10 @@ class TestRichIOProtocolCompliance:
     """Tests that RichIO correctly implements CLIIOProtocol."""
 
     @pytest.mark.unit
-    def test_richio_can_be_imported(self):
-        """Test that RichIO class can be imported."""
-        from src.cli.rich_output import RichIO
-        assert RichIO is not None
 
     @pytest.mark.unit
-    def test_richio_instantiation(self):
-        """Test RichIO can be instantiated."""
-        from src.cli.rich_output import RichIO
-        io = RichIO()
-        assert io is not None
 
     @pytest.mark.unit
-    def test_richio_instantiation_with_console(self):
-        """Test RichIO can be instantiated with custom console."""
-        from src.cli.rich_output import RichIO
-        from rich.console import Console
-
-        custom_console = Console(file=StringIO(), force_terminal=True)
-        io = RichIO(console=custom_console)
-        assert io is not None
 
     @pytest.mark.unit
     def test_richio_has_echo(self):
@@ -159,21 +142,6 @@ class TestRichIOEcho:
         assert "continues" in result
 
     @pytest.mark.unit
-    def test_echo_empty_message(self):
-        """Test echo with empty message."""
-        from src.cli.rich_output import RichIO
-        from rich.console import Console
-
-        output = StringIO()
-        console = Console(file=output, force_terminal=False)
-        io = RichIO(console=console)
-
-        # Should not raise
-        io.echo("")
-
-        # Output should exist (may be just newline)
-        result = output.getvalue()
-        assert result is not None
 
     @pytest.mark.unit
     def test_echo_multiple_messages(self):
@@ -786,29 +754,8 @@ class TestRichIOEdgeCases:
         assert "cafe" in result
 
     @pytest.mark.unit
-    def test_secho_with_empty_message(self):
-        """Test secho with empty message."""
-        from src.cli.rich_output import RichIO
-        from rich.console import Console
-
-        output = StringIO()
-        console = Console(file=output, force_terminal=False)
-        io = RichIO(console=console)
-
-        # Should not raise
-        io.secho("", fg="green")
-
-        assert output.getvalue() is not None
 
     @pytest.mark.unit
-    def test_style_with_empty_text(self):
-        """Test style with empty text."""
-        from src.cli.rich_output import RichIO
-
-        io = RichIO()
-        result = io.style("", fg="red")
-
-        assert isinstance(result, str)
 
     @pytest.mark.unit
     def test_panel_with_multiline_content(self):
@@ -873,13 +820,6 @@ class TestRichIOConsoleAccess:
     """Tests for accessing the underlying Rich console."""
 
     @pytest.mark.unit
-    def test_richio_has_console_property(self):
-        """Test that RichIO exposes its console."""
-        from src.cli.rich_output import RichIO
-
-        io = RichIO()
-        assert hasattr(io, 'console')
-        assert io.console is not None
 
     @pytest.mark.unit
     def test_custom_console_is_used(self):

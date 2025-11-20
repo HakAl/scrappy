@@ -22,7 +22,6 @@ from .utils.session_utils import (
     display_session_save_error,
     display_session_not_saved_warning
 )
-from .utils.cli_factory import initialize_cli_handlers
 
 if TYPE_CHECKING:
     from ..orchestrator.protocols import Orchestrator
@@ -35,18 +34,42 @@ class CommandRouter:
         self,
         io: CLIIOProtocol,
         orchestrator: "Orchestrator",
+        display: CLIDisplay,
+        session_mgr: CLISessionManager,
+        codebase: CLICodebaseAnalysis,
+        tasks: CLITaskExecution,
+        multiprovider: CLIMultiProvider,
+        smart: CLISmartQuery,
+        agent_mgr: CLIAgentManager,
+        task_router: CLITaskRouterHandler,
         state_manager: Optional[PlanStateManager] = None
     ) -> None:
         """
-        Initialize CommandRouter with IO interface and orchestrator.
+        Initialize CommandRouter with all dependencies.
 
         Args:
             io: The IO interface for input/output.
             orchestrator: The agent orchestrator.
+            display: Display handler for showing information.
+            session_mgr: Session manager for persistence.
+            codebase: Codebase analysis handler.
+            tasks: Task execution handler.
+            multiprovider: Multi-provider handler.
+            smart: Smart query handler.
+            agent_mgr: Agent manager handler.
+            task_router: Task router handler.
             state_manager: Optional plan state manager.
         """
         self.io = io
         self.orchestrator = orchestrator
+        self.display = display
+        self.session_mgr = session_mgr
+        self.codebase = codebase
+        self.tasks = tasks
+        self.multiprovider = multiprovider
+        self.smart = smart
+        self.agent_mgr = agent_mgr
+        self.task_router = task_router
         self.state_manager = state_manager or PlanStateManager()
 
         # State attributes
@@ -55,18 +78,6 @@ class CommandRouter:
         self.auto_route_mode: bool = True
         self.smart_mode: bool = False
         self.auto_save: bool = True
-
-        # Initialize component handlers using factory
-        self.session_start = datetime.now()
-        handlers = initialize_cli_handlers(orchestrator, self.session_start)
-        self.display = handlers['display']
-        self.session_mgr = handlers['session_mgr']
-        self.codebase = handlers['codebase']
-        self.tasks = handlers['tasks']
-        self.multiprovider = handlers['multiprovider']
-        self.smart = handlers['smart']
-        self.agent_mgr = handlers['agent_mgr']
-        self.task_router = handlers['task_router']
 
         # Build command registry for dispatch
         self._command_registry = {

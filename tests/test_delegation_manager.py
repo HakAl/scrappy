@@ -532,7 +532,6 @@ class TestDelegationManagerDelegate:
 class TestDelegationManagerDelegateAsync:
     """Tests for DelegationManager.delegate_async() method."""
 
-    @pytest.mark.asyncio
     async def test_delegate_async_returns_response(self):
         """Test async delegation returns response from provider."""
         from src.orchestrator.delegation import DelegationManager
@@ -560,7 +559,6 @@ class TestDelegationManagerDelegateAsync:
         assert result.provider == "cerebras"
         mock_provider.chat_async.assert_called_once()
 
-    @pytest.mark.asyncio
     async def test_delegate_async_uses_cache(self):
         """Test async delegation uses cache when available."""
         from src.orchestrator.delegation import DelegationManager
@@ -604,7 +602,6 @@ class TestDelegationManagerDelegateAsync:
         assert task_record['cached'] is True
         mock_provider.chat_async.assert_not_called()
 
-    @pytest.mark.asyncio
     async def test_delegate_async_retries_on_rate_limit(self):
         """Test async delegation retries on rate limit errors."""
         from src.orchestrator.delegation import DelegationManager
@@ -642,7 +639,6 @@ class TestDelegationManagerDelegateAsync:
         assert result.content == "Test response"
         assert call_count[0] == 3
 
-    @pytest.mark.asyncio
     async def test_delegate_async_falls_back_on_failure(self):
         """Test async delegation falls back to another provider."""
         from src.orchestrator.delegation import DelegationManager
@@ -676,7 +672,6 @@ class TestDelegationManagerDelegateAsync:
         assert result.metadata.get('fallback_from') == "cerebras"
         assert result.metadata.get('fallback_to') == "groq"
 
-    @pytest.mark.asyncio
     async def test_delegate_async_parallel_execution(self):
         """Test that multiple async delegates can run in parallel."""
         from src.orchestrator.delegation import DelegationManager
@@ -1030,7 +1025,6 @@ class TestDelegationManagerCacheControl:
 class TestDelegationManagerMultiProviderQueryAsync:
     """Tests for DelegationManager.multi_provider_query_async() method."""
 
-    @pytest.mark.asyncio
     async def test_multi_provider_query_returns_responses_from_all_providers(self):
         """Test that multi_provider_query_async queries all specified providers."""
         from src.orchestrator.delegation import DelegationManager
@@ -1087,7 +1081,6 @@ class TestDelegationManagerMultiProviderQueryAsync:
         assert results["cerebras"][0].content == "Cerebras response"
         assert results["groq"][0].content == "Groq response"
 
-    @pytest.mark.asyncio
     async def test_multi_provider_query_uses_all_available_providers_by_default(self):
         """Test that multi_provider_query_async uses all available providers when none specified."""
         from src.orchestrator.delegation import DelegationManager
@@ -1117,7 +1110,6 @@ class TestDelegationManagerMultiProviderQueryAsync:
         assert "cerebras" in results
         assert "groq" in results
 
-    @pytest.mark.asyncio
     async def test_multi_provider_query_handles_provider_failure(self):
         """Test that multi_provider_query_async handles individual provider failures gracefully."""
         from src.orchestrator.delegation import DelegationManager
@@ -1153,7 +1145,6 @@ class TestDelegationManagerMultiProviderQueryAsync:
         # Should have logged the error
         assert any("groq failed" in msg for msg in output.get_by_level('warn'))
 
-    @pytest.mark.asyncio
     async def test_multi_provider_query_passes_kwargs(self):
         """Test that multi_provider_query_async passes kwargs to delegate_async."""
         from src.orchestrator.delegation import DelegationManager
@@ -1183,7 +1174,6 @@ class TestDelegationManagerMultiProviderQueryAsync:
         assert call_args[1]['temperature'] == 0.5
         assert call_args[1]['max_tokens'] == 500
 
-    @pytest.mark.asyncio
     async def test_multi_provider_query_executes_in_parallel(self):
         """Test that multi_provider_query_async executes queries in parallel."""
         from src.orchestrator.delegation import DelegationManager
@@ -1235,7 +1225,6 @@ class TestDelegationManagerMultiProviderQueryAsync:
         # All starts should happen before all ends in parallel execution
         assert max(start_times) < min(end_times)
 
-    @pytest.mark.asyncio
     async def test_multi_provider_query_returns_empty_dict_when_all_fail(self):
         """Test that multi_provider_query_async returns empty dict when all providers fail."""
         from src.orchestrator.delegation import DelegationManager

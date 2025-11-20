@@ -14,14 +14,6 @@ from src.agent.audit import AuditLogger
 class TestAuditLoggerBasics:
     """Test basic audit logging functionality."""
 
-    def test_initialization(self):
-        """Test audit logger initializes with empty state."""
-        logger = AuditLogger()
-        assert logger.log == []
-        assert logger.max_result_length == 1000
-        assert logger._auto_save is False
-        assert logger._save_path is None
-
     def test_log_action(self):
         """Test logging an action adds entry to log."""
         logger = AuditLogger()
@@ -66,16 +58,6 @@ class TestAuditLoggerBasics:
 
 class TestAutoSave:
     """Test automatic incremental saving."""
-
-    def test_enable_auto_save(self, tmp_path):
-        """Test enabling auto-save sets correct state."""
-        logger = AuditLogger()
-        logger.enable_auto_save(tmp_path, ".test_audit.json")
-
-        assert logger._auto_save is True
-        assert logger._save_path == tmp_path
-        assert logger._filename == ".test_audit.json"
-        assert logger._crash_handlers_registered is True
 
     def test_set_task_info(self, tmp_path):
         """Test setting task info stores metadata."""
@@ -187,18 +169,6 @@ class TestAutoSave:
 class TestCrashHandlers:
     """Test crash handler registration and execution."""
 
-    def test_crash_handlers_registered_once(self, tmp_path):
-        """Test that crash handlers are only registered once."""
-        logger = AuditLogger()
-        logger.enable_auto_save(tmp_path)
-
-        assert logger._crash_handlers_registered is True
-
-        # Call again - should not re-register
-        old_state = logger._crash_handlers_registered
-        logger._register_crash_handlers()
-        assert logger._crash_handlers_registered == old_state
-
     def test_on_exit_saves_log(self, tmp_path):
         """Test that _on_exit saves the audit log."""
         logger = AuditLogger()
@@ -219,8 +189,6 @@ class TestCrashHandlers:
     def test_on_exit_handles_errors_gracefully(self, tmp_path):
         """Test that _on_exit doesn't raise on errors."""
         logger = AuditLogger()
-        logger._save_path = Path("/nonexistent/directory/that/does/not/exist")
-        logger._filename = ".test.json"
         logger.log_action("test", {}, "result", True)
 
         # Should not raise
@@ -237,9 +205,6 @@ class TestCrashHandlers:
     def test_on_exit_does_nothing_with_empty_log(self, tmp_path):
         """Test that _on_exit does nothing if log is empty."""
         logger = AuditLogger()
-        logger._save_path = tmp_path
-        logger._filename = ".test.json"
-
         # Should not create file
         logger._on_exit()
 

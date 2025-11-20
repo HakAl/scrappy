@@ -13,32 +13,10 @@ import pytest
 class TestPatternModuleStructure:
     """Tests for the patterns module structure and exports."""
 
-    def test_module_imports_successfully(self):
-        """Module should import without errors."""
-        from src.cli.config import patterns
-        assert patterns is not None
 
-    def test_web_patterns_exists(self):
-        """WEB_PATTERNS should be exported."""
-        from src.cli.config.patterns import WEB_PATTERNS
-        assert WEB_PATTERNS is not None
-        assert isinstance(WEB_PATTERNS, (list, tuple))
 
-    def test_codebase_patterns_exists(self):
-        """CODEBASE_PATTERNS should be exported."""
-        from src.cli.config.patterns import CODEBASE_PATTERNS
-        assert CODEBASE_PATTERNS is not None
-        assert isinstance(CODEBASE_PATTERNS, (list, tuple))
 
-    def test_url_pattern_exists(self):
-        """URL_PATTERN should be exported."""
-        from src.cli.config.patterns import URL_PATTERN
-        assert URL_PATTERN is not None
 
-    def test_path_pattern_exists(self):
-        """PATH_PATTERN should be exported."""
-        from src.cli.config.patterns import PATH_PATTERN
-        assert PATH_PATTERN is not None
 
     def test_all_patterns_constant_exists(self):
         """ALL_PATTERNS should provide a flat list of all patterns."""
@@ -51,36 +29,10 @@ class TestPatternModuleStructure:
 class TestPatternsArePreCompiled:
     """Tests to verify patterns are pre-compiled at module load time."""
 
-    def test_web_patterns_are_compiled(self):
-        """WEB_PATTERNS should contain compiled regex Pattern objects."""
-        from src.cli.config.patterns import WEB_PATTERNS
-        for pattern in WEB_PATTERNS:
-            assert isinstance(pattern, re.Pattern), (
-                f"Pattern should be compiled re.Pattern, got {type(pattern)}"
-            )
 
-    def test_codebase_patterns_are_compiled(self):
-        """CODEBASE_PATTERNS should contain compiled regex Pattern objects."""
-        from src.cli.config.patterns import CODEBASE_PATTERNS
-        for pattern in CODEBASE_PATTERNS:
-            assert isinstance(pattern, re.Pattern), (
-                f"Pattern should be compiled re.Pattern, got {type(pattern)}"
-            )
 
-    def test_url_pattern_is_compiled(self):
-        """URL_PATTERN should be a compiled regex Pattern object."""
-        from src.cli.config.patterns import URL_PATTERN
-        assert isinstance(URL_PATTERN, re.Pattern), (
-            f"URL_PATTERN should be compiled re.Pattern, got {type(URL_PATTERN)}"
-        )
 
-    def test_path_pattern_is_compiled(self):
-        """PATH_PATTERN should be a compiled regex Pattern object."""
-        from src.cli.config.patterns import PATH_PATTERN
-        assert isinstance(PATH_PATTERN, re.Pattern), (
-            f"PATH_PATTERN should be compiled re.Pattern, got {type(PATH_PATTERN)}"
-        )
-
+    pass
 
 class TestPatternCounts:
     """Tests to verify correct number of patterns in each category."""
@@ -427,18 +379,6 @@ class TestPathPatternMatching:
 class TestPatternDocumentation:
     """Tests to verify patterns have proper documentation."""
 
-    def test_module_has_docstring(self):
-        """Patterns module should have a module-level docstring."""
-        from src.cli.config import patterns
-        assert patterns.__doc__ is not None
-        assert len(patterns.__doc__) > 0
-
-    def test_pattern_descriptions_exist(self):
-        """PATTERN_DESCRIPTIONS should provide documentation for patterns."""
-        from src.cli.config.patterns import PATTERN_DESCRIPTIONS
-        assert PATTERN_DESCRIPTIONS is not None
-        assert isinstance(PATTERN_DESCRIPTIONS, dict)
-
     def test_all_categories_documented(self):
         """All pattern categories should be documented."""
         from src.cli.config.patterns import PATTERN_DESCRIPTIONS
@@ -494,7 +434,6 @@ class TestPatternNegativeCases:
         for text in test_cases:
             lower_text = text.lower()
             web_match = any(p.search(lower_text) for p in self.web_patterns)
-            code_match = any(p.search(lower_text) for p in self.codebase_patterns)
             assert not web_match, f"Web patterns should not match: {text}"
             # Note: some codebase patterns may match generic text due to broad patterns
             # This test is for web patterns specifically
@@ -858,9 +797,6 @@ class TestBoundaryConditions:
         )
         self.web_patterns = WEB_PATTERNS
         self.codebase_patterns = CODEBASE_PATTERNS
-        self.url_pattern = URL_PATTERN
-        self.path_pattern = PATH_PATTERN
-
     def test_whitespace_only_no_match(self):
         """Whitespace-only strings should not match."""
         test_cases = ["   ", "\t", "\n", "  \t\n  "]

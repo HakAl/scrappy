@@ -40,13 +40,14 @@ class CLI:
         context_aware: bool = True,
         verbose_selection: bool = False,
         show_provider_status: bool = False,
-        io: Optional[CLIIOProtocol] = None
+        io: Optional[CLIIOProtocol] = None,
+        orchestrator: Optional[AgentOrchestrator] = None,
+        state_manager: Optional[PlanStateManager] = None
     ):
         """
-        Initialize CLI with orchestrator and component handlers.
+        Initialize CLI with orchestrator and component handlers (dependencies only - NO side effects).
 
-        Creates an AgentOrchestrator instance and initializes all CLI component
-        handlers (display, session, codebase, tasks, etc.) using the factory.
+        Call initialize() after construction to perform setup and display initialization messages.
 
         Args:
             brain: Provider name to use as the orchestrator brain. If None, uses
@@ -58,47 +59,24 @@ class CLI:
                 during initialization.
             show_provider_status: If True, display provider availability status
                 instead of default initialization messages.
-            io: IO interface for input/output operations. Defaults to ClickIO.
-
-        Side Effects:
-            - Prints initialization messages to stdout via io interface
-            - Creates and stores AgentOrchestrator instance
-            - Initializes logger for structured logging
-            - May prompt user to restore previous session if one exists
-            - Displays brain/provider status to console
-
-        State Changes:
-            - Sets self.orchestrator to new AgentOrchestrator
-            - Sets self.session_start to current datetime
-            - Sets self.state_manager to new PlanStateManager
-            - Initializes all component handlers (display, session_mgr, etc.)
-            - Sets self.input_handler and self.logger
-
-        Raises:
-            No explicit exceptions, but underlying orchestrator/provider
-            initialization may raise if no providers are available.
+            io: IO interface for input/output operations. Defaults to RichIO.
+            orchestrator: Injectable orchestrator instance (default: creates new AgentOrchestrator)
+            state_manager: Injectable state manager (default: creates new PlanStateManager)
         """
-        if io is None:
-            io = RichIO()
-        self.io = io
+        # Store config for factory methods and initialization
+        self._brain = brain
+        self._auto_explore = auto_explore
+        self._context_aware = context_aware
+        self._verbose_selection = verbose_selection
+        self._show_provider_status = show_provider_status
 
-        io.secho("Initializing Scrappy...", fg="cyan")
-
-        # Show verbose selection info if requested
-        if verbose_selection:
-            io.secho("Verbose provider selection enabled", fg="yellow")
-
-        self.orchestrator = AgentOrchestrator(
-            orchestrator_provider=brain,
-            auto_explore=auto_explore,
-            context_aware=context_aware,
-            verbose_selection=verbose_selection,
-            show_provider_status=show_provider_status
-        )
+        # Initialize dependencies using factory methods
+        self.io = io or self._create_default_io()
+        self.orchestrator = orchestrator or self._create_default_orchestrator()
         self.session_start = datetime.now()
 
         # Initialize state manager for plan tracking
-        self.state_manager = PlanStateManager()
+        self.state_manager = state_manager or self._create_default_state_manager()
 
         # Initialize component handlers using factory
         handlers = initialize_cli_handlers(self.orchestrator, self.session_start)
@@ -110,39 +88,117 @@ class CLI:
         self.smart = handlers['smart']
         self.agent_mgr = handlers['agent_mgr']
         self.task_router = handlers['task_router']
-        self.input_handler = InputHandler(io)
+        self.input_handler = InputHandler(self.io)
 
         # Logger for structured logging
-        self.logger = get_logger("cli.core", io=io)
+        self.logger = get_logger("cli.core", io=self.io)
+
+    def initialize(self, offer_session_restore: bool = True):
+        """
+        Initialize CLI with display messages and optional session restore.
+
+        Call this after construction to perform I/O operations.
+
+        Args:
+            offer_session_restore: If True, check for and offer to restore previous session
+
+        Returns:
+            self (for method chaining)
+        """
+        self.io.secho("Initializing Scrappy...", fg="cyan")
+
+        # Show verbose selection info if requested
+        if self._verbose_selection:
+            self.io.secho("Verbose provider selection enabled", fg="yellow")
+
+        # Log initialization
         self.logger.info("CLI initialized", extra={
             "brain": self.orchestrator.brain,
-            "auto_explore": auto_explore,
-            "context_aware": context_aware,
+            "auto_explore": self._auto_explore,
+            "context_aware": self._context_aware,
         })
 
         # Display initialization info (unless show_provider_status already did)
-        if not show_provider_status:
+        if not self._show_provider_status:
             brain_name = self.orchestrator.brain
             if brain_name:
-                io.echo(f"Brain: {io.style(brain_name, fg='green', bold=True)}")
+                self.io.echo(f"Brain: {self.io.style(brain_name, fg='green', bold=True)}")
             else:
-                io.secho("Brain: None (no providers available)", fg='yellow')
+                self.io.secho("Brain: None (no providers available)", fg='yellow')
             providers_list = ', '.join(self.orchestrator.providers.list_available())
             if providers_list:
-                io.echo(f"Available providers: {io.style(providers_list, fg='cyan')}")
+                self.io.echo(f"Available providers: {self.io.style(providers_list, fg='cyan')}")
             else:
-                io.secho("No providers available - check API keys", fg='yellow')
+                self.io.secho("No providers available - check API keys", fg='yellow')
 
         # Show context status
         if self.orchestrator.context.is_explored():
-            io.secho(f"Context: {self.orchestrator.context.project_path.name} (cached)", fg="cyan")
-        elif context_aware:
-            io.secho("Context: Not explored (use /context to explore)", fg="yellow")
+            self.io.secho(f"Context: {self.orchestrator.context.project_path.name} (cached)", fg="cyan")
+        elif self._context_aware:
+            self.io.secho("Context: Not explored (use /context to explore)", fg="yellow")
 
         # Auto-detect and offer to load previous session
-        self._check_and_offer_session_restore(io=io)
+        if offer_session_restore:
+            self._check_and_offer_session_restore(io=self.io)
 
-        io.echo()
+        self.io.echo()
+
+        return self
+
+    # Factory methods for default dependencies
+
+    def _create_default_io(self) -> CLIIOProtocol:
+        """Create default IO interface."""
+        return RichIO()
+
+    def _create_default_orchestrator(self) -> AgentOrchestrator:
+        """Create default orchestrator."""
+        orch = AgentOrchestrator(
+            context_aware=self._context_aware,
+            verbose_selection=self._verbose_selection,
+        )
+        orch.initialize(
+            auto_register=True,
+            orchestrator_provider=self._brain,
+            auto_explore=self._auto_explore,
+            show_provider_status=self._show_provider_status
+        )
+        return orch
+
+    def _create_default_state_manager(self) -> PlanStateManager:
+        """Create default state manager."""
+        return PlanStateManager()
+
+    def _create_command_router(self) -> CommandRouter:
+        """Create CommandRouter with all dependencies."""
+        return CommandRouter(
+            io=self.io,
+            orchestrator=self.orchestrator,
+            display=self.display,
+            session_mgr=self.session_mgr,
+            codebase=self.codebase,
+            tasks=self.tasks,
+            multiprovider=self.multiprovider,
+            smart=self.smart,
+            agent_mgr=self.agent_mgr,
+            task_router=self.task_router,
+            state_manager=self.state_manager
+        )
+
+    def _create_interactive_mode(self) -> InteractiveMode:
+        """Create InteractiveMode with all dependencies."""
+        return InteractiveMode(
+            io=self.io,
+            orchestrator=self.orchestrator,
+            state_manager=self.state_manager,
+            input_handler=self.input_handler,
+            command_router=self._create_command_router(),
+            display=self.display,
+            smart=self.smart,
+            task_router=self.task_router,
+            tasks=self.tasks,
+            logger=self.logger
+        )
 
     def _check_and_offer_session_restore(self, io: Optional[CLIIOProtocol] = None):
         """
@@ -241,12 +297,8 @@ class CLI:
         Returns:
             None
         """
-        # Create InteractiveMode with shared state manager
-        interactive = InteractiveMode(
-            io=self.io,
-            orchestrator=self.orchestrator,
-            state_manager=self.state_manager
-        )
+        # Create InteractiveMode with all dependencies
+        interactive = self._create_interactive_mode()
 
         # Run the interactive loop
         interactive.run()
@@ -401,16 +453,13 @@ class CLI:
         if io is None:
             io = self.io
 
-        # Create a command router with current state
-        router = CommandRouter(io, self.orchestrator, state_manager=self.state_manager)
+        # Create a command router with all dependencies
+        router = self._create_command_router()
         router.conversation_history = self.conversation_history
         router.multiline_mode = self.multiline_mode
         router.auto_route_mode = self.auto_route_mode
         router.smart_mode = self.smart_mode
         router.auto_save = self.auto_save
-
-        # Use CLI's display instance for consistency
-        router.display = self.display
 
         # Parse and route the command
         parts = command.split(maxsplit=1)

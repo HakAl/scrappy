@@ -32,7 +32,8 @@ class CLITaskRouterHandler:
         self,
         orchestrator: Orchestrator,
         project_root: Optional[Path] = None,
-        auto_confirm: bool = False
+        auto_confirm: bool = False,
+        router: Optional[TaskRouter] = None
     ) -> None:
         """Initialize CLI task router handler.
 
@@ -42,26 +43,35 @@ class CLITaskRouterHandler:
                 working directory if not provided.
             auto_confirm: If True, direct commands will execute without user
                 confirmation. Defaults to False for safety.
+            router: Optional TaskRouter instance. Created if not provided.
 
         State Changes:
             - Sets instance attributes for orchestrator, project_root, auto_confirm
-            - Creates a new TaskRouter instance with verbose=True
+            - Creates a new TaskRouter instance with verbose=True (if not provided)
             - Initializes empty history list for tracking routing decisions
         """
         self.orchestrator = orchestrator
-        self.project_root = project_root or Path.cwd()
+        self.project_root = project_root or self._get_default_project_root()
         self.auto_confirm = auto_confirm
 
-        # Initialize router
-        self.router = TaskRouter(
-            orchestrator=orchestrator,
-            project_root=self.project_root,
-            auto_confirm_direct=auto_confirm,
-            verbose=True
-        )
+        # Inject router or create default
+        self.router = router or self._create_default_router()
 
         # Track routing history
         self.history: list = []
+
+    def _get_default_project_root(self) -> Path:
+        """Get default project root directory."""
+        return Path.cwd()
+
+    def _create_default_router(self) -> TaskRouter:
+        """Create default task router."""
+        return TaskRouter(
+            orchestrator=self.orchestrator,
+            project_root=self.project_root,
+            auto_confirm_direct=self.auto_confirm,
+            verbose=True
+        )
 
     def handle_auto_route(self, user_input: str):
         """Automatically route and execute user input.

@@ -13,10 +13,6 @@ class TestContextCacheBasics:
     """Basic cache operations."""
 
     @pytest.mark.unit
-    def test_cache_creation(self):
-        """ContextCache can be instantiated."""
-        cache = ContextCache()
-        assert cache is not None
 
     @pytest.mark.unit
     def test_save_creates_file(self, tmp_path):

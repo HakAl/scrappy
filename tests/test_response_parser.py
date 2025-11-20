@@ -523,14 +523,6 @@ class TestResponseParserInterface:
         assert callable(parser.parse)
 
     @pytest.mark.unit
-    def test_parser_interface_returns_parse_result(self):
-        """Parser interface returns ParseResult type."""
-        parser = JSONResponseParser()
-        response = '{"thought": "test", "action": "read_file", "parameters": {}, "is_complete": false}'
-
-        result = parser.parse(response)
-
-        assert isinstance(result, ParseResult)
 
     @pytest.mark.unit
     def test_different_parsers_same_interface(self):

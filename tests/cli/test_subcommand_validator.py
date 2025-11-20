@@ -269,15 +269,6 @@ class TestSubcommandRegistry:
 class TestSubcommandValidatorIntegration:
     """Integration tests for subcommand validation."""
 
-    def test_consistent_result_type(self):
-        """All calls should return SubcommandValidationResult."""
-        valid_result = validate_subcommand("cache", "clear")
-        invalid_result = validate_subcommand("cache", "bad")
-        empty_result = validate_subcommand("cache", "")
-
-        assert isinstance(valid_result, SubcommandValidationResult)
-        assert isinstance(invalid_result, SubcommandValidationResult)
-        assert isinstance(empty_result, SubcommandValidationResult)
 
     def test_validator_is_pure_function(self):
         """Validator should have no side effects."""

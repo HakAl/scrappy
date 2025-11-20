@@ -224,24 +224,10 @@ class TestNeedsToolSupport:
 class TestToolDetectorModuleStructure:
     """Tests for the tool_detector module structure."""
 
-    def test_module_imports_successfully(self):
-        """Module should import without errors."""
-        from src.cli import tool_detector
-        assert tool_detector is not None
 
     def test_needs_tool_support_is_callable(self):
         """needs_tool_support should be a callable function."""
         from src.cli.tool_detector import needs_tool_support
         assert callable(needs_tool_support)
 
-    def test_function_has_docstring(self):
-        """needs_tool_support should have a docstring."""
-        from src.cli.tool_detector import needs_tool_support
-        assert needs_tool_support.__doc__ is not None
-        assert len(needs_tool_support.__doc__) > 0
 
-    def test_function_returns_bool(self):
-        """needs_tool_support should return a boolean."""
-        from src.cli.tool_detector import needs_tool_support
-        result = needs_tool_support("test")
-        assert isinstance(result, bool)

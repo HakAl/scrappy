@@ -74,7 +74,6 @@ class TestContextManagerShowStatus:
 
         orchestrator = ConfigurableTestOrchestrator()
         # Override get_context_status to include git info
-        orchestrator.get_context_status = lambda: {
             'project_path': Path('/test'),
             'is_explored': True,
             'has_summary': True,
@@ -102,7 +101,6 @@ class TestContextManagerShowStatus:
 
         orchestrator = ConfigurableTestOrchestrator(context_explored=True)
         orchestrator.context.summary = "This is a Python web application"
-        orchestrator.get_context_status = lambda: {
             'project_path': Path('/test'),
             'is_explored': True,
             'has_summary': True,

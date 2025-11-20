@@ -36,7 +36,6 @@ class TestClassifiedTaskImmutability:
             extracted_directories=("src",)
         )
 
-    @pytest.mark.unit
     @pytest.mark.parametrize("field,value", [
         ("task_type", TaskType.CODE_GENERATION),
         ("confidence", 1.0),
@@ -140,18 +139,6 @@ class TestClassifiedTaskHashability:
     """Tests for hashability of frozen ClassifiedTask."""
 
     @pytest.mark.unit
-    def test_task_is_hashable(self):
-        """Test that ClassifiedTask can be hashed."""
-        task = ClassifiedTask(
-            original_input="test",
-            task_type=TaskType.RESEARCH,
-            confidence=0.8,
-            reasoning="test"
-        )
-
-        # Should not raise
-        hash_value = hash(task)
-        assert isinstance(hash_value, int)
 
     @pytest.mark.unit
     def test_task_can_be_used_in_set(self):

@@ -54,7 +54,6 @@ class TestRateLimiterShowStatus:
         from src.cli.rate_limiter import RateLimiter
 
         orchestrator = ConfigurableTestOrchestrator()
-        orchestrator.get_rate_limit_status = lambda: {
             'last_reset': {'daily': 'N/A', 'monthly': 'N/A'},
             'providers': {}
         }
@@ -89,7 +88,6 @@ class TestRateLimiterProviderDisplay:
         from src.cli.rate_limiter import RateLimiter
 
         orchestrator = ConfigurableTestOrchestrator()
-        orchestrator.get_rate_limit_status = lambda: {
             'last_reset': {'daily': '2024-01-01', 'monthly': '2024-01-01'},
             'providers': {
                 'openai': {
@@ -113,7 +111,6 @@ class TestRateLimiterProviderDisplay:
         from src.cli.rate_limiter import RateLimiter
 
         orchestrator = ConfigurableTestOrchestrator()
-        orchestrator.get_rate_limit_status = lambda: {
             'last_reset': {'daily': '2024-01-01', 'monthly': '2024-01-01'},
             'providers': {
                 'anthropic': {
@@ -139,7 +136,6 @@ class TestRateLimiterProviderDisplay:
         from src.cli.rate_limiter import RateLimiter
 
         orchestrator = ConfigurableTestOrchestrator()
-        orchestrator.get_rate_limit_status = lambda: {
             'last_reset': {'daily': '2024-01-01', 'monthly': '2024-01-01'},
             'providers': {
                 'gemini': {
@@ -164,7 +160,6 @@ class TestRateLimiterProviderDisplay:
         from src.cli.rate_limiter import RateLimiter
 
         orchestrator = ConfigurableTestOrchestrator()
-        orchestrator.get_rate_limit_status = lambda: {
             'last_reset': {'daily': '2024-01-01', 'monthly': '2024-01-01'},
             'providers': {
                 'openai': {
@@ -201,7 +196,6 @@ class TestRateLimiterProviderDisplay:
         from src.cli.rate_limiter import RateLimiter
 
         orchestrator = ConfigurableTestOrchestrator()
-        orchestrator.get_rate_limit_status = lambda: {
             'last_reset': {'daily': '2024-01-01', 'monthly': '2024-01-01'},
             'providers': {
                 'openai': {
@@ -242,7 +236,6 @@ class TestRateLimiterColorCoding:
         from src.cli.rate_limiter import RateLimiter
 
         orchestrator = ConfigurableTestOrchestrator()
-        orchestrator.get_rate_limit_status = lambda: {
             'last_reset': {'daily': '2024-01-01', 'monthly': '2024-01-01'},
             'providers': {
                 'openai': {
@@ -275,7 +268,6 @@ class TestRateLimiterColorCoding:
         from src.cli.rate_limiter import RateLimiter
 
         orchestrator = ConfigurableTestOrchestrator()
-        orchestrator.get_rate_limit_status = lambda: {
             'last_reset': {'daily': '2024-01-01', 'monthly': '2024-01-01'},
             'providers': {
                 'openai': {
@@ -308,7 +300,6 @@ class TestRateLimiterColorCoding:
         from src.cli.rate_limiter import RateLimiter
 
         orchestrator = ConfigurableTestOrchestrator()
-        orchestrator.get_rate_limit_status = lambda: {
             'last_reset': {'daily': '2024-01-01', 'monthly': '2024-01-01'},
             'providers': {
                 'openai': {
@@ -345,11 +336,9 @@ class TestRateLimiterWarnings:
         from src.cli.rate_limiter import RateLimiter
 
         orchestrator = ConfigurableTestOrchestrator()
-        orchestrator.check_rate_limit_warnings = lambda: [
             "OpenAI: 90% of daily requests used",
             "Anthropic: Approaching token limit"
         ]
-        orchestrator.get_rate_limit_status = lambda: {
             'last_reset': {'daily': '2024-01-01', 'monthly': '2024-01-01'},
             'providers': {
                 'openai': {
@@ -374,8 +363,6 @@ class TestRateLimiterWarnings:
         from src.cli.rate_limiter import RateLimiter
 
         orchestrator = ConfigurableTestOrchestrator()
-        orchestrator.check_rate_limit_warnings = lambda: ["Warning message"]
-        orchestrator.get_rate_limit_status = lambda: {
             'last_reset': {'daily': '2024-01-01', 'monthly': '2024-01-01'},
             'providers': {
                 'test': {
@@ -404,7 +391,6 @@ class TestRateLimiterFilterByProvider:
         from src.cli.rate_limiter import RateLimiter
 
         orchestrator = ConfigurableTestOrchestrator()
-        orchestrator.get_rate_limit_status = lambda: {
             'last_reset': {'daily': '2024-01-01', 'monthly': '2024-01-01'},
             'providers': {
                 'openai': {
@@ -435,7 +421,6 @@ class TestRateLimiterFilterByProvider:
         from src.cli.rate_limiter import RateLimiter
 
         orchestrator = ConfigurableTestOrchestrator()
-        orchestrator.get_rate_limit_status = lambda: {
             'last_reset': {'daily': '2024-01-01', 'monthly': '2024-01-01'},
             'providers': {
                 'openai': {
@@ -477,8 +462,6 @@ class TestRateLimiterReset:
 
         orchestrator = ConfigurableTestOrchestrator()
         reset_called = []
-        orchestrator.reset_rate_tracking = lambda provider=None: reset_called.append(provider)
-
         limiter = RateLimiter(orchestrator)
         io = MockIO(confirmations=[True])
 
@@ -494,8 +477,6 @@ class TestRateLimiterReset:
 
         orchestrator = ConfigurableTestOrchestrator()
         reset_called = []
-        orchestrator.reset_rate_tracking = lambda provider=None: reset_called.append(provider)
-
         limiter = RateLimiter(orchestrator)
         io = MockIO(confirmations=[True])
 
@@ -511,8 +492,6 @@ class TestRateLimiterReset:
 
         orchestrator = ConfigurableTestOrchestrator()
         reset_called = []
-        orchestrator.reset_rate_tracking = lambda provider=None: reset_called.append(provider)
-
         limiter = RateLimiter(orchestrator)
         io = MockIO(confirmations=[False])
 
@@ -529,7 +508,6 @@ class TestRateLimiterTimeFormatting:
         from src.cli.rate_limiter import RateLimiter
 
         orchestrator = ConfigurableTestOrchestrator()
-        orchestrator.get_rate_limit_status = lambda: {
             'last_reset': {'daily': '2024-01-01', 'monthly': '2024-01-01'},
             'providers': {
                 'openai': {
@@ -560,7 +538,6 @@ class TestRateLimiterTimeFormatting:
         from src.cli.rate_limiter import RateLimiter
 
         orchestrator = ConfigurableTestOrchestrator()
-        orchestrator.get_rate_limit_status = lambda: {
             'last_reset': {'daily': '2024-01-01', 'monthly': '2024-01-01'},
             'providers': {
                 'openai': {

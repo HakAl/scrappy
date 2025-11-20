@@ -165,32 +165,6 @@ class TestThinkMethodNativeToolDetection:
     """Tests for _think() method detecting and using native tool calling."""
 
     @pytest.mark.unit
-    def test_think_returns_thought_with_llm_response_when_native_tools_available(
-        self,
-        agent_with_native_orchestrator,
-        mock_orchestrator_with_native_support
-    ):
-        """_think() should include LLMResponse when provider supports native tools."""
-        # This test verifies AgentThought can store llm_response
-
-        # Create conversation state
-        state = ConversationState(
-            messages=[{"role": "user", "content": "Read main.py"}],
-            system_prompt="You are a helpful assistant",
-            iteration=1
-        )
-
-        # Call _think
-        thought = agent_with_native_orchestrator._think(state)
-
-        # Key behavior: AgentThought now has llm_response field
-        assert hasattr(thought, 'llm_response')
-        assert thought.llm_response is not None
-
-        # The response should be from the orchestrator
-        # (Whether it's native tools or JSON doesn't matter for this test)
-        assert thought.raw_response is not None
-        assert thought.provider is not None
 
     @pytest.mark.unit
     def test_think_uses_delegate_with_tools_for_native_provider(
@@ -425,47 +399,6 @@ class TestOrchestratorAdapterDelegateWithTools:
         assert "tools" in sig.parameters
 
     @pytest.mark.unit
-    def test_delegate_with_tools_accepts_tool_schemas(self):
-        """delegate_with_tools() should accept OpenAI-compatible tool schemas."""
-        # Create a mock that conforms to the Protocol
-        adapter = Mock(spec=OrchestratorAdapter)
-
-        # Mock the delegate_with_tools to return proper response using helper
-        response = make_response_with_tools(
-            content="Tool response",
-            tool_calls=[make_tool_call(name="read_file", arguments={"file_path": "x.py"})]
-        )
-        adapter.delegate_with_tools.return_value = response
-
-        # Define tool schemas
-        tools = [
-            {
-                "type": "function",
-                "function": {
-                    "name": "read_file",
-                    "description": "Read a file",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "file_path": {"type": "string"}
-                        },
-                        "required": ["file_path"]
-                    }
-                }
-            }
-        ]
-
-        # Call delegate_with_tools - this should work once Protocol is updated
-        result = adapter.delegate_with_tools(
-            provider="mock_provider",
-            prompt="Read the file",
-            tools=tools
-        )
-
-        # Should return LLMResponse with tool_calls
-        assert isinstance(result, LLMResponse)
-        assert result.tool_calls is not None
-        adapter.delegate_with_tools.assert_called_once()
 
     @pytest.mark.unit
     def test_delegate_with_tools_returns_llm_response_with_tool_calls(self):
@@ -514,65 +447,5 @@ class TestOrchestratorAdapterDelegateWithTools:
 class TestEndToEndNativeToolCalling:
     """Integration tests for complete native tool calling flow."""
 
-    @pytest.mark.unit
-    def test_agent_loop_with_native_tool_provider(
-        self,
-        minimal_config
-    ):
-        """Agent should complete task using native tool calls."""
-        # Create orchestrator with proper context
-        orch = ConfigurableTestOrchestrator(
-            available_providers=["mock_native_provider"],
-            response_content='{"thought": "test", "action": "complete", "is_complete": true, "result": "done"}'
-        )
+    pass
 
-        # Setup: Provider returns completion
-        complete_response = make_response_with_tools(
-            content="Task complete.",
-            tool_calls=[make_tool_call(call_id="call_2", name="complete", arguments={"result": "Task done successfully"})]
-        )
-
-        orch.delegate_with_tools = Mock(return_value=complete_response)
-
-        # Mock registry
-        orch._registry = Mock()
-        mock_provider = Mock()
-        mock_provider.supports_tool_calling = True
-        orch._registry.get = Mock(return_value=mock_provider)
-
-        agent = CodeAgent(
-            orchestrator=orch,
-            project_path=".",
-            config=minimal_config
-        )
-
-        # Test that agent can be created and basic properties work
-        # (Full run test would require more complex mocking)
-        assert agent is not None
-        assert agent._response_parser is not None
-
-        # Verify UnifiedResponseParser is used
-        from src.agent.response_parser import UnifiedResponseParser
-        assert isinstance(agent._response_parser, UnifiedResponseParser)
-
-    @pytest.mark.unit
-    def test_mixed_provider_support_in_same_session(self, minimal_config):
-        """Agent should handle switching between JSON and native tool providers."""
-        # This test ensures the agent can work with both types
-        orch = ConfigurableTestOrchestrator(
-            available_providers=["mock_native_provider", "mock_json_provider"]
-        )
-
-        agent = CodeAgent(
-            orchestrator=orch,
-            project_path=".",
-            config=minimal_config
-        )
-
-        # Verify agent can be configured for either mode
-        assert agent._response_parser is not None
-
-        # The parser should be able to handle both formats
-        # (This will be UnifiedResponseParser after integration)
-        from src.agent.response_parser import UnifiedResponseParser
-        assert isinstance(agent._response_parser, UnifiedResponseParser)

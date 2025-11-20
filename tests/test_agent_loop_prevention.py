@@ -164,7 +164,6 @@ class TestDuplicateActionDetection:
             "content": "// Update router.js to include UserDashboard\nimport React from 'react';\n"
         }
 
-        state.action_history = [
             {"action": "write_file", "parameters": identical_params},
             {"action": "write_file", "parameters": identical_params},
             {"action": "write_file", "parameters": identical_params}
