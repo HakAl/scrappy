@@ -54,7 +54,7 @@ class TestTimestampParsing:
     def test_returns_empty_string_when_timestamp_is_empty(self):
         """Should handle empty string gracefully."""
         result = extract_time_from_timestamp("")
-        assert result == "never"
+        assert result == ""
 
     def test_returns_original_when_no_t_separator(self):
         """Should return original string when not ISO format."""

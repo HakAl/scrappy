@@ -13,6 +13,7 @@ from tests.helpers import MockIO, ConfigurableTestOrchestrator
 from datetime import datetime
 from src.cli.utils.cli_factory import initialize_cli_handlers
 from src.cli.state_manager import PlanStateManager
+from src.cli.session_context import SessionContext
 from src.cli.input_handler import InputHandler
 from src.cli.logging import get_logger
 
@@ -27,6 +28,7 @@ def create_test_interactive_mode(io, orchestrator):
     from src.cli.command_router import CommandRouter
 
     state_manager = PlanStateManager()
+    session_context = SessionContext()
     input_handler = InputHandler(io)
     logger = get_logger('cli.interactive', io=io)
 
@@ -34,6 +36,7 @@ def create_test_interactive_mode(io, orchestrator):
     command_router = CommandRouter(
         io=io,
         orchestrator=orchestrator,
+        session_context=session_context,
         display=handlers['display'],
         session_mgr=handlers['session_mgr'],
         codebase=handlers['codebase'],
@@ -48,6 +51,7 @@ def create_test_interactive_mode(io, orchestrator):
     return InteractiveMode(
         io=io,
         orchestrator=orchestrator,
+        session_context=session_context,
         state_manager=state_manager,
         input_handler=input_handler,
         command_router=command_router,
@@ -84,23 +88,23 @@ class TestInteractiveMode:
         io = MockIO()
         mode = create_test_interactive_mode(io, self.orchestrator)
 
-        assert mode.multiline_mode is True
-        assert mode.auto_route_mode is True
-        assert mode.smart_mode is False
+        assert mode.session_context.multiline_mode is True
+        assert mode.session_context.auto_route_mode is True
+        assert mode.session_context.smart_mode is False
 
     def test_initializes_with_empty_conversation(self):
         """Should initialize with empty conversation history."""
         io = MockIO()
         mode = create_test_interactive_mode(io, self.orchestrator)
 
-        assert mode.conversation_history == []
+        assert mode.session_context.conversation_history == []
 
     def test_initializes_with_auto_save_enabled(self):
         """Should initialize with auto_save enabled."""
         io = MockIO()
         mode = create_test_interactive_mode(io, self.orchestrator)
 
-        assert mode.auto_save is True
+        assert mode.session_context.auto_save is True
 
     # =========================================================================
     # Run Loop Tests
@@ -152,7 +156,7 @@ class TestInteractiveMode:
         """Should add user input to conversation history."""
         io = MockIO()
         mode = create_test_interactive_mode(io, self.orchestrator)
-        mode.auto_route_mode = False
+        mode.session_context.auto_route_mode = False
         mode.smart_mode = False
 
         mock_response = MagicMock()
@@ -165,10 +169,10 @@ class TestInteractiveMode:
 
         mode._process_input("hello")
 
-        assert len(mode.conversation_history) == 2
-        assert mode.conversation_history[0]['role'] == 'user'
-        assert mode.conversation_history[0]['content'] == 'hello'
-        assert mode.conversation_history[1]['role'] == 'assistant'
+        assert len(mode.session_context.conversation_history) == 2
+        assert mode.session_context.conversation_history[0]['role'] == 'user'
+        assert mode.session_context.conversation_history[0]['content'] == 'hello'
+        assert mode.session_context.conversation_history[1]['role'] == 'assistant'
 
     def test_empty_input_returns_true_to_continue(self):
         """Should return True for empty input to continue loop."""
@@ -198,7 +202,7 @@ class TestInteractiveMode:
         """Should handle EOFError and auto-save."""
         io = MockIO()
         mode = create_test_interactive_mode(io, self.orchestrator)
-        mode.auto_save = True
+        mode.session_context.auto_save = True
         self.orchestrator.save_session = MagicMock(return_value="/test/session.json")
         mode.display = MagicMock()
 
@@ -239,7 +243,7 @@ class TestInteractiveModeDisplayOutput:
         """Should display response with provider/token info."""
         io = MockIO()
         mode = create_test_interactive_mode(io, self.orchestrator)
-        mode.auto_route_mode = False
+        mode.session_context.auto_route_mode = False
         mode.smart_mode = False
 
         mock_response = MagicMock()
@@ -260,7 +264,7 @@ class TestInteractiveModeDisplayOutput:
         """Should display tool usage information when tools used."""
         io = MockIO()
         mode = create_test_interactive_mode(io, self.orchestrator)
-        mode.auto_route_mode = False
+        mode.session_context.auto_route_mode = False
         mode.smart_mode = False
         mode.task_router = MagicMock()
 

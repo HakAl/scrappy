@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Dict, List, Optional
 
 from .io_interface import CLIIOProtocol
 from .state_manager import PlanStateManager
+from .session_context import SessionContextProtocol
 from .input_handler import InputHandler
 from .command_router import CommandRouter
 from .tool_detector import needs_tool_support
@@ -41,6 +42,7 @@ class InteractiveMode:
         self,
         io: CLIIOProtocol,
         orchestrator: "Orchestrator",
+        session_context: SessionContextProtocol,
         state_manager: PlanStateManager,
         input_handler: InputHandler,
         command_router: CommandRouter,
@@ -56,6 +58,7 @@ class InteractiveMode:
         Args:
             io: The IO interface for input/output.
             orchestrator: The agent orchestrator.
+            session_context: Shared session context for state management.
             state_manager: Plan state manager.
             input_handler: Input handler for reading user input.
             command_router: Command router for slash commands.
@@ -67,6 +70,7 @@ class InteractiveMode:
         """
         self.io = io
         self.orchestrator = orchestrator
+        self.session_context = session_context
         self.state_manager = state_manager
         self.input_handler = input_handler
         self.command_router = command_router
@@ -75,13 +79,6 @@ class InteractiveMode:
         self.task_router = task_router
         self.tasks = tasks
         self.logger = logger
-
-        # State attributes (sync from command_router for convenience)
-        self.conversation_history: List[Dict[str, str]] = self.command_router.conversation_history
-        self.multiline_mode: bool = self.command_router.multiline_mode
-        self.auto_route_mode: bool = self.command_router.auto_route_mode
-        self.smart_mode: bool = self.command_router.smart_mode
-        self.auto_save: bool = self.command_router.auto_save
 
     def run(self) -> None:
         """
@@ -114,7 +111,7 @@ class InteractiveMode:
         # Show welcome banner with Rich Panel
         # Use RichIO if available, otherwise fall back to basic io
         if isinstance(io, RichIO):
-            render_welcome_banner(io, self.multiline_mode, self.auto_route_mode)
+            render_welcome_banner(io, self.session_context.multiline_mode, self.session_context.auto_route_mode)
         else:
             # Fallback for non-Rich IO (e.g., testing)
             io.secho("=" * 60, fg="cyan")
@@ -130,12 +127,12 @@ class InteractiveMode:
             io.echo(f"  {io.style('/quit', fg='yellow')}          - Exit the CLI")
             io.secho("=" * 60, fg="cyan")
 
-            if self.multiline_mode:
+            if self.session_context.multiline_mode:
                 io.secho("Multiline input: ON", fg="green")
             else:
                 io.secho("Multiline input: OFF", fg="yellow")
 
-            if self.auto_route_mode:
+            if self.session_context.auto_route_mode:
                 io.secho("Auto-routing: ON", fg="green")
             else:
                 io.secho("Auto-routing: OFF", fg="yellow")
@@ -171,7 +168,7 @@ class InteractiveMode:
             try:
                 # Read input
                 user_input = self.input_handler.read_interactive_input(
-                    multiline_mode=self.multiline_mode
+                    multiline_mode=self.session_context.multiline_mode
                 )
 
                 # Process input
@@ -238,18 +235,18 @@ class InteractiveMode:
             return self.command_router.route(cmd, args)
 
         # Regular chat
-        self.conversation_history.append({
+        self.session_context.conversation_history.append({
             "role": "user",
             "content": user_input
         })
 
         # Use auto-routing if enabled
-        if self.auto_route_mode:
+        if self.session_context.auto_route_mode:
             result = self.task_router.handle_auto_route(user_input)
             response_content = result.output if result.success else f"Error: {result.error}"
             response = type('Response', (), {'content': response_content})()
         # Use smart mode if enabled
-        elif self.smart_mode:
+        elif self.session_context.smart_mode:
             response = self.smart.smart_query(user_input)
         else:
             # Check if this looks like a research task that needs tools
@@ -302,7 +299,7 @@ class InteractiveMode:
                 )
         io.echo()
 
-        self.conversation_history.append({
+        self.session_context.conversation_history.append({
             "role": "assistant",
             "content": response.content
         })
@@ -341,9 +338,9 @@ class InteractiveMode:
         self.logger.info("EOF received, exiting interactive mode")
 
         # Auto-save session on exit if enabled
-        if self.auto_save:
+        if self.session_context.auto_save:
             def save_session():
-                return self.orchestrator.save_session(self.conversation_history)
+                return self.orchestrator.save_session(self.session_context.conversation_history)
 
             result = graceful_degrade(
                 save_session,

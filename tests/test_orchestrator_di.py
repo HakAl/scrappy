@@ -141,13 +141,22 @@ class TestDependencyInjection:
 
     def test_cache_stats_uses_injected_cache(self, tmp_path):
         """get_cache_stats should use injected cache."""
+        from src.orchestrator.usage_reporter import UsageReporter
+
         mock_cache = Mock(spec=ResponseCache)
         expected_stats = {'exact_hits': 10, 'intent_hits': 5}
         mock_cache.get_stats.return_value = expected_stats
 
+        # Create usage_reporter with the mock cache
+        usage_reporter = UsageReporter(
+            cache=mock_cache,
+            created_at=None
+        )
+
         orch = AgentOrchestrator(
             project_path=str(tmp_path),
             cache=mock_cache,
+            usage_reporter=usage_reporter,
             output=NullOutput()
         )
 

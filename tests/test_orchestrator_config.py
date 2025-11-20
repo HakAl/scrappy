@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, PropertyMock
 from src.orchestrator.provider_selector import ProviderSelector
 from src.orchestrator.rate_limiter import RateLimitTracker
 from src.providers.base import ProviderRegistry
+from tests.helpers import create_test_rate_limit_tracker
 
 
 class TestProviderPriorityRegression:
@@ -166,10 +167,34 @@ class TestTaskPreferencesRegression:
 
         return registry
 
+    def _create_real_tracker(self):
+        """Create a tracker with real recommender for testing task preferences."""
+        from src.orchestrator.rate_limiting import RateLimitTracker, RateLimitRecommender
+        from tests.helpers import FakeStorage, FakePolicy, FakeCalculator
+
+        storage = FakeStorage()
+        policy = FakePolicy()
+        calculator = FakeCalculator()
+
+        # Create tracker with placeholder recommender
+        tracker = RateLimitTracker(
+            storage=storage,
+            policy=policy,
+            calculator=calculator,
+            recommender=MagicMock()
+        )
+
+        # Create real recommender with the tracker as usage query
+        # and replace the mock recommender
+        recommender = RateLimitRecommender(tracker)
+        tracker._recommender = recommender
+
+        return tracker
+
     def test_planning_task_preferences(self):
         """Planning tasks should prefer cerebras > groq > gemini."""
         registry = self._create_mock_registry(['cerebras', 'groq', 'gemini'])
-        tracker = RateLimitTracker()
+        tracker = self._create_real_tracker()
 
         result = tracker.get_recommended_provider('planning', registry)
 
@@ -178,7 +203,7 @@ class TestTaskPreferencesRegression:
     def test_execution_task_preferences(self):
         """Execution tasks should prefer cerebras > groq > gemini."""
         registry = self._create_mock_registry(['cerebras', 'groq', 'gemini'])
-        tracker = RateLimitTracker()
+        tracker = self._create_real_tracker()
 
         result = tracker.get_recommended_provider('execution', registry)
 
@@ -187,7 +212,7 @@ class TestTaskPreferencesRegression:
     def test_quick_task_preferences(self):
         """Quick tasks should prefer cerebras > groq."""
         registry = self._create_mock_registry(['groq', 'gemini'])
-        tracker = RateLimitTracker()
+        tracker = self._create_real_tracker()
 
         result = tracker.get_recommended_provider('quick', registry)
 
@@ -197,7 +222,7 @@ class TestTaskPreferencesRegression:
     def test_general_task_preferences(self):
         """General tasks should prefer cerebras > groq > gemini."""
         registry = self._create_mock_registry(['gemini', 'cohere'])
-        tracker = RateLimitTracker()
+        tracker = self._create_real_tracker()
 
         result = tracker.get_recommended_provider('general', registry)
 
@@ -207,7 +232,7 @@ class TestTaskPreferencesRegression:
     def test_unknown_task_type_uses_general_preferences(self):
         """Unknown task types should fall back to general preferences."""
         registry = self._create_mock_registry(['cerebras', 'groq'])
-        tracker = RateLimitTracker()
+        tracker = self._create_real_tracker()
 
         result = tracker.get_recommended_provider('unknown_task', registry)
 
@@ -216,7 +241,7 @@ class TestTaskPreferencesRegression:
     def test_returns_first_available_when_no_preferences_match(self):
         """Should return first available provider when no preferences match."""
         registry = self._create_mock_registry(['cohere', 'github_models'])
-        tracker = RateLimitTracker()
+        tracker = self._create_real_tracker()
 
         result = tracker.get_recommended_provider('planning', registry)
 

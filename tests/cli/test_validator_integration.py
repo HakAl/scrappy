@@ -9,6 +9,7 @@ from datetime import datetime
 from unittest.mock import Mock, patch
 from tests.helpers import MockIO, ConfigurableTestOrchestrator
 from src.cli.command_router import CommandRouter
+from src.cli.session_context import SessionContext
 from src.cli.input_handler import InputHandler
 from src.cli.utils.cli_factory import initialize_cli_handlers
 
@@ -25,10 +26,14 @@ class TestCommandRouterValidation:
         session_start = datetime.now()
         handlers = initialize_cli_handlers(self.orchestrator, session_start)
 
+        # Create session context for shared state
+        self.session_context = SessionContext()
+
         # Create router with all dependencies
         self.router = CommandRouter(
             io=self.io,
             orchestrator=self.orchestrator,
+            session_context=self.session_context,
             display=handlers['display'],
             session_mgr=handlers['session_mgr'],
             codebase=handlers['codebase'],
@@ -121,24 +126,24 @@ class TestCommandRouterValidation:
 
     def test_multiline_toggle_works(self):
         """Multiline mode toggle should work."""
-        initial_mode = self.router.multiline_mode
+        initial_mode = self.router.session_context.multiline_mode
         result = self.router.route("/ml", "")
         assert result is True
-        assert self.router.multiline_mode != initial_mode
+        assert self.router.session_context.multiline_mode != initial_mode
 
     def test_auto_route_toggle_works(self):
         """Auto-route mode toggle should work."""
-        initial_mode = self.router.auto_route_mode
+        initial_mode = self.router.session_context.auto_route_mode
         result = self.router.route("/auto", "")
         assert result is True
-        assert self.router.auto_route_mode != initial_mode
+        assert self.router.session_context.auto_route_mode != initial_mode
 
     def test_clear_command_clears_history(self):
         """Clear command should clear conversation history."""
-        self.router.conversation_history = [{"role": "user", "content": "test"}]
+        self.router.session_context.conversation_history = [{"role": "user", "content": "test"}]
         result = self.router.route("/clear", "")
         assert result is True
-        assert len(self.router.conversation_history) == 0
+        assert len(self.router.session_context.conversation_history) == 0
 
     def test_very_long_command_rejected(self):
         """Very long command should be rejected."""

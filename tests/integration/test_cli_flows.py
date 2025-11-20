@@ -26,6 +26,7 @@ from tests.helpers import (
 from datetime import datetime
 from src.cli.utils.cli_factory import initialize_cli_handlers
 from src.cli.state_manager import PlanStateManager
+from src.cli.session_context import SessionContext
 from src.cli.input_handler import InputHandler
 from src.cli.logging import get_logger
 
@@ -40,6 +41,7 @@ def create_test_interactive_mode(io, orchestrator):
     from src.cli.command_router import CommandRouter
 
     state_manager = PlanStateManager()
+    session_context = SessionContext()
     input_handler = InputHandler(io)
     logger = get_logger('cli.interactive', io=io)
 
@@ -47,6 +49,7 @@ def create_test_interactive_mode(io, orchestrator):
     command_router = CommandRouter(
         io=io,
         orchestrator=orchestrator,
+        session_context=session_context,
         display=handlers['display'],
         session_mgr=handlers['session_mgr'],
         codebase=handlers['codebase'],
@@ -61,6 +64,7 @@ def create_test_interactive_mode(io, orchestrator):
     return InteractiveMode(
         io=io,
         orchestrator=orchestrator,
+        session_context=session_context,
         state_manager=state_manager,
         input_handler=input_handler,
         command_router=command_router,
@@ -82,10 +86,12 @@ def create_test_command_router(io, orchestrator):
 
     session_start = datetime.now()
     handlers = initialize_cli_handlers(orchestrator, session_start)
+    session_context = SessionContext()
 
     return CommandRouter(
         io=io,
         orchestrator=orchestrator,
+        session_context=session_context,
         display=handlers['display'],
         session_mgr=handlers['session_mgr'],
         codebase=handlers['codebase'],
@@ -138,7 +144,7 @@ class TestSessionStartupFlow:
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
         mode = create_test_interactive_mode(io, orchestrator)
-        mode.multiline_mode = True
+        mode.session_context.multiline_mode = True
 
         with patch('sys.stdin.isatty', return_value=True):
             with patch.object(mode, '_main_loop', return_value=None):
@@ -153,7 +159,7 @@ class TestSessionStartupFlow:
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
         mode = create_test_interactive_mode(io, orchestrator)
-        mode.auto_route_mode = True
+        mode.session_context.auto_route_mode = True
 
         with patch('sys.stdin.isatty', return_value=True):
             with patch.object(mode, '_main_loop', return_value=None):
@@ -179,7 +185,7 @@ class TestSessionExitFlow:
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
         router = create_test_command_router(io, orchestrator)
-        router.auto_save = True
+        router.session_context.auto_save = True
         orchestrator.save_session = MagicMock(return_value="/test/session.json")
 
         result = router.route("/quit", "")
@@ -199,7 +205,7 @@ class TestSessionExitFlow:
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
         router = create_test_command_router(io, orchestrator)
-        router.auto_save = False
+        router.session_context.auto_save = False
         orchestrator.save_session = MagicMock()
 
         result = router.route("/quit", "")
@@ -433,11 +439,11 @@ class TestModeTogglingFlow:
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
         router = create_test_command_router(io, orchestrator)
-        initial = router.multiline_mode
+        initial = router.session_context.multiline_mode
 
         router.route("/ml", "")
 
-        assert router.multiline_mode != initial
+        assert router.session_context.multiline_mode != initial
 
         output = io.get_output()
         assert "Multiline" in output or "multiline" in output
@@ -447,7 +453,7 @@ class TestModeTogglingFlow:
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
         router = create_test_command_router(io, orchestrator)
-        router.multiline_mode = False  # Start OFF
+        router.session_context.multiline_mode = False  # Start OFF
 
         router.route("/ml", "")
 
@@ -461,11 +467,11 @@ class TestModeTogglingFlow:
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
         router = create_test_command_router(io, orchestrator)
-        initial = router.auto_route_mode
+        initial = router.session_context.auto_route_mode
 
         router.route("/auto", "")
 
-        assert router.auto_route_mode != initial
+        assert router.session_context.auto_route_mode != initial
 
         output = io.get_output()
         assert "Auto-routing" in output or "auto" in output.lower()
@@ -475,7 +481,7 @@ class TestModeTogglingFlow:
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
         router = create_test_command_router(io, orchestrator)
-        router.auto_route_mode = False  # Start OFF
+        router.session_context.auto_route_mode = False  # Start OFF
 
         router.route("/auto", "")
 
@@ -489,11 +495,11 @@ class TestModeTogglingFlow:
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
         router = create_test_command_router(io, orchestrator)
-        initial = router.smart_mode
+        initial = router.session_context.smart_mode
 
         router.route("/smart", "toggle")
 
-        assert router.smart_mode != initial
+        assert router.session_context.smart_mode != initial
 
         output = io.get_output()
         assert "Smart" in output or "smart" in output
@@ -530,14 +536,14 @@ class TestCommandExecutionFlow:
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
         router = create_test_command_router(io, orchestrator)
-        router.conversation_history = [
+        router.session_context.conversation_history = [
             {'role': 'user', 'content': 'hello'},
             {'role': 'assistant', 'content': 'hi'}
         ]
 
         router.route("/clear", "")
 
-        assert router.conversation_history == []
+        assert router.session_context.conversation_history == []
 
         output = io.get_output()
         assert "cleared" in output.lower()
@@ -599,7 +605,7 @@ class TestChatWithAutoRouteFlow:
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
         mode = create_test_interactive_mode(io, orchestrator)
-        mode.auto_route_mode = True
+        mode.session_context.auto_route_mode = True
         mode.task_router = MagicMock()
         mode.task_router.handle_auto_route.return_value = MagicMock(
             success=True,
@@ -608,9 +614,9 @@ class TestChatWithAutoRouteFlow:
 
         mode._process_input("hello world")
 
-        assert len(mode.conversation_history) >= 2
-        assert mode.conversation_history[0]['role'] == 'user'
-        assert mode.conversation_history[0]['content'] == 'hello world'
+        assert len(mode.session_context.conversation_history) >= 2
+        assert mode.session_context.conversation_history[0]['role'] == 'user'
+        assert mode.session_context.conversation_history[0]['content'] == 'hello world'
 
 
 # =============================================================================
@@ -640,14 +646,14 @@ class TestSessionManagementFlow:
 
         router.route("/session", "load")
 
-        assert router.conversation_history[0]['content'] == 'previous'
+        assert router.session_context.conversation_history[0]['content'] == 'previous'
 
     def test_session_toggle_auto_save(self):
         """Session toggle should toggle auto-save setting."""
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
         router = create_test_command_router(io, orchestrator)
-        initial = router.auto_save
+        initial = router.session_context.auto_save
         router.session_mgr = MagicMock()
         router.session_mgr.manage_session.return_value = {
             'auto_save': not initial
@@ -655,7 +661,7 @@ class TestSessionManagementFlow:
 
         router.route("/session", "toggle")
 
-        assert router.auto_save != initial
+        assert router.session_context.auto_save != initial
 
 
 # =============================================================================
@@ -784,25 +790,25 @@ class TestCompleteUserWorkflows:
         router = create_test_command_router(io, orchestrator)
 
         # Record initial states
-        initial_multiline = router.multiline_mode
-        initial_auto = router.auto_route_mode
-        initial_smart = router.smart_mode
+        initial_multiline = router.session_context.multiline_mode
+        initial_auto = router.session_context.auto_route_mode
+        initial_smart = router.session_context.smart_mode
 
         # Toggle multiline
         router.route("/ml", "")
-        assert router.multiline_mode != initial_multiline
+        assert router.session_context.multiline_mode != initial_multiline
 
         # Toggle auto-route
         router.route("/auto", "")
-        assert router.auto_route_mode != initial_auto
+        assert router.session_context.auto_route_mode != initial_auto
 
         # Toggle smart mode
         router.route("/smart", "toggle")
-        assert router.smart_mode != initial_smart
+        assert router.session_context.smart_mode != initial_smart
 
         # Toggle back
         router.route("/ml", "")
-        assert router.multiline_mode == initial_multiline
+        assert router.session_context.multiline_mode == initial_multiline
 
 
 
@@ -904,18 +910,18 @@ class TestSideEffects:
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
         router = create_test_command_router(io, orchestrator)
-        router.conversation_history.append({'role': 'user', 'content': 'test'})
+        router.session_context.conversation_history.append({'role': 'user', 'content': 'test'})
 
         router.route("/clear", "")
 
-        assert len(router.conversation_history) == 0
+        assert len(router.session_context.conversation_history) == 0
 
     def test_quit_returns_false_for_exit(self):
         """Quit command should return False to signal exit."""
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
         router = create_test_command_router(io, orchestrator)
-        router.auto_save = False
+        router.session_context.auto_save = False
 
         result = router.route("/quit", "")
 

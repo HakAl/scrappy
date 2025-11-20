@@ -10,7 +10,9 @@ from unittest.mock import Mock, MagicMock
 from typing import Optional
 
 from src.orchestrator.rate_limiter import RateLimitTracker
+from src.orchestrator.rate_limiting import RateLimitCalculator, RateLimitPolicy, RateLimitRecommender
 from src.providers.base import ProviderLimits
+from tests.helpers import create_test_rate_limit_tracker, FakeStorage
 
 
 def make_mock_provider(
@@ -39,13 +41,40 @@ def make_mock_registry(providers: dict) -> Mock:
     return registry
 
 
+def create_real_tracker():
+    """
+    Create a tracker with REAL calculator and policy for testing actual rate limiting logic.
+
+    Uses FakeStorage (in-memory) since that's just for persistence, but uses
+    real Calculator and Policy to test the actual rate limiting behavior.
+    """
+    storage = FakeStorage()
+    policy = RateLimitPolicy()
+    calculator = RateLimitCalculator()
+
+    # Create tracker with placeholder recommender
+    tracker = RateLimitTracker(
+        storage=storage,
+        policy=policy,
+        calculator=calculator,
+        recommender=MagicMock()
+    )
+
+    # Create real recommender with the tracker as usage query
+    # and replace the mock recommender
+    recommender = RateLimitRecommender(tracker)
+    tracker._recommender = recommender
+
+    return tracker
+
+
 class TestIsRateLimited:
     """Tests for is_rate_limited method on RateLimitTracker."""
 
     @pytest.mark.unit
     def test_not_rate_limited_when_under_quota(self):
         """Provider should not be rate limited when under quota."""
-        tracker = RateLimitTracker()
+        tracker = create_test_rate_limit_tracker()
 
         # Use 5 of 100 daily requests
         for _ in range(5):
@@ -65,7 +94,7 @@ class TestIsRateLimited:
     @pytest.mark.unit
     def test_rate_limited_when_daily_quota_exhausted(self):
         """Provider should be rate limited when daily requests exhausted."""
-        tracker = RateLimitTracker()
+        tracker = create_real_tracker()
 
         # Use all 10 daily requests
         for _ in range(10):
@@ -85,7 +114,7 @@ class TestIsRateLimited:
     @pytest.mark.unit
     def test_rate_limited_when_monthly_quota_exhausted(self):
         """Provider should be rate limited when monthly requests exhausted."""
-        tracker = RateLimitTracker()
+        tracker = create_real_tracker()
 
         # Directly set monthly usage
         tracker._ensure_provider_model('groq', 'model')
@@ -105,7 +134,7 @@ class TestIsRateLimited:
     @pytest.mark.unit
     def test_not_rate_limited_when_no_limits_set(self):
         """Provider should not be rate limited when no limits are configured."""
-        tracker = RateLimitTracker()
+        tracker = create_test_rate_limit_tracker()
 
         # Record many requests
         for _ in range(100):
@@ -125,7 +154,7 @@ class TestIsRateLimited:
     @pytest.mark.unit
     def test_not_rate_limited_for_unknown_provider(self):
         """Unknown provider should not be considered rate limited."""
-        tracker = RateLimitTracker()
+        tracker = create_test_rate_limit_tracker()
         registry = make_mock_registry({})  # Empty registry
 
         result = tracker.is_rate_limited('unknown', registry)
@@ -135,7 +164,7 @@ class TestIsRateLimited:
     @pytest.mark.unit
     def test_not_rate_limited_when_provider_has_no_limits(self):
         """Provider with None limits should not be rate limited."""
-        tracker = RateLimitTracker()
+        tracker = create_test_rate_limit_tracker()
 
         provider = make_mock_provider('groq', default_model='model')
         provider.get_limits.return_value = None
@@ -148,7 +177,7 @@ class TestIsRateLimited:
     @pytest.mark.unit
     def test_uses_provider_default_model(self):
         """Should check quota using provider's default model."""
-        tracker = RateLimitTracker()
+        tracker = create_real_tracker()
 
         # Record requests for custom-model
         for _ in range(10):
@@ -173,7 +202,7 @@ class TestGetRecommendedProvider:
     @pytest.mark.unit
     def test_returns_first_available_provider_for_general_task(self):
         """Should return first non-rate-limited provider for general tasks."""
-        tracker = RateLimitTracker()
+        tracker = create_real_tracker()
 
         providers = {
             'cerebras': make_mock_provider(
@@ -194,7 +223,7 @@ class TestGetRecommendedProvider:
     @pytest.mark.unit
     def test_skips_rate_limited_provider(self):
         """Should skip providers that are rate limited."""
-        tracker = RateLimitTracker()
+        tracker = create_real_tracker()
 
         # Rate limit cerebras
         for _ in range(10):
@@ -219,7 +248,7 @@ class TestGetRecommendedProvider:
     @pytest.mark.unit
     def test_returns_none_when_no_providers_available(self):
         """Should return None when no providers are available."""
-        tracker = RateLimitTracker()
+        tracker = create_real_tracker()
         registry = make_mock_registry({})
 
         result = tracker.get_recommended_provider('general', registry)
@@ -229,7 +258,7 @@ class TestGetRecommendedProvider:
     @pytest.mark.unit
     def test_respects_task_type_preferences(self):
         """Should prefer different providers based on task type."""
-        tracker = RateLimitTracker()
+        tracker = create_real_tracker()
 
         providers = {
             'cerebras': make_mock_provider(
@@ -258,7 +287,7 @@ class TestGetRecommendedProvider:
     @pytest.mark.unit
     def test_fallback_when_preferred_not_available(self):
         """Should fallback to next provider when preferred is not available."""
-        tracker = RateLimitTracker()
+        tracker = create_real_tracker()
 
         # Only groq available, not cerebras
         providers = {
@@ -276,7 +305,7 @@ class TestGetRecommendedProvider:
     @pytest.mark.unit
     def test_returns_first_available_even_if_rate_limited(self):
         """Should return first available as fallback even if rate limited."""
-        tracker = RateLimitTracker()
+        tracker = create_real_tracker()
 
         # Rate limit all providers
         for _ in range(10):
@@ -307,7 +336,7 @@ class TestGetRateLimitStatusExtended:
     @pytest.mark.unit
     def test_includes_limits_for_each_provider(self):
         """Should include limit information for each provider."""
-        tracker = RateLimitTracker()
+        tracker = create_real_tracker()
         tracker.record_request('groq', 'model', 100, 50)
 
         providers = {
@@ -334,7 +363,7 @@ class TestGetRateLimitStatusExtended:
     @pytest.mark.unit
     def test_includes_remaining_quota(self):
         """Should include remaining quota for each provider."""
-        tracker = RateLimitTracker()
+        tracker = create_real_tracker()
 
         # Use 5 requests
         for _ in range(5):
@@ -357,7 +386,7 @@ class TestGetRateLimitStatusExtended:
     @pytest.mark.unit
     def test_handles_provider_lookup_errors_gracefully(self):
         """Should handle errors when looking up provider info."""
-        tracker = RateLimitTracker()
+        tracker = create_real_tracker()
         tracker.record_request('groq', 'model', 100, 50)
 
         # Provider that raises an error
@@ -376,7 +405,7 @@ class TestGetRateLimitStatusExtended:
     @pytest.mark.unit
     def test_includes_all_available_providers(self):
         """Should include status for all providers with usage."""
-        tracker = RateLimitTracker()
+        tracker = create_real_tracker()
         tracker.record_request('groq', 'model', 100, 50)
         tracker.record_request('cerebras', 'llama', 200, 100)
 
@@ -406,7 +435,7 @@ class TestCheckAllWarnings:
     @pytest.mark.unit
     def test_returns_empty_list_when_no_warnings(self):
         """Should return empty list when no providers approaching limits."""
-        tracker = RateLimitTracker()
+        tracker = create_real_tracker()
         tracker.record_request('groq', 'model', 100, 50)
 
         providers = {
@@ -425,7 +454,7 @@ class TestCheckAllWarnings:
     @pytest.mark.unit
     def test_returns_warnings_for_approaching_limits(self):
         """Should return warnings when providers approach limits."""
-        tracker = RateLimitTracker()
+        tracker = create_real_tracker()
 
         # Use 95 of 100 requests
         for _ in range(95):
@@ -448,7 +477,7 @@ class TestCheckAllWarnings:
     @pytest.mark.unit
     def test_checks_all_models_for_provider(self):
         """Should check warnings for all models of each provider."""
-        tracker = RateLimitTracker()
+        tracker = create_real_tracker()
 
         # Use different models
         for _ in range(95):
@@ -473,7 +502,7 @@ class TestCheckAllWarnings:
     @pytest.mark.unit
     def test_checks_multiple_providers(self):
         """Should check warnings across all providers."""
-        tracker = RateLimitTracker()
+        tracker = create_real_tracker()
 
         # Approach limits on multiple providers
         for _ in range(95):

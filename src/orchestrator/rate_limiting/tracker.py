@@ -11,7 +11,7 @@ from .protocols import (
     RecommenderProtocol,
     UsageQueryProtocol,
 )
-from .recommender import TASK_PREFERENCES
+from ..config import TASK_PREFERENCES
 
 if TYPE_CHECKING:
     from ..providers import ProviderLimits
@@ -315,7 +315,8 @@ class RateLimitTracker:
                 for model in self.get_usage(provider_name).keys():
                     warning = self.is_limit_approaching(provider_name, model, limits)
                     if warning.get("message"):
-                        warnings.append(warning["message"])
+                        # Prepend provider and model info to warning message
+                        warnings.append(f"{provider_name}/{model}: {warning['message']}")
 
             except Exception:
                 continue

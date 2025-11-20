@@ -11,6 +11,7 @@ from pathlib import Path
 from src.providers.base import LLMResponse
 from src.orchestrator_adapter import NullContext, ContextProvider
 from src.infrastructure import InMemoryFileSystem, FileSystemProtocol
+from src.cli.session_context import SessionContext
 
 
 class MockWorkingMemory:
@@ -635,7 +636,8 @@ def make_cli_test_context(
     return {
         'io': io,
         'orchestrator': orch,
-        'context': orch.context
+        'context': orch.context,
+        'session_context': SessionContext()
     }
 
 
@@ -1237,3 +1239,45 @@ class FakeRecommender:
     ) -> Optional[str]:
         self.calls.append((task_type, registry, task_preferences))
         return self.provider
+
+
+def create_test_rate_limit_tracker(
+    auto_load: bool = False,
+    reset_flags: Optional[Dict[str, bool]] = None,
+    recommended_provider: Optional[str] = "openai"
+):
+    """
+    Create a RateLimitTracker configured for testing.
+
+    Factory function that creates a tracker with test doubles,
+    isolating tests from file system and real persistence.
+
+    Args:
+        auto_load: Whether to auto-load from storage on init
+        reset_flags: Reset flags for policy (default: no resets needed)
+        recommended_provider: Provider to recommend (default: "openai")
+
+    Returns:
+        Configured RateLimitTracker using test doubles
+
+    Usage:
+        tracker = create_test_rate_limit_tracker()
+        tracker.record_request('openai', 'gpt-4', 100, 50)
+        assert tracker.get_remaining('openai', limits).usage_today == 1
+    """
+    from src.orchestrator.rate_limiting import RateLimitTracker
+
+    storage = FakeStorage()
+    policy = FakePolicy(reset_flags=reset_flags)
+    calculator = FakeCalculator()
+    recommender = FakeRecommender(provider_to_recommend=recommended_provider)
+
+    tracker = RateLimitTracker(
+        storage=storage,
+        policy=policy,
+        calculator=calculator,
+        recommender=recommender,
+        auto_load=auto_load
+    )
+
+    return tracker

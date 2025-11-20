@@ -1,4 +1,4 @@
-# Command Tools Refactoring Plan
+# Command Tools Refactoring Plan -- src/agent_tools/tools/command_tool.py
 
 This document outlines the refactoring of `ShellCommandExecutor` to follow SOLID principles and architectural best practices.
 

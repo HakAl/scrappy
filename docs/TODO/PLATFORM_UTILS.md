@@ -1,8 +1,89 @@
 ## Protocol-Based Platform Utils Decomposition
 
+**UPDATED PLAN - Based on Current Codebase State**
+
+### Current State Analysis
+
+**What Already Exists:**
+1. `src/platform_utils.py` - 1600-line god module with functions for:
+   - Platform detection (is_windows, is_unix, is_macos, get_platform_name)
+   - Shell info (get_shell_info, has_git_bash)
+   - Command translation (translate_command_for_platform)
+   - Command validation (validate_command_for_platform, get_dangerous_commands, get_interactive_commands)
+   - Path utilities (normalize_path_for_shell, normalize_command_paths, get_null_device, get_path_separator)
+   - Command execution (smart_execute_command, get_python_fallback)
+   - Spring Initializr fixes (fix_spring_initializr_command, validate_spring_initializr_url)
+   - Python fallback implementations (_python_ls, _python_cat, _python_grep, etc.)
+
+2. `src/context/platform.py` - `PlatformDetector` class:
+   - Caches platform and tool detection results
+   - Methods: get_platform(), has_tool()
+   - Already follows good practices (DI-friendly, testable)
+
+3. `src/agent/protocols.py` - `PlatformUtilsProtocol`:
+   - Simple 6-method protocol
+   - Methods: is_windows(), is_unix(), is_macos(), get_platform_name(), validate_command(), translate_command()
+   - Already in use by CodeAgent via dependency injection
+
+4. `src/agent/platform_adapter.py` - Concrete implementations:
+   - `RealPlatformUtils` - wraps platform_utils module functions
+   - `MockPlatformUtils` - test double for platform behavior
+
+**What's Missing:**
+- No `src/platform/` directory structure
+- Protocol doesn't cover all platform_utils functionality (only 6 of ~30+ functions)
+- No separation of concerns (detection vs translation vs validation vs execution)
+- No command executor abstraction
+- No fallback strategy abstraction
+- Test helpers exist but are minimal
+
+### Refactoring Strategy
+
+**PHASE 1: Create Directory Structure** (Start Here)
+- Create `src/platform/` directory
+- Create `src/platform/protocols/` subdirectory for all protocol definitions
+- Move existing code in stages to maintain backward compatibility
+
+**PHASE 2: Expand and Decompose Protocols**
+- Keep existing `PlatformUtilsProtocol` for backward compatibility
+- Create focused protocols following SOLID principles
+- Use composition, not inheritance
+
+**PHASE 3: Implement Concrete Classes**
+- Move logic from platform_utils.py module into focused classes
+- Maintain platform_utils.py as facade for backward compatibility initially
+- Each class has single responsibility
+
+**PHASE 4: Testing Infrastructure**
+- Create comprehensive test helpers
+- Write behavior tests, not structure tests
+- Cover edge cases
+
+**PHASE 5: Migration**
+- Update call sites to use new architecture
+- Deprecate old module functions (keep for backward compat initially)
+- Remove deprecated code after migration
+
+---
+
 Decompose the god class using protocols:
 
+### Backward Compatibility Plan
+
+**CRITICAL: Maintain backward compatibility during refactoring**
+
+1. Keep `src/platform_utils.py` as facade initially - all existing imports work
+2. Keep `src/agent/protocols.py::PlatformUtilsProtocol` unchanged
+3. Keep `src/agent/platform_adapter.py` adapters working
+4. New code uses new protocols; old code continues working
+5. Gradual migration, not big bang refactor
+
+---
+
 ### 1. **Platform Detection Protocols**
+
+**NOTE:** `src/context/platform.py::PlatformDetector` already exists and works well.
+We'll create a protocol to abstract it, not replace it.
 
 ```python
 # scrappy/src/platform/protocols/detection.py
@@ -13,10 +94,12 @@ PlatformType = Literal["Windows", "macOS", "Linux", "FreeBSD", "OpenBSD", "NetBS
 
 
 @runtime_checkable
-class PlatformDetector(Protocol):
+class PlatformDetectorProtocol(Protocol):
     """
-    Protocol for platform detection and information.
-    
+    Protocol for platform detection (renamed from PlatformDetector to avoid conflict).
+
+    NOTE: src/context/platform.py::PlatformDetector already implements most of this.
+
     Implementations must provide platform detection methods
     and shell information without side effects.
     """
@@ -1141,3 +1224,256 @@ def _create_default_detector() -> PlatformDetector:
 ```
 
 **Why:** Separates default creation from constructor, maintains single responsibility, enables easier testing.
+
+---
+
+## UPDATED IMPLEMENTATION PLAN
+
+**Based on current codebase analysis, here's the revised implementation approach:**
+
+### Phase 1: Foundation (Do First)
+
+**Goal:** Set up directory structure and core protocols without breaking existing code.
+
+**Tasks:**
+1. ✅ Create `src/platform/` directory
+2. ✅ Create `src/platform/protocols/` subdirectory
+3. ✅ Create `src/platform/__init__.py` (empty for now)
+4. ✅ Create `src/platform/protocols/__init__.py` with protocol exports
+5. ✅ Define `PlatformDetectorProtocol` that `src/context/platform.py::PlatformDetector` already satisfies
+6. ✅ Define other protocols (CommandTranslator, CommandValidator, CommandExecutor, etc.)
+7. ✅ Keep `src/platform_utils.py` untouched - it continues working as-is
+
+**Deliverables:**
+- New directory structure
+- All protocol definitions in `src/platform/protocols/`
+- Zero breaking changes to existing code
+
+### Phase 2: Concrete Implementations
+
+**Goal:** Move logic from god module into focused classes.
+
+**Tasks:**
+1. ✅ Create `src/platform/detection.py`:
+   - `SystemPlatformDetector` - wraps existing `PlatformDetector`
+   - Implements `PlatformDetectorProtocol`
+   - Adds shell info methods from platform_utils
+
+2. ✅ Create `src/platform/translation.py`:
+   - `CommandTranslator` - moves translation logic from platform_utils
+   - Implements `CommandTranslatorProtocol`
+   - Handles Unix→Windows command translation
+   - Handles path normalization
+   - Handles npm fixes, Spring Initializr fixes
+
+3. ✅ Create `src/platform/validation.py`:
+   - `CommandValidator` - moves validation logic from platform_utils
+   - Implements `CommandValidatorProtocol`
+   - Dangerous command detection
+   - Interactive command detection
+   - Platform compatibility checks
+
+4. ✅ Create `src/platform/execution.py`:
+   - `NativeCommandExecutor` - runs commands as-is
+   - `TranslatedCommandExecutor` - translates then runs
+   - `FallbackCommandExecutor` - uses Python fallbacks
+   - All implement `CommandExecutorProtocol`
+
+5. ✅ Create `src/platform/fallback.py`:
+   - `PythonCommandFallback` - all the _python_* functions
+   - Implements `PythonCommandFallbackProtocol`
+
+6. ✅ Create `src/platform/orchestrator.py`:
+   - `PlatformOrchestrator` - coordinates all components
+   - Uses dependency injection for all sub-components
+   - Provides `smart_execute_command` with strategy pattern
+
+7. ✅ Create `src/platform/factory.py`:
+   - `create_platform_orchestrator()` - convenience factory
+
+**Deliverables:**
+- All logic moved into focused classes
+- Each class < 300 lines
+- Each class has single responsibility
+- All dependencies injected
+- `src/platform_utils.py` can now delegate to these classes (optional refactor)
+
+### Phase 3: Testing Infrastructure
+
+**Goal:** Comprehensive test coverage with behavior tests.
+
+**Tasks:**
+1. ✅ Create `tests/platform/` directory
+2. ✅ Update `tests/helpers.py` with platform test doubles:
+   - `FakePlatformDetector`
+   - `FakeCommandTranslator`
+   - `FakeCommandValidator`
+   - `FakeCommandExecutor`
+   - `FakePythonFallback`
+
+3. ✅ Write behavior tests:
+   - `tests/platform/test_platform_orchestrator.py` - end-to-end tests
+   - `tests/platform/test_detection.py` - platform detection tests
+   - `tests/platform/test_translation.py` - command translation tests
+   - `tests/platform/test_validation.py` - command validation tests
+   - `tests/platform/test_execution.py` - command execution tests
+   - `tests/platform/test_fallback.py` - Python fallback tests
+
+4. ✅ Edge case tests:
+   - Empty inputs
+   - Null values
+   - Timeout scenarios
+   - Error conditions
+   - Platform-specific edge cases
+
+**Deliverables:**
+- Test coverage > 90%
+- All behavior tests (not structure tests)
+- Edge cases covered
+- Tests prove features work
+
+### Phase 4: Migration (Optional)
+
+**Goal:** Migrate existing code to use new architecture.
+
+**Tasks:**
+1. ⚠️ Update `src/agent/platform_adapter.py`:
+   - `RealPlatformUtils` can use new `PlatformOrchestrator` internally
+   - Or keep wrapping `platform_utils.py` functions (backward compat)
+
+2. ⚠️ Update `src/platform_utils.py`:
+   - Option A: Keep as-is (facade pattern - wraps new classes)
+   - Option B: Deprecate with warnings, point to new modules
+   - Option C: Remove after full migration (breaking change)
+
+3. ⚠️ Update call sites:
+   - Replace direct `platform_utils` imports with new modules
+   - Use `PlatformOrchestrator` for command execution
+   - Use individual protocols for specific needs
+
+**Deliverables:**
+- All existing tests still pass
+- No breaking changes (unless intentional)
+- Deprecation warnings if applicable
+
+### Phase 5: Cleanup (Future)
+
+**Goal:** Remove deprecated code after migration period.
+
+**Tasks:**
+1. Remove `src/platform_utils.py` (if fully migrated)
+2. Remove old adapter code (if replaced)
+3. Update all documentation
+4. Update CLAUDE.md with new patterns
+
+---
+
+## RECOMMENDED STARTING POINT
+
+**Start with Phase 1, Task 1-6:**
+
+1. Create directory structure
+2. Define all protocols
+3. Don't touch existing code yet
+4. Verify nothing breaks (run existing tests)
+
+**Then proceed to Phase 2:**
+
+5. Implement one component at a time (start with detector)
+6. Write tests for each component as you go (TDD)
+7. Verify backward compatibility maintained
+
+**Key Principles:**
+
+- ✅ Protocol-first design
+- ✅ Dependency injection everywhere
+- ✅ Single responsibility per class
+- ✅ Behavior tests, not structure tests
+- ✅ Maintain backward compatibility
+- ✅ Incremental migration, not big bang
+- ✅ Each phase independently valuable
+
+---
+
+## DIFFERENCES FROM ORIGINAL PLAN
+
+1. **Renamed Protocol:** `PlatformDetector` → `PlatformDetectorProtocol` (avoid naming conflict)
+
+2. **Reuse Existing Code:** Don't rewrite `src/context/platform.py::PlatformDetector`, just wrap it
+
+3. **Backward Compatibility:** Keep `platform_utils.py` as facade, not delete it
+
+4. **Phased Approach:** Don't try to do everything at once
+
+5. **Leverage What Exists:**
+   - Keep `PlatformUtilsProtocol` in `src/agent/protocols.py`
+   - Keep adapters in `src/agent/platform_adapter.py`
+   - These can delegate to new architecture internally
+
+6. **Practical Focus:** Start with most valuable parts first (orchestrator, execution)
+
+---
+
+## CURRENT STATUS
+
+ Phase 1 is complete! Here's what I accomplished:
+
+  Phase 1 Summary - Foundation ✅
+
+  Created Directory Structure
+
+  src/platform/
+  ├── __init__.py
+  └── protocols/
+      ├── __init__.py
+      ├── detection.py         # PlatformDetectorProtocol
+      ├── translation.py       # CommandTranslatorProtocol
+      ├── validation.py        # CommandValidatorProtocol
+      ├── execution.py         # CommandExecutorProtocol + ExecutionResult
+      ├── fallback.py          # PythonCommandFallbackProtocol
+      └── orchestrator.py      # PlatformOrchestratorProtocol
+
+  Defined All Protocols
+
+  1. PlatformDetectorProtocol - Platform detection and tool availability
+    - Methods: is_windows(), is_unix(), is_macos(), get_platform_name(), get_shell_info(), has_git_bash(),
+  has_tool()
+  2. CommandTranslatorProtocol - Command translation for cross-platform compatibility
+    - Methods: translate_command(), normalize_command_paths(), normalize_npm_command_for_windows(),
+  fix_spring_initializr_command()
+  3. CommandValidatorProtocol - Command safety and compatibility validation
+    - Methods: validate_command_for_platform(), get_dangerous_commands(), get_interactive_commands()
+  4. CommandExecutorProtocol - Command execution strategy interface
+    - Methods: execute()
+    - ExecutionResult dataclass for results (not a protocol - data, not behavior)
+  5. PythonCommandFallbackProtocol - Python implementations of Unix commands
+    - Methods: ls(), cat(), grep(), find(), wc(), head(), tail(), touch(), mkdir_p(), rm(), cp(), mv(), which(),
+   pwd()
+  6. PlatformOrchestratorProtocol - Main orchestrator interface
+    - Properties: detector, translator, validator, executors
+    - Methods: smart_execute_command(), get_usage_report()
+
+  Verified Backward Compatibility ✅
+
+  - Ran existing tests: 26 passed (1 unrelated permission error)
+  - Zero breaking changes to existing code
+  - All protocols follow SOLID principles
+
+  Next: Phase 2 - Concrete Implementations
+
+  Ready to start implementing the concrete classes that satisfy these protocols. Should I proceed with Phase 2?
+
+  Todos
+  ☒ Review current state and update PLATFORM_UTILS.md plan
+  ☒ PHASE 1: Create src/platform directory structure
+  ☒ PHASE 1: Define all protocol interfaces in src/platform/protocols/
+  ☒ PHASE 1: Verify nothing breaks (run existing tests)
+  ☐ PHASE 2: Implement SystemPlatformDetector in src/platform/detection.py
+  ☐ PHASE 2: Implement CommandTranslator in src/platform/translation.py
+  ☐ PHASE 2: Implement CommandValidator in src/platform/validation.py
+  ☐ PHASE 2: Implement command executors in src/platform/execution.py
+  ☐ PHASE 2: Implement PythonCommandFallback in src/platform/fallback.py
+  ☐ PHASE 2: Implement PlatformOrchestrator in src/platform/orchestrator.py
+  ☐ PHASE 2: Create factory function in src/platform/factory.py
+  ☐ PHASE 3: Create test helpers in tests/helpers.py
+  ☐ PHASE 3: Write comprehensive behavior tests for all components

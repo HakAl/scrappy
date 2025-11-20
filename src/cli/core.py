@@ -21,6 +21,7 @@ from .rich_output import RichIO
 from .tool_detector import needs_tool_support
 from .input_handler import InputHandler
 from .state_manager import PlanStateManager
+from .session_context import SessionContext
 from .command_router import CommandRouter
 from .interactive import InteractiveMode
 from .utils.session_utils import display_previous_session_detected
@@ -77,6 +78,9 @@ class CLI:
 
         # Initialize state manager for plan tracking
         self.state_manager = state_manager or self._create_default_state_manager()
+
+        # Create session context for shared state management
+        self.session_context = SessionContext()
 
         # Initialize component handlers using factory
         handlers = initialize_cli_handlers(self.orchestrator, self.session_start)
@@ -174,6 +178,7 @@ class CLI:
         return CommandRouter(
             io=self.io,
             orchestrator=self.orchestrator,
+            session_context=self.session_context,
             display=self.display,
             session_mgr=self.session_mgr,
             codebase=self.codebase,
@@ -190,6 +195,7 @@ class CLI:
         return InteractiveMode(
             io=self.io,
             orchestrator=self.orchestrator,
+            session_context=self.session_context,
             state_manager=self.state_manager,
             input_handler=self.input_handler,
             command_router=self._create_command_router(),
@@ -302,263 +308,3 @@ class CLI:
 
         # Run the interactive loop
         interactive.run()
-
-    # Proxy properties for backward compatibility
-    @property
-    def active_plan(self):
-        """Get active plan from state manager."""
-        return self.state_manager.active_plan
-
-    @active_plan.setter
-    def active_plan(self, value):
-        """Set active plan in state manager."""
-        self.state_manager.active_plan = value
-
-    @property
-    def current_task_index(self):
-        """Get current task index from state manager."""
-        return self.state_manager.current_task_index
-
-    @current_task_index.setter
-    def current_task_index(self, value):
-        """Set current task index in state manager."""
-        self.state_manager.current_task_index = value
-
-    @property
-    def plan_active(self):
-        """Get plan active state from state manager."""
-        return self.state_manager.plan_active
-
-    @plan_active.setter
-    def plan_active(self, value):
-        """Set plan active state in state manager."""
-        self.state_manager.plan_active = value
-
-    @property
-    def auto_execute_tasks(self):
-        """Get auto execute tasks setting from state manager."""
-        return self.state_manager.auto_execute_tasks
-
-    @auto_execute_tasks.setter
-    def auto_execute_tasks(self, value):
-        """Set auto execute tasks setting in state manager."""
-        self.state_manager.auto_execute_tasks = value
-
-    @property
-    def multiline_mode(self):
-        """Get multiline mode (default True)."""
-        return getattr(self, '_multiline_mode', True)
-
-    @multiline_mode.setter
-    def multiline_mode(self, value):
-        """Set multiline mode."""
-        self._multiline_mode = value
-
-    @property
-    def auto_route_mode(self):
-        """Get auto route mode (default True)."""
-        return getattr(self, '_auto_route_mode', True)
-
-    @auto_route_mode.setter
-    def auto_route_mode(self, value):
-        """Set auto route mode."""
-        self._auto_route_mode = value
-
-    @property
-    def smart_mode(self):
-        """Get smart mode (default False)."""
-        return getattr(self, '_smart_mode', False)
-
-    @smart_mode.setter
-    def smart_mode(self, value):
-        """Set smart mode."""
-        self._smart_mode = value
-
-    @property
-    def conversation_history(self):
-        """Get conversation history."""
-        return getattr(self, '_conversation_history', [])
-
-    @conversation_history.setter
-    def conversation_history(self, value):
-        """Set conversation history."""
-        self._conversation_history = value
-
-    @property
-    def auto_save(self):
-        """Get auto save setting (default True)."""
-        return getattr(self, '_auto_save', True)
-
-    @auto_save.setter
-    def auto_save(self, value):
-        """Set auto save setting."""
-        self._auto_save = value
-
-    # Proxy methods for backward compatibility
-    def _read_multiline_input(self, prompt_text: str = "... ", io: Optional[CLIIOProtocol] = None) -> str:
-        """Read multiline input (delegates to InputHandler)."""
-        if io is not None:
-            handler = InputHandler(io)
-            return handler.read_multiline_input(prompt_text)
-        return self.input_handler.read_multiline_input(prompt_text)
-
-    def _needs_tool_support(self, user_input: str) -> bool:
-        """Detect if query needs tool support (delegates to tool_detector)."""
-        return needs_tool_support(user_input)
-
-    def _show_current_task(self, io: Optional[CLIIOProtocol] = None):
-        """Display current task (delegates to PlanStateManager)."""
-        if io is None:
-            io = self.io
-        self.state_manager.show_current_task(io)
-
-    def _show_plan_summary(self, io: Optional[CLIIOProtocol] = None):
-        """Show plan summary (delegates to PlanStateManager)."""
-        if io is None:
-            io = self.io
-        self.state_manager.show_plan_summary(io)
-
-    def _prompt_task_progression(self, io: Optional[CLIIOProtocol] = None) -> bool:
-        """Prompt for task progression (delegates to PlanStateManager)."""
-        if io is None:
-            io = self.io
-        return self.state_manager.prompt_task_progression(io)
-
-    def _handle_command(self, command: str, io: Optional[CLIIOProtocol] = None) -> bool:
-        """
-        Handle slash commands by delegating to CommandRouter.
-
-        Parses the command string and routes it to the appropriate handler
-        via a CommandRouter instance. State is synchronized back after routing.
-
-        Args:
-            command: Full command string including the slash prefix and any args.
-            io: IO interface for input/output. Defaults to self.io.
-
-        Returns:
-            bool: True to continue the interactive loop, False to exit.
-
-        Side Effects:
-            - Creates a new CommandRouter instance for each command
-            - Executes the command which may modify files, make API calls, etc.
-            - Output is displayed to console via io interface
-
-        State Changes:
-            - Syncs back conversation_history from router
-            - Syncs back multiline_mode from router
-            - Syncs back auto_route_mode from router
-            - Syncs back smart_mode from router
-            - Syncs back auto_save from router
-        """
-        if io is None:
-            io = self.io
-
-        # Create a command router with all dependencies
-        router = self._create_command_router()
-        router.conversation_history = self.conversation_history
-        router.multiline_mode = self.multiline_mode
-        router.auto_route_mode = self.auto_route_mode
-        router.smart_mode = self.smart_mode
-        router.auto_save = self.auto_save
-
-        # Parse and route the command
-        parts = command.split(maxsplit=1)
-        cmd = parts[0].lower()
-        args = parts[1] if len(parts) > 1 else ""
-
-        result = router.route(cmd, args)
-
-        # Sync state back
-        self.conversation_history = router.conversation_history
-        self.multiline_mode = router.multiline_mode
-        self.auto_route_mode = router.auto_route_mode
-        self.smart_mode = router.smart_mode
-        self.auto_save = router.auto_save
-
-        return result
-
-    def _execute_current_task(self, io: Optional[CLIIOProtocol] = None):
-        """
-        Execute the current task using intelligent routing.
-
-        Takes the current task from the active plan and routes it through
-        the TaskRouter for execution. Falls back to agent_mgr if routing fails.
-
-        Args:
-            io: IO interface for input/output. Defaults to self.io.
-
-        Side Effects:
-            - Displays task execution status messages to console
-            - Routes task through TaskRouter which may:
-              - Execute shell commands directly
-              - Make LLM API calls for research queries
-              - Run full agent loop for code generation
-            - Logs task execution outcome
-            - Prompts user for next action after completion
-            - Falls back to agent_mgr.run_agent() on routing failure
-
-        State Changes:
-            - Does not modify plan state directly (caller handles progression)
-            - Task execution may modify project files if it's a code task
-            - Updates orchestrator discoveries with task results
-
-        Returns:
-            None
-        """
-        if io is None:
-            io = self.io
-
-        if not self.plan_active or not self.active_plan:
-            return
-
-        task = self.active_plan[self.current_task_index]
-
-        # Build task description
-        if isinstance(task, dict):
-            task_name = task.get('step', 'Task')
-            task_desc = task.get('description', task_name)
-            full_task = f"{task_name}: {task_desc}"
-        else:
-            full_task = str(task)
-
-        io.secho(f"\nAuto-executing task...", fg="cyan", bold=True)
-        self.logger.info("Auto-executing task", extra={"task": full_task})
-
-        # Use TaskRouter to intelligently route the task
-        try:
-            result = self.task_router.router.route(full_task)
-
-            if result.success:
-                io.secho("[OK] Task executed successfully", fg="green")
-                if result.output:
-                    io.echo(result.output[:1000])  # Truncate long output
-                self.logger.info("Task completed", extra={"task": full_task})
-            else:
-                io.secho(f"[FAIL] Task failed: {result.error}", fg="red")
-                self.logger.warning("Task failed", extra={"task": full_task, "error": result.error})
-
-            # Show execution metadata
-            if "classification" in result.metadata:
-                cls_info = result.metadata["classification"]
-                io.secho(
-                    f"  [Strategy: {cls_info.get('type', 'unknown')} | "
-                    f"Provider: {cls_info.get('resolved_provider', 'none')}]",
-                    fg="bright_black"
-                )
-        except CLIError as e:
-            io.secho(f"Error executing task: {e}", fg="red")
-            if e.suggestion:
-                io.echo(f"Suggestion: {e.suggestion}")
-            self.logger.error("Task execution error", extra=e.logging_extra())
-            # Fallback to agent manager if TaskRouter fails
-            io.secho("Falling back to agent manager...", fg="yellow")
-            self.agent_mgr.run_agent(full_task, io=io)
-        except Exception as e:
-            io.secho(f"Error executing task: {e}", fg="red")
-            self.logger.exception("Unexpected error during task execution")
-            # Fallback to agent manager if TaskRouter fails
-            io.secho("Falling back to agent manager...", fg="yellow")
-            self.agent_mgr.run_agent(full_task, io=io)
-
-        # After task completes, prompt for next action
-        self._prompt_task_progression(io=io)

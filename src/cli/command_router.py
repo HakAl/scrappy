@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, List, Optional
 from .io_interface import CLIIOProtocol
 from .state_manager import PlanStateManager
+from .session_context import SessionContextProtocol
 from .display import CLIDisplay
 from .session import CLISessionManager
 from .codebase import CLICodebaseAnalysis
@@ -34,6 +35,7 @@ class CommandRouter:
         self,
         io: CLIIOProtocol,
         orchestrator: "Orchestrator",
+        session_context: SessionContextProtocol,
         display: CLIDisplay,
         session_mgr: CLISessionManager,
         codebase: CLICodebaseAnalysis,
@@ -50,6 +52,7 @@ class CommandRouter:
         Args:
             io: The IO interface for input/output.
             orchestrator: The agent orchestrator.
+            session_context: Shared session context for state management.
             display: Display handler for showing information.
             session_mgr: Session manager for persistence.
             codebase: Codebase analysis handler.
@@ -62,6 +65,7 @@ class CommandRouter:
         """
         self.io = io
         self.orchestrator = orchestrator
+        self.session_context = session_context
         self.display = display
         self.session_mgr = session_mgr
         self.codebase = codebase
@@ -71,13 +75,6 @@ class CommandRouter:
         self.agent_mgr = agent_mgr
         self.task_router = task_router
         self.state_manager = state_manager or PlanStateManager()
-
-        # State attributes
-        self.conversation_history: List[dict] = []
-        self.multiline_mode: bool = True
-        self.auto_route_mode: bool = True
-        self.smart_mode: bool = False
-        self.auto_save: bool = True
 
         # Build command registry for dispatch
         self._command_registry = {
@@ -130,10 +127,10 @@ class CommandRouter:
     def _handle_exit(self, args: str) -> bool:
         """Handle exit commands (/quit, /exit, /q)."""
         io = self.io
-        if self.auto_save:
+        if self.session_context.auto_save:
             try:
-                session_file = self.orchestrator.save_session(self.conversation_history)
-                display_session_saved(io, session_file, len(self.conversation_history), with_help=True)
+                session_file = self.orchestrator.save_session(self.session_context.conversation_history)
+                display_session_saved(io, session_file, len(self.session_context.conversation_history), with_help=True)
             except Exception as e:
                 display_session_save_error(io, e)
         else:
@@ -185,11 +182,11 @@ class CommandRouter:
 
     def _handle_session(self, args: str) -> bool:
         """Handle /session command."""
-        result = self.session_mgr.manage_session(args, self.conversation_history, self.auto_save, io=self.io)
+        result = self.session_mgr.manage_session(args, self.session_context.conversation_history, self.session_context.auto_save, io=self.io)
         if result.get('conversation_history') is not None:
-            self.conversation_history = result['conversation_history']
+            self.session_context.conversation_history = result['conversation_history']
         if result.get('auto_save') is not None:
-            self.auto_save = result['auto_save']
+            self.session_context.auto_save = result['auto_save']
         return True
 
     def _handle_limits(self, args: str) -> bool:
@@ -245,14 +242,14 @@ class CommandRouter:
         """Handle /smart command."""
         io = self.io
         if not args:
-            status = io.style("ON", fg="green") if self.smart_mode else io.style("OFF", fg="yellow")
+            status = io.style("ON", fg="green") if self.session_context.smart_mode else io.style("OFF", fg="yellow")
             io.echo(f"Smart query mode: {status}")
             io.echo("Usage: /smart <query> or /smart toggle")
         elif args.lower() == "toggle":
-            self.smart_mode = not self.smart_mode
-            status = "enabled" if self.smart_mode else "disabled"
-            io.secho(f"Smart query mode {status}.", fg="green" if self.smart_mode else "yellow")
-            if self.smart_mode:
+            self.session_context.smart_mode = not self.session_context.smart_mode
+            status = "enabled" if self.session_context.smart_mode else "disabled"
+            io.secho(f"Smart query mode {status}.", fg="green" if self.session_context.smart_mode else "yellow")
+            if self.session_context.smart_mode:
                 io.echo("All queries will now use tools for research (higher quota usage).")
         else:
             self.smart.smart_query(args)
@@ -275,7 +272,7 @@ class CommandRouter:
 
     def _handle_clear(self, args: str) -> bool:
         """Handle /clear command."""
-        self.conversation_history.clear()
+        self.session_context.conversation_history.clear()
         self.io.secho("Conversation history cleared.", fg="green")
         return True
 
@@ -295,8 +292,8 @@ class CommandRouter:
     def _handle_multiline(self, args: str) -> bool:
         """Handle multiline commands (/paste, /ml, /multiline)."""
         io = self.io
-        self.multiline_mode = not self.multiline_mode
-        if self.multiline_mode:
+        self.session_context.multiline_mode = not self.session_context.multiline_mode
+        if self.session_context.multiline_mode:
             io.secho("Multiline input mode: ON", fg="green", bold=True)
             io.echo("  - End a line with \\ to continue on next line")
             io.echo("  - Press Enter normally to send (no double-enter needed)")
@@ -311,8 +308,8 @@ class CommandRouter:
         """Handle auto-routing commands (/auto, /route, /autoroute)."""
         io = self.io
         if not args:
-            self.auto_route_mode = not self.auto_route_mode
-            if self.auto_route_mode:
+            self.session_context.auto_route_mode = not self.session_context.auto_route_mode
+            if self.session_context.auto_route_mode:
                 io.secho("Auto-routing mode: ON", fg="green", bold=True)
                 io.echo("  Tasks are automatically classified and routed:")
                 io.echo("  - Direct commands (pip, git) -> Shell execution")

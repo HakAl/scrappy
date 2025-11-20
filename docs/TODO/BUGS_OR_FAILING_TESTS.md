@@ -1,3 +1,19 @@
+we have 29 failing tests from recent refactoring work. they may highlight errors in code, be bad/duplicate
+  tests, or need updated w/ new imports / apis. can you check into them?
+ There are a few test failures remaining that appear to be from incomplete refactoring:
+
+
+<!-- MEDIUM PRIORITY - 30-50% Coverage: -->
+
+src\cli\smart_query.py
+
+
+src\cli\research_handlers\testing.py
+src\cli\research_handlers\dependency_info.py
+src\cli\research_handlers\architecture.py 
+src\cli\research_handlers\configuration.py
+src\cli\research_handlers\documentation.py
+
 [//]: # (agent_tools)
 3 failing tests in: test_search_tools.py
 2 failing tests in: test_file_tools.py
