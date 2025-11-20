@@ -29,9 +29,29 @@ from .memory import WorkingMemory
 from .session import SessionManager
 from .task_executor import TaskExecutor
 from .provider_selector import ProviderSelector
-from .protocols import Orchestrator
+from .protocols import (
+    Orchestrator,
+    CacheProtocol,
+    RateLimitTrackerProtocol,
+    SessionManagerProtocol,
+    ProviderSelectorProtocol,
+    ProviderRegistryProtocol,
+    WorkingMemoryProtocol,
+    OutputInterface,
+    ContextProvider,
+    OrchestratorAdapter,
+)
+from .manager_protocols import (
+    DelegationManagerProtocol,
+    TaskExecutorProtocol,
+    BackgroundTaskManagerProtocol,
+    UsageReporterProtocol,
+    StatusReporterProtocol,
+    ProviderRegistrarProtocol,
+)
 
 __all__ = [
+    # Core implementations
     'AgentOrchestrator',
     'create_orchestrator',
     'ResponseCache',
@@ -40,5 +60,21 @@ __all__ = [
     'SessionManager',
     'TaskExecutor',
     'ProviderSelector',
+    # Protocols
     'Orchestrator',
+    'CacheProtocol',
+    'RateLimitTrackerProtocol',
+    'SessionManagerProtocol',
+    'ProviderSelectorProtocol',
+    'ProviderRegistryProtocol',
+    'WorkingMemoryProtocol',
+    'OutputInterface',
+    'ContextProvider',
+    'OrchestratorAdapter',
+    'DelegationManagerProtocol',
+    'TaskExecutorProtocol',
+    'BackgroundTaskManagerProtocol',
+    'UsageReporterProtocol',
+    'StatusReporterProtocol',
+    'ProviderRegistrarProtocol',
 ]

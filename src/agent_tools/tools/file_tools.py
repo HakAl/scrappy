@@ -5,19 +5,7 @@ Provides read, write, list, and directory tree operations.
 """
 
 from pathlib import Path
-from typing import Any
-
-try:
-    import click
-    HAS_CLICK = True
-except ImportError:
-    HAS_CLICK = False
-
-try:
-    from ..formatters.output_formatter import RichDirectoryFormatter
-    HAS_RICH_FORMATTER = True
-except ImportError:
-    HAS_RICH_FORMATTER = False
+from typing import Any, Optional
 
 from .base import Tool, ToolParameter, ToolResult, ToolContext
 
@@ -265,6 +253,14 @@ class ListFilesTool(Tool):
 class ListDirectoryTool(Tool):
     """Show directory tree structure."""
 
+    def __init__(self, output_interface=None):
+        """Initialize tool with output interface.
+
+        Args:
+            output_interface: Output interface for styling. If None, no styling applied.
+        """
+        self._output = output_interface
+
     @property
     def name(self) -> str:
         return "list_directory"
@@ -298,14 +294,6 @@ class ListDirectoryTool(Tool):
             skip_dirs = context.config.skip_directories if context.config else ['node_modules', '__pycache__', '.git', 'venv', '.venv']
             allowed_hidden = context.config.allowed_hidden_files if context.config else ['.gitignore', '.env.example']
 
-            # Initialize formatter (prefer Rich over click)
-            formatter = None
-            if HAS_RICH_FORMATTER:
-                try:
-                    formatter = RichDirectoryFormatter()
-                except ImportError:
-                    pass
-
             def build_tree(dir_path: Path, prefix: str = "", current_depth: int = 0):
                 if current_depth > depth:
                     return
@@ -326,10 +314,8 @@ class ListDirectoryTool(Tool):
 
                     if item.is_dir():
                         # Directory - show in cyan with bold
-                        if formatter:
-                            dir_name = formatter.format_directory_name(f"{item.name}/")
-                        elif HAS_CLICK:
-                            dir_name = click.style(f"{item.name}/", fg='cyan', bold=True)
+                        if self._output:
+                            dir_name = self._output.style(f"{item.name}/", color='cyan', bold=True)
                         else:
                             dir_name = f"{item.name}/"
                         lines.append(f"{prefix}{connector}{dir_name}")
@@ -352,21 +338,18 @@ class ListDirectoryTool(Tool):
                             size_str = "?"
 
                         # Color by file type
-                        if formatter:
-                            file_name = formatter.format_file_name(item.name, extension=item.suffix)
-                            size_display = formatter.format_file_size(f"({size_str})")
-                        elif HAS_CLICK:
+                        if self._output:
                             if item.suffix in ['.py']:
-                                file_name = click.style(item.name, fg='green')
+                                file_name = self._output.style(item.name, color='green')
                             elif item.suffix in ['.js', '.ts', '.jsx', '.tsx']:
-                                file_name = click.style(item.name, fg='yellow')
+                                file_name = self._output.style(item.name, color='yellow')
                             elif item.suffix in ['.md', '.txt', '.rst']:
-                                file_name = click.style(item.name, fg='white')
+                                file_name = self._output.style(item.name, color='white')
                             elif item.suffix in ['.json', '.yaml', '.yml', '.toml']:
-                                file_name = click.style(item.name, fg='magenta')
+                                file_name = self._output.style(item.name, color='magenta')
                             else:
                                 file_name = item.name
-                            size_display = click.style(f"({size_str})", fg='bright_black')
+                            size_display = self._output.style(f"({size_str})", color='bright_black')
                         else:
                             file_name = item.name
                             size_display = f"({size_str})"
@@ -374,11 +357,8 @@ class ListDirectoryTool(Tool):
                         lines.append(f"{prefix}{connector}{file_name} {size_display}")
 
             # Start with the directory name
-            if formatter:
-                root_name = formatter.format_directory_name(str(target.relative_to(context.project_root)))
-                lines.append(f"{root_name}/")
-            elif HAS_CLICK:
-                root_name = click.style(str(target.relative_to(context.project_root)), fg='cyan', bold=True)
+            if self._output:
+                root_name = self._output.style(str(target.relative_to(context.project_root)), color='cyan', bold=True)
                 lines.append(f"{root_name}/")
             else:
                 root_name = str(target.relative_to(context.project_root))

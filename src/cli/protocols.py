@@ -5,7 +5,7 @@ This module defines the common interface that all CLI handlers must implement,
 enabling consistent behavior, testability, and type checking across the CLI layer.
 """
 
-from typing import TYPE_CHECKING, Protocol, Dict, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, Dict, Any, List, Optional, Callable, runtime_checkable
 
 if TYPE_CHECKING:
     from ..orchestrator.protocols import Orchestrator
@@ -101,5 +101,235 @@ class CLIHandlerProtocol(Protocol):
         - Reset counters and metrics to zero
         - Clear caches and histories
         - Return to post-initialize state
+        """
+        ...
+
+
+@runtime_checkable
+class DisplayFormatterProtocol(Protocol):
+    """
+    Protocol for display formatting.
+
+    Abstracts display formatting to enable testing without actual
+    terminal output and support different output formats.
+
+    Implementations:
+    - RichFormatter: Rich text formatting with colors and styles
+    - PlainFormatter: Plain text without formatting
+    - HTMLFormatter: HTML-formatted output
+    - MarkdownFormatter: Markdown-formatted output
+
+    Example:
+        def display_results(formatter: DisplayFormatterProtocol, data: Dict[str, Any]) -> str:
+            return formatter.format(data)
+    """
+
+    def format(self, data: Any, format_type: str = "default") -> str:
+        """
+        Format data for display.
+
+        Args:
+            data: Data to format
+            format_type: Type of formatting to apply
+
+        Returns:
+            Formatted string
+        """
+        ...
+
+    def format_table(
+        self,
+        data: List[Dict[str, Any]],
+        columns: Optional[List[str]] = None,
+    ) -> str:
+        """
+        Format data as table.
+
+        Args:
+            data: List of row dictionaries
+            columns: Column names to display (None for all)
+
+        Returns:
+            Formatted table string
+        """
+        ...
+
+    def format_error(
+        self,
+        error: Exception,
+        include_traceback: bool = False,
+    ) -> str:
+        """
+        Format error message.
+
+        Args:
+            error: Exception to format
+            include_traceback: Whether to include traceback
+
+        Returns:
+            Formatted error string
+        """
+        ...
+
+    def format_list(
+        self,
+        items: List[Any],
+        numbered: bool = False,
+    ) -> str:
+        """
+        Format list of items.
+
+        Args:
+            items: List of items to format
+            numbered: Use numbered list instead of bullets
+
+        Returns:
+            Formatted list string
+        """
+        ...
+
+    def format_code(
+        self,
+        code: str,
+        language: Optional[str] = None,
+    ) -> str:
+        """
+        Format code block.
+
+        Args:
+            code: Code to format
+            language: Programming language for syntax highlighting
+
+        Returns:
+            Formatted code string
+        """
+        ...
+
+    def format_json(
+        self,
+        data: Dict[str, Any],
+        indent: int = 2,
+    ) -> str:
+        """
+        Format JSON data.
+
+        Args:
+            data: Dictionary to format as JSON
+            indent: Indentation spaces
+
+        Returns:
+            Formatted JSON string
+        """
+        ...
+
+
+@runtime_checkable
+class InputValidatorProtocol(Protocol):
+    """
+    Protocol for input validation.
+
+    Abstracts input validation to enable testing with controlled
+    validation and support different validation strategies.
+
+    Implementations:
+    - SchemaValidator: Validates against JSON schema
+    - RegexValidator: Validates using regex patterns
+    - CustomValidator: Custom validation logic
+    - NoOpValidator: Always validates successfully
+
+    Example:
+        def validate_user_input(validator: InputValidatorProtocol, input: str) -> bool:
+            if not validator.validate(input):
+                errors = validator.get_errors()
+                raise ValueError(f"Invalid input: {errors}")
+            return True
+    """
+
+    def validate(
+        self,
+        value: Any,
+        rules: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        """
+        Validate input value.
+
+        Args:
+            value: Value to validate
+            rules: Optional validation rules
+
+        Returns:
+            True if valid, False otherwise
+        """
+        ...
+
+    def sanitize(
+        self,
+        value: str,
+        strategy: str = "default",
+    ) -> str:
+        """
+        Sanitize input value.
+
+        Args:
+            value: Value to sanitize
+            strategy: Sanitization strategy to use
+
+        Returns:
+            Sanitized value
+        """
+        ...
+
+    def get_errors(self) -> List[str]:
+        """
+        Get validation errors from last validation.
+
+        Returns:
+            List of error messages
+        """
+        ...
+
+    def add_rule(
+        self,
+        name: str,
+        validator_func: Callable[[Any], bool],
+        error_message: str,
+    ) -> None:
+        """
+        Add custom validation rule.
+
+        Args:
+            name: Rule name
+            validator_func: Function that returns True if valid
+            error_message: Error message if validation fails
+        """
+        ...
+
+    def remove_rule(self, name: str) -> bool:
+        """
+        Remove validation rule.
+
+        Args:
+            name: Rule name to remove
+
+        Returns:
+            True if rule was removed, False if not found
+        """
+        ...
+
+    def validate_many(
+        self,
+        values: List[Any],
+        rules: Optional[Dict[str, Any]] = None,
+    ) -> Dict[int, List[str]]:
+        """
+        Validate multiple values.
+
+        Args:
+            values: List of values to validate
+            rules: Optional validation rules
+
+        Returns:
+            Dictionary mapping indices to error lists
+            Empty dict if all valid
         """
         ...

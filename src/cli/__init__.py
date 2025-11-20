@@ -12,8 +12,15 @@ from .multiprovider import CLIMultiProvider
 from .smart_query import CLISmartQuery
 from .agent_manager import CLIAgentManager
 from .commands import cli, main
+from .protocols import (
+    CLIHandlerProtocol,
+    DisplayFormatterProtocol,
+    InputValidatorProtocol,
+)
+from .io_interface import CLIIOProtocol
 
 __all__ = [
+    # Implementations
     'CLI',
     'CLIDisplay',
     'CLISessionManager',
@@ -24,4 +31,9 @@ __all__ = [
     'CLIAgentManager',
     'cli',
     'main',
+    # Protocols
+    'CLIHandlerProtocol',
+    'CLIIOProtocol',
+    'DisplayFormatterProtocol',
+    'InputValidatorProtocol',
 ]

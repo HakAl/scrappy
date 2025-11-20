@@ -1,31 +1,14 @@
 """
 Output abstraction for the orchestrator.
 
-Provides a protocol and implementations for output operations,
-enabling testability by allowing injection of different output handlers.
+Provides implementations for output operations.
+The OutputInterface protocol is defined in protocols.py.
 """
 
-from typing import Protocol, List, Tuple
+from typing import List, Tuple
 
-
-class OutputInterface(Protocol):
-    """Protocol for output operations."""
-
-    def info(self, message: str) -> None:
-        """Output an informational message."""
-        ...
-
-    def warn(self, message: str) -> None:
-        """Output a warning message."""
-        ...
-
-    def error(self, message: str) -> None:
-        """Output an error message."""
-        ...
-
-    def success(self, message: str) -> None:
-        """Output a success message."""
-        ...
+# Import protocol from centralized location
+from .protocols import OutputInterface
 
 
 class ConsoleOutput:

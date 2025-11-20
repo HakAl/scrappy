@@ -7,18 +7,15 @@ Provides injectable formatters to colorize and style output.
 from abc import ABC, abstractmethod
 from typing import Protocol, Optional
 
-try:
-    import click
-    HAS_CLICK = True
-except ImportError:
-    HAS_CLICK = False
-
+# Rich imports only for RichDirectoryFormatter
 try:
     from rich.console import Console
     from rich.text import Text
     HAS_RICH = True
 except ImportError:
     HAS_RICH = False
+    Console = None
+    Text = None
 
 
 class OutputFormatter(Protocol):
@@ -44,6 +41,14 @@ class GitOutputFormatter:
     Supports output types: log, diff, blame, show
     """
 
+    def __init__(self, output_interface=None):
+        """Initialize formatter with output interface.
+
+        Args:
+            output_interface: Output interface for styling. If None, returns unstyled output.
+        """
+        self._output = output_interface
+
     def format(self, output: str, output_type: str = "log") -> str:
         """
         Add colors to git output for better readability.
@@ -53,9 +58,9 @@ class GitOutputFormatter:
             output_type: Type of git output (log, diff, blame, show)
 
         Returns:
-            Colorized output string (or unchanged if click not available)
+            Colorized output string (or unchanged if no output interface)
         """
-        if not HAS_CLICK:
+        if not self._output:
             return output
 
         lines = output.split('\n')
@@ -87,7 +92,7 @@ class GitOutputFormatter:
             parts = line.split(' ', 1)
             if len(parts) >= 1:
                 # Commit hash in yellow
-                colored = click.style(parts[0], fg='yellow')
+                colored = self._output.style(parts[0], color='yellow')
                 if len(parts) > 1:
                     colored += ' ' + parts[1]
                 return colored
@@ -96,15 +101,15 @@ class GitOutputFormatter:
     def _colorize_diff_line(self, line: str) -> str:
         """Colorize git diff output."""
         if line.startswith('+++') or line.startswith('---'):
-            return click.style(line, fg='cyan', bold=True)
+            return self._output.style(line, color='cyan', bold=True)
         elif line.startswith('+'):
-            return click.style(line, fg='green')
+            return self._output.style(line, color='green')
         elif line.startswith('-'):
-            return click.style(line, fg='red')
+            return self._output.style(line, color='red')
         elif line.startswith('@@'):
-            return click.style(line, fg='cyan')
+            return self._output.style(line, color='cyan')
         elif line.startswith('diff --git'):
-            return click.style(line, fg='bright_white', bold=True)
+            return self._output.style(line, color='bright_white', bold=True)
         return line
 
     def _colorize_blame_line(self, line: str) -> str:
@@ -112,7 +117,7 @@ class GitOutputFormatter:
         if line and '^' in line or (len(line) > 8 and line[:8].replace(' ', '').isalnum()):
             parts = line.split(' ', 1)
             if len(parts) >= 1:
-                colored = click.style(parts[0], fg='yellow')
+                colored = self._output.style(parts[0], color='yellow')
                 if len(parts) > 1:
                     colored += ' ' + parts[1]
                 return colored
@@ -121,22 +126,22 @@ class GitOutputFormatter:
     def _colorize_show_line(self, line: str) -> str:
         """Colorize git show output."""
         if line.startswith('commit '):
-            return click.style(line, fg='yellow', bold=True)
+            return self._output.style(line, color='yellow', bold=True)
         elif line.startswith('Author:'):
-            return click.style(line, fg='cyan')
+            return self._output.style(line, color='cyan')
         elif line.startswith('Date:'):
-            return click.style(line, fg='cyan')
+            return self._output.style(line, color='cyan')
         elif line.startswith('=== COMMIT'):
-            return click.style(line, fg='yellow', bold=True)
+            return self._output.style(line, color='yellow', bold=True)
         elif line.startswith('Message:'):
-            return click.style(line, fg='bright_white', bold=True)
+            return self._output.style(line, color='bright_white', bold=True)
         elif '|' in line and ('+' in line or '-' in line):
             # File stat lines
-            return click.style(line, fg='cyan')
+            return self._output.style(line, color='cyan')
         elif line.startswith('+'):
-            return click.style(line, fg='green')
+            return self._output.style(line, color='green')
         elif line.startswith('-'):
-            return click.style(line, fg='red')
+            return self._output.style(line, color='red')
         return line
 
 

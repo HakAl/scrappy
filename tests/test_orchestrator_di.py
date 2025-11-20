@@ -14,7 +14,8 @@ from src.orchestrator.rate_limiter import RateLimitTracker
 from src.orchestrator.memory import WorkingMemory
 from src.orchestrator.session import SessionManager
 from src.orchestrator.provider_selector import ProviderSelector
-from src.orchestrator.output import OutputInterface, NullOutput
+from src.orchestrator.protocols import OutputInterface
+from src.orchestrator.output import NullOutput
 
 
 class TestDependencyInjection:

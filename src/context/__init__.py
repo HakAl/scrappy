@@ -15,12 +15,24 @@ from .cache import ContextCache
 from .project_detector import ProjectDetector
 from .platform import PlatformDetector
 from .git_history import GitHistoryReader
+from .protocols import (
+    CodebaseContextProtocol,
+    ProjectDetectorProtocol,
+    FileScannerProtocol,
+    GitHistoryProtocol,
+)
 
 __all__ = [
+    # Implementations
     'CodebaseContext',
     'FileScanner',
     'ContextCache',
     'ProjectDetector',
     'PlatformDetector',
     'GitHistoryReader',
+    # Protocols
+    'CodebaseContextProtocol',
+    'ProjectDetectorProtocol',
+    'FileScannerProtocol',
+    'GitHistoryProtocol',
 ]

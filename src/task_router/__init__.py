@@ -25,6 +25,12 @@ from .strategies import (
     AgentExecutor,
 )
 from .validator import InputValidator, ValidationError
+from .protocols import (
+    TaskClassifierProtocol,
+    IntentClarifierProtocol,
+    TaskRouterProtocol,
+    MetricsCollectorProtocol,
+)
 
 __all__ = [
     # Classification
@@ -52,4 +58,9 @@ __all__ = [
     # Validation
     "InputValidator",
     "ValidationError",
+    # Protocols
+    "TaskClassifierProtocol",
+    "IntentClarifierProtocol",
+    "TaskRouterProtocol",
+    "MetricsCollectorProtocol",
 ]

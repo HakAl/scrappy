@@ -1,57 +1,457 @@
 # Claude Code Guidelines
 
-**IMPORTANT: ALWAYS USE TDD. TESTS FIRST, THEN CODE!**
-
-**CRITICAL: Demonstrate expected behavior of all new features in tests that fail. When tests exist, write code to satisfy the tests, then verify new code with tests.**
-
 **CRITICAL: Never use emojis or special characters in code.**
 
-## Test Quality Policy
+---
 
-**CRITICAL: Write tests that prove features work and provide confidence for changes.**
+## ARCHITECTURAL PRINCIPLES (READ THIS FIRST)
 
-### What Makes a Good Test
+### You Are an Architect, Not a Code Monkey
 
-Tests must demonstrate functionality and serve as guardrails for refactoring:
+Before writing ANY code, you must:
+1. **Design the abstraction** - What protocol/interface is needed?
+2. **Consider SOLID principles** - Is this following Single Responsibility, Open/Closed, Liskov Substitution, Interface Segregation, Dependency Inversion?
+3. **Plan dependency injection** - How will this be tested? What needs to be injected?
+4. **Think about edge cases** - What can go wrong? What are the boundaries?
+5. **Design before coding** - No coding until the design is clear
 
-1. **Test behavior, not implementation** - Verify what the code does, not how it does it internally
-2. **Cover edge cases and failure modes** - Happy path alone is insufficient; test boundaries, errors, and invalid inputs
-3. **Prove the feature works** - Tests should fail when requirements break, not when implementation details change
-4. **Enable confident refactoring** - If you can't refactor without breaking tests, the tests are testing the wrong things
+### MANDATORY: Protocol-First Design
 
-### Red Flags (Avoid These)
+**NEVER write a concrete class without defining its protocol first.**
 
-- Tests that mock everything and verify mock calls instead of outcomes
-- Tests that only cover the happy path
-- Tests that break when you refactor but behavior stays the same
-- Tests that pass when actual functionality is broken
-- High coverage numbers with no real safety guarantees
+```python
+# WRONG - Concrete class first
+class ResponseCache:
+    def get(self, key: str) -> Optional[str]:
+        return self._cache.get(key)
 
-### Writing Tests
+# RIGHT - Protocol first, then implementation
+class CacheProtocol(Protocol):
+    """Defines the contract for caching behavior."""
+    def get(self, key: str) -> Optional[str]: ...
+    def put(self, key: str, value: str) -> None: ...
+    def clear(self) -> None: ...
 
-When adding or modifying functionality:
+class ResponseCache:  # Implements CacheProtocol
+    def get(self, key: str) -> Optional[str]:
+        return self._cache.get(key)
+```
 
-1. **Start with edge cases** - What inputs break this? What are the boundaries?
-2. **Test failure modes** - How should this behave when things go wrong?
-3. **Verify observable outcomes** - Assert on return values, state changes, side effects users care about
-4. **Ask: "Does this test give me confidence?"** - If not, rewrite it
+**Why?** Protocols enable:
+- Testing with test doubles
+- Swapping implementations
+- Dependency inversion
+- Clear contracts
 
-### Commands
+---
+
+## SOLID PRINCIPLES (NON-NEGOTIABLE)
+
+### Single Responsibility Principle
+**Each class should have ONE reason to change.**
+
+🚫 **BAD - God Class:**
+```python
+class AgentOrchestrator:
+    def __init__(self):
+        self.cache = ResponseCache()
+        self.rate_tracker = RateLimitTracker()
+        self.session_manager = SessionManager()
+        # ... does caching, rate limiting, sessions, delegation, context, etc.
+```
+
+✅ **GOOD - Focused Classes:**
+```python
+class Orchestrator:
+    def __init__(
+        self,
+        cache: CacheProtocol,
+        rate_tracker: RateLimitProtocol,
+        session: SessionProtocol,
+        delegator: DelegationProtocol,
+    ):
+        # Each dependency is a focused, single-purpose component
+```
+
+### Open/Closed Principle
+**Open for extension, closed for modification.**
+
+Use strategy pattern, not if/else chains.
+
+🚫 **BAD:**
+```python
+def execute(self, task_type: str):
+    if task_type == "research":
+        # research logic
+    elif task_type == "coding":
+        # coding logic
+    # Adding new type = modifying this function
+```
+
+✅ **GOOD:**
+```python
+class ExecutionStrategy(Protocol):
+    def execute(self, task: Task) -> Result: ...
+
+# Add new strategies without modifying existing code
+strategies = {
+    TaskType.RESEARCH: ResearchStrategy(),
+    TaskType.CODING: CodingStrategy(),
+}
+```
+
+### Liskov Substitution Principle
+**Subtypes must be substitutable for their base types.**
+
+If you inherit from a class or implement a protocol, you must honor the contract completely.
+
+### Interface Segregation Principle
+**Don't force clients to depend on interfaces they don't use.**
+
+🚫 **BAD - Fat Interface:**
+```python
+class ProviderProtocol(Protocol):
+    def chat(self) -> Response: ...
+    def stream(self) -> Iterator[str]: ...
+    def embed(self) -> List[float]: ...
+    # Providers forced to implement everything even if not supported
+```
+
+✅ **GOOD - Focused Interfaces:**
+```python
+class ChatProvider(Protocol):
+    def chat(self) -> Response: ...
+
+class StreamingProvider(Protocol):
+    def stream(self) -> Iterator[str]: ...
+
+# Providers implement only what they support
+```
+
+### Dependency Inversion Principle
+**Depend on abstractions, not concretions.**
+
+🚫 **BAD:**
+```python
+class CodeAgent:
+    def __init__(self):
+        self.cache = ResponseCache()  # Depends on concrete class
+        self.file_ops = Path()  # Depends on stdlib directly
+```
+
+✅ **GOOD:**
+```python
+class CodeAgent:
+    def __init__(
+        self,
+        cache: CacheProtocol,  # Depends on abstraction
+        file_system: FileSystemProtocol,  # Depends on abstraction
+    ):
+```
+
+---
+
+## DEPENDENCY INJECTION (MANDATORY)
+
+### The Rule: ALL Dependencies MUST Be Injected
+
+**NO direct instantiation of dependencies in class bodies.**
+
+🚫 **FORBIDDEN PATTERNS:**
+```python
+class MyClass:
+    def __init__(self):
+        self.cache = ResponseCache()  # NO! Direct instantiation
+        self.db = sqlite3.connect("db.sqlite")  # NO! Hard-coded dependency
+        self.config = load_config()  # NO! Side effect in constructor
+        Path("file.txt").write_text("data")  # NO! Direct file access
+
+    def process(self):
+        result = requests.get("http://api.com")  # NO! Direct HTTP call
+```
+
+✅ **REQUIRED PATTERN:**
+```python
+class MyClass:
+    def __init__(
+        self,
+        cache: CacheProtocol,
+        db: DatabaseProtocol,
+        config: Config,
+        file_system: FileSystemProtocol,
+        http_client: HTTPClientProtocol,
+    ):
+        self.cache = cache
+        self.db = db
+        self.config = config
+        self.file_system = file_system
+        self.http_client = http_client
+```
+
+### Constructor Rules
+
+1. **NO side effects** - Constructors assign dependencies only
+2. **NO business logic** - Move logic to explicit methods
+3. **NO I/O operations** - No file reads, no network calls
+4. **NO auto-registration** - Explicit is better than implicit
+5. **Provide defaults with factory pattern:**
+
+```python
+def __init__(
+    self,
+    cache: Optional[CacheProtocol] = None,
+):
+    self.cache = cache or self._create_default_cache()
+
+def _create_default_cache(self) -> CacheProtocol:
+    return ResponseCache()  # Factory method for default
+```
+
+---
+
+## TEST-DRIVEN DEVELOPMENT (STRICT)
+
+### The Process (NO EXCEPTIONS)
+
+1. **Design the protocol/interface** - What's the contract?
+2. **Write failing tests** - Prove desired behavior doesn't exist yet
+3. **Implement minimally** - Make tests pass with simplest code
+4. **Refactor** - Clean up while keeping tests green
+5. **Add edge cases** - Test boundaries and error conditions
+
+### Test Quality Checklist
+
+Before writing ANY test, answer these questions:
+
+**❓ Does this test prove a feature works?**
+- If NO → Don't write it
+
+**❓ Would this test fail if the feature breaks?**
+- If NO → Don't write it
+
+**❓ Can I refactor internals without breaking this test?**
+- If NO → You're testing implementation, not behavior
+
+**❓ Does this test cover edge cases?**
+- Empty inputs?
+- Boundary values?
+- Error conditions?
+- Invalid data?
+
+**❓ Am I mocking appropriately?**
+- Only external dependencies (APIs, file system, network)?
+- Using real objects for business logic?
+- Using test doubles from `helpers.py`?
+
+### Tests to NEVER Write
+
+🚫 **Structure-only tests:**
+```python
+def test_returns_correct_type():
+    result = do_thing()
+    assert isinstance(result, MyClass)  # So what? Proves nothing!
+```
+
+🚫 **Initialization tests:**
+```python
+def test_initialization():
+    obj = MyClass()
+    assert obj is not None  # Useless!
+    assert hasattr(obj, 'field')  # Useless!
+```
+
+🚫 **Over-mocked tests:**
+```python
+def test_with_all_mocks():
+    mock1 = Mock()
+    mock2 = Mock()
+    mock3 = Mock()
+    obj = MyClass(mock1, mock2, mock3)
+    obj.do_thing()
+    mock1.assert_called_once()  # Only proves mock was called, not that feature works!
+```
+
+### Tests to ALWAYS Write
+
+✅ **Behavior tests:**
+```python
+def test_cache_returns_none_when_empty():
+    cache = ResponseCache()
+    result = cache.get("nonexistent")
+    assert result is None  # Tests actual behavior
+
+def test_cache_returns_stored_value():
+    cache = ResponseCache()
+    cache.put("key", "value")
+    result = cache.get("key")
+    assert result == "value"  # Tests actual behavior
+```
+
+✅ **Edge case tests:**
+```python
+def test_handles_empty_input():
+    result = process([])
+    assert result == []
+
+def test_handles_none_input():
+    result = process(None)
+    assert result is None
+
+def test_raises_on_invalid_input():
+    with pytest.raises(ValueError):
+        process("invalid")
+```
+
+✅ **Integration tests:**
+```python
+def test_end_to_end_flow():
+    # Use real objects, not mocks
+    orchestrator = create_test_orchestrator()
+    result = orchestrator.delegate("test query")
+    assert result.content != ""
+    assert result.tokens_used > 0
+```
+
+---
+
+## CODE REVIEW CHECKLIST
+
+Before submitting ANY code, check ALL of these:
+
+### Architecture
+- [ ] All dependencies injected, not instantiated directly?
+- [ ] Protocol/interface defined before implementation?
+- [ ] Each class has single responsibility?
+- [ ] Following SOLID principles?
+- [ ] No god classes (>300 lines = red flag)?
+- [ ] Clear separation of concerns?
+
+### Dependency Injection
+- [ ] All dependencies in constructor parameters?
+- [ ] Dependencies are protocols/interfaces, not concrete classes?
+- [ ] No side effects in constructors?
+- [ ] No direct file/network/database access?
+- [ ] Defaults provided via factory methods?
+
+### Testing
+- [ ] Tests prove features work, not just that code runs?
+- [ ] Edge cases covered (empty, null, invalid, boundaries)?
+- [ ] Error conditions tested?
+- [ ] Minimal mocking (only external dependencies)?
+- [ ] Tests would fail if feature breaks?
+- [ ] Can refactor without breaking tests?
+
+### Code Quality
+- [ ] No code duplication (DRY)?
+- [ ] Meaningful variable/function names?
+- [ ] Functions < 50 lines?
+- [ ] Classes < 300 lines?
+- [ ] No magic numbers or strings?
+- [ ] Type hints on all functions?
+
+### Anti-Patterns Avoided
+- [ ] No god classes?
+- [ ] No tight coupling?
+- [ ] No global state?
+- [ ] No direct instantiation of dependencies?
+- [ ] No side effects in constructors?
+- [ ] No if/else chains that should be strategy pattern?
+
+---
+
+## REFACTORING PLAN
+
+### Current Architecture Issues
+
+1. **God Classes:**
+   - `AgentOrchestrator` (850+ lines, multiple responsibilities)
+   - `CodeAgent` (tightly coupled to everything)
+
+2. **Missing Protocols:**
+   - `CacheProtocol` - abstract caching interface
+   - `FileSystemProtocol` - abstract file operations
+   - `RateLimitTrackerProtocol` - abstract rate tracking
+   - `SessionManagerProtocol` - abstract session persistence
+   - `ProviderSelectorProtocol` - abstract provider selection
+   - `ToolRegistryProtocol` - abstract tool management
+
+3. **Tight Coupling:**
+   - Direct file system access (`Path()` operations)
+   - Hard-coded tool implementations
+   - Concrete class dependencies instead of protocols
+
+### Refactoring Phases
+
+**Phase 1: Define Protocols** ← START HERE
+- Create all missing protocols
+- Document contracts clearly
+- Get agreement on interfaces before implementation
+
+**Phase 2: Break Up God Classes**
+- Extract `ContextManager` from `AgentOrchestrator`
+- Extract `BackgroundTaskManager` from `AgentOrchestrator`
+- Extract `UsageReporter` from `AgentOrchestrator`
+- Keep orchestrator focused on high-level coordination only
+
+**Phase 3: Apply Dependency Injection**
+- Update all constructors to inject dependencies
+- Remove all direct instantiation
+- Remove side effects from constructors
+
+**Phase 4: Remove Useless Tests**
+- Delete structure-only tests
+- Delete initialization tests
+- Delete over-mocked tests with no behavior verification
+
+**Phase 5: Write Proper Tests**
+- Test behavior, not implementation
+- Cover all edge cases
+- Test error conditions
+- Prove features work
+
+**Phase 6: Extract Common Patterns**
+- Base classes for providers
+- Shared CLI handler logic
+- Consolidated test helpers
+
+---
+
+## COMMANDS
 
 ```bash
-# Useful mocks!
-tests\helpers.py
-
 # Run all tests
 python -m pytest tests/ -v
 
 # Run specific test file
 python -m pytest tests/test_<module>.py -v
 
-# Run with coverage (use as a guide, not a target)
+# Run with coverage (informational only)
 python -m pytest tests/ --cov=src --cov-report=term-missing
 ```
 
-### Coverage Note
+---
 
-Coverage metrics are informational only. High coverage with poor tests provides false confidence. Focus on test quality: meaningful assertions, edge case coverage, and behavior verification.
+## REMEMBER
+
+**You are building a system that must:**
+- Be testable without real I/O
+- Support swapping implementations
+- Be maintainable by others
+- Follow industry best practices
+- Prove it works via tests
+
+**Think like an architect:**
+1. Design interfaces first
+2. Consider dependencies
+3. Plan for testing
+4. Follow SOLID
+5. Write tests that prove it works
+6. Then implement
+
+**Never be a lazy coder:**
+- Don't mock everything
+- Don't write tests that prove nothing
+- Don't create god classes
+- Don't hard-code dependencies
+- Don't skip edge cases
+- Don't write code without designing first

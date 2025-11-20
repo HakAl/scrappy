@@ -1,104 +1,17 @@
 """
-Minimal orchestrator adapter interface for the CodeAgent.
+Minimal orchestrator adapter implementation for the CodeAgent.
 
-This provides a clean abstraction layer between the agent and the
-full orchestrator, making the agent more testable and flexible.
+This provides adapter implementations that wrap the full orchestrator.
+The ContextProvider and OrchestratorAdapter protocols are defined in orchestrator/protocols.py.
 """
 
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import List, Optional, Protocol, runtime_checkable
+from typing import List, Optional
+
+# Import protocols from centralized location
+from .orchestrator.protocols import ContextProvider, OrchestratorAdapter
 
 # Import LLMResponse from providers to get full feature set including tool_calls
 from .providers.base import LLMResponse, ToolCall
-
-
-@runtime_checkable
-class ContextProvider(Protocol):
-    """Protocol for providing codebase context."""
-
-    def is_explored(self) -> bool:
-        """Check if the codebase has been explored."""
-        ...
-
-    def get_summary(self) -> str:
-        """Get a summary of the codebase context."""
-        ...
-
-
-@runtime_checkable
-class OrchestratorAdapter(Protocol):
-    """
-    Minimal interface for orchestrator functionality needed by CodeAgent.
-
-    This protocol defines only what the agent actually needs:
-    - List available providers
-    - Delegate LLM calls
-    - Access codebase context
-    """
-
-    @property
-    def context(self) -> ContextProvider:
-        """Get the context provider."""
-        ...
-
-    def list_providers(self) -> List[str]:
-        """List available LLM providers."""
-        ...
-
-    def delegate(
-        self,
-        provider: str,
-        prompt: str,
-        system_prompt: Optional[str] = None,
-        max_tokens: int = 1500,
-        temperature: float = 0.3,
-        use_context: bool = False
-    ) -> LLMResponse:
-        """
-        Delegate a prompt to an LLM provider.
-
-        Args:
-            provider: Name of the provider to use
-            prompt: User prompt to send
-            system_prompt: Optional system prompt
-            max_tokens: Maximum tokens in response
-            temperature: Sampling temperature
-            use_context: Whether to augment with codebase context
-
-        Returns:
-            LLMResponse with the model's response
-        """
-        ...
-
-    def delegate_with_tools(
-        self,
-        provider: str,
-        prompt: str,
-        tools: List[dict],
-        system_prompt: Optional[str] = None,
-        max_tokens: int = 1500,
-        temperature: float = 0.3,
-        tool_choice: str = "auto",
-        **kwargs
-    ) -> LLMResponse:
-        """
-        Delegate to an LLM provider with native tool calling support.
-
-        Args:
-            provider: Name of the provider to use
-            prompt: User prompt to send
-            tools: List of OpenAI-compatible tool schemas
-            system_prompt: Optional system prompt
-            max_tokens: Maximum tokens in response
-            temperature: Sampling temperature
-            tool_choice: How the model should choose tools ("auto", "none", or specific tool)
-            **kwargs: Additional provider-specific parameters
-
-        Returns:
-            LLMResponse with tool_calls field populated if model decided to call tools
-        """
-        ...
 
 
 class NullContext:
