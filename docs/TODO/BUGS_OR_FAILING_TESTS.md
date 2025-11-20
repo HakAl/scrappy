@@ -37,3 +37,10 @@ MANY likely bugs: tests/test_import_utils.py
 ---
 
 todos in: tests/agent_tools/test_output_formatter.py
+
+
+too big?
+src/platform/fallback.py
+src/platform/translation.py
+src/orchestrator/core.py
+src/orchestrator/cache.py

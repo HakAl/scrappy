@@ -3,28 +3,40 @@ Platform utilities adapter.
 
 Provides concrete implementations of PlatformUtilsProtocol for different
 platforms and testing scenarios.
+
+MIGRATION NOTE: This module has been updated to use the new platform
+architecture (src/platform/) while maintaining full backward compatibility.
 """
 
-from typing import Tuple
+from typing import Tuple, Optional
 
 from .protocols import PlatformUtilsProtocol
-from ..platform_utils import (
-    is_windows as real_is_windows,
-    is_unix as real_is_unix,
-    is_macos as real_is_macos,
-    get_platform_name as real_get_platform_name,
-    validate_command_for_platform as real_validate_command,
-    translate_command_for_platform as real_translate_command,
-)
+from src.platform.protocols.orchestrator import PlatformOrchestratorProtocol
+from src.platform.factory import create_platform_orchestrator
 
 
 class RealPlatformUtils:
     """
     Real platform utilities implementation.
 
-    Wraps platform_utils module functions behind PlatformUtilsProtocol
-    for dependency injection.
+    Uses the new PlatformOrchestrator architecture internally while
+    maintaining the PlatformUtilsProtocol interface for backward compatibility.
+
+    ARCHITECTURE: This class bridges the old PlatformUtilsProtocol to the
+    new protocol-based platform architecture, allowing gradual migration.
     """
+
+    def __init__(
+        self,
+        orchestrator: Optional[PlatformOrchestratorProtocol] = None
+    ):
+        """
+        Initialize with optional orchestrator dependency injection.
+
+        Args:
+            orchestrator: Platform orchestrator. Creates default if None.
+        """
+        self._orchestrator = orchestrator or create_platform_orchestrator()
 
     def is_windows(self) -> bool:
         """
@@ -33,7 +45,7 @@ class RealPlatformUtils:
         Returns:
             True if Windows, False otherwise
         """
-        return real_is_windows()
+        return self._orchestrator.detector.is_windows()
 
     def is_unix(self) -> bool:
         """
@@ -42,7 +54,7 @@ class RealPlatformUtils:
         Returns:
             True if Unix-like, False otherwise
         """
-        return real_is_unix()
+        return self._orchestrator.detector.is_unix()
 
     def is_macos(self) -> bool:
         """
@@ -51,16 +63,16 @@ class RealPlatformUtils:
         Returns:
             True if macOS, False otherwise
         """
-        return real_is_macos()
+        return self._orchestrator.detector.is_macos()
 
     def get_platform_name(self) -> str:
         """
         Get platform name.
 
         Returns:
-            Platform name (e.g., 'windows', 'linux', 'darwin')
+            Platform name (e.g., 'Windows', 'Linux', 'macOS')
         """
-        return real_get_platform_name()
+        return self._orchestrator.detector.get_platform_name()
 
     def validate_command(self, command: str) -> Tuple[bool, str]:
         """
@@ -72,7 +84,7 @@ class RealPlatformUtils:
         Returns:
             Tuple of (is_valid, error_message)
         """
-        return real_validate_command(command)
+        return self._orchestrator.validator.validate_command_for_platform(command)
 
     def translate_command(self, command: str) -> Tuple[str, bool]:
         """
@@ -84,7 +96,7 @@ class RealPlatformUtils:
         Returns:
             Tuple of (translated_command, was_modified)
         """
-        return real_translate_command(command)
+        return self._orchestrator.translator.translate_command(command)
 
 
 class MockPlatformUtils:

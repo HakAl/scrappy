@@ -1281,3 +1281,243 @@ def create_test_rate_limit_tracker(
     )
 
     return tracker
+
+
+# =============================================================================
+# Platform Test Doubles
+# =============================================================================
+
+class FakePlatformDetector:
+    """Test double for PlatformDetectorProtocol."""
+
+    def __init__(self, platform: str = "Linux", has_git_bash: bool = False):
+        """
+        Initialize fake platform detector.
+
+        Args:
+            platform: Platform name to report (Windows, macOS, Linux, etc.)
+            has_git_bash: Whether to report Git Bash as available
+        """
+        self._platform = platform
+        self._tools: Dict[str, bool] = {}
+        self._has_git_bash = has_git_bash
+
+    def is_windows(self) -> bool:
+        """Check if platform is Windows."""
+        return self._platform == "Windows"
+
+    def is_unix(self) -> bool:
+        """Check if platform is Unix-like."""
+        return self._platform in ["Linux", "macOS", "FreeBSD", "OpenBSD", "NetBSD"]
+
+    def is_macos(self) -> bool:
+        """Check if platform is macOS."""
+        return self._platform == "macOS"
+
+    def get_platform_name(self) -> str:
+        """Get platform name."""
+        return self._platform
+
+    def get_shell_info(self) -> Dict[str, Optional[str]]:
+        """Get shell info."""
+        if self._platform == "Windows":
+            return {
+                "default": "cmd.exe",
+                "bash": None,
+                "powershell": "powershell.exe",
+                "cmd": "cmd.exe",
+                "sh": None,
+            }
+        else:
+            return {
+                "default": "/bin/bash",
+                "bash": "/bin/bash",
+                "powershell": None,
+                "cmd": None,
+                "sh": "/bin/sh",
+            }
+
+    def has_git_bash(self) -> bool:
+        """Check if Git Bash is available."""
+        return self._has_git_bash
+
+    def has_tool(self, tool_name: str) -> bool:
+        """
+        Check if a tool is available.
+
+        You can configure available tools using set_tool().
+        """
+        return self._tools.get(tool_name, False)
+
+    def set_tool(self, tool_name: str, available: bool) -> None:
+        """Configure tool availability for testing."""
+        self._tools[tool_name] = available
+
+
+class FakeCommandTranslator:
+    """Test double for CommandTranslatorProtocol."""
+
+    def __init__(self, translate_to: Optional[str] = None):
+        """
+        Initialize fake command translator.
+
+        Args:
+            translate_to: Command to translate to (if None, no translation)
+        """
+        self._translate_to = translate_to
+
+    def translate_command(self, command: str) -> tuple[str, bool]:
+        """Translate command."""
+        if self._translate_to:
+            return (self._translate_to, True)
+        return (command, False)
+
+    def normalize_command_paths(self, command: str) -> tuple[str, bool, str]:
+        """Normalize command paths."""
+        return (command, False, "")
+
+    def normalize_npm_command_for_windows(self, command: str) -> tuple[str, bool, str]:
+        """Normalize npm command."""
+        return (command, False, "")
+
+    def fix_spring_initializr_command(self, command: str) -> tuple[str, bool, str]:
+        """Fix Spring Initializr command."""
+        return (command, False, "")
+
+
+class FakeCommandValidator:
+    """Test double for CommandValidatorProtocol."""
+
+    def __init__(self, always_valid: bool = True, warning: str = ""):
+        """
+        Initialize fake command validator.
+
+        Args:
+            always_valid: If True, all commands are valid
+            warning: Warning message to return for invalid commands
+        """
+        self._always_valid = always_valid
+        self._warning = warning
+
+    def validate_command_for_platform(self, command: str) -> tuple[bool, str]:
+        """Validate command."""
+        if self._always_valid:
+            return (True, "")
+        return (False, self._warning or "Command blocked for testing")
+
+    def get_dangerous_commands(self) -> List[str]:
+        """Get dangerous commands."""
+        return []
+
+    def get_interactive_commands(self) -> List[str]:
+        """Get interactive commands."""
+        return []
+
+
+class FakeCommandExecutor:
+    """Test double for CommandExecutorProtocol."""
+
+    def __init__(
+        self,
+        output: str = "",
+        returncode: int = 0,
+        method: str = "test"
+    ):
+        """
+        Initialize fake command executor.
+
+        Args:
+            output: Output to return
+            returncode: Return code to return
+            method: Execution method to report
+        """
+        self._output = output
+        self._returncode = returncode
+        self._method = method
+        self.commands_executed: List[str] = []
+
+    def execute(
+        self,
+        command: str,
+        cwd: Optional[str] = None,
+        timeout: int = 30
+    ):
+        """Execute command (fake)."""
+        from src.platform.protocols.execution import ExecutionResult
+
+        self.commands_executed.append(command)
+
+        return ExecutionResult(
+            output=self._output,
+            returncode=self._returncode,
+            method=self._method
+        )
+
+
+class FakePythonFallback:
+    """Test double for PythonCommandFallbackProtocol."""
+
+    def __init__(self, result: Optional[Dict[str, Any]] = None):
+        """
+        Initialize fake Python fallback.
+
+        Args:
+            result: Result dict to return for all commands
+        """
+        self._result = result or {'output': '', 'returncode': 0, 'used_fallback': True}
+
+    def ls(self, args: List[str], cwd) -> Dict[str, Any]:
+        """Python ls command."""
+        return self._result
+
+    def cat(self, args: List[str], cwd) -> Dict[str, Any]:
+        """Python cat command."""
+        return self._result
+
+    def grep(self, args: List[str], cwd) -> Dict[str, Any]:
+        """Python grep command."""
+        return self._result
+
+    def find(self, args: List[str], cwd) -> Dict[str, Any]:
+        """Python find command."""
+        return self._result
+
+    def wc(self, args: List[str], cwd) -> Dict[str, Any]:
+        """Python wc command."""
+        return self._result
+
+    def head(self, args: List[str], cwd) -> Dict[str, Any]:
+        """Python head command."""
+        return self._result
+
+    def tail(self, args: List[str], cwd) -> Dict[str, Any]:
+        """Python tail command."""
+        return self._result
+
+    def touch(self, args: List[str], cwd) -> Dict[str, Any]:
+        """Python touch command."""
+        return self._result
+
+    def mkdir_p(self, args: List[str], cwd) -> Dict[str, Any]:
+        """Python mkdir -p command."""
+        return self._result
+
+    def rm(self, args: List[str], cwd) -> Dict[str, Any]:
+        """Python rm command."""
+        return self._result
+
+    def cp(self, args: List[str], cwd) -> Dict[str, Any]:
+        """Python cp command."""
+        return self._result
+
+    def mv(self, args: List[str], cwd) -> Dict[str, Any]:
+        """Python mv command."""
+        return self._result
+
+    def which(self, args: List[str]) -> Dict[str, Any]:
+        """Python which command."""
+        return self._result
+
+    def pwd(self, cwd) -> Dict[str, Any]:
+        """Python pwd command."""
+        return self._result

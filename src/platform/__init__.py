@@ -24,6 +24,37 @@ Example usage:
         print(result.output)
 """
 
+from src.platform.factory import (
+    create_platform_orchestrator,
+    create_platform_detector,
+    create_command_translator,
+    create_command_validator,
+)
+
+from src.platform.detection import SystemPlatformDetector
+from src.platform.translation import SmartCommandTranslator
+from src.platform.validation import SecurityCommandValidator
+from src.platform.fallback import PythonCommandFallbackImpl
+from src.platform.executors import (
+    NativeCommandExecutor,
+    TranslatedCommandExecutor,
+    FallbackCommandExecutor,
+)
+from src.platform.orchestrator import SmartPlatformOrchestrator
+
 __all__ = [
-    # Will be populated as we add implementations
+    # Factory functions (recommended for production use)
+    'create_platform_orchestrator',
+    'create_platform_detector',
+    'create_command_translator',
+    'create_command_validator',
+    # Concrete implementations (for advanced use cases and testing)
+    'SystemPlatformDetector',
+    'SmartCommandTranslator',
+    'SecurityCommandValidator',
+    'PythonCommandFallbackImpl',
+    'NativeCommandExecutor',
+    'TranslatedCommandExecutor',
+    'FallbackCommandExecutor',
+    'SmartPlatformOrchestrator',
 ]
