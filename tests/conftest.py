@@ -22,7 +22,6 @@ class MockLLMResponse:
     tokens_used: int = 100
     model: str = "mock-model"
     provider: str = "mock"
-    : bool = False
 
 
 @pytest.fixture

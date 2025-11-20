@@ -10,6 +10,43 @@ import ast
 import asttokens
 
 
+def fix_empty_classes(original_source, broken_source, deleted_test_names):
+    """
+    When deleting tests leaves a class empty, insert 'pass' to make it valid.
+    """
+    # Parse original to find classes and their methods
+    try:
+        original_tree = ast.parse(original_source)
+    except:
+        return broken_source
+
+    class_info = {}  # {class_name: [(method_name, indent_level)]}
+
+    for node in ast.walk(original_tree):
+        if isinstance(node, ast.ClassDef):
+            methods = []
+            for item in node.body:
+                if isinstance(item, ast.FunctionDef):
+                    methods.append(item.name)
+            class_info[node.name] = methods
+
+    # Find classes where ALL methods were deleted
+    lines = broken_source.split('\n')
+    for class_name, methods in class_info.items():
+        if all(m in deleted_test_names for m in methods):
+            # Find the class definition line and insert 'pass' after it
+            for i, line in enumerate(lines):
+                if f'class {class_name}' in line and line.strip().startswith('class'):
+                    # Find indentation of class
+                    indent = len(line) - len(line.lstrip())
+                    # Insert pass statement after class definition
+                    if i + 1 < len(lines):
+                        lines.insert(i + 1, ' ' * (indent + 4) + 'pass')
+                    break
+
+    return '\n'.join(lines)
+
+
 def kill_tests_in_file(path, test_names, dry):
     """
     Deletes specified functions from a file.
@@ -67,10 +104,15 @@ def kill_tests_in_file(path, test_names, dry):
     except SyntaxError:
         # SAFETY CHECK 2: The "Empty Class" Rescue
         # If deletion caused a syntax error, it's usually because a class became empty.
-        # We try to insert a 'pass' where we deleted code if syntax fails.
-        # (This is a simplistic fallback; if this fails, we skip the file)
-        print(f"WARN: Deletion in {path} caused SyntaxError (likely empty class). Reverting.")
-        return False
+        # Find empty classes and insert 'pass' statements
+        print(f"WARN: Deletion in {path} caused SyntaxError (likely empty class). Attempting fix...")
+        new_source = fix_empty_classes(source, new_source, test_names)
+        try:
+            ast.parse(new_source, filename=path)
+            print(f"     Fixed empty class(es) by inserting 'pass'")
+        except SyntaxError:
+            print(f"     Could not fix automatically. Skipping file.")
+            return False
 
     if dry:
         print(f"[DRY-RUN] Would remove {len(kill_ranges)} tests from {path}")
