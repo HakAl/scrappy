@@ -62,6 +62,22 @@ from .types import (
 from .audit import AuditLogger
 from .response_parser import ResponseParser, JSONResponseParser, ParseResult, UnifiedResponseParser
 
+# Import new components
+from .ui import AgentUI
+from .safety_checker import SafetyChecker
+from .duplicate_detector import DuplicateDetector
+from .tool_runner import ToolRunner
+from .action_executor import ActionExecutor
+
+# Import protocols
+from .protocols import (
+    AgentUIProtocol,
+    SafetyCheckerProtocol,
+    DuplicateDetectorProtocol,
+    ToolRunnerProtocol,
+    ActionExecutorProtocol,
+)
+
 
 class CodeAgent:
     """
@@ -88,6 +104,12 @@ class CodeAgent:
         response_parser: Optional[Any] = None,  # ResponseParserProtocol
         tool_context: Optional[Any] = None,  # ToolContextProtocol
         command_executor: Optional[Any] = None,  # ShellCommandExecutor
+        # New component parameters
+        ui: Optional[AgentUIProtocol] = None,
+        safety_checker: Optional[SafetyCheckerProtocol] = None,
+        duplicate_detector: Optional[DuplicateDetectorProtocol] = None,
+        tool_runner: Optional[ToolRunnerProtocol] = None,
+        action_executor: Optional[ActionExecutorProtocol] = None,
     ):
         """
         Initialize the code agent with dependency injection.
@@ -151,7 +173,8 @@ class CodeAgent:
         self._response_parser: ResponseParser = response_parser or self._create_default_response_parser()
 
         # Tool context
-        self._show_progress("Preparing agent tools...")
+        # Note: Can't use self.ui yet as it's not created until after tool_context
+        self.io.secho("Preparing agent tools...", fg="cyan")
         self.tool_context = tool_context or self._create_default_tool_context()
 
         # Tool registry
@@ -185,8 +208,27 @@ class CodeAgent:
         # Command executor
         self._command_executor = command_executor or self._create_default_command_executor()
 
+        # Setup new agent components
+        # UI wraps the IO interface
+        self.ui = ui or AgentUI(self.io)
+
+        # Setup execution components (in dependency order)
+        self._safety_checker = safety_checker or SafetyChecker()
+        self._duplicate_detector = duplicate_detector or DuplicateDetector()
+        self._tool_runner = tool_runner or ToolRunner(
+            tool_registry=self.tool_registry,
+            command_executor=self._command_executor,
+            tool_context=self.tool_context,
+        )
+        self.action_executor = action_executor or ActionExecutor(
+            safety_checker=self._safety_checker,
+            duplicate_detector=self._duplicate_detector,
+            tool_runner=self._tool_runner,
+            ui=self.ui,
+        )
+
         # Use orchestrator's intelligent provider selection
-        self._show_progress("Selecting AI providers...")
+        self.ui.show_progress("Selecting AI providers...")
         available = self.adapter.list_providers()
 
         # Store orchestrator reference for dynamic provider selection
@@ -343,79 +385,6 @@ class CodeAgent:
 
     # ========== Rich Output Helper Methods ==========
 
-    def _show_thinking(self, text: str) -> None:
-        """Display thinking/reasoning output in a blue-bordered panel."""
-        if not text or not text.strip():
-            return
-        if hasattr(self.io, 'panel'):
-            self.io.panel(text, title="Thinking", border_style="blue")
-        else:
-            self.io.secho(f"[Thinking] {text}", fg="blue")
-
-    def _show_tool_request(self, tool_name: str, params: dict) -> None:
-        """Display tool request as a formatted table."""
-        if hasattr(self.io, 'table'):
-            headers = ["Property", "Value"]
-            rows = [["Tool", tool_name]]
-            for key, value in params.items():
-                # Truncate long values for display
-                str_value = str(value)
-                if len(str_value) > 100:
-                    str_value = str_value[:100] + "..."
-                rows.append([key, str_value])
-            self.io.table(headers, rows, title="Tool Request")
-        else:
-            self.io.secho(f"Tool: {tool_name}", fg="cyan", bold=True)
-            self.io.echo(f"Parameters: {json.dumps(params, indent=2)}")
-
-    def _show_command(self, command: str) -> None:
-        """Display command in syntax-highlighted block."""
-        if hasattr(self.io, 'syntax'):
-            self.io.syntax(command, language="shell")
-        else:
-            self.io.secho(f"$ {command}", fg="yellow")
-
-    def _show_error(self, message: str) -> None:
-        """Display error in red-bordered panel."""
-        if hasattr(self.io, 'panel'):
-            self.io.panel(message, title="Error", border_style="red")
-        else:
-            self.io.secho(f"Error: {message}", fg="red")
-
-    def _show_result(self, result: str, title: str = "Result") -> None:
-        """Display result in green-bordered panel."""
-        if hasattr(self.io, 'panel'):
-            self.io.panel(result, title=title, border_style="green")
-        else:
-            self.io.secho(f"{title}: {result}", fg="green")
-
-    def _show_warning(self, message: str) -> None:
-        """Display warning in yellow-bordered panel."""
-        if hasattr(self.io, 'panel'):
-            self.io.panel(message, title="Warning", border_style="yellow")
-        else:
-            self.io.secho(f"Warning: {message}", fg="yellow")
-
-    def _show_progress(self, message: str) -> None:
-        """Display progress/status message."""
-        self.io.secho(message, fg="cyan")
-
-    def _show_provider_status(self, provider: str, message: str, color: str = "cyan") -> None:
-        """Display provider status message."""
-        self.io.secho(f"[{provider}] {message}", fg=color)
-
-    def _show_rule(self, title: Optional[str] = None) -> None:
-        """Display horizontal rule separator."""
-        if hasattr(self.io, 'rule'):
-            self.io.rule(title)
-        else:
-            if title:
-                self.io.echo(f"\n{'='*60}")
-                self.io.echo(f" {title} ")
-                self.io.echo(f"{'='*60}")
-            else:
-                self.io.echo(f"\n{'='*60}")
-
     def _tool_run_command(self, command: str) -> str:
         """Run a shell command using the extracted command executor."""
         # Check for interactive commands BEFORE delegating to executor
@@ -423,7 +392,7 @@ class CodeAgent:
         cmd_lower = command.lower()
         for pattern in self.config.interactive_commands:
             if pattern in cmd_lower:
-                self._show_warning(f"'{pattern}' may require interactive input")
+                self.ui.show_warning(f"'{pattern}' may require interactive input")
                 # Suggest workarounds for common cases
                 if 'npx' in cmd_lower:
                     self.io.echo("   Tip: Add '-y' flag to skip prompts: npx -y create-react-app ...")
@@ -448,8 +417,8 @@ class CodeAgent:
         Run a command in interactive mode - passes I/O directly to terminal.
         User can respond to prompts directly.
         """
-        self._show_rule("INTERACTIVE MODE")
-        self._show_command(command)
+        self.ui.show_rule("INTERACTIVE MODE")
+        self.ui.show_command(command)
         self.io.echo("You can respond to any prompts. Output goes directly to terminal.")
 
         try:
@@ -463,7 +432,7 @@ class CodeAgent:
                 # This allows interactive prompts to work
             )
 
-            self._show_rule()
+            self.ui.show_rule()
             self.io.secho(f"Command finished with exit code: {result.returncode}",
                          fg="green" if result.returncode == 0 else "red")
 
@@ -473,7 +442,7 @@ class CodeAgent:
                 return f"Command finished with exit code {result.returncode}. Check terminal output for details."
 
         except KeyboardInterrupt:
-            self._show_rule()
+            self.ui.show_rule()
             self.io.secho("Command stopped by user (Ctrl+C)", fg="yellow")
 
             # Provide context-aware message based on command type
@@ -516,119 +485,85 @@ class CodeAgent:
         """
         return self._command_executor._categorize_command_approach(command)
 
+    # ========== Backward Compatibility Wrappers ==========
+
+    def _show_thinking(self, text: str) -> None:
+        """Backward compatibility wrapper - delegates to UI."""
+        self.ui.show_thinking(text)
+
+    def _show_tool_request(self, tool_name: str, params: dict) -> None:
+        """Backward compatibility wrapper - delegates to UI."""
+        self.ui.show_tool_request(tool_name, params)
+
+    def _show_command(self, command: str) -> None:
+        """Backward compatibility wrapper - delegates to UI."""
+        self.ui.show_command(command)
+
+    def _show_error(self, message: str) -> None:
+        """Backward compatibility wrapper - delegates to UI."""
+        self.ui.show_error(message)
+
+    def _show_result(self, result: str, title: str = "Result") -> None:
+        """Backward compatibility wrapper - delegates to UI."""
+        self.ui.show_result(result, title=title)
+
+    def _show_warning(self, message: str) -> None:
+        """Backward compatibility wrapper - delegates to UI."""
+        self.ui.show_warning(message)
+
+    def _show_progress(self, message: str) -> None:
+        """Backward compatibility wrapper - delegates to UI."""
+        self.ui.show_progress(message)
+
+    def _show_provider_status(self, provider: str, message: str, color: str = "cyan") -> None:
+        """Backward compatibility wrapper - delegates to UI."""
+        self.ui.show_provider_status(provider, message, color)
+
+    def _show_rule(self, title: str = None) -> None:
+        """Backward compatibility wrapper - delegates to UI."""
+        self.ui.show_rule(title)
+
     def _check_retry_pattern(self, command: str, failed_commands: list) -> str:
         """
-        Check if a command follows a pattern that has already failed.
+        Backward compatibility wrapper for _check_retry_pattern.
 
-        Delegates to the command executor's implementation.
-
-        Args:
-            command: The command about to be executed
-            failed_commands: List of previously failed commands with their approaches
-
-        Returns:
-            Warning message if retry pattern detected, empty string otherwise
+        Delegates to command executor's implementation.
         """
         return self._command_executor._check_retry_pattern(command, failed_commands)
 
     def _check_duplicate_action(self, action: AgentAction, state: ConversationState) -> str:
         """
-        Check if an action is a duplicate of recent actions (infinite loop detection).
+        Backward compatibility wrapper for _check_duplicate_action.
 
-        Args:
-            action: The action about to be executed
-            state: Current conversation state with action history
-
-        Returns:
-            Warning message if duplicate detected, empty string otherwise
+        Delegates to DuplicateDetector.
         """
-        # Only check for actions that modify state (write operations)
-        if action.action not in ['write_file', 'run_command']:
-            return ""
-
-        # Build current action signature for comparison
-        current_sig = {
-            "action": action.action,
-            "parameters": action.parameters
-        }
-
-        # Check immediate duplicate (same as last action)
-        if state.last_action:
-            if (state.last_action.get("action") == action.action and
-                state.last_action.get("parameters") == action.parameters):
-                return (
-                    f"Duplicate action detected: You just executed '{action.action}' with identical parameters. "
-                    f"This action already succeeded. If you need to verify the result, use 'read_file' instead of repeating the write. "
-                    f"If you think the file needs changes, make sure the new content is actually different."
-                )
-
-        # Check for repeated pattern (3+ times in action history)
-        if hasattr(state, 'action_history') and len(state.action_history) >= 2:
-            # Count how many times this exact action appears in recent history
-            identical_count = sum(
-                1 for hist_action in state.action_history[-5:]  # Check last 5 actions
-                if (hist_action.get("action") == action.action and
-                    hist_action.get("parameters") == action.parameters)
-            )
-
-            if identical_count >= 2:
-                return (
-                    f"Repeated action pattern detected: '{action.action}' with these exact parameters "
-                    f"has been executed {identical_count} times already. This suggests an infinite loop. "
-                    f"You MUST try a different approach:\n"
-                    f"- If writing a file: Read it first to see what's actually there\n"
-                    f"- If the content has a bug: Make sure your new content actually fixes it\n"
-                    f"- If the file is correct: Mark the task as complete instead of rewriting"
-                )
-
-        return ""
+        is_duplicate, warning = self._duplicate_detector.check_duplicate(action, state)
+        return warning if is_duplicate else ""
 
     def _get_user_confirmation(self, action: str, params: dict) -> bool:
-        """Ask user for confirmation before executing action."""
-        # Auto-approve safe read-only operations
-        safe_actions = ['read_file', 'list_files', 'list_directory', 'search_files', 'search_code', 'git_status', 'git_log', 'git_diff']
-        if action in safe_actions:
-            # Display tool request with auto-approval status
-            display_params = params.copy()
-            display_params['_status'] = 'Auto-approved (safe operation)'
-            self._show_tool_request(action, params)
+        """
+        Backward compatibility wrapper for _get_user_confirmation.
+
+        Delegates to SafetyChecker and UI.
+        """
+        # Create temporary AgentAction for safety check
+        from .types import AgentAction
+        temp_action = AgentAction(
+            thought="",
+            action=action,
+            parameters=params,
+            is_complete=False
+        )
+
+        # Check if safe
+        if self._safety_checker.is_safe_action(temp_action):
+            self.ui.show_tool_request(action, params)
             self.io.secho("Auto-approved (safe operation)", fg="green")
             return True
 
-        # Display tool request for approval
-        self._show_tool_request(action, params)
-
-        # Show preview for write operations
-        if action == 'write_file' and 'content' in params:
-            content = params['content']
-            max_preview = self.config.write_preview_truncation
-            preview = content[:max_preview] + "..." if len(content) > max_preview else content
-            if hasattr(self.io, 'syntax'):
-                # Try to detect language from file extension
-                file_path = params.get('path', '')
-                lang = 'text'
-                if file_path.endswith('.py'):
-                    lang = 'python'
-                elif file_path.endswith(('.js', '.jsx')):
-                    lang = 'javascript'
-                elif file_path.endswith(('.ts', '.tsx')):
-                    lang = 'typescript'
-                elif file_path.endswith('.json'):
-                    lang = 'json'
-                elif file_path.endswith(('.yml', '.yaml')):
-                    lang = 'yaml'
-                elif file_path.endswith('.md'):
-                    lang = 'markdown'
-                self.io.echo("\nContent preview:")
-                self.io.syntax(preview, language=lang)
-            else:
-                self.io.echo(f"\nContent preview:\n{preview}")
-
-        try:
-            return self.io.confirm("Allow?", default=False)
-        except (KeyboardInterrupt, EOFError):
-            self.io.echo("\nAction cancelled.")
-            raise  # Re-raise to stop the agent loop
+        # Show tool request and ask for confirmation
+        self.ui.show_tool_request(action, params)
+        return self.ui.prompt_confirm("Allow?", default=False)
 
     # ========== Decoupled Agent Loop Methods ==========
 
@@ -657,9 +592,9 @@ class CodeAgent:
 
         # Show progress indicator during API call
         if state.iteration == 1:
-            self._show_provider_status(current_provider, "Analyzing task (this may take a moment)...")
+            self.ui.show_provider_status(current_provider, "Analyzing task (this may take a moment)...")
         else:
-            self._show_provider_status(current_provider, "Thinking...")
+            self.ui.show_provider_status(current_provider, "Thinking...")
 
         # Build the prompt with conversation history for multi-turn
         if len(state.messages) == 2:
@@ -772,7 +707,7 @@ class CodeAgent:
         # Report latency on first call (helps user understand wait times)
         if state.iteration == 1:
             elapsed = time.time() - start_time
-            self._show_provider_status(actual_provider, f"Response received ({elapsed:.1f}s)", color="green")
+            self.ui.show_provider_status(actual_provider, f"Response received ({elapsed:.1f}s)", color="green")
 
         return AgentThought(
             raw_response=response.content,
@@ -819,6 +754,7 @@ class CodeAgent:
         Execute the planned action (tool call).
 
         This is the execution stage where the tool is actually run.
+        Delegates to ActionExecutor for all execution logic.
 
         Args:
             action: Parsed action from _plan_action()
@@ -827,185 +763,14 @@ class CodeAgent:
         Returns:
             ActionResult with execution details
         """
-        # Display thinking in panel
-        self._show_thinking(action.thought)
+        # Delegate to ActionExecutor
+        result = self.action_executor.execute(action, state, dry_run=self.dry_run)
 
-        # Handle parse failure - provide feedback to LLM to retry with valid JSON
-        if action.action == 'retry_parse':
-            # Show what the LLM actually returned for debugging
-            raw_response = action.parameters.get('raw_response', 'No response captured')
-            self._show_error(f"Response parsing failed. LLM returned:\n{raw_response[:300]}...")
-            self.io.secho("Requesting JSON format retry...", fg="yellow")
-            error_msg = (
-                "Your previous response could not be parsed as JSON. "
-                "You MUST respond with ONLY a valid JSON object (no other text). "
-                "Use this exact format:\n"
-                '{\n'
-                '  "thought": "Your reasoning here",\n'
-                '  "action": "tool_name",\n'
-                '  "parameters": {"param": "value"},\n'
-                '  "is_complete": false\n'
-                '}\n'
-                "Available tools: read_file, write_file, list_files, list_directory, search_code, run_command\n"
-                "Make sure all strings are properly quoted with double quotes. Do not include any text outside the JSON object."
-            )
-            return ActionResult(
-                success=False,
-                output=error_msg,
-                action=action.action,
-                parameters=action.parameters,
-                approved=False,
-                executed=False
-            )
+        # Log action for audit trail
+        if result.executed:
+            self._log_action(action.action, action.parameters, result.output, result.approved)
 
-        # Check if this is a valid tool action
-        if action.action not in self.tools or action.action == 'complete':
-            return ActionResult(
-                success=True,  # Not a failure, just no execution
-                output="",
-                action=action.action,
-                parameters=action.parameters,
-                approved=True,
-                executed=False
-            )
-
-        # Handle unknown actions
-        if action.action not in self.tools and action.action != 'complete' and action.action != 'error':
-            self._show_error(f"Unknown action: {action.action}")
-            return ActionResult(
-                success=False,
-                output=f"Unknown action '{action.action}'. Available tools: {', '.join(self.tools.keys())}",
-                action=action.action,
-                parameters=action.parameters,
-                approved=False,
-                executed=False
-            )
-
-        # Get user confirmation (unless auto_confirm)
-        if state.auto_confirm:
-            approved = True
-        else:
-            approved = self._get_user_confirmation(action.action, action.parameters)
-
-        if not approved:
-            self.io.secho("Action denied by user", fg="yellow")
-            self._log_action(action.action, action.parameters, "Denied by user", False)
-            return ActionResult(
-                success=False,
-                output="Denied by user",
-                action=action.action,
-                parameters=action.parameters,
-                approved=False,
-                executed=False
-            )
-
-        # Check for duplicate actions - prevent infinite loops
-        duplicate_warning = self._check_duplicate_action(action, state)
-        if duplicate_warning:
-            self._show_warning(f"Duplicate Action: {duplicate_warning}")
-            # Return warning to LLM instead of executing
-            return ActionResult(
-                success=False,
-                output=duplicate_warning,
-                action=action.action,
-                parameters=action.parameters,
-                approved=True,
-                executed=False
-            )
-
-        # Check for retry patterns - detect if same approach is being repeated
-        if action.action == 'run_command' and state.failed_commands:
-            command = action.parameters.get('command', '')
-            retry_warning = self._check_retry_pattern(command, state.failed_commands)
-            if retry_warning:
-                self._show_warning(f"Retry Pattern: {retry_warning}")
-                # Add warning to state for next iteration
-                state.retry_warnings.append(retry_warning)
-
-        # Execute the tool
-        self.io.secho(f"Executing: {action.action}", fg="cyan", bold=True)
-
-        # Show command in syntax block for run_command
-        if action.action == 'run_command':
-            cmd = action.parameters.get('command', '')
-            if cmd:
-                self._show_command(cmd)
-        tool_result = self.tools[action.action](**action.parameters)
-
-        # Track failed commands for retry detection
-        if action.action == 'run_command':
-            command = action.parameters.get('command', '')
-            if 'Error' in tool_result or 'failed' in tool_result.lower():
-                # Categorize the approach for better tracking
-                approach = self._categorize_command_approach(command)
-                state.failed_commands.append({
-                    'command': command,
-                    'error': tool_result[:200],  # Truncate error
-                    'approach': approach,
-                    'iteration': state.iteration
-                })
-                self.io.secho(f"   [Tracked] Failed '{approach}' approach - will suggest alternatives", fg="yellow")
-
-                # Check if this is a scaffolding approach
-                scaffolding_approaches = [
-                    'spring_initializr_download', 'curl_download',
-                    'powershell_download', 'npm_create_project'
-                ]
-
-                # If ANY scaffolding approach failed, inject strong write_file suggestion
-                if approach in scaffolding_approaches:
-                    scaffolding_failures = sum(
-                        1 for f in state.failed_commands
-                        if f['approach'] in scaffolding_approaches
-                    )
-                    if scaffolding_failures >= 1:
-                        warning = (
-                            f"MANDATORY STRATEGY CHANGE: Scaffolding/download approaches have failed {scaffolding_failures} time(s). "
-                            f"You MUST now use write_file tool to create project files directly. "
-                            f"Do NOT attempt any more curl, npm create, or spring initializr commands. "
-                            f"For Spring Boot: write_file to create pom.xml, Application.java, etc. "
-                            f"For React: write_file to create package.json, App.jsx, etc."
-                        )
-                        state.retry_warnings.append(warning)
-                        self.io.secho("   [MANDATORY] Switching to write_file strategy after scaffolding failure", fg="red", bold=True)
-
-                # If same approach failed twice, inject strong warning
-                approach_failures = sum(1 for f in state.failed_commands if f['approach'] == approach)
-                if approach_failures >= 2:
-                    warning = (
-                        f"CRITICAL: The '{approach}' approach has failed {approach_failures} times. "
-                        f"You MUST try a completely different strategy. "
-                        f"If using shell commands, switch to write_file tool instead."
-                    )
-                    state.retry_warnings.append(warning)
-
-        # Display result
-        max_display = self.config.result_display_truncation
-        if len(tool_result) > max_display:
-            display_result = tool_result[:max_display] + "... [truncated]"
-        else:
-            display_result = tool_result
-
-        # Use panel for results if available
-        if hasattr(self.io, 'panel'):
-            # Determine result style based on content
-            if 'Error' in tool_result or 'failed' in tool_result.lower():
-                self.io.panel(display_result, title="Result", border_style="red")
-            else:
-                self.io.panel(display_result, title="Result", border_style="green")
-        else:
-            self.io.echo(f"Result: {display_result}")
-
-        self._log_action(action.action, action.parameters, tool_result, True)
-
-        return ActionResult(
-            success=True,
-            output=tool_result,
-            action=action.action,
-            parameters=action.parameters,
-            approved=True,
-            executed=True
-        )
+        return result
 
     def _evaluate(
         self,
@@ -1035,7 +800,7 @@ class CodeAgent:
             ]
 
             if not meaningful_actions and not self.dry_run:
-                self._show_warning("Agent declared completion without performing any file operations.")
+                self.ui.show_warning("Agent declared completion without performing any file operations.")
                 self.io.echo("Requesting agent to actually execute the task...")
                 return EvaluationResult(
                     is_complete=False,
@@ -1044,8 +809,8 @@ class CodeAgent:
                 )
 
             final_result = action.result_text or 'Task completed'
-            self._show_rule("Task Complete")
-            self._show_result(final_result, title="Final Result")
+            self.ui.show_rule("Task Complete")
+            self.ui.show_result(final_result, title="Final Result")
             self._log_action('complete', {}, final_result, True)
 
             return EvaluationResult(
@@ -1111,6 +876,19 @@ class CodeAgent:
             }
             state.action_history.append(action_record)
             state.last_action = action_record
+
+            # Track failed commands for retry detection
+            if action.action == 'run_command' and not result.success:
+                command = action.parameters.get('command', '')
+                if command:
+                    approach = self._categorize_command_approach(command)
+                    state.failed_commands.append({
+                        'command': command,
+                        'error': result.output[:200],
+                        'approach': approach,
+                        'iteration': state.iteration
+                    })
+                    self.io.secho(f"   [Tracked] Failed '{approach}' approach", fg="yellow")
 
             # Build user message with tool result and any retry warnings
             user_message = f"Tool result for {result.action}:\n{result.output}\n"
@@ -1216,16 +994,16 @@ class CodeAgent:
 
         # Concise header
         task_preview = task[:80] + "..." if len(task) > 80 else task
-        self._show_rule("Agent Task")
+        self.ui.show_rule("Agent Task")
         self.io.secho(task_preview, fg="white", bold=True)
         if self.dry_run:
             self.io.secho("[DRY RUN MODE]", fg="yellow", bold=True)
 
         # Build initial context
-        self._show_progress("Building context...")
+        self.ui.show_progress("Building context...")
 
         # System prompt for agent - use SystemPromptBuilder for context-aware construction
-        self._show_progress("Preparing system prompt...")
+        self.ui.show_progress("Preparing system prompt...")
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
         # Create SystemPromptBuilder with tool registry for unified prompt generation
@@ -1263,7 +1041,7 @@ class CodeAgent:
         )
 
         # Main agent loop - decoupled stages with crash safety
-        self._show_progress("Starting agent loop...")
+        self.ui.show_progress("Starting agent loop...")
         try:
             while state.iteration < state.max_iterations:
                 state.iteration += 1
@@ -1317,13 +1095,13 @@ class CodeAgent:
         except KeyboardInterrupt:
             # User cancelled - save partial state
             self.io.echo("")  # New line
-            self._show_warning("Agent interrupted by user. Saving audit log...")
+            self.ui.show_warning("Agent interrupted by user. Saving audit log...")
             self._audit_logger.mark_complete(False, "Interrupted by user (KeyboardInterrupt)")
             raise  # Re-raise to let caller handle
         except Exception as e:
             # Unexpected error - save partial state for debugging
             self.io.echo("")  # New line
-            self._show_error(f"Agent error: {str(e)}\nSaving audit log...")
+            self.ui.show_error(f"Agent error: {str(e)}\nSaving audit log...")
             self._audit_logger.mark_complete(False, f"Error: {str(e)}")
             raise  # Re-raise to let caller handle
 

@@ -576,3 +576,321 @@ class PlatformUtilsProtocol(Protocol):
             Tuple of (translated_command, was_modified)
         """
         ...
+
+
+# =============================================================================
+# Agent Component Protocols
+# =============================================================================
+
+@runtime_checkable
+class AgentUIProtocol(Protocol):
+    """
+    Protocol for agent user interface operations.
+
+    Abstracts agent-specific UI operations (thinking display, tool requests,
+    results, errors) from the underlying I/O mechanism (CLIIOProtocol).
+
+    Implementations:
+    - AgentUI: Rich-enhanced UI for production
+    - TestAgentUI: Minimal UI for testing
+
+    Example:
+        def show_action(ui: AgentUIProtocol, action: str, params: dict) -> None:
+            ui.show_tool_request(action, params)
+            ui.show_progress(f"Executing {action}...")
+    """
+
+    def show_thinking(self, text: str) -> None:
+        """
+        Display agent thinking/reasoning.
+
+        Args:
+            text: Thought text to display
+        """
+        ...
+
+    def show_tool_request(self, tool_name: str, params: Dict[str, Any]) -> None:
+        """
+        Display tool invocation request.
+
+        Args:
+            tool_name: Name of tool being invoked
+            params: Tool parameters
+        """
+        ...
+
+    def show_command(self, command: str) -> None:
+        """
+        Display shell command being executed.
+
+        Args:
+            command: Shell command text
+        """
+        ...
+
+    def show_error(self, message: str) -> None:
+        """
+        Display error message.
+
+        Args:
+            message: Error message text
+        """
+        ...
+
+    def show_result(
+        self,
+        result: str,
+        title: str = "Result",
+        is_error: bool = False
+    ) -> None:
+        """
+        Display action result.
+
+        Args:
+            result: Result text/output
+            title: Display title
+            is_error: Whether result represents an error
+        """
+        ...
+
+    def show_warning(self, message: str) -> None:
+        """
+        Display warning message.
+
+        Args:
+            message: Warning message text
+        """
+        ...
+
+    def show_progress(self, message: str) -> None:
+        """
+        Display progress/status message.
+
+        Args:
+            message: Progress message text
+        """
+        ...
+
+    def show_provider_status(
+        self,
+        provider: str,
+        message: str,
+        color: str = "cyan"
+    ) -> None:
+        """
+        Display provider-specific status.
+
+        Args:
+            provider: Provider name (e.g., "OpenAI", "Gemini")
+            message: Status message
+            color: Display color
+        """
+        ...
+
+    def show_rule(self, title: Optional[str] = None) -> None:
+        """
+        Display horizontal rule separator.
+
+        Args:
+            title: Optional title for rule
+        """
+        ...
+
+    def prompt_confirm(
+        self,
+        message: str = "Allow?",
+        default: bool = False
+    ) -> bool:
+        """
+        Prompt user for confirmation.
+
+        Args:
+            message: Confirmation prompt text
+            default: Default value if user presses enter
+
+        Returns:
+            True if user confirmed, False otherwise
+        """
+        ...
+
+
+@runtime_checkable
+class SafetyCheckerProtocol(Protocol):
+    """
+    Protocol for action safety validation.
+
+    Abstracts safety checking to enable testing with controlled
+    safety policies and support different safety strategies.
+
+    Implementations:
+    - SafetyChecker: Default safety rules (read-only operations safe)
+    - PermissiveSafetyChecker: All operations safe (for testing)
+    - StrictSafetyChecker: No operations safe (for testing)
+
+    Example:
+        def should_confirm(checker: SafetyCheckerProtocol, action: AgentAction) -> bool:
+            if checker.is_safe_action(action):
+                return False  # No confirmation needed
+            return checker.requires_confirmation(action, auto_confirm=False)
+    """
+
+    def is_safe_action(self, action: Any) -> bool:
+        """
+        Check if action is safe to auto-execute.
+
+        Safe actions are typically read-only operations like reading files,
+        listing directories, or viewing git status.
+
+        Args:
+            action: AgentAction to check
+
+        Returns:
+            True if action is safe, False otherwise
+        """
+        ...
+
+    def requires_confirmation(self, action: Any, auto_confirm: bool) -> bool:
+        """
+        Check if action requires user confirmation.
+
+        Takes into account both action safety and auto_confirm flag.
+
+        Args:
+            action: AgentAction to check
+            auto_confirm: Whether auto-confirm mode is enabled
+
+        Returns:
+            True if confirmation required, False otherwise
+        """
+        ...
+
+
+@runtime_checkable
+class DuplicateDetectorProtocol(Protocol):
+    """
+    Protocol for detecting duplicate or redundant actions.
+
+    Abstracts duplicate detection to enable testing with controlled
+    detection logic and support different retry strategies.
+
+    Implementations:
+    - DuplicateDetector: Full duplicate/retry detection with state tracking
+    - NoDuplicateDetector: Never detects duplicates (for testing)
+    - StrictDuplicateDetector: Detects all repeats (for testing)
+
+    Example:
+        def check_action(detector: DuplicateDetectorProtocol, action, state) -> bool:
+            is_dup, warning = detector.check_duplicate(action, state)
+            if is_dup:
+                logger.warning(warning)
+                return False  # Don't execute
+            return True
+    """
+
+    def check_duplicate(
+        self,
+        action: Any,
+        state: Any
+    ) -> tuple[bool, str]:
+        """
+        Check if action is duplicate or should be blocked.
+
+        Checks for:
+        - Exact action duplicates in recent history
+        - Repeated failed commands (retry loops)
+        - Failed approach patterns (same strategy failing repeatedly)
+
+        Args:
+            action: AgentAction to check
+            state: ConversationState with action history
+
+        Returns:
+            Tuple of (is_duplicate, warning_message).
+            If is_duplicate is True, warning_message explains why.
+        """
+        ...
+
+
+@runtime_checkable
+class ToolRunnerProtocol(Protocol):
+    """
+    Protocol for executing tool operations.
+
+    Abstracts tool execution to enable testing with mock tools
+    and support different execution strategies.
+
+    Implementations:
+    - ToolRunner: Full tool execution with registry integration
+    - MockToolRunner: Returns preset results for testing
+    - LoggingToolRunner: Logs all tool calls (for debugging)
+
+    Example:
+        def run_action(runner: ToolRunnerProtocol, action: AgentAction) -> str:
+            result = runner.run_tool(action.action, action.parameters)
+            return result
+    """
+
+    def run_tool(self, tool_name: str, parameters: Dict[str, Any]) -> str:
+        """
+        Execute a tool and return its output.
+
+        Args:
+            tool_name: Name of tool to execute
+            parameters: Tool-specific parameters
+
+        Returns:
+            Tool output as string
+
+        Raises:
+            ValueError: If tool not found
+            Exception: If tool execution fails
+        """
+        ...
+
+
+@runtime_checkable
+class ActionExecutorProtocol(Protocol):
+    """
+    Protocol for coordinating action execution flow.
+
+    Abstracts execution coordination to enable testing with controlled
+    execution flow and support different execution strategies.
+
+    Implementations:
+    - ActionExecutor: Full coordination (safety → duplicate → execution)
+    - DryRunExecutor: Simulates execution without running tools
+    - LoggingExecutor: Logs all steps without execution
+
+    Example:
+        def execute_action(
+            executor: ActionExecutorProtocol,
+            action: AgentAction,
+            state: ConversationState
+        ) -> ActionResult:
+            return executor.execute(action, state, dry_run=False)
+    """
+
+    def execute(
+        self,
+        action: Any,
+        state: Any,
+        dry_run: bool = False
+    ) -> Any:
+        """
+        Orchestrate action execution flow.
+
+        Flow:
+        1. Check safety and get user confirmation if needed
+        2. Check for duplicate/retry patterns
+        3. Execute tool if approved and not duplicate
+        4. Return ActionResult with execution details
+
+        Args:
+            action: AgentAction to execute
+            state: ConversationState with history
+            dry_run: If True, simulate execution without running tools
+
+        Returns:
+            ActionResult with execution details
+        """
+        ...

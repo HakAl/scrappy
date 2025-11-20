@@ -44,3 +44,10 @@ src/platform/fallback.py
 src/platform/translation.py
 src/orchestrator/core.py
 src/orchestrator/cache.py
+src/orchestrator/rate_limiting/tracker.py
+src/cli/exceptions.py
+src/cli/output.py
+src/cli/rich_output.py
+src/context/codebase_context.py
+src/task_router/router.py
+src/agent/core.py
