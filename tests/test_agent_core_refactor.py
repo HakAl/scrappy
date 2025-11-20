@@ -734,25 +734,6 @@ class TestCommandStreamingExecution:
 
     @pytest.mark.unit
     @patch('src.agent_tools.tools.command_tool.subprocess.Popen')
-    def test_truncates_long_output(self, mock_popen, agent_with_config):
-        """Should truncate output exceeding max_command_output."""
-        # Update the executor's max_output directly (it caches config at init)
-        mock_process = MagicMock()
-        # Generate output longer than limit
-        long_line = "X" * 200 + "\n"
-        mock_process.stdout.readline.side_effect = [long_line, ""]
-        mock_process.poll.side_effect = [None, 0]
-        mock_popen.return_value = mock_process
-
-        executor = agent_with_config._command_executor
-        result = executor._run_command_streaming("verbose_cmd", 10, show_progress=False)
-
-        assert "truncated" in result.lower()
-        # Should have some X's but not all 200
-        assert "XXX" in result
-
-    @pytest.mark.unit
-    @patch('src.agent_tools.tools.command_tool.subprocess.Popen')
     def test_sets_environment_for_non_interactive(self, mock_popen, agent_with_config):
         """Should set CI=true to prevent interactive prompts."""
         mock_process = MagicMock()

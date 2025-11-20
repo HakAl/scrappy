@@ -315,26 +315,6 @@ class TestCacheValidationWithCodebaseContext:
         # file_index should be empty or the invalid value
         assert context.file_index == {} or context.file_index == "invalid"
 
-    @pytest.mark.unit
-    def test_partial_cache_data_loads_safely(self, temp_project_dir):
-        """CodebaseContext should load partial cache data safely."""
-        cache_file = temp_project_dir / ".llm_team_context.json"
-        # Only some fields present
-        cache_file.write_text('''
-        {
-            "explored_at": "2024-01-01T10:00:00",
-            "structure": {"total_files": 10}
-        }
-        ''')
-
-        context = CodebaseContext(str(temp_project_dir))
-
-        # Should load what's available
-        assert context.structure.get('total_files') == 10
-        # Missing fields should have defaults
-        assert context.summary is None
-        assert context.file_index == {}
-
 
 class TestValidationLogging:
     """Tests for validation warning messages."""

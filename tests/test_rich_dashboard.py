@@ -10,8 +10,8 @@ TDD tests for the live dashboard that displays:
 import pytest
 from unittest.mock import MagicMock, patch
 from rich.console import Console
-from rich.layout import 
-from rich.panel import 
+from rich.layout import Layout
+from rich.panel import Panel
 
 
 class TestDashboardCreation:

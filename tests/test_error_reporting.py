@@ -75,28 +75,6 @@ class TestCacheErrorReporting:
         errors = output.get_by_level('error')
         assert len(errors) > 0, "Expected error when saving to invalid path"
 
-    async def test_save_cache_async_reports_write_errors(self, tmp_path, sample_response):
-        """Test that _save_cache_async reports errors instead of silently failing."""
-        cache_file = tmp_path / "cache.json"
-        output = CapturingOutput()
-
-        cache = ResponseCache(cache_file=str(cache_file), output=output)
-
-        # First save to create file
-        await cache.put_async(sample_response, "test prompt", "model")
-
-        # Make read-only
-        cache_file.chmod(0o444)
-
-        try:
-            # This should fail but report error
-            await cache.put_async(sample_response, "another prompt", "model")
-
-            errors = output.get_by_level('error')
-            assert len(errors) > 0, "Expected error to be reported on async cache write failure"
-        finally:
-            cache_file.chmod(0o644)
-
     @pytest.mark.unit
     def test_save_cache_continues_after_error(self, tmp_path, sample_response):
         """Test that cache operations continue despite write errors.

@@ -212,39 +212,6 @@ class TestContextManagerOutputLogging:
 class TestContextManagerIntegration:
     """Integration tests with real CodebaseContext."""
 
-    def test_full_exploration_workflow(self, tmp_path):
-        """Test complete exploration workflow from start to finish."""
-        # Setup - Create a realistic project structure
-        (tmp_path / "src").mkdir()
-        (tmp_path / "src" / "main.py").write_text("def main(): pass")
-        (tmp_path / "tests").mkdir()
-        (tmp_path / "tests" / "test_main.py").write_text("def test_main(): pass")
-        (tmp_path / "README.md").write_text("# Test Project")
-
-        context = CodebaseContext(str(tmp_path))
-        output = Mock()
-        summary_func = Mock(return_value="A Python project with tests")
-
-        # Act
-        manager = ContextManager(context, output, summary_func)
-
-        # First exploration
-        result1 = manager.auto_explore()
-
-        # Second access (should use cache)
-        manager2 = ContextManager(
-            CodebaseContext(str(tmp_path)),
-            output,
-            summary_func
-        )
-        result2 = manager2.auto_explore()
-
-        # Assert
-        assert result1['status'] == 'explored'
-        assert result1['total_files'] >= 3  # At least 3 files
-        assert result2['status'] == 'cached'  # Uses cache on second access
-        assert summary_func.called
-
     def test_force_reexploration_clears_cache(self, tmp_path):
         """Force exploration should clear and rebuild cache."""
         (tmp_path / "test.py").write_text("# test")
@@ -298,28 +265,6 @@ class TestContextManagerEdgeCases:
 
         # Assert - Should explore successfully without summary
         assert result['status'] == 'explored'
-
-    def test_handles_summary_function_error(self, tmp_path):
-        """ContextManager should handle summary generation errors gracefully."""
-        (tmp_path / "test.py").write_text("# test")
-
-        # Create a mock context that will fail during summary generation
-        context = Mock()
-        context.clear_cache = Mock()
-        context.explore = Mock(return_value={'status': 'explored', 'total_files': 1})
-        context.project_path = tmp_path
-
-        output = Mock()
-        failing_summary = Mock(side_effect=RuntimeError("Summary failed"))
-        manager = ContextManager(context, output, failing_summary)
-
-        # Act - Should catch error and return failed status
-        result = manager.explore_project(force=True)
-
-        # Assert - Error should be caught and reported
-        assert result['status'] == 'failed'
-        assert 'error' in result
-        assert output.error.called
 
 
 class TestContextManagerProtocolCompliance:

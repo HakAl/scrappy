@@ -4,7 +4,7 @@ Tests for CodeAgent - execution flows, action parsing, and tool orchestration.
 import pytest
 from unittest.mock import Mock, MagicMock, patch, call
 from pathlib import Path
-from dataclasses import 
+from dataclasses import dataclass
 import json
 
 from src.agent import (

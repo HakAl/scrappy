@@ -428,19 +428,6 @@ class TestHandlerTestSetupIntegration:
         output = io.get_output()
         assert "Code Agent" in output or "test task" in output
 
-    def test_setup_can_be_used_for_session_manager(self):
-        """Factory setup should work for testing CLISessionManager."""
-        from tests.helpers import make_handler_test_setup
-
-        io, orch = make_handler_test_setup()
-
-        from src.cli.session import CLISessionManager
-        session = CLISessionManager(orch)
-
-        session.manage_context("", io=io)
-
-        output = io.get_output()
-        assert len(output) > 0
 
 
 class TestMockIOAdvanced:

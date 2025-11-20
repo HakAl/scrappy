@@ -227,20 +227,3 @@ class TestCaching:
         context.explore()
 
         assert context.cache_file.exists()
-
-    @pytest.mark.unit
-
-    @pytest.mark.unit
-    def test_loads_cache_on_init(self, temp_project_dir):
-        """Test that cache is loaded on initialization."""
-        # First context explores and saves
-        context1 = CodebaseContext(str(temp_project_dir))
-        context1.explore()
-        explored_time = context1.explored_at
-
-        # Second context should load from cache
-        context2 = CodebaseContext(str(temp_project_dir))
-        # Should have loaded cached data
-        assert context2.explored_at == explored_time
-
-

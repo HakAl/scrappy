@@ -269,9 +269,6 @@ class ConfigurableTestOrchestrator:
     def get_working_memory_summary(self) -> dict:
         """Get summary of working memory (deprecated, use working_memory.get_summary())."""
         return self.working_memory.get_summary()
-   'cache_exists': False
-
-        }
 
     def get_cache_stats(self) -> dict:
         """Get cache statistics."""
@@ -295,9 +292,6 @@ class ConfigurableTestOrchestrator:
     def clear_cache(self) -> None:
         """Clear the response cache."""
         pass
-   'providers': {}
-
-        }
 
     def status(self) -> dict:
         """Get orchestrator status."""
@@ -348,11 +342,6 @@ class ConfigurableTestOrchestrator:
             'discoveries_restored': 1,
             'conversation_history': []
         }
-   provider=self._provider_name
-
-
-
-        )
 
 
 class MockIO:

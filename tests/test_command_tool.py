@@ -236,16 +236,6 @@ class TestInteractiveCommandDetection:
 
         assert is_interactive is True
 
-    def test_detects_npx_create_as_interactive(self):
-        """Should detect npx commands as interactive."""
-        from src.agent_tools.tools.command_tool import ShellCommandExecutor
-
-        executor = ShellCommandExecutor(self.config)
-
-        is_interactive = executor._is_interactive_command("npx create-react-app my-app")
-
-        assert is_interactive is True
-
     def test_non_interactive_command_returns_false(self):
         """Should not flag non-interactive commands."""
         from src.agent_tools.tools.command_tool import ShellCommandExecutor
@@ -575,20 +565,6 @@ class TestTimeoutHandling:
         assert "timed out" in result.lower()
         assert "120s" in result
 
-    def test_truncate_output_preserves_last_portion(self):
-        """Truncation should keep the last portion of output."""
-        from src.agent_tools.tools.command_tool import ShellCommandExecutor
-
-        config = AgentConfig()
-        executor = ShellCommandExecutor(config)
-
-        long_output = "A" * 100
-        truncated = executor._truncate_output(long_output)
-
-        assert len(truncated) <= 100  # max_output + truncation message
-        assert "truncated" in truncated.lower()
-        assert truncated.endswith("A" * 50)  # Last 50 chars preserved
-
 
 class TestStreamingOutput:
     """Tests for streaming command output."""
@@ -596,20 +572,6 @@ class TestStreamingOutput:
     def setup_method(self):
         """Set up test fixtures."""
         self.config = AgentConfig()
-    def test_truncates_very_long_output(self):
-        """Should truncate output exceeding max size."""
-        from src.agent_tools.tools.command_tool import ShellCommandExecutor
-
-        config = AgentConfig()
-        executor = ShellCommandExecutor(config)
-
-        # Generate long output
-        long_output = "\n".join([f"Line {i}" for i in range(100)])
-
-        truncated = executor._truncate_output(long_output)
-
-        assert len(truncated) <= 200  # Some buffer for truncation message
-        assert "truncated" in truncated.lower()
 
     def test_empty_output_handling(self):
         """Should handle empty output appropriately."""

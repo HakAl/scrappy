@@ -1,8 +1,7 @@
 """
 Comprehensive tests for orchestrator adapter classes.
 
-Tests LLMResponse, NullContext, AgentOrchestratorAdapter,
-SimpleLLMAdapter, and MockOrchestratorAdapter.
+Tests LLMResponse, NullContext, AgentOrchestratorAdapter, and SimpleLLMAdapter.
 """
 
 import pytest
@@ -14,8 +13,6 @@ from src.orchestrator_adapter import (
     ContextProvider,
     OrchestratorAdapter
 )
-# Import test adapters from test helpers module
-from helpers import MockOrchestratorAdapter
 
 
 class TestLLMResponse:

@@ -22,7 +22,7 @@ from src.agent.protocols import (
     ResponseParserProtocol,
 )
 from src.infrastructure import InMemoryFileSystem
-from src.agent.platform_adapter import MockPlatformUtils, 
+from src.agent.platform_adapter import MockPlatformUtils
 from src.agent_config import AgentConfig
 
 

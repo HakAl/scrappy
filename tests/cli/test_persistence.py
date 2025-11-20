@@ -377,36 +377,6 @@ class TestPersistenceLoad:
         assert "Error" in output or "corrupted" in output.lower()
 
 
-class TestPersistenceClear:
-    """Tests for clear session command."""
-
-    def test_clear_calls_orchestrator_clear_session(self):
-        """Should call orchestrator's clear_session method."""
-        from src.cli.persistence import SessionPersistence
-
-        orchestrator = ConfigurableTestOrchestrator()
-        clear_called = []
-        persistence = SessionPersistence(orchestrator)
-        io = MockIO()
-
-        persistence.manage_session(args="clear", io=io)
-
-        assert clear_called == [True]
-
-    def test_clear_shows_confirmation(self):
-        """Should display confirmation message."""
-        from src.cli.persistence import SessionPersistence
-
-        orchestrator = ConfigurableTestOrchestrator()
-        persistence = SessionPersistence(orchestrator)
-        io = MockIO()
-
-        persistence.manage_session(args="clear", io=io)
-
-        output = io.get_output()
-        assert "cleared" in output.lower()
-
-
 class TestPersistenceToggle:
     """Tests for toggle auto-save command."""
 

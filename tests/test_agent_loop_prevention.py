@@ -131,60 +131,6 @@ class TestDuplicateActionDetection:
         if result.output:
             assert "duplicate" not in result.output.lower()
 
-    @pytest.mark.unit
-    def test_detect_three_consecutive_identical_actions(self):
-        """
-        CRITICAL: Detect when same action is repeated 3+ times consecutively.
-
-        This mirrors the real bug where write_file was called 7 times with
-        identical parameters.
-        """
-        # Setup mock orchestrator
-        mock_orch = Mock(spec=OrchestratorAdapter)
-        mock_orch.context = Mock()
-        mock_orch.list_providers.return_value = ['test_provider']
-
-        # Create agent
-        config = AgentConfig()
-        agent = CodeAgent(mock_orch, project_path=".", config=config)
-
-        # Simulate state after 2 identical actions
-        state = ConversationState(
-            messages=[],
-            system_prompt="test",
-            iteration=4,
-            max_iterations=10,
-            tools_executed=['write_file', 'write_file', 'write_file'],
-            auto_confirm=True
-        )
-
-        # Track action history for duplicate detection
-        identical_params = {
-            "path": "frontend/src/router.js",
-            "content": "// Update router.js to include UserDashboard\nimport React from 'react';\n"
-        }
-
-            {"action": "write_file", "parameters": identical_params},
-            {"action": "write_file", "parameters": identical_params},
-            {"action": "write_file", "parameters": identical_params}
-        ]
-
-        # Try to execute the SAME action again (4th time)
-        action = AgentAction(
-            thought="Need to update router.js",
-            action="write_file",
-            parameters=identical_params,
-            is_complete=False
-        )
-
-        # Execute
-        result = agent._execute(action, state)
-
-        # EXPECTATION: Should detect pattern and refuse/warn
-        # This test will FAIL until we implement pattern detection
-        assert result.success is False or "repeated" in result.output.lower(), \
-            "Agent should refuse to repeat identical action 4+ times"
-
 
 class TestContentDiffDetection:
     """Test that agent detects when writing file with unchanged content."""

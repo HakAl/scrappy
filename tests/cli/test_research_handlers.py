@@ -82,7 +82,7 @@ class TestResearchHandlerProtocol:
 
     def test_handler_has_intent_property(self):
         """Handler must expose which intent it handles."""
-        from src.cli.research_handlers.base import 
+        from src.cli.research_handlers.base import ResearchHandler
         from src.cli.research_handlers.file_structure import FileStructureHandler
 
         handler = FileStructureHandler()
@@ -91,7 +91,7 @@ class TestResearchHandlerProtocol:
 
     def test_handler_has_execute_method(self):
         """Handler must have execute method with correct signature."""
-        from src.cli.research_handlers.base import 
+        from src.cli.research_handlers.base import ResearchHandler
         from src.cli.research_handlers.file_structure import FileStructureHandler
 
         handler = FileStructureHandler()
