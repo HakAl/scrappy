@@ -14,48 +14,7 @@ from tests.helpers import MockIO, ConfigurableTestOrchestrator
 class TestCreateCLIFromContext:
     """Test create_cli_from_context factory function."""
 
-    def test_creates_cli_with_all_context_values(self):
-        """Should create CLI instance with all values from context."""
-        from src.cli.utils.cli_factory import create_cli_from_context
 
-        # Create mock Click context with all values
-        ctx = Mock()
-        ctx.obj = {
-            'brain': 'cerebras',
-            'auto_explore': True,
-            'context_aware': False,
-            'verbose_selection': True,
-            'show_providers': True
-        }
-
-        io = MockIO()
-        cli = create_cli_from_context(ctx, io=io)
-
-        # Verify CLI was created with correct brain
-        assert cli.orchestrator.brain == 'cerebras'
-        # Verify CLI has all required components
-        assert cli.orchestrator is not None
-        assert cli.io is io
-        assert hasattr(cli, 'display')
-        assert hasattr(cli, 'session_mgr')
-
-    def test_uses_default_values_when_not_in_context(self):
-        """Should use default values when context doesn't have them."""
-        from src.cli.utils.cli_factory import create_cli_from_context
-
-        ctx = Mock()
-        ctx.obj = {}  # Empty context
-
-        io = MockIO()
-        cli = create_cli_from_context(ctx, io=io)
-
-        # Verify defaults were applied - CLI was created successfully
-        # Note: brain may be None if no providers are available (e.g., in CI)
-        # but the orchestrator should still be created
-        assert cli.orchestrator is not None
-        assert cli.io is io
-        assert hasattr(cli, 'display')
-        assert hasattr(cli, 'session_mgr')
 
     def test_uses_provided_io_interface(self):
         """Should use the provided IO interface."""

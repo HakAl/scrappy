@@ -331,14 +331,6 @@ class TestClickIO:
         assert isinstance(result, str)
         assert "test" in result
 
-    @pytest.mark.unit
-    def test_clickio_has_secho(self):
-        """Test that ClickIO has secho method."""
-        from src.cli.io_interface import ClickIO
-        io = ClickIO()
-
-        assert hasattr(io, 'secho')
-        assert callable(io.secho)
 
 
 class TestIOProtocolUsage:

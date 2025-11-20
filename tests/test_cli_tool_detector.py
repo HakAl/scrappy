@@ -225,9 +225,5 @@ class TestToolDetectorModuleStructure:
     """Tests for the tool_detector module structure."""
 
 
-    def test_needs_tool_support_is_callable(self):
-        """needs_tool_support should be a callable function."""
-        from src.cli.tool_detector import needs_tool_support
-        assert callable(needs_tool_support)
 
 

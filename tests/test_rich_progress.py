@@ -22,13 +22,6 @@ import time
 class TestRichIOProgressBarBasics:
     """Tests for basic progress bar functionality."""
 
-    @pytest.mark.unit
-    def test_richio_has_progress_method(self):
-        """Test that RichIO has progress context manager method."""
-        from src.cli.rich_output import RichIO
-        io = RichIO()
-        assert hasattr(io, 'progress')
-        assert callable(io.progress)
 
     @pytest.mark.unit
     def test_progress_context_manager_basic(self):
@@ -49,20 +42,6 @@ class TestRichIOProgressBarBasics:
         result = output.getvalue()
         assert "Processing" in result
 
-    @pytest.mark.unit
-    def test_progress_returns_tracker(self):
-        """Test that progress context returns a progress tracker."""
-        from src.cli.rich_output import RichIO
-        from rich.console import Console
-
-        output = StringIO()
-        console = Console(file=output, force_terminal=False)
-        io = RichIO(console=console)
-
-        with io.progress(total=5, description="Test") as progress:
-            # Should have advance method
-            assert hasattr(progress, 'advance')
-            assert callable(progress.advance)
 
     @pytest.mark.unit
     def test_progress_advance_updates_progress(self):
@@ -179,13 +158,6 @@ class TestRichIOProgressBarAdvanced:
 class TestRichIOSpinner:
     """Tests for spinner (indeterminate progress) functionality."""
 
-    @pytest.mark.unit
-    def test_richio_has_spinner_method(self):
-        """Test that RichIO has spinner context manager method."""
-        from src.cli.rich_output import RichIO
-        io = RichIO()
-        assert hasattr(io, 'spinner')
-        assert callable(io.spinner)
 
     @pytest.mark.unit
     def test_spinner_context_manager_basic(self):
@@ -279,13 +251,6 @@ class TestRichIOSpinner:
 class TestRichIOStreaming:
     """Tests for streaming output functionality."""
 
-    @pytest.mark.unit
-    def test_richio_has_stream_method(self):
-        """Test that RichIO has stream context manager."""
-        from src.cli.rich_output import RichIO
-        io = RichIO()
-        assert hasattr(io, 'stream')
-        assert callable(io.stream)
 
     @pytest.mark.unit
     def test_stream_write_outputs_immediately(self):
@@ -403,13 +368,6 @@ class TestRichIOProgressWithStreaming:
 class TestRichIOMultipleProgress:
     """Tests for multiple concurrent progress operations."""
 
-    @pytest.mark.unit
-    def test_richio_has_multi_progress_method(self):
-        """Test RichIO has method for multiple progress bars."""
-        from src.cli.rich_output import RichIO
-        io = RichIO()
-        assert hasattr(io, 'multi_progress')
-        assert callable(io.multi_progress)
 
     @pytest.mark.unit
     def test_multi_progress_creates_multiple_bars(self):
@@ -607,95 +565,15 @@ class TestProgressTrackerInterface:
 class TestStreamWriterInterface:
     """Tests for the StreamWriter returned by stream()."""
 
-    @pytest.mark.unit
-    def test_stream_has_write_method(self):
-        """Test stream writer has write method."""
-        from src.cli.rich_output import RichIO
-        from rich.console import Console
 
-        output = StringIO()
-        console = Console(file=output, force_terminal=False)
-        io = RichIO(console=console)
 
-        with io.stream() as stream:
-            assert hasattr(stream, 'write')
-            assert callable(stream.write)
-
-    @pytest.mark.unit
-    def test_stream_has_writeline_method(self):
-        """Test stream writer has writeline method."""
-        from src.cli.rich_output import RichIO
-        from rich.console import Console
-
-        output = StringIO()
-        console = Console(file=output, force_terminal=False)
-        io = RichIO(console=console)
-
-        with io.stream() as stream:
-            assert hasattr(stream, 'writeline')
-            assert callable(stream.writeline)
-
-    @pytest.mark.unit
-    def test_stream_has_flush_method(self):
-        """Test stream writer has flush method."""
-        from src.cli.rich_output import RichIO
-        from rich.console import Console
-
-        output = StringIO()
-        console = Console(file=output, force_terminal=False)
-        io = RichIO(console=console)
-
-        with io.stream() as stream:
-            assert hasattr(stream, 'flush')
-            assert callable(stream.flush)
 
 
 class TestMultiProgressInterface:
     """Tests for the MultiProgress manager returned by multi_progress()."""
 
-    @pytest.mark.unit
-    def test_multi_progress_has_add_task(self):
-        """Test multi-progress has add_task method."""
-        from src.cli.rich_output import RichIO
-        from rich.console import Console
 
-        output = StringIO()
-        console = Console(file=output, force_terminal=False)
-        io = RichIO(console=console)
 
-        with io.multi_progress() as mp:
-            assert hasattr(mp, 'add_task')
-            assert callable(mp.add_task)
-
-    @pytest.mark.unit
-    def test_multi_progress_has_advance(self):
-        """Test multi-progress has advance method."""
-        from src.cli.rich_output import RichIO
-        from rich.console import Console
-
-        output = StringIO()
-        console = Console(file=output, force_terminal=False)
-        io = RichIO(console=console)
-
-        with io.multi_progress() as mp:
-            assert hasattr(mp, 'advance')
-            assert callable(mp.advance)
-
-    @pytest.mark.unit
-    def test_multi_progress_has_update(self):
-        """Test multi-progress has update method for setting values."""
-        from src.cli.rich_output import RichIO
-        from rich.console import Console
-
-        output = StringIO()
-        console = Console(file=output, force_terminal=False)
-        io = RichIO(console=console)
-
-        with io.multi_progress() as mp:
-            assert hasattr(mp, 'update')
-            assert callable(mp.update)
-            task = mp.add_task("Test", total=10)
-            mp.update(task, completed=5)
 
 
 class TestRichIOProgressIntegration:

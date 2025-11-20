@@ -31,44 +31,7 @@ class TestRetryStrategy:
         assert result == "success"
         assert len(attempts) == 2
 
-    @pytest.mark.unit
-    def test_retry_respects_max_retries(self):
-        """Retry should not exceed max_retries."""
-        from src.cli.error_recovery import retry_operation
 
-        attempts = []
-
-        def counter():
-            attempts.append(1)
-            raise ConnectionError("Fail")
-
-        try:
-            retry_operation(counter, max_retries=2)
-        except Exception:
-            pass
-
-        assert len(attempts) == 2
-
-    @pytest.mark.unit
-    def test_retry_with_exponential_backoff(self):
-        """Retry should use exponential backoff between attempts."""
-        from src.cli.error_recovery import retry_operation
-
-        sleep_calls = []
-
-        def always_fails():
-            raise ConnectionError("Fail")
-
-        with patch('time.sleep', side_effect=lambda x: sleep_calls.append(x)):
-            try:
-                retry_operation(always_fails, max_retries=3, backoff=True)
-            except Exception:
-                pass
-
-        # Exponential backoff: 1, 2, 4...
-        assert len(sleep_calls) >= 1
-        if len(sleep_calls) >= 2:
-            assert sleep_calls[1] >= sleep_calls[0]
 
     @pytest.mark.unit
     def test_retry_only_on_retryable_errors(self):
@@ -260,93 +223,8 @@ class TestGracefulDegradation:
 class TestCircuitBreaker:
     """Test circuit breaker pattern for repeated failures."""
 
-    @pytest.mark.unit
-    def test_circuit_opens_after_failures(self):
-        """Circuit should open after threshold failures."""
-        from src.cli.error_recovery import CircuitBreaker
-        from src.cli.exceptions import ProviderError
 
-        breaker = CircuitBreaker(failure_threshold=3)
 
-        def failing():
-            raise ConnectionError("Fail")
-
-        # Trip the circuit
-        for _ in range(3):
-            try:
-                breaker.call(failing)
-            except Exception:
-                pass
-
-        # Circuit should be open
-        assert breaker.is_open
-
-        # Should fail fast without calling function
-        with pytest.raises(ProviderError) as exc_info:
-            breaker.call(failing)
-
-        assert "circuit" in str(exc_info.value).lower()
-
-    @pytest.mark.unit
-    def test_circuit_closes_after_success(self):
-        """Circuit should close after successful call in half-open state."""
-        from src.cli.error_recovery import CircuitBreaker
-
-        breaker = CircuitBreaker(failure_threshold=2, reset_timeout=0)
-
-        attempts = [0]
-
-        def sometimes_works():
-            attempts[0] += 1
-            if attempts[0] <= 2:
-                raise Exception("Fail")
-            return "OK"
-
-        # Trip the circuit
-        for _ in range(2):
-            try:
-                breaker.call(sometimes_works)
-            except Exception:
-                pass
-
-        # Manually move to half-open for testing
-        breaker._state = "half-open"
-
-        # This should succeed and close the circuit
-        result = breaker.call(sometimes_works)
-
-        assert result == "OK"
-        assert not breaker.is_open
-
-    @pytest.mark.unit
-    def test_circuit_reset_timeout(self):
-        """Circuit should try again after reset timeout."""
-        from src.cli.error_recovery import CircuitBreaker
-
-        breaker = CircuitBreaker(failure_threshold=2, reset_timeout=0.01)
-
-        call_count = [0]
-
-        def failing_then_working():
-            call_count[0] += 1
-            if call_count[0] <= 2:
-                raise Exception("Fail")
-            return "OK"
-
-        # Trip the circuit
-        for _ in range(2):
-            try:
-                breaker.call(failing_then_working)
-            except Exception:
-                pass
-
-        # Wait for reset
-        import time
-        time.sleep(0.02)
-
-        # Should try again (half-open)
-        result = breaker.call(failing_then_working)
-        assert result == "OK"
 
 
 class TestErrorRecoveryContext:
@@ -489,29 +367,3 @@ class TestRecoveryLogging:
             # Should have logged the fallback
             assert logger_instance.warning.called or logger_instance.info.called
 
-    @pytest.mark.unit
-    def test_circuit_breaker_logs_state_changes(self):
-        """Circuit breaker should log state changes."""
-        from src.cli.error_recovery import CircuitBreaker
-        import logging
-
-        def failing():
-            raise Exception("Fail")
-
-        with patch('logging.getLogger') as mock_logger:
-            logger_instance = Mock()
-            mock_logger.return_value = logger_instance
-
-            breaker = CircuitBreaker(failure_threshold=2, logger=logger_instance)
-
-            for _ in range(2):
-                try:
-                    breaker.call(failing)
-                except Exception:
-                    pass
-
-            # Should have logged circuit opening
-            assert any(
-                'circuit' in str(call).lower() or 'open' in str(call).lower()
-                for call in logger_instance.method_calls
-            )

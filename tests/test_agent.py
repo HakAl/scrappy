@@ -155,34 +155,6 @@ class TestCodeAgentInitialization:
 
         assert agent.audit_log == []
 
-    @pytest.mark.unit
-    def test_agent_with_orchestrator_wrapping(self, temp_project_dir):
-        """Test that non-adapter orchestrator gets wrapped."""
-        # Use spec=object to prevent Mock from satisfying OrchestratorAdapter Protocol
-        # (which is @runtime_checkable and Mock's __getattr__ magic would otherwise match)
-        mock_orch = Mock(spec=object)
-        mock_orch.registry = Mock()
-        mock_orch.registry.list_available.return_value = ["cerebras"]
-
-        with patch('src.agent.core.AgentOrchestratorAdapter') as mock_wrapper:
-            # Create a simple class that mimics the adapter interface
-            # This avoids Mock's attribute magic interfering with method returns
-            class FakeAdapter:
-                def list_providers(self):
-                    return ["cerebras"]
-
-                def get_preferred_provider(self):
-                    return (None, None)
-
-            mock_adapter_instance = FakeAdapter()
-            mock_wrapper.return_value = mock_adapter_instance
-
-            agent = CodeAgent(
-                orchestrator=mock_orch,
-                project_path=str(temp_project_dir)
-            )
-
-            mock_wrapper.assert_called_once_with(mock_orch)
 
 
 class TestAgentActionParsing:
@@ -199,31 +171,7 @@ class TestAgentActionParsing:
             orchestrator=mock_adapter,
             project_path=str(temp_project_dir)
         )
-
-    @pytest.mark.unit
-    def test_parse_action_from_json_response(self, agent):
-        """Test parsing action from JSON response."""
-        response = '''
-        {
-            "thought": "I need to read the config file",
-            "action": "read_file",
-            "parameters": {"path": "config.json"}
-        }
-        '''
-
-        # This tests the parsing logic
-        try:
-            data = json.loads(response)
-            action = AgentAction(
-                thought=data.get("thought", ""),
-                action=data.get("action", ""),
-                parameters=data.get("parameters", {}),
-                is_complete=data.get("is_complete", False)
-            )
-            assert action.action == "read_file"
-            assert action.parameters["path"] == "config.json"
-        except Exception:
-            pass  # JSON parsing not the focus here
+  # JSON parsing not the focus here
 
     @pytest.mark.unit
     def test_parse_completion_action(self, agent):

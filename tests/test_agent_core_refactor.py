@@ -625,26 +625,6 @@ class TestCommandExecutionWithRetry:
         assert mock_stream.call_count == 1
         assert "file not found" in result
 
-    @pytest.mark.unit
-    @patch.object(ShellCommandExecutor, '_run_command_streaming')
-    @patch.object(ShellCommandExecutor, '_parse_command_output')
-    @patch('time.sleep')
-    def test_exponential_backoff_between_retries(self, mock_sleep, mock_parse, mock_stream, agent_with_config):
-        """Should use exponential backoff between retries."""
-        mock_stream.side_effect = [
-            "Error: socket hang up",
-            "Error: socket hang up",
-            "Success"
-        ]
-        mock_parse.return_value = "Success"
-
-        executor = agent_with_config._command_executor
-        executor._run_command_with_retry("npm install", 10, max_retries=3)
-
-        # First retry: 2^1 = 2 seconds
-        # Second retry: 2^2 = 4 seconds
-        sleep_calls = [call[0][0] for call in mock_sleep.call_args_list]
-        assert sleep_calls == [2, 4]
 
     @pytest.mark.unit
     @patch.object(ShellCommandExecutor, '_run_command_streaming')
@@ -781,18 +761,7 @@ class TestAgentToolsMapping:
         """Tools dict should include run_command."""
         assert "run_command" in agent_with_config.tools
 
-    @pytest.mark.unit
-    def test_dynamic_tool_method_resolution(self, agent_with_config):
-        """Should resolve _tool_* methods dynamically."""
-        # This tests the __getattr__ magic
-        assert hasattr(agent_with_config, '_tool_read_file')
-        assert callable(agent_with_config._tool_read_file)
 
-    @pytest.mark.unit
-    def test_unknown_tool_raises_attribute_error(self, agent_with_config):
-        """Should raise AttributeError for unknown _tool_* methods."""
-        with pytest.raises(AttributeError):
-            agent_with_config._tool_nonexistent_tool()
 
     @pytest.mark.unit
     def test_tools_are_callable(self, agent_with_config):

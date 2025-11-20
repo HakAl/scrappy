@@ -234,20 +234,5 @@ class TestDefaultsValueRanges:
 class TestAllDefaultsExport:
     """Tests for convenient exports."""
 
-    def test_all_temperatures_dict_exists(self):
-        """TEMPERATURES dict should provide all temperature values."""
-        from src.cli.config.defaults import TEMPERATURES
-        assert TEMPERATURES is not None
-        assert isinstance(TEMPERATURES, dict)
-        assert 'low' in TEMPERATURES
-        assert 'default' in TEMPERATURES
 
 
-    def test_all_separator_widths_dict_exists(self):
-        """SEPARATOR_WIDTHS dict should provide all separator widths."""
-        from src.cli.config.defaults import SEPARATOR_WIDTHS
-        assert SEPARATOR_WIDTHS is not None
-        assert isinstance(SEPARATOR_WIDTHS, dict)
-        assert 'narrow' in SEPARATOR_WIDTHS
-        assert 'standard' in SEPARATOR_WIDTHS
-        assert 'wide' in SEPARATOR_WIDTHS

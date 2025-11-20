@@ -72,14 +72,6 @@ class TestContextCacheBasics:
 
         assert not cache_file.exists()
 
-    @pytest.mark.unit
-    def test_clear_nonexistent_no_error(self, tmp_path):
-        """clear() handles nonexistent file gracefully."""
-        cache_file = tmp_path / "nonexistent.json"
-
-        cache = ContextCache()
-        # Should not raise
-        cache.clear(cache_file)
 
 
 class TestCacheRoundTrip:

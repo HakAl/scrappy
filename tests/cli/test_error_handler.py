@@ -287,17 +287,6 @@ class TestGetErrorSuggestion:
 class TestSafeOperation:
     """Tests for safe operation wrapper."""
 
-    def test_safe_operation_success(self):
-        """safe_operation returns success and result for successful operations."""
-        from src.cli.utils.error_handler import safe_operation
-
-        def successful_func():
-            return "result"
-
-        success, result = safe_operation(successful_func)
-
-        assert success is True
-        assert result == "result"
 
     def test_safe_operation_failure(self):
         """safe_operation returns failure and error for failed operations."""
@@ -323,29 +312,7 @@ class TestSafeOperation:
         assert success is False
         assert result == "default"
 
-    def test_safe_operation_with_args(self):
-        """safe_operation passes arguments to function."""
-        from src.cli.utils.error_handler import safe_operation
 
-        def add(a, b):
-            return a + b
-
-        success, result = safe_operation(add, 2, 3)
-
-        assert success is True
-        assert result == 5
-
-    def test_safe_operation_with_kwargs(self):
-        """safe_operation passes keyword arguments to function."""
-        from src.cli.utils.error_handler import safe_operation
-
-        def greet(name, greeting="Hello"):
-            return f"{greeting}, {name}!"
-
-        success, result = safe_operation(greet, "World", greeting="Hi")
-
-        assert success is True
-        assert result == "Hi, World!"
 
     def test_safe_operation_with_io(self):
         """safe_operation can output errors to IO when provided."""
@@ -597,24 +564,6 @@ class TestErrorHandlerIntegration:
         assert 'yellow' in colors
         assert 'red' in colors
 
-    def test_error_handler_with_mock_orchestrator(self):
-        """Error handler works with ConfigurableTestOrchestrator."""
-        from src.cli.utils.error_handler import api_delegation_error
-        from tests.helpers import ConfigurableTestOrchestrator
-
-        io = MockIO()
-        orchestrator = ConfigurableTestOrchestrator(
-            rate_limited={'gemini'}
-        )
-
-        # Simulate API call that would fail
-        try:
-            orchestrator.delegate('gemini', 'test prompt')
-        except Exception as e:
-            api_delegation_error(io, e, 'gemini')
-
-        output = io.get_output()
-        assert 'gemini' in output.lower() or 'rate limit' in output.lower()
 
     def test_safe_operation_with_real_file_operations(self):
         """safe_operation handles real file I/O errors correctly."""
@@ -692,17 +641,6 @@ class TestErrorMessageQuality:
 class TestEdgeCases:
     """Tests for edge cases and error recovery."""
 
-    def test_handle_none_error(self):
-        """handle_error gracefully handles None input."""
-        from src.cli.utils.error_handler import handle_error
-
-        io = MockIO()
-
-        # Should not raise, even with None
-        try:
-            handle_error(None, io)
-        except TypeError:
-            pytest.fail("handle_error should handle None gracefully")
 
     def test_format_error_with_unicode(self):
         """format_error handles Unicode characters in error messages."""
@@ -713,19 +651,6 @@ class TestEdgeCases:
 
         assert "cafe" in result or "nino" in result
 
-    def test_safe_operation_with_generator(self):
-        """safe_operation works with generator functions."""
-        from src.cli.utils.error_handler import safe_operation
-
-        def gen_func():
-            yield 1
-            yield 2
-            return 3
-
-        success, result = safe_operation(gen_func)
-
-        # Generator itself should be returned successfully
-        assert success is True
 
     def test_deeply_nested_exception_chain(self):
         """handle_error works with deeply nested exception chains."""

@@ -418,20 +418,5 @@ class TestCachePersistence:
         # File should exist after put
         assert cache_file.exists()
 
-    @pytest.mark.unit
-    def test_cache_loads_from_file(self, tmp_path):
-        """Test that cache loads from existing file."""
-        cache_file = tmp_path / "test_cache.json"
-
-        # Create cache and save data
-        cache1 = ResponseCache(cache_file=str(cache_file))
-        response = LLMResponse("persisted", "model", "provider")
-        cache1.put(response, "prompt", "model")
-
-        # Create new cache instance with same file
-        cache2 = ResponseCache(cache_file=str(cache_file))
-
-        # Should load the cached entry
-        result = cache2.get("provider", "prompt", model="model")
         # Note: This might fail if entries expired during test
         # The implementation cleans expired entries on load

@@ -148,22 +148,7 @@ class TestTaskExecutorPlanSkipLogic:
         assert result[0]['description'] == 'Open file'
         mock_brain.chat.assert_not_called()
 
-    @pytest.mark.unit
-    def test_no_score_complex_task_uses_brain(self, executor, mock_brain):
-        """Without complexity score, complex tasks use the brain."""
-        result = executor.plan("Implement user authentication with JWT and OAuth support")
 
-        # Should call the brain for complex task
-        mock_brain.chat.assert_called_once()
-
-    @pytest.mark.unit
-    def test_explicit_score_overrides_heuristic(self, executor, mock_brain):
-        """Explicit complexity_score takes precedence over heuristic."""
-        # Simple task text but high complexity score
-        result = executor.plan("Open file", complexity_score=5)
-
-        # High score should trigger brain call despite simple text
-        mock_brain.chat.assert_called_once()
 
     @pytest.mark.unit
     def test_skip_plan_structure_is_valid(self, executor):

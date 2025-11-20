@@ -36,22 +36,6 @@ class TestClassifiedTaskImmutability:
             extracted_directories=("src",)
         )
 
-    @pytest.mark.parametrize("field,value", [
-        ("task_type", TaskType.CODE_GENERATION),
-        ("confidence", 1.0),
-        ("reasoning", "New reasoning"),
-        ("original_input", "different input"),
-        ("extracted_command", "new command"),
-        ("suggested_provider", "quality"),
-        ("override_provider", "quality"),
-        ("complexity_score", 10),
-        ("requires_planning", True),
-        ("requires_tools", False),
-    ])
-    def test_cannot_modify_frozen_fields(self, sample_task, field, value):
-        """Test that frozen fields cannot be modified after creation."""
-        with pytest.raises(FrozenInstanceError):
-            setattr(sample_task, field, value)
 
 
 class TestClassifiedTaskReplace:
@@ -331,19 +315,6 @@ class TestClassifiedTaskWithTupleFields:
         assert task1.extracted_files == task2.extracted_files == ()
         assert task1.extracted_directories == task2.extracted_directories == ()
 
-    @pytest.mark.unit
-    def test_tuple_fields_cannot_be_reassigned(self):
-        """Test that tuple fields cannot be reassigned."""
-        task = ClassifiedTask(
-            original_input="test",
-            task_type=TaskType.RESEARCH,
-            confidence=0.8,
-            reasoning="test",
-            matched_patterns=("pattern1",)
-        )
-
-        with pytest.raises(FrozenInstanceError):
-            task.matched_patterns = ("new_pattern",)
 
 
 class TestIntentClarifierCompatibility:

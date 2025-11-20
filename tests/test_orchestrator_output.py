@@ -297,19 +297,6 @@ class TestCapturingOutput:
 class TestOutputEdgeCases:
     """Test edge cases across all output implementations."""
 
-    @pytest.mark.parametrize("output_class", [ConsoleOutput, NullOutput, CapturingOutput])
-    def test_none_message_handling(self, output_class):
-        """All implementations should handle None gracefully (if passed)."""
-        output = output_class()
-        # These should not raise exceptions
-        # Note: Protocol specifies str, but implementations should be robust
-        try:
-            output.info("")
-            output.warn("")
-            output.error("")
-            output.success("")
-        except Exception as e:
-            pytest.fail(f"{output_class.__name__} raised exception on empty string: {e}")
 
     @pytest.mark.parametrize("output_class", [ConsoleOutput, NullOutput, CapturingOutput])
     def test_long_message(self, output_class, capsys):

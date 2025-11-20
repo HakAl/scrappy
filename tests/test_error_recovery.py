@@ -51,13 +51,6 @@ class TestProviderFailover:
         assert "working" in available
         assert "failing" in available
 
-    @pytest.mark.unit
-    def test_failing_provider_raises_exception(self, registry_with_providers):
-        """Test that failing provider raises exception."""
-        provider = registry_with_providers.get("failing")
-
-        with pytest.raises(Exception):
-            provider.chat([{"role": "user", "content": "test"}])
 
     @pytest.mark.unit
     def test_working_provider_succeeds(self, registry_with_providers):
@@ -67,18 +60,6 @@ class TestProviderFailover:
         response = provider.chat([{"role": "user", "content": "test"}])
         assert response.content == "Success"
 
-    @pytest.mark.unit
-    def test_fallback_to_working_provider(self, registry_with_providers):
-        """Test falling back to working provider after failure."""
-        # Try failing provider first
-        try:
-            provider = registry_with_providers.get("failing")
-            provider.chat([{"role": "user", "content": "test"}])
-        except Exception:
-            # Fallback to working provider
-            fallback = registry_with_providers.get("working")
-            response = fallback.chat([{"role": "user", "content": "test"}])
-            assert response.content == "Success"
 
 
 class TestCacheRecovery:

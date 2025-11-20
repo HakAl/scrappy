@@ -552,15 +552,6 @@ class TestEdgeCases:
         error = CLIError("Error: invalid character")
         assert "invalid character" in str(error)
 
-    @pytest.mark.unit
-    def test_exception_with_very_long_message(self):
-        """Exception should handle very long messages."""
-        from src.cli.exceptions import CLIError
-
-        long_message = "x" * 10000
-        error = CLIError(long_message)
-        # Should not raise
-        str(error)
 
     @pytest.mark.unit
     def test_exception_context_with_non_serializable_value(self):

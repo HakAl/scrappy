@@ -270,20 +270,6 @@ class TestContextManagerEdgeCases:
 class TestContextManagerProtocolCompliance:
     """Test that ContextManager implements ContextManagerProtocol."""
 
-    def test_implements_protocol_methods(self, tmp_path):
-        """ContextManager should implement all protocol methods."""
-        from src.orchestrator.manager_protocols import ContextManagerProtocol
-
-        context = CodebaseContext(str(tmp_path))
-        manager = ContextManager(context)
-
-        # Assert - Check protocol compliance
-        assert isinstance(manager, ContextManagerProtocol)
-        assert hasattr(manager, 'context')
-        assert hasattr(manager, 'auto_explore')
-        assert hasattr(manager, 'explore_project')
-        assert callable(manager.auto_explore)
-        assert callable(manager.explore_project)
 
 
 class TestContextManagerDependencyInjection:

@@ -122,10 +122,6 @@ class TestPathValidatorIsFileCheck:
 class TestPathValidatorCombinedChecks:
     """Tests for combined validation flags."""
 
-    def test_cannot_be_both_file_and_dir(self):
-        """Should raise error if both must_be_file and must_be_dir are True."""
-        with pytest.raises((ValueError, TypeError)):
-            validate_path("some/path", must_be_file=True, must_be_dir=True)
 
     def test_existing_file_full_validation(self, tmp_path):
         """Full validation of existing file should pass all checks."""

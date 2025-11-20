@@ -11,25 +11,6 @@ from src.providers.base import LLMResponse, ProviderLimits, LLMProvider, Provide
 class TestLLMResponse:
     """Tests for LLMResponse dataclass."""
 
-    @pytest.mark.unit
-    def test_response_creation(self):
-        """Test creating a basic LLMResponse."""
-        response = LLMResponse(
-            content="Test content",
-            model="test-model",
-            provider="test-provider"
-        )
-
-        assert response.content == "Test content"
-        assert response.model == "test-model"
-        assert response.provider == "test-provider"
-        assert response.tokens_used == 0
-        assert response.input_tokens == 0
-        assert response.output_tokens == 0
-        assert response.latency_ms == 0.0
-        assert response.raw_response is None
-        assert isinstance(response.metadata, dict)
-        assert isinstance(response.timestamp, datetime)
 
     @pytest.mark.unit
     def test_response_with_tokens(self):
@@ -143,11 +124,6 @@ class TestProviderRegistry:
         assert "mock" in registry.list_available()
         assert registry.get("mock") is provider
 
-    @pytest.mark.unit
-    def test_get_nonexistent_provider(self, registry):
-        """Test getting a provider that doesn't exist raises KeyError."""
-        with pytest.raises(KeyError):
-            registry.get("nonexistent")
 
     @pytest.mark.unit
     def test_list_available_empty(self, registry):

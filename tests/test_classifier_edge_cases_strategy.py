@@ -140,10 +140,6 @@ class TestExtensibilityLimitations:
         # Current: might not classify as DIRECT_COMMAND
         # With strategy: could register new command patterns dynamically
 
-    def test_domain_specific_commands(self, classifier):
-        """Domain-specific commands hard to add with regex."""
-        # Generic command pattern
-        result = classifier.classify("terraform apply")
         # Might not recognize terraform without explicit regex
         # Strategy pattern could allow plugins for domain-specific detection
 
@@ -213,18 +209,10 @@ class TestComplexRealWorldScenarios:
         # Current regex doesn't handle negation well
         # Might still classify as CODE_GENERATION due to "create" pattern
 
-    def test_correction_or_modification(self, classifier):
-        """Corrections build on previous context."""
-        result = classifier.classify("actually, make it async instead")
         # Without context, hard to classify
         # Might default to RESEARCH or low-confidence CODE_GENERATION
         # Strategy pattern could maintain conversation context
 
-    def test_natural_language_with_code(self, classifier):
-        """Natural language mixed with code snippets."""
-        result = classifier.classify(
-            "the function should return user.get('name', 'Anonymous')"
-        )
         # This is describing behavior, likely CODE_GENERATION
         # But no explicit "create/write" verb
         # Current regex might miss this
@@ -249,9 +237,6 @@ class TestFallbackBehaviorEdgeCases:
         assert result.task_type == TaskType.RESEARCH
         assert result.confidence == 0.5
 
-    def test_code_snippet_without_context(self, classifier):
-        """Raw code snippet without instruction."""
-        result = classifier.classify("def foo(): pass")
         # Could be asking what this does (RESEARCH)
         # Or could be requesting to create it (CODE_GENERATION)
         # Without context, unclear
@@ -305,15 +290,9 @@ class TestMetadataExtractionEdgeCases:
     def classifier(self):
         return TaskClassifier()
 
-    def test_file_with_spaces(self, classifier):
-        """Filenames with spaces (quoted or not)."""
-        result = classifier.classify('edit "my file.py"')
         # Should extract file even with quotes
         # Current regex might not handle quotes
 
-    def test_url_not_file(self, classifier):
-        """URLs should not be extracted as files."""
-        result = classifier.classify("fetch data from http://api.example.com/data.json")
         # .json in URL should not be extracted as local file
         # Current implementation might extract "data.json"
 
@@ -367,9 +346,5 @@ class TestStrategyPatternMotivation:
         assert result.task_type == TaskType.DIRECT_COMMAND
         # No need to check other patterns after direct command match
 
-    def test_would_benefit_from_custom_strategies(self, classifier):
-        """Domain-specific projects might need custom classification."""
-        # Example: ML project might want special handling for training commands
-        result = classifier.classify("train model on dataset.csv")
         # Current: might classify as CODE_GENERATION or RESEARCH
         # Custom strategy: could recognize as ML_TRAINING task type

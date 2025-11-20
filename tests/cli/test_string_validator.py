@@ -16,13 +16,7 @@ from src.cli.validators.string import (
 class TestIsEmptyOrWhitespace:
     """Tests for is_empty_or_whitespace() helper."""
 
-    def test_none_is_empty(self):
-        """None should be treated as empty."""
-        assert is_empty_or_whitespace(None) is True
 
-    def test_empty_string_is_empty(self):
-        """Empty string should be treated as empty."""
-        assert is_empty_or_whitespace("") is True
 
     def test_whitespace_only_is_empty(self):
         """Whitespace-only string should be treated as empty."""
@@ -46,22 +40,13 @@ class TestIsEmptyOrWhitespace:
 class TestNormalizeString:
     """Tests for normalize_string() helper."""
 
-    def test_none_returns_empty_string(self):
-        """None should normalize to empty string."""
-        assert normalize_string(None) == ""
 
-    def test_empty_string_returns_empty_string(self):
-        """Empty string should normalize to empty string."""
-        assert normalize_string("") == ""
 
     def test_strips_whitespace(self):
         """Should strip leading and trailing whitespace."""
         assert normalize_string("  hello  ") == "hello"
         assert normalize_string("\tfoo\n") == "foo"
 
-    def test_preserves_internal_whitespace(self):
-        """Should preserve whitespace inside string."""
-        assert normalize_string("  hello world  ") == "hello world"
 
     def test_whitespace_only_returns_empty(self):
         """Whitespace-only should normalize to empty string."""

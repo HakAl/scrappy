@@ -24,50 +24,6 @@ def json_only_config():
     )
 
 
-@pytest.mark.unit
-def test_agent_works_with_json_only_provider(json_only_config):
-    """Agent should work correctly with providers that only support JSON (no native tools)."""
-    # Create orchestrator with JSON-only provider
-    orch = ConfigurableTestOrchestrator(
-        available_providers=['gemini'],  # Gemini doesn't support native tools
-        response_content='{"thought": "Analyzing task", "action": "complete", "is_complete": true, "result": "Task done"}'
-    )
-
-    # Create agent
-    agent = CodeAgent(
-        orchestrator=orch,
-        project_path='.',
-        config=json_only_config
-    )
-
-    # Agent should use UnifiedResponseParser (auto-detects format)
-    assert isinstance(agent._response_parser, UnifiedResponseParser)
-
-    # Create conversation state
-    state = ConversationState(
-        messages=[
-            {'role': 'system', 'content': 'You are a helpful assistant'},
-            {'role': 'user', 'content': 'Complete the task'}
-        ],
-        system_prompt='You are a helpful assistant',
-        iteration=1
-    )
-
-    # Agent should successfully think using JSON format
-    thought = agent._think(state)
-
-    # Should have raw_response (JSON text)
-    assert thought.raw_response is not None
-    assert isinstance(thought.raw_response, str)
-    assert 'complete' in thought.raw_response.lower()
-
-    # Should NOT have llm_response with tool_calls (JSON mode)
-    assert thought.llm_response is None or thought.llm_response.tool_calls is None
-
-    # Plan action should parse JSON correctly
-    action = agent._plan_action(thought)
-    assert action.action == 'complete'
-    assert action.is_complete is True
 
 
 @pytest.mark.unit

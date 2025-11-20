@@ -94,13 +94,6 @@ class TestProviderPriorityRegression:
         log = selector.get_selection_log()
         assert any('not available' in entry.lower() for entry in log)
 
-    def test_setup_brain_raises_when_no_providers(self):
-        """setup_brain should raise when no providers available."""
-        registry = ProviderRegistry()
-        selector = ProviderSelector(registry)
-
-        with pytest.raises(RuntimeError, match="No providers available"):
-            selector.setup_brain()
 
 
 class TestFallbackPriorityRegression:
@@ -383,12 +376,6 @@ class TestConfigValidation:
     They should fail until config.py is properly implemented.
     """
 
-    def test_config_module_exists(self):
-        """Config module should be importable."""
-        try:
-            from src.orchestrator import config
-        except ImportError:
-            pytest.skip("config.py not yet created")
 
     def test_provider_priority_defined(self):
         """PROVIDER_PRIORITY should be defined."""

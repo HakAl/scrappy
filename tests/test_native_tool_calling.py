@@ -390,27 +390,6 @@ class TestNativeToolCallParser:
 class TestNativeToolCallParserInterface:
     """Tests for NativeToolCallParser interface compatibility."""
 
-    @pytest.mark.unit
 
-    @pytest.mark.unit
-    def test_parser_has_parse_response_method(self):
-        """NativeToolCallParser has parse_response method for LLMResponse."""
-        from src.agent.response_parser import NativeToolCallParser
-
-        parser = NativeToolCallParser()
-
-        assert hasattr(parser, 'parse_response')
-        assert callable(parser.parse_response)
-
-    @pytest.mark.unit
-    def test_parser_has_parse_method_for_backward_compat(self):
-        """NativeToolCallParser has parse(str) method for backward compat."""
-        from src.agent.response_parser import NativeToolCallParser
-
-        parser = NativeToolCallParser()
-
-        # Should still have parse() method from base class
-        assert hasattr(parser, 'parse')
-        assert callable(parser.parse)
 
 

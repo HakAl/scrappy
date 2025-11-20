@@ -325,17 +325,3 @@ class TestCacheManagerCaseInsensitivity:
 class TestCacheManagerDefaultIO:
     """Tests for default IO behavior."""
 
-    def test_uses_rich_io_when_io_not_provided(self):
-        """Should use RichIO as default when io parameter is None."""
-        from src.cli.cache_manager import CacheManager
-
-        orchestrator = ConfigurableTestOrchestrator()
-        manager = CacheManager(orchestrator)
-
-        try:
-            with patch('src.cli.cache_manager.RichIO') as mock_rich:
-                mock_io = MockIO()
-                mock_rich.return_value = mock_io
-                manager.manage_cache(args="", io=None)
-        except ImportError:
-            pass

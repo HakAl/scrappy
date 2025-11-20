@@ -555,20 +555,6 @@ class TestPersistenceCaseInsensitivity:
 class TestPersistenceDefaultIO:
     """Tests for default IO behavior."""
 
-    def test_uses_rich_io_when_io_not_provided(self):
-        """Should use RichIO as default when io parameter is None."""
-        from src.cli.persistence import SessionPersistence
-
-        orchestrator = ConfigurableTestOrchestrator()
-        persistence = SessionPersistence(orchestrator)
-
-        try:
-            with patch('src.cli.persistence.RichIO') as mock_rich:
-                mock_io = MockIO()
-                mock_rich.return_value = mock_io
-                persistence.manage_session(args="", io=None)
-        except ImportError:
-            pass
 
 
 class TestPersistenceDefaultParameters:

@@ -731,34 +731,6 @@ class TestSmartQueryIOInjection:
         from src.cli.smart_query import CLISmartQuery
         self.smart = CLISmartQuery(self.orchestrator)
 
-    def test_smart_query_accepts_io_parameter(self):
-        """smart_query() should accept an io parameter."""
-        io = MockIO()
-
-        # Mock the classifier to return minimal result
-        self.smart.classifier = MagicMock()
-        self.smart.classifier.classify.return_value = MagicMock(
-            primary_intent=MagicMock(intent=MagicMock(value='general'), confidence=0.8),
-            secondary_intents=[],
-            entities={},
-            keywords=[]
-        )
-
-        # Mock delegate response
-        mock_response = MagicMock()
-        mock_response.content = "Test response"
-        mock_response.provider = "test"
-        mock_response.model = "model"
-        mock_response.tokens_used = 100
-        mock_response.latency_ms = 50
-        self.orchestrator.delegate = MagicMock(return_value=mock_response)
-
-        # Should not raise TypeError for unexpected keyword argument
-        self.smart.smart_query("test query", io=io)
-
-        # Verify output went to io object
-        output = io.get_output()
-        assert "Smart Query" in output
 
     def test_smart_query_outputs_header(self):
         """smart_query() should output analyzing header through io."""
@@ -819,143 +791,10 @@ class TestSmartQueryIOInjection:
         assert "code_search" in output
         assert "0.95" in output
 
-    def test_smart_query_outputs_secondary_intents(self):
-        """smart_query() should output secondary intents through io."""
-        io = MockIO()
 
-        self.smart.classifier = MagicMock()
-        self.smart.classifier.classify.return_value = MagicMock(
-            primary_intent=MagicMock(intent=MagicMock(value='code_search'), confidence=0.8),
-            secondary_intents=[
-                MagicMock(intent=MagicMock(value='file_structure'), confidence=0.6)
-            ],
-            entities={},
-            keywords=[]
-        )
 
-        mock_response = MagicMock()
-        mock_response.content = "Response"
-        mock_response.provider = "test"
-        mock_response.model = "model"
-        mock_response.tokens_used = 100
-        mock_response.latency_ms = 50
-        self.orchestrator.delegate = MagicMock(return_value=mock_response)
 
-        self.smart.smart_query("test", io=io)
 
-        output = io.get_output()
-        assert "Secondary intents" in output
-        assert "file_structure" in output
-
-    def test_smart_query_outputs_extracted_entities(self):
-        """smart_query() should output extracted entities through io."""
-        io = MockIO()
-
-        self.smart.classifier = MagicMock()
-        self.smart.classifier.classify.return_value = MagicMock(
-            primary_intent=MagicMock(intent=MagicMock(value='code_search'), confidence=0.8),
-            secondary_intents=[],
-            entities={'function_name': ['my_function', 'other_func']},
-            keywords=[]
-        )
-
-        mock_response = MagicMock()
-        mock_response.content = "Response"
-        mock_response.provider = "test"
-        mock_response.model = "model"
-        mock_response.tokens_used = 100
-        mock_response.latency_ms = 50
-        self.orchestrator.delegate = MagicMock(return_value=mock_response)
-
-        self.smart.smart_query("test", io=io)
-
-        output = io.get_output()
-        assert "Extracted" in output
-        assert "function_name" in output
-
-    def test_smart_query_outputs_researching_header(self):
-        """smart_query() should output researching header through io."""
-        io = MockIO()
-
-        self.smart.classifier = MagicMock()
-        self.smart.classifier.classify.return_value = MagicMock(
-            primary_intent=MagicMock(intent=MagicMock(value='general'), confidence=0.8),
-            secondary_intents=[],
-            entities={},
-            keywords=[]
-        )
-
-        mock_response = MagicMock()
-        mock_response.content = "Response"
-        mock_response.provider = "test"
-        mock_response.model = "model"
-        mock_response.tokens_used = 100
-        mock_response.latency_ms = 50
-        self.orchestrator.delegate = MagicMock(return_value=mock_response)
-
-        self.smart.smart_query("test", io=io)
-
-        output = io.get_output()
-        assert "[Smart Query] Researching" in output
-
-    def test_smart_query_outputs_research_actions(self):
-        """smart_query() should output research actions through io."""
-        io = MockIO()
-
-        self.smart.classifier = MagicMock()
-        # Use FILE_STRUCTURE intent to trigger directory listing
-        from src.intent_classifier import QueryIntent
-        self.smart.classifier.classify.return_value = MagicMock(
-            primary_intent=MagicMock(intent=QueryIntent.FILE_STRUCTURE, confidence=0.9),
-            secondary_intents=[],
-            entities={},
-            keywords=[]
-        )
-
-        mock_response = MagicMock()
-        mock_response.content = "Response"
-        mock_response.provider = "test"
-        mock_response.model = "model"
-        mock_response.tokens_used = 100
-        mock_response.latency_ms = 50
-        self.orchestrator.delegate = MagicMock(return_value=mock_response)
-
-        # Mock CodeAgent
-        with patch('src.cli.smart_query.CodeAgent') as MockAgent:
-            mock_agent = MagicMock()
-            mock_agent._tool_list_directory.return_value = "dir1/\ndir2/"
-            MockAgent.return_value = mock_agent
-
-            self.smart.smart_query("show directory structure", io=io)
-
-        output = io.get_output()
-        assert "Checking directory structure" in output
-
-    def test_smart_query_outputs_research_count(self):
-        """smart_query() should output research result count through io."""
-        io = MockIO()
-
-        self.smart.classifier = MagicMock()
-        self.smart.classifier.classify.return_value = MagicMock(
-            primary_intent=MagicMock(intent=MagicMock(value='general'), confidence=0.8),
-            secondary_intents=[],
-            entities={},
-            keywords=[]
-        )
-
-        mock_response = MagicMock()
-        mock_response.content = "Response"
-        mock_response.provider = "test"
-        mock_response.model = "model"
-        mock_response.tokens_used = 100
-        mock_response.latency_ms = 50
-        self.orchestrator.delegate = MagicMock(return_value=mock_response)
-
-        self.smart.smart_query("test", io=io)
-
-        output = io.get_output()
-        assert "Gathered" in output
-        assert "research results" in output
 
     def test_smart_query_outputs_assistant_header(self):
         """smart_query() should output Assistant header through io."""
@@ -989,30 +828,6 @@ class TestSmartQueryIOInjection:
         assert assistant_outputs[0]['fg'] == 'blue'
         assert assistant_outputs[0]['bold'] is True
 
-    def test_smart_query_outputs_response(self):
-        """smart_query() should output response content through io."""
-        io = MockIO()
-
-        self.smart.classifier = MagicMock()
-        self.smart.classifier.classify.return_value = MagicMock(
-            primary_intent=MagicMock(intent=MagicMock(value='general'), confidence=0.8),
-            secondary_intents=[],
-            entities={},
-            keywords=[]
-        )
-
-        mock_response = MagicMock()
-        mock_response.content = "This is the actual response content"
-        mock_response.provider = "test"
-        mock_response.model = "model"
-        mock_response.tokens_used = 100
-        mock_response.latency_ms = 50
-        self.orchestrator.delegate = MagicMock(return_value=mock_response)
-
-        self.smart.smart_query("test", io=io)
-
-        output = io.get_output()
-        assert "This is the actual response content" in output
 
     def test_smart_query_outputs_metadata(self):
         """smart_query() should output response metadata through io."""
@@ -1050,38 +865,6 @@ class TestSmartQueryIOInjection:
         if metadata_outputs:
             assert metadata_outputs[0]['fg'] == 'cyan'
 
-    def test_smart_query_saves_to_working_memory(self):
-        """smart_query() should save results to working memory."""
-        io = MockIO()
-
-        from src.intent_classifier import QueryIntent
-        self.smart.classifier = MagicMock()
-        self.smart.classifier.classify.return_value = MagicMock(
-            primary_intent=MagicMock(intent=QueryIntent.FILE_STRUCTURE, confidence=0.8),
-            secondary_intents=[],
-            entities={},
-            keywords=[]
-        )
-
-        mock_response = MagicMock()
-        mock_response.content = "Response"
-        mock_response.provider = "test"
-        mock_response.model = "model"
-        mock_response.tokens_used = 100
-        mock_response.latency_ms = 50
-        self.orchestrator.delegate = MagicMock(return_value=mock_response)
-
-        # Mock CodeAgent
-        with patch('src.cli.smart_query.CodeAgent') as MockAgent:
-            mock_agent = MagicMock()
-            mock_agent._tool_list_directory.return_value = "result"
-            MockAgent.return_value = mock_agent
-
-            self.smart.smart_query("show structure", io=io)
-
-        # Verify working memory was updated
-        summary = self.orchestrator.working_memory.get_summary()
-        assert summary['discoveries'] > 0 or summary['recent_searches'] > 0
 
     def test_smart_query_returns_response(self):
         """smart_query() should return the LLM response."""

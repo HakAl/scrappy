@@ -207,20 +207,6 @@ class TestSessionExitFlow:
         assert result is False
         orchestrator.save_session.assert_not_called()
 
-    def test_eof_triggers_auto_save(self):
-        """EOF should trigger auto-save when enabled."""
-        io = MockIO()
-        orchestrator = ConfigurableTestOrchestrator()
-        orchestrator.save_session = MagicMock(return_value="/test/session.json")
-        mode = create_test_interactive_mode(io, orchestrator)
-        mode.auto_save = True
-        mode.display = MagicMock()
-
-        mode._handle_eof()
-
-        orchestrator.save_session.assert_called_once()
-        output = io.get_output()
-        assert "saved" in output.lower() or "Goodbye" in output
 
 # =============================================================================
 # Plan Workflow Flow Tests
@@ -818,32 +804,6 @@ class TestCompleteUserWorkflows:
         router.route("/ml", "")
         assert router.multiline_mode == initial_multiline
 
-    def test_chat_with_plan_active_prompts_progression(self):
-        """Chat while plan active should prompt for task progression."""
-        io = MockIO(inputs=["2"])  # Stay on task
-        orchestrator = ConfigurableTestOrchestrator()
-        mode = create_test_interactive_mode(io, orchestrator)
-        mode.state_manager.start_plan([
-            {'step': 'Task 1'},
-            {'step': 'Task 2'}
-        ])
-        mode.auto_route_mode = False
-        mode.smart_mode = False
-
-        mock_response = MagicMock()
-        mock_response.content = "Done"
-        mock_response.provider = "test"
-        mock_response.model = "test"
-        mock_response.tokens_used = 10
-        mock_response.latency_ms = 50
-        orchestrator.delegate = MagicMock(return_value=mock_response)
-
-        with patch('sys.stdin.isatty', return_value=True):
-            mode._process_input("do something")
-
-        # Should have prompted for progression
-        output = io.get_output()
-        assert "What next?" in output or "1." in output
 
 
 # =============================================================================

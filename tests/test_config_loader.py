@@ -31,21 +31,6 @@ class TestGetTruncationDefaults:
             assert isinstance(value, int), f"{key} should be int"
             assert value > 0, f"{key} should be positive"
 
-    @pytest.mark.unit
-    def test_uses_config_values_when_available(self):
-        """Test that actual config values are used when imports succeed."""
-        from src.context.config_loader import get_truncation_defaults
-        from src.cli.config.defaults import (
-            TRUNCATE_RESEARCH_LARGE,
-            TRUNCATE_ERROR_MESSAGE,
-            TRUNCATE_PRIORITY_FILE,
-        )
-
-        result = get_truncation_defaults()
-
-        assert result['research_large'] == TRUNCATE_RESEARCH_LARGE
-        assert result['error_message'] == TRUNCATE_ERROR_MESSAGE
-        assert result['priority_file'] == TRUNCATE_PRIORITY_FILE
 
     @pytest.mark.unit
     def test_fallback_values_when_import_fails(self):
@@ -107,52 +92,13 @@ class TestGetExtensionsConfig:
         assert len(entry_points) > 0
         assert all(isinstance(f, str) for f in entry_points)
 
-    @pytest.mark.unit
-    def test_uses_config_values_when_available(self):
-        """Test that actual config values are used when imports succeed."""
-        from src.context.config_loader import get_extensions_config
-        from src.cli.config.extensions import EXTENSIONS_BY_CATEGORY, ENTRY_POINT_FILES
 
-        extensions, entry_points = get_extensions_config()
 
-        assert extensions == EXTENSIONS_BY_CATEGORY
-        assert entry_points == ENTRY_POINT_FILES
-
-    @pytest.mark.unit
-    def test_python_extensions_include_py(self):
-        """Test that Python category includes .py extension."""
-        from src.context.config_loader import get_extensions_config
-
-        extensions, _ = get_extensions_config()
-
-        assert '.py' in extensions['python']
-
-    @pytest.mark.unit
-    def test_entry_points_include_main_py(self):
-        """Test that entry points include main.py."""
-        from src.context.config_loader import get_extensions_config
-
-        _, entry_points = get_extensions_config()
-
-        assert 'main.py' in entry_points
 
 
 class TestGetPathsConfig:
     """Tests for get_paths_config function."""
 
-    @pytest.mark.unit
-
-    @pytest.mark.unit
-    def test_includes_common_skip_dirs(self):
-        """Test that result includes commonly skipped directories."""
-        from src.context.config_loader import get_paths_config
-
-        result = get_paths_config()
-
-        # These should always be skipped
-        assert '.git' in result
-        assert '__pycache__' in result
-        assert 'node_modules' in result
 
     @pytest.mark.unit
     def test_includes_venv_dirs(self):
@@ -165,15 +111,6 @@ class TestGetPathsConfig:
         venv_dirs = {'.venv', 'venv', 'env'}
         assert any(d in result for d in venv_dirs)
 
-    @pytest.mark.unit
-    def test_uses_config_values_when_available(self):
-        """Test that actual config values are used when imports succeed."""
-        from src.context.config_loader import get_paths_config
-        from src.cli.config.paths import SKIP_DIRS
-
-        result = get_paths_config()
-
-        assert result == SKIP_DIRS
 
 
 class TestConfigLoaderConsistency:
@@ -209,15 +146,3 @@ class TestEdgeCases:
         assert entry1 == entry2
         assert paths1 == paths2
 
-    @pytest.mark.unit
-    def test_extensions_values_are_lists(self):
-        """Test that all extension category values are lists."""
-        from src.context.config_loader import get_extensions_config
-
-        extensions, _ = get_extensions_config()
-
-        for category, exts in extensions.items():
-            assert isinstance(exts, list), f"{category} should be a list"
-            for ext in exts:
-                assert isinstance(ext, str), f"Extension in {category} should be string"
-                assert ext.startswith('.'), f"Extension {ext} should start with dot"

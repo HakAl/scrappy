@@ -511,19 +511,3 @@ class TestPlanStateManagerModuleStructure:
 
 
 
-    def test_has_required_methods(self):
-        """Should have required methods."""
-        from src.cli.state_manager import PlanStateManager
-        manager = PlanStateManager()
-
-        methods = [
-            'start_plan', 'end_plan', 'advance_task', 'skip_task',
-            'get_current_task', 'has_more_tasks', 'get_progress',
-            'get_progress_percentage', 'show_current_task',
-            'show_plan_summary', 'show_all_tasks', 'prompt_task_progression',
-            'get_task_description'
-        ]
-
-        for method in methods:
-            assert hasattr(manager, method), f"Missing method: {method}"
-            assert callable(getattr(manager, method)), f"{method} not callable"

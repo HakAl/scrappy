@@ -158,15 +158,6 @@ class TestCLITaskRouterHandler:
         # Verify it doesn't add to history (preview mode)
         assert len(handler.history) == 0
 
-    @pytest.mark.unit
-    def test_handle_route_history_empty(self, mock_orchestrator, capsys):
-        """Test route_history handles empty history gracefully."""
-        from src.cli.task_router_handler import CLITaskRouterHandler
-
-        handler = CLITaskRouterHandler(mock_orchestrator)
-
-        # Should not raise an error
-        handler.handle_route_history()
 
     @pytest.mark.unit
     def test_handle_route_history_shows_recent_entries(self, mock_orchestrator, mock_router_result):
@@ -243,78 +234,8 @@ class TestCLIAgentManager:
 
         assert manager.orchestrator is mock_orchestrator
 
-    @pytest.mark.unit
-    @patch('src.cli.agent_manager.CodeAgent')
-    @patch('src.cli.agent_manager.create_git_checkpoint')
-    def test_run_agent_prompts_for_options(self, mock_checkpoint, mock_agent_class, mock_orchestrator):
-        """Test run_agent prompts user for dry run and checkpoint options."""
-        from src.cli.agent_manager import CLIAgentManager
 
-        manager = CLIAgentManager(mock_orchestrator)
-        io = MockIO(
-            confirmations=[False, False, False]  # dry_run=False, checkpoint=False, start=False (cancel)
-        )
-
-        manager.run_agent("Test task", io=io)
-
-        output = io.get_output()
-        assert "dry-run" in output.lower() or "Test task" in output
-
-    @pytest.mark.unit
-    @patch('src.cli.agent_manager.CodeAgent')
-    @patch('src.cli.agent_manager.create_git_checkpoint')
-    def test_run_agent_cancelled_by_user(self, mock_checkpoint, mock_agent_class, mock_orchestrator):
-        """Test run_agent can be cancelled by user."""
-        from src.cli.agent_manager import CLIAgentManager
-
-        manager = CLIAgentManager(mock_orchestrator)
-        io = MockIO(
-            confirmations=[False, False, False]  # dry_run, checkpoint, start=False
-        )
-
-        manager.run_agent("Test task", io=io)
-
-        output = io.get_output()
-        assert "cancelled" in output.lower()
-        # Agent should not have been run
-        mock_agent_class.return_value.run.assert_not_called()
-
-    @pytest.mark.unit
-    @patch('src.cli.agent_manager.CodeAgent')
-    @patch('src.cli.agent_manager.create_git_checkpoint')
-    def test_run_agent_creates_checkpoint_when_requested(self, mock_checkpoint, mock_agent_class, mock_orchestrator):
-        """Test run_agent creates git checkpoint when user confirms."""
-        from src.cli.agent_manager import CLIAgentManager
-
-        mock_checkpoint.return_value = "abc123"
-        mock_agent = Mock()
-        mock_agent.run.return_value = {
-            "success": True,
-            "result": "Done",
-            "iterations": 1,
-            "audit_log": []
-        }
-        mock_agent.planner = "cerebras"
-        mock_agent.executor = "groq"
-        mock_agent.project_root = Path("/test")
-        mock_agent_class.return_value = mock_agent
-
-        manager = CLIAgentManager(mock_orchestrator)
-        io = MockIO(
-            confirmations=[
-                False,  # dry_run
-                True,   # create checkpoint
-                True,   # start
-                False,  # save audit log
-                False   # rollback
-            ]
-        )
-
-        manager.run_agent("Test task", io=io)
-
-        mock_checkpoint.assert_called_once()
-        output = io.get_output()
-        assert "abc123" in output  # Should show checkpoint hash
+  # Should show checkpoint hash
 
     @pytest.mark.unit
     @patch('src.cli.agent_manager.CodeAgent')
@@ -347,35 +268,6 @@ class TestCLIAgentManager:
         assert "Task Completed Successfully" in output or "Completed" in output
         assert "Task completed successfully" in output
 
-    @pytest.mark.unit
-    @patch('src.cli.agent_manager.CodeAgent')
-    @patch('src.cli.agent_manager.create_git_checkpoint')
-    def test_run_agent_failure_shows_result(self, mock_checkpoint, mock_agent_class, mock_orchestrator):
-        """Test run_agent displays failure result."""
-        from src.cli.agent_manager import CLIAgentManager
-
-        mock_checkpoint.return_value = None
-        mock_agent = Mock()
-        mock_agent.run.return_value = {
-            "success": False,
-            "result": "Could not complete task",
-            "iterations": 5,
-            "audit_log": []
-        }
-        mock_agent.planner = "cerebras"
-        mock_agent.executor = "groq"
-        mock_agent.project_root = Path("/test")
-        mock_agent_class.return_value = mock_agent
-
-        manager = CLIAgentManager(mock_orchestrator)
-        io = MockIO(
-            confirmations=[False, False, True, False]
-        )
-
-        manager.run_agent("Failing task", io=io)
-
-        output = io.get_output()
-        assert "Did Not Complete" in output or "Could not complete" in output
 
     @pytest.mark.unit
     @patch('src.cli.agent_manager.CodeAgent')

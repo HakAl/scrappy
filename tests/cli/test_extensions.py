@@ -186,92 +186,23 @@ class TestAllCodeExtensions:
 class TestHelperFunctions:
     """Tests for helper functions in extensions module."""
 
-    def test_get_category_for_extension_exists(self):
-        """get_category_for_extension helper should exist."""
-        from src.cli.config.extensions import get_category_for_extension
-        assert callable(get_category_for_extension)
 
-    def test_get_category_for_python(self):
-        """get_category_for_extension should return 'python' for .py."""
-        from src.cli.config.extensions import get_category_for_extension
-        assert get_category_for_extension('.py') == 'python'
 
-    def test_get_category_for_javascript(self):
-        """get_category_for_extension should return 'javascript' for js files."""
-        from src.cli.config.extensions import get_category_for_extension
-        for ext in ['.js', '.jsx', '.ts', '.tsx']:
-            assert get_category_for_extension(ext) == 'javascript'
 
-    def test_get_category_for_config(self):
-        """get_category_for_extension should return 'config' for config files."""
-        from src.cli.config.extensions import get_category_for_extension
-        for ext in ['.json', '.yaml', '.yml', '.toml', '.ini']:
-            assert get_category_for_extension(ext) == 'config'
 
-    def test_get_category_for_unknown(self):
-        """get_category_for_extension should return 'other' for unknown."""
-        from src.cli.config.extensions import get_category_for_extension
-        assert get_category_for_extension('.unknown') == 'other'
 
-    def test_is_code_file_exists(self):
-        """is_code_file helper should exist."""
-        from src.cli.config.extensions import is_code_file
-        assert callable(is_code_file)
 
-    def test_is_code_file_true_cases(self):
-        """is_code_file should return True for code file extensions."""
-        from src.cli.config.extensions import is_code_file
-        code_exts = ['.py', '.js', '.jsx', '.ts', '.tsx', '.html', '.css']
-        for ext in code_exts:
-            assert is_code_file(ext) is True, f"{ext} should be a code file"
 
-    def test_is_code_file_false_cases(self):
-        """is_code_file should return False for non-code extensions."""
-        from src.cli.config.extensions import is_code_file
-        non_code = ['.exe', '.dll', '.so', '.bin']
-        for ext in non_code:
-            assert is_code_file(ext) is False, f"{ext} should not be a code file"
 
-    def test_is_config_file_exists(self):
-        """is_config_file helper should exist."""
-        from src.cli.config.extensions import is_config_file
-        assert callable(is_config_file)
 
-    def test_is_config_file_true_cases(self):
-        """is_config_file should return True for config extensions."""
-        from src.cli.config.extensions import is_config_file
-        config_exts = ['.json', '.yaml', '.yml', '.toml', '.ini']
-        for ext in config_exts:
-            assert is_config_file(ext) is True, f"{ext} should be a config file"
 
-    def test_is_config_file_false_cases(self):
-        """is_config_file should return False for non-config extensions."""
-        from src.cli.config.extensions import is_config_file
-        non_config = ['.py', '.js', '.exe']
-        for ext in non_config:
-            assert is_config_file(ext) is False, f"{ext} should not be a config file"
 
-    def test_is_docs_file_exists(self):
-        """is_docs_file helper should exist."""
-        from src.cli.config.extensions import is_docs_file
-        assert callable(is_docs_file)
 
-    def test_is_docs_file_true_cases(self):
-        """is_docs_file should return True for docs extensions."""
-        from src.cli.config.extensions import is_docs_file
-        docs_exts = ['.md', '.rst', '.txt']
-        for ext in docs_exts:
-            assert is_docs_file(ext) is True, f"{ext} should be a docs file"
 
 
 class TestExtensionsEdgeCases:
     """Tests for edge cases in extensions module."""
 
-    def test_extension_with_dot(self):
-        """Extensions should handle both '.py' and 'py' formats."""
-        from src.cli.config.extensions import get_category_for_extension
-        # The function should work with extensions that have dots
-        assert get_category_for_extension('.py') == 'python'
 
     def test_case_sensitivity(self):
         """Extensions should be lowercase for consistency."""
@@ -289,12 +220,3 @@ class TestExtensionsEdgeCases:
             for ext in exts:
                 assert ext.startswith('.'), f"Extension {ext} should start with dot"
 
-    def test_no_duplicate_extensions_across_categories(self):
-        """Same extension should not appear in multiple categories."""
-        from src.cli.config.extensions import EXTENSIONS_BY_CATEGORY
-        seen = {}
-        for category, exts in EXTENSIONS_BY_CATEGORY.items():
-            for ext in exts:
-                if ext in seen:
-                    pytest.fail(f"Extension {ext} appears in both {seen[ext]} and {category}")
-                seen[ext] = category

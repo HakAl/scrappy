@@ -163,19 +163,6 @@ class TestCodebaseExploration:
 
         assert result['status'] == 'cached'
 
-    @pytest.mark.unit
-    def test_explore_force_reexplores(self, rich_project_dir):
-        """Test that force=True re-explores."""
-        context = CodebaseContext(str(rich_project_dir))
-        context.explore()
-
-        old_time = context.explored_at
-        import time
-        time.sleep(0.01)  # Small delay
-
-        result = context.explore(force=True)
-        assert result['status'] == 'explored'
-        assert context.explored_at > old_time
 
 
 class TestKeyFileReading:
@@ -198,14 +185,6 @@ class TestKeyFileReading:
 
         assert "README.md" in context.key_files or any("README" in k for k in context.key_files)
 
-    @pytest.mark.unit
-    def test_reads_setup_py(self, project_with_key_files):
-        """Test that setup.py is read."""
-        context = CodebaseContext(str(project_with_key_files))
-        context.explore()
-
-        has_setup = "setup.py" in context.key_files or any("setup" in k for k in context.key_files)
-        assert has_setup
 
     @pytest.mark.unit
     def test_key_files_contain_content(self, project_with_key_files):

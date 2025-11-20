@@ -89,14 +89,6 @@ class TestResearchHandlerProtocol:
         assert hasattr(handler, 'intent')
         assert handler.intent == QueryIntent.FILE_STRUCTURE
 
-    def test_handler_has_execute_method(self):
-        """Handler must have execute method with correct signature."""
-        from src.cli.research_handlers.base import ResearchHandler
-        from src.cli.research_handlers.file_structure import FileStructureHandler
-
-        handler = FileStructureHandler()
-        assert hasattr(handler, 'execute')
-        assert callable(handler.execute)
 
 
         # Should handle errors gracefully
@@ -375,20 +367,6 @@ class TestResearchHandlerRegistry:
 class TestHandlerIntegration:
     """Integration tests for handlers working together."""
 
-    def test_all_handlers_follow_protocol(self):
-        """All handlers implement the required protocol."""
-        from src.cli.research_handlers.registry import create_default_registry
-
-        registry = create_default_registry()
-
-        for intent in registry.list_intents():
-            handler = registry.get_handler(intent)
-
-            # Check protocol requirements
-            assert hasattr(handler, 'intent')
-            assert hasattr(handler, 'execute')
-            assert callable(handler.execute)
-            assert handler.intent == intent
 
     def test_handlers_are_stateless(self, mock_agent, mock_io):
         """Handlers should be stateless - multiple calls work correctly."""

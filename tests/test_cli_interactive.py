@@ -117,20 +117,6 @@ class TestInteractiveMode:
         output = io.get_output()
         assert "TTY" in output or "terminal" in output.lower()
 
-    def test_run_shows_welcome_banner(self):
-        """Should show welcome banner on start."""
-        io = MockIO(inputs=["/quit"])
-        io.prompt = lambda *args, **kwargs: "/quit"
-        mode = create_test_interactive_mode(io, self.orchestrator)
-        mode.command_router = MagicMock()
-        mode.command_router.route.return_value = False
-
-        with patch('sys.stdin.isatty', return_value=True):
-            with patch.object(mode, '_process_input', return_value=False):
-                mode.run()
-
-        output = io.get_output()
-        assert "Interactive Mode" in output or "LLM Agent Team" in output
 
     def test_run_shows_commands_help(self):
         """Should show available commands on start."""
@@ -238,17 +224,6 @@ class TestInteractiveMode:
     # Session Management Tests
     # =========================================================================
 
-    def test_skips_auto_save_when_disabled(self):
-        """Should skip auto-save when disabled."""
-        io = MockIO()
-        mode = create_test_interactive_mode(io, self.orchestrator)
-        mode.auto_save = False
-        mode.display = MagicMock()
-        self.orchestrator.save_session = MagicMock()
-
-        mode._handle_eof()
-
-        self.orchestrator.save_session.assert_not_called()
 
 
 class TestInteractiveModeDisplayOutput:

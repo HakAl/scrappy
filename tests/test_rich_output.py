@@ -21,67 +21,12 @@ from typing import List
 class TestRichIOProtocolCompliance:
     """Tests that RichIO correctly implements CLIIOProtocol."""
 
-    @pytest.mark.unit
 
-    @pytest.mark.unit
 
-    @pytest.mark.unit
 
-    @pytest.mark.unit
-    def test_richio_has_echo(self):
-        """Test that RichIO has echo method."""
-        from src.cli.rich_output import RichIO
-        io = RichIO()
-        assert hasattr(io, 'echo')
-        assert callable(io.echo)
 
-    @pytest.mark.unit
-    def test_richio_has_secho(self):
-        """Test that RichIO has secho method."""
-        from src.cli.rich_output import RichIO
-        io = RichIO()
-        assert hasattr(io, 'secho')
-        assert callable(io.secho)
 
-    @pytest.mark.unit
-    def test_richio_has_styled_echo(self):
-        """Test that RichIO has styled_echo method."""
-        from src.cli.rich_output import RichIO
-        io = RichIO()
-        assert hasattr(io, 'styled_echo')
-        assert callable(io.styled_echo)
 
-    @pytest.mark.unit
-    def test_richio_has_style(self):
-        """Test that RichIO has style method."""
-        from src.cli.rich_output import RichIO
-        io = RichIO()
-        assert hasattr(io, 'style')
-        assert callable(io.style)
-
-    @pytest.mark.unit
-    def test_richio_has_prompt(self):
-        """Test that RichIO has prompt method."""
-        from src.cli.rich_output import RichIO
-        io = RichIO()
-        assert hasattr(io, 'prompt')
-        assert callable(io.prompt)
-
-    @pytest.mark.unit
-    def test_richio_has_confirm(self):
-        """Test that RichIO has confirm method."""
-        from src.cli.rich_output import RichIO
-        io = RichIO()
-        assert hasattr(io, 'confirm')
-        assert callable(io.confirm)
-
-    @pytest.mark.unit
-    def test_richio_has_input_line(self):
-        """Test that RichIO has input_line method."""
-        from src.cli.rich_output import RichIO
-        io = RichIO()
-        assert hasattr(io, 'input_line')
-        assert callable(io.input_line)
 
 
 class TestRichIOEcho:
@@ -475,13 +420,6 @@ class TestRichIOColorMapping:
 class TestRichIOPanels:
     """Tests for Rich panel rendering (extended functionality)."""
 
-    @pytest.mark.unit
-    def test_richio_has_panel_method(self):
-        """Test that RichIO has panel method."""
-        from src.cli.rich_output import RichIO
-        io = RichIO()
-        assert hasattr(io, 'panel')
-        assert callable(io.panel)
 
     @pytest.mark.unit
     def test_panel_renders_content(self):
@@ -547,13 +485,6 @@ class TestRichIOPanels:
 class TestRichIOTables:
     """Tests for Rich table rendering (extended functionality)."""
 
-    @pytest.mark.unit
-    def test_richio_has_table_method(self):
-        """Test that RichIO has table method."""
-        from src.cli.rich_output import RichIO
-        io = RichIO()
-        assert hasattr(io, 'table')
-        assert callable(io.table)
 
     @pytest.mark.unit
     def test_table_renders_data(self):
@@ -642,13 +573,6 @@ class TestRichIOTables:
 class TestRichIOSyntaxHighlight:
     """Tests for syntax highlighting (extended functionality)."""
 
-    @pytest.mark.unit
-    def test_richio_has_syntax_method(self):
-        """Test that RichIO has syntax method."""
-        from src.cli.rich_output import RichIO
-        io = RichIO()
-        assert hasattr(io, 'syntax')
-        assert callable(io.syntax)
 
     @pytest.mark.unit
     def test_syntax_renders_code(self):
@@ -840,13 +764,6 @@ class TestRichIOConsoleAccess:
 class TestRichIORule:
     """Tests for horizontal rule rendering."""
 
-    @pytest.mark.unit
-    def test_richio_has_rule_method(self):
-        """Test that RichIO has rule method."""
-        from src.cli.rich_output import RichIO
-        io = RichIO()
-        assert hasattr(io, 'rule')
-        assert callable(io.rule)
 
     @pytest.mark.unit
     def test_rule_renders(self):

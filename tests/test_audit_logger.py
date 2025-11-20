@@ -186,21 +186,7 @@ class TestCrashHandlers:
             data = json.load(f)
         assert len(data['actions']) == 1
 
-    def test_on_exit_handles_errors_gracefully(self, tmp_path):
-        """Test that _on_exit doesn't raise on errors."""
-        logger = AuditLogger()
-        logger.log_action("test", {}, "result", True)
 
-        # Should not raise
-        logger._on_exit()
-
-    def test_on_exit_does_nothing_without_path(self):
-        """Test that _on_exit does nothing if no save path."""
-        logger = AuditLogger()
-        logger.log_action("test", {}, "result", True)
-
-        # Should not raise
-        logger._on_exit()
 
     def test_on_exit_does_nothing_with_empty_log(self, tmp_path):
         """Test that _on_exit does nothing if log is empty."""

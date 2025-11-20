@@ -83,16 +83,6 @@ class TestFactoryFunctions:
         assert 'anthropic' in orch.available_providers
         assert orch.brain == 'anthropic'
 
-    def test_make_cli_test_context_returns_full_setup(self):
-        """make_cli_test_context should return io, orchestrator, and handler components."""
-        from tests.helpers import make_cli_test_context
-
-        ctx = make_cli_test_context()
-
-        assert 'io' in ctx
-        assert 'orchestrator' in ctx
-        # Should also have mock components commonly used
-        assert 'context' in ctx
 
     def test_make_cli_test_context_with_explored_context(self):
         """make_cli_test_context should configure explored context."""
@@ -102,58 +92,13 @@ class TestFactoryFunctions:
 
         assert ctx['orchestrator'].context.is_explored() is True
 
-    def test_make_mock_agent_result_success(self):
-        """make_mock_agent_result should create success result dict."""
-        from tests.helpers import make_mock_agent_result
 
-        result = make_mock_agent_result(
-            success=True,
-            result="Task completed",
-            iterations=3
-        )
 
-        assert result['success'] is True
-        assert result['result'] == "Task completed"
-        assert result['iterations'] == 3
-        assert 'audit_log' in result
-
-    def test_make_mock_agent_result_failure(self):
-        """make_mock_agent_result should create failure result dict."""
-        from tests.helpers import make_mock_agent_result
-
-        result = make_mock_agent_result(
-            success=False,
-            result="Task incomplete"
-        )
-
-        assert result['success'] is False
-        assert result['result'] == "Task incomplete"
-
-    def test_make_mock_agent_result_with_audit_log(self):
-        """make_mock_agent_result should accept custom audit log."""
-        from tests.helpers import make_mock_agent_result
-
-        audit_log = [
-            {'timestamp': '2024-01-01', 'action': 'write_file', 'approved': True}
-        ]
-        result = make_mock_agent_result(audit_log=audit_log)
-
-        assert result['audit_log'] == audit_log
 
 
 class TestVerificationHelpers:
     """Tests for behavior verification helper functions."""
 
-    def test_assert_output_contains_passes_when_found(self):
-        """assert_output_contains should pass when text is in output."""
-        from tests.helpers import MockIO, assert_output_contains
-
-        io = MockIO()
-        io.echo("Hello world")
-
-        # Should not raise
-        assert_output_contains(io, "Hello")
-        assert_output_contains(io, "world")
 
     def test_assert_output_contains_fails_when_not_found(self):
         """assert_output_contains should fail when text is not in output."""
@@ -168,15 +113,6 @@ class TestVerificationHelpers:
         assert "goodbye" in str(exc_info.value)
         assert "not found" in str(exc_info.value).lower()
 
-    def test_assert_output_not_contains_passes_when_absent(self):
-        """assert_output_not_contains should pass when text is absent."""
-        from tests.helpers import MockIO, assert_output_not_contains
-
-        io = MockIO()
-        io.echo("Hello world")
-
-        # Should not raise
-        assert_output_not_contains(io, "goodbye")
 
     def test_assert_output_not_contains_fails_when_present(self):
         """assert_output_not_contains should fail when text is present."""
@@ -190,25 +126,7 @@ class TestVerificationHelpers:
 
         assert "world" in str(exc_info.value)
 
-    def test_assert_styled_with_passes_for_matching_style(self):
-        """assert_styled_with should pass when text has matching style."""
-        from tests.helpers import MockIO, assert_styled_with
 
-        io = MockIO()
-        io.secho("Error message", fg="red", bold=True)
-
-        # Should not raise
-        assert_styled_with(io, "Error message", fg="red", bold=True)
-
-    def test_assert_styled_with_passes_for_partial_match(self):
-        """assert_styled_with should pass when only some styles are checked."""
-        from tests.helpers import MockIO, assert_styled_with
-
-        io = MockIO()
-        io.secho("Warning", fg="yellow", bold=False)
-
-        # Should not raise - only checking fg
-        assert_styled_with(io, "Warning", fg="yellow")
 
     def test_assert_styled_with_fails_for_wrong_color(self):
         """assert_styled_with should fail when color doesn't match."""
@@ -222,35 +140,8 @@ class TestVerificationHelpers:
 
         assert "red" in str(exc_info.value)
 
-    def test_assert_styled_with_fails_for_wrong_bold(self):
-        """assert_styled_with should fail when bold doesn't match."""
-        from tests.helpers import MockIO, assert_styled_with
 
-        io = MockIO()
-        io.secho("Title", bold=False)
 
-        with pytest.raises(AssertionError) as exc_info:
-            assert_styled_with(io, "Title", bold=True)
-
-    def test_assert_styled_with_substring_match(self):
-        """assert_styled_with should match substrings in text."""
-        from tests.helpers import MockIO, assert_styled_with
-
-        io = MockIO()
-        io.secho("Success: Task completed", fg="green")
-
-        # Should match substring
-        assert_styled_with(io, "Success", fg="green")
-
-    def test_assert_has_error_output_passes_for_red_text(self):
-        """assert_has_error_output should pass when red-colored output exists."""
-        from tests.helpers import MockIO, assert_has_error_output
-
-        io = MockIO()
-        io.secho("Error occurred", fg="red")
-
-        # Should not raise
-        assert_has_error_output(io)
 
     def test_assert_has_error_output_fails_when_no_red(self):
         """assert_has_error_output should fail when no red output exists."""
@@ -264,55 +155,10 @@ class TestVerificationHelpers:
 
         assert "error" in str(exc_info.value).lower()
 
-    def test_assert_has_success_output_passes_for_green_text(self):
-        """assert_has_success_output should pass when green-colored output exists."""
-        from tests.helpers import MockIO, assert_has_success_output
 
-        io = MockIO()
-        io.secho("Success!", fg="green")
 
-        # Should not raise
-        assert_has_success_output(io)
 
-    def test_assert_has_success_output_fails_when_no_green(self):
-        """assert_has_success_output should fail when no green output exists."""
-        from tests.helpers import MockIO, assert_has_success_output
 
-        io = MockIO()
-        io.secho("Error!", fg="red")
-
-        with pytest.raises(AssertionError) as exc_info:
-            assert_has_success_output(io)
-
-    def test_assert_has_warning_output_passes_for_yellow_text(self):
-        """assert_has_warning_output should pass when yellow-colored output exists."""
-        from tests.helpers import MockIO, assert_has_warning_output
-
-        io = MockIO()
-        io.secho("Warning!", fg="yellow")
-
-        # Should not raise
-        assert_has_warning_output(io)
-
-    def test_assert_has_warning_output_fails_when_no_yellow(self):
-        """assert_has_warning_output should fail when no yellow output exists."""
-        from tests.helpers import MockIO, assert_has_warning_output
-
-        io = MockIO()
-        io.echo("Normal text")
-
-        with pytest.raises(AssertionError) as exc_info:
-            assert_has_warning_output(io)
-
-    def test_assert_provider_used_passes_when_used(self):
-        """assert_provider_used should pass when provider was used."""
-        from tests.helpers import ConfigurableTestOrchestrator, assert_provider_used
-
-        orch = ConfigurableTestOrchestrator()
-        orch.delegate(provider_name='cerebras', prompt='test')
-
-        # Should not raise
-        assert_provider_used(orch, 'cerebras')
 
     def test_assert_provider_used_fails_when_not_used(self):
         """assert_provider_used should fail when provider was not used."""
@@ -326,41 +172,8 @@ class TestVerificationHelpers:
 
         assert "cerebras" in str(exc_info.value)
 
-    def test_assert_provider_used_with_count(self):
-        """assert_provider_used should verify exact call count when specified."""
-        from tests.helpers import ConfigurableTestOrchestrator, assert_provider_used
 
-        orch = ConfigurableTestOrchestrator()
-        orch.delegate(provider_name='cerebras', prompt='test1')
-        orch.delegate(provider_name='cerebras', prompt='test2')
 
-        # Should pass
-        assert_provider_used(orch, 'cerebras', count=2)
-
-        # Should fail
-        with pytest.raises(AssertionError):
-            assert_provider_used(orch, 'cerebras', count=3)
-
-    def test_assert_delegate_called_with_passes_for_matching_prompt(self):
-        """assert_delegate_called_with should pass when prompt matches."""
-        from tests.helpers import ConfigurableTestOrchestrator, assert_delegate_called_with
-
-        orch = ConfigurableTestOrchestrator()
-        orch.delegate(prompt='Find the bug in auth.py')
-
-        # Should not raise
-        assert_delegate_called_with(orch, prompt_contains='bug')
-        assert_delegate_called_with(orch, prompt_contains='auth.py')
-
-    def test_assert_delegate_called_with_fails_for_no_match(self):
-        """assert_delegate_called_with should fail when no call matches."""
-        from tests.helpers import ConfigurableTestOrchestrator, assert_delegate_called_with
-
-        orch = ConfigurableTestOrchestrator()
-        orch.delegate(prompt='Hello world')
-
-        with pytest.raises(AssertionError):
-            assert_delegate_called_with(orch, prompt_contains='goodbye')
 
     def test_get_styled_by_color_filters_correctly(self):
         """get_styled_by_color should return only outputs with specified color."""

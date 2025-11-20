@@ -513,24 +513,7 @@ class TestJSONResponseParserEdgeCases:
 class TestResponseParserInterface:
     """Tests for the parser abstraction interface."""
 
-    @pytest.mark.unit
-    def test_json_parser_implements_interface(self):
-        """JSONResponseParser implements ResponseParser interface."""
-        parser = JSONResponseParser()
 
-        assert isinstance(parser, ResponseParser)
-        assert hasattr(parser, 'parse')
-        assert callable(parser.parse)
-
-    @pytest.mark.unit
-
-    @pytest.mark.unit
-    def test_different_parsers_same_interface(self):
-        """Different parser implementations share the same interface."""
-        # This test documents the expected interface for future native tool call parser
-        from abc import ABC
-
-        assert issubclass(ResponseParser, ABC)
         # Future: NativeToolCallParser would also implement this interface
 
 

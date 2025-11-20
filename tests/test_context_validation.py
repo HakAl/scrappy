@@ -181,23 +181,7 @@ class TestCacheStructureValidation:
         # Should log a warning about invalid datetime
         assert len(caplog.records) > 0
         assert 'invalid' in caplog.text.lower() or 'datetime' in caplog.text.lower()
-
-    @pytest.mark.unit
-    def test_wrong_type_for_structure_logs_warning(self, tmp_path, caplog):
-        """Should log warning when 'structure' has wrong type."""
-        cache_file = tmp_path / "cache.json"
-        # structure should be dict, but is a string
-        cache_file.write_text('{"explored_at": "2024-01-01T10:00:00", "structure": "not-a-dict"}')
-
-        cache = ContextCache()
-
-        with caplog.at_level(logging.WARNING):
-            result = cache.load(cache_file)
-
-        # Should handle gracefully - either warn or return None
-        if result is not None:
-            # If it returns, structure should be the invalid value or None
-            pass  # Implementation dependent
+  # Implementation dependent
 
     @pytest.mark.unit
 
@@ -332,38 +316,11 @@ class TestValidationLogging:
             log_text = caplog.text
             assert 'my_missing_project' in log_text or str(nonexistent) in log_text
 
-    @pytest.mark.unit
-    def test_cache_validation_log_includes_field_name(self, tmp_path, caplog):
-        """Cache validation warning should include the problematic field name."""
-        cache_file = tmp_path / "cache.json"
-        cache_file.write_text('{"explored_at": "invalid-date"}')
-
-        cache = ContextCache()
-
-        with caplog.at_level(logging.WARNING):
-            cache.load(cache_file)
 
         # Warning should mention the field (if warning is issued)
         # Note: current implementation keeps invalid dates as strings without warning
         # This test documents expected behavior
 
-    @pytest.mark.unit
-    def test_multiple_validation_issues_all_logged(self, tmp_path, caplog):
-        """Multiple validation issues should all be logged."""
-        cache_file = tmp_path / "cache.json"
-        # Multiple issues: invalid date, wrong types
-        cache_file.write_text('''
-        {
-            "explored_at": "bad-date",
-            "structure": "should-be-dict",
-            "file_index": 123
-        }
-        ''')
-
-        cache = ContextCache()
-
-        with caplog.at_level(logging.WARNING):
-            cache.load(cache_file)
 
         # Should log warnings for each issue (if implemented)
         # Current behavior: only invalid datetime would potentially warn

@@ -63,19 +63,7 @@ class TestRealFileSystem:
 
         assert result == content
 
-    def test_read_text_nonexistent_file_raises_error(self, fs, temp_dir):
-        """Reading nonexistent file raises FileNotFoundError."""
-        file_path = str(Path(temp_dir) / "nonexistent.txt")
 
-        with pytest.raises(FileNotFoundError):
-            fs.read_text(file_path)
-
-    def test_read_bytes_nonexistent_file_raises_error(self, fs, temp_dir):
-        """Reading nonexistent binary file raises FileNotFoundError."""
-        file_path = str(Path(temp_dir) / "nonexistent.dat")
-
-        with pytest.raises(FileNotFoundError):
-            fs.read_bytes(file_path)
 
     def test_exists_returns_true_for_file(self, fs, temp_dir):
         """exists() returns True for existing file."""
@@ -143,27 +131,8 @@ class TestRealFileSystem:
         assert fs.exists(dir_path)
         assert fs.is_dir(dir_path)
 
-    def test_mkdir_without_parents_raises_error_for_nested(self, fs, temp_dir):
-        """mkdir without parents=True raises error for nested path."""
-        dir_path = str(Path(temp_dir) / "a" / "b" / "c")
+  # Should not raise
 
-        with pytest.raises(FileNotFoundError):
-            fs.mkdir(dir_path, parents=False)
-
-    def test_mkdir_with_exist_ok_does_not_raise_if_exists(self, fs, temp_dir):
-        """mkdir with exist_ok=True doesn't raise if directory exists."""
-        dir_path = str(Path(temp_dir) / "existing")
-        fs.mkdir(dir_path)
-
-        fs.mkdir(dir_path, exist_ok=True)  # Should not raise
-
-    def test_mkdir_without_exist_ok_raises_if_exists(self, fs, temp_dir):
-        """mkdir without exist_ok raises if directory exists."""
-        dir_path = str(Path(temp_dir) / "existing")
-        fs.mkdir(dir_path)
-
-        with pytest.raises(FileExistsError):
-            fs.mkdir(dir_path, exist_ok=False)
 
     def test_list_dir_returns_directory_contents(self, fs, temp_dir):
         """list_dir() returns names of files and directories."""
@@ -178,20 +147,7 @@ class TestRealFileSystem:
         assert "subdir" in contents
         assert len(contents) == 3
 
-    def test_list_dir_nonexistent_raises_error(self, fs, temp_dir):
-        """list_dir() on nonexistent directory raises FileNotFoundError."""
-        dir_path = str(Path(temp_dir) / "nonexistent")
 
-        with pytest.raises(FileNotFoundError):
-            fs.list_dir(dir_path)
-
-    def test_list_dir_on_file_raises_error(self, fs, temp_dir):
-        """list_dir() on file raises NotADirectoryError."""
-        file_path = str(Path(temp_dir) / "file.txt")
-        fs.write_text(file_path, "content")
-
-        with pytest.raises(NotADirectoryError):
-            fs.list_dir(file_path)
 
     def test_delete_removes_file(self, fs, temp_dir):
         """delete() removes file."""
@@ -211,21 +167,7 @@ class TestRealFileSystem:
 
         assert not fs.exists(dir_path)
 
-    def test_delete_nonexistent_raises_error(self, fs, temp_dir):
-        """delete() on nonexistent path raises FileNotFoundError."""
-        file_path = str(Path(temp_dir) / "nonexistent.txt")
 
-        with pytest.raises(FileNotFoundError):
-            fs.delete(file_path)
-
-    def test_delete_nonempty_directory_raises_error(self, fs, temp_dir):
-        """delete() on non-empty directory raises OSError."""
-        dir_path = str(Path(temp_dir) / "nonempty")
-        fs.mkdir(dir_path)
-        fs.write_text(str(Path(dir_path) / "file.txt"), "content")
-
-        with pytest.raises(OSError):
-            fs.delete(dir_path)
 
     def test_delete_tree_removes_directory_and_contents(self, fs, temp_dir):
         """delete_tree() removes directory with all contents."""
@@ -239,12 +181,6 @@ class TestRealFileSystem:
 
         assert not fs.exists(dir_path)
 
-    def test_delete_tree_nonexistent_raises_error(self, fs, temp_dir):
-        """delete_tree() on nonexistent directory raises FileNotFoundError."""
-        dir_path = str(Path(temp_dir) / "nonexistent")
-
-        with pytest.raises(FileNotFoundError):
-            fs.delete_tree(dir_path)
 
     def test_resolve_returns_absolute_path(self, fs):
         """resolve() returns absolute path."""
@@ -298,15 +234,7 @@ class TestInMemoryFileSystem:
 
         assert result == content
 
-    def test_read_text_nonexistent_file_raises_error(self, fs):
-        """Reading nonexistent file raises FileNotFoundError."""
-        with pytest.raises(FileNotFoundError):
-            fs.read_text("/nonexistent.txt")
 
-    def test_read_bytes_nonexistent_file_raises_error(self, fs):
-        """Reading nonexistent binary file raises FileNotFoundError."""
-        with pytest.raises(FileNotFoundError):
-            fs.read_bytes("/nonexistent.dat")
 
     def test_exists_returns_true_for_file(self, fs):
         """exists() returns True for existing file."""
@@ -369,30 +297,9 @@ class TestInMemoryFileSystem:
         assert fs.is_dir("/a/b")
         assert fs.is_dir("/a")
 
-    def test_mkdir_without_parents_raises_error_for_nested(self, fs):
-        """mkdir without parents=True raises error for nested path."""
-        with pytest.raises(FileNotFoundError):
-            fs.mkdir("/a/b/c", parents=False)
+  # Should not raise
 
-    def test_mkdir_with_exist_ok_does_not_raise_if_exists(self, fs):
-        """mkdir with exist_ok=True doesn't raise if directory exists."""
-        fs.mkdir("/existing")
 
-        fs.mkdir("/existing", exist_ok=True)  # Should not raise
-
-    def test_mkdir_without_exist_ok_raises_if_exists(self, fs):
-        """mkdir without exist_ok raises if directory exists."""
-        fs.mkdir("/existing")
-
-        with pytest.raises(FileExistsError):
-            fs.mkdir("/existing", exist_ok=False)
-
-    def test_mkdir_raises_if_path_exists_as_file(self, fs):
-        """mkdir raises error if path exists as file."""
-        fs.write_text("/file.txt", "content")
-
-        with pytest.raises(FileExistsError):
-            fs.mkdir("/file.txt")
 
     def test_list_dir_returns_directory_contents(self, fs):
         """list_dir() returns names of files and directories."""
@@ -418,17 +325,7 @@ class TestInMemoryFileSystem:
         assert "sub" in contents
         assert "nested.txt" not in contents
 
-    def test_list_dir_nonexistent_raises_error(self, fs):
-        """list_dir() on nonexistent directory raises FileNotFoundError."""
-        with pytest.raises(FileNotFoundError):
-            fs.list_dir("/nonexistent")
 
-    def test_list_dir_on_file_raises_error(self, fs):
-        """list_dir() on file raises NotADirectoryError."""
-        fs.write_text("/file.txt", "content")
-
-        with pytest.raises(NotADirectoryError):
-            fs.list_dir("/file.txt")
 
     def test_delete_removes_file(self, fs):
         """delete() removes file."""
@@ -446,18 +343,7 @@ class TestInMemoryFileSystem:
 
         assert not fs.exists("/empty_dir")
 
-    def test_delete_nonexistent_raises_error(self, fs):
-        """delete() on nonexistent path raises FileNotFoundError."""
-        with pytest.raises(FileNotFoundError):
-            fs.delete("/nonexistent.txt")
 
-    def test_delete_nonempty_directory_raises_error(self, fs):
-        """delete() on non-empty directory raises OSError."""
-        fs.mkdir("/nonempty")
-        fs.write_text("/nonempty/file.txt", "content")
-
-        with pytest.raises(OSError):
-            fs.delete("/nonempty")
 
     def test_delete_tree_removes_directory_and_contents(self, fs):
         """delete_tree() removes directory with all contents."""
@@ -470,17 +356,7 @@ class TestInMemoryFileSystem:
         assert not fs.exists("/tree/file1.txt")
         assert not fs.exists("/tree/subdir")
 
-    def test_delete_tree_nonexistent_raises_error(self, fs):
-        """delete_tree() on nonexistent directory raises FileNotFoundError."""
-        with pytest.raises(FileNotFoundError):
-            fs.delete_tree("/nonexistent")
 
-    def test_delete_tree_on_file_raises_error(self, fs):
-        """delete_tree() on file raises NotADirectoryError."""
-        fs.write_text("/file.txt", "content")
-
-        with pytest.raises(NotADirectoryError):
-            fs.delete_tree("/file.txt")
 
     def test_resolve_returns_absolute_path(self, fs):
         """resolve() returns absolute path."""

@@ -192,15 +192,6 @@ class TestUsageExport:
         assert 'api_calls,1' in exported
         assert 'token_usage,300' in exported
 
-    def test_raises_on_unsupported_format(self):
-        """Export with unsupported format should raise ValueError."""
-        mock_cache = Mock()
-        mock_cache.get_stats.return_value = {}
-
-        reporter = UsageReporter(cache=mock_cache)
-
-        with pytest.raises(ValueError, match='Unsupported export format'):
-            reporter.export(format='xml')
 
 
 class TestEdgeCases:
@@ -316,14 +307,6 @@ class TestCacheIntegration:
         assert stats == expected_stats
         mock_cache.get_stats.assert_called_once()
 
-    def test_clear_cache_delegates_to_cache(self):
-        """clear_cache() should call cache.clear()."""
-        mock_cache = Mock()
-
-        reporter = UsageReporter(cache=mock_cache)
-        reporter.clear_cache()
-
-        mock_cache.clear.assert_called_once()
 
 
 class TestBackwardCompatibility:

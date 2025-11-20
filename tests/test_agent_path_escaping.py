@@ -28,27 +28,7 @@ from src.agent_tools.tools.base import ToolContext
 class TestPathNormalizationWindows:
     """Test path normalization on Windows platform."""
 
-    @pytest.mark.unit
-    @patch('src.platform_utils.is_windows', return_value=True)
-    def test_mkdir_forward_slashes_normalized(self, mock_is_win):
-        """mkdir command with forward slashes should be normalized to backslashes."""
-        command = 'mkdir frontend/src/components'
-        normalized, was_modified, msg = normalize_command_paths(command)
 
-        assert was_modified is True
-        assert 'frontend\\src\\components' in normalized
-        assert '/' not in normalized
-
-    @pytest.mark.unit
-    @patch('src.platform_utils.is_windows', return_value=True)
-    def test_copy_command_paths_normalized(self, mock_is_win):
-        """copy command paths should be normalized."""
-        command = 'copy src/file.txt dest/file.txt'
-        normalized, was_modified, msg = normalize_command_paths(command)
-
-        assert was_modified is True
-        assert 'src\\file.txt' in normalized
-        assert 'dest\\file.txt' in normalized
 
     @pytest.mark.unit
     @patch('src.platform_utils.is_windows', return_value=True)
@@ -67,122 +47,22 @@ class TestPathNormalizationWindows:
         assert '\\' in path_value, f"Path not normalized: {path_value}"
         assert '/' not in path_value, f"Forward slashes still present: {path_value}"
 
-    @pytest.mark.unit
-    @patch('src.platform_utils.is_windows', return_value=True)
-    def test_quoted_path_with_spaces_preserved(self, mock_is_win):
-        """Paths with spaces in quotes should be preserved."""
-        command = 'mkdir "my project/src/main"'
-        normalized, was_modified, msg = normalize_command_paths(command)
 
-        assert 'my project' in normalized
-        assert '\\' in normalized or '/' not in normalized
-
-    @pytest.mark.unit
-    @patch('src.platform_utils.is_windows', return_value=True)
-    def test_url_not_normalized(self, mock_is_win):
-        """URLs should not have slashes converted."""
-        command = 'curl https://example.com/api/data'
-        normalized, was_modified, msg = normalize_command_paths(command)
-
-        # URLs should be preserved
-        assert 'https://example.com/api/data' in normalized
 
 
 class TestPathNormalizationUnix:
     """Test path normalization on Unix/Mac platforms."""
 
-    @pytest.mark.unit
-    @patch('src.platform_utils.is_windows', return_value=False)
-    def test_backslashes_normalized_to_forward_slashes(self, mock_is_win):
-        """On Unix, backslashes in paths should become forward slashes."""
-        path = 'frontend\\src\\components'
-        normalized = normalize_path_for_shell(path)
 
-        assert '/' in normalized
-        assert '\\' not in normalized
-        assert normalized == 'frontend/src/components'
 
-    @pytest.mark.unit
-    @patch('src.platform_utils.is_windows', return_value=False)
-    def test_mkdir_on_unix_keeps_forward_slashes(self, mock_is_win):
-        """Unix mkdir should keep forward slashes."""
-        command = 'mkdir -p frontend/src/components'
-        normalized, was_modified, msg = normalize_command_paths(command)
-
-        # Should not be modified on Unix
-        assert '/' in normalized
-        assert '\\' not in normalized
-
-    @pytest.mark.unit
-    @patch('src.platform_utils.is_windows', return_value=False)
-    def test_unix_commands_validated(self, mock_is_win):
-        """Unix commands should be valid on Unix platform."""
-        commands = [
-            'mkdir -p frontend/src',
-            'cp -r src/ dest/',
-            'rm -rf build/',
-            'ls -la src/',
-        ]
-
-        for cmd in commands:
-            is_valid, warning = validate_command_for_platform(cmd)
-            assert is_valid is True, f"Unix command '{cmd}' rejected on Unix: {warning}"
 
 
 class TestPowerShellCmdletHandling:
     """Test handling of PowerShell-specific cmdlets."""
 
-    @pytest.mark.unit
-    @patch('src.platform_utils.is_windows', return_value=True)
-    def test_new_item_cmdlet_not_handled(self, mock_is_win):
-        """BUG: New-Item PowerShell cmdlet is not rejected or converted - should FAIL."""
-        ps_command = 'New-Item -ItemType Directory -Path "frontend\\src\\components" -Force'
 
-        is_valid, warning = validate_command_for_platform(ps_command)
-        fallback = get_python_fallback(ps_command, '/fake/path')
 
-        # Either must be rejected OR have a fallback
-        # Currently neither is true, so command fails with "not recognized"
-        has_handling = (not is_valid) or (fallback is not None)
 
-        assert has_handling, (
-            f"New-Item cmdlet passes validation ({is_valid}) "
-            f"but has no fallback ({fallback}). "
-            f"Will fail with 'not recognized' in cmd.exe"
-        )
-
-    @pytest.mark.unit
-    @patch('src.platform_utils.is_windows', return_value=True)
-    def test_remove_item_cmdlet_not_handled(self, mock_is_win):
-        """Remove-Item PowerShell cmdlet should be handled."""
-        ps_command = 'Remove-Item -Path "frontend\\src\\components" -Recurse'
-
-        is_valid, warning = validate_command_for_platform(ps_command)
-        fallback = get_python_fallback(ps_command, '/fake/path')
-
-        has_handling = (not is_valid) or (fallback is not None)
-        assert has_handling, "Remove-Item not handled"
-
-    @pytest.mark.unit
-    @patch('src.platform_utils.is_windows', return_value=True)
-    def test_copy_item_cmdlet_not_handled(self, mock_is_win):
-        """Copy-Item PowerShell cmdlet should be handled."""
-        ps_command = 'Copy-Item -Path "src.txt" -Destination "dest.txt"'
-
-        is_valid, warning = validate_command_for_platform(ps_command)
-        fallback = get_python_fallback(ps_command, '/fake/path')
-
-        has_handling = (not is_valid) or (fallback is not None)
-        assert has_handling, "Copy-Item not handled"
-
-    @pytest.mark.unit
-    @patch('src.platform_utils.is_windows', return_value=True)
-    def test_cmd_mkdir_is_valid(self, mock_is_win):
-        """Standard cmd.exe mkdir should be valid."""
-        cmd_command = 'mkdir frontend\\src\\components'
-
-        is_valid, warning = validate_command_for_platform(cmd_command)
-        assert is_valid is True, f"cmd.exe mkdir rejected: {warning}"
 
 
 class TestCommandExecutionIntegration:

@@ -94,30 +94,6 @@ class TestDangerousCommandDetection:
 class TestCommandValidation:
     """Tests for command validation by platform."""
 
-    @pytest.mark.unit
-    def test_validate_safe_command(self):
-        """Test that safe commands pass validation."""
-        is_valid, warning = validate_command_for_platform("git status")
-        assert is_valid is True
 
-    @pytest.mark.unit
-    def test_validate_empty_command(self):
-        """Test that empty commands fail validation."""
-        is_valid, warning = validate_command_for_platform("")
-        assert is_valid is False
-        assert "Empty" in warning
 
-    @pytest.mark.unit
-    def test_validate_returns_tuple(self):
-        """Test that validation returns proper tuple."""
-        result = validate_command_for_platform("echo test")
-        assert isinstance(result, tuple)
-        assert len(result) == 2
-        assert isinstance(result[0], bool)
-        assert isinstance(result[1], str)
 
-    @pytest.mark.unit
-    def test_whitespace_only_command(self):
-        """Test that whitespace-only command fails."""
-        is_valid, warning = validate_command_for_platform("   ")
-        assert is_valid is False

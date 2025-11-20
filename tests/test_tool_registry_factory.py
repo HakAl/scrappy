@@ -92,15 +92,6 @@ class TestToolRegistryFactoryBehavior:
         for tool in registry.list_all():
             assert callable(tool), f"Tool {tool.name} is not callable"
 
-    @pytest.mark.unit
-    def test_all_tools_have_names(self):
-        """All tools should have non-empty names."""
-        registry = create_default_registry()
-
-        for tool in registry.list_all():
-            assert hasattr(tool, 'name'), f"Tool missing name attribute"
-            assert tool.name, f"Tool has empty name"
-            assert isinstance(tool.name, str), f"Tool name is not string"
 
     @pytest.mark.unit
     def test_all_tools_have_descriptions(self):

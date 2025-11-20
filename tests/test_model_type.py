@@ -124,16 +124,6 @@ class TestModelInfo:
 class TestProviderModelInfo:
     """Test provider's get_model_info method."""
 
-    def test_groq_provider_has_get_model_info(self):
-        """GroqProvider should implement get_model_info method."""
-        from src.providers.groq_provider import GroqProvider
-
-        with patch.dict('os.environ', {'GROQ_API_KEY': 'test-key'}):
-            with patch('src.providers.groq_provider.GROQ_AVAILABLE', True):
-                with patch('src.providers.groq_provider.Groq'):
-                    provider = GroqProvider(api_key='test-key')
-                    assert hasattr(provider, 'get_model_info')
-                    assert callable(provider.get_model_info)
 
     def test_groq_llama4_is_instruction_tuned(self):
         """Groq llama-4-scout-instruct should be classified as instruction-tuned."""
@@ -162,16 +152,6 @@ class TestProviderModelInfo:
                     assert info.model_type == ModelType.CHAT
                     assert info.is_instruction_tuned is False
 
-    def test_cerebras_provider_has_get_model_info(self):
-        """CerebrasProvider should implement get_model_info method."""
-        from src.providers.cerebras_provider import CerebrasProvider
-
-        with patch.dict('os.environ', {'CEREBRAS_API_KEY': 'test-key'}):
-            with patch('src.providers.cerebras_provider.OPENAI_AVAILABLE', True):
-                with patch('src.providers.cerebras_provider.OpenAI'):
-                    provider = CerebrasProvider(api_key='test-key')
-                    assert hasattr(provider, 'get_model_info')
-                    assert callable(provider.get_model_info)
 
     def test_cerebras_qwen_instruct_is_instruction_tuned(self):
         """Cerebras qwen-instruct model should be classified as instruction-tuned."""
@@ -188,16 +168,6 @@ class TestProviderModelInfo:
                     assert info is not None
                     assert info.context_length > 0
 
-    def test_gemini_provider_has_get_model_info(self):
-        """GeminiProvider should implement get_model_info method."""
-        from src.providers.gemini_provider import GeminiProvider
-
-        with patch.dict('os.environ', {'GEMINI_API_KEY': 'test-key'}):
-            with patch('src.providers.gemini_provider.GEMINI_AVAILABLE', True):
-                with patch('src.providers.gemini_provider.genai'):
-                    provider = GeminiProvider(api_key='test-key')
-                    assert hasattr(provider, 'get_model_info')
-                    assert callable(provider.get_model_info)
 
     def test_unknown_model_returns_unknown_type(self):
         """Unknown model ID should return ModelInfo with UNKNOWN type."""

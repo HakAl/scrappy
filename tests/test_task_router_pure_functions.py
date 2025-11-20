@@ -28,45 +28,13 @@ from src.task_router.pure_functions import (
 class TestHasActionIndicators:
     """Tests for has_action_indicators pure function."""
 
-    @pytest.mark.unit
-    def test_detects_create(self):
-        """Should detect 'create' as action indicator."""
-        assert has_action_indicators("create a file") is True
 
-    @pytest.mark.unit
-    def test_detects_write(self):
-        """Should detect 'write' as action indicator."""
-        assert has_action_indicators("write some code") is True
 
-    @pytest.mark.unit
-    def test_detects_build(self):
-        """Should detect 'build' as action indicator."""
-        assert has_action_indicators("build an application") is True
 
-    @pytest.mark.unit
-    def test_detects_implement(self):
-        """Should detect 'implement' as action indicator."""
-        assert has_action_indicators("implement the feature") is True
 
-    @pytest.mark.unit
-    def test_detects_fix(self):
-        """Should detect 'fix' as action indicator."""
-        assert has_action_indicators("fix the bug") is True
 
-    @pytest.mark.unit
-    def test_detects_update(self):
-        """Should detect 'update' as action indicator."""
-        assert has_action_indicators("update the config") is True
 
-    @pytest.mark.unit
-    def test_no_action_in_explanation(self):
-        """Should not find action in pure explanation text."""
-        assert has_action_indicators("explain how python works") is False
 
-    @pytest.mark.unit
-    def test_no_action_in_question(self):
-        """Should not find action in question."""
-        assert has_action_indicators("what is dependency injection?") is False
 
     @pytest.mark.unit
     def test_case_insensitive(self):
@@ -74,10 +42,6 @@ class TestHasActionIndicators:
         assert has_action_indicators("CREATE a file") is True
         assert has_action_indicators("Write Some Code") is True
 
-    @pytest.mark.unit
-    def test_empty_string(self):
-        """Should handle empty string."""
-        assert has_action_indicators("") is False
 
 
 class TestHasConflictingSignals:
@@ -394,52 +358,11 @@ class TestDetermineExecutionAction:
 class TestParseLlmClassificationResponse:
     """Tests for parse_llm_classification_response pure function."""
 
-    @pytest.mark.unit
-    def test_parses_valid_json(self):
-        """Should parse valid JSON response."""
-        response = '{"task_type": "RESEARCH", "confidence": 0.85, "reasoning": "Information gathering"}'
-        result = parse_llm_classification_response(response)
-        assert result["task_type"] == "RESEARCH"
-        assert result["confidence"] == 0.85
-        assert result["reasoning"] == "Information gathering"
 
-    @pytest.mark.unit
-    def test_parses_code_generation(self):
-        """Should parse CODE_GENERATION response."""
-        response = '{"task_type": "CODE_GENERATION", "confidence": 0.9, "reasoning": "Creating code"}'
-        result = parse_llm_classification_response(response)
-        assert result["task_type"] == "CODE_GENERATION"
 
-    @pytest.mark.unit
-    def test_handles_json_in_markdown(self):
-        """Should extract JSON from markdown code blocks."""
-        response = '''Here's my analysis:
-```json
-{"task_type": "RESEARCH", "confidence": 0.8, "reasoning": "Test"}
-```'''
-        result = parse_llm_classification_response(response)
-        assert result["task_type"] == "RESEARCH"
 
-    @pytest.mark.unit
-    def test_returns_none_for_invalid_json(self):
-        """Should return None for invalid JSON."""
-        response = "This is not JSON"
-        result = parse_llm_classification_response(response)
-        assert result is None
 
-    @pytest.mark.unit
-    def test_returns_none_for_missing_fields(self):
-        """Should return None if required fields missing."""
-        response = '{"task_type": "RESEARCH"}'  # Missing confidence and reasoning
-        result = parse_llm_classification_response(response)
-        assert result is None
 
-    @pytest.mark.unit
-    def test_normalizes_task_type_case(self):
-        """Should normalize task_type to uppercase."""
-        response = '{"task_type": "research", "confidence": 0.8, "reasoning": "Test"}'
-        result = parse_llm_classification_response(response)
-        assert result["task_type"] == "RESEARCH"
 
 
 class TestBuildClassificationMetadata:

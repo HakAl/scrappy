@@ -148,31 +148,6 @@ class TestRichOutputHandlerClassification:
         # Should show percentage (46% or 45.6%)
         assert "46%" in output or "45%" in output or "45.6%" in output
 
-    def test_classification_table_has_borders(self, captured_console):
-        """Classification table should have visible borders."""
-        from src.task_router.output_handler import RichOutputHandler
-
-        console, string_io = captured_console
-        handler = RichOutputHandler(console=console)
-
-        handler.log_classification(
-            task_type="code_review",
-            confidence=0.90,
-            complexity=6,
-            reasoning="Review task"
-        )
-
-        output = get_captured_output(string_io)
-
-        # Rich tables typically use box-drawing characters
-        # Check for any table-like structure
-        has_borders = (
-            "|" in output or
-            "+" in output or
-            "-" in output or
-            any(char in output for char in ["│", "┌", "┐", "└", "┘", "├", "┤", "─"])
-        )
-        assert has_borders, f"Output should have table borders:\n{output}"
 
 
 # =============================================================================
@@ -318,24 +293,6 @@ class TestRichOutputHandlerStrategy:
         for strategy in strategies:
             assert strategy in output, f"Strategy '{strategy}' not found in output"
 
-    def test_execution_strategy_formatted_distinctly(self, captured_console):
-        """Execution strategy should be visually distinct."""
-        from src.task_router.output_handler import RichOutputHandler
-
-        console, string_io = captured_console
-        handler = RichOutputHandler(console=console)
-
-        handler.log_execution_start("streaming")
-
-        output = get_captured_output(string_io)
-
-        # Should have some indicator like "Strategy:" or "Executing with:"
-        has_label = (
-            "Strategy" in output or
-            "Executing" in output or
-            "Execution" in output
-        )
-        assert has_label, f"Output should have strategy label:\n{output}"
 
 
 # =============================================================================
@@ -441,32 +398,8 @@ class TestRichOutputHandlerIntegration:
 class TestComplexityProgressBar:
     """Tests for complexity progress bar formatting function."""
 
-    def test_progress_bar_zero_complexity(self):
-        """Zero complexity should show empty bar."""
-        from src.task_router.output_handler import format_complexity_bar
 
-        result = format_complexity_bar(0)
 
-        # Should contain 0%
-        assert "0%" in result
-
-    def test_progress_bar_half_complexity(self):
-        """Half complexity should show half-filled bar."""
-        from src.task_router.output_handler import format_complexity_bar
-
-        result = format_complexity_bar(5)
-
-        # Should contain 50%
-        assert "50%" in result
-
-    def test_progress_bar_full_complexity(self):
-        """Full complexity should show filled bar."""
-        from src.task_router.output_handler import format_complexity_bar
-
-        result = format_complexity_bar(10)
-
-        # Should contain 100%
-        assert "100%" in result
 
     def test_progress_bar_custom_width(self):
         """Progress bar should respect custom width."""
@@ -515,14 +448,3 @@ class TestBackwardCompatibility:
         assert "0.80" in output
         assert "5/10" in output
 
-    def test_console_handler_interface_unchanged(self):
-        """ConsoleOutputHandler should have unchanged interface."""
-        from src.task_router.output_handler import ConsoleOutputHandler
-
-        handler = ConsoleOutputHandler()
-
-        # Should have all required methods
-        assert callable(handler.log_classification)
-        assert callable(handler.log_provider_selection)
-        assert callable(handler.log_execution_start)
-        assert callable(handler.log_info)

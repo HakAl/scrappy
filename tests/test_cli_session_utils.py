@@ -598,17 +598,6 @@ class TestDisplayLastConversationMessages:
 
         assert 'No role here' in output
 
-    def test_handles_missing_content(self):
-        """Should handle messages with missing content key."""
-        from src.cli.utils.session_utils import display_last_conversation_messages
-
-        io = MockIO()
-        conversation = [
-            {'role': 'user'}
-        ]
-
-        # Should not raise
-        display_last_conversation_messages(io, conversation)
 
 
 class TestDisplaySessionNotSavedWarning:

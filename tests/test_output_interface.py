@@ -11,41 +11,9 @@ import pytest
 class TestOutputInterface:
     """Tests for the generic output interface that hides implementation details."""
 
-    @pytest.mark.unit
 
-    @pytest.mark.unit
 
-    @pytest.mark.unit
-    def test_output_print_method(self):
-        """Test that output has generic print method."""
-        from src.cli.output import Output
-        output = Output()
-        assert hasattr(output, 'print')
-        assert callable(output.print)
 
-    @pytest.mark.unit
-    def test_output_style_method(self):
-        """Test that output has generic style method."""
-        from src.cli.output import Output
-        output = Output()
-        assert hasattr(output, 'style')
-        assert callable(output.style)
-
-    @pytest.mark.unit
-    def test_output_confirm_method(self):
-        """Test that output has generic confirm method."""
-        from src.cli.output import Output
-        output = Output()
-        assert hasattr(output, 'confirm')
-        assert callable(output.confirm)
-
-    @pytest.mark.unit
-    def test_output_prompt_method(self):
-        """Test that output has generic prompt method."""
-        from src.cli.output import Output
-        output = Output()
-        assert hasattr(output, 'prompt')
-        assert callable(output.prompt)
 
 
 class TestOutputForTesting:

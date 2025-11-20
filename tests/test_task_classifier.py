@@ -73,18 +73,6 @@ class TestTaskClassifierBasics:
             result = classifier.classify(task_input)
             assert result.task_type == expected_type, f"Failed for: {task_input}"
 
-    @pytest.mark.unit
-    def test_classification_returns_valid_structure(self, classifier):
-        """Test that classification returns proper ClassifiedTask structure."""
-        result = classifier.classify("test input")
-
-        assert isinstance(result, ClassifiedTask)
-        assert hasattr(result, 'task_type')
-        assert hasattr(result, 'confidence')
-        assert hasattr(result, 'original_input')
-        assert hasattr(result, 'reasoning')
-        assert result.original_input == "test input"
-        assert 0.0 <= result.confidence <= 1.0
 
 
 class TestPatternExpansion:

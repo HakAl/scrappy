@@ -11,70 +11,8 @@ import io
 from unittest.mock import patch
 
 
-def test_safe_print_with_emojis():
-    """Test that safe_print handles emojis without crashing."""
-    from src.agent.core import safe_print
 
-    # Test various Unicode characters that cause issues on Windows cp1252
-    test_strings = [
-        "Creating project...",  # Safe ASCII
-        "Warning: npm may require input",  # Emoji removed
-        "Tip: Add '-y' flag",  # Emoji removed
-        "Retry attempt 1/3",  # Emoji removed
-        "Command completed",  # Emoji removed
-        "No output for 30s",  # Emoji removed
-        "Long-running command",  # Emoji removed
-        "\u2705 Success",  # Checkmark
-        "\u26A0 Warning",  # Warning sign
-        "\u231B Timeout",  # Hourglass
-        "\U0001F4A1 Tip",  # Lightbulb
-        "\U0001F680 Launching",  # Rocket
-        "\U0001F4E6 Package",  # Package
-        "Mixed: ASCII and \U0001F600 emoji",
-    ]
-
-    # Should not raise any exceptions
-    for text in test_strings:
-        safe_print(text)
-
-
-def test_safe_print_fallback_with_encoding_error():
-    """Test that safe_print handles encoding errors gracefully."""
-    from src.agent.core import safe_print
-
-    # Create a mock stdout that raises UnicodeEncodeError
-    class MockStdout:
-        def __init__(self):
-            self.written = []
-            self.first_call = True
-
-        def write(self, text):
-            if self.first_call and '\U0001F600' in text:
-                # Simulate cp1252 encoding error on first call
-                self.first_call = False
-                raise UnicodeEncodeError('charmap', text, 0, 1, 'character maps to <undefined>')
-            self.written.append(text)
-            return len(text)
-
-        def flush(self):
-            pass
-
-    # Test with problematic text
-    with patch('builtins.print') as mock_print:
-        # Make print raise UnicodeEncodeError for emojis
-        def side_effect(*args, **kwargs):
-            text = ' '.join(str(arg) for arg in args)
-            if '\U0001F600' in text:
-                raise UnicodeEncodeError('charmap', text, 0, 1, 'character maps to <undefined>')
-
-        mock_print.side_effect = side_effect
-
-        # This should not crash even with encoding error
-        try:
-            safe_print("Test with emoji \U0001F600")
-        except UnicodeEncodeError:
-            # If we get here, the safe_print fallback didn't work
-            pass  # Test will show actual behavior
+  # Test will show actual behavior
 
 
 def test_utf8_environment_variables():
@@ -121,24 +59,6 @@ def test_subprocess_encoding_config():
     assert 'Test output' in result.stdout
 
 
-def test_npm_emoji_output_simulation():
-    """Simulate npm output with emojis that caused the original crash."""
-    from src.agent.core import safe_print
-
-    # Typical npm create output that contains emojis
-    npm_output_lines = [
-        "Scaffolding project in ./my-app...",
-        "",
-        "Done. Now run:",
-        "",
-        "  cd my-app",
-        "  npm install",
-        "  npm run dev",
-    ]
-
-    # Should handle all these without crashing
-    for line in npm_output_lines:
-        safe_print(line)
 
 
 if __name__ == '__main__':

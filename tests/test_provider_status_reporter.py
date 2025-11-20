@@ -36,31 +36,7 @@ class TestPrintStatus:
             verbose_selection=verbose
         )
 
-    def test_prints_header(self):
-        """print_status() should print provider configuration header."""
-        self.registry.list_available.return_value = ['cerebras']
-        self.selector._get_brain_selection_reason.return_value = 'test reason'
-        self.selector.get_selection_log.return_value = []
 
-        reporter = self._make_reporter()
-        reporter.print_status()
-
-        messages = self.output.get_by_level('info')
-        header_found = any('PROVIDER CONFIGURATION SUMMARY' in msg for msg in messages)
-        assert header_found, f"Header not found in: {messages}"
-
-    def test_prints_separator_lines(self):
-        """print_status() should print separator lines with equals signs."""
-        self.registry.list_available.return_value = ['cerebras']
-        self.selector._get_brain_selection_reason.return_value = 'test reason'
-        self.selector.get_selection_log.return_value = []
-
-        reporter = self._make_reporter()
-        reporter.print_status()
-
-        messages = self.output.get_by_level('info')
-        separator_found = any('=' * 60 in msg for msg in messages)
-        assert separator_found, f"Separator not found in: {messages}"
 
     def test_shows_available_provider_with_ok_status(self):
         """print_status() should show [OK] for available providers."""

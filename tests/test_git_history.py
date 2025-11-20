@@ -350,25 +350,6 @@ class TestGitHistoryReaderWithCodebaseContext:
 
         return tmp_path
 
-    @pytest.mark.integration
-
-    @pytest.mark.integration
-    def test_codebase_context_git_history_has_expected_fields(self, git_project):
-        """CodebaseContext git_history should have expected fields."""
-        from src.context import CodebaseContext
-
-        context = CodebaseContext(str(git_project))
-        context.explore()
-
-        # Should have at least some of these fields
-        possible_fields = [
-            'recent_commits', 'current_branch', 'branches',
-            'top_contributors', 'recently_changed_files', 'first_commit_date'
-        ]
-        has_some_fields = any(
-            field in context.git_history for field in possible_fields
-        )
-        assert has_some_fields, f"git_history has none of expected fields: {context.git_history}"
 
 
 class TestGitHistoryReaderTimeouts:

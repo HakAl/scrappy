@@ -19,14 +19,6 @@ from src.task_router.classifier import ClassifiedTask, TaskType
 class TestProviderAwareStrategyBase:
     """Tests for ProviderAwareStrategy base class existence and interface."""
 
-    @pytest.mark.unit
-
-    @pytest.mark.unit
-    def test_provider_aware_strategy_extends_execution_strategy(self):
-        """Test that ProviderAwareStrategy extends ExecutionStrategy."""
-        from src.task_router.strategies.base import ProviderAwareStrategy
-
-        assert issubclass(ProviderAwareStrategy, ExecutionStrategy)
 
 
 

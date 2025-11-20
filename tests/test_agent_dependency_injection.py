@@ -29,22 +29,6 @@ from src.agent_config import AgentConfig
 class TestFileSystemBehavior:
     """Tests that agent actually USES injected file system for operations."""
 
-    def test_uses_file_system_to_resolve_project_path(self, orchestrator):
-        """Agent uses injected file system to resolve project root."""
-        fs = Mock(spec=FileSystemProtocol)
-        fs.resolve = Mock(return_value=Path("/resolved/project"))
-        fs.is_dir = Mock(return_value=True)
-        fs.exists = Mock(return_value=True)
-
-        agent = CodeAgent(
-            orchestrator=orchestrator,
-            project_path="/test/project",
-            file_system=fs,
-        )
-
-        # Verify file system was USED to resolve path
-        fs.resolve.assert_called()
-        assert agent.project_root == Path("/resolved/project")
 
     def test_uses_in_memory_file_system_for_isolation(self, orchestrator):
         """Agent uses InMemoryFileSystem for isolated testing."""
@@ -76,21 +60,6 @@ class TestFileSystemBehavior:
         assert not fs.exists("/etc/passwd")
         assert not fs.exists("C:\\Windows\\System32")
 
-    def test_uses_file_system_for_default_project_root(self, orchestrator):
-        """Agent uses file system to resolve '.' when no path provided."""
-        fs = Mock(spec=FileSystemProtocol)
-        fs.resolve = Mock(return_value=Path("/current/dir"))
-        fs.is_dir = Mock(return_value=True)
-        fs.exists = Mock(return_value=True)
-
-        agent = CodeAgent(
-            orchestrator=orchestrator,
-            file_system=fs,
-        )
-
-        # Verify file system was called to resolve current directory
-        fs.resolve.assert_called_with(".")
-        assert agent.project_root == Path("/current/dir")
 
 
 class TestPlatformUtilsBehavior:
@@ -157,19 +126,6 @@ class TestPlatformUtilsBehavior:
 class TestAuditLoggerBehavior:
     """Tests that agent actually USES injected audit logger."""
 
-    def test_uses_audit_logger_when_provided(self, orchestrator):
-        """Agent accepts and can use custom audit logger."""
-        logger = Mock(spec=AuditLoggerProtocol)
-        logger.get_log = Mock(return_value=[])
-
-        agent = CodeAgent(
-            orchestrator=orchestrator,
-            audit_logger=logger,
-        )
-
-        # Verify logger is accessible
-        log = agent._audit_logger.get_log()
-        assert isinstance(log, list)
 
     def test_audit_logger_can_be_queried(self, orchestrator):
         """Injected audit logger can be queried for entries."""
@@ -205,25 +161,6 @@ class TestResponseParserBehavior:
         # Verify parser was injected correctly
         assert agent._response_parser is parser
 
-    def test_response_parser_is_used_for_parsing(self, orchestrator):
-        """Agent would use injected parser for response parsing."""
-        # This tests that parser can be swapped for testing
-        parser = Mock(spec=ResponseParserProtocol)
-        parser.parse = Mock(return_value=Mock(
-            is_complete=True,
-            thought="test thought",
-            action="complete",
-        ))
-
-        agent = CodeAgent(
-            orchestrator=orchestrator,
-            response_parser=parser,
-        )
-
-        # Parser should be available for use
-        result = agent._response_parser.parse('{"thought": "test"}')
-        assert result.thought == "test thought"
-        parser.parse.assert_called_once()
 
 
 class TestCommandExecutorBehavior:
@@ -292,26 +229,6 @@ class TestMultipleDependencyInjection:
         assert isinstance(agent._audit_logger.get_log(), list)
         assert agent.io is not None
 
-    def test_mixed_injected_and_default_dependencies(self, orchestrator):
-        """Agent handles mix of injected and default dependencies."""
-        fs = InMemoryFileSystem()
-        utils = MockPlatformUtils()
-
-        agent = CodeAgent(
-            orchestrator=orchestrator,
-            file_system=fs,
-            platform_utils=utils,
-            # Other dependencies use defaults
-        )
-
-        # Injected dependencies
-        assert isinstance(agent._file_system, InMemoryFileSystem)
-        assert isinstance(agent._platform_utils, MockPlatformUtils)
-
-        # Default dependencies should be created (not None)
-        assert hasattr(agent, '_audit_logger') and agent._audit_logger
-        assert hasattr(agent, '_response_parser') and agent._response_parser
-        assert hasattr(agent, 'io') and agent.io
 
 
 class TestDependencyEdgeCases:

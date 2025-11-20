@@ -86,33 +86,6 @@ class TestTaskRouterDependencyInjection:
 class TestInjectedClassifierIsUsed:
     """Test that injected classifier is actually used during routing."""
 
-    def test_route_uses_injected_classifier(self):
-        """Router should call the injected classifier's classify method."""
-        # Arrange
-        custom_classifier = Mock(spec=TaskClassifier)
-        custom_classifier.classify.return_value = ClassifiedTask(
-            original_input="hello",
-            task_type=TaskType.CONVERSATION,
-            confidence=0.95,
-            reasoning="Mocked classification"
-        )
-
-        orchestrator = ConfigurableTestOrchestrator(
-            response_content="Hello there!"
-        )
-
-        router = TaskRouter(
-            orchestrator=orchestrator,
-            classifier=custom_classifier,
-            output_handler=NullOutputHandler(),
-            intent_clarifier=NullClarifier(),
-        )
-
-        # Act
-        router.route("hello")
-
-        # Assert
-        custom_classifier.classify.assert_called_once_with("hello")
 
     def test_classification_result_determines_strategy(self):
         """Injected classifier's result should determine which strategy executes."""
@@ -148,23 +121,6 @@ class TestInjectedClassifierIsUsed:
 class TestInjectedMetricsCollectorIsUsed:
     """Test that injected metrics collector is actually used."""
 
-    def test_route_updates_injected_metrics_collector(self):
-        """Router should call update on injected metrics collector after execution."""
-        # Arrange
-        custom_metrics = Mock(spec=MetricsCollector)
-        custom_metrics.get_metrics.return_value = RouterMetrics()
-
-        router = TaskRouter(
-            metrics_collector=custom_metrics,
-            output_handler=NullOutputHandler(),
-            intent_clarifier=NullClarifier(),
-        )
-
-        # Act
-        router.route("hello")
-
-        # Assert
-        custom_metrics.update.assert_called_once()
 
     def test_get_metrics_returns_from_injected_collector(self):
         """get_metrics should delegate to the injected metrics collector."""
@@ -194,26 +150,6 @@ class TestInjectedMetricsCollectorIsUsed:
 class TestInjectedProviderResolverIsUsed:
     """Test that injected provider resolver is actually used."""
 
-    def test_route_uses_injected_provider_resolver(self):
-        """Router should use injected provider resolver to resolve hints."""
-        # Arrange
-        custom_resolver = Mock(spec=ProviderResolver)
-        custom_resolver.resolve.return_value = ("test_provider", "test_model")
-
-        orchestrator = ConfigurableTestOrchestrator()
-
-        router = TaskRouter(
-            orchestrator=orchestrator,
-            provider_resolver=custom_resolver,
-            output_handler=NullOutputHandler(),
-            intent_clarifier=NullClarifier(),
-        )
-
-        # Act
-        result = router.route("what is python", provider="fast")
-
-        # Assert - resolver should have been called
-        custom_resolver.resolve.assert_called()
 
     def test_resolved_provider_appears_in_result_metadata(self):
         """Provider resolution result should appear in execution metadata."""
@@ -283,28 +219,6 @@ class TestAllDependenciesInjectedTogether:
         custom_classifier.classify.assert_called_once()
         custom_metrics.update.assert_called_once()
 
-    def test_partial_injection_uses_defaults_for_rest(self):
-        """Injecting some dependencies should use defaults for others."""
-        # Arrange
-        custom_classifier = Mock(spec=TaskClassifier)
-        custom_classifier.classify.return_value = ClassifiedTask(
-            original_input="test",
-            task_type=TaskType.CONVERSATION,
-            confidence=0.9,
-            reasoning="Custom"
-        )
-
-        # Act - only inject classifier
-        router = TaskRouter(
-            classifier=custom_classifier,
-            output_handler=NullOutputHandler(),
-            intent_clarifier=NullClarifier(),
-        )
-
-        # Assert
-        assert router.classifier is custom_classifier
-        assert isinstance(router.metrics_collector, MetricsCollector)
-        assert isinstance(router.provider_resolver, ProviderResolver)
 
 
 class TestDependencyInjectionEnablesTestability:

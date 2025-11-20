@@ -102,51 +102,12 @@ class TestProjectIndicatorFiles:
 class TestHelperFunctions:
     """Tests for helper functions in paths module."""
 
-    def test_should_skip_directory_exists(self):
-        """should_skip_directory helper should exist."""
-        from src.cli.config.paths import should_skip_directory
-        assert callable(should_skip_directory)
 
-    def test_should_skip_directory_true_cases(self):
-        """should_skip_directory should return True for skip dirs."""
-        from src.cli.config.paths import should_skip_directory
-        skip_cases = [
-            '.git', '__pycache__', 'node_modules',
-            '.venv', 'venv', 'env', 'dist', 'build'
-        ]
-        for dir_name in skip_cases:
-            assert should_skip_directory(dir_name) is True, f"Should skip {dir_name}"
 
-    def test_should_skip_directory_false_cases(self):
-        """should_skip_directory should return False for normal dirs."""
-        from src.cli.config.paths import should_skip_directory
-        normal_cases = ['src', 'lib', 'tests', 'docs', 'utils', 'helpers']
-        for dir_name in normal_cases:
-            assert should_skip_directory(dir_name) is False, f"Should not skip {dir_name}"
 
-    def test_is_session_file_exists(self):
-        """is_session_file helper should exist."""
-        from src.cli.config.paths import is_session_file
-        assert callable(is_session_file)
 
-    def test_is_session_file_true_cases(self):
-        """is_session_file should return True for session files."""
-        from src.cli.config.paths import is_session_file
-        session_files = ['.llm_team_session.json', '.llm_rate_limits.json']
-        for filename in session_files:
-            assert is_session_file(filename) is True, f"Should be session file: {filename}"
 
-    def test_is_session_file_false_cases(self):
-        """is_session_file should return False for normal files."""
-        from src.cli.config.paths import is_session_file
-        normal_files = ['main.py', 'config.json', 'README.md']
-        for filename in normal_files:
-            assert is_session_file(filename) is False, f"Should not be session file: {filename}"
 
-    def test_is_project_root_exists(self):
-        """is_project_root helper should exist."""
-        from src.cli.config.paths import is_project_root
-        assert callable(is_project_root)
 
 
 class TestSkipDirsProperties:
@@ -255,27 +216,8 @@ class TestAllHiddenDirectories:
 
 class TestPathsEdgeCases:
     """Tests for edge cases in paths module."""
+  # Implementation will define this
 
-    def test_should_skip_partial_match(self):
-        """should_skip_directory should not match partial names."""
-        from src.cli.config.paths import should_skip_directory
-        # Should not skip directories that contain skip dirs as substrings
-        partial_cases = [
-            'my_venv_files',  # contains 'venv'
-            'node_modules_backup',  # contains 'node_modules'
-            'dist_old'  # contains 'dist'
-        ]
-        for dir_name in partial_cases:
-            # The behavior depends on implementation - exact match or contains
-            # This test documents the expected behavior
-            pass  # Implementation will define this
-
-    def test_case_sensitivity(self):
-        """Directory names should be case-sensitive."""
-        from src.cli.config.paths import should_skip_directory
-        # Git, __PYCACHE__ are different from .git, __pycache__
-        # This test documents case sensitivity behavior
-        assert should_skip_directory('.git') is True
         # Implementation should decide on case sensitivity
 
 

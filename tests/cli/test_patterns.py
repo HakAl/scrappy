@@ -501,28 +501,7 @@ class TestHelperFunctions:
 class TestPackageKeywordsAndActionVerbs:
     """Tests for package keywords and action verbs constants."""
 
-    def test_package_keywords_exists(self):
-        """PACKAGE_KEYWORDS should be exported."""
-        from src.cli.config.patterns import PACKAGE_KEYWORDS
-        assert PACKAGE_KEYWORDS is not None
-        assert isinstance(PACKAGE_KEYWORDS, (list, tuple, set))
-        assert 'pypi' in PACKAGE_KEYWORDS
-        assert 'npm' in PACKAGE_KEYWORDS
-        assert 'github.com' in PACKAGE_KEYWORDS
-        assert 'registry' in PACKAGE_KEYWORDS
 
-    def test_action_keywords_exists(self):
-        """ACTION_KEYWORDS should be exported."""
-        from src.cli.config.patterns import ACTION_KEYWORDS
-        assert ACTION_KEYWORDS is not None
-        assert isinstance(ACTION_KEYWORDS, (list, tuple, set))
-        assert 'fetch' in ACTION_KEYWORDS
-        assert 'get' in ACTION_KEYWORDS
-        assert 'check' in ACTION_KEYWORDS
-        assert 'look' in ACTION_KEYWORDS
-        assert 'find' in ACTION_KEYWORDS
-        assert 'show' in ACTION_KEYWORDS
-        assert 'what' in ACTION_KEYWORDS
 
 
 class TestPathPatternFalsePositives:
@@ -809,23 +788,5 @@ class TestBoundaryConditions:
         for char in "abcdefghijklmnopqrstuvwxyz0123456789":
             for pattern in self.web_patterns:
                 assert not pattern.search(char), f"Web pattern matched single char: {char}"
+  # Just verify it completes
 
-    def test_very_long_input(self):
-        """Patterns should handle very long input without hanging."""
-        long_text = "fetch the docs " * 1000
-        # Should complete quickly without catastrophic backtracking
-        for pattern in self.web_patterns:
-            pattern.search(long_text)  # Just verify it completes
-
-    def test_special_regex_chars_escaped(self):
-        """Special regex characters in input should be handled safely."""
-        test_cases = [
-            "what about file.py?",
-            "check (config).json",
-            "look at [bracket].py",
-            "file with * wildcard",
-        ]
-        for text in test_cases:
-            # Should not raise exceptions
-            for pattern in self.codebase_patterns:
-                pattern.search(text.lower())

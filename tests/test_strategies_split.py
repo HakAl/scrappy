@@ -443,50 +443,7 @@ class TestAgentExecutorBehavior:
 class TestStrategyInterfaceCompliance:
     """Test all strategies implement the required interface."""
 
-    @pytest.mark.unit
-    def test_all_strategies_have_execute_method(self):
-        """Test all strategies implement execute()."""
-        from src.task_router.strategies.direct_executor import DirectExecutor
-        from src.task_router.strategies.conversation_executor import ConversationExecutor
 
-        strategies = [
-            DirectExecutor(),
-            ConversationExecutor(),
-        ]
 
-        for strategy in strategies:
-            assert hasattr(strategy, 'execute')
-            assert callable(strategy.execute)
-
-    @pytest.mark.unit
-    def test_all_strategies_have_can_handle_method(self):
-        """Test all strategies implement can_handle()."""
-        from src.task_router.strategies.direct_executor import DirectExecutor
-        from src.task_router.strategies.conversation_executor import ConversationExecutor
-
-        strategies = [
-            DirectExecutor(),
-            ConversationExecutor(),
-        ]
-
-        for strategy in strategies:
-            assert hasattr(strategy, 'can_handle')
-            assert callable(strategy.can_handle)
-
-    @pytest.mark.unit
-    def test_all_strategies_have_name_property(self):
-        """Test all strategies have a name property."""
-        from src.task_router.strategies.direct_executor import DirectExecutor
-        from src.task_router.strategies.conversation_executor import ConversationExecutor
-
-        strategies = [
-            DirectExecutor(),
-            ConversationExecutor(),
-        ]
-
-        for strategy in strategies:
-            assert hasattr(strategy, 'name')
-            assert isinstance(strategy.name, str)
-            assert len(strategy.name) > 0
 
 

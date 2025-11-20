@@ -47,21 +47,6 @@ class TestPromptBuilderUsesCodebaseContext:
         assert context.structure.get('has_requirements') is True
         assert builder.project_type == 'python'
 
-    @pytest.mark.unit
-    def test_does_not_duplicate_file_scanning(self, temp_project_dir):
-        """PromptBuilder should not re-scan files if context already explored."""
-        from src.agent.prompt_builder import PromptBuilder
-
-        context = CodebaseContext(str(temp_project_dir))
-        context.explore()
-
-        # Track if explore is called again
-        with patch.object(context, 'explore', wraps=context.explore) as mock_explore:
-            builder = PromptBuilder(context=context)
-            _ = builder.build()
-
-            # Should not re-explore
-            mock_explore.assert_not_called()
 
 
 class TestPromptBuilderPlatformAwareness:
@@ -506,17 +491,6 @@ class TestPromptBuilderToolRegistryIntegration:
 class TestPromptBuilderStrategyGuidance:
     """PromptBuilder should have strategy guidance as a proper section."""
 
-    @pytest.mark.unit
-    def test_has_strategy_section_method(self, temp_project_dir):
-        """PromptBuilder should have _build_strategy_section method."""
-        from src.agent.prompt_builder import PromptBuilder
-
-        builder = PromptBuilder(project_root=temp_project_dir)
-
-        assert hasattr(builder, '_build_strategy_section')
-        section = builder._build_strategy_section()
-        assert isinstance(section, str)
-        assert len(section) > 0
 
     @pytest.mark.unit
     def test_strategy_section_prefers_write_file(self, temp_project_dir):
@@ -548,17 +522,6 @@ class TestPromptBuilderStrategyGuidance:
 class TestPromptBuilderEfficiencyRules:
     """PromptBuilder should have efficiency rules as a proper section."""
 
-    @pytest.mark.unit
-    def test_has_efficiency_section_method(self, temp_project_dir):
-        """PromptBuilder should have _build_efficiency_section method."""
-        from src.agent.prompt_builder import PromptBuilder
-
-        builder = PromptBuilder(project_root=temp_project_dir)
-
-        assert hasattr(builder, '_build_efficiency_section')
-        section = builder._build_efficiency_section()
-        assert isinstance(section, str)
-        assert len(section) > 0
 
     @pytest.mark.unit
     def test_efficiency_section_mentions_skip_redundant(self, temp_project_dir):
@@ -601,17 +564,6 @@ class TestPromptBuilderEfficiencyRules:
 class TestPromptBuilderCompletionSemantics:
     """PromptBuilder should have completion semantics as a proper section."""
 
-    @pytest.mark.unit
-    def test_has_completion_section_method(self, temp_project_dir):
-        """PromptBuilder should have _build_completion_section method."""
-        from src.agent.prompt_builder import PromptBuilder
-
-        builder = PromptBuilder(project_root=temp_project_dir)
-
-        assert hasattr(builder, '_build_completion_section')
-        section = builder._build_completion_section()
-        assert isinstance(section, str)
-        assert len(section) > 0
 
     @pytest.mark.unit
     def test_completion_section_defines_when_done(self, temp_project_dir):
@@ -652,17 +604,6 @@ class TestPromptBuilderCompletionSemantics:
 class TestPromptBuilderSafetyRules:
     """PromptBuilder should have safety rules as a proper section."""
 
-    @pytest.mark.unit
-    def test_has_safety_section_method(self, temp_project_dir):
-        """PromptBuilder should have _build_safety_section method."""
-        from src.agent.prompt_builder import PromptBuilder
-
-        builder = PromptBuilder(project_root=temp_project_dir)
-
-        assert hasattr(builder, '_build_safety_section')
-        section = builder._build_safety_section()
-        assert isinstance(section, str)
-        assert len(section) > 0
 
     @pytest.mark.unit
     def test_safety_section_warns_empty_files(self, temp_project_dir):

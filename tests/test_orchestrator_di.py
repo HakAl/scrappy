@@ -96,26 +96,6 @@ class TestDependencyInjection:
         assert orch.background_manager is mock_manager
 
 
-    def test_partial_injection(self, tmp_path):
-        """Can inject some dependencies while using defaults for others."""
-        mock_cache = Mock(spec=ResponseCache)
-        mock_memory = Mock(spec=WorkingMemory)
-
-        orch = AgentOrchestrator(
-            project_path=str(tmp_path),
-            cache=mock_cache,
-            working_memory=mock_memory,
-            output=NullOutput()
-        )
-
-        # Injected
-        assert orch.cache is mock_cache
-        assert orch.working_memory is mock_memory
-
-        # Defaults
-        assert isinstance(orch.rate_tracker, RateLimitTracker)
-        assert isinstance(orch.session_manager, SessionManager)
-        assert isinstance(orch.provider_selector, ProviderSelector)
 
     def test_injection_enables_mock_testing(self, tmp_path):
         """Demonstrates using injection for unit testing with mocks."""

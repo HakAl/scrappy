@@ -283,34 +283,6 @@ class TestInputHandlerModuleStructure:
 
 
 
-    def test_has_read_multiline_input_method(self):
-        """InputHandler should have read_multiline_input method."""
-        from src.cli.input_handler import InputHandler
-        io = MockIO()
-        handler = InputHandler(io)
-        assert hasattr(handler, 'read_multiline_input')
-        assert callable(handler.read_multiline_input)
 
-    def test_has_parse_command_method(self):
-        """InputHandler should have parse_command method."""
-        from src.cli.input_handler import InputHandler
-        io = MockIO()
-        handler = InputHandler(io)
-        assert hasattr(handler, 'parse_command')
-        assert callable(handler.parse_command)
 
-    def test_has_is_command_method(self):
-        """InputHandler should have is_command method."""
-        from src.cli.input_handler import InputHandler
-        io = MockIO()
-        handler = InputHandler(io)
-        assert hasattr(handler, 'is_command')
-        assert callable(handler.is_command)
 
-    def test_has_read_interactive_input_method(self):
-        """InputHandler should have read_interactive_input method."""
-        from src.cli.input_handler import InputHandler
-        io = MockIO()
-        handler = InputHandler(io)
-        assert hasattr(handler, 'read_interactive_input')
-        assert callable(handler.read_interactive_input)
