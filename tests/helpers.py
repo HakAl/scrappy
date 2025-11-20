@@ -1107,3 +1107,133 @@ class RecordingIntentClassifier(IntentClassifierProtocol):
 # =============================================================================
 # File System Test Helpers
 # =============================================================================
+
+
+# =============================================================================
+# Rate Limiting Test Doubles
+# =============================================================================
+
+class FakeFileSystem:
+    """Test double for file system operations."""
+
+    def __init__(self):
+        self._files: Dict[Path, str] = {}
+        self._dirs: set[Path] = set()
+
+    def exists(self, path: Path) -> bool:
+        return path in self._files or path in self._dirs
+
+    def read_text(self, path: Path, encoding: str = "utf-8") -> str:
+        if path not in self._files:
+            raise FileNotFoundError(f"No such file: {path}")
+        return self._files[path]
+
+    def write_text(self, path: Path, content: str, encoding: str = "utf-8") -> None:
+        self._files[path] = content
+
+    def mkdir(self, path: Path, parents: bool = False, exist_ok: bool = False) -> None:
+        if path in self._dirs and not exist_ok:
+            raise FileExistsError(f"Directory exists: {path}")
+        self._dirs.add(path)
+        if parents:
+            current = path.parent
+            while current and current != current.parent:
+                self._dirs.add(current)
+                current = current.parent
+
+    def unlink(self, path: Path) -> None:
+        if path in self._files:
+            del self._files[path]
+
+
+class FakeStorage:
+    """Test double for storage."""
+
+    def __init__(self):
+        self._data: Optional[dict[str, Any]] = None
+        self.load_count = 0
+        self.save_count = 0
+
+    def load(self) -> dict[str, Any]:
+        self.load_count += 1
+        return self._data.copy() if self._data else {}
+
+    def save(self, data: dict[str, Any]) -> None:
+        self.save_count += 1
+        self._data = data.copy()
+
+    async def load_async(self) -> dict[str, Any]:
+        return self.load()
+
+    async def save_async(self, data: dict[str, Any]) -> None:
+        return self.save(data)
+
+
+class FakePolicy:
+    """Test double for reset policy."""
+
+    def __init__(self, reset_flags: Optional[Dict[str, bool]] = None):
+        self.reset_flags = reset_flags or {"daily": False, "monthly": False}
+        self.reset_calls: List[Dict[str, bool]] = []
+
+    def reset_needed(self, last_reset_info: Dict[str, str]) -> Dict[str, bool]:
+        return self.reset_flags
+
+    def apply_reset(self, usage: dict[str, Any], which: Dict[str, bool]) -> None:
+        self.reset_calls.append(which)
+
+
+class FakeCalculator:
+    """Test double for calculator."""
+
+    def __init__(self):
+        self.remaining_calls = []
+        self.warnings_calls = []
+        self.summarise_calls = []
+
+    def remaining(self, usage: dict[str, Any], limits: Any) -> Dict[str, Any]:
+        self.remaining_calls.append((usage, limits))
+        return {
+            "requests_remaining_today": 100,
+            "requests_remaining_month": 1000,
+            "tokens_remaining_today": 10000,
+            "tokens_remaining_minute": 1000,
+            "usage_today": 0,
+            "tokens_today": 0,
+            "usage_this_month": 0,
+        }
+
+    def warnings(
+        self,
+        remaining: Dict[str, Any],
+        limits: Any,
+        threshold: float = 0.1,
+    ) -> Dict[str, Any]:
+        self.warnings_calls.append((remaining, limits, threshold))
+        return {
+            "approaching_daily_request_limit": False,
+            "approaching_monthly_request_limit": False,
+            "approaching_daily_token_limit": False,
+            "message": None,
+        }
+
+    def summarise(self, usage: dict[str, Any]) -> Dict[str, Any]:
+        self.summarise_calls.append(usage)
+        return {"last_reset": {}, "providers": {}}
+
+
+class FakeRecommender:
+    """Test double for recommender."""
+
+    def __init__(self, provider_to_recommend: Optional[str] = "openai"):
+        self.provider = provider_to_recommend
+        self.calls = []
+
+    def recommended(
+        self,
+        task_type: str,
+        registry: Any,
+        task_preferences: dict[str, list[str]],
+    ) -> Optional[str]:
+        self.calls.append((task_type, registry, task_preferences))
+        return self.provider

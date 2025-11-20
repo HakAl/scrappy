@@ -8,6 +8,7 @@ from typing import Optional
 from .io_interface import CLIIOProtocol
 from .rich_output import RichIO
 from .validators import validate_subcommand
+from src.infrastructure.formatters import CacheFormatter, CacheFormatterProtocol
 
 
 class CacheManager:
@@ -19,19 +20,27 @@ class CacheManager:
 
     Attributes:
         orchestrator: The AgentOrchestrator instance that owns the actual cache.
+        formatter: Formatter for displaying cache statistics.
     """
 
-    def __init__(self, orchestrator) -> None:
+    def __init__(
+        self,
+        orchestrator,
+        formatter: Optional[CacheFormatterProtocol] = None
+    ) -> None:
         """Initialize cache manager.
 
         Args:
             orchestrator: The AgentOrchestrator instance that provides cache
                 operations (get_cache_stats, clear_cache, toggle_cache).
+            formatter: Optional formatter for display. Defaults to CacheFormatter.
 
         State Changes:
             Sets self.orchestrator to the provided orchestrator instance.
+            Sets self.formatter to the provided formatter or creates default.
         """
         self.orchestrator = orchestrator
+        self.formatter = formatter or CacheFormatter()
 
     def manage_cache(self, args: str = "", io: Optional[CLIIOProtocol] = None) -> None:
         """Manage response cache with subcommands.
@@ -74,29 +83,18 @@ class CacheManager:
             return
 
         if validation.subcommand == "":
-            # Show cache status
+            # Show cache status using formatter
             stats = self.orchestrator.get_cache_stats()
-            io.secho("\nCache Statistics:", bold=True)
-            io.echo("-" * 50)
-            total_entries = stats.get('exact_cache_entries', 0) + stats.get('intent_cache_entries', 0)
-            io.echo(f"Total Entries: {total_entries}")
-            io.echo(f"Exact Cache Hits: {stats.get('exact_hits', 0)}")
-            io.echo(f"Intent Cache Hits: {stats.get('intent_hits', 0)}")
-            io.echo(f"Cache Misses: {stats.get('exact_misses', 0)}")
-            io.echo(f"Cache Saves: {stats.get('saves', 0)}")
-            exact_hit_rate = stats.get('exact_hit_rate', '0.0%')
-            intent_hit_rate = stats.get('intent_hit_rate', '0.0%')
-            exact_rate_value = float(exact_hit_rate.rstrip('%'))
-            io.secho(f"Exact Hit Rate: {exact_hit_rate}", fg="green" if exact_rate_value > 50 else "yellow")
-            io.secho(f"Intent Hit Rate: {intent_hit_rate}", fg="green" if float(intent_hit_rate.rstrip('%')) > 50 else "yellow")
-            io.echo(f"Cache File: {stats.get('cache_file', 'N/A')}")
-            io.echo(f"Caching: {io.style('Enabled' if self.orchestrator.caching_enabled else 'Disabled', fg='green' if self.orchestrator.caching_enabled else 'red')}")
+            enabled = self.orchestrator.caching_enabled
+            formatted_stats = self.formatter.format_stats(stats, enabled)
+            io.echo(formatted_stats)
 
         elif validation.subcommand == "clear":
             self.orchestrator.clear_cache()
-            io.secho("Response cache cleared.", fg="green")
+            clear_message = self.formatter.format_clear_message()
+            io.echo(clear_message)
 
         elif validation.subcommand == "toggle":
             new_state = self.orchestrator.toggle_cache()
-            status = "enabled" if new_state else "disabled"
-            io.secho(f"Response caching {status}.", fg="green" if new_state else "yellow")
+            toggle_message = self.formatter.format_toggle_message(new_state)
+            io.echo(toggle_message)

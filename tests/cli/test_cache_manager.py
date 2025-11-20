@@ -123,12 +123,11 @@ class TestCacheManagerShowStats:
 
         manager.manage_cache(args="", io=io)
 
-        styled = io.get_styled_outputs()
-        # Find styled outputs with hit rates
-        hit_rate_styles = [s for s in styled if '%' in s['text']]
-        # At least one should be green (hit rate > 50%)
-        green_styles = [s for s in hit_rate_styles if s['fg'] == 'green']
-        assert len(green_styles) > 0
+        output = io.get_output()
+        # Check that hit rate > 50% is displayed with green ANSI code
+        # ANSI green code is \x1b[32m
+        assert '60.0%' in output
+        assert '\x1b[32m' in output  # Contains green color code
 
     def test_show_cache_stats_colors_poor_hit_rate_yellow(self):
         """Should style poor hit rates (<=50%) in yellow."""
@@ -151,12 +150,11 @@ class TestCacheManagerShowStats:
 
         manager.manage_cache(args="", io=io)
 
-        styled = io.get_styled_outputs()
-        # Find styled outputs with hit rates
-        hit_rate_styles = [s for s in styled if '%' in s['text']]
-        # Should have yellow styles (hit rate <= 50%)
-        yellow_styles = [s for s in hit_rate_styles if s['fg'] == 'yellow']
-        assert len(yellow_styles) > 0
+        output = io.get_output()
+        # Check that hit rate <= 50% is displayed with yellow ANSI code
+        # ANSI yellow code is \x1b[33m
+        assert '20.0%' in output
+        assert '\x1b[33m' in output  # Contains yellow color code
 
 
 class TestCacheManagerClear:
@@ -200,9 +198,11 @@ class TestCacheManagerClear:
 
         manager.manage_cache(args="clear", io=io)
 
-        styled = io.get_styled_outputs()
-        green_messages = [s for s in styled if s['fg'] == 'green']
-        assert len(green_messages) > 0
+        output = io.get_output()
+        # Check that cleared message contains green ANSI code
+        # ANSI green code is \x1b[32m
+        assert 'cleared' in output
+        assert '\x1b[32m' in output  # Contains green color code
 
 
 class TestCacheManagerToggle:

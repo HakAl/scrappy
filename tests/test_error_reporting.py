@@ -59,13 +59,16 @@ class TestCacheErrorReporting:
             cache_file.chmod(0o644)
 
     @pytest.mark.unit
-    def test_save_cache_with_invalid_path_reports_error(self, sample_response):
+    def test_save_cache_with_invalid_path_reports_error(self, tmp_path, sample_response):
         """Test that saving to invalid path reports error."""
         output = CapturingOutput()
 
-        # Use an invalid path (directory that doesn't exist)
+        # Create a directory and try to use it as a file path (will fail on write)
+        invalid_path = tmp_path / "somedir"
+        invalid_path.mkdir()
+
         cache = ResponseCache(
-            cache_file="/nonexistent/directory/cache.json",
+            cache_file=str(invalid_path),  # Directory, not a file
             output=output
         )
 
@@ -83,9 +86,12 @@ class TestCacheErrorReporting:
         """
         output = CapturingOutput()
 
-        # Invalid path causes write failure
+        # Create a directory and try to use it as a file path (will fail on write)
+        invalid_path = tmp_path / "another_dir"
+        invalid_path.mkdir()
+
         cache = ResponseCache(
-            cache_file="/nonexistent/directory/cache.json",
+            cache_file=str(invalid_path),  # Directory, not a file
             output=output
         )
 

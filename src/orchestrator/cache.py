@@ -13,23 +13,18 @@ import re
 
 if TYPE_CHECKING:
     from .output import OutputInterface
+    from ..infrastructure.persistence import JSONPersistence
 
 try:
-    from ..utils.imports import safe_import, setup_src_path
-    aiofiles, AIOFILES_AVAILABLE = safe_import('aiofiles')
+    from ..providers import LLMResponse
+    from ..infrastructure.persistence import JSONPersistence
 except ImportError:
     # Fallback for direct execution
     import sys
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).parent.parent))
-    from utils.imports import safe_import
-    aiofiles, AIOFILES_AVAILABLE = safe_import('aiofiles')
-
-try:
-    from ..providers import LLMResponse
-except ImportError:
-    setup_src_path() if 'setup_src_path' in dir() else None
     from providers import LLMResponse
+    from infrastructure.persistence import JSONPersistence
 
 
 class ResponseCache:
@@ -50,7 +45,8 @@ class ResponseCache:
         cache_file: Optional[str] = None,
         default_ttl_hours: int = 24,
         output: Optional['OutputInterface'] = None,
-        auto_load: bool = False
+        auto_load: bool = False,
+        persistence: Optional['JSONPersistence'] = None
     ):
         """
         Initialize response cache (dependencies only - NO file I/O by default).
@@ -62,6 +58,7 @@ class ResponseCache:
             default_ttl_hours: Default time-to-live for cache entries in hours
             output: Output interface for error reporting (optional)
             auto_load: If True, automatically load cache in constructor (for backwards compatibility)
+            persistence: JSONPersistence instance for file I/O (optional, created if not provided)
         """
         self._cache: dict = {}
         self._intent_cache: dict = {}  # Separate cache for intent-based lookups
@@ -76,8 +73,16 @@ class ResponseCache:
         self.cache_file = Path(cache_file) if cache_file else None
         self.output = output or self._create_default_output()
 
+        # Create persistence layer if file path provided
+        if persistence:
+            self.persistence = persistence
+        elif cache_file:
+            self.persistence = JSONPersistence(cache_file, output=self.output)
+        else:
+            self.persistence = None
+
         # Auto-load cache if requested (for backwards compatibility)
-        if auto_load and self.cache_file and self.cache_file.exists():
+        if auto_load and self.persistence and self.persistence.exists():
             self._load_cache()
 
     def restore_from_disk(self):
@@ -89,7 +94,7 @@ class ResponseCache:
         Returns:
             self (for method chaining)
         """
-        if self.cache_file and self.cache_file.exists():
+        if self.persistence and self.persistence.exists():
             self._load_cache()
         return self
 
@@ -235,7 +240,7 @@ class ResponseCache:
         self._stats['saves'] += 1
 
         # Persist if configured
-        if self.cache_file:
+        if self.persistence:
             self._save_cache()
 
     async def put_async(
@@ -263,7 +268,7 @@ class ResponseCache:
         self._stats['saves'] += 1
 
         # Persist if configured (non-blocking)
-        if self.cache_file:
+        if self.persistence:
             await self._save_cache_async()
 
     def get_by_intent(
@@ -352,7 +357,7 @@ class ResponseCache:
         }
 
         # Persist if configured
-        if self.cache_file:
+        if self.persistence:
             self._save_cache()
 
     async def put_by_intent_async(
@@ -387,87 +392,80 @@ class ResponseCache:
         }
 
         # Persist if configured (non-blocking)
-        if self.cache_file:
+        if self.persistence:
             await self._save_cache_async()
 
     def _save_cache(self):
         """Save cache to disk."""
-        try:
-            # Save both exact match and intent caches
-            cache_data = {
-                'exact': self._cache,
-                'intent': self._intent_cache
-            }
-            with open(self.cache_file, 'w', encoding='utf-8') as f:
-                json.dump(cache_data, f, indent=2)
-        except Exception as e:
-            self.output.error(f"Cache write failed: {e}")
+        if not self.persistence:
+            return
+
+        # Save both exact match and intent caches
+        cache_data = {
+            'exact': self._cache,
+            'intent': self._intent_cache
+        }
+        self.persistence.save(cache_data)
 
     async def _save_cache_async(self):
         """Save cache to disk asynchronously."""
-        if not AIOFILES_AVAILABLE:
-            # Fallback to sync version
-            self._save_cache()
+        if not self.persistence:
             return
 
-        try:
-            # Save both exact match and intent caches
-            cache_data = {
-                'exact': self._cache,
-                'intent': self._intent_cache
-            }
-            async with aiofiles.open(self.cache_file, 'w', encoding='utf-8') as f:
-                await f.write(json.dumps(cache_data, indent=2))
-        except Exception as e:
-            self.output.error(f"Cache write failed: {e}")
+        # Save both exact match and intent caches
+        cache_data = {
+            'exact': self._cache,
+            'intent': self._intent_cache
+        }
+        await self.persistence.save_async(cache_data)
 
     def _load_cache(self):
         """Load cache from disk."""
-        try:
-            with open(self.cache_file, 'r', encoding='utf-8') as f:
-                cache_data = json.load(f)
+        if not self.persistence:
+            return
 
-            # Handle both old format (dict) and new format (nested dicts)
-            if isinstance(cache_data, dict) and 'exact' in cache_data:
-                self._cache = cache_data.get('exact', {})
-                self._intent_cache = cache_data.get('intent', {})
-            else:
-                # Old format - treat as exact cache only
-                self._cache = cache_data
-                self._intent_cache = {}
+        cache_data = self.persistence.load()
 
-            # Clean expired entries on load
-            self._cleanup_expired()
-        except Exception:
+        if cache_data is None:
             self._cache = {}
             self._intent_cache = {}
+            return
+
+        # Handle both old format (dict) and new format (nested dicts)
+        if isinstance(cache_data, dict) and 'exact' in cache_data:
+            self._cache = cache_data.get('exact', {})
+            self._intent_cache = cache_data.get('intent', {})
+        else:
+            # Old format - treat as exact cache only
+            self._cache = cache_data
+            self._intent_cache = {}
+
+        # Clean expired entries on load
+        self._cleanup_expired()
 
     async def _load_cache_async(self):
         """Load cache from disk asynchronously."""
-        if not AIOFILES_AVAILABLE:
-            # Fallback to sync version
-            self._load_cache()
+        if not self.persistence:
             return
 
-        try:
-            async with aiofiles.open(self.cache_file, 'r', encoding='utf-8') as f:
-                content = await f.read()
-                cache_data = json.loads(content)
+        cache_data = await self.persistence.load_async()
 
-            # Handle both old format (dict) and new format (nested dicts)
-            if isinstance(cache_data, dict) and 'exact' in cache_data:
-                self._cache = cache_data.get('exact', {})
-                self._intent_cache = cache_data.get('intent', {})
-            else:
-                # Old format - treat as exact cache only
-                self._cache = cache_data
-                self._intent_cache = {}
-
-            # Clean expired entries on load
-            self._cleanup_expired()
-        except Exception:
+        if cache_data is None:
             self._cache = {}
             self._intent_cache = {}
+            return
+
+        # Handle both old format (dict) and new format (nested dicts)
+        if isinstance(cache_data, dict) and 'exact' in cache_data:
+            self._cache = cache_data.get('exact', {})
+            self._intent_cache = cache_data.get('intent', {})
+        else:
+            # Old format - treat as exact cache only
+            self._cache = cache_data
+            self._intent_cache = {}
+
+        # Clean expired entries on load
+        self._cleanup_expired()
 
     def _cleanup_expired(self):
         """Remove expired entries from cache."""
@@ -503,8 +501,8 @@ class ResponseCache:
         """Clear all cache entries."""
         self._cache = {}
         self._intent_cache = {}
-        if self.cache_file and self.cache_file.exists():
-            self.cache_file.unlink()
+        if self.persistence:
+            self.persistence.clear()
         self._stats = {
             'hits': 0,
             'misses': 0,
@@ -552,5 +550,5 @@ class ResponseCache:
         for key in intent_keys_to_remove:
             del self._intent_cache[key]
 
-        if self.cache_file:
+        if self.persistence:
             self._save_cache()

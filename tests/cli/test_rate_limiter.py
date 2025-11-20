@@ -13,7 +13,8 @@ import pytest
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from src.cli.rate_limiter import RateLimiter, extract_time_from_timestamp
+from src.cli.rate_limiter import RateLimiter
+from src.infrastructure.formatters.rate_limit_formatter import extract_time_from_timestamp
 from tests.helpers import MockIO
 
 
@@ -244,10 +245,11 @@ class TestRateLimiterQuotaDisplay:
 
         limiter.show_rate_limits("", io=io)
 
-        # Check that percentage is shown
-        styled = io.get_styled_outputs()
-        green_with_pct = [s for s in styled if s['fg'] == 'green' and '%' in s['text']]
-        assert len(green_with_pct) > 0
+        # Check that percentage is shown with green ANSI code
+        # ANSI green code is \x1b[32m
+        output = io.get_output()
+        assert '50.0%' in output  # 50/100 = 50%
+        assert '\x1b[32m' in output  # Contains green color code
 
     def test_shows_red_for_high_usage(self):
         """Should use red color for >= 90% usage."""
@@ -273,10 +275,11 @@ class TestRateLimiterQuotaDisplay:
 
         limiter.show_rate_limits("", io=io)
 
-        # Check for red styling on high percentage
-        styled = io.get_styled_outputs()
-        red_with_pct = [s for s in styled if s['fg'] == 'red' and '%' in s['text']]
-        assert len(red_with_pct) > 0
+        # Check for red ANSI code on high percentage (>= 90%)
+        # ANSI red code is \x1b[31m
+        output = io.get_output()
+        assert '95.0%' in output  # 950/1000 = 95%
+        assert '\x1b[31m' in output  # Contains red color code
 
 
 class TestRateLimiterModelBreakdown:
