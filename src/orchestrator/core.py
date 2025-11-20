@@ -35,7 +35,7 @@ from .background import BackgroundTaskManager
 from .registration import ProviderRegistrar
 from .status_reporter import ProviderStatusReporter
 from .usage_reporter import UsageReporter
-from .context_manager import ContextManager
+from .context_coordinator import ContextCoordinator
 from .manager_protocols import ContextManagerProtocol, BackgroundTaskManagerProtocol
 
 
@@ -255,9 +255,9 @@ class AgentOrchestrator:
             record_task=lambda task: self.task_history.append(task)
         )
 
-    def _create_default_context_manager(self, codebase_context: CodebaseContext) -> ContextManager:
-        """Create default context manager."""
-        return ContextManager(
+    def _create_default_context_manager(self, codebase_context: CodebaseContext) -> ContextCoordinator:
+        """Create default context coordinator."""
+        return ContextCoordinator(
             context=codebase_context,
             output=self.output,
             generate_summary_func=self.task_executor.generate_context_summary

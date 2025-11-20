@@ -1,6 +1,6 @@
 """
 Context management functionality for the CLI.
-Handles project context, exploration, and working memory.
+Handles project context, exploration, and working memory commands.
 """
 
 from typing import Optional
@@ -10,11 +10,11 @@ from .rich_output import RichIO
 from .validators import validate_subcommand
 
 
-class ContextManager:
-    """Manages project context and working memory."""
+class CLIContextCommands:
+    """Handles CLI context-related commands."""
 
     def __init__(self, orchestrator):
-        """Initialize context manager.
+        """Initialize context command handler.
 
         Args:
             orchestrator: The AgentOrchestrator instance

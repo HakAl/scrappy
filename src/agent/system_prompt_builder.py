@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from src.agent_tools.tools import ToolRegistry
 
 
-class PromptBuilder:
+class SystemPromptBuilder:
     """Builds context-aware system prompts for LLM agents."""
 
     def __init__(
@@ -26,7 +26,7 @@ class PromptBuilder:
         tool_registry: Optional["ToolRegistry"] = None
     ):
         """
-        Initialize PromptBuilder.
+        Initialize SystemPromptBuilder.
 
         Args:
             context: Existing CodebaseContext instance (preferred)

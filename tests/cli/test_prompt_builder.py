@@ -1,5 +1,5 @@
 """
-Tests for PromptBuilder used by smart_query.
+Tests for ResearchPromptBuilder used by smart_query.
 """
 
 import pytest
@@ -7,12 +7,12 @@ from src.task_router.protocols import QueryIntent, IntentResult
 from src.cli.research_handlers.base import ClassificationResult
 
 
-class TestPromptBuilder:
-    """Tests for the PromptBuilder class."""
+class TestResearchPromptBuilder:
+    """Tests for the ResearchPromptBuilder class."""
 
     def test_builds_prompt_with_research_results(self):
-        """PromptBuilder includes research results in prompt."""
-        from src.cli.prompt_builder import PromptBuilder
+        """ResearchPromptBuilder includes research results in prompt."""
+        from src.cli.research_prompt_builder import ResearchPromptBuilder
 
         classification = ClassificationResult(
             query="Where is the CodeAgent class?",
@@ -30,7 +30,7 @@ class TestPromptBuilder:
             "Class 'CodeAgent':\nsrc/agent.py:10: class CodeAgent:"
         ]
 
-        builder = PromptBuilder()
+        builder = ResearchPromptBuilder()
         prompt = builder.build(
             query="Where is the CodeAgent class?",
             classification=classification,
@@ -42,8 +42,8 @@ class TestPromptBuilder:
         assert "src/agent.py" in prompt
 
     def test_builds_prompt_without_research_results(self):
-        """PromptBuilder handles empty research results."""
-        from src.cli.prompt_builder import PromptBuilder
+        """ResearchPromptBuilder handles empty research results."""
+        from src.cli.research_prompt_builder import ResearchPromptBuilder
 
         classification = ClassificationResult(
             query="What is this project?",
@@ -56,7 +56,7 @@ class TestPromptBuilder:
             keywords=['project']
         )
 
-        builder = PromptBuilder()
+        builder = ResearchPromptBuilder()
         prompt = builder.build(
             query="What is this project?",
             classification=classification,
@@ -68,8 +68,8 @@ class TestPromptBuilder:
         assert "Research Results" not in prompt or "provide a helpful answer" in prompt.lower()
 
     def test_includes_classification_context(self):
-        """PromptBuilder includes classification metadata."""
-        from src.cli.prompt_builder import PromptBuilder
+        """ResearchPromptBuilder includes classification metadata."""
+        from src.cli.research_prompt_builder import ResearchPromptBuilder
 
         classification = ClassificationResult(
             query="Find authentication code",
@@ -82,7 +82,7 @@ class TestPromptBuilder:
             keywords=['authentication', 'code']
         )
 
-        builder = PromptBuilder()
+        builder = ResearchPromptBuilder()
         prompt = builder.build(
             query="Find authentication code",
             classification=classification,
@@ -98,8 +98,8 @@ class TestPromptBuilder:
         assert "authentication" in prompt
 
     def test_includes_project_summary_when_provided(self):
-        """PromptBuilder includes project summary at the start."""
-        from src.cli.prompt_builder import PromptBuilder
+        """ResearchPromptBuilder includes project summary at the start."""
+        from src.cli.research_prompt_builder import ResearchPromptBuilder
 
         classification = ClassificationResult(
             query="How does auth work?",
@@ -112,7 +112,7 @@ class TestPromptBuilder:
             keywords=['auth']
         )
 
-        builder = PromptBuilder()
+        builder = ResearchPromptBuilder()
         prompt = builder.build(
             query="How does auth work?",
             classification=classification,
@@ -123,8 +123,8 @@ class TestPromptBuilder:
         assert "Python CLI tool" in prompt
 
     def test_separates_multiple_research_results(self):
-        """PromptBuilder properly separates multiple results."""
-        from src.cli.prompt_builder import PromptBuilder
+        """ResearchPromptBuilder properly separates multiple results."""
+        from src.cli.research_prompt_builder import ResearchPromptBuilder
 
         classification = ClassificationResult(
             query="Show me tests",
@@ -143,7 +143,7 @@ class TestPromptBuilder:
             "Coverage report:\n80% coverage"
         ]
 
-        builder = PromptBuilder()
+        builder = ResearchPromptBuilder()
         prompt = builder.build(
             query="Show me tests",
             classification=classification,
@@ -156,18 +156,18 @@ class TestPromptBuilder:
         assert "80%" in prompt
 
     def test_get_system_prompt(self):
-        """PromptBuilder provides appropriate system prompt."""
-        from src.cli.prompt_builder import PromptBuilder
+        """ResearchPromptBuilder provides appropriate system prompt."""
+        from src.cli.research_prompt_builder import ResearchPromptBuilder
 
-        builder = PromptBuilder()
+        builder = ResearchPromptBuilder()
         system_prompt = builder.get_system_prompt()
 
         assert "AI assistant" in system_prompt
         assert "codebase" in system_prompt.lower() or "research" in system_prompt.lower()
 
     def test_handles_empty_entities(self):
-        """PromptBuilder handles classification with no entities."""
-        from src.cli.prompt_builder import PromptBuilder
+        """ResearchPromptBuilder handles classification with no entities."""
+        from src.cli.research_prompt_builder import ResearchPromptBuilder
 
         classification = ClassificationResult(
             query="What is this?",
@@ -180,7 +180,7 @@ class TestPromptBuilder:
             keywords=[]
         )
 
-        builder = PromptBuilder()
+        builder = ResearchPromptBuilder()
         # Should not raise
         prompt = builder.build(
             query="What is this?",
@@ -191,12 +191,12 @@ class TestPromptBuilder:
         assert "What is this?" in prompt
 
 
-class TestPromptBuilderEdgeCases:
-    """Edge case tests for PromptBuilder."""
+class TestResearchPromptBuilderEdgeCases:
+    """Edge case tests for ResearchPromptBuilder."""
 
     def test_handles_very_long_research_results(self):
-        """PromptBuilder handles large research results without issues."""
-        from src.cli.prompt_builder import PromptBuilder
+        """ResearchPromptBuilder handles large research results without issues."""
+        from src.cli.research_prompt_builder import ResearchPromptBuilder
 
         classification = ClassificationResult(
             query="Show everything",
@@ -212,7 +212,7 @@ class TestPromptBuilderEdgeCases:
         # Create a large result
         large_result = "line\n" * 1000
 
-        builder = PromptBuilder()
+        builder = ResearchPromptBuilder()
         prompt = builder.build(
             query="Show everything",
             classification=classification,
@@ -224,8 +224,8 @@ class TestPromptBuilderEdgeCases:
         assert "Show everything" in prompt
 
     def test_handles_special_characters_in_query(self):
-        """PromptBuilder handles queries with special characters."""
-        from src.cli.prompt_builder import PromptBuilder
+        """ResearchPromptBuilder handles queries with special characters."""
+        from src.cli.research_prompt_builder import ResearchPromptBuilder
 
         classification = ClassificationResult(
             query='Search for "error" in *.py files',
@@ -238,7 +238,7 @@ class TestPromptBuilderEdgeCases:
             keywords=['error']
         )
 
-        builder = PromptBuilder()
+        builder = ResearchPromptBuilder()
         prompt = builder.build(
             query='Search for "error" in *.py files',
             classification=classification,
@@ -248,8 +248,8 @@ class TestPromptBuilderEdgeCases:
         assert '"error"' in prompt or 'error' in prompt
 
     def test_multiple_secondary_intents(self):
-        """PromptBuilder handles classification with secondary intents."""
-        from src.cli.prompt_builder import PromptBuilder
+        """ResearchPromptBuilder handles classification with secondary intents."""
+        from src.cli.research_prompt_builder import ResearchPromptBuilder
 
         classification = ClassificationResult(
             query="How does the auth system work and where is it tested?",
@@ -262,7 +262,7 @@ class TestPromptBuilderEdgeCases:
             keywords=['auth', 'system', 'tested']
         )
 
-        builder = PromptBuilder()
+        builder = ResearchPromptBuilder()
         prompt = builder.build(
             query="How does the auth system work and where is it tested?",
             classification=classification,

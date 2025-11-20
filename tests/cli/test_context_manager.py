@@ -14,7 +14,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from src.cli.context_manager import ContextManager
+from src.cli.context_commands import CLIContextCommands
 from tests.helpers import MockIO
 
 
@@ -46,7 +46,7 @@ class TestContextStatusDisplay:
         }
         orchestrator.context.summary = "Test project summary"
 
-        manager = ContextManager(orchestrator)
+        manager = CLIContextCommands(orchestrator)
         io = MockIO()
 
         manager.manage_context("", io=io)
@@ -83,7 +83,7 @@ class TestContextStatusDisplay:
             'discoveries': 0
         }
 
-        manager = ContextManager(orchestrator)
+        manager = CLIContextCommands(orchestrator)
         io = MockIO()
 
         manager.manage_context("", io=io)
@@ -120,7 +120,7 @@ class TestContextStatusDisplay:
             'discoveries': 0
         }
 
-        manager = ContextManager(orchestrator)
+        manager = CLIContextCommands(orchestrator)
         io = MockIO()
 
         manager.manage_context("", io=io)
@@ -143,7 +143,7 @@ class TestExploreCommand:
         }
         orchestrator.context.summary = "Cached summary"
 
-        manager = ContextManager(orchestrator)
+        manager = CLIContextCommands(orchestrator)
         io = MockIO()
 
         manager.manage_context("explore", io=io)
@@ -162,7 +162,7 @@ class TestExploreCommand:
         }
         orchestrator.context.summary = "Fresh summary"
 
-        manager = ContextManager(orchestrator)
+        manager = CLIContextCommands(orchestrator)
         io = MockIO()
 
         manager.manage_context("explore", io=io)
@@ -180,7 +180,7 @@ class TestExploreCommand:
         }
         orchestrator.context.summary = None
 
-        manager = ContextManager(orchestrator)
+        manager = CLIContextCommands(orchestrator)
         io = MockIO()
 
         manager.manage_context("explore", io=io)
@@ -202,7 +202,7 @@ class TestRefreshCommand:
         }
         orchestrator.context.summary = "Updated summary"
 
-        manager = ContextManager(orchestrator)
+        manager = CLIContextCommands(orchestrator)
         io = MockIO()
 
         manager.manage_context("refresh", io=io)
@@ -221,7 +221,7 @@ class TestClearCommands:
         """Should clear context cache from disk."""
         orchestrator = MagicMock()
 
-        manager = ContextManager(orchestrator)
+        manager = CLIContextCommands(orchestrator)
         io = MockIO()
 
         manager.manage_context("clear", io=io)
@@ -234,7 +234,7 @@ class TestClearCommands:
         """Should clear session working memory."""
         orchestrator = MagicMock()
 
-        manager = ContextManager(orchestrator)
+        manager = CLIContextCommands(orchestrator)
         io = MockIO()
 
         manager.manage_context("clearmem", io=io)
@@ -252,7 +252,7 @@ class TestToggleCommand:
         orchestrator = MagicMock()
         orchestrator.context_aware = False
 
-        manager = ContextManager(orchestrator)
+        manager = CLIContextCommands(orchestrator)
         io = MockIO()
 
         manager.manage_context("toggle", io=io)
@@ -266,7 +266,7 @@ class TestToggleCommand:
         orchestrator = MagicMock()
         orchestrator.context_aware = True
 
-        manager = ContextManager(orchestrator)
+        manager = CLIContextCommands(orchestrator)
         io = MockIO()
 
         manager.manage_context("toggle", io=io)
@@ -283,7 +283,7 @@ class TestAddCommand:
         """Should show error when add called without path."""
         orchestrator = MagicMock()
 
-        manager = ContextManager(orchestrator)
+        manager = CLIContextCommands(orchestrator)
         io = MockIO()
 
         manager.manage_context("add", io=io)
@@ -296,7 +296,7 @@ class TestAddCommand:
         """Should accept path argument and display it."""
         orchestrator = MagicMock()
 
-        manager = ContextManager(orchestrator)
+        manager = CLIContextCommands(orchestrator)
         io = MockIO()
 
         manager.manage_context("add src/test.py", io=io)
@@ -313,7 +313,7 @@ class TestInputValidation:
         """Should display error and usage for invalid subcommand."""
         orchestrator = MagicMock()
 
-        manager = ContextManager(orchestrator)
+        manager = CLIContextCommands(orchestrator)
         io = MockIO()
 
         manager.manage_context("invalid_command", io=io)
@@ -346,7 +346,7 @@ class TestInputValidation:
             'discoveries': 0
         }
 
-        manager = ContextManager(orchestrator)
+        manager = CLIContextCommands(orchestrator)
 
         # Should not crash when io=None (uses RichIO internally)
         manager.manage_context("")
@@ -375,7 +375,7 @@ class TestContextManagerEdgeCases:
             'discoveries': 0
         }
 
-        manager = ContextManager(orchestrator)
+        manager = CLIContextCommands(orchestrator)
         io = MockIO()
 
         manager.manage_context("", io=io)
@@ -404,7 +404,7 @@ class TestContextManagerEdgeCases:
         }
         orchestrator.context.summary = {'not': 'a string'}  # Non-string summary
 
-        manager = ContextManager(orchestrator)
+        manager = CLIContextCommands(orchestrator)
         io = MockIO()
 
         manager.manage_context("", io=io)

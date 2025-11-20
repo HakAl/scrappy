@@ -1,7 +1,5 @@
 PHASE 5: Write Proper Tests + Delete Bad/Redundant Tests
 
-<!-- HIGH PRIORITY  -->
-
 <!-- MEDIUM PRIORITY - 30-50% Coverage: -->
 
 src\cli\smart_query.py

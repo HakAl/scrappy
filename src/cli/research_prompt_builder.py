@@ -9,7 +9,7 @@ from typing import List, Optional
 from .research_handlers.base import ClassificationResult
 
 
-class PromptBuilder:
+class ResearchPromptBuilder:
     """Builds prompts for LLM with classification context and research results."""
 
     def build(

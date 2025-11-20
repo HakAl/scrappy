@@ -10,7 +10,7 @@ from src.task_router.intent import RegexIntentClassifier, RegexEntityExtractor
 from src.task_router.protocols import IntentResult
 from .io_interface import CLIIOProtocol
 from .rich_output import RichIO
-from .prompt_builder import PromptBuilder
+from .research_prompt_builder import ResearchPromptBuilder
 from .research_handlers import create_default_registry
 from .research_handlers.base import ClassificationResult
 from .display_manager import DisplayManager
@@ -25,7 +25,7 @@ class CLISmartQuery:
         orchestrator,
         classifier: Optional[RegexIntentClassifier] = None,
         entity_extractor: Optional[RegexEntityExtractor] = None,
-        prompt_builder: Optional[PromptBuilder] = None,
+        prompt_builder: Optional[ResearchPromptBuilder] = None,
         handler_registry: Optional[dict] = None
     ):
         """Initialize smart query handler.
@@ -51,9 +51,9 @@ class CLISmartQuery:
         """Create default entity extractor."""
         return RegexEntityExtractor()
 
-    def _create_default_prompt_builder(self) -> PromptBuilder:
+    def _create_default_prompt_builder(self) -> ResearchPromptBuilder:
         """Create default prompt builder."""
-        return PromptBuilder()
+        return ResearchPromptBuilder()
 
     def _create_default_handler_registry(self) -> dict:
         """Create default research handler registry."""

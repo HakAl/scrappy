@@ -1224,12 +1224,12 @@ class CodeAgent:
         # Build initial context
         self._show_progress("Building context...")
 
-        # System prompt for agent - use PromptBuilder for context-aware construction
+        # System prompt for agent - use SystemPromptBuilder for context-aware construction
         self._show_progress("Preparing system prompt...")
-        from src.agent.prompt_builder import PromptBuilder
+        from src.agent.system_prompt_builder import SystemPromptBuilder
 
-        # Create PromptBuilder with tool registry for unified prompt generation
-        prompt_builder = PromptBuilder(
+        # Create SystemPromptBuilder with tool registry for unified prompt generation
+        prompt_builder = SystemPromptBuilder(
             context=self.orch.context,
             tool_registry=self.tool_registry
         )

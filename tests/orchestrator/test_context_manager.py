@@ -1,7 +1,7 @@
 """
-Tests for ContextManager.
+Tests for ContextCoordinator.
 
-These tests verify that ContextManager properly coordinates codebase context
+These tests verify that ContextCoordinator properly coordinates codebase context
 operations with orchestrator components (logging, task execution).
 """
 
@@ -9,11 +9,11 @@ import pytest
 from pathlib import Path
 from unittest.mock import Mock, MagicMock
 
-from src.orchestrator.context_manager import ContextManager
+from src.orchestrator.context_coordinator import ContextCoordinator
 from src.context.codebase_context import CodebaseContext
 
 
-class TestContextManagerAutoExplore:
+class TestContextCoordinatorAutoExplore:
     """Test auto-exploration behavior on startup."""
 
     def test_auto_explore_uses_cached_context_when_available(self, tmp_path):
@@ -23,7 +23,7 @@ class TestContextManagerAutoExplore:
         context.explore()  # Explore to populate cache
 
         output = Mock()
-        manager = ContextManager(context, output)
+        manager = ContextCoordinator(context, output)
 
         # Act
         result = manager.auto_explore()
@@ -44,7 +44,7 @@ class TestContextManagerAutoExplore:
         context = CodebaseContext(str(tmp_path))
         output = Mock()
         summary_func = Mock(return_value="Test summary")
-        manager = ContextManager(context, output, summary_func)
+        manager = ContextCoordinator(context, output, summary_func)
 
         # Act
         result = manager.auto_explore()
@@ -63,7 +63,7 @@ class TestContextManagerAutoExplore:
 
         context = CodebaseContext(str(tmp_path))
         output = Mock()
-        manager = ContextManager(context, output, generate_summary_func=None)
+        manager = ContextCoordinator(context, output, generate_summary_func=None)
 
         # Act
         result = manager.auto_explore()
@@ -79,7 +79,7 @@ class TestContextManagerAutoExplore:
         """Auto-exploration of empty directory should complete gracefully."""
         context = CodebaseContext(str(tmp_path))
         output = Mock()
-        manager = ContextManager(context, output)
+        manager = ContextCoordinator(context, output)
 
         # Act
         result = manager.auto_explore()
@@ -89,7 +89,7 @@ class TestContextManagerAutoExplore:
         assert result['total_files'] == 0
 
 
-class TestContextManagerExploreProject:
+class TestContextCoordinatorExploreProject:
     """Test manual project exploration."""
 
     def test_explore_project_without_force_uses_cache(self, tmp_path):
@@ -98,7 +98,7 @@ class TestContextManagerExploreProject:
         context.explore()  # Pre-populate cache
 
         output = Mock()
-        manager = ContextManager(context, output)
+        manager = ContextCoordinator(context, output)
 
         # Act
         result = manager.explore_project(force=False)
@@ -115,7 +115,7 @@ class TestContextManagerExploreProject:
 
         output = Mock()
         summary_func = Mock(return_value="Summary")
-        manager = ContextManager(context, output, summary_func)
+        manager = ContextCoordinator(context, output, summary_func)
 
         # Act
         result = manager.explore_project(force=True)
@@ -131,7 +131,7 @@ class TestContextManagerExploreProject:
         context = CodebaseContext(str(tmp_path))
         output = Mock()
         summary_func = Mock(return_value="Generated summary")
-        manager = ContextManager(context, output, summary_func)
+        manager = ContextCoordinator(context, output, summary_func)
 
         # Act
         result = manager.explore_project(force=True)
@@ -153,7 +153,7 @@ class TestContextManagerExploreProject:
         context.project_path = tmp_path
 
         output = Mock()
-        manager = ContextManager(context, output)
+        manager = ContextCoordinator(context, output)
 
         # Act
         result = manager.explore_project(force=True)
@@ -165,13 +165,13 @@ class TestContextManagerExploreProject:
         assert output.error.called
 
 
-class TestContextManagerContextProperty:
+class TestContextCoordinatorContextProperty:
     """Test the context property accessor."""
 
     def test_context_property_returns_underlying_context(self, tmp_path):
         """The context property should return the underlying CodebaseContext."""
         context = CodebaseContext(str(tmp_path))
-        manager = ContextManager(context)
+        manager = ContextCoordinator(context)
 
         # Act
         retrieved_context = manager.context
@@ -182,7 +182,7 @@ class TestContextManagerContextProperty:
     def test_context_property_allows_direct_operations(self, tmp_path):
         """The context property should allow direct CodebaseContext operations."""
         context = CodebaseContext(str(tmp_path))
-        manager = ContextManager(context)
+        manager = ContextCoordinator(context)
 
         # Act - Use context directly through property
         status = manager.context.get_status()
@@ -192,14 +192,14 @@ class TestContextManagerContextProperty:
         assert 'is_explored' in status
 
 
-class TestContextManagerOutputLogging:
+class TestContextCoordinatorOutputLogging:
     """Test output logging behavior."""
 
     def test_uses_provided_output_interface(self, tmp_path):
         """ContextManager should use the provided OutputInterface."""
         context = CodebaseContext(str(tmp_path))
         custom_output = Mock()
-        manager = ContextManager(context, custom_output)
+        manager = ContextCoordinator(context, custom_output)
 
         # Act
         manager.auto_explore()
@@ -209,7 +209,7 @@ class TestContextManagerOutputLogging:
 
 
 
-class TestContextManagerIntegration:
+class TestContextCoordinatorIntegration:
     """Integration tests with real CodebaseContext."""
 
     def test_force_reexploration_clears_cache(self, tmp_path):
@@ -218,7 +218,7 @@ class TestContextManagerIntegration:
 
         context = CodebaseContext(str(tmp_path))
         output = Mock()
-        manager = ContextManager(context, output)
+        manager = ContextCoordinator(context, output)
 
         # First exploration
         result1 = manager.auto_explore()
@@ -236,7 +236,7 @@ class TestContextManagerIntegration:
         assert result2['total_files'] > result1['total_files']
 
 
-class TestContextManagerEdgeCases:
+class TestContextCoordinatorEdgeCases:
     """Test edge cases and boundary conditions."""
 
     def test_handles_nonexistent_directory(self, tmp_path):
@@ -244,7 +244,7 @@ class TestContextManagerEdgeCases:
         nonexistent = tmp_path / "does_not_exist"
         context = CodebaseContext(str(nonexistent))
         output = Mock()
-        manager = ContextManager(context, output)
+        manager = ContextCoordinator(context, output)
 
         # Act
         result = manager.auto_explore()
@@ -258,7 +258,7 @@ class TestContextManagerEdgeCases:
 
         context = CodebaseContext(str(tmp_path))
         output = Mock()
-        manager = ContextManager(context, output, generate_summary_func=None)
+        manager = ContextCoordinator(context, output, generate_summary_func=None)
 
         # Act
         result = manager.explore_project(force=True)
@@ -267,12 +267,12 @@ class TestContextManagerEdgeCases:
         assert result['status'] == 'explored'
 
 
-class TestContextManagerProtocolCompliance:
+class TestContextCoordinatorProtocolCompliance:
     """Test that ContextManager implements ContextManagerProtocol."""
 
 
 
-class TestContextManagerDependencyInjection:
+class TestContextCoordinatorDependencyInjection:
     """Test dependency injection behavior."""
 
     def test_accepts_codebase_context_dependency(self, tmp_path):
@@ -280,7 +280,7 @@ class TestContextManagerDependencyInjection:
         context = CodebaseContext(str(tmp_path))
 
         # Act
-        manager = ContextManager(context)
+        manager = ContextCoordinator(context)
 
         # Assert
         assert manager.context is context
@@ -291,7 +291,7 @@ class TestContextManagerDependencyInjection:
         custom_output = Mock()
 
         # Act
-        manager = ContextManager(context, custom_output)
+        manager = ContextCoordinator(context, custom_output)
 
         # Assert
         assert manager.output is custom_output

@@ -29,7 +29,7 @@ from .memory import WorkingMemory
 from .session import SessionManager
 from .task_executor import TaskExecutor
 from .provider_selector import ProviderSelector
-from .context_manager import ContextManager
+from .context_coordinator import ContextCoordinator as ContextManager
 from .protocols import (
     Orchestrator,
     CacheProtocol,

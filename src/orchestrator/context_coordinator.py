@@ -1,5 +1,5 @@
 """
-Context manager for orchestrator.
+Context coordinator for orchestrator.
 
 Coordinates codebase context operations with orchestrator components
 like logging and task execution.
@@ -18,7 +18,7 @@ from .protocols import OutputInterface
 from .output import ConsoleOutput
 
 
-class ContextManager:
+class ContextCoordinator:
     """
     Coordinates codebase context operations with orchestrator components.
 
@@ -47,7 +47,7 @@ class ContextManager:
         generate_summary_func: Optional[Callable[[str], str]] = None,
     ):
         """
-        Initialize context manager.
+        Initialize context coordinator.
 
         Args:
             context: Underlying codebase context

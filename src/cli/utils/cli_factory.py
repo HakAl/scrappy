@@ -18,7 +18,7 @@ from ..multiprovider import CLIMultiProvider
 from ..smart_query import CLISmartQuery
 from ..agent_manager import CLIAgentManager
 from ..task_router_handler import CLITaskRouterHandler
-from ..context_manager import ContextManager
+from ..context_commands import CLIContextCommands
 from ..cache_manager import CacheManager
 from ..rate_limiter import RateLimiter
 from ..persistence import SessionPersistence
@@ -109,7 +109,7 @@ def initialize_cli_handlers(orchestrator: "Orchestrator", session_start: datetim
         Dict with all 8 standard handlers
     """
     # Create session manager dependencies first
-    context_manager = ContextManager(orchestrator)
+    context_manager = CLIContextCommands(orchestrator)
     cache_manager = CacheManager(orchestrator)
     rate_limiter = RateLimiter(orchestrator)
     session_persistence = SessionPersistence(orchestrator)

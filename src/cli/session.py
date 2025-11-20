@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 
 from .io_interface import CLIIOProtocol
 from .rich_output import RichIO
-from .context_manager import ContextManager
+from .context_commands import CLIContextCommands
 from .cache_manager import CacheManager
 from .rate_limiter import RateLimiter
 from .persistence import SessionPersistence
@@ -19,7 +19,7 @@ class CLISessionManager:
     def __init__(
         self,
         orchestrator: Any,
-        context_manager: ContextManager,
+        context_manager: CLIContextCommands,
         cache_manager: CacheManager,
         rate_limiter: RateLimiter,
         session_persistence: SessionPersistence
