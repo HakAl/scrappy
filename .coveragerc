@@ -6,6 +6,12 @@ omit =
     */examples/*
     */site-packages/*
     setup.py
+    # Re-export modules (no behavior to test)
+    src/agent.py
+    src/cli.py
+    src/orchestrator.py
+    # Type definitions only (no runtime behavior)
+    src/cli/types.py
 
 [report]
 show_missing = true

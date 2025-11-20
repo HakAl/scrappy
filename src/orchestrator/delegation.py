@@ -1,71 +1,117 @@
 """
-DelegationManager - Handles LLM delegation with retry/fallback logic.
+DelegationManager - Handles LLM delegation with caching and prompt augmentation.
 
-Extracted from AgentOrchestrator to separate delegation concerns.
+Refactored to follow SOLID principles:
+- Single Responsibility: Coordinates delegation flow, delegates retry logic to RetryOrchestrator
+- Open/Closed: Can extend by swapping protocol implementations
+- Dependency Inversion: Depends on protocols, not concretions
 """
 
 from typing import Optional, Callable
 from datetime import datetime
 import asyncio
-import time
 
 try:
-    from ..providers import ProviderRegistry, LLMResponse
-    from ..utils.errors import is_rate_limit_error, RateLimitError, AllProvidersRateLimitedError
+    from ..providers import LLMResponse
+    from ..protocols.delegation import (
+        LLMRequest,
+        RetryOrchestratorProtocol,
+        ProviderRegistryProtocol,
+        CacheProtocol,
+        RateLimitTrackerProtocol,
+        ProviderSelectorProtocol,
+        OutputInterfaceProtocol,
+        ContextProviderProtocol,
+        WorkingMemoryProtocol,
+        PromptAugmenterProtocol,
+        BatchSchedulerProtocol,
+    )
+    from ..config import (
+        DEFAULT_MAX_TOKENS,
+        DEFAULT_TEMPERATURE,
+        DEFAULT_MAX_RETRIES,
+        DEFAULT_PROVIDER,
+        DEFAULT_MAX_CONCURRENT,
+    )
 except ImportError:
-    from providers import ProviderRegistry, LLMResponse
-    from utils.errors import is_rate_limit_error, RateLimitError, AllProvidersRateLimitedError
-
-from .cache import ResponseCache
-from .rate_limiter import RateLimitTracker
-from .provider_selector import ProviderSelector
-from .output import OutputInterface, NullOutput
+    from providers import LLMResponse
+    from protocols.delegation import (
+        LLMRequest,
+        RetryOrchestratorProtocol,
+        ProviderRegistryProtocol,
+        CacheProtocol,
+        RateLimitTrackerProtocol,
+        ProviderSelectorProtocol,
+        OutputInterfaceProtocol,
+        ContextProviderProtocol,
+        WorkingMemoryProtocol,
+        PromptAugmenterProtocol,
+        BatchSchedulerProtocol,
+    )
+    from config import (
+        DEFAULT_MAX_TOKENS,
+        DEFAULT_TEMPERATURE,
+        DEFAULT_MAX_RETRIES,
+        DEFAULT_PROVIDER,
+        DEFAULT_MAX_CONCURRENT,
+    )
 
 
 class DelegationManager:
     """
-    Handles LLM delegation with retry/fallback logic.
+    Coordinates LLM delegation with caching, prompt augmentation, and retry logic.
 
-    Responsible for:
-    - Delegating prompts to LLM providers
-    - Handling rate limit retries with exponential backoff
-    - Falling back to alternative providers on quota exhaustion
-    - Managing cache interactions
-    - Tracking request metrics
+    Follows SOLID principles:
+    - Single Responsibility: Coordinates delegation flow (caching, augmentation, retry)
+    - Open/Closed: Extensible via protocol implementations
+    - Dependency Inversion: Depends on protocols, not concretions
+
+    Responsibilities:
+    - Coordinate delegation flow (caching, augmentation, retry)
+    - Check cache before making requests
+    - Delegate prompt augmentation to PromptAugmenter
+    - Delegate retry/fallback logic to RetryOrchestrator
+    - Delegate batch/parallel execution to BatchScheduler
+    - Store successful responses in cache
+    - Return response with metadata
+
+    Does NOT:
+    - Implement prompt augmentation logic (delegates to PromptAugmenter)
+    - Implement retry logic (delegates to RetryOrchestrator)
+    - Implement batch scheduling logic (delegates to BatchScheduler)
+    - Implement provider selection (delegates to ProviderSelector)
+    - Implement rate limit tracking (delegates to RateLimitTracker)
     """
 
     def __init__(
         self,
-        registry: ProviderRegistry,
-        cache: ResponseCache,
-        rate_tracker: RateLimitTracker,
-        provider_selector: ProviderSelector,
-        output: Optional[OutputInterface] = None,
-        context: Optional[object] = None,
+        *,
+        retry_orchestrator: RetryOrchestratorProtocol,
+        cache: CacheProtocol,
+        output: OutputInterfaceProtocol,
+        prompt_augmenter: PromptAugmenterProtocol,
+        batch_scheduler: BatchSchedulerProtocol,
         context_aware: bool = False,
-        get_working_memory_context: Optional[Callable[[], str]] = None,
     ):
         """
         Initialize DelegationManager.
 
+        All dependencies are injected - NO instantiation inside constructor.
+
         Args:
-            registry: Provider registry for accessing LLM providers
+            retry_orchestrator: Retry orchestrator for handling retries/fallbacks
             cache: Response cache for caching LLM responses
-            rate_tracker: Rate limit tracker for monitoring usage
-            provider_selector: Provider selector for fallback logic
             output: Output interface for logging messages
-            context: Codebase context for prompt augmentation
+            prompt_augmenter: Prompt augmenter for adding context and working memory
+            batch_scheduler: Batch scheduler for parallel execution
             context_aware: Whether to augment prompts with context
-            get_working_memory_context: Callable to get working memory context string
         """
-        self.registry = registry
-        self.cache = cache
-        self.rate_tracker = rate_tracker
-        self.provider_selector = provider_selector
-        self.output = output or NullOutput()
-        self.context = context
-        self.context_aware = context_aware
-        self._get_working_memory_context = get_working_memory_context or (lambda: "")
+        self._retry_orchestrator = retry_orchestrator
+        self._cache = cache
+        self._output = output
+        self._prompt_augmenter = prompt_augmenter
+        self._batch_scheduler = batch_scheduler
+        self._context_aware = context_aware
 
     def delegate(
         self,
@@ -73,17 +119,20 @@ class DelegationManager:
         prompt: str,
         model: Optional[str] = None,
         system_prompt: Optional[str] = None,
-        max_tokens: int = 1000,
-        temperature: float = 0.7,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        temperature: float = DEFAULT_TEMPERATURE,
         use_context: Optional[bool] = None,
         use_cache: Optional[bool] = None,
         intent_classification: Optional[dict] = None,
         auto_fallback: bool = True,
-        max_retries: int = 3,
+        max_retries: int = DEFAULT_MAX_RETRIES,
         **kwargs
     ) -> tuple[LLMResponse, dict]:
         """
-        Delegate a task to a specific provider with automatic fallback on rate limits.
+        Synchronous wrapper around delegate_async.
+
+        This is a thin wrapper that calls asyncio.run() on the async implementation.
+        All business logic is in delegate_async() to avoid duplication.
 
         Args:
             provider_name: Initial provider to try
@@ -104,192 +153,24 @@ class DelegationManager:
 
         Raises:
             AllProvidersRateLimitedError: If all providers are rate limited
-            RateLimitError: If proactive quota check fails
-            Exception: Other non-rate-limit errors
+            ValueError: If input validation fails
         """
-        # Input validation
-        if not prompt or not prompt.strip():
-            raise ValueError("prompt cannot be empty")
-        if not 0.0 <= temperature <= 2.0:
-            raise ValueError(f"temperature must be 0.0-2.0, got {temperature}")
-        if max_tokens <= 0:
-            raise ValueError(f"max_tokens must be positive, got {max_tokens}")
-
-        # Determine settings
-        should_use_context = use_context if use_context is not None else self.context_aware
-        should_use_cache = use_cache if use_cache is not None else True
-
-        # Augment prompt with context if enabled
-        final_prompt = prompt
-        if should_use_context:
-            if self.context and hasattr(self.context, 'is_explored') and self.context.is_explored():
-                final_prompt = self.context.augment_prompt(prompt)
-
-            # Add working memory context
-            working_memory_context = self._get_working_memory_context()
-            if working_memory_context:
-                final_prompt = working_memory_context + "\n\n" + final_prompt
-
-        # Check cache first
-        cached_response = None
-        intent_cache_hit = False
-        if should_use_cache:
-            cached_response = self.cache.get(
-                provider_name, final_prompt, model, system_prompt, max_tokens, temperature
+        return asyncio.run(
+            self.delegate_async(
+                provider_name=provider_name,
+                prompt=prompt,
+                model=model,
+                system_prompt=system_prompt,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                use_context=use_context,
+                use_cache=use_cache,
+                intent_classification=intent_classification,
+                auto_fallback=auto_fallback,
+                max_retries=max_retries,
+                **kwargs
             )
-            if not cached_response and intent_classification:
-                cached_response = self.cache.get_by_intent(
-                    intent_classification.get('intent', ''),
-                    intent_classification.get('entities', {}),
-                    intent_classification.get('keywords', []),
-                    provider_name,
-                    model
-                )
-                if cached_response:
-                    intent_cache_hit = True
-
-        if cached_response:
-            task_record = {
-                'timestamp': datetime.now().isoformat(),
-                'provider': provider_name,
-                'model': cached_response.model,
-                'tokens_used': cached_response.tokens_used,
-                'latency_ms': 0.0,
-                'context_augmented': should_use_context,
-                'cached': True,
-                'intent_cache_hit': intent_cache_hit,
-            }
-            return cached_response, task_record
-
-        # Build messages
-        messages = []
-        if system_prompt:
-            messages.append({'role': 'system', 'content': system_prompt})
-        messages.append({'role': 'user', 'content': final_prompt})
-
-        # Track which providers we've tried
-        attempted_providers = []
-        current_provider_name = provider_name
-        current_model = model
-
-        while True:
-            provider = self.registry.get(current_provider_name)
-
-            # Proactive limit check
-            try:
-                provider_limits = provider.get_limits()
-                remaining = self.rate_tracker.get_remaining_quota(
-                    current_provider_name, current_model or provider.default_model, provider_limits
-                )
-
-                if remaining.get('requests_today_remaining', 100) <= 0:
-                    self.output.warn(f"{current_provider_name} has exhausted daily quota, trying fallback...")
-                    raise RateLimitError(current_provider_name, "Daily quota exhausted", "requests")
-            except RateLimitError:
-                raise
-            except Exception as e:
-                self.output.warn(f"Proactive limit check failed for {current_provider_name}: {e}")
-
-            # Try the current provider with retries
-            last_error = None
-            for attempt in range(max_retries):
-                try:
-                    response = provider.chat(
-                        messages=messages,
-                        model=current_model,
-                        max_tokens=max_tokens,
-                        temperature=temperature,
-                        **kwargs
-                    )
-
-                    # Success! Store in cache
-                    if should_use_cache:
-                        self.cache.put(response, final_prompt, current_model, system_prompt, max_tokens, temperature)
-                        if intent_classification:
-                            self.cache.put_by_intent(
-                                response,
-                                intent_classification.get('intent', ''),
-                                intent_classification.get('entities', {}),
-                                intent_classification.get('keywords', [])
-                            )
-
-                    # Track rate limits
-                    self.rate_tracker.record_request(
-                        provider=current_provider_name,
-                        model=response.model,
-                        input_tokens=response.input_tokens,
-                        output_tokens=response.output_tokens,
-                        success=True
-                    )
-
-                    # Check for approaching limits
-                    warnings = self.rate_tracker.is_limit_approaching(
-                        current_provider_name, response.model, provider_limits
-                    )
-                    if warnings.get('message'):
-                        response.metadata['rate_limit_warning'] = warnings['message']
-
-                    # Add fallback info if we switched providers
-                    if current_provider_name != provider_name:
-                        response.metadata['fallback_from'] = provider_name
-                        response.metadata['fallback_to'] = current_provider_name
-                        response.metadata['attempted_providers'] = attempted_providers
-
-                    # Create task record
-                    task_record = {
-                        'timestamp': datetime.now().isoformat(),
-                        'provider': current_provider_name,
-                        'model': response.model,
-                        'tokens_used': response.tokens_used,
-                        'latency_ms': response.latency_ms,
-                        'context_augmented': should_use_context,
-                        'cached': False,
-                        'fallback': current_provider_name != provider_name,
-                        'attempts': attempt + 1,
-                    }
-
-                    return response, task_record
-
-                except Exception as e:
-                    last_error = e
-
-                    if is_rate_limit_error(e):
-                        # Record the failed request
-                        self.rate_tracker.record_request(
-                            provider=current_provider_name,
-                            model=current_model or provider.default_model,
-                            input_tokens=0,
-                            output_tokens=0,
-                            success=False,
-                            error_message=str(e)
-                        )
-
-                        if attempt < max_retries - 1:
-                            wait_time = (2 ** attempt) * 0.5
-                            self.output.warn(f"Rate limit hit on {current_provider_name}, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})...")
-                            time.sleep(wait_time)
-                        else:
-                            self.output.warn(f"Rate limit persists on {current_provider_name} after {max_retries} attempts")
-                            break
-                    else:
-                        raise
-
-            # Exhausted retries for current provider
-            attempted_providers.append(current_provider_name)
-
-            if not auto_fallback:
-                raise last_error
-
-            # Get next fallback provider
-            fallback_provider = self.provider_selector.get_provider_for_fallback(exclude=attempted_providers)
-
-            if fallback_provider is None:
-                self.output.error(f"All providers rate limited. Attempted: {attempted_providers}")
-                raise AllProvidersRateLimitedError(attempted_providers)
-
-            self.output.info(f"[FALLBACK] Switching from {current_provider_name} to {fallback_provider}")
-            current_provider_name = fallback_provider
-            current_model = None
+        )
 
     async def delegate_async(
         self,
@@ -297,17 +178,20 @@ class DelegationManager:
         prompt: str,
         model: Optional[str] = None,
         system_prompt: Optional[str] = None,
-        max_tokens: int = 1000,
-        temperature: float = 0.7,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        temperature: float = DEFAULT_TEMPERATURE,
         use_context: Optional[bool] = None,
         use_cache: Optional[bool] = None,
         intent_classification: Optional[dict] = None,
         auto_fallback: bool = True,
-        max_retries: int = 3,
+        max_retries: int = DEFAULT_MAX_RETRIES,
         **kwargs
     ) -> tuple[LLMResponse, dict]:
         """
-        Async version of delegate with automatic fallback on rate limits.
+        Async delegation with caching, prompt augmentation, and retry/fallback logic.
+
+        This is the primary implementation. The sync delegate() method is a thin
+        wrapper that calls asyncio.run() on this method.
 
         Args:
             provider_name: Initial provider to try
@@ -328,32 +212,24 @@ class DelegationManager:
 
         Raises:
             AllProvidersRateLimitedError: If all providers are rate limited
-            RateLimitError: If proactive quota check fails
-            Exception: Other non-rate-limit errors
+            ValueError: If input validation fails
         """
         # Determine settings
-        should_use_context = use_context if use_context is not None else self.context_aware
+        should_use_context = use_context if use_context is not None else self._context_aware
         should_use_cache = use_cache if use_cache is not None else True
 
-        # Augment prompt with context if enabled
-        final_prompt = prompt
-        if should_use_context:
-            if self.context and hasattr(self.context, 'is_explored') and self.context.is_explored():
-                final_prompt = self.context.augment_prompt(prompt)
+        # Step 1: Augment prompt with context and working memory
+        final_prompt = self._prompt_augmenter.augment(prompt, use_context=should_use_context)
 
-            working_memory_context = self._get_working_memory_context()
-            if working_memory_context:
-                final_prompt = working_memory_context + "\n\n" + final_prompt
-
-        # Check cache first
+        # Step 2: Check cache first
         cached_response = None
         intent_cache_hit = False
         if should_use_cache:
-            cached_response = self.cache.get(
+            cached_response = self._cache.get(
                 provider_name, final_prompt, model, system_prompt, max_tokens, temperature
             )
             if not cached_response and intent_classification:
-                cached_response = self.cache.get_by_intent(
+                cached_response = self._cache.get_by_intent(
                     intent_classification.get('intent', ''),
                     intent_classification.get('entities', {}),
                     intent_classification.get('keywords', []),
@@ -377,144 +253,66 @@ class DelegationManager:
             }
             return cached_response, task_record
 
-        # Build messages
-        messages = []
-        if system_prompt:
-            messages.append({'role': 'system', 'content': system_prompt})
-        messages.append({'role': 'user', 'content': final_prompt})
+        # Step 3: Create LLMRequest object (validates inputs)
+        request = LLMRequest(
+            prompt=final_prompt,
+            provider=provider_name,
+            model=model,
+            system_prompt=system_prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            use_context=use_context,
+            use_cache=use_cache,
+            intent_classification=intent_classification,
+            auto_fallback=auto_fallback,
+            kwargs=kwargs,
+        )
 
-        # Track which providers we've tried
-        attempted_providers = []
-        current_provider_name = provider_name
-        current_model = model
+        # Step 4: Execute with retry/fallback (delegate to RetryOrchestrator)
+        response, retry_metadata = await self._retry_orchestrator.execute_with_retry(
+            request=request,
+            excluded_providers=set(),
+            max_retries=max_retries,
+        )
 
-        while True:
-            provider = self.registry.get(current_provider_name)
-
-            # Proactive limit check
-            try:
-                provider_limits = provider.get_limits()
-                remaining = self.rate_tracker.get_remaining_quota(
-                    current_provider_name, current_model or provider.default_model, provider_limits
+        # Step 5: Store in cache
+        if should_use_cache:
+            self._cache.put(response, final_prompt, model, system_prompt, max_tokens, temperature)
+            if intent_classification:
+                self._cache.put_by_intent(
+                    response,
+                    intent_classification.get('intent', ''),
+                    intent_classification.get('entities', {}),
+                    intent_classification.get('keywords', [])
                 )
 
-                if remaining.get('requests_today_remaining', 100) <= 0:
-                    self.output.warn(f"{current_provider_name} has exhausted daily quota, trying fallback...")
-                    raise RateLimitError(current_provider_name, "Daily quota exhausted", "requests")
-            except RateLimitError:
-                raise
-            except Exception as e:
-                self.output.warn(f"Proactive limit check failed for {current_provider_name}: {e}")
+        # Step 6: Create final task record
+        task_record = {
+            'timestamp': datetime.now().isoformat(),
+            'provider': retry_metadata['provider'],
+            'model': retry_metadata['model'],
+            'tokens_used': retry_metadata['tokens_used'],
+            'latency_ms': retry_metadata['latency_ms'],
+            'context_augmented': should_use_context,
+            'cached': False,
+            'async': True,
+            'fallback': retry_metadata['fallback'],
+            'attempts': retry_metadata['attempts'],
+        }
 
-            # Try the current provider with retries
-            last_error = None
-            for attempt in range(max_retries):
-                try:
-                    response = await provider.chat_async(
-                        messages=messages,
-                        model=current_model,
-                        max_tokens=max_tokens,
-                        temperature=temperature,
-                        **kwargs
-                    )
-
-                    # Success! Store in cache (can be done async)
-                    if should_use_cache:
-                        self.cache.put(response, final_prompt, current_model, system_prompt, max_tokens, temperature)
-                        if intent_classification:
-                            self.cache.put_by_intent(
-                                response,
-                                intent_classification.get('intent', ''),
-                                intent_classification.get('entities', {}),
-                                intent_classification.get('keywords', [])
-                            )
-
-                    # Track rate limits
-                    self.rate_tracker.record_request(
-                        provider=current_provider_name,
-                        model=response.model,
-                        input_tokens=response.input_tokens,
-                        output_tokens=response.output_tokens,
-                        success=True
-                    )
-
-                    # Check for approaching limits
-                    warnings = self.rate_tracker.is_limit_approaching(
-                        current_provider_name, response.model, provider_limits
-                    )
-                    if warnings.get('message'):
-                        response.metadata['rate_limit_warning'] = warnings['message']
-
-                    # Add fallback info if we switched providers
-                    if current_provider_name != provider_name:
-                        response.metadata['fallback_from'] = provider_name
-                        response.metadata['fallback_to'] = current_provider_name
-                        response.metadata['attempted_providers'] = attempted_providers
-
-                    # Create task record
-                    task_record = {
-                        'timestamp': datetime.now().isoformat(),
-                        'provider': current_provider_name,
-                        'model': response.model,
-                        'tokens_used': response.tokens_used,
-                        'latency_ms': response.latency_ms,
-                        'context_augmented': should_use_context,
-                        'cached': False,
-                        'async': True,
-                        'fallback': current_provider_name != provider_name,
-                        'attempts': attempt + 1,
-                    }
-
-                    return response, task_record
-
-                except Exception as e:
-                    last_error = e
-
-                    if is_rate_limit_error(e):
-                        self.rate_tracker.record_request(
-                            provider=current_provider_name,
-                            model=current_model or provider.default_model,
-                            input_tokens=0,
-                            output_tokens=0,
-                            success=False,
-                            error_message=str(e)
-                        )
-
-                        if attempt < max_retries - 1:
-                            wait_time = (2 ** attempt) * 0.5
-                            self.output.warn(f"Rate limit hit on {current_provider_name}, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})...")
-                            await asyncio.sleep(wait_time)
-                        else:
-                            self.output.warn(f"Rate limit persists on {current_provider_name} after {max_retries} attempts")
-                            break
-                    else:
-                        raise
-
-            # Exhausted retries for current provider
-            attempted_providers.append(current_provider_name)
-
-            if not auto_fallback:
-                raise last_error
-
-            # Get next fallback provider
-            fallback_provider = self.provider_selector.get_provider_for_fallback(exclude=attempted_providers)
-
-            if fallback_provider is None:
-                self.output.error(f"All providers rate limited. Attempted: {attempted_providers}")
-                raise AllProvidersRateLimitedError(attempted_providers)
-
-            self.output.info(f"[FALLBACK] Switching from {current_provider_name} to {fallback_provider}")
-            current_provider_name = fallback_provider
-            current_model = None
+        return response, task_record
 
     def delegate_batch(
         self,
         tasks: list[dict],
-        provider_name: str = 'groq',
+        provider_name: str = DEFAULT_PROVIDER,
         **kwargs
     ) -> list[LLMResponse]:
         """
-        Process multiple tasks with same provider.
+        Process multiple tasks with same provider (synchronous wrapper).
+
+        This is a thin wrapper around batch_delegate_async. All business logic
+        is in the async implementation.
 
         Args:
             tasks: List of task dicts with 'prompt' and optional 'system_prompt', 'kwargs'
@@ -524,33 +322,29 @@ class DelegationManager:
         Returns:
             List of LLMResponse objects in the same order as input tasks
         """
-        results = []
-        for task in tasks:
-            task_kwargs = task.get('kwargs', {})
-            task_kwargs.update(kwargs)
-
-            result, _ = self.delegate(
-                provider_name,
-                task['prompt'],
-                system_prompt=task.get('system_prompt'),
-                **task_kwargs
-            )
-            results.append(result)
-        return results
+        return asyncio.run(
+            self.batch_delegate_async(tasks, provider_name, **kwargs)
+        )
 
     async def batch_delegate_async(
         self,
         tasks: list[dict],
-        provider_name: str = 'groq',
-        max_concurrent: int = 5
+        provider_name: str = DEFAULT_PROVIDER,
+        max_concurrent: int = DEFAULT_MAX_CONCURRENT,
+        **kwargs
     ) -> list[LLMResponse]:
         """
         Process multiple tasks in parallel using async.
+
+        This method parallelizes calls to delegate_async, ensuring each task
+        goes through the full delegation flow (augmentation, caching, retry).
+        Uses semaphore for concurrency control.
 
         Args:
             tasks: List of task dicts with 'prompt' and optional 'system_prompt', 'kwargs'
             provider_name: Provider to use for all tasks
             max_concurrent: Maximum number of concurrent requests
+            **kwargs: Additional arguments passed to all tasks
 
         Returns:
             List of LLMResponse objects in the same order as input tasks
@@ -558,67 +352,74 @@ class DelegationManager:
         semaphore = asyncio.Semaphore(max_concurrent)
 
         async def process_task(task):
+            """Process a single task through full delegation flow."""
             async with semaphore:
+                task_kwargs = task.get('kwargs', {})
+                task_kwargs.update(kwargs)
+
                 result, _ = await self.delegate_async(
-                    provider_name,
-                    task['prompt'],
+                    provider_name=provider_name,
+                    prompt=task['prompt'],
                     system_prompt=task.get('system_prompt'),
-                    **task.get('kwargs', {})
+                    **task_kwargs
                 )
                 return result
 
+        # Execute all tasks in parallel and preserve order
         results = await asyncio.gather(*[process_task(task) for task in tasks])
         return list(results)
 
     async def multi_provider_query_async(
         self,
         prompt: str,
-        providers: list[str] = None,
+        providers: list[str],
+        model: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        temperature: float = DEFAULT_TEMPERATURE,
         **kwargs
     ) -> dict[str, tuple]:
         """
-        Query multiple providers in parallel for the same prompt.
+        Query multiple providers in parallel for the same prompt (delegates to BatchScheduler).
+
+        This method now delegates to BatchScheduler for parallel multi-provider queries,
+        eliminating ~15 lines of duplicate logic.
 
         Useful for getting different perspectives or comparing outputs.
 
         Args:
             prompt: The prompt to send to all providers
-            providers: List of provider names (defaults to all available)
-            **kwargs: Additional arguments passed to delegate_async
+            providers: List of provider names to query
+            model: Specific model (optional)
+            system_prompt: System prompt (optional)
+            max_tokens: Maximum tokens in response
+            temperature: Sampling temperature
+            **kwargs: Additional arguments passed to requests
 
         Returns:
-            Dict mapping provider name to (LLMResponse, task_record) tuple
+            Dict mapping provider name to (LLMResponse, task_record) tuple.
+            Failed providers are excluded from results.
+
+        Raises:
+            ValueError: If providers list is empty
         """
-        if providers is None:
-            providers = self.registry.list_available()
+        # Create LLMRequest object (provider will be overridden per provider)
+        request = LLMRequest(
+            prompt=prompt,
+            provider=providers[0] if providers else DEFAULT_PROVIDER,  # Default, will be overridden
+            model=model,
+            system_prompt=system_prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            use_context=kwargs.get('use_context'),
+            use_cache=kwargs.get('use_cache'),
+            intent_classification=kwargs.get('intent_classification'),
+            auto_fallback=False,  # No fallback in multi-provider mode
+            kwargs=kwargs,
+        )
 
-        async def query_provider(provider_name):
-            try:
-                response = await self.delegate_async(provider_name, prompt, **kwargs)
-                return provider_name, response
-            except Exception as e:
-                self.output.warn(f"{provider_name} failed: {e}")
-                return provider_name, None
-
-        results = await asyncio.gather(*[query_provider(p) for p in providers])
-        return {name: response for name, response in results if response is not None}
-
-    def run_async(self, coro):
-        """
-        Helper to run async code from sync context.
-
-        Usage:
-            results = manager.run_async(manager.batch_delegate_async(tasks))
-        """
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # If we're already in an async context, create a new task
-                import nest_asyncio
-                nest_asyncio.apply()
-                return loop.run_until_complete(coro)
-            else:
-                return loop.run_until_complete(coro)
-        except RuntimeError:
-            # No event loop, create a new one
-            return asyncio.run(coro)
+        # Delegate to BatchScheduler for parallel multi-provider execution
+        return await self._batch_scheduler.execute_multi_provider(
+            request=request,
+            providers=providers,
+        )

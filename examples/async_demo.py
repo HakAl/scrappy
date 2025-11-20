@@ -158,11 +158,11 @@ def main():
     print("  - orch.delegate_async() - Single async request")
     print("  - orch.batch_delegate_async() - Parallel batch processing")
     print("  - orch.multi_provider_query_async() - Query multiple providers")
-    print("  - orch.run_async() - Helper for sync contexts")
     print("\nUsage example:")
     print("  results = await orch.batch_delegate_async(tasks, 'cerebras', max_concurrent=5)")
     print("  # Or from sync code:")
-    print("  results = orch.run_async(orch.batch_delegate_async(tasks))")
+    print("  import asyncio")
+    print("  results = asyncio.run(orch.batch_delegate_async(tasks))")
 
 
 if __name__ == "__main__":

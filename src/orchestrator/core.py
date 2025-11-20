@@ -13,10 +13,12 @@ try:
     from ..providers import ProviderRegistry, LLMResponse
     from ..context import CodebaseContext
     from ..utils.errors import is_rate_limit_error, RateLimitError, AllProvidersRateLimitedError
+    from ..exceptions.delegation import ProviderNotFoundError
 except ImportError:
     from providers import ProviderRegistry, LLMResponse
     from context import CodebaseContext
     from utils.errors import is_rate_limit_error, RateLimitError, AllProvidersRateLimitedError
+    from exceptions.delegation import ProviderNotFoundError
 
 from .cache import ResponseCache
 from .rate_limiter import RateLimitTracker
@@ -26,6 +28,9 @@ from .task_executor import TaskExecutor
 from .provider_selector import ProviderSelector
 from .output import OutputInterface, ConsoleOutput
 from .delegation import DelegationManager
+from .retry_orchestrator import RetryOrchestrator
+from .prompt_augmenter import PromptAugmenter
+from .batch_scheduler import BatchScheduler
 from .background import BackgroundTaskManager
 from .registration import ProviderRegistrar
 from .status_reporter import ProviderStatusReporter
@@ -259,16 +264,44 @@ class AgentOrchestrator:
         )
 
     def _create_default_delegation_manager(self) -> DelegationManager:
-        """Create default delegation manager."""
-        return DelegationManager(
+        """
+        Create default delegation manager with collaborators.
+
+        Following SOLID principles:
+        - Creates RetryOrchestrator with injected dependencies
+        - Creates PromptAugmenter with injected dependencies
+        - Creates BatchScheduler with injected dependencies
+        - Passes all collaborators to DelegationManager
+        - Uses protocol-based composition
+        """
+        # Create RetryOrchestrator with its dependencies
+        retry_orchestrator = RetryOrchestrator(
             registry=self.registry,
-            cache=self.cache,
             rate_tracker=self.rate_tracker,
             provider_selector=self.provider_selector,
             output=self.output,
+        )
+
+        # Create PromptAugmenter with its dependencies
+        prompt_augmenter = PromptAugmenter(
             context=self.context_manager.context,
+            working_memory=self.working_memory,
+        )
+
+        # Create BatchScheduler with its dependencies
+        batch_scheduler = BatchScheduler(
+            retry_orchestrator=retry_orchestrator,
+            output=self.output,
+        )
+
+        # Create DelegationManager with injected dependencies
+        return DelegationManager(
+            retry_orchestrator=retry_orchestrator,
+            cache=self.cache,
+            output=self.output,
+            prompt_augmenter=prompt_augmenter,
+            batch_scheduler=batch_scheduler,
             context_aware=self.context_aware,
-            get_working_memory_context=self.working_memory.get_context_string
         )
 
     # Provider Management
@@ -473,13 +506,18 @@ class AgentOrchestrator:
 
         Raises:
             AllProvidersRateLimitedError: If all providers are rate limited
+            ProviderNotFoundError: If no providers are available
             Exception: Other non-rate-limit errors
         """
         # Auto-select provider if not specified
         if provider_name is None:
             provider_name = self.get_recommended_provider(task_type)
             if provider_name is None:
-                raise Exception("No providers available")
+                available = list(self.providers.list_providers())
+                raise ProviderNotFoundError(
+                    provider_name="<auto-select>",
+                    available_providers=available
+                )
 
         # Determine cache setting
         should_use_cache = use_cache if use_cache is not None else self.caching_enabled
@@ -721,15 +759,6 @@ class AgentOrchestrator:
         return await self.delegation_manager.multi_provider_query_async(
             prompt, providers, **kwargs
         )
-
-    def run_async(self, coro):
-        """
-        Helper to run async code from sync context.
-
-        Usage:
-            results = orch.run_async(orch.batch_delegate_async(tasks))
-        """
-        return self.delegation_manager.run_async(coro)
 
     # Usage and Cache Statistics (delegates to UsageReporter)
 

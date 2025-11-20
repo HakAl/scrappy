@@ -256,24 +256,65 @@ def raise_operation_failed(operation: str, error: Exception):
     raise RuntimeError(ErrorFormatter.operation_failed(operation, error))
 
 
+# Import domain exceptions for proper exception hierarchy
+try:
+    from ..exceptions.delegation import (
+        DelegationError,
+        RateLimitExceededError,
+        RetryExhaustedError,
+    )
+except ImportError:
+    from exceptions.delegation import (
+        DelegationError,
+        RateLimitExceededError,
+        RetryExhaustedError,
+    )
+
+
 # Custom exceptions for rate limit handling
-class RateLimitError(Exception):
-    """Exception raised when a provider hits rate limits."""
+class RateLimitError(RateLimitExceededError):
+    """Exception raised when a provider hits rate limits.
+
+    Inherits from RateLimitExceededError for proper exception hierarchy.
+    Maintains backward compatibility with existing code.
+    """
 
     def __init__(self, provider: str, message: str = "", limit_type: str = "requests"):
-        self.provider = provider
+        # Store legacy attributes for backward compatibility
+        self.provider = provider  # Legacy attribute
         self.limit_type = limit_type
+
+        # Generate or use custom message
         self.message = message or ErrorFormatter.rate_limit_exceeded(provider, limit_type)
-        super().__init__(self.message)
+
+        # Store parent class attributes for protocol compliance
+        self.provider_name = provider
+        self.wait_seconds = 0.0
+        self.max_wait_seconds = None
+
+        # Call DelegationError (grandparent) directly to preserve our message
+        # Skip RateLimitExceededError.__init__() to avoid message override
+        DelegationError.__init__(self, self.message)
 
 
-class AllProvidersRateLimitedError(Exception):
-    """Exception raised when all providers are rate limited."""
+class AllProvidersRateLimitedError(RetryExhaustedError):
+    """Exception raised when all providers are rate limited.
+
+    Inherits from RetryExhaustedError for proper exception hierarchy.
+    Maintains backward compatibility with existing code.
+    """
 
     def __init__(self, attempted_providers: list):
-        self.attempted_providers = attempted_providers
+        # Store legacy message attribute for backward compatibility
         self.message = ErrorFormatter.all_providers_rate_limited(attempted_providers)
-        super().__init__(self.message)
+
+        # Call parent with new protocol
+        # Note: last_error is unknown in legacy calls, use generic Exception
+        super().__init__(
+            attempted_providers=attempted_providers,
+            last_error=Exception(self.message),
+            total_attempts=len(attempted_providers)
+        )
 
 
 def is_rate_limit_error(error: Exception) -> bool:

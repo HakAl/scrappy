@@ -160,6 +160,18 @@ class WorkingMemory:
             return "[Session Working Memory]\n" + "\n\n".join(parts)
         return ""
 
+    def get_context(self) -> str:
+        """
+        Get working memory context string.
+
+        Implements WorkingMemoryProtocol. Delegates to get_context_string()
+        for backward compatibility.
+
+        Returns:
+            Context string summarizing recent interactions
+        """
+        return self.get_context_string()
+
     def clear(self):
         """Clear all working memory."""
         self.file_reads = {}
