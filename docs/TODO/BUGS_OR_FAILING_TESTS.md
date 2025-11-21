@@ -1,4 +1,4 @@
-we should load the dependencies in a non blocking manner when the app begins, not when a user runs /explore.
+we should load the heavy dependencies in a non blocking manner when the app begins, not when a user runs /explore.
 
 explore now freezes the app and crashes it.
 UX: hangs after /explore, never shows progress, freezes and process must be manually killed
@@ -10,10 +10,6 @@ src/context/lancedb_search_provider.py
 
 3% test coverage:
 src\context\lancedb_search_provider.py
----
-
-extra prompt : Start agent? [y/n] (y): y
-
 ---
 
 You>  /explore

@@ -8,6 +8,8 @@ Key Components:
     - JinaEmbedFunction: Custom FastEmbed embedding function for code
     - LanceDBSearchProvider: Vector + full-text hybrid search provider
     - SemanticCodeChunker: Intelligent code chunking for embeddings
+    - SemanticSearchInitializer: Background initializer for heavy dependencies
+    - NullInitializer: No-op initializer for testing
 
 Usage:
     from context.semantic import LanceDBSearchProvider
@@ -19,5 +21,11 @@ Usage:
 
 from .embeddings import JinaEmbedFunction
 from .provider import LanceDBSearchProvider
+from .initializer import SemanticSearchInitializer, NullInitializer
 
-__all__ = ["JinaEmbedFunction", "LanceDBSearchProvider"]
+__all__ = [
+    "JinaEmbedFunction",
+    "LanceDBSearchProvider",
+    "SemanticSearchInitializer",
+    "NullInitializer",
+]

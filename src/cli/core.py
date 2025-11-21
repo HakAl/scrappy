@@ -5,7 +5,10 @@ Main entry point and command routing for the Scrappy CLI.
 
 import sys
 from datetime import datetime
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..infrastructure.protocols import BackgroundInitializerProtocol
 
 from ..orchestrator import AgentOrchestrator
 from .display import CLIDisplay
@@ -43,7 +46,8 @@ class CLI:
         show_provider_status: bool = False,
         io: Optional[CLIIOProtocol] = None,
         orchestrator: Optional[AgentOrchestrator] = None,
-        state_manager: Optional[PlanStateManager] = None
+        state_manager: Optional[PlanStateManager] = None,
+        semantic_search_initializer: Optional['BackgroundInitializerProtocol'] = None
     ):
         """
         Initialize CLI with orchestrator and component handlers (dependencies only - NO side effects).
@@ -63,6 +67,7 @@ class CLI:
             io: IO interface for input/output operations. Defaults to RichIO.
             orchestrator: Injectable orchestrator instance (default: creates new AgentOrchestrator)
             state_manager: Injectable state manager (default: creates new PlanStateManager)
+            semantic_search_initializer: Injectable background initializer for semantic search
         """
         # Store config for factory methods and initialization
         self._brain = brain
@@ -81,6 +86,9 @@ class CLI:
 
         # Create session context for shared state management
         self.session_context = SessionContext()
+
+        # Background initializer for semantic search (heavy dependencies)
+        self.semantic_search_initializer = semantic_search_initializer or self._create_default_semantic_search_initializer()
 
         # Initialize component handlers using factory
         handlers = initialize_cli_handlers(self.orchestrator, self.session_start)
@@ -114,6 +122,10 @@ class CLI:
         # Show verbose selection info if requested
         if self._verbose_selection:
             self.io.secho("Verbose provider selection enabled", fg="yellow")
+
+        # Start background initialization of semantic search (non-blocking)
+        self.semantic_search_initializer.start()
+        self.io.secho("Loading semantic search in background...", fg="cyan")
 
         # Log initialization
         self.logger.info("CLI initialized", extra={
@@ -172,6 +184,12 @@ class CLI:
     def _create_default_state_manager(self) -> PlanStateManager:
         """Create default state manager."""
         return PlanStateManager()
+
+    def _create_default_semantic_search_initializer(self) -> 'BackgroundInitializerProtocol':
+        """Create default semantic search initializer."""
+        from ..context.semantic import SemanticSearchInitializer
+        project_path = self.orchestrator.context.project_path
+        return SemanticSearchInitializer(project_path)
 
     def _create_command_router(self) -> CommandRouter:
         """Create CommandRouter with all dependencies."""

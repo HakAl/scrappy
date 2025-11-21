@@ -599,3 +599,108 @@ class PathProviderProtocol(Protocol):
             PermissionError: If no write permission
         """
         ...
+
+
+class BackgroundInitializerProtocol(Protocol):
+    """
+    Protocol for background initialization of heavy dependencies.
+
+    Allows expensive operations (model loading, database setup) to run
+    in background threads without blocking the UI.
+
+    Implementations:
+    - SemanticSearchInitializer: Loads FastEmbed and LanceDB asynchronously
+    - TestInitializer: Returns preset results for testing
+    - NullInitializer: No-op for when dependencies unavailable
+
+    Example:
+        def init_and_use(initializer: BackgroundInitializerProtocol) -> None:
+            initializer.start()  # Start background loading
+
+            # Do other work while loading...
+
+            # Wait when actually needed
+            if initializer.wait_for_completion(timeout=30.0):
+                result = initializer.get_result()
+                if result:
+                    result.do_something()
+            else:
+                print("Initialization timed out or failed")
+
+        # In production
+        init = SemanticSearchInitializer(project_path)
+        init_and_use(init)
+
+        # In tests
+        init = TestInitializer(preset_result)
+        init_and_use(init)
+    """
+
+    def start(self) -> None:
+        """
+        Start background initialization.
+
+        This should be non-blocking and return immediately.
+        The actual work happens in a background thread.
+        """
+        ...
+
+    def is_complete(self) -> bool:
+        """
+        Check if initialization is complete.
+
+        Returns:
+            True if initialization finished (success or failure), False if still running
+        """
+        ...
+
+    def is_running(self) -> bool:
+        """
+        Check if initialization is currently running.
+
+        Returns:
+            True if initialization is in progress, False otherwise
+        """
+        ...
+
+    def wait_for_completion(
+        self,
+        timeout: Optional[float] = None
+    ) -> bool:
+        """
+        Wait for initialization to complete.
+
+        Args:
+            timeout: Maximum seconds to wait (None = wait forever)
+
+        Returns:
+            True if completed successfully, False if timed out or failed
+        """
+        ...
+
+    def get_result(self) -> Optional[Any]:
+        """
+        Get the initialized object.
+
+        Returns:
+            Initialized object if successful, None if failed or not complete
+        """
+        ...
+
+    def get_error(self) -> Optional[Exception]:
+        """
+        Get initialization error if any.
+
+        Returns:
+            Exception if initialization failed, None otherwise
+        """
+        ...
+
+    def get_status(self) -> str:
+        """
+        Get human-readable status message.
+
+        Returns:
+            Status message (e.g., "Initializing...", "Complete", "Failed")
+        """
+        ...
