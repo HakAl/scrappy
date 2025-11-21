@@ -1,9 +1,13 @@
 """
-Infrastructure protocols module.
+Infrastructure module.
 
-Provides abstract interfaces for external dependencies and infrastructure concerns.
-Enables dependency injection and testability by abstracting file system, HTTP,
-environment variables, and configuration.
+Provides shared infrastructure components across all application layers:
+- Protocols: Abstract interfaces for external dependencies (file system, HTTP, etc.)
+- Exceptions: Unified exception hierarchy with recovery actions
+- Error Recovery: Retry, circuit breaker, and fallback strategies
+- File System: Real and in-memory file system implementations
+
+Enables dependency injection, testability, and consistent error handling.
 """
 
 from .protocols import (
@@ -16,6 +20,10 @@ from .file_system import (
     RealFileSystem,
     InMemoryFileSystem,
 )
+
+# Exception and error recovery are available via submodules:
+# - infrastructure.exceptions
+# - infrastructure.error_recovery
 
 __all__ = [
     "FileSystemProtocol",

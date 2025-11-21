@@ -12,11 +12,9 @@ import pytest
 from unittest.mock import Mock, MagicMock, AsyncMock, patch, call
 from datetime import datetime
 
-from src.utils.errors import (
-    is_rate_limit_error,
-    RateLimitError,
-    AllProvidersRateLimitedError
-)
+from src.utils.errors import is_rate_limit_error, RateLimitError
+from src.utils.errors import AllProvidersRateLimitedError as LegacyAllProvidersRateLimitedError
+from infrastructure.exceptions import AllProvidersRateLimitedError
 from src.orchestrator.core import AgentOrchestrator
 from src.providers.base import LLMResponse
 
@@ -339,7 +337,7 @@ class TestRateLimitExceptions:
         assert str(error) == "Custom rate limit message"
 
     def test_all_providers_error_lists_attempted(self):
-        error = AllProvidersRateLimitedError(['groq', 'cerebras', 'gemini'])
+        error = LegacyAllProvidersRateLimitedError(['groq', 'cerebras', 'gemini'])
         assert 'groq' in str(error)
         assert 'cerebras' in str(error)
         assert 'gemini' in str(error)

@@ -27,17 +27,16 @@ try:
         ProviderSelectorProtocol,
     )
     from ..providers import LLMResponse
-    from ..utils.errors import (
-        is_rate_limit_error,
-        RateLimitError,
-        AllProvidersRateLimitedError,
-    )
     from ..config import (
         DEFAULT_MAX_RETRIES,
-        EXPONENTIAL_BACKOFF_BASE,
-        EXPONENTIAL_BACKOFF_MULTIPLIER,
         DEFAULT_QUOTA_THRESHOLD,
     )
+    from infrastructure.exceptions import (
+        RateLimitError,
+        AllProvidersRateLimitedError,
+        BaseError,
+    )
+    from infrastructure.error_recovery import RetryConfig
 except ImportError:
     from protocols.delegation import (
         LLMRequest,
@@ -48,17 +47,16 @@ except ImportError:
         ProviderSelectorProtocol,
     )
     from providers import LLMResponse
-    from utils.errors import (
-        is_rate_limit_error,
-        RateLimitError,
-        AllProvidersRateLimitedError,
-    )
     from config import (
         DEFAULT_MAX_RETRIES,
-        EXPONENTIAL_BACKOFF_BASE,
-        EXPONENTIAL_BACKOFF_MULTIPLIER,
         DEFAULT_QUOTA_THRESHOLD,
     )
+    from infrastructure.exceptions import (
+        RateLimitError,
+        AllProvidersRateLimitedError,
+        BaseError,
+    )
+    from infrastructure.error_recovery import RetryConfig
 
 
 class RetryOrchestrator:
@@ -80,6 +78,7 @@ class RetryOrchestrator:
         rate_tracker: RateLimitTrackerProtocol,
         provider_selector: ProviderSelectorProtocol,
         output: OutputInterfaceProtocol,
+        retry_config: Optional[RetryConfig] = None,
     ):
         """
         Initialize RetryOrchestrator.
@@ -91,11 +90,20 @@ class RetryOrchestrator:
             rate_tracker: Rate limit tracker for monitoring usage
             provider_selector: Provider selector for fallback logic
             output: Output interface for logging messages
+            retry_config: Optional retry configuration (uses default if not provided)
         """
         self._registry = registry
         self._rate_tracker = rate_tracker
         self._provider_selector = provider_selector
         self._output = output
+        # Use infrastructure's unified retry config (matches legacy: 0.5s * 2^attempt)
+        self._retry_config = retry_config or RetryConfig(
+            max_retries=DEFAULT_MAX_RETRIES,
+            base_delay=0.5,
+            multiplier=2.0,
+            max_delay=60.0,
+            jitter=False  # Keep deterministic behavior for now
+        )
 
     async def execute_with_retry(
         self,
@@ -124,6 +132,7 @@ class RetryOrchestrator:
 
         Raises:
             AllProvidersRateLimitedError: When all providers and retries exhausted
+            RateLimitError: When rate limits are hit
             KeyError: When requested provider doesn't exist
             Other exceptions: For non-retryable errors
         """
@@ -141,7 +150,10 @@ class RetryOrchestrator:
                 self._output.error(
                     f"All providers exhausted. Attempted: {attempted_providers}"
                 )
-                raise AllProvidersRateLimitedError(attempted_providers)
+                raise AllProvidersRateLimitedError(
+                    message="All providers exhausted",
+                    attempted_providers=attempted_providers,
+                )
 
         # Build messages for the LLM call
         messages = []
@@ -167,9 +179,8 @@ class RetryOrchestrator:
                         f"{current_provider_name} has exhausted daily quota, trying fallback..."
                     )
                     raise RateLimitError(
-                        current_provider_name,
-                        "Daily quota exhausted",
-                        "requests"
+                        message="Daily quota exhausted",
+                        provider_name=current_provider_name,
                     )
             except RateLimitError:
                 raise
@@ -227,7 +238,29 @@ class RetryOrchestrator:
                 except Exception as e:
                     last_error = e
 
-                    if is_rate_limit_error(e):
+                    # Type-based error classification (replaces string matching)
+                    is_retryable = False
+                    if isinstance(e, BaseError):
+                        # Use new infrastructure's is_retryable property
+                        is_retryable = e.is_retryable
+                    elif isinstance(e, RateLimitError):
+                        # Infrastructure rate limit errors are always retryable
+                        is_retryable = True
+                    else:
+                        # For unknown errors, check if it looks like a rate limit
+                        # (fallback for provider exceptions not yet wrapped)
+                        error_str = str(e).lower()
+                        is_retryable = any(
+                            indicator in error_str
+                            for indicator in [
+                                '429', 'rate limit', 'rate_limit', 'ratelimit',
+                                'quota', 'too many requests', 'resource exhausted',
+                                'resource_exhausted', 'capacity', 'throttl',
+                                'requests per', 'tokens per', 'limit exceeded'
+                            ]
+                        )
+
+                    if is_retryable:
                         # Record the failed request
                         self._rate_tracker.record_request(
                             provider=current_provider_name,
@@ -238,14 +271,12 @@ class RetryOrchestrator:
                             error_message=str(e)
                         )
 
-                        # Exponential backoff
+                        # Exponential backoff using unified infrastructure config
                         if attempt < max_retries - 1:
-                            wait_time = (
-                                EXPONENTIAL_BACKOFF_BASE ** attempt
-                            ) * EXPONENTIAL_BACKOFF_MULTIPLIER
+                            wait_time = self._retry_config.calculate_delay(attempt)
                             self._output.warn(
                                 f"Rate limit hit on {current_provider_name}, "
-                                f"retrying in {wait_time}s "
+                                f"retrying in {wait_time:.1f}s "
                                 f"(attempt {attempt + 1}/{max_retries})..."
                             )
                             await asyncio.sleep(wait_time)
@@ -256,7 +287,7 @@ class RetryOrchestrator:
                             )
                             break
                     else:
-                        # Non-rate-limit error - raise immediately
+                        # Non-retryable error - raise immediately
                         raise
 
             # Exhausted retries for current provider
@@ -269,9 +300,8 @@ class RetryOrchestrator:
                     raise last_error
                 else:
                     raise RateLimitError(
-                        current_provider_name,
-                        f"Rate limit exceeded after {max_retries} retries (auto_fallback=False)",
-                        "requests"
+                        message=f"Rate limit exceeded after {max_retries} retries (auto_fallback=False)",
+                        provider_name=current_provider_name,
                     )
 
             # Get next fallback provider
@@ -283,7 +313,10 @@ class RetryOrchestrator:
                 self._output.error(
                     f"All providers rate limited. Attempted: {attempted_providers}"
                 )
-                raise AllProvidersRateLimitedError(attempted_providers)
+                raise AllProvidersRateLimitedError(
+                    message="All providers rate limited",
+                    attempted_providers=attempted_providers,
+                )
 
             self._output.info(
                 f"[FALLBACK] Switching from {current_provider_name} to {fallback_provider}"

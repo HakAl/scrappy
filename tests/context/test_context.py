@@ -8,9 +8,6 @@ import json
 
 from src.context import CodebaseContext
 
-# Mark ALL tests as slow - CodebaseContext loads semantic search in __init__
-pytestmark = pytest.mark.slow
-
 
 class TestCodebaseContextBasics:
     """Basic context creation and state tests."""

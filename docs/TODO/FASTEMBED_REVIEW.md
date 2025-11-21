@@ -1,202 +1,220 @@
-Zero-block background loading**, even on first launch when the 1.3 GB Jina model needs to be downloaded.
 
-FastEmbed + LanceDB + Rich + background thread:
 
-### The Real Solution: Fully Background Model Download Using Rich via Thread-Safe Live Update
+# Async Threading Solution for Loading Heavy Model
 
-We bypass `tqdm` completely and **replace FastEmbed’s internal downloader** 
-with one that reports progress to a **Rich `Live` object** that lives on the main thread.
 
-This gives you:
+## Current Analysis
 
-- 100% non-blocking startup  
-- Beautiful Rich progress bar in your UI  
-- Model downloads in background thread  
-- No `tqdm` deadlocks  
-- Works on Windows/macOS/Linux  
-- First-class UX
+`SemanticSearchInitializer` is designed to handle background initialization,
+but there might be some issues with how it's integrated with the `LanceDBSearchProvider`.
+The key is to ensure the embedding model loads in the background thread during initialization,
+not when first using the search functionality.
 
-### Step-by-Step Fix (Copy-Paste Ready)
-
-#### 1. Example POC
+## Solution
 
 ```python
+# In your main application code or wherever you initialize the semantic search
+
 import threading
 from pathlib import Path
-from typing import Optional, Callable
-from huggingface_hub import snapshot_download
-from rich.live import Live
-from rich.progress import Progress, BarColumn, DownloadColumn, TransferSpeedColumn, TimeRemainingColumn, TextColumn
-import logging
+from context.semantic.initializer import SemanticSearchInitializer
 
-logger = logging.getLogger(__name__)
+# Create the initializer
+semantic_initializer = SemanticSearchInitializer(project_path=Path("."))
 
-# This is the exact model FastEmbed uses internally
-JINA_MODEL_ID = "jinaai/jina-embeddings-v2-base-code"
-FASTEmbed_CACHE_DIR = Path.home() / ".cache" / "fastembed"
+# Start the background initialization (non-blocking)
+semantic_initializer.start()
 
-def _get_local_model_path() -> Optional[Path]:
-    """Check if model already exists"""
-    model_path = FASTEmbed_CACHE_DIR / "onnx" / "jina-embeddings-v2-base-code"
-    if model_path.exists():
-        return model_path
-    return None
-
-def download_jina_model_background(
-    on_progress: Callable[[int, int, float], None],
-    on_complete: Callable[[bool, str], None]
-) -> None:
-    """
-    Download Jina model in background thread.
-    Reports progress via callback (thread-safe).
-    """
-    try:
-        if _get_local_model_path():
-            on_complete(True, "Model already cached")
-            return
-
-        snapshot_download(
-            repo_id=JINA_MODEL_ID,
-            repo_type="model",
-            local_dir=FASTEmbed_CACHE_DIR / "onnx" / "jina-embeddings-v2-base-code",
-            local_dir_use_symlinks=False,
-            resume_download=True,
-            allow_patterns=["*.json", "*.onnx", "*.bin"],
-            tqdm_class=lambda **kwargs: None,  # Disable tqdm entirely
-        )
-
-        on_complete(True, "Model downloaded successfully")
-    except Exception as e:
-        logger.error(f"Jina model download failed: {e}")
-        on_complete(False, str(e))
-
-
-def make_background_downloader_with_rich(live: Live) -> Callable:
-    """
-    Factory: returns a function you can call to start download + Rich progress
-    """
-    progress = Progress(
-        TextColumn("[bold blue]Semantic Search Setup"),
-        BarColumn(),
-        DownloadColumn(),
-        TransferSpeedColumn(),
-        TimeRemainingColumn(),
-    )
-    task = progress.add_task("Downloading AI code model (~1.3GB first run)...", total=1_370_000_000)  # ~1.37GB
-
-    def start_download():
-        def update_progress(downloaded: int, total: int, speed: float):
-            live.update(progress)
-
-        def on_done(success: bool, msg: str):
-            if success:
-                progress.update(task, advance=progress.tasks[task].total, completed=True)
-                live.update(progress)
-            else:
-                progress.update(task, description=f"[red]Failed: {msg}")
-
-        thread = threading.Thread(
-            target=download_jina_model_background,
-            args=(update_progress, on_done),
-            daemon=True
-        )
-        thread.start()
-
-    return start_download
-```
-
-#### 2. Modify `embeddings.py` — Bypass FastEmbed’s downloader entirely
-
-```python
-# In embeddings.py — replace the __init__ to skip download if in progress
-def __init__(self, **kwargs):
-    super().__init__(**kwargs)
-    logger.debug("Initializing JinaEmbedFunction")
-
-    model_path = _get_local_model_path()
-    if model_path and model_path.exists():
-        self._model = TextEmbedding(model_name=self.name)
+# You can check the status later
+def check_semantic_search_status():
+    if semantic_initializer.is_complete():
+        search_provider = semantic_initializer.get_result()
+        if search_provider:
+            print("Semantic search is ready!")
+            # Now you can use search_provider.index_files() or search_provider.search()
+        else:
+            error = semantic_initializer.get_error()
+            print(f"Semantic search initialization failed: {error}")
     else:
-        # Model not present — we'll initialize later when it's ready
-        # This prevents hanging on first embed()
-        self._model = None
-        logger.info("Jina model not found — will be initialized after background download")
+        status = semantic_initializer.get_status()
+        print(f"Semantic search status: {status}")
+        # Check again later
 
-def generate_embeddings(self, texts: List[str]):
-    # Auto-initialize if not ready (now safe because download is happening in bg)
-    if self._model is None:
-        # Block max 2 seconds — if not ready, skip embedding this batch
-        import time
-        start = time.time()
-        while self._model is None and time.time() - start < 2.0:
-            try:
-                self._model = TextEmbedding(model_name=self.name)
-                logger.info("Jina model loaded on-demand after background download")
-                break
-            except:
-                time.sleep(0.1)
-        if self._model is None:
-            raise RuntimeError("Embedding model not ready yet — try again soon")
-
-    return super().generate_embeddings(texts)
+# You could use a timer to periodically check the status
+threading.Timer(5.0, check_semantic_search_status).start()
 ```
 
-#### 3. In your UI — show Rich Live progress (non-blocking!)
 
-```python
-# In your main app UI code
-from rich.live import Live
-from rich.panel import Panel
-from src.context.semantic.model_downloader import make_background_downloader_with_rich
-
-class SemanticSearchStatus:
-    def __init__(self):
-        self.live = Live(Panel("Initializing semantic search..."), refresh_per_second=4)
-        self.downloader = make_background_downloader_with_rich(self.live)
-
-    def start(self):
-        self.live.start()
-        self.downloader()  # starts background download + updates Live
-
-    def stop(self):
-        self.live.stop()
-```
-
-#### 4. In `initializer.py` — now 100% safe and fast
+### 1. Update `SemanticSearchInitializer._initialize_semantic_search()`
 
 ```python
 def _initialize_semantic_search(self) -> None:
-    try:
-        # ... chunker, provider setup ...
+    """
+    Internal method to initialize semantic search in background thread.
 
-        search_provider = LanceDBSearchProvider(...)
+    This is the actual heavy lifting that happens in the background.
+    """
+    try:
+        logger.debug("Starting semantic search initialization in background")
+
+        # Import heavy dependencies here (in background thread)
+        from ..code_chunker import SemanticCodeChunker
+        from .provider import LanceDBSearchProvider
 
         with self._lock:
-            self._status = "Waiting for AI model (first run)..."
+            self._status = "Loading embedding model..."
 
-        # This will now either:
-        # - Succeed instantly (model cached)
-        # - Or wait gracefully (model downloading in bg)
-        search_provider._ensure_schema()  # ← now safe!
+        # Create chunker (lightweight)
+        chunker = SemanticCodeChunker(chunk_size=100, overlap=3)
+
+        # Create LanceDB provider (triggers FastEmbed model download if needed)
+        with self._lock:
+            self._status = "Initializing vector database..."
+
+        search_provider = LanceDBSearchProvider(
+            self._project_path,
+            chunker,
+            db_dir_name=".scrappy/lancedb"
+        )
+
+        # Trigger model loading in background by ensuring schema is ready
+        # This downloads/loads the FastEmbed model NOW (in background)
+        # instead of blocking later during index_files()
+        with self._lock:
+            self._status = "Loading embedding model (this may take 10-30s)..."
+
+        # Ensure DB is created first
+        search_provider._ensure_db()
+        
+        # Now load the embedding model by accessing the embedding function
+        # This is the critical step that loads the heavy model in the background
+        search_provider._ensure_schema()  # This will call _create_embedding_func()
+        
+        # Additional step to ensure the model is fully loaded
+        # Generate a dummy embedding to trigger model initialization if needed
+        try:
+            if search_provider._embedding_func:
+                # This will trigger the actual model loading if not already done
+                _ = search_provider._embedding_func.generate_embeddings(["test"])
+                logger.debug("Embedding model is fully loaded")
+        except Exception as e:
+            logger.warning(f"Error during test embedding generation: {e}")
 
         with self._lock:
             self._result = search_provider
-            self._status = "Ready"
+            self._status = "Complete"
             self._complete = True
 
+        logger.debug("Semantic search initialized successfully in background")
+
+    except ImportError as e:
+        with self._lock:
+            self._error = e
+            self._status = f"Failed: Missing dependencies ({e})"
+            self._complete = True
+        logger.debug(f"Semantic search not available: {e}")
+
     except Exception as e:
-        ...
+        with self._lock:
+            self._error = e
+            self._status = f"Failed: {e}"
+            self._complete = True
+        logger.warning(f"Failed to initialize semantic search: {e}")
 ```
 
-### Final Result
+### 2. Update `LanceDBSearchProvider._ensure_schema()` to ensure the model is fully loaded
 
-- App starts instantly  
-- Rich `Live` shows: `"Downloading AI code model (~1.3GB first run)... [===   ] 45%"`  
-- Background thread downloads model safely  
-- No `tqdm`, no deadlock, no freeze  
-- Once downloaded → semantic search works forever  
-- Subsequent launches: ready in <1 second
+```python
+def _ensure_schema(self):
+    """
+    Lazy schema initialization (creates embedding func and schema).
 
-This is **exactly** what Cursor.sh, Continue.dev, and Windsurf do.
+    Raises:
+        IndexingError: If fastembed is not available or initialization fails
+    """
+    if self._code_schema is None:
+        try:
+            logger.debug("Initializing embedding function (may take 10-30s on first use)...")
+            self._embedding_func = _create_embedding_func()
+            
+            # Ensure the model is fully loaded by generating a test embedding
+            # This ensures the heavy model loading happens here, not later
+            try:
+                _ = self._embedding_func.generate_embeddings(["test"])
+                logger.debug("Embedding model is fully loaded")
+            except Exception as e:
+                logger.warning(f"Error during test embedding generation: {e}")
+            
+            self._code_schema = _create_code_schema(self._embedding_func)
+            logger.debug("Embedding function initialized")
+        except Exception as e:
+            raise IndexingError(
+                f"Failed to initialize embedding function. "
+                f"Make sure semantic search dependencies are installed: "
+                f"pip install fastembed lancedb. "
+                f"Error: {e}"
+            ) from e
+```
 
-You now have **the best possible UX** for heavy background AI model loading.
+### 3. Add a method to `SemanticSearchInitializer` to wait for completion with a callback
+
+```python
+def wait_with_callback(self, callback, timeout: Optional[float] = None) -> None:
+    """
+    Wait for initialization to complete and call a callback when done.
+    
+    This is useful for integrating with UI frameworks that use callbacks.
+    
+    Args:
+        callback: Function to call when initialization is complete
+        timeout: Maximum seconds to wait (None = wait forever)
+    """
+    def wait_thread():
+        completed = self.wait_for_completion(timeout=timeout)
+        callback(completed, self.get_result(), self.get_error())
+    
+    thread = threading.Thread(target=wait_thread)
+    thread.daemon = True
+    thread.start()
+```
+
+## Usage Example
+
+Here's how you would use this in your application:
+
+```python
+# In your application initialization code
+from context.semantic.initializer import SemanticSearchInitializer
+
+def on_semantic_search_ready(completed, search_provider, error):
+    if completed and search_provider:
+        print("Semantic search is ready!")
+        # Now you can use search_provider.index_files() or search_provider.search()
+        # For example:
+        files_to_index = {"file1.py": "content1", "file2.py": "content2"}
+        search_provider.index_files(files_to_index)
+        
+        # Or perform a search
+        results = search_provider.search("query")
+        print(f"Found {len(results.chunks)} results")
+    else:
+        print(f"Semantic search initialization failed: {error}")
+
+# Create and start the initializer
+semantic_initializer = SemanticSearchInitializer(project_path=Path("."))
+semantic_initializer.start()
+
+# Set up a callback to be notified when initialization is complete
+semantic_initializer.wait_with_callback(on_semantic_search_ready, timeout=60.0)
+
+# Your application can continue running without blocking
+```
+
+## Key Points
+
+1. The heavy model loading happens in `SemanticSearchInitializer._initialize_semantic_search()` in a background thread.
+2. We explicitly trigger the model loading by calling `_ensure_schema()` and generating a test embedding.
+3. The UI won't freeze because the heavy initialization happens in the background thread.
+4. The application can check the status or use callbacks to know when the semantic search is ready.
+
+This approach ensures that the heavy model is loaded in the background thread during initialization, not when first using the search functionality, preventing UI freezing during startup.

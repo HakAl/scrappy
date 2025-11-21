@@ -95,4 +95,11 @@ def prevent_real_api_calls(monkeypatch):
         monkeypatch.delenv(key, raising=False)
 
 
-# Markers for conditional test execution
+def pytest_deselected(items):
+    if not items:
+        return
+    config = items[0].session.config
+    reporter = config.pluginmanager.getplugin("terminalreporter")
+    reporter.ensure_newline()
+    for item in items:
+        reporter.line(f"deselected: {item.nodeid}", yellow=True, bold=True)

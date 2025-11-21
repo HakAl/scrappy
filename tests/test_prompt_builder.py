@@ -14,9 +14,6 @@ from pathlib import Path
 
 from src.context import CodebaseContext
 
-# Mark ALL tests as slow - imports CodebaseContext which loads semantic search
-pytestmark = pytest.mark.slow
-
 
 class TestSystemPromptBuilderUsesCodebaseContext:
     """SystemPromptBuilder should leverage CodebaseContext for project detection."""

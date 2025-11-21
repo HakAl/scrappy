@@ -13,10 +13,6 @@ import pytest
 from unittest.mock import Mock
 from src.orchestrator.context_coordinator import ContextCoordinator
 
-# Mark ALL tests as slow - uses CodebaseContext which loads semantic search
-pytestmark = pytest.mark.slow
-
-
 class MockCodebaseContext:
     """Test double for CodebaseContext."""
 

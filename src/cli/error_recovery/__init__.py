@@ -1,19 +1,16 @@
 """
 Error recovery strategies for CLI operations.
 
-This module provides mechanisms for handling transient failures including
-retry logic, fallback providers, circuit breakers, and graceful degradation.
-
-All public APIs are re-exported here for backward compatibility.
+This module provides CLI-specific error recovery with backward compatibility.
+For new code, consider using infrastructure.error_recovery directly.
 """
 
+# Import from local CLI implementations (maintain backward compatibility)
 from .retry import retry_operation, safe_operation_with_recovery
 from .fallback import with_fallback, fallback_providers, graceful_degrade
 from .circuit_breaker import CircuitBreaker
-from .context import (
-    error_recovery_context,
-    ErrorRecoveryContext,
-)
+from .context import error_recovery_context, ErrorRecoveryContext
+
 
 __all__ = [
     # Retry strategies

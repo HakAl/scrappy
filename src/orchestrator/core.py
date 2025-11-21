@@ -12,13 +12,13 @@ import time
 try:
     from ..providers import ProviderRegistry, LLMResponse
     from ..context import CodebaseContext
-    from ..utils.errors import is_rate_limit_error, RateLimitError, AllProvidersRateLimitedError
     from ..exceptions.delegation import ProviderNotFoundError
+    from infrastructure.exceptions import RateLimitError, AllProvidersRateLimitedError
 except ImportError:
     from providers import ProviderRegistry, LLMResponse
     from context import CodebaseContext
-    from utils.errors import is_rate_limit_error, RateLimitError, AllProvidersRateLimitedError
     from exceptions.delegation import ProviderNotFoundError
+    from infrastructure.exceptions import RateLimitError, AllProvidersRateLimitedError
 
 from .cache import ResponseCache
 from .rate_limiter import RateLimitTracker
