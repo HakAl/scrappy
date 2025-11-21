@@ -716,26 +716,6 @@ class TestTaskExecutionIOInjection:
 
 
 # =============================================================================
-# CLISmartQuery I/O Injection Tests
-# =============================================================================
-
-# NOTE: TestSmartQueryIOInjection class deleted (2024-11-20)
-#
-# Reason: Over-mocked tests that violated CLAUDE.md principles:
-# - Mocked internal state (self.smart.classifier) instead of using DI
-# - Tested implementation details, not behavior
-# - Broke when internals changed (intent classifier refactoring)
-# - Failed the key test: "Can I refactor internals without breaking this test?"
-#
-# These tests proved nothing about actual functionality. They only proved
-# that mocks were called correctly - not that the feature works.
-#
-# If smart_query I/O behavior needs testing, write proper integration tests:
-# - Inject dependencies via constructor (use test doubles, not mocks)
-# - Test actual output behavior, not internal calls
-# - Do not mock self.smart.classifier - inject it as a parameter
-
-# =============================================================================
 # Default I/O Parameter Tests
 # =============================================================================
 

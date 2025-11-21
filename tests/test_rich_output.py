@@ -17,18 +17,6 @@ import pytest
 from io import StringIO
 from typing import List
 
-
-class TestRichIOProtocolCompliance:
-    """Tests that RichIO correctly implements CLIIOProtocol."""
-
-
-
-
-
-
-
-
-
 class TestRichIOEcho:
     """Tests for RichIO echo output functionality."""
 
@@ -678,10 +666,6 @@ class TestRichIOEdgeCases:
         assert "cafe" in result
 
     @pytest.mark.unit
-
-    @pytest.mark.unit
-
-    @pytest.mark.unit
     def test_panel_with_multiline_content(self):
         """Test panel with multiline content."""
         from src.cli.rich_output import RichIO
@@ -744,8 +728,6 @@ class TestRichIOConsoleAccess:
     """Tests for accessing the underlying Rich console."""
 
     @pytest.mark.unit
-
-    @pytest.mark.unit
     def test_custom_console_is_used(self):
         """Test that custom console is actually used."""
         from src.cli.rich_output import RichIO
@@ -763,7 +745,6 @@ class TestRichIOConsoleAccess:
 
 class TestRichIORule:
     """Tests for horizontal rule rendering."""
-
 
     @pytest.mark.unit
     def test_rule_renders(self):

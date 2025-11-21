@@ -8,18 +8,8 @@ Implementation library (click, rich, or anything else) should be completely hidd
 import pytest
 
 
-class TestOutputInterface:
-    """Tests for the generic output interface that hides implementation details."""
-
-
-
-
-
-
 class TestOutputForTesting:
     """Tests for test-mode output that captures instead of printing."""
-
-    @pytest.mark.unit
 
     @pytest.mark.unit
     def test_test_output_captures_print(self):
@@ -193,15 +183,8 @@ class TestOutputUsage:
         assert "file2.js" in output
 
 
-class TestOutputConfiguration:
-    """Tests for output configuration and library selection."""
-
-    pass
-
 class TestBackwardCompatibility:
     """Tests for backward compatibility with existing CLIIOProtocol."""
-
-    @pytest.mark.unit
 
     @pytest.mark.unit
     def test_echo_method_exists(self):
@@ -226,8 +209,6 @@ class TestBackwardCompatibility:
 
 class TestEdgeCases:
     """Tests for edge cases and error handling."""
-
-    @pytest.mark.unit
 
     @pytest.mark.unit
     def test_output_style_with_no_color(self):

@@ -441,8 +441,3 @@ class TestEdgeCases:
         # Should raise ValueError for empty prompt
         with pytest.raises(ValueError, match="prompt cannot be empty"):
             await manager.delegate_async("cerebras", "")
-
-
-class TestSyncWrapper:
-    """Test synchronous delegate() wrapper."""
-

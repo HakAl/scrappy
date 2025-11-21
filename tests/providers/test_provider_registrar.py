@@ -185,21 +185,9 @@ class TestAutoRegisterAll:
         assert result['cohere'] is False
 
 
-class TestOutputMessages:
-    """Test that correct output messages are generated."""
-
-
-
-
-
-
-
-
 
 class TestProviderRegistration:
     """Test that providers are actually registered in the registry."""
-
-
 
     def test_multiple_providers_registered(self):
         """Multiple successful providers should all be registered."""
@@ -271,16 +259,6 @@ class TestRegistrationOrder:
 class TestEdgeCases:
     """Test edge cases and error conditions."""
 
-    def test_empty_registry_at_start(self):
-        """Registry should be empty before auto_register_all is called."""
-        from src.orchestrator.registration import ProviderRegistrar
-
-        registry = ProviderRegistry()
-        output = CapturingOutput()
-        registrar = ProviderRegistrar(registry, output)
-
-        assert len(registry.list_available()) == 0
-
     def test_registry_exception_during_register(self):
         """Handle exceptions during registry.register call."""
         from src.orchestrator.registration import ProviderRegistrar
@@ -337,58 +315,3 @@ class TestEdgeCases:
         # Both calls should return the same structure
         assert result1.keys() == result2.keys()
 
-
-class TestCountHelpers:
-    """Test helper methods for getting registration counts."""
-
-    def test_get_success_count(self):
-        """Can get count of successfully registered providers."""
-        from src.orchestrator.registration import ProviderRegistrar
-
-        registry = ProviderRegistry()
-        output = CapturingOutput()
-        registrar = ProviderRegistrar(registry, output)
-
-        def make_mock_provider(name):
-            mock = Mock()
-            mock.name = name
-            return mock
-
-        with patch.multiple(
-            'src.orchestrator.registration',
-            GitHubModelsProvider=Mock(return_value=make_mock_provider('github_models')),
-            CerebrasProvider=Mock(return_value=make_mock_provider('cerebras')),
-            GroqProvider=Mock(side_effect=Exception("fail")),
-            GeminiProvider=Mock(return_value=make_mock_provider('gemini')),
-            CohereProvider=Mock(side_effect=Exception("fail")),
-        ):
-            result = registrar.auto_register_all()
-
-        success_count = sum(1 for v in result.values() if v)
-        assert success_count == 3
-
-    def test_get_failure_count(self):
-        """Can get count of failed provider registrations."""
-        from src.orchestrator.registration import ProviderRegistrar
-
-        registry = ProviderRegistry()
-        output = CapturingOutput()
-        registrar = ProviderRegistrar(registry, output)
-
-        def make_mock_provider(name):
-            mock = Mock()
-            mock.name = name
-            return mock
-
-        with patch.multiple(
-            'src.orchestrator.registration',
-            GitHubModelsProvider=Mock(return_value=make_mock_provider('github_models')),
-            CerebrasProvider=Mock(return_value=make_mock_provider('cerebras')),
-            GroqProvider=Mock(side_effect=Exception("fail")),
-            GeminiProvider=Mock(return_value=make_mock_provider('gemini')),
-            CohereProvider=Mock(side_effect=Exception("fail")),
-        ):
-            result = registrar.auto_register_all()
-
-        failure_count = sum(1 for v in result.values() if not v)
-        assert failure_count == 2

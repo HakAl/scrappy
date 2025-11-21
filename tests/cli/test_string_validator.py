@@ -16,8 +16,6 @@ from src.cli.validators.string import (
 class TestIsEmptyOrWhitespace:
     """Tests for is_empty_or_whitespace() helper."""
 
-
-
     def test_whitespace_only_is_empty(self):
         """Whitespace-only string should be treated as empty."""
         assert is_empty_or_whitespace("   ") is True
@@ -39,8 +37,6 @@ class TestIsEmptyOrWhitespace:
 
 class TestNormalizeString:
     """Tests for normalize_string() helper."""
-
-
 
     def test_strips_whitespace(self):
         """Should strip leading and trailing whitespace."""
@@ -99,31 +95,6 @@ class TestValidateNonEmpty:
         """Default field name should be 'value'."""
         result = validate_non_empty("")
         assert "value" in result.error.lower()
-
-
-class TestStringValidationResult:
-    """Tests for StringValidationResult dataclass."""
-
-    def test_result_has_required_attributes(self):
-        """Result should have is_valid, value, and error."""
-        result = StringValidationResult(
-            is_valid=True,
-            value="test",
-            error=None
-        )
-        assert result.is_valid is True
-        assert result.value == "test"
-        assert result.error is None
-
-    def test_invalid_result_has_error(self):
-        """Invalid result should contain error message."""
-        result = StringValidationResult(
-            is_valid=False,
-            value="",
-            error="Value cannot be empty"
-        )
-        assert result.is_valid is False
-        assert result.error is not None
 
 
 class TestStringValidatorIntegration:

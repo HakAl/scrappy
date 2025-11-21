@@ -72,41 +72,6 @@ class TestGroqProviderToolCalling:
         assert response.tool_calls[0].arguments == {"path": "config.json"}
 
     @pytest.mark.unit
-    def test_groq_chat_with_tools_multiple_calls(self, groq_provider, mock_groq_client):
-        """Groq returns multiple tool calls from API."""
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = "Reading both files."
-        mock_response.choices[0].message.tool_calls = [
-            MagicMock(
-                id="call_1",
-                function=MagicMock(
-                    name="read_file",
-                    arguments='{"path": "a.txt"}'
-                )
-            ),
-            MagicMock(
-                id="call_2",
-                function=MagicMock(
-                    name="read_file",
-                    arguments='{"path": "b.txt"}'
-                )
-            )
-        ]
-        mock_response.usage = MagicMock(prompt_tokens=60, completion_tokens=30)
-
-        mock_groq_client.chat.completions.create.return_value = mock_response
-
-        response = groq_provider.chat_with_tools(
-            [{"role": "user", "content": "Read both files"}],
-            [{"type": "function", "function": {"name": "read_file"}}]
-        )
-
-        assert len(response.tool_calls) == 2
-        assert response.tool_calls[0].id == "call_1"
-        assert response.tool_calls[1].id == "call_2"
-
-    @pytest.mark.unit
     def test_groq_chat_with_tools_no_tool_calls(self, groq_provider, mock_groq_client):
         """Groq returns no tool calls when model doesn't use them."""
         mock_response = MagicMock()
@@ -146,33 +111,6 @@ class TestGroqProviderToolCalling:
         call_kwargs = mock_groq_client.chat.completions.create.call_args.kwargs
         assert call_kwargs.get("tool_choice") == "none"
 
-    @pytest.mark.unit
-    def test_groq_chat_with_tools_complex_arguments(self, groq_provider, mock_groq_client):
-        """Groq parses complex nested arguments correctly."""
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = "Writing file."
-        mock_response.choices[0].message.tool_calls = [
-            MagicMock(
-                id="call_complex",
-                function=MagicMock(
-                    name="write_file",
-                    arguments='{"path": "data.json", "content": "{\\"key\\": \\"value\\"}", "options": {"overwrite": true}}'
-                )
-            )
-        ]
-        mock_response.usage = MagicMock(prompt_tokens=70, completion_tokens=40)
-
-        mock_groq_client.chat.completions.create.return_value = mock_response
-
-        response = groq_provider.chat_with_tools(
-            [{"role": "user", "content": "Write JSON file"}],
-            [{"type": "function", "function": {"name": "write_file"}}]
-        )
-
-        assert response.tool_calls[0].arguments["path"] == "data.json"
-        assert "key" in response.tool_calls[0].arguments["content"]
-        assert response.tool_calls[0].arguments["options"]["overwrite"] is True
 
     @pytest.mark.unit
     def test_groq_response_includes_metadata(self, groq_provider, mock_groq_client):

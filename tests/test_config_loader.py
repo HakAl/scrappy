@@ -112,12 +112,6 @@ class TestGetPathsConfig:
         assert any(d in result for d in venv_dirs)
 
 
-
-class TestConfigLoaderConsistency:
-    """Tests for consistency between config_loader and existing behavior."""
-
-    pass
-
 class TestEdgeCases:
     """Tests for edge cases and error handling."""
 

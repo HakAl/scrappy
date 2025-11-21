@@ -29,8 +29,6 @@ class TestSystemPromptBuilderUsesCodebaseContext:
         assert builder.context is context
 
     @pytest.mark.unit
-
-    @pytest.mark.unit
     def test_uses_context_structure_for_project_type(self, temp_project_dir):
         """SystemPromptBuilder should use context.structure for project type detection."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
@@ -821,8 +819,6 @@ class TestPromptBuilderNoOperationalGuidanceBlob:
 
 class TestSystemPromptBuilderCodebaseStructure:
     """SystemPromptBuilder should include actual file locations from context."""
-
-    @pytest.mark.unit
 
     @pytest.mark.unit
     def test_includes_javascript_file_locations(self, temp_project_dir):

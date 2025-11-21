@@ -47,7 +47,7 @@ def get_captured_output(console: Console) -> str:
 class TestWelcomeBannerPanel:
     """Test welcome banner renders as a Rich Panel with ASCII art."""
 
-    @pytest.mark.unit
+    @pytest.mark.integration
     def test_welcome_banner_uses_panel_component(self):
         """Welcome banner should render inside a Rich Panel."""
         io, console = make_capturing_rich_io()
@@ -64,7 +64,7 @@ class TestWelcomeBannerPanel:
         # Title should be visible (case-insensitive)
         assert 'scrappy' in output.lower()
 
-    @pytest.mark.unit
+    @pytest.mark.integration
     def test_welcome_banner_contains_ascii_art(self):
         """Welcome banner should include ASCII art or styled title."""
         io, console = make_capturing_rich_io()
@@ -78,7 +78,7 @@ class TestWelcomeBannerPanel:
         # Either box characters or large text representation
         assert 'Interactive Mode' in output or 'SCRAPPY' in output
 
-    @pytest.mark.unit
+    @pytest.mark.integration
     def test_welcome_banner_shows_quick_commands(self):
         """Welcome banner should list key commands."""
         io, console = make_capturing_rich_io()
@@ -92,7 +92,7 @@ class TestWelcomeBannerPanel:
         assert '/help' in output
         assert '/quit' in output
 
-    @pytest.mark.unit
+    @pytest.mark.integration
     def test_welcome_banner_panel_has_border_style(self):
         """Welcome banner panel should have styled border."""
         io, console = make_capturing_rich_io()
@@ -106,7 +106,7 @@ class TestWelcomeBannerPanel:
         lines = output.strip().split('\n')
         assert len(lines) >= 3  # At least top border, content, bottom border
 
-    @pytest.mark.unit
+    @pytest.mark.integration
     def test_welcome_banner_shows_mode_statuses(self):
         """Welcome banner should display current mode statuses."""
         io, console = make_capturing_rich_io()
@@ -129,7 +129,7 @@ class TestWelcomeBannerPanel:
 class TestHelpCommandsTable:
     """Test help commands format as a Rich Table with syntax highlighting."""
 
-    @pytest.mark.unit
+    @pytest.mark.integration
     def test_help_uses_table_component(self):
         """Help display should use Rich Table for command listing."""
         io, console = make_capturing_rich_io()
@@ -145,7 +145,7 @@ class TestHelpCommandsTable:
         # or column separators
         assert 'Command' in output or '/help' in output
 
-    @pytest.mark.unit
+    @pytest.mark.integration
     def test_help_table_has_command_column(self):
         """Help table should have a column for command names."""
         io, console = make_capturing_rich_io()
@@ -160,7 +160,7 @@ class TestHelpCommandsTable:
         found_commands = sum(1 for cmd in commands if cmd in output)
         assert found_commands >= 3  # At least some commands present
 
-    @pytest.mark.unit
+    @pytest.mark.integration
     def test_help_table_has_description_column(self):
         """Help table should have descriptions for commands."""
         io, console = make_capturing_rich_io()
@@ -175,7 +175,7 @@ class TestHelpCommandsTable:
         found_descriptions = sum(1 for desc in descriptions if desc in output)
         assert found_descriptions >= 2
 
-    @pytest.mark.unit
+    @pytest.mark.integration
     def test_help_table_groups_by_category(self):
         """Help table should group commands by category."""
         io, console = make_capturing_rich_io()
@@ -192,7 +192,7 @@ class TestHelpCommandsTable:
         found_categories = sum(1 for cat in categories if cat in output)
         assert found_categories >= 3  # At least some categories
 
-    @pytest.mark.unit
+    @pytest.mark.integration
     def test_help_table_has_syntax_highlighting(self):
         """Help table should syntax-highlight command names."""
         io, console = make_capturing_rich_io()
@@ -207,7 +207,7 @@ class TestHelpCommandsTable:
         assert '/help' in output
         assert '/quit' in output
 
-    @pytest.mark.unit
+    @pytest.mark.integration
     def test_help_accepts_category_filter(self):
         """Help table should optionally filter by category."""
         io, console = make_capturing_rich_io()
@@ -230,7 +230,7 @@ class TestHelpCommandsTable:
 class TestStatusDisplayComponents:
     """Test status display uses Rich components like progress bars."""
 
-    @pytest.mark.unit
+    @pytest.mark.integration
     def test_status_uses_panel_for_grouping(self):
         """Status display should group information in panels."""
         io, console = make_capturing_rich_io()
@@ -245,7 +245,7 @@ class TestStatusDisplayComponents:
         # Should have status information
         assert 'brain' in output.lower() or 'provider' in output.lower()
 
-    @pytest.mark.unit
+    @pytest.mark.integration
     def test_status_shows_provider_with_styling(self):
         """Current brain provider should be prominently styled."""
         io, console = make_capturing_rich_io()
@@ -259,7 +259,7 @@ class TestStatusDisplayComponents:
         # Provider name should appear
         assert 'cerebras' in output.lower()
 
-    @pytest.mark.unit
+    @pytest.mark.integration
     def test_status_shows_session_duration(self):
         """Status should display session duration."""
         io, console = make_capturing_rich_io()
@@ -274,7 +274,7 @@ class TestStatusDisplayComponents:
         # Should show duration or time info
         assert 'Duration' in output or 'Session' in output or ':' in output
 
-    @pytest.mark.unit
+    @pytest.mark.integration
     def test_status_shows_tasks_completed(self):
         """Status should show number of tasks completed."""
         io, console = make_capturing_rich_io()
@@ -299,7 +299,7 @@ class TestStatusDisplayComponents:
 class TestRateLimitProgressBars:
     """Test rate limit display uses progress bars."""
 
-    @pytest.mark.unit
+    @pytest.mark.integration
     def test_rate_limits_use_progress_bars(self):
         """Rate limit usage should display as progress bars."""
         io, console = make_capturing_rich_io()
@@ -326,7 +326,7 @@ class TestRateLimitProgressBars:
         # Should show some kind of progress indicator or percentage
         assert '%' in output or '/' in output or any(c in output for c in ['|', '*', '=', '#'])
 
-    @pytest.mark.unit
+    @pytest.mark.integration
     def test_rate_limits_show_percentage_used(self):
         """Rate limits should show percentage of quota used."""
         io, console = make_capturing_rich_io()
@@ -350,7 +350,7 @@ class TestRateLimitProgressBars:
         # Should show percentage or fraction
         assert '75' in output or '75%' in output or '3/4' in output
 
-    @pytest.mark.unit
+    @pytest.mark.integration
     def test_rate_limits_color_code_by_usage(self):
         """Rate limits should color-code based on usage level."""
         io, console = make_capturing_rich_io()
@@ -376,7 +376,7 @@ class TestRateLimitProgressBars:
         assert 'gemini' in output.lower()
         assert '95' in output or '9500' in output
 
-    @pytest.mark.unit
+    @pytest.mark.integration
     def test_rate_limits_handle_no_data(self):
         """Rate limits should handle missing or empty data gracefully."""
         io, console = make_capturing_rich_io()
@@ -392,7 +392,7 @@ class TestRateLimitProgressBars:
         # Should show informative message
         assert 'No' in output or 'no' in output or 'empty' in output.lower() or len(output.strip()) > 0
 
-    @pytest.mark.unit
+    @pytest.mark.integration
     def test_rate_limits_show_multiple_providers(self):
         """Rate limits should display data for multiple providers."""
         io, console = make_capturing_rich_io()
@@ -431,7 +431,7 @@ class TestRateLimitProgressBars:
 class TestUsageStatisticsRich:
     """Test usage statistics display with Rich components."""
 
-    @pytest.mark.unit
+    @pytest.mark.integration
     def test_usage_uses_table_for_providers(self):
         """Usage stats should display provider breakdown in a table."""
         io, console = make_capturing_rich_io()
@@ -451,7 +451,7 @@ class TestUsageStatisticsRich:
         assert 'cerebras' in output.lower()
         assert 'groq' in output.lower()
 
-    @pytest.mark.unit
+    @pytest.mark.integration
     def test_usage_shows_token_counts(self):
         """Usage stats should display token counts."""
         io, console = make_capturing_rich_io()
@@ -467,7 +467,7 @@ class TestUsageStatisticsRich:
         # Should show token info
         assert 'token' in output.lower() or '100' in output
 
-    @pytest.mark.unit
+    @pytest.mark.integration
     def test_usage_shows_cache_statistics(self):
         """Usage stats should display cache hit/miss information."""
         io, console = make_capturing_rich_io()
@@ -495,7 +495,7 @@ class TestUsageStatisticsRich:
         assert 'cache' in output.lower() or 'Cache' in output
         assert '30%' in output or 'hit' in output.lower()
 
-    @pytest.mark.unit
+    @pytest.mark.integration
     def test_usage_shows_latency_info(self):
         """Usage stats should display latency information."""
         io, console = make_capturing_rich_io()
@@ -531,7 +531,7 @@ class TestUsageStatisticsRich:
 class TestPlanTaskTreeDisplay:
     """Test plan and task display uses Rich Tree structure."""
 
-    @pytest.mark.unit
+    @pytest.mark.integration
     def test_plan_displays_as_tree(self):
         """Active plan should display tasks as a tree structure."""
         io, console = make_capturing_rich_io()
@@ -556,7 +556,7 @@ class TestPlanTaskTreeDisplay:
         # Should show tasks
         assert 'Research' in output or 'Write tests' in output
 
-    @pytest.mark.unit
+    @pytest.mark.integration
     def test_plan_tree_shows_task_status(self):
         """Plan tree should indicate task completion status."""
         io, console = make_capturing_rich_io()
@@ -579,7 +579,7 @@ class TestPlanTaskTreeDisplay:
         # Could be checkmarks, colors, or status text
         assert 'Completed' in output or 'completed' in output.lower() or '[x]' in output.lower()
 
-    @pytest.mark.unit
+    @pytest.mark.integration
     def test_plan_tree_highlights_current_task(self):
         """Plan tree should highlight the current in-progress task."""
         io, console = make_capturing_rich_io()
@@ -601,7 +601,7 @@ class TestPlanTaskTreeDisplay:
         # Current task should be present
         assert 'Current task' in output
 
-    @pytest.mark.unit
+    @pytest.mark.integration
     def test_plan_tree_handles_empty_plan(self):
         """Plan tree should handle empty or missing plan gracefully."""
         io, console = make_capturing_rich_io()
@@ -625,7 +625,7 @@ class TestPlanTaskTreeDisplay:
 class TestRichDisplayIntegration:
     """Integration tests for Rich display components working together."""
 
-    @pytest.mark.unit
+    @pytest.mark.integration
     def test_display_methods_use_correct_io(self):
         """Display methods should use the provided IO interface."""
         io, console = make_capturing_rich_io()
@@ -640,7 +640,7 @@ class TestRichDisplayIntegration:
         assert len(output.strip()) > 0
         assert 'Status' in output or 'Brain' in output or 'cerebras' in output.lower()
 
-    @pytest.mark.unit
+    @pytest.mark.integration
     def test_rich_io_protocol_compatibility(self):
         """RichIO should remain compatible with CLIIOProtocol."""
         io, console = make_capturing_rich_io()
@@ -655,7 +655,7 @@ class TestRichDisplayIntegration:
         assert "Test message" in output
         assert "Styled message" in output
 
-    @pytest.mark.unit
+    @pytest.mark.integration
     def test_fallback_to_basic_display(self):
         """Display should fall back gracefully if Rich components fail."""
         # This test ensures robustness

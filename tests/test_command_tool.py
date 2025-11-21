@@ -189,20 +189,6 @@ class TestPlatformSpecificFixes:
         assert "write_file" in result.error.lower() or "template" in result.error.lower()
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 class TestErrorHandling:
     """Tests for error handling in command execution."""
 

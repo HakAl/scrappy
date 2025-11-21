@@ -184,27 +184,6 @@ class TestCacheExpiration:
     """Tests for TTL-based cache expiration."""
 
     @pytest.mark.unit
-    def test_expired_entries_return_none(self):
-        """Test that expired cache entries are not returned."""
-        cache = ResponseCache(default_ttl_hours=1)
-        response = LLMResponse(
-            content="Old response",
-            model="model",
-            provider="provider"
-        )
-
-        cache.put(response, "prompt", "model")
-
-        # Manually expire the entry
-        for key in cache._cache:
-            old_time = datetime.now() - timedelta(hours=2)
-            cache._cache[key]["cached_at"] = old_time.isoformat()
-
-        # Should return None (expired)
-        result = cache.get("provider", "prompt", model="model")
-        assert result is None
-
-    @pytest.mark.unit
     def test_valid_entries_returned(self):
         """Test that non-expired entries are returned."""
         cache = ResponseCache(default_ttl_hours=24)

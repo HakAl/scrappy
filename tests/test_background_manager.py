@@ -11,7 +11,6 @@ Following CLAUDE.md guidelines:
 
 import pytest
 import asyncio
-from unittest.mock import Mock
 from src.orchestrator.background import BackgroundTaskManager
 
 
@@ -21,7 +20,6 @@ class TestBackgroundTaskSubmission:
     @pytest.mark.asyncio
     async def test_submit_returns_unique_task_id(self):
         """Submitting a task should return a unique ID for tracking."""
-        mock_output = Mock()
         manager = BackgroundTaskManager()
 
         async def dummy_task():
@@ -36,7 +34,6 @@ class TestBackgroundTaskSubmission:
     @pytest.mark.asyncio
     async def test_submit_multiple_tasks_returns_different_ids(self):
         """Each submitted task should get a unique ID."""
-        mock_output = Mock()
         manager = BackgroundTaskManager()
 
         async def dummy_task():
@@ -53,7 +50,6 @@ class TestBackgroundTaskSubmission:
     @pytest.mark.asyncio
     async def test_tracks_active_tasks(self):
         """Manager should track submitted tasks as active."""
-        mock_output = Mock()
         manager = BackgroundTaskManager()
 
         async def slow_task():
@@ -70,7 +66,6 @@ class TestBackgroundTaskSubmission:
     @pytest.mark.asyncio
     async def test_task_actually_executes_in_background(self):
         """Submitted task should execute without blocking caller."""
-        mock_output = Mock()
         manager = BackgroundTaskManager()
 
         executed = []
@@ -99,7 +94,6 @@ class TestBackgroundTaskCompletion:
     @pytest.mark.asyncio
     async def test_removes_task_from_active_when_complete(self):
         """Completed tasks should be removed from active tracking."""
-        mock_output = Mock()
         manager = BackgroundTaskManager()
 
         async def quick_task():
@@ -117,7 +111,6 @@ class TestBackgroundTaskCompletion:
     @pytest.mark.asyncio
     async def test_wait_for_tasks_waits_until_completion(self):
         """wait_for_background_tasks should wait for all tasks to finish."""
-        mock_output = Mock()
         manager = BackgroundTaskManager()
 
         completed = []
@@ -143,7 +136,6 @@ class TestBackgroundTaskCompletion:
     @pytest.mark.asyncio
     async def test_wait_returns_immediately_when_no_tasks(self):
         """wait_for_background_tasks should return immediately if no tasks pending."""
-        mock_output = Mock()
         manager = BackgroundTaskManager()
 
         result = await manager.wait_for_background_tasks(timeout=1.0)
@@ -156,7 +148,6 @@ class TestBackgroundTaskCompletion:
     @pytest.mark.asyncio
     async def test_wait_returns_completion_stats(self):
         """wait_for_background_tasks should return stats about what completed."""
-        mock_output = Mock()
         manager = BackgroundTaskManager()
 
         async def quick_task():
@@ -179,7 +170,6 @@ class TestBackgroundTaskErrors:
     @pytest.mark.asyncio
     async def test_handles_task_raising_exception(self):
         """Tasks that raise exceptions should be captured, not crash manager."""
-        mock_output = Mock()
         manager = BackgroundTaskManager()
 
         async def failing_task():
@@ -198,7 +188,6 @@ class TestBackgroundTaskErrors:
     @pytest.mark.asyncio
     async def test_records_task_errors(self):
         """Errors from tasks should be recorded in error log."""
-        mock_output = Mock()
         manager = BackgroundTaskManager()
 
         async def failing_task():
@@ -218,7 +207,6 @@ class TestBackgroundTaskErrors:
     @pytest.mark.asyncio
     async def test_get_status_returns_error_count(self):
         """get_task_status should include error count."""
-        mock_output = Mock()
         manager = BackgroundTaskManager()
 
         async def failing_task():
@@ -237,7 +225,6 @@ class TestBackgroundTaskErrors:
     @pytest.mark.asyncio
     async def test_clear_errors_empties_error_list(self):
         """clear_background_errors should remove all recorded errors."""
-        mock_output = Mock()
         manager = BackgroundTaskManager()
 
         async def failing_task():
@@ -262,7 +249,6 @@ class TestBackgroundTaskCancellation:
     @pytest.mark.asyncio
     async def test_cancel_task_cancels_by_id(self):
         """cancel_task should cancel the task with the given ID."""
-        mock_output = Mock()
         manager = BackgroundTaskManager()
 
         async def long_running_task():
@@ -287,7 +273,6 @@ class TestBackgroundTaskCancellation:
     @pytest.mark.asyncio
     async def test_cancel_returns_false_for_unknown_task_id(self):
         """Cancelling unknown task ID should return False."""
-        mock_output = Mock()
         manager = BackgroundTaskManager()
 
         result = manager.cancel_task("nonexistent-id")
@@ -297,7 +282,6 @@ class TestBackgroundTaskCancellation:
     @pytest.mark.asyncio
     async def test_handles_cancellation_gracefully(self):
         """Cancelled tasks should not appear in error log."""
-        mock_output = Mock()
         manager = BackgroundTaskManager()
 
         async def cancellable_task():
@@ -309,7 +293,6 @@ class TestBackgroundTaskCancellation:
         await asyncio.sleep(0.05)
 
         # Cancelled tasks should NOT be in error log
-        # (CancelledError is not treated as an error)
         status = manager.get_task_status()
         # Depending on implementation, may have 0 errors or cancelled error isn't counted
         # The key is it shouldn't crash
@@ -321,7 +304,6 @@ class TestEdgeCases:
     @pytest.mark.asyncio
     async def test_wait_respects_timeout(self):
         """wait_for_background_tasks should timeout if tasks don't complete."""
-        mock_output = Mock()
         manager = BackgroundTaskManager()
 
         async def very_slow_task():
@@ -340,7 +322,6 @@ class TestEdgeCases:
     @pytest.mark.asyncio
     async def test_handles_multiple_simultaneous_completions(self):
         """Multiple tasks completing at same time should be handled correctly."""
-        mock_output = Mock()
         manager = BackgroundTaskManager()
 
         async def quick_task():
@@ -360,7 +341,6 @@ class TestEdgeCases:
     @pytest.mark.asyncio
     async def test_get_status_returns_active_count(self):
         """get_task_status should return count of active tasks."""
-        mock_output = Mock()
         manager = BackgroundTaskManager()
 
         async def slow_task():
@@ -379,7 +359,6 @@ class TestEdgeCases:
     @pytest.mark.asyncio
     async def test_error_tracking_preserves_error_info(self):
         """Error records should include useful debugging information."""
-        mock_output = Mock()
         manager = BackgroundTaskManager()
 
         async def task_with_specific_error():

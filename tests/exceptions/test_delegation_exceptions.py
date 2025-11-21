@@ -23,12 +23,6 @@ from src.utils.errors import (
 )
 
 
-class TestExceptionHierarchy:
-    """Test that exceptions follow the proper inheritance hierarchy."""
-
-
-
-
 class TestRetryExhaustedError:
     """Test RetryExhaustedError functionality."""
 
@@ -176,8 +170,6 @@ class TestProviderExecutionError:
 
 class TestBackwardCompatibility:
     """Test backward compatibility with legacy exception handling."""
-
-
 
     def test_legacy_exceptions_preserve_attributes(self):
         """Verify legacy exceptions preserve their original attributes."""

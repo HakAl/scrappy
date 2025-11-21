@@ -11,8 +11,6 @@ class TestProjectDetectorBasics:
     """Basic initialization and interface tests."""
 
     @pytest.mark.unit
-
-    @pytest.mark.unit
     def test_creation_with_project_path(self, tmp_path):
         """ProjectDetector can be created with a project path."""
         from src.context.project_detector import ProjectDetector

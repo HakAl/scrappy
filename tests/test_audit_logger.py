@@ -35,15 +35,6 @@ class TestAuditLoggerBasics:
 
         assert len(logger.log[0]['result']) == 10
 
-    def test_get_log_returns_copy(self):
-        """Test get_log returns the log list."""
-        logger = AuditLogger()
-        logger.log_action("test", {}, "result", True)
-
-        log = logger.get_log()
-        assert len(log) == 1
-        assert log is logger.log
-
     def test_clear_log(self):
         """Test clearing the log."""
         logger = AuditLogger()
@@ -185,16 +176,6 @@ class TestCrashHandlers:
         with open(audit_file) as f:
             data = json.load(f)
         assert len(data['actions']) == 1
-
-
-
-    def test_on_exit_does_nothing_with_empty_log(self, tmp_path):
-        """Test that _on_exit does nothing if log is empty."""
-        logger = AuditLogger()
-        # Should not create file
-        logger._on_exit()
-
-        assert not (tmp_path / ".test.json").exists()
 
 
 class TestCrashRecovery:

@@ -354,61 +354,6 @@ more text'''
         # Should find the complete valid JSON object
         assert result.action == "list_files"
 
-
-class TestJSONResponseParserRegexFallback:
-    """Tests for regex-based extraction when JSON parsing fails."""
-
-    @pytest.fixture
-    def parser(self):
-        """Create JSON parser instance."""
-        return JSONResponseParser()
-
-    @pytest.mark.unit
-    def test_parse_extracts_fields_via_regex(self, parser):
-        """Parser uses regex to extract fields from broken JSON."""
-        response = '''
-        {
-            "thought": "Need to check git status",
-            "action": "git_status",
-            incomplete json here...'''
-
-        result = parser.parse(response)
-
-        # Should extract what it can via regex
-        assert "git" in result.thought or result.action == "git_status" or result.error
-
-    @pytest.mark.unit
-    def test_parse_extracts_thought_and_action_minimally(self, parser):
-        """Parser can extract thought and action even from severely broken JSON."""
-        response = '''"thought": "Running tests", "action": "run_command"'''
-
-        result = parser.parse(response)
-
-        # Should at least extract something or return error
-        assert result.thought or result.action or result.error
-
-    @pytest.mark.unit
-    def test_parse_handles_completely_invalid_input(self, parser):
-        """Parser returns error result for completely unparseable input."""
-        response = "This is just plain text with no JSON at all."
-
-        result = parser.parse(response)
-
-        # Should return retry_parse action or have error
-        assert result.action == "retry_parse" or result.error is not None
-        assert result.is_complete is False
-
-    @pytest.mark.unit
-    def test_parse_empty_response(self, parser):
-        """Parser handles empty response gracefully."""
-        response = ""
-
-        result = parser.parse(response)
-
-        assert result.action == "retry_parse" or result.error is not None
-        assert result.is_complete is False
-
-
 class TestJSONResponseParserEdgeCases:
     """Tests for edge cases and boundary conditions."""
 

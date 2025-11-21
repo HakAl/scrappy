@@ -109,8 +109,6 @@ class TestPlatformDetection:
         assert platform1 == platform2
 
     @pytest.mark.unit
-
-    @pytest.mark.unit
     def test_matches_current_system(self):
         """Platform detection should match the actual system."""
         from src.context.platform import PlatformDetector
@@ -130,9 +128,6 @@ class TestPlatformDetection:
 
 class TestToolAvailability:
     """Tests for tool/command availability detection."""
-
-    @pytest.mark.unit
-
     @pytest.mark.unit
     def test_detects_python_available(self):
         """Should detect that Python is available (we're running in Python)."""

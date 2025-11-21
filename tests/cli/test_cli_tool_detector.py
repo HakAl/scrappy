@@ -220,10 +220,3 @@ class TestNeedsToolSupport:
         assert self.needs_tool_support("I want to know where the tests are") is True
         assert self.needs_tool_support("Can you check the npm package for me") is True
 
-
-class TestToolDetectorModuleStructure:
-    """Tests for the tool_detector module structure."""
-
-
-
-

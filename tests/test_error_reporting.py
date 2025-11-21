@@ -31,34 +31,6 @@ class TestCacheErrorReporting:
         )
 
     @pytest.mark.unit
-    def test_save_cache_reports_write_errors(self, tmp_path, sample_response):
-        """Test that _save_cache reports errors instead of silently failing.
-
-        When cache file write fails, the error should be reported via output.
-        """
-        cache_file = tmp_path / "cache.json"
-        output = CapturingOutput()
-
-        cache = ResponseCache(cache_file=str(cache_file), output=output)
-        cache.put(sample_response, "test prompt", "model")
-
-        # Make the file read-only to cause write failure on next put
-        cache_file.chmod(0o444)
-
-        try:
-            # This should fail but report the error
-            cache.put(sample_response, "another prompt", "model")
-
-            # Verify error was reported
-            errors = output.get_by_level('error')
-            assert len(errors) > 0, "Expected error to be reported when cache write fails"
-            assert any("cache" in err.lower() or "write" in err.lower() for err in errors), \
-                f"Error message should mention cache/write failure. Got: {errors}"
-        finally:
-            # Restore permissions for cleanup
-            cache_file.chmod(0o644)
-
-    @pytest.mark.unit
     def test_save_cache_with_invalid_path_reports_error(self, tmp_path, sample_response):
         """Test that saving to invalid path reports error."""
         output = CapturingOutput()

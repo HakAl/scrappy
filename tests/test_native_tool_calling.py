@@ -63,19 +63,6 @@ class TestToolCallDataclass:
         assert "nested" in tool_call.arguments["content"]
         assert tool_call.arguments["options"]["overwrite"] is True
 
-    @pytest.mark.unit
-    def test_tool_call_id_uniqueness_assumption(self):
-        """ToolCall IDs are unique identifiers from the LLM."""
-        from src.providers.base import ToolCall
-
-        call1 = ToolCall(id="call_001", name="read_file", arguments={"path": "a.txt"})
-        call2 = ToolCall(id="call_002", name="read_file", arguments={"path": "b.txt"})
-
-        assert call1.id != call2.id
-        # Same tool name, different IDs
-        assert call1.name == call2.name
-
-
 class TestLLMResponseWithToolCalls:
     """Tests for LLMResponse extended with tool_calls field."""
 
@@ -385,11 +372,4 @@ class TestNativeToolCallParser:
         result = parser.parse_response(response)
 
         assert result.error is None
-
-
-class TestNativeToolCallParserInterface:
-    """Tests for NativeToolCallParser interface compatibility."""
-
-
-
 

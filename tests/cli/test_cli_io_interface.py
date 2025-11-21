@@ -9,17 +9,8 @@ import pytest
 from typing import List, Optional
 
 
-class TestCLIIOProtocol:
-    """Tests for the CLIIOProtocol interface definition."""
-
-    pass
-
 class TestTestIO:
     """Tests for TestIO implementation - used for testing CLI code."""
-
-    @pytest.mark.unit
-
-    @pytest.mark.unit
 
     @pytest.mark.unit
     def test_testio_echo_captures_output(self):
@@ -236,10 +227,6 @@ class TestMockIO:
     """Tests for MockIO in tests/helpers.py."""
 
     @pytest.mark.unit
-
-    @pytest.mark.unit
-
-    @pytest.mark.unit
     def test_mockio_echo_captures_output(self):
         """Test that echo() captures output."""
         from tests.helpers import MockIO
@@ -314,12 +301,6 @@ class TestClickIO:
     """Tests for ClickIO implementation - real CLI output using click."""
 
     @pytest.mark.unit
-
-    @pytest.mark.unit
-
-    @pytest.mark.unit
-
-    @pytest.mark.unit
     def test_clickio_style_returns_styled_string(self):
         """Test that ClickIO.style() returns a styled string."""
         from src.cli.io_interface import ClickIO
@@ -330,7 +311,6 @@ class TestClickIO:
         # Result should be a string (with ANSI codes when terminal supports it)
         assert isinstance(result, str)
         assert "test" in result
-
 
 
 class TestIOProtocolUsage:
@@ -427,8 +407,6 @@ class TestIOProtocolUsage:
 
 class TestEdgeCases:
     """Tests for edge cases and error handling."""
-
-    @pytest.mark.unit
 
     @pytest.mark.unit
     def test_testio_echo_with_special_characters(self):

@@ -14,29 +14,6 @@ from dataclasses import FrozenInstanceError, replace
 from src.task_router.classifier import ClassifiedTask, TaskType
 
 
-class TestClassifiedTaskImmutability:
-    """Tests that verify ClassifiedTask cannot be mutated after creation."""
-
-    @pytest.fixture
-    def sample_task(self):
-        """Create a sample ClassifiedTask for testing."""
-        return ClassifiedTask(
-            original_input="test input",
-            task_type=TaskType.RESEARCH,
-            confidence=0.8,
-            reasoning="Test reasoning",
-            extracted_command=None,
-            suggested_provider="fast",
-            override_provider=None,
-            complexity_score=3,
-            requires_planning=False,
-            requires_tools=True,
-            matched_patterns=("pattern1",),
-            extracted_files=("file.py",),
-            extracted_directories=("src",)
-        )
-
-
 
 class TestClassifiedTaskReplace:
     """Tests for creating modified copies using dataclasses.replace()."""

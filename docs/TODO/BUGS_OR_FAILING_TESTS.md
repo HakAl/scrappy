@@ -1,3 +1,8 @@
+help me assess these tests? some are bad, useless, call actual functions or apis not mocks.
+sort through them to remove bad tests and keep good ones. please list functions to remove, or the whole file, or nothing.
+
+
+
 [//]: # (CRITICAL)
 
 

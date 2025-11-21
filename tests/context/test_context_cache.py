@@ -13,8 +13,6 @@ class TestContextCacheBasics:
     """Basic cache operations."""
 
     @pytest.mark.unit
-
-    @pytest.mark.unit
     def test_save_creates_file(self, tmp_path):
         """save() creates cache file on disk."""
         cache_file = tmp_path / "cache.json"
@@ -71,7 +69,6 @@ class TestContextCacheBasics:
         cache.clear(cache_file)
 
         assert not cache_file.exists()
-
 
 
 class TestCacheRoundTrip:

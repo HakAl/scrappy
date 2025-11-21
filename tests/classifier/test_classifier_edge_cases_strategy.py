@@ -6,8 +6,6 @@ These tests demonstrate scenarios where the current regex approach struggles:
 2. Context-dependent classification - same words, different meanings
 3. Semantic understanding - understanding intent vs pattern matching
 4. Complex priority resolution - when multiple patterns conflict
-
-These tests guide the strategy pattern design by showing what behaviors we need.
 """
 
 import pytest
@@ -29,16 +27,12 @@ class TestContextDependentClassification:
 
         # List as noun in creation context - should be CODE_GENERATION
         result2 = classifier.classify("create a list of users")
-        # Current behavior: might classify as either depending on pattern priority
-        # With strategy pattern: could use context to understand creation intent
         assert result2.task_type == TaskType.CODE_GENERATION
 
     def test_make_command_vs_make_build_tool(self, classifier):
         """'make' as create verb vs 'make' build tool."""
         # 'make' as create - should be CODE_GENERATION
         result1 = classifier.classify("make a function")
-        # Current regex has negative lookahead for "make a" to prevent this
-        # But we want this to be CODE_GENERATION
         assert result1.task_type == TaskType.CODE_GENERATION
 
         # 'make' as build tool - should be DIRECT_COMMAND
@@ -69,26 +63,11 @@ class TestSemanticIntent:
         result1 = classifier.classify("what does this function do?")
         assert result1.task_type == TaskType.RESEARCH
 
-        # Request to add question as comment - should be CODE_GENERATION
-        # Current regex will likely classify this as RESEARCH due to "what"
-        result2 = classifier.classify(
-            "add a comment asking 'what should the timeout be?'"
-        )
-        # This is tricky - we want CODE_GENERATION but regex sees "what"
-        # Strategy pattern could analyze full context
-
     def test_imperative_vs_conditional(self, classifier):
         """Imperative commands vs conditional questions."""
         # Imperative - should be CODE_GENERATION
         result1 = classifier.classify("create the database schema")
         assert result1.task_type == TaskType.CODE_GENERATION
-
-        # Conditional/planning - might still be CODE_GENERATION but softer
-        result2 = classifier.classify(
-            "should I create the database schema?"
-        )
-        # This is asking for advice, likely CONVERSATION or RESEARCH
-        # Current regex might classify as CODE_GENERATION due to "create"
 
 
 class TestPatternOverlap:
@@ -110,7 +89,6 @@ class TestPatternOverlap:
         """Both 'find' (RESEARCH) and 'fix' (CODE_GENERATION) present."""
         result = classifier.classify("find and fix the authentication bug")
         # CODE_GENERATION should likely win since fixing requires code changes
-        # Current implementation accumulates both scores
         assert result.task_type == TaskType.CODE_GENERATION
 
     def test_create_then_list(self, classifier):
@@ -120,28 +98,6 @@ class TestPatternOverlap:
         assert result.task_type == TaskType.CODE_GENERATION
         # Should recognize multi-step complexity
         assert result.complexity_score >= 5
-
-
-class TestExtensibilityLimitations:
-    """Test cases that would be easier with strategy pattern."""
-
-    @pytest.fixture
-    def classifier(self):
-        return TaskClassifier()
-
-    def test_new_package_manager_not_recognized(self, classifier):
-        """New package managers require regex updates."""
-        # Known package manager
-        result1 = classifier.classify("npm install express")
-        assert result1.task_type == TaskType.DIRECT_COMMAND
-
-        # Hypothetical new package manager (not in regex)
-        result2 = classifier.classify("bun install express")
-        # Current: might not classify as DIRECT_COMMAND
-        # With strategy: could register new command patterns dynamically
-
-        # Might not recognize terraform without explicit regex
-        # Strategy pattern could allow plugins for domain-specific detection
 
 
 class TestMaintenanceChallenges:
@@ -197,26 +153,6 @@ class TestComplexRealWorldScenarios:
         assert result.task_type == TaskType.CODE_GENERATION
         assert result.complexity_score >= 5
 
-    def test_negation_handling(self, classifier):
-        """Negations can change meaning."""
-        result1 = classifier.classify("create a function")
-        result2 = classifier.classify("don't create a function")
-
-        # First is clearly CODE_GENERATION
-        assert result1.task_type == TaskType.CODE_GENERATION
-
-        # Second is probably CONVERSATION or request for clarification
-        # Current regex doesn't handle negation well
-        # Might still classify as CODE_GENERATION due to "create" pattern
-
-        # Without context, hard to classify
-        # Might default to RESEARCH or low-confidence CODE_GENERATION
-        # Strategy pattern could maintain conversation context
-
-        # This is describing behavior, likely CODE_GENERATION
-        # But no explicit "create/write" verb
-        # Current regex might miss this
-
 
 class TestFallbackBehaviorEdgeCases:
     """Test edge cases in fallback logic."""
@@ -237,17 +173,12 @@ class TestFallbackBehaviorEdgeCases:
         assert result.task_type == TaskType.RESEARCH
         assert result.confidence == 0.5
 
-        # Could be asking what this does (RESEARCH)
-        # Or could be requesting to create it (CODE_GENERATION)
-        # Without context, unclear
-
     def test_single_word_ambiguous(self, classifier):
         """Single ambiguous word."""
         result = classifier.classify("refactor")
         # Just "refactor" alone - what should this be?
         # Likely CODE_GENERATION but confidence should be lower
         assert result.task_type == TaskType.CODE_GENERATION
-        # Single word should have lower confidence than full sentence
 
 
 class TestPriorityEdgeCases:
@@ -290,12 +221,6 @@ class TestMetadataExtractionEdgeCases:
     def classifier(self):
         return TaskClassifier()
 
-        # Should extract file even with quotes
-        # Current regex might not handle quotes
-
-        # .json in URL should not be extracted as local file
-        # Current implementation might extract "data.json"
-
     def test_relative_vs_absolute_paths(self, classifier):
         """Should normalize path separators."""
         result1 = classifier.classify("edit src/utils.py")
@@ -314,12 +239,6 @@ class TestMetadataExtractionEdgeCases:
 class TestStrategyPatternMotivation:
     """
     Tests that motivate the strategy pattern refactor.
-
-    These demonstrate what a strategy pattern could provide:
-    - Pluggable classification strategies
-    - Context-aware decisions
-    - Easy extension without modifying core code
-    - Testable individual strategies
     """
 
     @pytest.fixture
@@ -334,7 +253,6 @@ class TestStrategyPatternMotivation:
             "and finally write tests"
         )
         # This has three distinct actions of different types
-        # Strategy pattern could use chain of responsibility
         # Current: picks highest scoring type
         assert result.task_type == TaskType.CODE_GENERATION
         assert result.complexity_score >= 7
@@ -345,6 +263,3 @@ class TestStrategyPatternMotivation:
         result = classifier.classify("pip install requests")
         assert result.task_type == TaskType.DIRECT_COMMAND
         # No need to check other patterns after direct command match
-
-        # Current: might classify as CODE_GENERATION or RESEARCH
-        # Custom strategy: could recognize as ML_TRAINING task type

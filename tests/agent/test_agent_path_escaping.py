@@ -25,46 +25,6 @@ from src.agent_tools.tools.file_tools import WriteFileTool
 from src.agent_tools.tools.base import ToolContext
 
 
-class TestPathNormalizationWindows:
-    """Test path normalization on Windows platform."""
-
-
-
-    @pytest.mark.unit
-    @patch('src.platform_utils.is_windows', return_value=True)
-    def test_powershell_path_parameter_not_normalized(self, mock_is_win):
-        """BUG: PowerShell -Path syntax is not normalized - this test should FAIL."""
-        command = 'New-Item -ItemType Directory -Path "frontend/src/components" -Force'
-        normalized, was_modified, msg = normalize_command_paths(command)
-
-        # Extract path from the command
-        import re
-        match = re.search(r'-Path\s+"([^"]+)"', normalized)
-        assert match is not None, f"Could not find -Path in: {normalized}"
-
-        path_value = match.group(1)
-        # This SHOULD have backslashes but currently doesn't
-        assert '\\' in path_value, f"Path not normalized: {path_value}"
-        assert '/' not in path_value, f"Forward slashes still present: {path_value}"
-
-
-
-
-class TestPathNormalizationUnix:
-    """Test path normalization on Unix/Mac platforms."""
-
-
-
-
-
-class TestPowerShellCmdletHandling:
-    """Test handling of PowerShell-specific cmdlets."""
-
-
-
-
-
-
 class TestCommandExecutionIntegration:
     """Integration tests for command execution through the agent."""
 

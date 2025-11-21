@@ -302,33 +302,6 @@ class TestGetRecommendedProvider:
 
         assert result == 'groq'
 
-    @pytest.mark.unit
-    def test_returns_first_available_even_if_rate_limited(self):
-        """Should return first available as fallback even if rate limited."""
-        tracker = create_real_tracker()
-
-        # Rate limit all providers
-        for _ in range(10):
-            tracker.record_request('cerebras', 'default-model', 100, 50)
-            tracker.record_request('groq', 'default-model', 100, 50)
-
-        providers = {
-            'cerebras': make_mock_provider(
-                'cerebras',
-                limits=ProviderLimits(requests_per_day=10)
-            ),
-            'groq': make_mock_provider(
-                'groq',
-                limits=ProviderLimits(requests_per_day=10)
-            ),
-        }
-        registry = make_mock_registry(providers)
-
-        result = tracker.get_recommended_provider('general', registry)
-
-        # Should return first available as fallback
-        assert result in ['cerebras', 'groq']
-
 
 class TestGetRateLimitStatusExtended:
     """Tests for extended get_rate_limit_status with provider info."""

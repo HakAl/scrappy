@@ -10,13 +10,6 @@ from unittest.mock import Mock
 from src.orchestrator.output import CapturingOutput
 from src.orchestrator.status_reporter import ProviderStatusReporter
 
-
-class TestProviderStatusReporterConstruction:
-    """Test ProviderStatusReporter initialization."""
-
-
-
-
 class TestPrintStatus:
     """Test print_status() presentation logic."""
 
@@ -35,8 +28,6 @@ class TestPrintStatus:
             brain_name=brain_name,
             verbose_selection=verbose
         )
-
-
 
     def test_shows_available_provider_with_ok_status(self):
         """print_status() should show [OK] for available providers."""

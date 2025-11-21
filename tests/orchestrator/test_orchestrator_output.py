@@ -17,13 +17,6 @@ from src.orchestrator.output import (
 )
 
 
-class TestOutputInterfaceProtocol:
-    """Test that implementations satisfy the OutputInterface protocol."""
-
-
-
-
-
 class TestConsoleOutput:
     """Test ConsoleOutput prints to stdout correctly."""
 

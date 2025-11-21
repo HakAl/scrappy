@@ -8,16 +8,6 @@ import pytest
 import importlib
 import sys
 
-
-class TestValidatorsPackageStructure:
-    """Tests for the validators package module structure."""
-
-
-
-
-
-
-
 class TestBaseModule:
     """Tests for the base.py module."""
 

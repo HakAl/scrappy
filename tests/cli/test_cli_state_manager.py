@@ -504,10 +504,3 @@ class TestPlanStateManagerTaskExecution:
 
         assert desc == ""
 
-
-class TestPlanStateManagerModuleStructure:
-    """Tests for state_manager module structure."""
-
-
-
-

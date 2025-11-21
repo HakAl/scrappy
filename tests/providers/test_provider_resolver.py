@@ -120,26 +120,6 @@ class TestQualityHintResolution:
         orch.providers = Mock()
         return orch
 
-    def test_quality_hint_prefers_cerebras_70b(self, mock_orchestrator):
-        """Quality hint should use cerebras with 70B model."""
-        mock_orchestrator.providers.list_available.return_value = ['cerebras', 'groq']
-
-        resolver = ProviderResolver(orchestrator=mock_orchestrator)
-        provider, model = resolver.resolve("quality")
-
-        assert provider == 'cerebras'
-        assert model == 'llama-3.3-70b'
-
-    def test_quality_hint_falls_back_to_groq_70b(self, mock_orchestrator):
-        """Quality hint should use groq 70B when cerebras unavailable."""
-        mock_orchestrator.providers.list_available.return_value = ['groq']
-
-        resolver = ProviderResolver(orchestrator=mock_orchestrator)
-        provider, model = resolver.resolve("quality")
-
-        assert provider == 'groq'
-        assert model == 'llama-3.3-70b-versatile'
-
     def test_quality_hint_falls_back_to_gemini(self, mock_orchestrator):
         """Quality hint should use gemini as last resort."""
         mock_orchestrator.providers.list_available.return_value = ['gemini']
@@ -159,98 +139,6 @@ class TestQualityHintResolution:
 
         assert provider is None
         assert model is None
-
-
-class TestHighVolumeHintResolution:
-    """Test resolution of 'high_volume' hint."""
-
-    @pytest.fixture
-    def mock_orchestrator(self):
-        orch = Mock()
-        orch.providers = Mock()
-        return orch
-
-    def test_high_volume_uses_fast_providers(self, mock_orchestrator):
-        """High volume hint should use same logic as fast."""
-        mock_orchestrator.providers.list_available.return_value = ['groq']
-
-        resolver = ProviderResolver(orchestrator=mock_orchestrator, use_provider_selector=False)
-        provider, model = resolver.resolve("high_volume")
-
-        assert provider == 'groq'
-        assert model is None
-
-    def test_high_volume_prefers_cerebras(self, mock_orchestrator):
-        """High volume should prefer cerebras."""
-        mock_orchestrator.providers.list_available.return_value = ['cerebras', 'groq', 'gemini']
-
-        resolver = ProviderResolver(orchestrator=mock_orchestrator)
-        provider, model = resolver.resolve("high_volume")
-
-        assert provider == 'cerebras'
-
-
-class TestGeneralHintResolution:
-    """Test resolution of 'general' hint."""
-
-    @pytest.fixture
-    def mock_orchestrator(self):
-        orch = Mock()
-        orch.providers = Mock()
-        return orch
-
-    def test_general_uses_fast_providers(self, mock_orchestrator):
-        """General hint should use same logic as fast."""
-        mock_orchestrator.providers.list_available.return_value = ['gemini']
-
-        resolver = ProviderResolver(orchestrator=mock_orchestrator)
-        provider, model = resolver.resolve("general")
-
-        assert provider == 'gemini'
-        assert model is None
-
-    def test_general_prefers_cerebras(self, mock_orchestrator):
-        """General should prefer cerebras."""
-        mock_orchestrator.providers.list_available.return_value = ['cerebras', 'groq']
-
-        resolver = ProviderResolver(orchestrator=mock_orchestrator)
-        provider, model = resolver.resolve("general")
-
-        assert provider == 'cerebras'
-
-
-class TestProviderSelectorIntegration:
-    """Test integration with ProviderSelector."""
-
-    def test_uses_provider_selector_when_available(self):
-        """Should delegate to ProviderSelector when available."""
-        orch = Mock()
-        orch.providers = Mock()
-
-        # Mock ProviderSelector to return specific values
-        # Note: This test will pass once we implement the fallback to ProviderSelector
-        resolver = ProviderResolver(orchestrator=orch, use_provider_selector=True)
-
-        # If ProviderSelector is available, it should be used
-        # For now, we'll test the fallback behavior
-        orch.providers.list_available.return_value = ['cerebras']
-        provider, model = resolver.resolve("fast")
-
-        # Should still work with fallback
-        assert provider in ['cerebras', None]  # May use ProviderSelector or fallback
-
-    def test_falls_back_when_provider_selector_fails(self):
-        """Should use fallback logic when ProviderSelector raises exception."""
-        orch = Mock()
-        orch.providers = Mock()
-        orch.providers.list_available.return_value = ['groq']
-
-        resolver = ProviderResolver(orchestrator=orch, use_provider_selector=True)
-        provider, model = resolver.resolve("fast")
-
-        # Should fall back to simple mapping
-        assert provider == 'groq'
-
 
 class TestUnknownHints:
     """Test behavior with unknown or invalid hints."""

@@ -552,11 +552,6 @@ class TestPersistenceCaseInsensitivity:
             assert "Usage:" not in output
 
 
-class TestPersistenceDefaultIO:
-    """Tests for default IO behavior."""
-
-
-
 class TestPersistenceDefaultParameters:
     """Tests for default parameter handling."""
 

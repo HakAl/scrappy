@@ -199,23 +199,6 @@ class TestCLITaskRouterHandler:
         assert handler.history[0]["result"].error == "Provider unavailable"
 
 
-class TestCLIDisplay:
-    """Tests for CLI display formatting."""
-
-    @pytest.fixture
-    def mock_orchestrator(self):
-        """Create mock orchestrator with required methods."""
-        orch = Mock()
-        orch.brain = "cerebras"
-        orch.providers = Mock()
-        orch.providers.list_available.return_value = ["cerebras", "groq"]
-        orch.providers.get.return_value = Mock(
-            available_models=["model1", "model2"],
-            default_model="model1"
-        )
-        return orch
-
-
 class TestCLIAgentManager:
     """Tests for agent manager."""
 

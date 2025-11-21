@@ -491,26 +491,6 @@ class TestValidateProvider:
         result = validate_provider("2fast")
         assert not result.is_valid
 
-
-class TestValidationError:
-    """Tests for ValidationError exception."""
-
-    def test_validation_error_has_message(self):
-        """ValidationError should have descriptive message."""
-        error = ValidationError("test error message")
-        assert str(error) == "test error message"
-
-    def test_validation_error_has_field(self):
-        """ValidationError should support field attribute."""
-        error = ValidationError("invalid value", field="provider")
-        assert error.field == "provider"
-
-    def test_validation_error_has_value(self):
-        """ValidationError should support value attribute."""
-        error = ValidationError("invalid", value="bad_input")
-        assert error.value == "bad_input"
-
-
 class TestValidatorIntegration:
     """Integration tests for validators working together."""
 

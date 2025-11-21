@@ -10,137 +10,10 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 
-class TestGitHistoryReaderBasics:
-    """Basic GitHistoryReader functionality tests."""
-
-    pass
-
-class TestGitHistoryReaderWithMocks:
-    """Tests using mocked subprocess calls for isolation."""
-
-    @pytest.fixture
-    def mock_subprocess_run(self):
-        """Create a mock for subprocess.run."""
-        with patch('subprocess.run') as mock_run:
-            yield mock_run
-
-    @pytest.mark.unit
-    def test_gets_recent_commits(self, temp_project_dir, mock_subprocess_run):
-        """Should extract recent commits from git log."""
-        from src.context.git_history import GitHistoryReader
-
-        # Mock git log output
-        mock_result = MagicMock()
-        mock_result.returncode = 0
-        mock_result.stdout = "abc1234 Initial commit\ndef5678 Add feature\n"
-        mock_subprocess_run.return_value = mock_result
-
-        reader = GitHistoryReader()
-        result = reader.get_history(temp_project_dir)
-
-        assert 'recent_commits' in result
-        assert len(result['recent_commits']) == 2
-        assert 'Initial commit' in result['recent_commits'][0]
-
-    @pytest.mark.unit
-    def test_gets_current_branch(self, temp_project_dir, mock_subprocess_run):
-        """Should extract current branch name."""
-        from src.context.git_history import GitHistoryReader
-
-        mock_result = MagicMock()
-        mock_result.returncode = 0
-        mock_result.stdout = "main\n"
-        mock_subprocess_run.return_value = mock_result
-
-        reader = GitHistoryReader()
-        result = reader.get_history(temp_project_dir)
-
-        assert 'current_branch' in result
-        assert result['current_branch'] == 'main'
-
-    @pytest.mark.unit
-    def test_gets_branches_list(self, temp_project_dir, mock_subprocess_run):
-        """Should extract list of branches."""
-        from src.context.git_history import GitHistoryReader
-
-        mock_result = MagicMock()
-        mock_result.returncode = 0
-        mock_result.stdout = "* main\n  feature/auth\n  develop\n"
-        mock_subprocess_run.return_value = mock_result
-
-        reader = GitHistoryReader()
-        result = reader.get_history(temp_project_dir)
-
-        assert 'branches' in result
-        # Should strip asterisk and whitespace
-        assert 'main' in result['branches']
-
-    @pytest.mark.unit
-    def test_gets_top_contributors(self, temp_project_dir, mock_subprocess_run):
-        """Should extract top contributors."""
-        from src.context.git_history import GitHistoryReader
-
-        mock_result = MagicMock()
-        mock_result.returncode = 0
-        mock_result.stdout = "    42\tJohn Doe\n    15\tJane Smith\n"
-        mock_subprocess_run.return_value = mock_result
-
-        reader = GitHistoryReader()
-        result = reader.get_history(temp_project_dir)
-
-        assert 'top_contributors' in result
-        contributors = result['top_contributors']
-        assert len(contributors) >= 1
-        # Check structure
-        assert 'name' in contributors[0]
-        assert 'commits' in contributors[0]
-
-    @pytest.mark.unit
-    def test_gets_recently_changed_files(self, temp_project_dir, mock_subprocess_run):
-        """Should extract recently changed files."""
-        from src.context.git_history import GitHistoryReader
-
-        mock_result = MagicMock()
-        mock_result.returncode = 0
-        mock_result.stdout = "src/main.py\ntests/test_main.py\nREADME.md\n"
-        mock_subprocess_run.return_value = mock_result
-
-        reader = GitHistoryReader()
-        result = reader.get_history(temp_project_dir)
-
-        assert 'recently_changed_files' in result
-        changed = result['recently_changed_files']
-        assert 'src/main.py' in changed or any('main.py' in f for f in changed)
-
-    @pytest.mark.unit
-    def test_gets_first_commit_date(self, temp_project_dir, mock_subprocess_run):
-        """Should extract first commit date (repository age)."""
-        from src.context.git_history import GitHistoryReader
-
-        mock_result = MagicMock()
-        mock_result.returncode = 0
-        mock_result.stdout = "2024-01-15 10:30:00 -0500\n"
-        mock_subprocess_run.return_value = mock_result
-
-        reader = GitHistoryReader()
-        result = reader.get_history(temp_project_dir)
-
-        assert 'first_commit_date' in result
-        assert '2024' in result['first_commit_date']
 
 
 class TestGitHistoryReaderEdgeCases:
     """Edge cases and error handling tests."""
-
-    @pytest.mark.unit
-
-    @pytest.mark.unit
-
-    @pytest.mark.unit
-
-    @pytest.mark.unit
-
-    @pytest.mark.unit
 
     @pytest.mark.unit
     def test_limits_recent_commits_to_20(self, temp_project_dir):
@@ -323,33 +196,6 @@ class TestGitHistoryReaderIntegration:
             # Should include our files
             all_files = ' '.join(result['recently_changed_files'])
             assert 'main.py' in all_files or 'README' in all_files
-
-
-class TestGitHistoryReaderWithCodebaseContext:
-    """Tests for GitHistoryReader integration with CodebaseContext."""
-
-    @pytest.fixture
-    def git_project(self, tmp_path):
-        """Create a project with git initialization."""
-        subprocess.run(['git', 'init'], cwd=tmp_path, capture_output=True)
-        subprocess.run(
-            ['git', 'config', 'user.email', 'test@test.com'],
-            cwd=tmp_path, capture_output=True
-        )
-        subprocess.run(
-            ['git', 'config', 'user.name', 'Test User'],
-            cwd=tmp_path, capture_output=True
-        )
-
-        (tmp_path / 'README.md').write_text('# Project\n')
-        subprocess.run(['git', 'add', '.'], cwd=tmp_path, capture_output=True)
-        subprocess.run(
-            ['git', 'commit', '-m', 'Initial'],
-            cwd=tmp_path, capture_output=True
-        )
-
-        return tmp_path
-
 
 
 class TestGitHistoryReaderTimeouts:

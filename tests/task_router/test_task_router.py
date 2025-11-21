@@ -11,54 +11,6 @@ from src.task_router.strategies import ExecutionResult
 from src.task_router.intent_clarifier import NullClarifier
 
 
-class TestTaskRouter:
-    """Tests for TaskRouter main class."""
-
-    @pytest.fixture
-    def router(self):
-        """Create a TaskRouter without orchestrator."""
-        return TaskRouter(
-            orchestrator=None,
-            auto_confirm_direct=True,
-            verbose=False,
-            intent_clarifier=NullClarifier()
-        )
-
-    @pytest.mark.unit
-    def test_conversation_routing(self, router):
-        """Test that simple greetings are routed correctly."""
-        result = router.route("hello")
-        assert result.success is True
-
-    @pytest.mark.unit
-    def test_direct_command_routing(self, router):
-        """Test that shell commands are routed to direct executor."""
-        # With NullClarifier injected, this won't trigger interactive prompts
-        result = router.route("echo test")
-        assert isinstance(result, ExecutionResult)
-        # Echo should succeed with auto_confirm_direct=True
-        assert result.success is True
-
-    @pytest.mark.unit
-    def test_metrics_tracking(self, router):
-        """Test that router tracks metrics."""
-        router.route("hello")
-        router.route("thanks")
-
-        metrics = router.get_metrics()
-        assert metrics.total_tasks >= 2
-        assert isinstance(metrics.success_rate, float)
-
-    @pytest.mark.unit
-
-    @pytest.mark.unit
-    def test_execution_time_tracked(self, router):
-        """Test that execution time is measured."""
-        result = router.route("hello")
-        assert result.execution_time >= 0
-        assert isinstance(result.execution_time, float)
-
-
 class TestConfidenceEscalation:
     """Tests for confidence-based task escalation."""
 
@@ -140,60 +92,4 @@ class TestIntentClarification:
         task = classifier.classify("what is python?")
         needs_clarify = router._needs_intent_clarification(task)
         assert needs_clarify is False
-
-
-class TestRouterWithMockOrchestrator:
-    """Tests for router with mock orchestrator."""
-
-    @pytest.fixture
-    def mock_orchestrator(self):
-        """Create a mock orchestrator with complete interface."""
-        orch = Mock()
-        orch.delegate.return_value = Mock(
-            content="Mock response about machine learning",
-            tokens_used=100
-        )
-        # Need providers attribute for LLM classification
-        orch.providers = Mock()
-        orch.providers.list_available.return_value = ['groq']
-        return orch
-
-        # The result should be a fallback since orchestrator isn't fully wired
-        # but the point is it doesn't error out or trigger prompts
-
-
-class TestTaskTypeRouting:
-    """Tests for routing different task types."""
-
-    @pytest.fixture
-    def router(self):
-        return TaskRouter(
-            orchestrator=None,
-            auto_confirm_direct=True,
-            verbose=False,
-            intent_clarifier=NullClarifier()
-        )
-
-    @pytest.mark.unit
-    def test_conversation_returns_success(self, router):
-        """Test that conversation tasks succeed."""
-        result = router.route("hi there")
-        assert result.success is True
-
-    @pytest.mark.unit
-    def test_thanks_is_conversation(self, router):
-        """Test that 'thanks' is handled as conversation."""
-        result = router.route("thanks")
-        # ExecutionResult doesn't have task_type, just check success
-        assert result.success is True
-
-    @pytest.mark.unit
-    def test_empty_input_handled(self, router):
-        """Test that empty input is handled gracefully."""
-        # With NullClarifier injected, this won't trigger interactive prompts
-        result = router.route("")
-        assert isinstance(result, ExecutionResult)
-        # Empty input should fail validation
-        assert result.success is False
-
 

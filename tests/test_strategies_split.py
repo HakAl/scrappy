@@ -439,11 +439,3 @@ class TestAgentExecutorBehavior:
         assert executor._resolved_provider == "openai"
         assert executor._resolved_model == "gpt-4"
 
-
-class TestStrategyInterfaceCompliance:
-    """Test all strategies implement the required interface."""
-
-
-
-
-

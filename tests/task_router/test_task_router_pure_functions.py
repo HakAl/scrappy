@@ -28,20 +28,11 @@ from src.task_router.pure_functions import (
 class TestHasActionIndicators:
     """Tests for has_action_indicators pure function."""
 
-
-
-
-
-
-
-
-
     @pytest.mark.unit
     def test_case_insensitive(self):
         """Should be case insensitive."""
         assert has_action_indicators("CREATE a file") is True
         assert has_action_indicators("Write Some Code") is True
-
 
 
 class TestHasConflictingSignals:
@@ -353,16 +344,6 @@ class TestDetermineExecutionAction:
             is_safe=False
         )
         assert action == "block"
-
-
-class TestParseLlmClassificationResponse:
-    """Tests for parse_llm_classification_response pure function."""
-
-
-
-
-
-
 
 
 class TestBuildClassificationMetadata:

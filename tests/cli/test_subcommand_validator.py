@@ -11,35 +11,6 @@ from src.cli.validators.subcommand import (
     COMMAND_SUBCOMMANDS,
 )
 
-
-class TestSubcommandValidationResult:
-    """Tests for SubcommandValidationResult dataclass."""
-
-    def test_result_has_required_attributes(self):
-        """Result should have is_valid, subcommand, args, and error."""
-        result = SubcommandValidationResult(
-            is_valid=True,
-            subcommand="clear",
-            args="",
-            error=None
-        )
-        assert result.is_valid is True
-        assert result.subcommand == "clear"
-        assert result.args == ""
-        assert result.error is None
-
-    def test_invalid_result_has_error(self):
-        """Invalid result should contain error message."""
-        result = SubcommandValidationResult(
-            is_valid=False,
-            subcommand="",
-            args="",
-            error="Unknown subcommand"
-        )
-        assert result.is_valid is False
-        assert result.error is not None
-
-
 class TestValidateSubcommand:
     """Tests for validate_subcommand() function."""
 
@@ -229,41 +200,6 @@ class TestValidateSubcommand:
         result = validate_subcommand("  session  ", "save")
         assert result.is_valid
         assert result.subcommand == "save"
-
-
-class TestSubcommandRegistry:
-    """Tests for COMMAND_SUBCOMMANDS registry."""
-
-    def test_cache_has_expected_subcommands(self):
-        """Cache command should have clear and toggle subcommands."""
-        assert "cache" in COMMAND_SUBCOMMANDS
-        cache_subs = COMMAND_SUBCOMMANDS["cache"]
-        assert "clear" in cache_subs
-        assert "toggle" in cache_subs
-
-    def test_context_has_expected_subcommands(self):
-        """Context command should have explore, refresh, clear, add subcommands."""
-        assert "context" in COMMAND_SUBCOMMANDS
-        context_subs = COMMAND_SUBCOMMANDS["context"]
-        assert "explore" in context_subs
-        assert "refresh" in context_subs
-        assert "clear" in context_subs
-        assert "add" in context_subs
-
-    def test_session_has_expected_subcommands(self):
-        """Session command should have save, load, clear, toggle subcommands."""
-        assert "session" in COMMAND_SUBCOMMANDS
-        session_subs = COMMAND_SUBCOMMANDS["session"]
-        assert "save" in session_subs
-        assert "load" in session_subs
-        assert "clear" in session_subs
-        assert "toggle" in session_subs
-
-    def test_limits_has_expected_subcommands(self):
-        """Limits command should have reset subcommand."""
-        assert "limits" in COMMAND_SUBCOMMANDS
-        limits_subs = COMMAND_SUBCOMMANDS["limits"]
-        assert "reset" in limits_subs
 
 
 class TestSubcommandValidatorIntegration:

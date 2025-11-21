@@ -11,10 +11,6 @@ class TestFileScannerBasics:
     """Basic file scanning functionality."""
 
     @pytest.mark.unit
-
-    @pytest.mark.unit
-
-    @pytest.mark.unit
     def test_scan_empty_directory(self, tmp_path):
         """Scanning empty directory returns empty categories."""
         scanner = FileScanner()
@@ -332,8 +328,6 @@ class TestEdgeCases:
         # Should return empty categories, not raise
         assert isinstance(result, dict)
         assert sum(len(v) for v in result.values()) == 0
-
-    @pytest.mark.unit
 
     @pytest.mark.unit
     def test_handles_deeply_nested_structure(self, tmp_path):

@@ -51,7 +51,6 @@ class TestProviderFailover:
         assert "working" in available
         assert "failing" in available
 
-
     @pytest.mark.unit
     def test_working_provider_succeeds(self, registry_with_providers):
         """Test that working provider succeeds."""
@@ -59,7 +58,6 @@ class TestProviderFailover:
 
         response = provider.chat([{"role": "user", "content": "test"}])
         assert response.content == "Success"
-
 
 
 class TestCacheRecovery:
@@ -83,8 +81,6 @@ class TestCacheRecovery:
         # Cache should be empty after failed load
         stats = cache.get_stats()
         assert stats["exact_cache_entries"] == 0
-
-    @pytest.mark.unit
 
     @pytest.mark.unit
     def test_cache_recovers_after_clear(self, cache):
@@ -131,8 +127,6 @@ class TestMemoryRecovery:
 
         # Should only keep last N files
         assert len(memory.file_reads) == 2
-
-    @pytest.mark.unit
 
     @pytest.mark.unit
     def test_memory_clear_recovers_state(self):
@@ -186,8 +180,6 @@ class TestTaskRouterErrorHandling:
         assert result.confidence >= 0
 
     @pytest.mark.unit
-
-    @pytest.mark.unit
     def test_router_metrics_with_failures(self, router):
         """Test router tracks failed tasks."""
         # Route several tasks
@@ -202,8 +194,6 @@ class TestCodebaseContextRecovery:
     """Tests for codebase context error recovery."""
 
     @pytest.mark.unit
-
-    @pytest.mark.unit
     def test_context_handles_empty_directory(self, tmp_path):
         """Test context handles empty directory."""
         empty_dir = tmp_path / "empty"
@@ -213,6 +203,3 @@ class TestCodebaseContextRecovery:
         result = context.explore()
 
         assert result["total_files"] == 0
-
-
-

@@ -10,15 +10,6 @@ These tests verify that:
 import pytest
 
 
-class TestBackwardCompatibility:
-    """Test that existing imports continue to work after refactoring."""
-
-
-
-
-
-
-
 
 class TestRetryModuleExports:
     """Test retry.py module exports the correct functions."""

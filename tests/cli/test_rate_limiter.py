@@ -17,20 +17,6 @@ from src.cli.rate_limiter import RateLimiter
 from src.infrastructure.formatters.rate_limit_formatter import extract_time_from_timestamp
 from tests.helpers import MockIO
 
-
-class TestTimestampParsing:
-    """Test timestamp parsing handles various ISO 8601 formats correctly."""
-
-
-
-
-
-
-
-
-
-
-
 class TestRateLimiterDisplay:
     """Test rate limiter displays usage data correctly."""
 

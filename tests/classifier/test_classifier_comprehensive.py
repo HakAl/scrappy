@@ -746,33 +746,3 @@ class TestProviderSuggestions:
 
         # High complexity should suggest quality provider
         assert result.suggested_provider == "quality"
-
-
-class TestRequiresAnalysisFlagTestRequiresAnalysisFlag:
-    """Test that _requires_analysis correctly identifies tasks needing codebase analysis."""
-
-    @pytest.fixture
-    def classifier(self):
-        return TaskClassifier()
-
-    @pytest.mark.unit
-    def test_requirements_creation_requires_analysis(self, classifier):
-        """Test that creating requirements.txt requires analysis."""
-        result = classifier.classify("create requirements.txt")
-
-        # Should suggest quality provider because it needs to analyze imports
-        assert result.suggested_provider == "quality"
-
-    @pytest.mark.unit
-    def test_dockerfile_creation_requires_analysis(self, classifier):
-        """Test that creating Dockerfile requires analysis."""
-        result = classifier.classify("create a Dockerfile")
-
-        assert result.suggested_provider == "quality"
-
-    @pytest.mark.unit
-    def test_refactor_requires_analysis(self, classifier):
-        """Test that refactoring requires analysis."""
-        result = classifier.classify("refactor this code")
-
-        assert result.suggested_provider == "quality"

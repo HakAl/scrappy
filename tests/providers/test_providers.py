@@ -175,10 +175,3 @@ class TestProviderRegistry:
         provider = mock_provider_class()
         cost = provider.estimate_cost(100, 200)
         assert cost == 0.0
-
-
-class TestProviderInterface:
-    """Tests for LLMProvider abstract interface compliance."""
-
-    pass
-

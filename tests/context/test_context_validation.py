@@ -148,8 +148,6 @@ class TestCacheStructureValidation:
         if result is not None:
             # If it returns data, it should be missing explored_at
             assert result.get('explored_at') is None
-        # Alternatively, it could log a warning
-        # assert len(caplog.records) > 0
 
     @pytest.mark.unit
     def test_missing_structure_field_handled(self, tmp_path):
@@ -181,9 +179,6 @@ class TestCacheStructureValidation:
         # Should log a warning about invalid datetime
         assert len(caplog.records) > 0
         assert 'invalid' in caplog.text.lower() or 'datetime' in caplog.text.lower()
-  # Implementation dependent
-
-    @pytest.mark.unit
 
     @pytest.mark.unit
     def test_extra_fields_ignored(self, tmp_path):
@@ -315,15 +310,6 @@ class TestValidationLogging:
         if caplog.records:
             log_text = caplog.text
             assert 'my_missing_project' in log_text or str(nonexistent) in log_text
-
-
-        # Warning should mention the field (if warning is issued)
-        # Note: current implementation keeps invalid dates as strings without warning
-        # This test documents expected behavior
-
-
-        # Should log warnings for each issue (if implemented)
-        # Current behavior: only invalid datetime would potentially warn
 
 
 class TestValidationRecovery:

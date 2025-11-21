@@ -183,23 +183,6 @@ class TestAllCodeExtensions:
             assert ext in ALL_CODE_EXTENSIONS, f"Missing {ext}"
 
 
-class TestHelperFunctions:
-    """Tests for helper functions in extensions module."""
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 class TestExtensionsEdgeCases:
     """Tests for edge cases in extensions module."""
 
