@@ -26,17 +26,18 @@ except ImportError:
     )
 
 from .output import OutputInterface
+from .protocols import ProviderRegistryProtocol  # For type hints (Dependency Inversion)
 
 
 class ProviderRegistrar:
     """Handles provider auto-registration."""
 
-    def __init__(self, registry: ProviderRegistry, output: OutputInterface):
+    def __init__(self, registry: ProviderRegistryProtocol, output: OutputInterface):
         """
         Initialize the registrar.
 
         Args:
-            registry: Provider registry to register providers with
+            registry: Provider registry to register providers with (ProviderRegistryProtocol for DI)
             output: Output interface for status messages
         """
         self.registry = registry

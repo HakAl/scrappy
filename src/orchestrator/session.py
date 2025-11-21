@@ -21,6 +21,7 @@ except ImportError:
         aiofiles = None
 
 from .memory import WorkingMemory
+from .protocols import WorkingMemoryProtocol  # For type hints (Dependency Inversion)
 
 
 class SessionManager:
@@ -46,7 +47,7 @@ class SessionManager:
 
     def save_session(
         self,
-        working_memory: WorkingMemory,
+        working_memory: WorkingMemoryProtocol,
         task_history: list,
         session_start: datetime,
         conversation_history: list = None
@@ -55,7 +56,7 @@ class SessionManager:
         Save current session to disk.
 
         Args:
-            working_memory: WorkingMemory instance to save
+            working_memory: WorkingMemory instance to save (WorkingMemoryProtocol for DI)
             task_history: List of task history entries
             session_start: When the session started
             conversation_history: Optional list of conversation messages

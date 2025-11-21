@@ -8,7 +8,7 @@ from typing import Dict, Any, Callable
 
 from ..agent_tools.tools import ToolRegistry, ToolContext
 from ..agent_tools.tools.command_tool import ShellCommandExecutor
-from .protocols import ToolRunnerProtocol
+from .protocols import ToolRunnerProtocol, ToolRegistryProtocol  # Protocols for type hints (DI)
 
 
 class ToolRunner:
@@ -23,7 +23,7 @@ class ToolRunner:
 
     def __init__(
         self,
-        tool_registry: ToolRegistry,
+        tool_registry: ToolRegistryProtocol,
         command_executor: ShellCommandExecutor,
         tool_context: ToolContext,
     ):
@@ -31,7 +31,7 @@ class ToolRunner:
         Initialize tool runner.
 
         Args:
-            tool_registry: Registry of available tools
+            tool_registry: Registry of available tools (ToolRegistryProtocol for DI)
             command_executor: Executor for shell commands
             tool_context: Context for tool execution
         """

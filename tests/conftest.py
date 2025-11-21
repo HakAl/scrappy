@@ -70,4 +70,29 @@ def temp_project_dir(tmp_path):
     return tmp_path
 
 
+@pytest.fixture(autouse=True)
+def prevent_real_api_calls(monkeypatch):
+    """
+    CRITICAL: Prevent ALL tests from making real API calls.
+
+    This fixture runs automatically for EVERY test.
+    Removes all API keys from environment so tests MUST use mocks.
+    """
+    # Block ALL real provider API calls by removing API keys from environment
+    # Tests that need providers MUST use mocks
+    api_keys_to_block = [
+        'GROQ_API_KEY',
+        'CEREBRAS_API_KEY',
+        'GEMINI_API_KEY',
+        'COHERE_API_KEY',
+        'GITHUB_API_KEY',
+        'GITHUB_TOKEN',
+        'OPENAI_API_KEY',
+        'ANTHROPIC_API_KEY',
+    ]
+
+    for key in api_keys_to_block:
+        monkeypatch.delenv(key, raising=False)
+
+
 # Markers for conditional test execution

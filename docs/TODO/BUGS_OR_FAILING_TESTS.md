@@ -1,5 +1,36 @@
+[//]: # (CRITICAL)
 
 
+  🔥 TEST ISOLATION FAILURES
+
+  1. Integration Tests Run by Default = Real API Calls
+
+  - ❌ pytest.ini doesn't exclude @pytest.mark.integration
+  - ❌ All 5 API keys are set in your environment
+  - ❌ Running pytest makes 457+ real API calls and costs real money
+  - ❌ Integration tests hit rate limits (30 errors in the file)
+
+  2. Tests Write to Project Root
+
+  - ❌ .llm_rate_limits.json created in project root (should use tmp)
+  - ❌ .llm_response_cache.json created in project root (should use tmp)
+  - ❌ These files pollute the repository
+
+  3. Tests Create Source Files
+
+  - ❌ App.js created in src/ -- tests/test_agent_loop_prevention.py??
+  - ❌ Tests should ONLY write to tmp_path fixtures
+
+  The Fixes Needed
+
+  1. Update pytest.ini to exclude integration tests by default
+  2. Mock RateLimitTracker to use temp paths, not project root
+  3. Mock ResponseCache to use temp paths, not project root
+  4. Add .gitignore entries for these files
+  5. Audit all tests to ensure they use tmp_path/temp_project_dir
+  6. Document how to run integration tests explicitly
+
+---
 
 <!-- MEDIUM PRIORITY - TEST NEEDED / INVESTIGATION / REPAIR: -->
 
@@ -50,4 +81,11 @@ src/orchestrator/rate_limiting/tracker.py
 src/platform/fallback.py
 src/platform/translation.py
 src/task_router/router.py
+
+---
+
+cerebras not defaulted to instruct model
+
+---
+
 

@@ -50,7 +50,7 @@ class ResponseCache:  # Implements CacheProtocol
 ### Single Responsibility Principle
 **Each class should have ONE reason to change.**
 
-🚫 **BAD - God Class:**
+**BAD - God Class:**
 ```python
 class AgentOrchestrator:
     def __init__(self):
@@ -60,7 +60,7 @@ class AgentOrchestrator:
         # ... does caching, rate limiting, sessions, delegation, context, etc.
 ```
 
-✅ **GOOD - Focused Classes:**
+**GOOD - Focused Classes:**
 ```python
 class Orchestrator:
     def __init__(
@@ -78,7 +78,7 @@ class Orchestrator:
 
 Use strategy pattern, not if/else chains.
 
-🚫 **BAD:**
+ **BAD:**
 ```python
 def execute(self, task_type: str):
     if task_type == "research":
@@ -88,7 +88,7 @@ def execute(self, task_type: str):
     # Adding new type = modifying this function
 ```
 
-✅ **GOOD:**
+**GOOD:**
 ```python
 class ExecutionStrategy(Protocol):
     def execute(self, task: Task) -> Result: ...
@@ -108,7 +108,7 @@ If you inherit from a class or implement a protocol, you must honor the contract
 ### Interface Segregation Principle
 **Don't force clients to depend on interfaces they don't use.**
 
-🚫 **BAD - Fat Interface:**
+**BAD - Fat Interface:**
 ```python
 class ProviderProtocol(Protocol):
     def chat(self) -> Response: ...
@@ -117,7 +117,7 @@ class ProviderProtocol(Protocol):
     # Providers forced to implement everything even if not supported
 ```
 
-✅ **GOOD - Focused Interfaces:**
+**GOOD - Focused Interfaces:**
 ```python
 class ChatProvider(Protocol):
     def chat(self) -> Response: ...
@@ -131,7 +131,7 @@ class StreamingProvider(Protocol):
 ### Dependency Inversion Principle
 **Depend on abstractions, not concretions.**
 
-🚫 **BAD:**
+**BAD:**
 ```python
 class CodeAgent:
     def __init__(self):
@@ -139,7 +139,7 @@ class CodeAgent:
         self.file_ops = Path()  # Depends on stdlib directly
 ```
 
-✅ **GOOD:**
+**GOOD:**
 ```python
 class CodeAgent:
     def __init__(
@@ -157,7 +157,7 @@ class CodeAgent:
 
 **NO direct instantiation of dependencies in class bodies.**
 
-🚫 **FORBIDDEN PATTERNS:**
+**FORBIDDEN PATTERNS:**
 ```python
 class MyClass:
     def __init__(self):
@@ -170,7 +170,7 @@ class MyClass:
         result = requests.get("http://api.com")  # NO! Direct HTTP call
 ```
 
-✅ **REQUIRED PATTERN:**
+**REQUIRED PATTERN:**
 ```python
 class MyClass:
     def __init__(
@@ -209,50 +209,47 @@ def _create_default_cache(self) -> CacheProtocol:
 
 ---
 
-## TEST-DRIVEN DEVELOPMENT (STRICT)
-
-### The Process (NO EXCEPTIONS)
-
-1. **Design the protocol/interface** - What's the contract?
-2. **Write failing tests** - Prove desired behavior doesn't exist yet
-3. **Implement minimally** - Make tests pass with simplest code
-4. **Refactor** - Clean up while keeping tests green
-5. **Add edge cases** - Test boundaries and error conditions
+## TESTS
 
 ### Test Quality Checklist
 
 Before writing ANY test, answer these questions:
 
-**❓ Does this test prove a feature works?**
+**Does this test prove a feature works?**
 - If NO → Don't write it
 
-**❓ Would this test fail if the feature breaks?**
+**Would this test fail if the feature breaks?**
 - If NO → Don't write it
 
-**❓ Can I refactor internals without breaking this test?**
+**Can I refactor internals without breaking this test?**
 - If NO → You're testing implementation, not behavior
 
-**❓ Does this test cover edge cases?**
+**Does this test cover edge cases?**
 - Empty inputs?
 - Boundary values?
 - Error conditions?
 - Invalid data?
 
-**❓ Am I mocking appropriately?**
+**Am I mocking appropriately?**
 - Only external dependencies (APIs, file system, network)?
 - Using real objects for business logic?
 - Using test doubles from `helpers.py`?
 
+### TEST ISOLATION (CRITICAL - READ THIS)
+
+**NEVER MAKE REAL API CALLS IN TESTS. EVER.**
+**TEST BEHAVIOR THROUGH MOCKS NOT REAL APIS YOU MANIAC**
+
 ### Tests to NEVER Write
 
-🚫 **Structure-only tests:**
+ **Structure-only tests:**
 ```python
 def test_returns_correct_type():
     result = do_thing()
     assert isinstance(result, MyClass)  # So what? Proves nothing!
 ```
 
-🚫 **Initialization tests:**
+ **Initialization tests:**
 ```python
 def test_initialization():
     obj = MyClass()
@@ -260,7 +257,7 @@ def test_initialization():
     assert hasattr(obj, 'field')  # Useless!
 ```
 
-🚫 **Over-mocked tests:**
+ **Over-mocked tests:**
 ```python
 def test_with_all_mocks():
     mock1 = Mock()
@@ -273,7 +270,7 @@ def test_with_all_mocks():
 
 ### Tests to ALWAYS Write
 
-✅ **Behavior tests:**
+ **Behavior tests:**
 ```python
 def test_cache_returns_none_when_empty():
     cache = ResponseCache()
@@ -287,7 +284,7 @@ def test_cache_returns_stored_value():
     assert result == "value"  # Tests actual behavior
 ```
 
-✅ **Edge case tests:**
+ **Edge case tests:**
 ```python
 def test_handles_empty_input():
     result = process([])
@@ -302,7 +299,7 @@ def test_raises_on_invalid_input():
         process("invalid")
 ```
 
-✅ **Integration tests:**
+ **Integration tests:**
 ```python
 def test_end_to_end_flow():
     # Use real objects, not mocks
@@ -311,51 +308,6 @@ def test_end_to_end_flow():
     assert result.content != ""
     assert result.tokens_used > 0
 ```
-
----
-
-## CODE REVIEW CHECKLIST
-
-Before submitting ANY code, check ALL of these:
-
-### Architecture
-- [ ] All dependencies injected, not instantiated directly?
-- [ ] Protocol/interface defined before implementation?
-- [ ] Each class has single responsibility?
-- [ ] Following SOLID principles?
-- [ ] No god classes (>300 lines = red flag)?
-- [ ] Clear separation of concerns?
-
-### Dependency Injection
-- [ ] All dependencies in constructor parameters?
-- [ ] Dependencies are protocols/interfaces, not concrete classes?
-- [ ] No side effects in constructors?
-- [ ] No direct file/network/database access?
-- [ ] Defaults provided via factory methods?
-
-### Testing
-- [ ] Tests prove features work, not just that code runs?
-- [ ] Edge cases covered (empty, null, invalid, boundaries)?
-- [ ] Error conditions tested?
-- [ ] Minimal mocking (only external dependencies)?
-- [ ] Tests would fail if feature breaks?
-- [ ] Can refactor without breaking tests?
-
-### Code Quality
-- [ ] No code duplication (DRY)?
-- [ ] Meaningful variable/function names?
-- [ ] Functions < 50 lines?
-- [ ] Classes < 300 lines?
-- [ ] No magic numbers or strings?
-- [ ] Type hints on all functions?
-
-### Anti-Patterns Avoided
-- [ ] No god classes?
-- [ ] No tight coupling?
-- [ ] No global state?
-- [ ] No direct instantiation of dependencies?
-- [ ] No side effects in constructors?
-- [ ] No if/else chains that should be strategy pattern?
 
 ---
 
@@ -379,40 +331,6 @@ Before submitting ANY code, check ALL of these:
    - Direct file system access (`Path()` operations)
    - Hard-coded tool implementations
    - Concrete class dependencies instead of protocols
-
-### Refactoring Phases
-
-**Phase 1: Define Protocols** ← START HERE
-- Create all missing protocols
-- Document contracts clearly
-- Get agreement on interfaces before implementation
-
-**Phase 2: Break Up God Classes**
-- Extract `ContextManager` from `AgentOrchestrator`
-- Extract `BackgroundTaskManager` from `AgentOrchestrator`
-- Extract `UsageReporter` from `AgentOrchestrator`
-- Keep orchestrator focused on high-level coordination only
-
-**Phase 3: Apply Dependency Injection**
-- Update all constructors to inject dependencies
-- Remove all direct instantiation
-- Remove side effects from constructors
-
-**Phase 4: Remove Useless Tests**
-- Delete structure-only tests
-- Delete initialization tests
-- Delete over-mocked tests with no behavior verification
-
-**Phase 5: Write Proper Tests**
-- Test behavior, not implementation
-- Cover all edge cases
-- Test error conditions
-- Prove features work
-
-**Phase 6: Extract Common Patterns**
-- Base classes for providers
-- Shared CLI handler logic
-- Consolidated test helpers
 
 ---
 

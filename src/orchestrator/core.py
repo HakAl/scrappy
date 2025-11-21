@@ -39,6 +39,17 @@ from .context_coordinator import ContextCoordinator
 from .manager_protocols import ContextManagerProtocol, BackgroundTaskManagerProtocol
 from .factory import OrchestratorFactory, OrchestratorComponents
 
+# Import protocols for type hints (Dependency Inversion Principle)
+from .protocols import (
+    CacheProtocol,
+    RateLimitTrackerProtocol,
+    SessionManagerProtocol,
+    WorkingMemoryProtocol,
+    ProviderSelectorProtocol,
+    ProviderRegistryProtocol,
+    ContextProvider,
+)
+
 
 class AgentOrchestrator:
     """
@@ -59,14 +70,14 @@ class AgentOrchestrator:
         cache_ttl_hours: int = 24,
         verbose_selection: bool = False,
         output: Optional[OutputInterface] = None,
-        # Injectable dependencies for testability
-        registry: Optional[ProviderRegistry] = None,
-        codebase_context: Optional[CodebaseContext] = None,
-        cache: Optional[ResponseCache] = None,
-        rate_tracker: Optional[RateLimitTracker] = None,
-        working_memory: Optional[WorkingMemory] = None,
-        session_manager: Optional[SessionManager] = None,
-        provider_selector: Optional[ProviderSelector] = None,
+        # Injectable dependencies for testability (using protocols for Dependency Inversion)
+        registry: Optional[ProviderRegistryProtocol] = None,
+        codebase_context: Optional[ContextProvider] = None,
+        cache: Optional[CacheProtocol] = None,
+        rate_tracker: Optional[RateLimitTrackerProtocol] = None,
+        working_memory: Optional[WorkingMemoryProtocol] = None,
+        session_manager: Optional[SessionManagerProtocol] = None,
+        provider_selector: Optional[ProviderSelectorProtocol] = None,
         usage_reporter: Optional[UsageReporter] = None,
         status_reporter: Optional[ProviderStatusReporter] = None,
         task_executor: Optional[TaskExecutor] = None,

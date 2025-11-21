@@ -15,6 +15,7 @@ except ImportError:
 
 from .output import OutputInterface, ConsoleOutput
 from .config import BRAIN_PRIORITY, FALLBACK_PRIORITY, get_provider_reason
+from .protocols import ProviderRegistryProtocol  # For type hints (Dependency Inversion)
 
 
 class ProviderSelector:
@@ -28,12 +29,12 @@ class ProviderSelector:
     - Cohere: Limited (1,000/month) - embeddings only
     """
 
-    def __init__(self, registry: ProviderRegistry, verbose: bool = False, output: Optional[OutputInterface] = None):
+    def __init__(self, registry: ProviderRegistryProtocol, verbose: bool = False, output: Optional[OutputInterface] = None):
         """
         Initialize provider selector.
 
         Args:
-            registry: Provider registry to select from
+            registry: Provider registry to select from (ProviderRegistryProtocol for DI)
             verbose: Enable verbose selection logging
             output: Output interface for messages (default: ConsoleOutput)
         """

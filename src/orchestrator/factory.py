@@ -35,24 +35,36 @@ from .usage_reporter import UsageReporter
 from .context_coordinator import ContextCoordinator
 from .manager_protocols import ContextManagerProtocol, BackgroundTaskManagerProtocol
 
+# Import protocols for type hints (Dependency Inversion Principle)
+from .protocols import (
+    CacheProtocol,
+    RateLimitTrackerProtocol,
+    SessionManagerProtocol,
+    WorkingMemoryProtocol,
+    ProviderSelectorProtocol,
+    ProviderRegistryProtocol,
+    ContextProvider,
+)
+
 
 class OrchestratorComponents:
     """
     Container for orchestrator components.
 
     Holds all created components to avoid parameter explosion.
+    Uses protocol type hints following Dependency Inversion Principle.
     """
 
     def __init__(self):
         self.output: Optional[OutputInterface] = None
-        self.registry: Optional[ProviderRegistry] = None
+        self.registry: Optional[ProviderRegistryProtocol] = None
         self.background_manager: Optional[BackgroundTaskManagerProtocol] = None
-        self.codebase_context: Optional[CodebaseContext] = None
-        self.cache: Optional[ResponseCache] = None
-        self.rate_tracker: Optional[RateLimitTracker] = None
-        self.working_memory: Optional[WorkingMemory] = None
-        self.session_manager: Optional[SessionManager] = None
-        self.provider_selector: Optional[ProviderSelector] = None
+        self.codebase_context: Optional[ContextProvider] = None
+        self.cache: Optional[CacheProtocol] = None
+        self.rate_tracker: Optional[RateLimitTrackerProtocol] = None
+        self.working_memory: Optional[WorkingMemoryProtocol] = None
+        self.session_manager: Optional[SessionManagerProtocol] = None
+        self.provider_selector: Optional[ProviderSelectorProtocol] = None
         self.usage_reporter: Optional[UsageReporter] = None
         self.status_reporter: Optional[ProviderStatusReporter] = None
         self.task_executor: Optional[TaskExecutor] = None
@@ -168,7 +180,7 @@ class OrchestratorFactory:
         """Create default output interface."""
         return ConsoleOutput()
 
-    def create_registry(self) -> ProviderRegistry:
+    def create_registry(self) -> ProviderRegistryProtocol:
         """Create default provider registry."""
         return ProviderRegistry()
 
@@ -176,11 +188,11 @@ class OrchestratorFactory:
         """Create default background task manager."""
         return BackgroundTaskManager()
 
-    def create_codebase_context(self) -> CodebaseContext:
+    def create_codebase_context(self) -> ContextProvider:
         """Create default codebase context."""
         return CodebaseContext(self.project_path)
 
-    def create_cache(self, codebase_context: CodebaseContext) -> ResponseCache:
+    def create_cache(self, codebase_context: ContextProvider) -> CacheProtocol:
         """Create default response cache."""
         cache_path = codebase_context.project_path / ".llm_response_cache.json"
         return ResponseCache(
@@ -188,24 +200,24 @@ class OrchestratorFactory:
             default_ttl_hours=self.cache_ttl_hours
         )
 
-    def create_rate_tracker(self, codebase_context: CodebaseContext):
+    def create_rate_tracker(self, codebase_context: ContextProvider) -> RateLimitTrackerProtocol:
         """Create default rate limit tracker."""
         tracker_path = codebase_context.project_path / ".llm_rate_limits.json"
         return create_rate_limit_tracker(tracker_file=str(tracker_path), auto_load=True)
 
-    def create_working_memory(self) -> WorkingMemory:
+    def create_working_memory(self) -> WorkingMemoryProtocol:
         """Create default working memory."""
         return WorkingMemory()
 
-    def create_session_manager(self, codebase_context: CodebaseContext) -> SessionManager:
+    def create_session_manager(self, codebase_context: ContextProvider) -> SessionManagerProtocol:
         """Create default session manager."""
         return SessionManager(codebase_context.project_path)
 
     def create_provider_selector(
         self,
-        registry: ProviderRegistry,
+        registry: ProviderRegistryProtocol,
         output: OutputInterface
-    ) -> ProviderSelector:
+    ) -> ProviderSelectorProtocol:
         """Create default provider selector."""
         return ProviderSelector(
             registry,
@@ -213,14 +225,14 @@ class OrchestratorFactory:
             output=output
         )
 
-    def create_usage_reporter(self, cache: ResponseCache) -> UsageReporter:
+    def create_usage_reporter(self, cache: CacheProtocol) -> UsageReporter:
         """Create default usage reporter."""
         return UsageReporter(cache=cache, created_at=self.created_at)
 
     def create_status_reporter(
         self,
-        registry: ProviderRegistry,
-        provider_selector: ProviderSelector,
+        registry: ProviderRegistryProtocol,
+        provider_selector: ProviderSelectorProtocol,
         output: OutputInterface,
         brain_name: Optional[str] = None
     ) -> ProviderStatusReporter:
@@ -248,7 +260,7 @@ class OrchestratorFactory:
 
     def create_context_manager(
         self,
-        codebase_context: CodebaseContext,
+        codebase_context: ContextProvider,
         output: OutputInterface,
         task_executor: TaskExecutor
     ) -> ContextCoordinator:
@@ -261,12 +273,12 @@ class OrchestratorFactory:
 
     def create_delegation_manager(
         self,
-        registry: ProviderRegistry,
-        cache: ResponseCache,
+        registry: ProviderRegistryProtocol,
+        cache: CacheProtocol,
         output: OutputInterface,
-        rate_tracker: RateLimitTracker,
-        provider_selector: ProviderSelector,
-        working_memory: WorkingMemory,
+        rate_tracker: RateLimitTrackerProtocol,
+        provider_selector: ProviderSelectorProtocol,
+        working_memory: WorkingMemoryProtocol,
         context_manager: ContextManagerProtocol
     ) -> DelegationManager:
         """

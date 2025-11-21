@@ -416,16 +416,9 @@ class TestCohereProviderIntegration:
     #     assert response.model == "command-r7b-12-2024"
     #     assert "hello" in response.content.lower() or "hi" in response.content.lower()
 
-    @pytest.mark.integration
-    @pytest.mark.skipif(not os.environ.get("COHERE_API_KEY"), reason="COHERE_API_KEY not set")
-    def test_real_rate_limits(self):
-        """Test rate limit information with real API."""
-        provider = CohereProvider()
-
-        limits = provider.get_limits()
-
-        assert limits.requests_per_minute == 20
-        assert limits.requests_per_month == 1000
+    # DELETED: test_real_rate_limits
+    # Tests should NEVER make real API calls.
+    # Rate limit logic is tested with mocked providers throughout the test suite.
 
 
 if __name__ == "__main__":
