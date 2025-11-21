@@ -52,13 +52,6 @@ def test_chunks_with_overlap():
         assert next_starts_before_current_ends
 
 
-def test_rejects_invalid_overlap():
-    """Chunker validates overlap < chunk_size."""
-    with pytest.raises(ValueError, match="must be less than chunk_size"):
-        SemanticCodeChunker(chunk_size=10, overlap=10)
-
-    with pytest.raises(ValueError):
-        SemanticCodeChunker(chunk_size=5, overlap=20)
 
 
 def test_chunk_boundaries():

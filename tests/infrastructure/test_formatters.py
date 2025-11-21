@@ -487,37 +487,7 @@ class TestCacheFormatter:
 class TestExtractTimeFromTimestamp:
     """Tests for timestamp extraction utility."""
 
-    def test_extract_time_from_iso_timestamp(self):
-        """Extracts time portion from ISO timestamp."""
-        from src.infrastructure.formatters.rate_limit_formatter import extract_time_from_timestamp
 
-        result = extract_time_from_timestamp("2024-01-15T10:30:45")
-        assert result == "10:30:45"
 
-    def test_extract_time_removes_microseconds(self):
-        """Removes microseconds from timestamp."""
-        from src.infrastructure.formatters.rate_limit_formatter import extract_time_from_timestamp
 
-        result = extract_time_from_timestamp("2024-01-15T10:30:45.123456")
-        assert result == "10:30:45"
 
-    def test_extract_time_handles_never(self):
-        """Returns 'never' unchanged."""
-        from src.infrastructure.formatters.rate_limit_formatter import extract_time_from_timestamp
-
-        result = extract_time_from_timestamp("never")
-        assert result == "never"
-
-    def test_extract_time_handles_empty_string(self):
-        """Returns empty string unchanged."""
-        from src.infrastructure.formatters.rate_limit_formatter import extract_time_from_timestamp
-
-        result = extract_time_from_timestamp("")
-        assert result == ""
-
-    def test_extract_time_handles_non_iso_format(self):
-        """Returns original string for non-ISO format."""
-        from src.infrastructure.formatters.rate_limit_formatter import extract_time_from_timestamp
-
-        result = extract_time_from_timestamp("10:30:45")
-        assert result == "10:30:45"

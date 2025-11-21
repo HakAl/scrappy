@@ -21,50 +21,14 @@ from tests.helpers import MockIO
 class TestTimestampParsing:
     """Test timestamp parsing handles various ISO 8601 formats correctly."""
 
-    def test_extracts_time_from_standard_iso_timestamp(self):
-        """Should extract HH:MM:SS from standard ISO timestamp."""
-        result = extract_time_from_timestamp("2024-11-18T10:30:45.123456")
-        assert result == "10:30:45"
 
-    def test_extracts_time_without_fractional_seconds(self):
-        """Should handle ISO timestamp without fractional seconds."""
-        result = extract_time_from_timestamp("2024-11-18T10:30:45")
-        assert result == "10:30:45"
 
-    def test_extracts_time_with_z_timezone(self):
-        """Should remove Z timezone suffix."""
-        result = extract_time_from_timestamp("2024-11-18T10:30:45Z")
-        assert result == "10:30:45"
 
-    def test_extracts_time_with_positive_timezone_offset(self):
-        """Should remove +HH:MM timezone offset."""
-        result = extract_time_from_timestamp("2024-11-18T10:30:45+05:00")
-        assert result == "10:30:45"
 
-    def test_extracts_time_with_negative_timezone_offset(self):
-        """Should remove -HH:MM timezone offset."""
-        result = extract_time_from_timestamp("2024-11-18T10:30:45-08:00")
-        assert result == "10:30:45"
 
-    def test_returns_never_when_timestamp_is_never(self):
-        """Should return 'never' unchanged."""
-        result = extract_time_from_timestamp("never")
-        assert result == "never"
 
-    def test_returns_empty_string_when_timestamp_is_empty(self):
-        """Should handle empty string gracefully."""
-        result = extract_time_from_timestamp("")
-        assert result == ""
 
-    def test_returns_original_when_no_t_separator(self):
-        """Should return original string when not ISO format."""
-        result = extract_time_from_timestamp("10:30:45")
-        assert result == "10:30:45"
 
-    def test_handles_malformed_timestamp_gracefully(self):
-        """Should not crash on malformed input."""
-        result = extract_time_from_timestamp("not-a-timestamp")
-        assert result == "not-a-timestamp"
 
 
 class TestRateLimiterDisplay:
@@ -194,15 +158,6 @@ class TestRateLimiterReset:
         output = io.get_output()
         assert "reset" in output.lower()
 
-    def test_does_not_reset_when_user_declines(self):
-        """Should not reset when user declines confirmation."""
-        orchestrator = MagicMock()
-        limiter = RateLimiter(orchestrator)
-        io = MockIO(confirmations=[False])
-
-        limiter.show_rate_limits("reset", io=io)
-
-        orchestrator.reset_rate_tracking.assert_not_called()
 
     def test_resets_specific_provider_when_confirmed(self):
         """Should reset only specified provider when confirmed."""

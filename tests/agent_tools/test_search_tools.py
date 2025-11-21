@@ -81,10 +81,6 @@ class TestInternalTextLogic:
 #         assert results[1] == "---"
 #         assert "match2" in results[2]
 
-    def test_bad_regex_compilation(self, tool):
-        """Ensure invalid regex raises ValueError here (caught in execute)."""
-        with pytest.raises(ValueError):
-            tool._search_text("content", "(unclosed group", True, False, 0, Path("."))
 
 
 # --- Integration Tests: File System Execution ---

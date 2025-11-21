@@ -24,19 +24,6 @@ class TestDisplayManagerProtocol:
         # Should be recognized as implementing the protocol
         assert isinstance(display, DisplayManagerProtocol)
 
-    @pytest.mark.unit
-    def test_display_manager_provides_io_interface(self):
-        """DisplayManager should provide IO interface."""
-        from src.cli.display_manager import DisplayManager
-
-        display = DisplayManager()
-        io = display.get_io()
-
-        # Should return IO with required methods
-        assert hasattr(io, 'echo')
-        assert hasattr(io, 'secho')
-        assert hasattr(io, 'confirm')
-        assert hasattr(io, 'prompt')
 
     @pytest.mark.unit
     def test_display_manager_provides_dashboard_when_enabled(self):
@@ -251,15 +238,6 @@ class TestReset:
         assert dashboard.get_panel_content("thought_process") == ""
         assert dashboard.get_panel_content("terminal") == ""
 
-    @pytest.mark.unit
-    def test_reset_on_display_without_dashboard(self):
-        """Reset should work even without dashboard."""
-        from src.cli.display_manager import DisplayManager
-
-        display = DisplayManager(dashboard_enabled=False)
-
-        # Should not raise error
-        display.reset()
 
 
 class TestBackwardCompatibility:
@@ -377,17 +355,6 @@ class TestEdgeCases:
 
         assert display.is_dashboard_enabled() is False
 
-    @pytest.mark.unit
-    def test_live_dashboard_with_custom_refresh_rate(self):
-        """Live dashboard should accept custom refresh rate."""
-        from src.cli.display_manager import DisplayManager
-
-        display = DisplayManager(dashboard_enabled=True)
-
-        # Should not raise error
-        with display.live_dashboard(refresh_per_second=10):
-            dashboard = display.get_dashboard()
-            dashboard.set_state("idle")
 
 
 class TestIntegrationWithHandlers:

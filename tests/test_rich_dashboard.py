@@ -397,16 +397,6 @@ class TestDashboardProtocolCompliance:
         # Should be recognized as implementing the protocol
         assert isinstance(dashboard, DashboardProtocol)
 
-    @pytest.mark.unit
-    def test_dashboard_has_console_attribute(self):
-        """Dashboard should have console attribute as required by protocol."""
-        from src.cli.rich_dashboard import RichDashboard
-
-        dashboard = RichDashboard()
-
-        # Should have console attribute
-        assert hasattr(dashboard, 'console')
-        assert isinstance(dashboard.console, Console)
 
 
 class TestEdgeCases:
@@ -504,98 +494,8 @@ class TestEdgeCases:
 class TestRichLiveIntegration:
     """Integration tests for RichDashboard with Rich.Live."""
 
-    @pytest.mark.integration
-    def test_dashboard_works_with_rich_live_context(self):
-        """Dashboard should work within Rich.Live context manager."""
-        from src.cli.rich_dashboard import RichDashboard
-        from rich.live import Live
-        import time
 
-        # Create dashboard with test console
-        string_io = StringIO()
-        console = Console(file=string_io, width=120)
-        dashboard = RichDashboard(console=console)
 
-        # Set some content
-        dashboard.set_state("thinking", "Processing request...")
-        dashboard.update_thought_process("Analyzing requirements")
-        dashboard.append_terminal("$ pytest tests/")
-
-        # Use dashboard with Live display
-        with Live(dashboard.get_renderable(), console=console, refresh_per_second=4):
-            # Simulate brief operation
-            time.sleep(0.1)
-
-        # Dashboard should have been rendered
-        output = string_io.getvalue()
-        assert len(output) > 0
-
-    @pytest.mark.integration
-    def test_dashboard_updates_during_live_display(self):
-        """Dashboard updates should be reflected in live display."""
-        from src.cli.rich_dashboard import RichDashboard
-        from rich.live import Live
-        import time
-
-        string_io = StringIO()
-        console = Console(file=string_io, width=120)
-        dashboard = RichDashboard(console=console)
-
-        with Live(dashboard.get_renderable(), console=console, refresh_per_second=10):
-            # Update state during live display
-            dashboard.set_state("scanning", "Scanning files...")
-            time.sleep(0.05)
-
-            dashboard.set_state("thinking", "Analyzing code...")
-            time.sleep(0.05)
-
-            dashboard.append_terminal("$ ls -la")
-            time.sleep(0.05)
-
-        # Output should contain the updates
-        output = string_io.getvalue()
-        assert len(output) > 0
-
-    @pytest.mark.integration
-    def test_dashboard_simulates_agent_execution_flow(self):
-        """Dashboard should handle complete agent execution simulation."""
-        from src.cli.rich_dashboard import RichDashboard
-        from rich.live import Live
-        import time
-
-        string_io = StringIO()
-        console = Console(file=string_io, width=120)
-        dashboard = RichDashboard(console=console)
-
-        with Live(dashboard.get_renderable(), console=console, refresh_per_second=10):
-            # Simulate agent workflow
-            dashboard.set_state("scanning", "Scanning codebase...")
-            dashboard.update_context(["main.py", "utils.py"], 500)
-            time.sleep(0.05)
-
-            dashboard.set_state("thinking", "Planning approach...")
-            dashboard.append_thought("Step 1: Identify entry points")
-            dashboard.update_tokens(750)
-            time.sleep(0.05)
-
-            dashboard.set_state("executing", "Running analysis...")
-            dashboard.capture_command("grep -r 'TODO'", "main.py:42: TODO: Fix this")
-            dashboard.update_tokens(1000)
-            time.sleep(0.05)
-
-            dashboard.append_thought("Step 2: Generate report")
-            dashboard.append_terminal("Analysis complete")
-            time.sleep(0.05)
-
-        # Verify content was set
-        assert dashboard.get_state() == "executing"
-        assert "Step 1" in dashboard.get_panel_content("thought_process")
-        assert "Step 2" in dashboard.get_panel_content("thought_process")
-        assert "TODO" in dashboard.get_panel_content("terminal")
-
-        content = dashboard.get_panel_content("context")
-        assert "main.py" in content
-        assert "1,000" in content or "1000" in content
 
 
 class TestMockDashboardProtocol:

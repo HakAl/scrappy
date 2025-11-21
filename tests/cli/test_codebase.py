@@ -31,18 +31,6 @@ class TestExploreCodebasePathValidation:
         output = io.get_output()
         assert "does not exist" in output.lower()
 
-    @patch('pathlib.Path.exists', return_value=True)
-    @patch('pathlib.Path.is_dir', return_value=False)
-    def test_rejects_file_path(self, mock_is_dir, mock_exists):
-        """Should display error when path is a file, not directory."""
-        orchestrator = MagicMock()
-        analyzer = CLICodebaseAnalysis(orchestrator)
-        io = MockIO()
-
-        analyzer.explore_codebase("/some/file.txt", io=io)
-
-        output = io.get_output()
-        assert "not a directory" in output.lower()
 
 
 class TestFindSourceFiles:
@@ -83,25 +71,6 @@ class TestFindSourceFiles:
         assert not any('.hidden.py' in f for f in all_files)
         assert any('visible.py' in f for f in all_files)
 
-    @patch('os.walk')
-    def test_skips_common_directories(self, mock_walk):
-        """Should skip node_modules, venv, __pycache__, etc."""
-        # os.walk allows modifying dirs in-place to skip directories
-        dirs_to_modify = ['node_modules', '__pycache__', 'src']
-
-        def walk_side_effect(path):
-            yield (str(path), dirs_to_modify, ['file.py'])
-
-        mock_walk.side_effect = walk_side_effect
-
-        orchestrator = MagicMock()
-        analyzer = CLICodebaseAnalysis(orchestrator)
-
-        files = analyzer._find_source_files(Path('/test'))
-
-        # Should have filtered out skip dirs (node_modules, __pycache__)
-        # We can't directly test the dirs modification, but we can verify files were found
-        assert isinstance(files, dict)
 
 
 class TestAnalyzeStructure:

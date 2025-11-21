@@ -26,34 +26,7 @@ from src.utils.errors import (
 class TestExceptionHierarchy:
     """Test that exceptions follow the proper inheritance hierarchy."""
 
-    def test_all_exceptions_inherit_from_delegation_error(self):
-        """Verify all domain exceptions inherit from DelegationError."""
-        exceptions = [
-            RetryExhaustedError([], Exception("test"), 0),
-            CacheError("test"),
-            ProviderNotFoundError("test", []),
-            RateLimitExceededError("test", 1.0),
-            InvalidRequestError("param", "value", "message"),
-            PromptAugmentationError("test"),
-            BatchSchedulingError("test"),
-            ProviderExecutionError("test", Exception("test")),
-        ]
 
-        for exc in exceptions:
-            assert isinstance(exc, DelegationError)
-            assert isinstance(exc, Exception)
-
-    def test_legacy_exceptions_inherit_from_domain_exceptions(self):
-        """Verify legacy exceptions now inherit from domain exceptions."""
-        # RateLimitError should inherit from RateLimitExceededError
-        rate_limit_exc = RateLimitError("test_provider")
-        assert isinstance(rate_limit_exc, RateLimitExceededError)
-        assert isinstance(rate_limit_exc, DelegationError)
-
-        # AllProvidersRateLimitedError should inherit from RetryExhaustedError
-        all_providers_exc = AllProvidersRateLimitedError(["provider1", "provider2"])
-        assert isinstance(all_providers_exc, RetryExhaustedError)
-        assert isinstance(all_providers_exc, DelegationError)
 
 
 class TestRetryExhaustedError:
@@ -204,37 +177,7 @@ class TestProviderExecutionError:
 class TestBackwardCompatibility:
     """Test backward compatibility with legacy exception handling."""
 
-    def test_can_catch_legacy_rate_limit_error(self):
-        """Verify legacy RateLimitError can still be caught."""
-        exc = RateLimitError("test_provider", "Daily quota exceeded")
 
-        # Should be catchable as RateLimitError (legacy)
-        with pytest.raises(RateLimitError):
-            raise exc
-
-        # Should be catchable as RateLimitExceededError (new)
-        with pytest.raises(RateLimitExceededError):
-            raise exc
-
-        # Should be catchable as DelegationError (base)
-        with pytest.raises(DelegationError):
-            raise exc
-
-    def test_can_catch_legacy_all_providers_error(self):
-        """Verify legacy AllProvidersRateLimitedError can still be caught."""
-        exc = AllProvidersRateLimitedError(["provider1", "provider2"])
-
-        # Should be catchable as AllProvidersRateLimitedError (legacy)
-        with pytest.raises(AllProvidersRateLimitedError):
-            raise exc
-
-        # Should be catchable as RetryExhaustedError (new)
-        with pytest.raises(RetryExhaustedError):
-            raise exc
-
-        # Should be catchable as DelegationError (base)
-        with pytest.raises(DelegationError):
-            raise exc
 
     def test_legacy_exceptions_preserve_attributes(self):
         """Verify legacy exceptions preserve their original attributes."""

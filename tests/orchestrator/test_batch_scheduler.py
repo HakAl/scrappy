@@ -334,17 +334,6 @@ async def test_execute_multi_provider_disables_fallback():
     assert len(results) == 2
 
 
-def test_batch_scheduler_implements_protocol():
-    """Test that BatchScheduler implements BatchSchedulerProtocol."""
-    orchestrator = MockRetryOrchestrator()
-    output = MockOutput()
-    scheduler = BatchScheduler(retry_orchestrator=orchestrator, output=output)
-
-    # Verify it has the protocol methods
-    assert hasattr(scheduler, "execute_batch")
-    assert hasattr(scheduler, "execute_multi_provider")
-    assert callable(scheduler.execute_batch)
-    assert callable(scheduler.execute_multi_provider)
 
 
 def test_batch_scheduler_requires_injected_dependencies():

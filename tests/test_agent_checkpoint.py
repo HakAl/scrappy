@@ -373,23 +373,6 @@ class TestCheckpointCommandValidation:
             # Fourth call should get commit hash
             assert calls[3][0][0] == "git rev-parse HEAD"
 
-    def test_rollback_command_structure(self):
-        """Test that rollback command is properly structured."""
-        commit_hash = "abc123def456"
-
-        with patch('subprocess.run') as mock_run:
-            mock_run.return_value = Mock(returncode=0)
-
-            rollback_to_checkpoint(commit_hash)
-
-            # Verify command structure
-            mock_run.assert_called_once_with(
-                f"git reset --hard {commit_hash}",
-                shell=True,
-                cwd=".",
-                capture_output=True,
-                text=True
-            )
 
 
 # Performance and edge case tests

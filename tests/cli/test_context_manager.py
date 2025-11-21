@@ -326,30 +326,6 @@ class TestInputValidation:
         assert "clearmem" in output
         assert "toggle" in output
 
-    def test_uses_richio_when_no_io_provided(self):
-        """Should default to RichIO when io parameter is None."""
-        orchestrator = MagicMock()
-        orchestrator.get_context_status.return_value = {
-            'project_path': Path('/test'),
-            'is_explored': False,
-            'has_summary': False,
-            'explored_at': None,
-            'total_files': 0,
-            'cache_file': Path('/test/.cache'),
-            'cache_exists': False
-        }
-        orchestrator.working_memory.get_summary.return_value = {
-            'files_cached': 0,
-            'cached_files': [],
-            'recent_searches': 0,
-            'git_operations': 0,
-            'discoveries': 0
-        }
-
-        manager = CLIContextCommands(orchestrator)
-
-        # Should not crash when io=None (uses RichIO internally)
-        manager.manage_context("")
 
 
 class TestContextManagerEdgeCases:

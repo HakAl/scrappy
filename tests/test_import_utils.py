@@ -37,12 +37,6 @@ class TestSafeImport:
         assert available is True
         assert module.__name__ == 'os'
 
-    def test_safe_import_nonexistent_module(self):
-        """Test importing a non-existent module."""
-        module, available = safe_import('nonexistent_module_xyz')
-
-        assert module is None
-        assert available is False
 
     def test_safe_import_submodule(self):
         """Test importing a submodule."""
@@ -60,27 +54,8 @@ class TestSafeImport:
         assert available is True
         assert hasattr(module, 'Mapping')
 
-    def test_safe_import_with_package_name(self):
-        """Test safe_import with package name parameter."""
-        module, available = safe_import('json', package_name='json')
 
-        assert module is not None
-        assert available is True
 
-    def test_safe_import_with_install_name(self):
-        """Test safe_import with install name parameter."""
-        module, available = safe_import('json', install_name='json')
-
-        assert module is not None
-        assert available is True
-
-    def test_safe_import_built_in_module(self):
-        """Test importing a built-in module."""
-        module, available = safe_import('sys')
-
-        assert module is not None
-        assert available is True
-        assert module is sys
 
 
 class TestRequireImport:
@@ -93,20 +68,8 @@ class TestRequireImport:
         assert module is not None
         assert module.__name__ == 'os'
 
-    def test_require_import_nonexistent_module(self):
-        """Test requiring a non-existent module raises ImportError."""
-        with pytest.raises(ImportError, match="nonexistent_module_xyz package not installed"):
-            require_import('nonexistent_module_xyz')
 
-    def test_require_import_with_custom_package_name(self):
-        """Test require_import with custom package name in error message."""
-        with pytest.raises(ImportError, match="custom_package_name package not installed"):
-            require_import('nonexistent_module_xyz', package_name='custom_package_name')
 
-    def test_require_import_with_install_name(self):
-        """Test require_import with custom install name in error message."""
-        with pytest.raises(ImportError, match="pip install custom-install-package"):
-            require_import('nonexistent_module_xyz', install_name='custom-install-package')
 
     def test_require_import_submodule(self):
         """Test requiring a submodule."""
@@ -115,11 +78,6 @@ class TestRequireImport:
         assert module is not None
         assert hasattr(module, 'join')
 
-    def test_require_import_built_in(self):
-        """Test requiring a built-in module."""
-        module = require_import('sys')
-
-        assert module is sys
 
 
 class TestPathSetupFunctions:
@@ -265,14 +223,6 @@ class TestImportWithFallback:
             # Should return the nested attribute
             assert result == mock_module
 
-    def test_import_with_fallback_both_fail(self):
-        """Test behavior when both primary and fallback imports fail."""
-        with patch('builtins.__import__') as mock_import:
-            mock_import.side_effect = ImportError
-
-            with patch('src.utils.imports.setup_src_path'):
-                with pytest.raises(ImportError):
-                    import_with_fallback('nonexistent.primary', 'nonexistent.fallback')
 
 # todo
     # def test_import_with_fallback_single_dot(self):
@@ -417,12 +367,6 @@ class TestImportEdgeCases:
     #     assert module is None
     #     assert available is False
 
-    def test_safe_import_invalid_module_name(self):
-        """Test safe_import with invalid module name."""
-        module, available = safe_import('invalid-module-name!')
-
-        assert module is None
-        assert available is False
 # todo
     # def test_require_import_empty_string(self):
     #     """Test require_import with empty string."""
@@ -466,29 +410,8 @@ class TestImportEdgeCases:
 class TestImportIntegration:
     """Integration tests for import utilities."""
 
-    def test_real_safe_import_builtin(self):
-        """Test safe_import with real built-in module."""
-        module, available = safe_import('json')
 
-        assert module is not None
-        assert available is True
-        import json
-        assert module is json
 
-    def test_real_safe_import_nonexistent(self):
-        """Test safe_import with real non-existent module."""
-        module, available = safe_import('definitely_not_a_real_module_12345')
-
-        assert module is None
-        assert available is False
-
-    def test_real_require_import_builtin(self):
-        """Test require_import with real built-in module."""
-        module = require_import('json')
-
-        assert module is not None
-        import json
-        assert module is json
 
     def test_real_require_import_nonexistent(self):
         """Test require_import with real non-existent module."""

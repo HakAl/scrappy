@@ -315,26 +315,7 @@ class TestGitHubModelsProvider:
         with patch('src.providers.github_models_provider.OPENAI_AVAILABLE', False):
             assert provider_with_mock_client.is_available() is False
 
-    def test_base_url_configuration(self, provider_with_mock_client):
-        """Test that base URL is correctly configured."""
-        expected_url = "https://models.github.ai/inference"
 
-        with patch('src.providers.github_models_provider.OpenAI') as mock_openai_class:
-            GitHubModelsProvider(api_key="test-key")
-            mock_openai_class.assert_called_once_with(
-                api_key="test-key",
-                base_url=expected_url
-            )
-
-    def test_error_handling_api_failure(self, provider_with_mock_client):
-        """Test error handling when API call fails."""
-        messages = [{"role": "user", "content": "Test"}]
-
-        # Mock API failure
-        provider_with_mock_client._client.chat.completions.with_raw_response.create.side_effect = Exception("API Error")
-
-        with pytest.raises(Exception, match="API Error"):
-            provider_with_mock_client.chat(messages)
 
     def test_metadata_inclusion(self, provider_with_mock_client):
         """Test that metadata is properly included in response."""

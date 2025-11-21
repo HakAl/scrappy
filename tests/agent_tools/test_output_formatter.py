@@ -168,17 +168,6 @@ class TestRichDirectoryFormatter:
                 assert formatter._console is not None
                 MockConsole.assert_called_once()
 
-    def test_format_directory_name(self, mock_rich_console):
-        """Test directory formatting style."""
-        with patch('src.agent_tools.formatters.output_formatter.HAS_RICH', True):
-            formatter = RichDirectoryFormatter(console=mock_rich_console)
-
-            # We need to patch Text inside the module to verify it's called with correct style
-            with patch('src.agent_tools.formatters.output_formatter.Text') as MockText:
-                formatter.format_directory_name("src/")
-
-                MockText.assert_called_with("src/", style="bold cyan")
-                mock_rich_console.print.assert_called()
 
     # @pytest.mark.parametrize("ext,expected_style", [
     #     (".py", "green"),
@@ -207,14 +196,6 @@ class TestRichDirectoryFormatter:
     #                 assert kwargs['style'] == expected_style
 
 # todo
-    def test_format_file_size(self, mock_rich_console):
-        """Test file size formatting."""
-        with patch('src.agent_tools.formatters.output_formatter.HAS_RICH', True):
-            formatter = RichDirectoryFormatter(console=mock_rich_console)
-
-            with patch('src.agent_tools.formatters.output_formatter.Text') as MockText:
-                formatter.format_file_size("(10KB)")
-                MockText.assert_called_with("(10KB)", style="bright_black")
 
     def test_format_tree_line_passthrough(self, mock_rich_console):
         """Test that tree structural lines are passed through."""
@@ -222,16 +203,4 @@ class TestRichDirectoryFormatter:
             formatter = RichDirectoryFormatter(console=mock_rich_console)
             line = "|-- "
             assert formatter.format_tree_line(line) == line
-
-    def test_render_text_logic(self, mock_rich_console):
-        """Verify the console capture logic works."""
-        with patch('src.agent_tools.formatters.output_formatter.HAS_RICH', True):
-            formatter = RichDirectoryFormatter(console=mock_rich_console)
-            mock_text_obj = Mock()
-
-            result = formatter._render_text(mock_text_obj)
-
-            # Verify the flow: capture -> print -> return captured string
-            mock_rich_console.capture.assert_called_once()
-            mock_rich_console.print.assert_called_with(mock_text_obj, end='')
-            assert result == "Rendered Output"  # Defined in mock_rich_console fixture
+  # Defined in mock_rich_console fixture

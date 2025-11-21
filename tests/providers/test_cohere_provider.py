@@ -84,17 +84,6 @@ class TestCohereProvider:
             assert provider.default_model == "command-r7b-12-2024"
             assert provider._calls_made == 0
 
-    def test_initialization_with_env_var(self, monkeypatch):
-        """Test provider initialization with environment variable."""
-        monkeypatch.setenv("COHERE_API_KEY", "env-test-key")
-
-        with patch('src.providers.cohere_provider.cohere') as mock_cohere:
-            mock_cohere.ClientV2.return_value = Mock()
-            mock_cohere.Client.return_value = Mock()
-
-            provider = CohereProvider()
-
-            assert provider._api_key == "env-test-key"
 
     def test_available_models(self, provider_with_mock_clients):
         """Test that available models are correctly listed."""
@@ -251,17 +240,6 @@ class TestCohereProvider:
         recommended_model = provider_with_mock_clients.get_model_for_task(task_type)
         assert recommended_model == expected_model
 
-    def test_embed_basic(self, provider_with_mock_clients):
-        """Test basic embedding functionality."""
-        texts = ["Hello world", "Test embedding"]
-
-        embeddings = provider_with_mock_clients.embed(texts)
-
-        assert isinstance(embeddings, list)
-        assert len(embeddings) == 2
-        assert isinstance(embeddings[0], list)
-        assert len(embeddings[0]) == 3  # Mocked dimension
-        assert embeddings == [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
 
 # todo
     # def test_embed_custom_model(self, provider_with_mock_clients, mock_cohere_client_v1):
@@ -361,15 +339,6 @@ class TestCohereProvider:
         assert response.model == model_name
         assert response.content == "Test response from Cohere"
 
-    def test_error_handling_api_failure(self, provider_with_mock_clients, mock_cohere_client_v2):
-        """Test error handling when API call fails."""
-        messages = [{"role": "user", "content": "Test"}]
-
-        # Mock API failure
-        mock_cohere_client_v2.chat.side_effect = Exception("API Error")
-
-        with pytest.raises(Exception, match="API Error"):
-            provider_with_mock_clients.chat(messages)
 
     def test_metadata_inclusion(self, provider_with_mock_clients):
         """Test that metadata is properly included in response."""

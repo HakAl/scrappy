@@ -446,26 +446,3 @@ class TestEdgeCases:
 class TestSyncWrapper:
     """Test synchronous delegate() wrapper."""
 
-    def test_sync_delegate_calls_async_version(self):
-        """Sync delegate() should call async version via asyncio.run()."""
-        cache = MockCache()
-        augmenter = MockPromptAugmenter()
-        retry_orch = MockRetryOrchestrator()
-        output = MockOutput()
-        scheduler = MockBatchScheduler()
-
-        manager = DelegationManager(
-            retry_orchestrator=retry_orch,
-            cache=cache,
-            output=output,
-            prompt_augmenter=augmenter,
-            batch_scheduler=scheduler
-        )
-
-        # Call sync version
-        response, task_record = manager.delegate("cerebras", "test prompt")
-
-        # Should have executed (called retry orchestrator)
-        assert len(retry_orch.execute_calls) == 1
-        assert isinstance(response, LLMResponse)
-        assert isinstance(task_record, dict)

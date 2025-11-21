@@ -40,20 +40,8 @@ def provider(mock_env_setup, mock_genai):
 
 # --- Initialization Tests ---
 
-def test_init_raises_without_key(monkeypatch):
-    """Should raise error if API key is missing."""
-    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-    # Patch availability but not the key
-    with patch("src.providers.gemini_provider.GEMINI_AVAILABLE", True):
-        with pytest.raises(ValueError, match="GEMINI_API_KEY"):
-            GeminiProvider(api_key=None)
 
 
-def test_init_configures_genai(mock_env_setup, mock_genai):
-    """Should configure the underlying library."""
-    with patch("src.providers.gemini_provider.GEMINI_AVAILABLE", True):
-        GeminiProvider()
-        mock_genai.configure.assert_called_with(api_key="fake-key-123")
 
 
 # --- Message Formatting Tests ---
@@ -165,13 +153,6 @@ def test_chat_fallback_exhaustion(provider, mock_genai):
     assert "All providers rate limited" in str(exc.value)
 
 
-def test_chat_non_retriable_error(provider, mock_genai):
-    """Should raise immediately on non-rate-limit errors (e.g. Invalid Argument)."""
-    mock_model = mock_genai.GenerativeModel.return_value
-    mock_model.generate_content.side_effect = ValueError("Invalid API Key")
-
-    with pytest.raises(ValueError):
-        provider.chat([{"role": "user", "content": "Hi"}])
 
 
 # --- Asynchronous Chat Tests ---

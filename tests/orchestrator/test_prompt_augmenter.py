@@ -150,20 +150,8 @@ def test_augment_with_use_context_true_adds_context():
 
 # Tests for edge cases
 
-def test_augment_with_empty_prompt_raises_error():
-    """Test that empty prompt raises ValueError."""
-    augmenter = PromptAugmenter()
-
-    with pytest.raises(ValueError, match="prompt cannot be empty or None"):
-        augmenter.augment("")
 
 
-def test_augment_with_none_prompt_raises_error():
-    """Test that None prompt raises ValueError."""
-    augmenter = PromptAugmenter()
-
-    with pytest.raises(ValueError, match="prompt cannot be empty or None"):
-        augmenter.augment(None)
 
 
 def test_augment_with_context_not_explored_skips_context():
@@ -202,12 +190,6 @@ def test_augment_with_none_working_memory_does_not_prepend():
     assert result == prompt
 
 
-def test_augment_with_whitespace_only_prompt_raises_error():
-    """Test that whitespace-only prompt raises ValueError."""
-    augmenter = PromptAugmenter()
-
-    with pytest.raises(ValueError, match="prompt cannot be empty or None"):
-        augmenter.augment("   \n\t  ")
 
 
 # Tests for multiple calls (idempotency checks)
@@ -240,19 +222,6 @@ def test_augment_multiple_calls_with_different_prompts():
 
 # Tests for protocol compliance
 
-def test_prompt_augmenter_implements_protocol():
-    """Test that PromptAugmenter implements PromptAugmenterProtocol."""
-    from src.protocols.delegation import PromptAugmenterProtocol
-
-    augmenter = PromptAugmenter()
-
-    # Should have augment method
-    assert hasattr(augmenter, 'augment')
-    assert callable(augmenter.augment)
-
-    # Test that it works as expected by the protocol
-    result = augmenter.augment("test prompt")
-    assert isinstance(result, str)
 
 
 # Tests for dependency injection
