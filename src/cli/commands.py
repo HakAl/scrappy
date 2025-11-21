@@ -300,21 +300,6 @@ def explore(ctx, path, save):
     click.secho(f"\nExploring: {path_obj}", bold=True)
     click.echo("-" * 50)
 
-    # Wait for semantic search initialization if still running
-    if cli_instance.semantic_search_initializer.is_running():
-        click.echo("Waiting for semantic search initialization...")
-        if not cli_instance.semantic_search_initializer.wait_for_completion(timeout=60.0):
-            click.secho("Warning: Semantic search initialization timed out", fg="yellow")
-        elif cli_instance.semantic_search_initializer.get_error():
-            click.secho("Warning: Semantic search initialization failed", fg="yellow")
-        else:
-            click.secho("Semantic search ready", fg="green")
-
-    # Inject initialized semantic search into context if available
-    semantic_search = cli_instance.semantic_search_initializer.get_result()
-    if semantic_search:
-        cli_instance.orchestrator.context._semantic_search = semantic_search
-
     original_cwd = os.getcwd()
     try:
         os.chdir(path_obj)

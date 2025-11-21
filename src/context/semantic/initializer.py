@@ -156,10 +156,24 @@ class SemanticSearchInitializer:
             chunker = SemanticCodeChunker(chunk_size=100, overlap=3)
 
             # Create LanceDB provider (triggers FastEmbed model download if needed)
+            # Store database in .scrappy/lancedb/ instead of .lancedb/ at project root
             with self._lock:
                 self._status = "Initializing vector database..."
 
-            search_provider = LanceDBSearchProvider(self._project_path, chunker)
+            search_provider = LanceDBSearchProvider(
+                self._project_path,
+                chunker,
+                db_dir_name=".scrappy/lancedb"
+            )
+
+            # Trigger model loading in background by ensuring schema is ready
+            # This downloads/loads the FastEmbed model NOW (in background)
+            # instead of blocking later during index_files()
+            with self._lock:
+                self._status = "Loading embedding model (this may take 10-30s)..."
+
+            search_provider._ensure_db()
+            search_provider._ensure_schema()  # Loads FastEmbed model here
 
             with self._lock:
                 self._result = search_provider

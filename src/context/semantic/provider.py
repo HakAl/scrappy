@@ -11,16 +11,16 @@ from pathlib import Path
 from typing import Dict, Optional
 from contextlib import contextmanager
 
-import lancedb
-import fasteners
-from lancedb.pydantic import LanceModel, Vector
-from lancedb.embeddings import get_registry
+# Use simple imports to avoid circular dependency messes
+try:
+    import lancedb
+    import fasteners
+    from lancedb.pydantic import LanceModel, Vector
+    from lancedb.embeddings import get_registry
+except ImportError:
+    lancedb = None
 
-from ..protocols import (
-    CodeChunkerProtocol,
-    SemanticSearchProtocol,
-    SearchResult
-)
+from ..protocols import CodeChunkerProtocol, SearchResult
 
 logger = logging.getLogger(__name__)
 
@@ -255,13 +255,22 @@ class LanceDBSearchProvider:
         Raises:
             IndexingError: If indexing fails
         """
+        # Early logging to see if we're even called
+        logger.info(f"index_files called with {len(files)} files")
+
+        if not files:
+            logger.warning("No files provided for indexing")
+            return
+
         self._ensure_db()
         self._ensure_schema()  # Lazy-initialize embedding function and schema
 
         with self._safe_db_context():
             table_exists = TABLE_NAME in self._db.table_names()
+            logger.debug(f"Table exists: {table_exists}")
 
             if not table_exists:
+                logger.info("Creating new index table")
                 self._create_and_populate(files)
                 return
 
@@ -331,34 +340,71 @@ class LanceDBSearchProvider:
             if files_to_add:
                 self._add_files_in_batches(table, files_to_add)
 
-                # Update FTS index
-                # replace=True is expensive but ensures consistency
-                table.create_fts_index("content", replace=True)
+                # Update FTS index (only if table has rows)
+                try:
+                    if table.count_rows() > 0:
+                        logger.debug("Creating FTS index")
+                        table.create_fts_index("content", replace=True)
+                    else:
+                        logger.warning("Table is empty, skipping FTS index creation")
+                except Exception as e:
+                    logger.warning(f"FTS indexing failed (search will still work via vector): {e}")
 
             table.cleanup_old_versions()
 
     def _create_and_populate(self, files: Dict[str, str]):
         """Create table from scratch."""
+        logger.info(f"Creating new index from {len(files)} files")
+
         # Drop if exists
         if TABLE_NAME in self._db.table_names():
+            logger.debug("Dropping existing table")
             self._db.drop_table(TABLE_NAME)
+
+        # Don't create table if no valid files
+        if not files:
+            logger.warning("No files to index, skipping table creation")
+            return
 
         table = self._db.create_table(TABLE_NAME, schema=self._code_schema)
 
         # Normalize keys
         valid_files = {}
+        skipped = 0
         for k, v in files.items():
             try:
                 valid_files[self._normalize_path(k)] = v
-            except ValueError:
-                pass
+            except ValueError as e:
+                logger.debug(f"Skipping invalid path {k}: {e}")
+                skipped += 1
 
+        if skipped > 0:
+            logger.info(f"Skipped {skipped} files with invalid paths")
+
+        if not valid_files:
+            logger.warning("No valid files after normalization")
+            return
+
+        logger.info(f"Indexing {len(valid_files)} valid files")
         self._add_files_in_batches(table, valid_files)
-        table.create_fts_index("content", replace=True)
+
+        # Only create FTS if rows exist
+        try:
+            if table.count_rows() > 0:
+                logger.debug("Creating FTS index on new table")
+                table.create_fts_index("content", replace=True)
+            else:
+                logger.warning("No rows added to table")
+        except Exception as e:
+            logger.warning(f"Initial FTS creation failed: {e}")
 
     def _add_files_in_batches(self, table, files: Dict[str, str]):
         """Chunk content and add to DB in batches (memory efficient)."""
         batch = []
+        total_chunks = 0
+        skipped_small = 0
+
+        logger.debug(f"Processing {len(files)} files for chunking")
 
         for norm_path, content in files.items():
             try:
@@ -366,11 +412,16 @@ class LanceDBSearchProvider:
                 lines = content.splitlines()
                 file_hash = self._compute_hash(content)
 
+                file_chunk_count = 0
                 for chunk in chunks:
-                    chunk_text = '\n'.join(lines[chunk.start_line - 1:chunk.end_line])
+                    # Safety check for line ranges
+                    start = max(0, chunk.start_line - 1)
+                    end = min(len(lines), chunk.end_line)
+                    chunk_text = '\n'.join(lines[start:end])
 
                     # Skip very small chunks (noise)
                     if len(chunk_text) < MIN_CHUNK_SIZE:
+                        skipped_small += 1
                         continue
 
                     batch.append({
@@ -381,16 +432,26 @@ class LanceDBSearchProvider:
                         "content_hash": file_hash,
                         "content": chunk_text,
                     })
+                    file_chunk_count += 1
+                    total_chunks += 1
 
                     if len(batch) >= BATCH_SIZE:
+                        logger.debug(f"Adding batch of {len(batch)} chunks to table")
                         table.add(batch)
                         batch = []
 
+                logger.debug(f"Indexed {norm_path}: {file_chunk_count} chunks")
+
             except Exception as e:
                 logger.error(f"Failed to chunk/index file {norm_path}: {e}")
+                import traceback
+                logger.debug(traceback.format_exc())
 
         if batch:
+            logger.debug(f"Adding final batch of {len(batch)} chunks to table")
             table.add(batch)
+
+        logger.info(f"Added {total_chunks} chunks total (skipped {skipped_small} small chunks)")
 
     # --- Core: Retrieval ---
 

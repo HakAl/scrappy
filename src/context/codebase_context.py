@@ -141,35 +141,15 @@ class CodebaseContext:
 
     def _ensure_semantic_search(self) -> Optional['SemanticSearchProtocol']:
         """
-        Lazy initialization of semantic search (only created on first access).
+        Return semantic search provider if available.
+
+        Semantic search is initialized via background initialization in CLI startup.
+        This method just returns what's been injected, or None if unavailable.
 
         Returns:
             SemanticSearchProtocol instance or None if not available
         """
-        # Already have one (injected or created)?
-        if self._semantic_search is not None:
-            return self._semantic_search
-
-        # Already tried and failed?
-        if self._semantic_search_attempted:
-            return None
-
-        # Try to create it (once)
-        self._semantic_search_attempted = True
-        try:
-            from .code_chunker import SemanticCodeChunker
-            from .semantic import LanceDBSearchProvider
-
-            chunker = SemanticCodeChunker(chunk_size=100, overlap=3)
-            self._semantic_search = LanceDBSearchProvider(self.project_path, chunker)
-            logger.debug("Semantic search initialized")
-            return self._semantic_search
-        except ImportError as e:
-            logger.debug(f"Semantic search not available: {e}")
-            return None
-        except Exception as e:
-            logger.warning(f"Failed to initialize semantic search: {e}")
-            return None
+        return self._semantic_search
 
     def is_explored(self) -> bool:
         """Check if the codebase has been explored."""
@@ -477,11 +457,14 @@ Be concise and technical. No fluff."""
         Gracefully handles errors - semantic search becomes unavailable on failure.
         """
         try:
-            logger.info("Indexing files for semantic search...")
+            logger.info("Starting semantic search indexing...")
+            logger.debug(f"Semantic search provider: {self._semantic_search}")
 
             # Collect file contents
             files = {}
+            skipped = 0
             for file_type, file_list in self.file_index.items():
+                logger.debug(f"Processing {len(file_list)} files of type {file_type}")
                 for file_path in file_list:
                     full_path = self.project_path / file_path
                     try:
@@ -489,13 +472,23 @@ Be concise and technical. No fluff."""
                         files[file_path] = content
                     except Exception as e:
                         logger.debug(f"Skipping {file_path}: {e}")
+                        skipped += 1
+
+            logger.info(f"Collected {len(files)} files for indexing (skipped {skipped})")
+
+            if not files:
+                logger.warning("No files collected for semantic search indexing")
+                return
 
             # Index files
+            logger.debug(f"Calling index_files with {len(files)} files")
             self._semantic_search.index_files(files)
-            logger.info(f"Indexed {len(files)} files for semantic search")
+            logger.info(f"Semantic search indexing complete")
 
         except Exception as e:
-            logger.warning(f"Semantic indexing failed: {e}")
+            logger.error(f"Semantic indexing failed: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
             # Gracefully degrade - disable semantic search
             self._semantic_search = None
 

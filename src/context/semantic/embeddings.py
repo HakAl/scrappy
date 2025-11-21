@@ -7,6 +7,7 @@ Uses FastEmbed for fast, local embedding generation.
 
 import logging
 from typing import List
+import numpy as np
 
 from lancedb.embeddings import register, TextEmbeddingFunction
 from fastembed import TextEmbedding
@@ -65,9 +66,15 @@ class JinaEmbedFunction(TextEmbeddingFunction):
             List of embedding vectors (each vector is a list of floats)
 
         Note:
-            FastEmbed returns a generator, so we convert to list for LanceDB compatibility.
+            FastEmbed returns a generator of numpy.ndarray objects.
+            We must convert each array to a Python list to satisfy LanceDB/Pydantic validation.
+            Without this conversion, ONNX Runtime may miscalculate buffer sizes.
         """
-        return list(self._model.embed(texts))
+        # FastEmbed returns Iterable[np.ndarray]
+        embeddings_generator = self._model.embed(texts)
+
+        # Convert numpy arrays to python lists to satisfy LanceDB/Pydantic validation
+        return [embedding.tolist() for embedding in embeddings_generator]
 
     def ndims(self) -> int:
         """
