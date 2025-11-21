@@ -39,7 +39,8 @@ class CodebaseContext:
         platform_detector: Optional[PlatformDetector] = None,
         git_history_reader: Optional[GitHistoryReader] = None,
         project_detector: Optional[ProjectDetector] = None,
-        auto_load_cache: bool = False
+        auto_load_cache: bool = False,
+        semantic_search: Optional['SemanticSearchProtocol'] = None,
     ):
         """
         Initialize codebase context (dependencies only - NO file I/O by default).
@@ -54,6 +55,7 @@ class CodebaseContext:
             git_history_reader: Injectable git history reader (default: creates new GitHistoryReader)
             project_detector: Injectable project detector (default: creates from project_path)
             auto_load_cache: If True, automatically load cache in constructor (for backwards compatibility)
+            semantic_search: Optional semantic search provider. If None, will auto-create if dependencies available.
         """
         # Store config for factory methods
         self._initial_project_path = project_path
@@ -83,6 +85,9 @@ class CodebaseContext:
         self._platform_detector = platform_detector or self._create_default_platform_detector()
         self._git_history_reader = git_history_reader or self._create_default_git_history_reader()
         self._project_detector = project_detector or self._create_default_project_detector()
+
+        # Semantic search (optional, gracefully degrades if not available)
+        self._semantic_search = semantic_search or self._create_default_semantic_search()
 
         # Auto-load cache if requested (for backwards compatibility)
         if auto_load_cache:
@@ -122,6 +127,28 @@ class CodebaseContext:
         """Create default project detector."""
         return ProjectDetector(self.project_path)
 
+    def _create_default_semantic_search(self) -> Optional['SemanticSearchProtocol']:
+        """
+        Create default semantic search if dependencies available.
+
+        Gracefully returns None if LanceDB not installed.
+
+        Returns:
+            SemanticSearchProtocol instance or None
+        """
+        try:
+            from .code_chunker import SemanticCodeChunker
+            from .lancedb_search_provider import LanceDBSearchProvider
+
+            chunker = SemanticCodeChunker(chunk_size=100, overlap=3)
+            return LanceDBSearchProvider(self.project_path, chunker)
+        except ImportError as e:
+            logger.debug(f"Semantic search not available: {e}")
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to initialize semantic search: {e}")
+            return None
+
     def is_explored(self) -> bool:
         """Check if the codebase has been explored."""
         return self.explored_at is not None
@@ -156,6 +183,10 @@ class CodebaseContext:
         if self.structure.get('has_git'):
             self.git_history = self._get_git_history()
 
+        # Index for semantic search if available
+        if self._semantic_search:
+            self._index_for_semantic_search()
+
         # Mark exploration time (summary will be generated when needed)
         self.explored_at = datetime.now()
 
@@ -168,7 +199,8 @@ class CodebaseContext:
             'total_files': self.structure.get('total_files', 0),
             'file_types': self.structure.get('by_type', {}),
             'directories': self.structure.get('directories', []),
-            'has_git_history': bool(self.git_history)
+            'has_git_history': bool(self.git_history),
+            'semantic_search_enabled': self._semantic_search is not None,
         }
 
     def generate_summary(self, llm_func) -> str:
@@ -309,12 +341,15 @@ Be concise and technical. No fluff."""
 
         return user_prompt
 
-    def get_relevant_context(self, query: str) -> str:
+    def get_relevant_context(self, query: str, max_tokens: int = 4000) -> str:
         """
         Get context relevant to a specific query.
 
+        Now uses semantic search if available, with fallback to keyword matching.
+
         Args:
             query: The query to find relevant context for
+            max_tokens: Maximum tokens to return (for semantic search)
 
         Returns:
             Relevant context string
@@ -322,35 +357,19 @@ Be concise and technical. No fluff."""
         if not self.is_explored():
             return ""
 
-        # Simple keyword-based relevance (could be enhanced with embeddings)
-        query_lower = query.lower()
-        relevant_parts = []
+        # Try semantic search first
+        if self._semantic_search and self._semantic_search.is_indexed():
+            try:
+                result = self._semantic_search.search(query, max_tokens=max_tokens)
+                if result.chunks:
+                    logger.debug(f"Using semantic search ({len(result.chunks)} chunks)")
+                    return self._format_search_result(result)
+            except Exception as e:
+                logger.warning(f"Semantic search failed, falling back to keyword: {e}")
 
-        # Always include summary
-        if self.summary:
-            relevant_parts.append(f"Project: {self.summary}")
-
-        # Check for file-specific keywords
-        if any(word in query_lower for word in ['file', 'module', 'class', 'function', 'import']):
-            # Include file structure
-            py_files = self.file_index.get('python', [])[:10]
-            if py_files:
-                relevant_parts.append("Key Python files:\n" + "\n".join(f"  {f}" for f in py_files))
-
-        # Check for config-related queries
-        if any(word in query_lower for word in ['config', 'setup', 'install', 'dependency', 'require']):
-            if 'requirements.txt' in self.key_files:
-                defaults = get_truncation_defaults()
-                deps = self.key_files['requirements.txt'][:defaults['error_message']]
-                relevant_parts.append(f"Dependencies:\n{deps}")
-
-        # Check for architecture queries
-        if any(word in query_lower for word in ['architecture', 'structure', 'organize', 'pattern']):
-            dirs = self.structure.get('directories', [])
-            if dirs:
-                relevant_parts.append(f"Project directories: {', '.join(dirs)}")
-
-        return "\n\n".join(relevant_parts)
+        # Fall back to keyword matching (existing logic)
+        logger.debug("Using keyword-based context")
+        return self._get_keyword_context(query)
 
     def _scan_files(self) -> dict:
         """Scan project for source files."""
@@ -428,6 +447,97 @@ Be concise and technical. No fluff."""
     def _get_git_history(self) -> dict:
         """Get git history information."""
         return self._git_history_reader.get_history(self.project_path)
+
+    def _index_for_semantic_search(self):
+        """
+        Index files for semantic search (called during explore).
+
+        Gracefully handles errors - semantic search becomes unavailable on failure.
+        """
+        try:
+            logger.info("Indexing files for semantic search...")
+
+            # Collect file contents
+            files = {}
+            for file_type, file_list in self.file_index.items():
+                for file_path in file_list:
+                    full_path = self.project_path / file_path
+                    try:
+                        content = full_path.read_text(encoding='utf-8', errors='ignore')
+                        files[file_path] = content
+                    except Exception as e:
+                        logger.debug(f"Skipping {file_path}: {e}")
+
+            # Index files
+            self._semantic_search.index_files(files)
+            logger.info(f"Indexed {len(files)} files for semantic search")
+
+        except Exception as e:
+            logger.warning(f"Semantic indexing failed: {e}")
+            # Gracefully degrade - disable semantic search
+            self._semantic_search = None
+
+    def _format_search_result(self, result: 'SearchResult') -> str:
+        """
+        Format search result into context string.
+
+        Args:
+            result: SearchResult from semantic search
+
+        Returns:
+            Formatted context string
+        """
+        if not result.chunks:
+            return ""
+
+        parts = []
+        for chunk in result.chunks:
+            header = f"--- {chunk['path']} (lines {chunk['lines'][0]}-{chunk['lines'][1]}) ---"
+            parts.append(f"{header}\n{chunk['content']}\n")
+
+        return "\n".join(parts)
+
+    def _get_keyword_context(self, query: str) -> str:
+        """
+        Get context using keyword matching (existing behavior).
+
+        This is the ORIGINAL get_relevant_context logic, extracted
+        for clarity and to enable fallback.
+
+        Args:
+            query: Search query
+
+        Returns:
+            Context string based on keyword matching
+        """
+        # Simple keyword-based relevance (existing logic)
+        query_lower = query.lower()
+        relevant_parts = []
+
+        # Always include summary
+        if self.summary:
+            relevant_parts.append(f"Project: {self.summary}")
+
+        # Check for file-specific keywords
+        if any(word in query_lower for word in ['file', 'module', 'class', 'function', 'import']):
+            py_files = self.file_index.get('python', [])[:10]
+            if py_files:
+                relevant_parts.append("Key Python files:\n" + "\n".join(f"  {f}" for f in py_files))
+
+        # Check for config-related queries
+        if any(word in query_lower for word in ['config', 'setup', 'install', 'dependency', 'require']):
+            if 'requirements.txt' in self.key_files:
+                defaults = get_truncation_defaults()
+                deps = self.key_files['requirements.txt'][:defaults['error_message']]
+                relevant_parts.append(f"Dependencies:\n{deps}")
+
+        # Check for architecture queries
+        if any(word in query_lower for word in ['architecture', 'structure', 'organize', 'pattern']):
+            dirs = self.structure.get('directories', [])
+            if dirs:
+                relevant_parts.append(f"Project directories: {', '.join(dirs)}")
+
+        return "\n\n".join(relevant_parts)
 
     def _save_cache(self):
         """Save context to disk cache."""

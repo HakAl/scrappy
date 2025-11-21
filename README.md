@@ -112,6 +112,33 @@ This isn't just a simple wrapper around APIs. It's a smart, resilient system.
 *   **Response Caching**: Saves your quota and provides instant responses for repeated queries.
 *   **Session Persistence**: Resume your conversations and context exactly where you left off.
 
+---
+
+## Smart Codebase Understanding
+
+Scrappy automatically understands your codebase through **semantic search**. When you ask a question, it finds the most relevant code to answer you - no configuration needed.
+
+### How It Works
+
+1. **First Run**: Scrappy scans and indexes your project (30-60 seconds for large codebases)
+2. **Subsequent Runs**: Only changed files are re-indexed (fast)
+3. **Query Time**: AI-powered vector search finds relevant code chunks
+
+### Features
+
+- **Semantic search**: Finds code by meaning, not just keywords
+- **Hybrid search**: Combines vector similarity with keyword matching
+- **Incremental updates**: Only re-indexes changed files
+- **Fully automatic**: Works out of the box, no extra steps
+
+### What Gets Indexed?
+
+- All source code files in your project
+- Configuration files (package.json, requirements.txt, etc.)
+- Documentation files (README, etc.)
+
+The index is stored locally in `.lancedb/` and never leaves your machine.
+
 ## Who Is This For?
 
 | ✅ Perfect for:                                                               | ⚠️ Maybe not for:                                                     |

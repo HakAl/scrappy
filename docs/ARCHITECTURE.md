@@ -147,14 +147,62 @@ All providers implement a common interface:
 - Models: command-r-08-2024, embed-english-v3.0
 - Limits: **1,000 calls/month total** (CRITICAL - use sparingly)
 
-### 3. Codebase Context (`src/context.py`)
+### 3. Codebase Context (`src/context/`)
 
-Automatic project understanding:
+Automatic project understanding with **built-in semantic search**:
 - Scans project files and structure
 - Analyzes dependencies and configuration
+- **Indexes code for semantic search** (automatic, built-in)
 - Generates LLM summaries of the codebase
 - Caches results to `.llm_team_context.json`
 - Augments prompts with relevant context
+
+#### Semantic Search Architecture
+
+**Components:**
+- **`CodeChunkerProtocol`** (`src/context/protocols.py`) - Abstracts chunking strategies
+  - Implementation: `SemanticCodeChunker` - Overlapping line-based chunks
+- **`SemanticSearchProtocol`** (`src/context/protocols.py`) - Abstracts search backends
+  - Implementation: `LanceDBSearchProvider` - Vector + full-text hybrid search
+- **`CodebaseContext`** (`src/context/codebase_context.py`) - Seamless integration
+  - Automatically indexes during `explore()`
+  - Falls back to keyword matching if LanceDB unavailable
+
+**Data Flow:**
+```
+User runs scrappy
+    ↓
+CodebaseContext.explore()
+    ├─ Scan files
+    ├─ Analyze structure
+    ├─ Read key files
+    └─ Index for semantic search (if available)
+        ├─ Chunk files (SemanticCodeChunker)
+        └─ Build vector index (LanceDBSearchProvider)
+
+User asks question
+    ↓
+CodebaseContext.get_relevant_context(query)
+    ├─ Try semantic search first
+    │   ├─ Vector similarity (embeddings)
+    │   └─ Hybrid ranking (vector + keyword)
+    └─ Fall back to keyword matching (if semantic unavailable)
+        └─ Return context
+```
+
+**Key Features:**
+- **Incremental updates**: Only re-indexes changed files
+- **Fully automatic**: Built-in, no configuration needed
+- **Security**: Path traversal prevention, project root enforcement
+- **File locking**: Prevents concurrent indexing race conditions
+- **Local storage**: Index stored in `.lancedb/` (never leaves machine)
+- **Graceful degradation**: Falls back to keyword search if indexing fails
+
+**Search Strategy:**
+1. **Hybrid search**: Combines vector similarity (semantic meaning) with full-text search (keywords)
+2. **Token budgets**: Respects max_tokens parameter to avoid overwhelming LLM context
+3. **Deduplication**: Prevents duplicate chunks in results
+4. **Fallback**: If hybrid search fails, falls back to vector-only search
 
 ### 4. Code Agent (`src/agent.py`)
 
@@ -420,9 +468,9 @@ The system handles:
 4. **Cost estimation** - Even for free tiers, track usage
 5. **Retry logic** - Automatic retry on transient failures
 6. **Provider health checks** - Monitor availability
-7. **Embedding-based context** - Use Cohere embeddings for semantic relevance
+7. ~~**Embedding-based context**~~ - ✅ **IMPLEMENTED** (semantic search with LanceDB)
 8. **Conversation memory** - Persist chat history across sessions
-9. **Smart context selection** - Only inject relevant parts of context
+9. ~~**Smart context selection**~~ - ✅ **IMPLEMENTED** (semantic search finds relevant code)
 10. **Agent memory** - Learn from previous successful actions
 11. **Agent tool expansion** - Add git, testing, debugging tools
 12. **Multi-file agent operations** - Coordinate changes across multiple files
@@ -444,7 +492,7 @@ python examples/basic_usage.py
 2. **Session-based rate tracking** - Rate limits reset on restart (context is cached)
 3. **No response caching** - Every call hits the API
 4. **Limited error recovery** - Basic error handling only
-5. **Full context injection** - Context isn't filtered by relevance (yet)
+5. ~~**Full context injection**~~ - ✅ **RESOLVED** (semantic search filters by relevance)
 
 ## Project Structure
 
@@ -452,9 +500,18 @@ python examples/basic_usage.py
 src/
 ├── __init__.py
 ├── orchestrator.py           # Main orchestrator with swappable brain
-├── context.py                # Codebase context management
 ├── agent.py                  # Code agent with human-in-the-loop
 ├── cli.py                    # Click-based CLI interface
+├── context/
+│   ├── __init__.py
+│   ├── protocols.py          # Context layer protocols
+│   ├── codebase_context.py   # Main context manager
+│   ├── code_chunker.py       # Semantic code chunking
+│   ├── lancedb_search_provider.py  # Vector search (optional)
+│   ├── file_scanner.py       # File system scanning
+│   ├── project_detector.py   # Project type detection
+│   ├── git_history.py        # Git operations
+│   └── cache.py              # Context caching
 └── providers/
     ├── __init__.py           # Provider exports
     ├── base.py               # Abstract base class

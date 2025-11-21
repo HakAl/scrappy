@@ -8,6 +8,7 @@ file scanning, and git history operations.
 from typing import Protocol, Dict, Any, List, Optional, Set, runtime_checkable
 from pathlib import Path
 from datetime import datetime
+from dataclasses import dataclass
 
 
 @runtime_checkable
@@ -399,4 +400,125 @@ class GitHistoryProtocol(Protocol):
         Returns:
             List of commits that modified the file
         """
+        ...
+
+
+# --- Semantic Search Data Classes ---
+
+
+@dataclass
+class CodeChunk:
+    """Represents a chunk of code with line range."""
+    start_line: int
+    end_line: int
+    file_path: Optional[str] = None
+
+
+@dataclass
+class SearchResult:
+    """Result from semantic search."""
+    chunks: List[Dict[str, Any]]  # [{path, lines: (start, end), content, score}]
+    tokens_used: int
+    limit_hit: Optional[str] = None  # 'token_limit' | None
+
+
+# --- Semantic Search Protocols ---
+
+
+@runtime_checkable
+class CodeChunkerProtocol(Protocol):
+    """
+    Protocol for code chunking strategies.
+
+    Abstracts code chunking to enable different strategies
+    (semantic, line-based, AST-based) without changing consumers.
+
+    Implementations:
+    - SemanticCodeChunker: Semantic chunking with overlap
+    - LineBasedChunker: Simple line-count chunking (future)
+    - TestChunker: Fixed chunks for testing
+
+    Example:
+        def chunk_file(chunker: CodeChunkerProtocol, content: str) -> List[CodeChunk]:
+            return chunker.chunk("example.py", content)
+    """
+
+    def chunk(self, file_path: str, content: str) -> List[CodeChunk]:
+        """
+        Chunk code content into retrievable segments.
+
+        Args:
+            file_path: Path to the file being chunked
+            content: File content to chunk
+
+        Returns:
+            List of CodeChunk objects with line ranges
+        """
+        ...
+
+
+@runtime_checkable
+class SemanticSearchProtocol(Protocol):
+    """
+    Protocol for semantic code search.
+
+    Abstracts semantic search implementation to enable:
+    - Swapping search backends (LanceDB, Pinecone, Chroma)
+    - Testing with mock search results
+    - Graceful degradation when not available
+
+    Implementations:
+    - LanceDBSearchProvider: Vector + FTS hybrid search
+    - MockSearchProvider: Preset results for testing
+    - NullSearchProvider: No-op for when dependencies unavailable
+
+    Example:
+        def search_code(search: SemanticSearchProtocol, query: str) -> SearchResult:
+            if search.is_indexed():
+                return search.search(query)
+            return SearchResult(chunks=[], tokens_used=0)
+    """
+
+    def index_files(self, files: Dict[str, str]) -> None:
+        """
+        Index files for semantic search.
+
+        Args:
+            files: Dict mapping file paths to content
+
+        Raises:
+            IndexingError: If indexing fails
+        """
+        ...
+
+    def search(
+        self,
+        query: str,
+        max_results: int = 25,
+        max_tokens: int = 4000
+    ) -> SearchResult:
+        """
+        Search indexed files semantically.
+
+        Args:
+            query: Search query
+            max_results: Maximum results to return
+            max_tokens: Token budget for results
+
+        Returns:
+            SearchResult with chunks and metadata
+        """
+        ...
+
+    def is_indexed(self) -> bool:
+        """
+        Check if files have been indexed.
+
+        Returns:
+            True if index exists and is usable, False otherwise
+        """
+        ...
+
+    def clear_index(self) -> None:
+        """Clear the search index."""
         ...
