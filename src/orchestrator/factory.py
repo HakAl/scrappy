@@ -45,6 +45,8 @@ from .protocols import (
     ProviderRegistryProtocol,
     ContextProvider,
 )
+from ..infrastructure.protocols import PathProviderProtocol
+from ..infrastructure.paths import ScrappyPathProvider, migrate_legacy_files
 
 
 class OrchestratorComponents:
@@ -87,17 +89,34 @@ class OrchestratorFactory:
         verbose_selection: bool = False,
         context_aware: bool = True,
         created_at: Optional[datetime] = None,
+        path_provider: Optional[PathProviderProtocol] = None,
     ):
         """
         Initialize factory with configuration.
 
         NO side effects - only assigns configuration.
+
+        Args:
+            project_path: Path to project directory
+            cache_ttl_hours: Cache TTL in hours
+            verbose_selection: Enable verbose provider selection
+            context_aware: Enable context awareness
+            created_at: Creation timestamp
+            path_provider: Path provider for data files (auto-creates if None)
         """
         self.project_path = project_path
         self.cache_ttl_hours = cache_ttl_hours
         self.verbose_selection = verbose_selection
         self.context_aware = context_aware
         self.created_at = created_at or datetime.now()
+
+        # Create path provider if not provided
+        if path_provider is None:
+            project_root = Path(project_path) if project_path else Path(".")
+            path_provider = ScrappyPathProvider(project_root)
+            # Auto-migrate old .llm_* files on first run
+            migrate_legacy_files(project_root, path_provider, verbose=False)
+        self._path_provider = path_provider
 
     def create_all_components(
         self,
@@ -194,7 +213,11 @@ class OrchestratorFactory:
 
     def create_cache(self, codebase_context: ContextProvider) -> CacheProtocol:
         """Create default response cache."""
-        cache_path = codebase_context.project_path / ".llm_response_cache.json"
+        if self._path_provider:
+            cache_path = self._path_provider.response_cache_file()
+        else:
+            # Fallback for backwards compatibility
+            cache_path = codebase_context.project_path / ".llm_response_cache.json"
         return ResponseCache(
             cache_file=str(cache_path),
             default_ttl_hours=self.cache_ttl_hours
@@ -202,7 +225,11 @@ class OrchestratorFactory:
 
     def create_rate_tracker(self, codebase_context: ContextProvider) -> RateLimitTrackerProtocol:
         """Create default rate limit tracker."""
-        tracker_path = codebase_context.project_path / ".llm_rate_limits.json"
+        if self._path_provider:
+            tracker_path = self._path_provider.rate_limits_file()
+        else:
+            # Fallback for backwards compatibility
+            tracker_path = codebase_context.project_path / ".llm_rate_limits.json"
         return create_rate_limit_tracker(tracker_file=str(tracker_path), auto_load=True)
 
     def create_working_memory(self) -> WorkingMemoryProtocol:
@@ -211,7 +238,7 @@ class OrchestratorFactory:
 
     def create_session_manager(self, codebase_context: ContextProvider) -> SessionManagerProtocol:
         """Create default session manager."""
-        return SessionManager(codebase_context.project_path)
+        return SessionManager(codebase_context.project_path, self._path_provider)
 
     def create_provider_selector(
         self,

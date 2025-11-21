@@ -22,6 +22,8 @@ except ImportError:
 
 from .memory import WorkingMemory
 from .protocols import WorkingMemoryProtocol  # For type hints (Dependency Inversion)
+from ..infrastructure.protocols import PathProviderProtocol
+from ..infrastructure.paths import ScrappyPathProvider
 
 
 class SessionManager:
@@ -35,15 +37,26 @@ class SessionManager:
     - Session metadata
     """
 
-    def __init__(self, project_path: Path):
+    def __init__(
+        self,
+        project_path: Path,
+        path_provider: PathProviderProtocol | None = None
+    ):
         """
         Initialize session manager.
 
         Args:
             project_path: Path to project directory
+            path_provider: Path provider for file locations (defaults to ScrappyPathProvider)
         """
         self.project_path = project_path
-        self.session_file = project_path / ".llm_team_session.json"
+        self._path_provider = path_provider or ScrappyPathProvider(project_path)
+        self._path_provider.ensure_data_dir()
+
+    @property
+    def session_file(self) -> Path:
+        """Get path to session file."""
+        return self._path_provider.session_file()
 
     def save_session(
         self,

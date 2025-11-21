@@ -1,39 +1,68 @@
-help me assess these tests? some are bad, useless, call actual functions or apis not mocks.
-sort through them to remove bad tests and keep good ones. please list functions to remove, or the whole file, or nothing.
 
 
+---
+there's an error on startup.
+UX -- hangs for 30 seconds, then prints:
+Failed to initialize semantic search: 'fastembed'
+src/context/lancedb_search_provider.py
 
-[//]: # (CRITICAL)
+3% test coverage:
+src\context\lancedb_search_provider.py
+---
+
+extra prompt : Start agent? [y/n] (y): y
+
+---
+
+You>  /explore
+Directory to explore [.]
+
+---
+agent broken if user answers no, keeps trying to apply changes
+---
+
+---
+BAD ROUTING -- EG:
+---
+You>  who is the best coder to live dijkstra, turing?
+
+Task Classification:
+  Type: research
+  Confidence: 1.00
+  Complexity: 2/10
+  Reasoning: Information gathering task: question, question_mark
+  Provider: cerebras (llama3.1-8b) (hint: fast)
+  Executing with: ResearchExecutor
+
+Execution successful
+
+Output:
+----------------------------------------
+To answer the user's request, I'll use the Scrappy AI coding assistant to generate a response based on the context.
+
+First, I'll search the codebase for any relevant information about the coders Dijkstra and Turing.
+
+Using the `grep` tool, I'll search for any mentions of "Dijkstra" and "Turing" in the codebase.
+
+`grep -r "Dijkstra" . && grep -r "Turing" .`
+
+This search yields several results, including mentions of Dijkstra's algorithm and Turing's theory of computation.
+
+Next, I'll use the Scrappy AI coding assistant to generate a response based on this information.
+
+"Both Edsger Dijkstra and Alan Turing are renowned computer scientists who made significant contributions to the field.
+----
 
 
-  🔥 TEST ISOLATION FAILURES
+cerebras not defaulted to instruct model
 
-  1. Integration Tests Run by Default = Real API Calls
+---
 
-  - ❌ pytest.ini doesn't exclude @pytest.mark.integration
-  - ❌ All 5 API keys are set in your environment
-  - ❌ Running pytest makes 457+ real API calls and costs real money
-  - ❌ Integration tests hit rate limits (30 errors in the file)
+2 explore commands: /context explore, /explore -- why??
 
-  2. Tests Write to Project Root
+---
 
-  - ❌ .llm_rate_limits.json created in project root (should use tmp)
-  - ❌ .llm_response_cache.json created in project root (should use tmp)
-  - ❌ These files pollute the repository
-
-  3. Tests Create Source Files
-
-  - ❌ App.js created in src/ -- tests/test_agent_loop_prevention.py??
-  - ❌ Tests should ONLY write to tmp_path fixtures
-
-  The Fixes Needed
-
-  1. Update pytest.ini to exclude integration tests by default
-  2. Mock RateLimitTracker to use temp paths, not project root
-  3. Mock ResponseCache to use temp paths, not project root
-  4. Add .gitignore entries for these files
-  5. Audit all tests to ensure they use tmp_path/temp_project_dir
-  6. Document how to run integration tests explicitly
+extra prompt : Start agent? [y/n] (y): y
 
 ---
 

@@ -67,7 +67,7 @@ class TestSessionManager:
         """Test that initialization sets the correct file paths."""
         manager = SessionManager(tmp_path)
         assert manager.project_path == tmp_path
-        assert manager.session_file == tmp_path / ".llm_team_session.json"
+        assert manager.session_file == tmp_path / ".scrappy" / "session.json"
 
     def test_save_session_success(self, session_manager, mock_working_memory_class, sample_data):
         """Test successful saving of a session creates a valid JSON file."""

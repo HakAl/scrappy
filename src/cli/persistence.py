@@ -117,7 +117,7 @@ class SessionPersistence:
 
         if validation.subcommand == "":
             # Show session info
-            session_file = self.orchestrator.context.project_path / ".llm_team_session.json"
+            session_file = self.orchestrator.session_manager.session_file
             io.secho("\nSession Management:", fg="magenta", bold=True)
             io.secho("-" * 50, fg="magenta")
             io.echo(f"Session File: {session_file}")

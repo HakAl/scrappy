@@ -45,7 +45,7 @@ class TestCodebaseContextBasics:
     def test_cache_file_path(self, temp_project_dir):
         """Test that cache file path is set correctly."""
         context = CodebaseContext(str(temp_project_dir))
-        expected_cache = temp_project_dir / ".llm_team_context.json"
+        expected_cache = temp_project_dir / ".scrappy" / "context.json"
         assert context.cache_file == expected_cache
 
 

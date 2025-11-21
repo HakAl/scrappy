@@ -54,7 +54,10 @@ Thumbs.db
 .coverage
 htmlcov/
 
-# LLM Team cache and session files
+# Scrappy data directory
+.scrappy/
+
+# Legacy LLM Team files (migrated to .scrappy/)
 .llm_*
 .agent_audit.json
 

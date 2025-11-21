@@ -511,3 +511,91 @@ class ConfigLoaderProtocol(Protocol):
             ValueError: If configuration is invalid
         """
         ...
+
+
+class PathProviderProtocol(Protocol):
+    """
+    Protocol for providing paths to Scrappy data files.
+
+    Abstracts path management to enable testing without creating real files
+    and to centralize all file path configuration in one place.
+
+    Implementations:
+    - ScrappyPathProvider: Uses .scrappy/ directory in project root
+    - TestPathProvider: Uses temporary directories for testing
+    - InMemoryPathProvider: Returns paths that point to in-memory storage
+
+    Example:
+        def save_session(paths: PathProviderProtocol, data: dict) -> None:
+            path = paths.session_file()
+            path.write_text(json.dumps(data))
+
+        # In production
+        save_session(ScrappyPathProvider(project_root), data)
+
+        # In tests
+        save_session(TestPathProvider(tmp_path), data)
+    """
+
+    def data_dir(self) -> Path:
+        """
+        Get the main data directory.
+
+        Returns:
+            Path to data directory (e.g., .scrappy/)
+        """
+        ...
+
+    def session_file(self) -> Path:
+        """
+        Get path to session persistence file.
+
+        Returns:
+            Path to session file
+        """
+        ...
+
+    def rate_limits_file(self) -> Path:
+        """
+        Get path to rate limits tracking file.
+
+        Returns:
+            Path to rate limits file
+        """
+        ...
+
+    def audit_file(self) -> Path:
+        """
+        Get path to agent audit log file.
+
+        Returns:
+            Path to audit log file
+        """
+        ...
+
+    def response_cache_file(self) -> Path:
+        """
+        Get path to response cache file.
+
+        Returns:
+            Path to response cache file
+        """
+        ...
+
+    def context_file(self) -> Path:
+        """
+        Get path to context storage file.
+
+        Returns:
+            Path to context file
+        """
+        ...
+
+    def ensure_data_dir(self) -> None:
+        """
+        Ensure data directory exists, creating it if necessary.
+
+        Raises:
+            PermissionError: If no write permission
+        """
+        ...

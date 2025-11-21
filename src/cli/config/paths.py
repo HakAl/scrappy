@@ -8,15 +8,39 @@ constants used throughout the CLI for file system operations.
 import os
 from typing import List, Set
 
-# Session and tracking files
-SESSION_FILE = '.llm_team_session.json'
-RATE_LIMITS_FILE = '.llm_rate_limits.json'
+# Session and tracking files (now in .scrappy/ directory)
+SESSION_FILE = '.scrappy/session.json'
+RATE_LIMITS_FILE = '.scrappy/rate_limits.json'
+RESPONSE_CACHE_FILE = '.scrappy/response_cache.json'
+CONTEXT_FILE = '.scrappy/context.json'
+AUDIT_FILE = '.scrappy/audit.json'
 
-# Hidden files (session tracking files that should not be shown)
+# Legacy file names (for migration)
+LEGACY_SESSION_FILE = '.llm_team_session.json'
+LEGACY_RATE_LIMITS_FILE = '.llm_rate_limits.json'
+LEGACY_RESPONSE_CACHE_FILE = '.llm_response_cache.json'
+LEGACY_CONTEXT_FILE = '.llm_team_context.json'
+LEGACY_AUDIT_FILE = '.llm_agent_audit.json'
+
+# Hidden files and directories (should not be shown in file listings)
 HIDDEN_FILES: List[str] = [
     SESSION_FILE,
     RATE_LIMITS_FILE,
+    RESPONSE_CACHE_FILE,
+    CONTEXT_FILE,
+    AUDIT_FILE,
+    # Legacy files
+    LEGACY_SESSION_FILE,
+    LEGACY_RATE_LIMITS_FILE,
+    LEGACY_RESPONSE_CACHE_FILE,
+    LEGACY_CONTEXT_FILE,
+    LEGACY_AUDIT_FILE,
 ]
+
+# Hidden directories
+HIDDEN_DIRS: Set[str] = {
+    '.scrappy',
+}
 
 # Cache directories
 CACHE_DIRS: Set[str] = {
@@ -84,6 +108,7 @@ SKIP_DIRS: Set[str] = (
     VENDOR_DIRS |
     VENV_DIRS |
     ALL_HIDDEN_DIRS |
+    HIDDEN_DIRS |
     {'.git', '.svn', '.hg', '.idea', '.vscode'}
 )
 
@@ -127,6 +152,7 @@ SKIP_DIRS_DESCRIPTIONS = {
     '.tox': 'Tox testing directory',
     '.nox': 'Nox testing directory',
     '.coverage': 'Coverage data directory',
+    '.scrappy': 'Scrappy data directory (session, cache, logs)',
 }
 
 # Project root indicator files

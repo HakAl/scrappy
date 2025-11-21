@@ -77,6 +77,8 @@ from .protocols import (
     ToolRunnerProtocol,
     ActionExecutorProtocol,
 )
+from ..infrastructure.protocols import PathProviderProtocol
+from ..infrastructure.paths import ScrappyPathProvider
 
 
 class CodeAgent:
@@ -104,6 +106,7 @@ class CodeAgent:
         response_parser: Optional[Any] = None,  # ResponseParserProtocol
         tool_context: Optional[Any] = None,  # ToolContextProtocol
         command_executor: Optional[Any] = None,  # ShellCommandExecutor
+        path_provider: Optional[PathProviderProtocol] = None,  # PathProviderProtocol
         # New component parameters
         ui: Optional[AgentUIProtocol] = None,
         safety_checker: Optional[SafetyCheckerProtocol] = None,
@@ -146,6 +149,9 @@ class CodeAgent:
         # Platform utilities
         self._platform_utils = platform_utils or self._create_default_platform_utils()
 
+        # Path provider (store for use in audit logger)
+        self._path_provider = path_provider
+
         # Wrap orchestrator in adapter if needed
         if isinstance(orchestrator, OrchestratorAdapter):
             self.adapter = orchestrator
@@ -165,6 +171,10 @@ class CodeAgent:
 
         self.config = config or AgentConfig()
         self.dry_run = False
+
+        # Create default path provider if not provided
+        if self._path_provider is None:
+            self._path_provider = ScrappyPathProvider(self.project_root)
 
         # Audit logger
         self._audit_logger = audit_logger or self._create_default_audit_logger()
@@ -298,7 +308,10 @@ class CodeAgent:
 
     def _create_default_audit_logger(self):
         """Create default audit logger."""
-        return AuditLogger(max_result_length=self.config.audit_log_result_truncation)
+        return AuditLogger(
+            max_result_length=self.config.audit_log_result_truncation,
+            path_provider=self._path_provider
+        )
 
     def _create_default_response_parser(self):
         """Create default response parser."""
@@ -988,8 +1001,8 @@ class CodeAgent:
         # Update tool context dry_run state
         self.tool_context.dry_run = self.dry_run
 
-        # Enable auto-save for crash safety
-        self._audit_logger.enable_auto_save(self.project_root, ".llm_agent_audit.json")
+        # Enable auto-save for crash safety (uses path_provider)
+        self._audit_logger.enable_auto_save()
         self._audit_logger.set_task_info(task, max_iterations, auto_confirm)
 
         # Concise header

@@ -93,7 +93,8 @@ class TestSessionSaving:
         path = manager.save_session(memory, [], datetime.now())
 
         assert path is not None
-        assert '.llm_team_session.json' in path
+        assert 'session.json' in path
+        assert '.scrappy' in path
 
     def test_save_overwrites_existing_session(self, temp_dir):
         """Saving multiple times should overwrite previous session."""

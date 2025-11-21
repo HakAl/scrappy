@@ -40,19 +40,29 @@ class IndexingError(Exception):
     pass
 
 
-# --- Setup Embedding Function ---
-embedding_func = get_registry().get("fastembed").create(name=EMBEDDING_MODEL)
+# --- Lazy Embedding Function Setup ---
+# NOTE: Embedding function and schema are created lazily on first use
+# to avoid 30-second startup hang from fastembed initialization.
 
 
-class CodeSchema(LanceModel):
-    """Schema for storing code chunks with vector embeddings."""
-    id: str                 # Composite: "path:start_line"
-    file_path: str          # Normalized POSIX path
-    start_line: int
-    end_line: int
-    content_hash: str       # MD5 hash for change detection
-    content: str = embedding_func.SourceField()
-    vector: Vector(embedding_func.ndims()) = embedding_func.VectorField()
+def _create_embedding_func():
+    """Create embedding function (called lazily on first use)."""
+    return get_registry().get("fastembed").create(name=EMBEDDING_MODEL)
+
+
+def _create_code_schema(embedding_func):
+    """Create schema dynamically with embedding function."""
+    class CodeSchema(LanceModel):
+        """Schema for storing code chunks with vector embeddings."""
+        id: str                 # Composite: "path:start_line"
+        file_path: str          # Normalized POSIX path
+        start_line: int
+        end_line: int
+        content_hash: str       # MD5 hash for change detection
+        content: str = embedding_func.SourceField()
+        vector: Vector(embedding_func.ndims()) = embedding_func.VectorField()
+
+    return CodeSchema
 
 
 class LanceDBSearchProvider:
@@ -94,12 +104,22 @@ class LanceDBSearchProvider:
 
         # Lazy initialization
         self._db = None
+        self._embedding_func = None
+        self._code_schema = None
 
     def _ensure_db(self):
         """Lazy DB initialization (creates directory and connects)."""
         if self._db is None:
             self._db_path.mkdir(parents=True, exist_ok=True)
             self._db = lancedb.connect(self._db_path)
+
+    def _ensure_schema(self):
+        """Lazy schema initialization (creates embedding func and schema)."""
+        if self._code_schema is None:
+            logger.debug("Initializing embedding function (may take 10-30s on first use)...")
+            self._embedding_func = _create_embedding_func()
+            self._code_schema = _create_code_schema(self._embedding_func)
+            logger.debug("Embedding function initialized")
 
     # --- Helper: Path Normalization & Security ---
 
@@ -196,6 +216,7 @@ class LanceDBSearchProvider:
             IndexingError: If indexing fails
         """
         self._ensure_db()
+        self._ensure_schema()  # Lazy-initialize embedding function and schema
 
         with self._safe_db_context():
             table_exists = TABLE_NAME in self._db.table_names()
@@ -280,7 +301,7 @@ class LanceDBSearchProvider:
         if TABLE_NAME in self._db.table_names():
             self._db.drop_table(TABLE_NAME)
 
-        table = self._db.create_table(TABLE_NAME, schema=CodeSchema)
+        table = self._db.create_table(TABLE_NAME, schema=self._code_schema)
 
         # Normalize keys
         valid_files = {}

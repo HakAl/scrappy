@@ -12,36 +12,50 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
+from ..infrastructure.protocols import PathProviderProtocol
+from ..infrastructure.paths import ScrappyPathProvider
+
 
 class AuditLogger:
     """Handles audit logging for agent actions with crash-safe persistence."""
 
-    def __init__(self, max_result_length: int = 1000):
+    def __init__(
+        self,
+        max_result_length: int = 1000,
+        path_provider: Optional[PathProviderProtocol] = None
+    ):
         """
         Initialize the audit logger.
 
         Args:
             max_result_length: Maximum length for result truncation in logs
+            path_provider: Path provider for file locations (optional)
         """
         self.log: List[dict] = []
         self.max_result_length = max_result_length
+        self._path_provider = path_provider
         self._save_path: Optional[Path] = None
-        self._filename: str = ".llm_agent_audit.json"
         self._auto_save: bool = False
         self._crash_handlers_registered: bool = False
         self._task_info: dict = {}
 
-    def enable_auto_save(self, path: Path, filename: str = ".llm_agent_audit.json") -> None:
+    def enable_auto_save(self, path: Optional[Path] = None, filename: Optional[str] = None) -> None:
         """
         Enable automatic incremental saving after each action.
         Also registers crash handlers to save on unexpected exit.
 
         Args:
-            path: Directory to save the log file
-            filename: Name of the audit log file
+            path: Directory to save the log file (uses path_provider if None)
+            filename: Name of the audit log file (deprecated, uses path_provider if available)
         """
-        self._save_path = path
-        self._filename = filename
+        if self._path_provider:
+            self._path_provider.ensure_data_dir()
+            self._save_path = self._path_provider.audit_file()
+        elif path:
+            self._save_path = path / (filename or "audit.json")
+        else:
+            raise ValueError("Either path_provider must be set or path must be provided")
+
         self._auto_save = True
         self._register_crash_handlers()
 
@@ -103,7 +117,7 @@ class AuditLogger:
             except Exception:
                 # Last resort: try to write to current directory
                 try:
-                    with open(self._filename, 'w') as f:
+                    with open("audit.json", 'w') as f:
                         json.dump(self._build_save_data(), f, indent=2)
                 except Exception:
                     pass  # Give up silently if we can't save
@@ -124,8 +138,7 @@ class AuditLogger:
             return
 
         try:
-            log_path = self._save_path / self._filename
-            with open(log_path, 'w') as f:
+            with open(self._save_path, 'w') as f:
                 json.dump(self._build_save_data(), f, indent=2)
         except Exception:
             pass  # Don't let save errors interrupt agent execution
@@ -184,18 +197,28 @@ class AuditLogger:
         self.log = []
         self._task_info = {}
 
-    def save(self, path: Path, filename: str = ".llm_agent_audit.json") -> str:
+    def save(self, path: Optional[Path] = None, filename: Optional[str] = None) -> str:
         """
         Save audit log to file.
 
         Args:
-            path: Directory to save the log file
-            filename: Name of the audit log file
+            path: Directory to save the log file (uses path_provider if None)
+            filename: Name of the audit log file (deprecated)
 
         Returns:
             Path to the saved file
         """
-        log_path = path / filename
+        if self._path_provider:
+            self._path_provider.ensure_data_dir()
+            log_path = self._path_provider.audit_file()
+        elif path:
+            log_path = path / (filename or "audit.json")
+        else:
+            raise ValueError("Either path_provider must be set or path must be provided")
+
+        # Ensure parent directory exists
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+
         with open(log_path, 'w') as f:
             json.dump(self._build_save_data(), f, indent=2)
         return str(log_path)

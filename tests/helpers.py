@@ -11,7 +11,54 @@ from pathlib import Path
 from src.providers.base import LLMResponse
 from src.orchestrator_adapter import NullContext, ContextProvider
 from src.infrastructure import InMemoryFileSystem, FileSystemProtocol
+from src.infrastructure.protocols import PathProviderProtocol
 from src.cli.session_context import SessionContext
+
+
+class TestPathProvider:
+    """
+    Mock path provider for testing.
+
+    Returns in-memory or temporary paths to prevent test pollution.
+    """
+
+    def __init__(self, base_dir: Optional[Path] = None):
+        """
+        Initialize mock path provider.
+
+        Args:
+            base_dir: Base directory for all paths (defaults to in-memory)
+        """
+        self._base_dir = base_dir or Path("/tmp/test")
+        self._data_dir = self._base_dir / ".scrappy"
+
+    def data_dir(self) -> Path:
+        """Get test data directory."""
+        return self._data_dir
+
+    def session_file(self) -> Path:
+        """Get test session file path."""
+        return self._data_dir / "session.json"
+
+    def rate_limits_file(self) -> Path:
+        """Get test rate limits file path."""
+        return self._data_dir / "rate_limits.json"
+
+    def audit_file(self) -> Path:
+        """Get test audit file path."""
+        return self._data_dir / "audit.json"
+
+    def response_cache_file(self) -> Path:
+        """Get test response cache file path."""
+        return self._data_dir / "response_cache.json"
+
+    def context_file(self) -> Path:
+        """Get test context file path."""
+        return self._data_dir / "context.json"
+
+    def ensure_data_dir(self) -> None:
+        """No-op for mock - don't create real directories."""
+        pass
 
 
 class MockWorkingMemory:

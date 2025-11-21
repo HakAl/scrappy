@@ -28,6 +28,8 @@ class TestRateLimiterDisplay:
             'providers': {}
         }
         orchestrator.context.project_path = Path('/test')
+        # Mock the storage path to return the new path
+        orchestrator.rate_tracker._storage.path = Path('/test/.scrappy/rate_limits.json')
 
         limiter = RateLimiter(orchestrator)
         io = MockIO()
@@ -37,7 +39,7 @@ class TestRateLimiterDisplay:
         output = io.get_output()
         assert "No usage data recorded yet" in output
         assert "Rate limits will be tracked" in output
-        assert ".llm_rate_limits.json" in output
+        assert ("rate_limits.json" in output or ".scrappy" in output)
 
     def test_displays_provider_usage_data(self):
         """Should show requests and tokens for providers."""

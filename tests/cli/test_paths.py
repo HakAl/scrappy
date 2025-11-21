@@ -66,15 +66,15 @@ class TestSessionFiles:
 
 
     def test_session_file_value(self):
-        """SESSION_FILE should be .llm_team_session.json."""
+        """SESSION_FILE should be .scrappy/session.json."""
         from src.cli.config.paths import SESSION_FILE
-        assert SESSION_FILE == '.llm_team_session.json'
+        assert SESSION_FILE == '.scrappy/session.json'
 
 
     def test_rate_limits_file_value(self):
-        """RATE_LIMITS_FILE should be .llm_rate_limits.json."""
+        """RATE_LIMITS_FILE should be .scrappy/rate_limits.json."""
         from src.cli.config.paths import RATE_LIMITS_FILE
-        assert RATE_LIMITS_FILE == '.llm_rate_limits.json'
+        assert RATE_LIMITS_FILE == '.scrappy/rate_limits.json'
 
 
 class TestProjectIndicatorFiles:

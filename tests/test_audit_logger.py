@@ -9,6 +9,7 @@ from datetime import datetime
 from unittest.mock import patch, MagicMock
 
 from src.agent.audit import AuditLogger
+from src.infrastructure.paths import TempPathProvider
 
 
 class TestAuditLoggerBasics:
@@ -52,8 +53,9 @@ class TestAutoSave:
 
     def test_set_task_info(self, tmp_path):
         """Test setting task info stores metadata."""
-        logger = AuditLogger()
-        logger.enable_auto_save(tmp_path)
+        path_provider = TempPathProvider(tmp_path)
+        logger = AuditLogger(path_provider=path_provider)
+        logger.enable_auto_save()
         logger.set_task_info("Test task", 10, False)
 
         assert logger._task_info['task'] == "Test task"
@@ -63,11 +65,12 @@ class TestAutoSave:
 
     def test_set_task_info_saves_immediately(self, tmp_path):
         """Test that setting task info triggers save."""
-        logger = AuditLogger()
-        logger.enable_auto_save(tmp_path)
+        path_provider = TempPathProvider(tmp_path)
+        logger = AuditLogger(path_provider=path_provider)
+        logger.enable_auto_save()
         logger.set_task_info("Test task", 10, False)
 
-        audit_file = tmp_path / ".llm_agent_audit.json"
+        audit_file = path_provider.audit_file()
         assert audit_file.exists()
 
         with open(audit_file) as f:
@@ -79,14 +82,16 @@ class TestAutoSave:
 
     def test_log_action_saves_incrementally(self, tmp_path):
         """Test that each action triggers a save."""
-        logger = AuditLogger()
-        logger.enable_auto_save(tmp_path)
+        path_provider = TempPathProvider(tmp_path)
+        logger = AuditLogger(path_provider=path_provider)
+        logger.enable_auto_save()
         logger.set_task_info("Test task", 10, False)
 
         # First action
         logger.log_action("read_file", {"path": "a.py"}, "content a", True)
 
-        with open(tmp_path / ".llm_agent_audit.json") as f:
+        audit_file = path_provider.audit_file()
+        with open(audit_file) as f:
             data = json.load(f)
         assert data['total_actions'] == 1
         assert len(data['actions']) == 1
@@ -94,7 +99,7 @@ class TestAutoSave:
         # Second action
         logger.log_action("write_file", {"path": "b.py", "content": "test"}, "success", True)
 
-        with open(tmp_path / ".llm_agent_audit.json") as f:
+        with open(audit_file) as f:
             data = json.load(f)
         assert data['total_actions'] == 2
         assert len(data['actions']) == 2
@@ -102,14 +107,15 @@ class TestAutoSave:
 
     def test_save_builds_correct_structure(self, tmp_path):
         """Test that save() produces correct data structure."""
-        logger = AuditLogger()
+        path_provider = TempPathProvider(tmp_path)
+        logger = AuditLogger(path_provider=path_provider)
         logger._task_info = {
             'task': 'Test task',
             'started_at': '2024-01-01T00:00:00'
         }
         logger.log_action("test", {}, "result", True)
 
-        path = logger.save(tmp_path)
+        path = logger.save()
 
         with open(path) as f:
             data = json.load(f)
@@ -125,13 +131,15 @@ class TestAutoSave:
 
     def test_mark_complete_success(self, tmp_path):
         """Test marking task as complete successfully."""
-        logger = AuditLogger()
-        logger.enable_auto_save(tmp_path)
+        path_provider = TempPathProvider(tmp_path)
+        logger = AuditLogger(path_provider=path_provider)
+        logger.enable_auto_save()
         logger.set_task_info("Test task", 10, False)
 
         logger.mark_complete(True, "Task completed successfully")
 
-        with open(tmp_path / ".llm_agent_audit.json") as f:
+        audit_file = path_provider.audit_file()
+        with open(audit_file) as f:
             data = json.load(f)
 
         assert data['task_info']['completed'] is True
@@ -142,13 +150,14 @@ class TestAutoSave:
 
     def test_mark_complete_failure(self, tmp_path):
         """Test marking task as complete with failure."""
-        logger = AuditLogger()
-        logger.enable_auto_save(tmp_path)
+        path_provider = TempPathProvider(tmp_path)
+        logger = AuditLogger(path_provider=path_provider)
+        logger.enable_auto_save()
         logger.set_task_info("Test task", 10, False)
 
         logger.mark_complete(False, "Max iterations reached")
 
-        with open(tmp_path / ".llm_agent_audit.json") as f:
+        with open(path_provider.audit_file()) as f:
             data = json.load(f)
 
         assert data['task_info']['completed'] is True
@@ -162,15 +171,17 @@ class TestCrashHandlers:
 
     def test_on_exit_saves_log(self, tmp_path):
         """Test that _on_exit saves the audit log."""
-        logger = AuditLogger()
-        logger.enable_auto_save(tmp_path)
+        path_provider = TempPathProvider(tmp_path)
+
+        logger = AuditLogger(path_provider=path_provider)
+        logger.enable_auto_save()
         logger.set_task_info("Test task", 10, False)
         logger.log_action("test", {}, "result", True)
 
         # Simulate exit
         logger._on_exit()
 
-        audit_file = tmp_path / ".llm_agent_audit.json"
+        audit_file = path_provider.audit_file()
         assert audit_file.exists()
 
         with open(audit_file) as f:
@@ -183,8 +194,10 @@ class TestCrashRecovery:
 
     def test_partial_execution_saved(self, tmp_path):
         """Test that partial execution is saved on crash."""
-        logger = AuditLogger()
-        logger.enable_auto_save(tmp_path)
+        path_provider = TempPathProvider(tmp_path)
+
+        logger = AuditLogger(path_provider=path_provider)
+        logger.enable_auto_save()
         logger.set_task_info("Create API endpoint", 10, True)
 
         # Simulate partial execution
@@ -193,7 +206,7 @@ class TestCrashRecovery:
         # Crash happens here - no mark_complete called
 
         # Verify file exists with partial state
-        with open(tmp_path / ".llm_agent_audit.json") as f:
+        with open(path_provider.audit_file()) as f:
             data = json.load(f)
 
         assert data['task_info']['task'] == "Create API endpoint"
@@ -203,14 +216,16 @@ class TestCrashRecovery:
 
     def test_error_state_saved(self, tmp_path):
         """Test that error state is saved."""
-        logger = AuditLogger()
-        logger.enable_auto_save(tmp_path)
+        path_provider = TempPathProvider(tmp_path)
+
+        logger = AuditLogger(path_provider=path_provider)
+        logger.enable_auto_save()
         logger.set_task_info("Fix bug", 5, False)
 
         logger.log_action("read_file", {"path": "bug.py"}, "code", True)
         logger.mark_complete(False, "Error: Network timeout")
 
-        with open(tmp_path / ".llm_agent_audit.json") as f:
+        with open(path_provider.audit_file()) as f:
             data = json.load(f)
 
         assert data['task_info']['success'] is False
@@ -219,15 +234,17 @@ class TestCrashRecovery:
 
     def test_keyboard_interrupt_state_saved(self, tmp_path):
         """Test that keyboard interrupt state is saved."""
-        logger = AuditLogger()
-        logger.enable_auto_save(tmp_path)
+        path_provider = TempPathProvider(tmp_path)
+
+        logger = AuditLogger(path_provider=path_provider)
+        logger.enable_auto_save()
         logger.set_task_info("Long running task", 50, True)
 
         logger.log_action("write_file", {"path": "part1.py"}, "created", True)
         logger.log_action("write_file", {"path": "part2.py"}, "created", True)
         logger.mark_complete(False, "Interrupted by user (KeyboardInterrupt)")
 
-        with open(tmp_path / ".llm_agent_audit.json") as f:
+        with open(path_provider.audit_file()) as f:
             data = json.load(f)
 
         assert data['total_actions'] == 2
@@ -236,8 +253,10 @@ class TestCrashRecovery:
 
     def test_audit_file_can_be_loaded_for_retry(self, tmp_path):
         """Test that saved audit can be loaded to understand what was done."""
-        logger = AuditLogger()
-        logger.enable_auto_save(tmp_path)
+        path_provider = TempPathProvider(tmp_path)
+
+        logger = AuditLogger(path_provider=path_provider)
+        logger.enable_auto_save()
         logger.set_task_info("Multi-step task", 10, False)
 
         # Simulate partial work
@@ -247,7 +266,7 @@ class TestCrashRecovery:
         # Crash before write_file on file2.py
 
         # Load and analyze what was done
-        with open(tmp_path / ".llm_agent_audit.json") as f:
+        with open(path_provider.audit_file()) as f:
             data = json.load(f)
 
         actions = [a['action'] for a in data['actions']]
@@ -264,13 +283,14 @@ class TestLegacyCompatibility:
 
     def test_save_method_still_works(self, tmp_path):
         """Test that save() method still works as before."""
-        logger = AuditLogger()
+        path_provider = TempPathProvider(tmp_path)
+        logger = AuditLogger(path_provider=path_provider)
         logger.log_action("test", {}, "result", True)
 
-        path = logger.save(tmp_path)
+        path = logger.save()
 
-        assert path == str(tmp_path / ".llm_agent_audit.json")
-        assert (tmp_path / ".llm_agent_audit.json").exists()
+        assert "audit.json" in path
+        assert Path(path).exists()
 
     def test_save_uses_custom_filename(self, tmp_path):
         """Test that save() accepts custom filename."""

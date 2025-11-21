@@ -17,6 +17,8 @@ from .platform import PlatformDetector
 from .git_history import GitHistoryReader
 from .project_detector import ProjectDetector
 from .config_loader import get_truncation_defaults, get_extensions_config, get_paths_config
+from ..infrastructure.protocols import PathProviderProtocol
+from ..infrastructure.paths import ScrappyPathProvider
 
 
 class CodebaseContext:
@@ -41,6 +43,7 @@ class CodebaseContext:
         project_detector: Optional[ProjectDetector] = None,
         auto_load_cache: bool = False,
         semantic_search: Optional['SemanticSearchProtocol'] = None,
+        path_provider: Optional[PathProviderProtocol] = None,
     ):
         """
         Initialize codebase context (dependencies only - NO file I/O by default).
@@ -56,6 +59,7 @@ class CodebaseContext:
             project_detector: Injectable project detector (default: creates from project_path)
             auto_load_cache: If True, automatically load cache in constructor (for backwards compatibility)
             semantic_search: Optional semantic search provider. If None, will auto-create if dependencies available.
+            path_provider: Path provider for data files (auto-creates if None)
         """
         # Store config for factory methods
         self._initial_project_path = project_path
@@ -77,7 +81,9 @@ class CodebaseContext:
         self.file_index: dict = {}
         self.git_history: dict = {}  # Git history info
         self.explored_at: Optional[datetime] = None
-        self.cache_file = self.project_path / ".llm_team_context.json"
+
+        # Path provider for data files
+        self._path_provider = path_provider or ScrappyPathProvider(self.project_path)
 
         # Component instances using factory methods
         self._file_scanner = file_scanner or self._create_default_file_scanner()
@@ -92,6 +98,11 @@ class CodebaseContext:
         # Auto-load cache if requested (for backwards compatibility)
         if auto_load_cache:
             self._load_cache()
+
+    @property
+    def cache_file(self) -> Path:
+        """Get path to context cache file."""
+        return self._path_provider.context_file()
 
     def restore_from_cache(self):
         """

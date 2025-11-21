@@ -10,6 +10,7 @@ Note: These tests require semantic dependencies:
 import pytest
 import shutil
 from pathlib import Path
+from unittest.mock import patch
 
 # Skip all tests if LanceDB not available
 pytest.importorskip("lancedb", reason="LanceDB not installed. Run: pip install -e '.[semantic]'")
@@ -30,6 +31,40 @@ def provider(tmp_path):
     db_path = tmp_path / ".lancedb"
     if db_path.exists():
         shutil.rmtree(db_path)
+
+
+def test_no_initialization_on_import():
+    """
+    Verify that importing the module doesn't trigger embedding initialization.
+
+    This test ensures we don't have the 30-second startup hang.
+    """
+    with patch('src.context.lancedb_search_provider._create_embedding_func') as mock_create:
+        # Reimport the module
+        import importlib
+        import src.context.lancedb_search_provider
+        importlib.reload(src.context.lancedb_search_provider)
+
+        # Embedding function should NOT be created on import
+        mock_create.assert_not_called()
+
+
+def test_initialization_only_on_first_index(tmp_path):
+    """Verify embedding function is initialized only when indexing."""
+    chunker = SemanticCodeChunker(chunk_size=100, overlap=3)
+    provider = LanceDBSearchProvider(tmp_path, chunker)
+
+    # Should be None before indexing
+    assert provider._embedding_func is None
+    assert provider._code_schema is None
+
+    # Index files
+    files = {"test.py": "def foo():\n    pass\n"}
+    provider.index_files(files)
+
+    # Should be initialized after indexing
+    assert provider._embedding_func is not None
+    assert provider._code_schema is not None
 
 
 def test_empty_search_returns_empty(provider):

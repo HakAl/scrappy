@@ -135,7 +135,8 @@ class RateLimiter:
             warnings_output = self.formatter.format_warnings(warnings)
             io.echo(warnings_output)
 
-        # Show tracker file location
-        tracker_file = self.orchestrator.context.project_path / ".llm_rate_limits.json"
-        tracker_location = self.formatter.format_tracker_file_location(str(tracker_file))
-        io.echo(tracker_location)
+        # Show tracker file location (get from rate tracker storage)
+        tracker_file = self.orchestrator.rate_tracker._storage.path
+        if tracker_file:
+            tracker_location = self.formatter.format_tracker_file_location(str(tracker_file))
+            io.echo(tracker_location)

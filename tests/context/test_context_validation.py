@@ -243,7 +243,7 @@ class TestCacheValidationWithCodebaseContext:
         context1.explore()
 
         # Corrupt the explored_at field
-        cache_file = temp_project_dir / ".llm_team_context.json"
+        cache_file = temp_project_dir / ".scrappy" / "context.json"
         import json
         with open(cache_file, 'r') as f:
             data = json.load(f)
