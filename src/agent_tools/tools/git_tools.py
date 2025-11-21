@@ -45,7 +45,7 @@ class GitTool(Tool):
             Tuple of (success, output_or_error)
         """
         if timeout is None:
-            timeout = context.config.git_timeout if context.config else 30
+            timeout = context.config.git_timeout
 
         try:
             result = subprocess.run(
@@ -198,7 +198,7 @@ class GitDiffTool(GitTool):
             return ToolResult(True, "No changes found")
 
         # Truncate if too long
-        max_size = context.config.max_git_diff_size if context.config else 20000
+        max_size = context.config.max_git_diff_size
         truncated = len(output) > max_size
         if truncated:
             output = output[:max_size] + "\n... [truncated]"
@@ -258,7 +258,7 @@ class GitBlameTool(GitTool):
             return ToolResult(True, "No blame information found")
 
         # Truncate if too long
-        max_size = context.config.max_git_blame_size if context.config else 20000
+        max_size = context.config.max_git_blame_size
         truncated = len(output) > max_size
         if truncated:
             output = output[:max_size] + "\n... [truncated]"
@@ -309,7 +309,7 @@ class GitShowTool(GitTool):
             return ToolResult(True, "No commit information found")
 
         # Truncate if too long
-        max_size = context.config.max_git_show_size if context.config else 20000
+        max_size = context.config.max_git_show_size
         truncated = len(output) > max_size
         if truncated:
             output = output[:max_size] + "\n... [truncated]"
@@ -345,7 +345,7 @@ class GitRecentChangesTool(GitTool):
         n = kwargs.get("n", 3)
 
         # Limit to reasonable number
-        max_commits = context.config.max_recent_commits if context.config else 10
+        max_commits = context.config.max_recent_commits
         n = min(n, max_commits)
 
         args = [
@@ -357,7 +357,7 @@ class GitRecentChangesTool(GitTool):
         ]
 
         # Use longer timeout for diffs
-        timeout = context.config.git_diff_timeout if context.config else 60
+        timeout = context.config.git_diff_timeout
 
         success, output = self._run_git_command(context, args, timeout=timeout)
 
@@ -368,7 +368,7 @@ class GitRecentChangesTool(GitTool):
             return ToolResult(True, "No recent changes found")
 
         # Truncate if too long
-        max_size = context.config.max_recent_changes_size if context.config else 50000
+        max_size = context.config.max_recent_changes_size
         truncated = len(output) > max_size
         if truncated:
             output = output[:max_size] + f"\n\n... [truncated - showing first {max_size} chars]"

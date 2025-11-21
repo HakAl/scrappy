@@ -11,10 +11,10 @@ from .protocols import (
     RecommenderProtocol,
     UsageQueryProtocol,
 )
-from ..config import TASK_PREFERENCES
 
 if TYPE_CHECKING:
     from ..providers import ProviderLimits
+    from ..config import OrchestratorConfig
 
 
 class RateLimitTracker:
@@ -34,6 +34,7 @@ class RateLimitTracker:
         calculator: CalculatorProtocol,
         recommender: RecommenderProtocol,
         auto_load: bool = False,
+        config: Optional['OrchestratorConfig'] = None,
     ):
         """
         Initialize tracker.
@@ -44,11 +45,18 @@ class RateLimitTracker:
             calculator: Usage calculations
             recommender: Provider recommendation
             auto_load: If True, load data from storage on init
+            config: OrchestratorConfig instance (creates default if None)
         """
         self._storage = storage
         self._policy = policy
         self._calc = calculator
         self._recommender = recommender
+
+        # Import here to avoid circular dependency
+        if config is None:
+            from ..config import OrchestratorConfig
+            config = OrchestratorConfig()
+        self.config = config
 
         self._usage: Dict[str, Any] = {}
         self._initialise_empty()
@@ -248,7 +256,7 @@ class RateLimitTracker:
         Returns:
             Provider name or None
         """
-        return self._recommender.recommended(task_type, registry, TASK_PREFERENCES)
+        return self._recommender.recommended(task_type, registry, self.config.task_preferences)
 
     def get_rate_limit_status_extended(self, registry: Any) -> dict[str, Any]:
         """

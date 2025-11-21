@@ -8,13 +8,13 @@ import pytest
 import time
 import asyncio
 from unittest.mock import Mock, call
-from infrastructure.error_recovery import (
+from src.infrastructure.error_recovery import (
     ExponentialBackoffRetry,
     RetryConfig,
     retry_operation,
     retry_operation_async,
 )
-from infrastructure.exceptions import (
+from src.infrastructure.exceptions import (
     BaseError,
     RetryableError,
     NonRetryableError,

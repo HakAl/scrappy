@@ -33,6 +33,7 @@ from .background import BackgroundTaskManager
 from .status_reporter import ProviderStatusReporter
 from .usage_reporter import UsageReporter
 from .context_coordinator import ContextCoordinator
+from .config import OrchestratorConfig
 from .manager_protocols import (
     ContextManagerProtocol,
     BackgroundTaskManagerProtocol,
@@ -97,6 +98,7 @@ class OrchestratorFactory:
         context_aware: bool = True,
         created_at: Optional[datetime] = None,
         path_provider: Optional[PathProviderProtocol] = None,
+        config: Optional[OrchestratorConfig] = None,
     ):
         """
         Initialize factory with configuration.
@@ -110,12 +112,14 @@ class OrchestratorFactory:
             context_aware: Enable context awareness
             created_at: Creation timestamp
             path_provider: Path provider for data files (auto-creates if None)
+            config: OrchestratorConfig instance (creates default if None)
         """
         self.project_path = project_path
         self.cache_ttl_hours = cache_ttl_hours
         self.verbose_selection = verbose_selection
         self.context_aware = context_aware
         self.created_at = created_at or datetime.now()
+        self.config = config or OrchestratorConfig()
 
         # Create path provider if not provided
         if path_provider is None:
@@ -158,10 +162,11 @@ class OrchestratorFactory:
         components.rate_tracker = self.create_rate_tracker(components.codebase_context)
         components.session_manager = self.create_session_manager(components.codebase_context)
 
-        # Provider selector
+        # Provider selector (needs config)
         components.provider_selector = self.create_provider_selector(
             components.registry,
-            components.output
+            components.output,
+            self.config
         )
 
         # Usage reporter
@@ -237,7 +242,11 @@ class OrchestratorFactory:
         else:
             # Fallback for backwards compatibility
             tracker_path = codebase_context.project_path / ".llm_rate_limits.json"
-        return create_rate_limit_tracker(tracker_file=str(tracker_path), auto_load=True)
+        return create_rate_limit_tracker(
+            tracker_file=str(tracker_path),
+            auto_load=True,
+            config=self.config
+        )
 
     def create_working_memory(self) -> WorkingMemoryProtocol:
         """Create default working memory."""
@@ -250,13 +259,15 @@ class OrchestratorFactory:
     def create_provider_selector(
         self,
         registry: ProviderRegistryProtocol,
-        output: OutputInterface
+        output: OutputInterface,
+        config: OrchestratorConfig
     ) -> ProviderSelectorProtocol:
         """Create default provider selector."""
         return ProviderSelector(
             registry,
             verbose=self.verbose_selection,
-            output=output
+            output=output,
+            config=config
         )
 
     def create_usage_reporter(self, cache: CacheProtocol) -> UsageReporterProtocol:

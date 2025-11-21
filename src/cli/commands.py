@@ -32,6 +32,7 @@ from .exceptions import (
 )
 from .logging import get_logger
 from ..agent import CodeAgent, create_git_checkpoint, rollback_to_checkpoint
+from .config_factory import get_config
 
 
 @click.group(invoke_without_command=True)
@@ -425,6 +426,20 @@ def agent(ctx, task, dry_run, no_checkpoint, auto_confirm, max_iterations):
 
 def main():
     """Main entry point."""
+    # Load configuration early - this initializes the global config
+    # Config is loaded from:
+    #   1. Explicit file path (via CLI_CONFIG_PATH env var)
+    #   2. Default config files (.scrappy.json, .scrappy.yaml, .scrappy.toml)
+    #   3. Environment variables (CLI_* prefix)
+    #   4. Default values
+    try:
+        config = get_config()
+        config.validate()
+    except Exception as e:
+        # If config fails to load/validate, print error but continue with defaults
+        click.secho(f"Warning: Config validation failed: {e}", fg="yellow")
+        click.echo("Continuing with default configuration...\n")
+
     cli(obj={})
 
 

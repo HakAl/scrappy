@@ -6,8 +6,8 @@ Errors related to user interaction, file operations, sessions, and tasks.
 
 from typing import Optional, Any
 from pathlib import Path
-from infrastructure.exceptions.base import BaseError, NonRetryableError
-from infrastructure.exceptions.enums import (
+from .base import BaseError, NonRetryableError
+from .enums import (
     ErrorCategory,
     ErrorSeverity,
     RecoveryAction

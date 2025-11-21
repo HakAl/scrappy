@@ -14,7 +14,7 @@ from datetime import datetime
 
 from src.utils.errors import is_rate_limit_error, RateLimitError
 from src.utils.errors import AllProvidersRateLimitedError as LegacyAllProvidersRateLimitedError
-from infrastructure.exceptions import AllProvidersRateLimitedError
+from src.infrastructure.exceptions import AllProvidersRateLimitedError
 from src.orchestrator.core import AgentOrchestrator
 from src.providers.base import LLMResponse
 

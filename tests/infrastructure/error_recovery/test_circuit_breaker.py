@@ -11,12 +11,12 @@ from unittest.mock import Mock
 from pathlib import Path
 import tempfile
 import json
-from infrastructure.error_recovery import (
+from src.infrastructure.error_recovery import (
     CircuitBreaker,
     CircuitBreakerConfig,
     CircuitState,
 )
-from infrastructure.exceptions import CircuitBreakerOpenError
+from src.infrastructure.exceptions import CircuitBreakerOpenError
 
 
 class TestCircuitBreakerStates:

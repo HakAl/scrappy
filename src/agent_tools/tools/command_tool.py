@@ -87,8 +87,7 @@ def create_shell_executor(config: "AgentConfig") -> "ShellCommandExecutor":
     sanitizer = WindowsSanitizer() if is_windows() else UnixSanitizer()
 
     # Create security validator with custom patterns if provided
-    dangerous_patterns = getattr(config, 'dangerous_commands', None)
-    security = CommandSecurity(dangerous_patterns=dangerous_patterns)
+    security = CommandSecurity(dangerous_patterns=config.dangerous_commands)
 
     # Create other components
     advisor = CommandAdvisor()
@@ -152,12 +151,12 @@ class ShellCommandExecutor:
         )
 
         self.config = config
-        self.timeout = getattr(config, 'command_timeout', 120)
-        self.max_output = getattr(config, 'max_command_output', 50000)
+        self.timeout = config.command_timeout
+        self.max_output = config.max_command_output
 
         # Inject dependencies with defaults
         self._security = security or CommandSecurity(
-            dangerous_patterns=getattr(config, 'dangerous_commands', None)
+            dangerous_patterns=config.dangerous_commands
         )
         self._sanitizer = sanitizer or (
             WindowsSanitizer() if is_windows() else UnixSanitizer()

@@ -9,9 +9,9 @@ from typing import Callable, TypeVar, Any, Optional, Union
 import time
 import asyncio
 import logging
-from infrastructure.error_recovery.protocols import RetryStrategyProtocol
-from infrastructure.error_recovery.config import RetryConfig, DEFAULT_RETRY_CONFIG
-from infrastructure.exceptions import BaseError
+from .protocols import RetryStrategyProtocol
+from .config import RetryConfig, DEFAULT_RETRY_CONFIG
+from ..exceptions import BaseError
 
 T = TypeVar('T')
 

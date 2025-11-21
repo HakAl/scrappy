@@ -12,7 +12,7 @@ import asyncio
 
 # Re-export enums from exceptions.enums for backward compatibility
 # (Enums moved to break circular dependency)
-from infrastructure.exceptions.enums import (
+from ..exceptions.enums import (
     RecoveryAction,
     ErrorSeverity,
     ErrorCategory,

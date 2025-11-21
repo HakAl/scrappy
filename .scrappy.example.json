@@ -1,0 +1,46 @@
+{
+  "_comment": "Example Scrappy CLI configuration file",
+  "_info": "Copy this file to .scrappy.json and customize as needed",
+  "_usage": [
+    "Config is loaded from (in order of priority):",
+    "  1. File specified in CLI_CONFIG_PATH environment variable",
+    "  2. .scrappy.json, .scrappy.yaml, .scrappy.toml in current directory",
+    "  3. Environment variables with CLI_ prefix (e.g., CLI_TEMPERATURE_DEFAULT=0.8)",
+    "  4. Default values shown below"
+  ],
+
+  "temperature_low": 0.3,
+  "temperature_default": 0.7,
+
+  "max_tokens_query": 1000,
+  "max_tokens_summary": 2000,
+
+  "max_lines_config": 100,
+  "max_lines_dependency": 50,
+  "max_test_results": 20,
+
+  "truncate_error_message": 500,
+  "truncate_research_medium": 1000,
+  "truncate_research_large": 1500,
+  "truncate_file_content": 2000,
+  "truncate_priority_file": 3000,
+
+  "preview_short": 40,
+  "preview_standard": 50,
+  "preview_conclusion": 200,
+
+  "cache_hit_good": 0.50,
+  "rate_limit_warning": 0.75,
+  "rate_limit_critical": 0.90,
+
+  "max_display_messages": 4,
+  "progress_bar_width": 20,
+  "dashboard_enabled": true,
+  "dashboard_refresh_rate": 4,
+
+  "separator_width_narrow": 40,
+  "separator_width_standard": 50,
+  "separator_width_wide": 60,
+
+  "max_iterations": 10
+}

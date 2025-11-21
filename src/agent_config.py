@@ -8,10 +8,11 @@ from dataclasses import dataclass, field
 from typing import List, Set
 
 from .platform_utils import get_dangerous_commands, get_interactive_commands
+from .infrastructure.config import BaseConfig
 
 
 @dataclass
-class AgentConfig:
+class AgentConfig(BaseConfig):
     """Configuration settings for CodeAgent."""
 
     # File operations
@@ -85,3 +86,68 @@ class AgentConfig:
     meaningful_actions: List[str] = field(
         default_factory=lambda: ['write_file', 'run_command']
     )
+
+    def validate(self) -> None:
+        """
+        Validate AgentConfig values.
+
+        Raises:
+            ValueError: If configuration is invalid
+        """
+        super().validate()
+
+        # Validate file operations
+        if self.max_file_read_size <= 0:
+            raise ValueError(
+                f"max_file_read_size must be positive, got {self.max_file_read_size}"
+            )
+
+        if self.max_file_listing <= 0:
+            raise ValueError(
+                f"max_file_listing must be positive, got {self.max_file_listing}"
+            )
+
+        if self.max_directory_tree_lines <= 0:
+            raise ValueError(
+                f"max_directory_tree_lines must be positive, got {self.max_directory_tree_lines}"
+            )
+
+        # Validate command execution
+        if self.command_timeout <= 0:
+            raise ValueError(
+                f"command_timeout must be positive, got {self.command_timeout}"
+            )
+
+        if self.max_command_output <= 0:
+            raise ValueError(
+                f"max_command_output must be positive, got {self.max_command_output}"
+            )
+
+        # Validate git operations
+        if self.git_timeout <= 0:
+            raise ValueError(
+                f"git_timeout must be positive, got {self.git_timeout}"
+            )
+
+        if self.git_diff_timeout <= 0:
+            raise ValueError(
+                f"git_diff_timeout must be positive, got {self.git_diff_timeout}"
+            )
+
+        # Validate LLM settings
+        if self.default_max_tokens <= 0:
+            raise ValueError(
+                f"default_max_tokens must be positive, got {self.default_max_tokens}"
+            )
+
+        if not (0.0 <= self.default_temperature <= 2.0):
+            raise ValueError(
+                f"default_temperature must be between 0.0 and 2.0, got {self.default_temperature}"
+            )
+
+        # Validate provider preferences
+        if not self.planner_preferences:
+            raise ValueError("planner_preferences cannot be empty")
+
+        if not self.executor_preferences:
+            raise ValueError("executor_preferences cannot be empty")

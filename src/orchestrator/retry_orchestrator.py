@@ -31,12 +31,12 @@ try:
         DEFAULT_MAX_RETRIES,
         DEFAULT_QUOTA_THRESHOLD,
     )
-    from infrastructure.exceptions import (
+    from ..infrastructure.exceptions import (
         RateLimitError,
         AllProvidersRateLimitedError,
         BaseError,
     )
-    from infrastructure.error_recovery import RetryConfig
+    from ..infrastructure.error_recovery import RetryConfig
 except ImportError:
     from protocols.delegation import (
         LLMRequest,

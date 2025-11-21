@@ -17,7 +17,7 @@ from .platform import PlatformDetector
 from .git_history import GitHistoryReader
 from .project_detector import ProjectDetector
 from .config_loader import get_truncation_defaults, get_extensions_config, get_paths_config
-from ..infrastructure.protocols import PathProviderProtocol
+from ..infrastructure.protocols import PathProviderProtocol, BackgroundInitializerProtocol
 from ..infrastructure.paths import ScrappyPathProvider
 
 
@@ -43,6 +43,7 @@ class CodebaseContext:
         project_detector: Optional[ProjectDetector] = None,
         auto_load_cache: bool = False,
         semantic_search: Optional['SemanticSearchProtocol'] = None,
+        semantic_initializer: Optional[BackgroundInitializerProtocol] = None,
         path_provider: Optional[PathProviderProtocol] = None,
     ):
         """
@@ -58,7 +59,8 @@ class CodebaseContext:
             git_history_reader: Injectable git history reader (default: creates new GitHistoryReader)
             project_detector: Injectable project detector (default: creates from project_path)
             auto_load_cache: If True, automatically load cache in constructor (for backwards compatibility)
-            semantic_search: Optional semantic search provider. If None, will auto-create if dependencies available.
+            semantic_search: DEPRECATED - Use semantic_initializer instead. Direct injection of initialized search.
+            semantic_initializer: Background initializer for semantic search. Preferred over semantic_search.
             path_provider: Path provider for data files (auto-creates if None)
         """
         # Store config for factory methods
@@ -92,8 +94,9 @@ class CodebaseContext:
         self._git_history_reader = git_history_reader or self._create_default_git_history_reader()
         self._project_detector = project_detector or self._create_default_project_detector()
 
-        # Semantic search (LAZY - only created when accessed)
-        self._semantic_search = semantic_search  # None unless explicitly injected
+        # Semantic search - supports both old (direct) and new (initializer) patterns
+        self._semantic_search = semantic_search  # Direct injection (deprecated)
+        self._semantic_initializer = semantic_initializer  # Background initializer (preferred)
         self._semantic_search_attempted = False  # Track if we tried to create it
 
         # Auto-load cache if requested (for backwards compatibility)
@@ -139,17 +142,88 @@ class CodebaseContext:
         """Create default project detector."""
         return ProjectDetector(self.project_path)
 
+    def _create_default_semantic_initializer(self) -> Optional[BackgroundInitializerProtocol]:
+        """
+        Create default semantic search initializer.
+
+        Returns:
+            SemanticSearchInitializer if dependencies available, NullInitializer otherwise
+        """
+        try:
+            from .semantic.initializer import SemanticSearchInitializer
+            logger.debug("Creating SemanticSearchInitializer")
+            return SemanticSearchInitializer(self.project_path)
+        except ImportError as e:
+            logger.debug(f"Semantic search dependencies not available: {e}")
+            from .semantic.initializer import NullInitializer
+            return NullInitializer()
+
+    def start_background_initialization(self) -> None:
+        """
+        Start background initialization tasks (semantic search model loading, etc.).
+
+        This is non-blocking and returns immediately. The actual work happens
+        in background threads.
+
+        Call this early in application startup to pre-load heavy dependencies.
+        """
+        if self._semantic_initializer:
+            logger.debug("Starting background semantic search initialization")
+            self._semantic_initializer.start()
+        else:
+            logger.debug("No semantic initializer configured")
+
+    def get_semantic_initialization_status(self) -> Optional[str]:
+        """
+        Get human-readable status of semantic search initialization.
+
+        Returns:
+            Status string if initializer exists, None otherwise
+        """
+        if self._semantic_initializer:
+            return self._semantic_initializer.get_status()
+        return None
+
+    def is_semantic_search_ready(self) -> bool:
+        """
+        Check if semantic search is ready to use.
+
+        Returns:
+            True if semantic search is available and ready
+        """
+        if self._semantic_search:
+            return True  # Directly injected, already ready
+        if self._semantic_initializer:
+            return self._semantic_initializer.is_complete() and \
+                   self._semantic_initializer.get_error() is None
+        return False
+
     def _ensure_semantic_search(self) -> Optional['SemanticSearchProtocol']:
         """
         Return semantic search provider if available.
 
-        Semantic search is initialized via background initialization in CLI startup.
-        This method just returns what's been injected, or None if unavailable.
+        Checks both direct injection and background initializer.
 
         Returns:
             SemanticSearchProtocol instance or None if not available
         """
-        return self._semantic_search
+        # Check direct injection first (backwards compatibility)
+        if self._semantic_search:
+            return self._semantic_search
+
+        # Check if background initializer has completed
+        if self._semantic_initializer and self._semantic_initializer.is_complete():
+            result = self._semantic_initializer.get_result()
+            if result:
+                # Cache the result for future calls
+                self._semantic_search = result
+                return result
+            else:
+                error = self._semantic_initializer.get_error()
+                logger.debug(f"Semantic search initialization failed: {error}")
+                return None
+
+        return None
 
     def is_explored(self) -> bool:
         """Check if the codebase has been explored."""

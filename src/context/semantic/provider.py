@@ -149,6 +149,15 @@ class LanceDBSearchProvider:
             try:
                 logger.debug("Initializing embedding function (may take 10-30s on first use)...")
                 self._embedding_func = _create_embedding_func()
+
+                # Ensure the model is fully loaded by generating a test embedding
+                # This ensures the heavy model loading happens here, not later
+                try:
+                    _ = self._embedding_func.generate_embeddings(["test"])
+                    logger.debug("Embedding model is fully loaded")
+                except Exception as e:
+                    logger.warning(f"Error during test embedding generation: {e}")
+
                 self._code_schema = _create_code_schema(self._embedding_func)
                 logger.debug("Embedding function initialized")
             except Exception as e:

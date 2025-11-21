@@ -24,21 +24,21 @@ Example usage:
 """
 
 # Import enums first (no dependencies)
-from infrastructure.exceptions.enums import (
+from .enums import (
     RecoveryAction,
     ErrorSeverity,
     ErrorCategory,
 )
 
 # Base classes
-from infrastructure.exceptions.base import (
+from .base import (
     BaseError,
     RetryableError,
     NonRetryableError,
 )
 
 # Provider errors
-from infrastructure.exceptions.provider_errors import (
+from .provider_errors import (
     ProviderError,
     RateLimitError,
     AllProvidersRateLimitedError,
@@ -50,7 +50,7 @@ from infrastructure.exceptions.provider_errors import (
 )
 
 # Delegation errors
-from infrastructure.exceptions.delegation_errors import (
+from .delegation_errors import (
     DelegationError,
     RetryExhaustedError,
     CacheError,
@@ -61,7 +61,7 @@ from infrastructure.exceptions.delegation_errors import (
 )
 
 # CLI errors
-from infrastructure.exceptions.cli_errors import (
+from .cli_errors import (
     CLIError,
     ValidationError,
     FileOperationError,

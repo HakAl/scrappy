@@ -15,7 +15,7 @@ from datetime import datetime
 from src.orchestrator.retry_orchestrator import RetryOrchestrator
 from src.protocols.delegation import LLMRequest
 from src.providers.base import LLMResponse
-from infrastructure.exceptions import (
+from src.infrastructure.exceptions import (
     RateLimitError,
     AllProvidersRateLimitedError,
 )

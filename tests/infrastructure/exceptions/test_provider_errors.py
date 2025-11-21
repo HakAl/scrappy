@@ -5,7 +5,7 @@ Following CLAUDE.md: Test BEHAVIOR, not structure. Cover edge cases.
 """
 
 import pytest
-from infrastructure.exceptions import (
+from src.infrastructure.exceptions import (
     ProviderError,
     RateLimitError,
     AllProvidersRateLimitedError,

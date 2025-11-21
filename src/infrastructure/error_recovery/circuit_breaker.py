@@ -14,12 +14,12 @@ from dataclasses import dataclass, asdict
 import json
 from pathlib import Path
 
-from infrastructure.error_recovery.protocols import CircuitBreakerProtocol
-from infrastructure.error_recovery.config import (
+from .protocols import CircuitBreakerProtocol
+from .config import (
     CircuitBreakerConfig,
     DEFAULT_CIRCUIT_BREAKER_CONFIG
 )
-from infrastructure.exceptions import CircuitBreakerOpenError, BaseError
+from ..exceptions import CircuitBreakerOpenError, BaseError
 
 T = TypeVar('T')
 

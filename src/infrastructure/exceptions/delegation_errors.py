@@ -5,8 +5,8 @@ Errors related to request delegation, caching, and batch processing.
 """
 
 from typing import Optional, Dict, Any
-from infrastructure.exceptions.base import BaseError, NonRetryableError, RetryableError
-from infrastructure.exceptions.enums import (
+from .base import BaseError, NonRetryableError, RetryableError
+from .enums import (
     ErrorCategory,
     ErrorSeverity,
     RecoveryAction

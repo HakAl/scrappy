@@ -14,7 +14,7 @@ except ImportError:
     from providers.base import ModelType
 
 from .output import OutputInterface, ConsoleOutput
-from .config import BRAIN_PRIORITY, FALLBACK_PRIORITY, get_provider_reason
+from .config import OrchestratorConfig
 from .protocols import ProviderRegistryProtocol  # For type hints (Dependency Inversion)
 
 
@@ -29,7 +29,13 @@ class ProviderSelector:
     - Cohere: Limited (1,000/month) - embeddings only
     """
 
-    def __init__(self, registry: ProviderRegistryProtocol, verbose: bool = False, output: Optional[OutputInterface] = None):
+    def __init__(
+        self,
+        registry: ProviderRegistryProtocol,
+        verbose: bool = False,
+        output: Optional[OutputInterface] = None,
+        config: Optional[OrchestratorConfig] = None
+    ):
         """
         Initialize provider selector.
 
@@ -37,10 +43,12 @@ class ProviderSelector:
             registry: Provider registry to select from (ProviderRegistryProtocol for DI)
             verbose: Enable verbose selection logging
             output: Output interface for messages (default: ConsoleOutput)
+            config: OrchestratorConfig instance (creates default if None)
         """
         self.registry = registry
         self.verbose = verbose
         self.output = output or ConsoleOutput()
+        self.config = config or OrchestratorConfig()
         self._selection_log = []
 
     def _log(self, message: str, level: str = "INFO"):
@@ -214,7 +222,7 @@ class ProviderSelector:
         # Default priority: cerebras > groq > gemini
         # NOTE: GitHub Models excluded due to aggressive rate limiting (crashes after ~10 requests)
         # GitHub Models is NOT suitable for orchestrator brain or agent planner roles
-        priority = BRAIN_PRIORITY
+        priority = self.config.brain_priority
         self._log(f"Auto-selection priority: {' > '.join(priority)}")
 
         for provider_name in priority:
@@ -234,7 +242,7 @@ class ProviderSelector:
 
     def _get_brain_selection_reason(self, provider_name: str) -> str:
         """Get human-readable reason for brain selection."""
-        return get_provider_reason(provider_name)
+        return self.config.get_provider_reason(provider_name)
 
     def get_provider_for_fallback(self, exclude: list[str] = None) -> Optional[str]:
         """
@@ -250,7 +258,7 @@ class ProviderSelector:
         available = self.registry.list_available()
 
         # Priority order for fallback
-        priority = FALLBACK_PRIORITY
+        priority = self.config.fallback_priority
 
         for provider_name in priority:
             if provider_name in available and provider_name not in exclude:

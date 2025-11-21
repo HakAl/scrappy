@@ -7,8 +7,8 @@ Provides sequential fallback chain for when primary operations fail.
 from typing import Callable, TypeVar, Any, Optional, Union
 import asyncio
 import logging
-from infrastructure.error_recovery.protocols import FallbackStrategyProtocol
-from infrastructure.exceptions import BaseError, RetryExhaustedError
+from .protocols import FallbackStrategyProtocol
+from ..exceptions import BaseError, RetryExhaustedError
 
 T = TypeVar('T')
 

@@ -7,13 +7,13 @@ Following CLAUDE.md: Test BEHAVIOR. Prove fallback chain works correctly.
 import pytest
 import asyncio
 from unittest.mock import Mock
-from infrastructure.error_recovery import (
+from src.infrastructure.error_recovery import (
     FallbackChain,
     with_fallback,
     with_fallback_async,
     graceful_degrade,
 )
-from infrastructure.exceptions import RetryExhaustedError
+from src.infrastructure.exceptions import RetryExhaustedError
 
 
 class TestFallbackChain:

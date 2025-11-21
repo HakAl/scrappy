@@ -42,7 +42,7 @@ class ReadFileTool(Tool):
             lines = content.count('\n') + 1
 
             # Truncate if too long
-            max_size = context.config.max_file_read_size if context.config else 50000
+            max_size = context.config.max_file_read_size
             if len(content) > max_size:
                 content = content[:max_size] + "\n... [truncated]"
 
@@ -243,7 +243,7 @@ class ListFilesTool(Tool):
 
         try:
             files = list(target.glob(pattern))
-            max_files = context.config.max_file_listing if context.config else 100
+            max_files = context.config.max_file_listing
             truncated = len(files) > max_files
             if truncated:
                 files = files[:max_files]
@@ -310,8 +310,8 @@ class ListDirectoryTool(Tool):
 
         try:
             lines = []
-            skip_dirs = context.config.skip_directories if context.config else ['node_modules', '__pycache__', '.git', 'venv', '.venv']
-            allowed_hidden = context.config.allowed_hidden_files if context.config else ['.gitignore', '.env.example']
+            skip_dirs = context.config.skip_directories
+            allowed_hidden = context.config.allowed_hidden_files
 
             def build_tree(dir_path: Path, prefix: str = "", current_depth: int = 0):
                 if current_depth > depth:
@@ -385,7 +385,7 @@ class ListDirectoryTool(Tool):
 
             build_tree(target)
 
-            max_lines = context.config.max_directory_tree_lines if context.config else 200
+            max_lines = context.config.max_directory_tree_lines
             truncated = len(lines) > max_lines
             if truncated:
                 lines = lines[:max_lines]

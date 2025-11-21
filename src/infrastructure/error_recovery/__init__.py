@@ -46,7 +46,7 @@ Backward compatibility:
 """
 
 # Protocols
-from infrastructure.error_recovery.protocols import (
+from .protocols import (
     RetryStrategyProtocol,
     CircuitBreakerProtocol,
     FallbackStrategyProtocol,
@@ -58,7 +58,7 @@ from infrastructure.error_recovery.protocols import (
 )
 
 # Configuration
-from infrastructure.error_recovery.config import (
+from .config import (
     RetryConfig,
     CircuitBreakerConfig,
     ErrorRecoveryConfig,
@@ -71,19 +71,19 @@ from infrastructure.error_recovery.config import (
 )
 
 # Strategies
-from infrastructure.error_recovery.retry import (
+from .retry import (
     ExponentialBackoffRetry,
     retry_operation,
     retry_operation_async,
 )
 
-from infrastructure.error_recovery.circuit_breaker import (
+from .circuit_breaker import (
     CircuitBreaker,
     CircuitState,
     CircuitStats,
 )
 
-from infrastructure.error_recovery.fallback import (
+from .fallback import (
     FallbackChain,
     with_fallback,
     with_fallback_async,

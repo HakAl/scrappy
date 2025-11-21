@@ -168,7 +168,7 @@ class SearchCodeTool(Tool):
 
         try:
             results = []
-            max_results = context.config.max_search_results if context.config else 100
+            max_results = context.config.max_search_results
 
             for file_path in context.project_root.rglob(file_pattern):
                 # Skip git and cache directories

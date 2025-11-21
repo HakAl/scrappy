@@ -12,7 +12,7 @@ import logging
 import traceback
 from pathlib import Path
 
-from infrastructure.exceptions.enums import (
+from .enums import (
     RecoveryAction,
     ErrorSeverity,
     ErrorCategory

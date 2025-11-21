@@ -8,10 +8,10 @@ to prevent UI freezing during startup.
 import logging
 import threading
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
 
-from ...infrastructure.protocols import BackgroundInitializerProtocol
 from ..protocols import SemanticSearchProtocol
+from ...infrastructure.protocols import BackgroundInitializerProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +106,26 @@ class SemanticSearchInitializer:
 
             return True
 
-    def get_result(self) -> Optional[SemanticSearchProtocol]:
+    def wait_with_callback(self, callback, timeout: Optional[float] = None) -> None:
+        """
+        Wait for initialization to complete and call a callback when done.
+
+        This is useful for integrating with UI frameworks that use callbacks.
+
+        Args:
+            callback: Function to call when initialization is complete
+            timeout: Maximum seconds to wait (None = wait forever)
+        """
+
+        def wait_thread():
+            completed = self.wait_for_completion(timeout=timeout)
+            callback(completed, self.get_result(), self.get_error())
+
+        thread = threading.Thread(target=wait_thread)
+        thread.daemon = True
+        thread.start()
+
+    def get_result(self) -> Optional[Any]:
         """
         Get the initialized semantic search object.
 
@@ -173,7 +192,20 @@ class SemanticSearchInitializer:
                 self._status = "Loading embedding model (this may take 10-30s)..."
 
             search_provider._ensure_db()
-            search_provider._ensure_schema()  # Loads FastEmbed model here
+
+            # Now load the embedding model by accessing the embedding function
+            # This is the critical step that loads the heavy model in the background
+            search_provider._ensure_schema()  # This will call _create_embedding_func()
+
+            # Additional step to ensure the model is fully loaded
+            # Generate a dummy embedding to trigger model initialization if needed
+            try:
+                if search_provider._embedding_func:
+                    # This will trigger the actual model loading if not already done
+                    _ = search_provider._embedding_func.generate_embeddings(["test"])
+                    logger.debug("Embedding model is fully loaded")
+            except Exception as e:
+                logger.warning(f"Error during test embedding generation: {e}")
 
             with self._lock:
                 self._result = search_provider
@@ -202,6 +234,7 @@ class NullInitializer:
     No-op initializer for when background initialization is not needed.
 
     Always returns None and completes immediately.
+    Implements BackgroundInitializerProtocol.
     """
 
     def start(self) -> None:

@@ -13,7 +13,7 @@ try:
     from ..providers import ProviderRegistry, LLMResponse
     from ..context import CodebaseContext
     from ..exceptions.delegation import ProviderNotFoundError
-    from infrastructure.exceptions import RateLimitError, AllProvidersRateLimitedError
+    from ..infrastructure.exceptions import RateLimitError, AllProvidersRateLimitedError
 except ImportError:
     from providers import ProviderRegistry, LLMResponse
     from context import CodebaseContext

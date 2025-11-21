@@ -6,7 +6,7 @@ Following CLAUDE.md: Test BEHAVIOR, not structure. Prove features work.
 
 import pytest
 import logging
-from infrastructure.exceptions import (
+from src.infrastructure.exceptions import (
     BaseError,
     RetryableError,
     NonRetryableError,

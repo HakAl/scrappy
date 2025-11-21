@@ -5,15 +5,6 @@ from typing import Any, Optional
 from .protocols import UsageQueryProtocol
 
 
-# Task preferences - can be moved to config later
-TASK_PREFERENCES = {
-    "general": ["openai", "anthropic", "gemini"],
-    "research": ["openai", "anthropic", "gemini"],
-    "coding": ["anthropic", "openai", "gemini"],
-    "analysis": ["anthropic", "openai", "gemini"],
-}
-
-
 class RateLimitRecommender:
     """
     Recommends providers based on rate limits.

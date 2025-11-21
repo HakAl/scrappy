@@ -5,12 +5,12 @@ Errors related to LLM providers, API calls, rate limits, and authentication.
 """
 
 from typing import Optional, Dict, Any
-from infrastructure.exceptions.base import (
+from .base import (
     BaseError,
     RetryableError,
     NonRetryableError
 )
-from infrastructure.exceptions.enums import (
+from .enums import (
     ErrorCategory,
     ErrorSeverity,
     RecoveryAction
