@@ -92,8 +92,9 @@ class CodebaseContext:
         self._git_history_reader = git_history_reader or self._create_default_git_history_reader()
         self._project_detector = project_detector or self._create_default_project_detector()
 
-        # Semantic search (optional, gracefully degrades if not available)
-        self._semantic_search = semantic_search or self._create_default_semantic_search()
+        # Semantic search (LAZY - only created when accessed)
+        self._semantic_search = semantic_search  # None unless explicitly injected
+        self._semantic_search_attempted = False  # Track if we tried to create it
 
         # Auto-load cache if requested (for backwards compatibility)
         if auto_load_cache:
@@ -138,21 +139,31 @@ class CodebaseContext:
         """Create default project detector."""
         return ProjectDetector(self.project_path)
 
-    def _create_default_semantic_search(self) -> Optional['SemanticSearchProtocol']:
+    def _ensure_semantic_search(self) -> Optional['SemanticSearchProtocol']:
         """
-        Create default semantic search if dependencies available.
-
-        Gracefully returns None if LanceDB not installed.
+        Lazy initialization of semantic search (only created on first access).
 
         Returns:
-            SemanticSearchProtocol instance or None
+            SemanticSearchProtocol instance or None if not available
         """
+        # Already have one (injected or created)?
+        if self._semantic_search is not None:
+            return self._semantic_search
+
+        # Already tried and failed?
+        if self._semantic_search_attempted:
+            return None
+
+        # Try to create it (once)
+        self._semantic_search_attempted = True
         try:
             from .code_chunker import SemanticCodeChunker
-            from .lancedb_search_provider import LanceDBSearchProvider
+            from .semantic import LanceDBSearchProvider
 
             chunker = SemanticCodeChunker(chunk_size=100, overlap=3)
-            return LanceDBSearchProvider(self.project_path, chunker)
+            self._semantic_search = LanceDBSearchProvider(self.project_path, chunker)
+            logger.debug("Semantic search initialized")
+            return self._semantic_search
         except ImportError as e:
             logger.debug(f"Semantic search not available: {e}")
             return None

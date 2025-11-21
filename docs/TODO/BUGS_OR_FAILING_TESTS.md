@@ -1,5 +1,7 @@
+we should load the dependencies in a non blocking manner when the app begins, not when a user runs /explore.
 
-
+explore now freezes the app and crashes it.
+UX: hangs after /explore, never shows progress, freezes and process must be manually killed
 ---
 there's an error on startup.
 UX -- hangs for 30 seconds, then prints:
@@ -59,6 +61,7 @@ cerebras not defaulted to instruct model
 ---
 
 2 explore commands: /context explore, /explore -- why??
+Context: Not explored (use /context to explore)
 
 ---
 

@@ -57,10 +57,6 @@ htmlcov/
 # Scrappy data directory
 .scrappy/
 
-# Legacy LLM Team files (migrated to .scrappy/)
-.llm_*
-.agent_audit.json
-
 .claude
 
 /NUL

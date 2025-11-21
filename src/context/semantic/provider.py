@@ -8,7 +8,7 @@ and hybrid search (vector + full-text).
 import hashlib
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 from contextlib import contextmanager
 
 import lancedb
@@ -16,8 +16,7 @@ import fasteners
 from lancedb.pydantic import LanceModel, Vector
 from lancedb.embeddings import get_registry
 
-from .protocols import (
-    CodeChunk,
+from ..protocols import (
     CodeChunkerProtocol,
     SemanticSearchProtocol,
     SearchResult
@@ -29,7 +28,6 @@ logger = logging.getLogger(__name__)
 DB_DIR_NAME = ".lancedb"
 LOCK_FILE_NAME = "update.lock"
 TABLE_NAME = "code_chunks"
-EMBEDDING_MODEL = "jinaai/jina-embeddings-v2-base-code"
 TOKEN_ESTIMATION_CHAR_RATIO = 3.0
 BATCH_SIZE = 1000
 MIN_CHUNK_SIZE = 20  # Skip very small chunks
@@ -41,17 +39,38 @@ class IndexingError(Exception):
 
 
 # --- Lazy Embedding Function Setup ---
-# NOTE: Embedding function and schema are created lazily on first use
-# to avoid 30-second startup hang from fastembed initialization.
+# NOTE: JinaEmbedFunction is registered at module import (fast, metadata only)
+# The actual TextEmbedding model is created when .create() is called (lazy)
 
 
 def _create_embedding_func():
-    """Create embedding function (called lazily on first use)."""
-    return get_registry().get("fastembed").create(name=EMBEDDING_MODEL)
+    """
+    Create embedding function (called lazily on first use).
+
+    Uses the custom fastembed-jina embedding function registered in embeddings.py.
+    This provides Jina AI's code-optimized embeddings via FastEmbed.
+
+    Returns:
+        Initialized embedding function instance
+
+    Raises:
+        Exception: If fastembed-jina is not available or initialization fails
+    """
+    # Import here to ensure JinaEmbedFunction is registered
+    from .embeddings import JinaEmbedFunction  # noqa: F401
+    return get_registry().get("fastembed-jina").create()
 
 
 def _create_code_schema(embedding_func):
-    """Create schema dynamically with embedding function."""
+    """
+    Create schema dynamically with embedding function.
+
+    Args:
+        embedding_func: Initialized embedding function
+
+    Returns:
+        CodeSchema class for LanceDB table
+    """
     class CodeSchema(LanceModel):
         """Schema for storing code chunks with vector embeddings."""
         id: str                 # Composite: "path:start_line"
@@ -78,6 +97,12 @@ class LanceDBSearchProvider:
     - Graceful error handling
     - Windows path normalization
     - Security (path traversal prevention)
+    - Custom FastEmbed + Jina embeddings for code understanding
+
+    Architecture:
+    - Follows SOLID principles (dependency injection, single responsibility)
+    - Lazy initialization (no I/O in constructor)
+    - Protocol-based design (easy to test and swap implementations)
     """
 
     def __init__(
@@ -114,12 +139,25 @@ class LanceDBSearchProvider:
             self._db = lancedb.connect(self._db_path)
 
     def _ensure_schema(self):
-        """Lazy schema initialization (creates embedding func and schema)."""
+        """
+        Lazy schema initialization (creates embedding func and schema).
+
+        Raises:
+            IndexingError: If fastembed is not available or initialization fails
+        """
         if self._code_schema is None:
-            logger.debug("Initializing embedding function (may take 10-30s on first use)...")
-            self._embedding_func = _create_embedding_func()
-            self._code_schema = _create_code_schema(self._embedding_func)
-            logger.debug("Embedding function initialized")
+            try:
+                logger.debug("Initializing embedding function (may take 10-30s on first use)...")
+                self._embedding_func = _create_embedding_func()
+                self._code_schema = _create_code_schema(self._embedding_func)
+                logger.debug("Embedding function initialized")
+            except Exception as e:
+                raise IndexingError(
+                    f"Failed to initialize embedding function. "
+                    f"Make sure semantic search dependencies are installed: "
+                    f"pip install fastembed lancedb. "
+                    f"Error: {e}"
+                ) from e
 
     # --- Helper: Path Normalization & Security ---
 
@@ -185,9 +223,11 @@ class LanceDBSearchProvider:
 
         try:
             yield
-        except lancedb.db.LanceError as e:
-            # Handle internal LanceDB corruption or errors
-            raise IndexingError(f"Search engine error: {e}")
+        except Exception as e:
+            # Handle internal LanceDB errors (catch-all since LanceDB doesn't have specific exception types)
+            if "lance" in str(type(e)).lower() or "table" in str(e).lower():
+                raise IndexingError(f"Search engine error: {e}")
+            raise  # Re-raise if not a LanceDB error
         finally:
             try:
                 lock.release()
@@ -283,7 +323,9 @@ class LanceDBSearchProvider:
 
             # Remove stale entries
             if paths_to_remove:
-                table.delete("file_path IN (@paths)", {"paths": paths_to_remove})
+                # Build SQL with quoted strings for safety
+                paths_sql = ", ".join(f"'{path}'" for path in paths_to_remove)
+                table.delete(f"file_path IN ({paths_sql})")
 
             # Add new entries
             if files_to_add:
