@@ -161,6 +161,25 @@ class WriteFileTool(Tool):
             )
 
         target = context.project_root / path
+
+        # Check if file exists and content is identical (loop prevention)
+        if target.exists():
+            try:
+                existing_content = target.read_text(encoding='utf-8')
+                # Normalize line endings for comparison
+                normalized_existing = existing_content.replace('\r\n', '\n')
+                normalized_new = content.replace('\r\n', '\n')
+
+                if normalized_existing == normalized_new:
+                    return ToolResult(
+                        True,
+                        f"Warning: File content unchanged. No modifications needed.",
+                        metadata={"chars": len(content), "path": path, "unchanged": True}
+                    )
+            except Exception:
+                # If we can't read the existing file, proceed with write
+                pass
+
         try:
             # Create parent directories if needed
             target.parent.mkdir(parents=True, exist_ok=True)

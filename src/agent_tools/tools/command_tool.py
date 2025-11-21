@@ -5,11 +5,8 @@ Provides shell command execution with security checks, platform fixes,
 retry logic, and output parsing.
 """
 
-import json
 import os
-import re
 import subprocess
-import threading
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
@@ -64,34 +61,121 @@ def safe_print(msg: str) -> None:
         print(msg.encode('utf-8', errors='replace').decode('utf-8'))
 
 
+def create_shell_executor(config: "AgentConfig") -> "ShellCommandExecutor":
+    """
+    Factory function for creating ShellCommandExecutor with default dependencies.
+
+    Creates a fully-wired ShellCommandExecutor with appropriate components
+    for the current platform.
+
+    Args:
+        config: AgentConfig with command settings
+
+    Returns:
+        Fully configured ShellCommandExecutor instance
+    """
+    from ..components import (
+        CommandSecurity,
+        WindowsSanitizer,
+        UnixSanitizer,
+        CommandAdvisor,
+        SubprocessRunner,
+        OutputParser,
+    )
+
+    # Detect platform and create appropriate sanitizer
+    sanitizer = WindowsSanitizer() if is_windows() else UnixSanitizer()
+
+    # Create security validator with custom patterns if provided
+    dangerous_patterns = getattr(config, 'dangerous_commands', None)
+    security = CommandSecurity(dangerous_patterns=dangerous_patterns)
+
+    # Create other components
+    advisor = CommandAdvisor()
+    runner = SubprocessRunner()
+    parser = OutputParser()
+
+    # Wire everything together
+    return ShellCommandExecutor(
+        config=config,
+        security=security,
+        sanitizer=sanitizer,
+        advisor=advisor,
+        runner=runner,
+        parser=parser,
+    )
+
+
 class ShellCommandExecutor:
     """
-    Core shell command execution engine.
+    Core shell command execution engine with dependency injection.
 
-    Handles:
-    - Security validation (dangerous command blocking)
-    - Platform-specific command normalization
-    - Interactive command detection
-    - Streaming output capture
-    - Automatic retry with exponential backoff
-    - Output parsing (JSON/YAML detection)
-    - Command categorization for retry pattern detection
+    Coordinates command execution through injected components following
+    the Single Responsibility Principle. Each concern is delegated to
+    a focused protocol implementation.
     """
 
-    def __init__(self, config: "AgentConfig"):
+    def __init__(
+        self,
+        config: "AgentConfig",
+        security: Optional["CommandSecurityProtocol"] = None,
+        sanitizer: Optional["PlatformSanitizerProtocol"] = None,
+        advisor: Optional["CommandAdvisorProtocol"] = None,
+        runner: Optional["SubprocessRunnerProtocol"] = None,
+        parser: Optional["OutputParserProtocol"] = None,
+    ):
         """
-        Initialize executor with configuration.
+        Initialize executor with configuration and optional dependencies.
 
         Args:
             config: AgentConfig with command settings
+            security: Command security validator (default: creates CommandSecurity)
+            sanitizer: Platform-specific sanitizer (default: auto-detects platform)
+            advisor: Command advisor (default: creates CommandAdvisor)
+            runner: Subprocess runner (default: creates SubprocessRunner)
+            parser: Output parser (default: creates OutputParser)
         """
+        from ..protocols import (
+            CommandSecurityProtocol,
+            PlatformSanitizerProtocol,
+            CommandAdvisorProtocol,
+            SubprocessRunnerProtocol,
+            OutputParserProtocol,
+        )
+        from ..components import (
+            CommandSecurity,
+            WindowsSanitizer,
+            UnixSanitizer,
+            CommandAdvisor,
+            SubprocessRunner,
+            OutputParser,
+        )
+
         self.config = config
         self.timeout = getattr(config, 'command_timeout', 120)
         self.max_output = getattr(config, 'max_command_output', 50000)
 
+        # Inject dependencies with defaults
+        self._security = security or CommandSecurity(
+            dangerous_patterns=getattr(config, 'dangerous_commands', None)
+        )
+        self._sanitizer = sanitizer or (
+            WindowsSanitizer() if is_windows() else UnixSanitizer()
+        )
+        self._advisor = advisor or CommandAdvisor()
+        self._runner = runner or SubprocessRunner()
+        self._parser = parser or OutputParser()
+
     def run(self, command: str, project_root: Path, dry_run: bool = False) -> str:
         """
-        Execute a shell command with all safety and convenience features.
+        Execute a shell command using injected components.
+
+        Coordinates the full execution pipeline:
+        1. Security validation
+        2. Platform sanitization
+        3. Pre-execution advice
+        4. Command execution
+        5. Output parsing and enrichment
 
         Args:
             command: Shell command to execute
@@ -101,91 +185,13 @@ class ShellCommandExecutor:
         Returns:
             Command output or error message
         """
-        # Security: Block dangerous commands
-        error = self._check_dangerous_command(command)
-        if error:
-            return error
-
-        # Platform-specific interceptions and fixes
-        intercept_result = self._check_platform_intercepts(command, project_root)
-        if intercept_result:
-            return intercept_result
-
-        command = self._apply_platform_fixes(command)
-
-        # Validate command for platform
-        is_valid, warning = validate_command_for_platform(command)
-        if not is_valid:
-            fallback_result = get_python_fallback(command, str(project_root))
-            if fallback_result:
-                output = fallback_result['output']
-                if fallback_result['returncode'] != 0:
-                    return f"[Python fallback] {output}"
-                return f"[Python fallback] {output}" if output else "[Python fallback] Command completed successfully"
-            return f"Error: {warning}. Use platform-appropriate tools instead."
-
-        if dry_run:
-            return f"[DRY RUN] Would run: {command}"
-
-        # Check for interactive commands
-        if self._is_interactive_command(command):
-            suggestion = self._get_interactive_suggestion(command)
-            safe_print(f"Warning: Command may require interactive input")
-            if suggestion:
-                safe_print(f"   Tip: {suggestion}")
-
-        # Check for long-running commands
-        is_long_running = self._is_long_running_command(command)
-        if is_long_running:
-            safe_print(f"Long-running command detected")
-            safe_print(f"   Timeout: {self.timeout}s | Streaming output enabled")
-
+        # 1. Security validation
         try:
-            # Use streaming with retry for all commands
-            show_progress = is_long_running
-            return self._run_command_with_retry(command, self.timeout, show_progress=show_progress, cwd=project_root)
-        except subprocess.TimeoutExpired:
-            return f"Error: Command timed out ({self.timeout}s limit)"
-        except Exception as e:
-            return f"Error running command: {str(e)}"
+            self._security.validate(command)
+        except ValueError as e:
+            return f"Error: {str(e)}"
 
-    def _check_dangerous_command(self, command: str) -> Optional[str]:
-        """
-        Check if command matches dangerous patterns.
-
-        Args:
-            command: Command to check
-
-        Returns:
-            Error message if dangerous, None if safe
-        """
-        dangerous_patterns = getattr(self.config, 'dangerous_commands', [
-            r'rm\s+-rf\s+/',
-            r'rm\s+-rf\s+\*',
-            r'format\s+[A-Za-z]:',
-            r'mkfs\.',
-            r'dd\s+if=',
-            r':\(\)\s*\{.*\}',  # Fork bomb
-            r'sudo\s+rm',
-        ])
-
-        for pattern in dangerous_patterns:
-            if re.search(pattern, command, re.IGNORECASE):
-                return f"Error: Command matches dangerous pattern '{pattern}'"
-
-        return None
-
-    def _check_platform_intercepts(self, command: str, project_root: Path) -> Optional[str]:
-        """
-        Check for platform-specific command interceptions.
-
-        Args:
-            command: Command to check
-            project_root: Project root path
-
-        Returns:
-            Error/guidance message if intercepted, None otherwise
-        """
+        # 2. Platform-specific intercepts (still using platform_utils for now)
         if is_windows():
             intercept_info = intercept_spring_initializr_download(command, str(project_root))
             if intercept_info and intercept_info.get('should_intercept'):
@@ -201,109 +207,51 @@ class ShellCommandExecutor:
                     f"Create these files manually: 1) pom.xml, 2) Application.java, "
                     f"3) application.properties"
                 )
-        return None
 
-    def _apply_platform_fixes(self, command: str) -> str:
-        """
-        Apply platform-specific command fixes.
+        # 3. Platform sanitization
+        command = self._sanitizer.sanitize(command)
 
-        Args:
-            command: Original command
+        # 4. Platform validation
+        is_valid, warning = validate_command_for_platform(command)
+        if not is_valid:
+            fallback_result = get_python_fallback(command, str(project_root))
+            if fallback_result:
+                output = fallback_result['output']
+                if fallback_result['returncode'] != 0:
+                    return f"[Python fallback] {output}"
+                return f"[Python fallback] {output}" if output else "[Python fallback] Command completed successfully"
+            return f"Error: {warning}. Use platform-appropriate tools instead."
 
-        Returns:
-            Fixed command
-        """
-        # Fix Spring Initializr URLs
-        fixed_command, was_fixed, fix_message = fix_spring_initializr_command(command)
-        if was_fixed:
-            safe_print(f"   [Auto-fix] {fix_message}")
-            command = fixed_command
+        if dry_run:
+            return f"[DRY RUN] Would run: {command}"
 
-        # Normalize npm commands for Windows
-        npm_normalized, npm_was_normalized, npm_message = normalize_npm_command_for_windows(command)
-        if npm_was_normalized:
-            safe_print(f"   [Auto-fix] {npm_message}")
-            command = npm_normalized
+        # 5. Pre-execution advice
+        advice = self._advisor.analyze_command(command)
+        if advice:
+            safe_print(f"   [ADVICE] {advice}")
 
-        # Normalize paths for Windows
-        normalized_command, was_normalized, norm_message = normalize_command_paths(command)
-        if was_normalized:
-            safe_print(f"   [Auto-fix] {norm_message}")
-            command = normalized_command
+        # 6. Check for long-running commands
+        is_long_running = self._is_long_running_command(command)
+        if is_long_running:
+            safe_print(f"Long-running command detected")
+            safe_print(f"   Timeout: {self.timeout}s | Streaming output enabled")
 
-        return command
+        # 7. Execute with retry logic
+        try:
+            show_progress = is_long_running
+            output = self._run_command_with_retry(command, self.timeout, show_progress=show_progress, cwd=project_root)
 
-    def _normalize_command_paths(self, command: str) -> str:
-        """
-        Normalize paths in command for current platform.
+            # 8. Parse and enrich output
+            parsed_output = self._parser.parse(output, max_length=self.max_output)
+            enriched_output = self._advisor.enrich_output(parsed_output, command)
 
-        Args:
-            command: Command with paths
+            return enriched_output
 
-        Returns:
-            Command with normalized paths
-        """
-        normalized, _, _ = normalize_command_paths(command)
-        return normalized
+        except TimeoutError as e:
+            return f"Error: {str(e)}"
+        except Exception as e:
+            return f"Error running command: {str(e)}"
 
-    def _normalize_npm_command(self, command: str) -> str:
-        """
-        Normalize npm command for current platform.
-
-        Args:
-            command: npm command
-
-        Returns:
-            Normalized npm command
-        """
-        normalized, _, _ = normalize_npm_command_for_windows(command)
-        return normalized
-
-    def _is_interactive_command(self, command: str) -> bool:
-        """
-        Check if command may require interactive input.
-
-        Args:
-            command: Command to check
-
-        Returns:
-            True if command is interactive
-        """
-        cmd_lower = command.lower()
-        interactive_patterns = getattr(self.config, 'interactive_commands', [
-            'npm init',
-            'npx',
-            'yarn create',
-        ])
-
-        for pattern in interactive_patterns:
-            if pattern in cmd_lower:
-                return True
-
-        return False
-
-    def _get_interactive_suggestion(self, command: str) -> str:
-        """
-        Get suggestion for handling interactive command.
-
-        Args:
-            command: Interactive command
-
-        Returns:
-            Suggestion string
-        """
-        cmd_lower = command.lower()
-
-        if 'npx' in cmd_lower:
-            return "Add '-y' flag to skip prompts: npx -y create-react-app ..."
-
-        if 'npm init' in cmd_lower:
-            return "Use 'npm init -y' to skip prompts"
-
-        if 'yarn create' in cmd_lower:
-            return "Yarn create may prompt for choices"
-
-        return ""
 
     def _is_long_running_command(self, command: str) -> bool:
         """
@@ -344,6 +292,7 @@ class ShellCommandExecutor:
         Run command with automatic retry on recoverable errors.
 
         Uses exponential backoff: 2s, 4s, 8s between retries.
+        Delegates execution to injected SubprocessRunner.
 
         Args:
             command: Shell command to execute
@@ -379,7 +328,19 @@ class ShellCommandExecutor:
                 time.sleep(wait_time)
                 retry_count = attempt
 
-            output = self._run_command_streaming(command, timeout, show_progress, cwd=cwd)
+            # Use injected runner for execution
+            try:
+                result = self._runner.execute(
+                    command=command,
+                    cwd=str(cwd) if cwd else str(Path.cwd()),
+                    timeout=timeout,
+                    stream_output=show_progress
+                )
+                output = result.stdout
+            except TimeoutError as e:
+                return f"Error: {str(e)}"
+            except Exception as e:
+                return f"Error running command: {str(e)}"
 
             # Check for recoverable errors
             is_recoverable_error = False
@@ -394,256 +355,73 @@ class ShellCommandExecutor:
 
             if not is_recoverable_error:
                 # Success or non-recoverable error
-                parsed_output = self._parse_command_output(output)
                 if retry_count > 0:
-                    parsed_output = f"[Succeeded after {retry_count} retries]\n{parsed_output}"
-                return parsed_output
+                    output = f"[Succeeded after {retry_count} retries]\n{output}"
+                return output
 
         # All retries exhausted
         return f"Error: Command failed after {max_retries} attempts.\nLast error:\n{last_error}"
 
-    def _run_command_streaming(self, command: str, timeout: int, show_progress: bool = True, cwd: Optional[Path] = None) -> str:
-        """
-        Run command with streaming output capture.
-
-        Args:
-            command: Shell command
-            timeout: Timeout in seconds
-            show_progress: Show progress indicators
-            cwd: Working directory for command (defaults to current directory)
-
-        Returns:
-            Captured output or error message
-        """
-        output_lines = []
-        process = None
-        working_dir = str(cwd) if cwd else str(Path.cwd())
-
-        try:
-            # Set environment for unbuffered output
-            env = os.environ.copy()
-            env['PYTHONUNBUFFERED'] = '1'
-            env['NODE_ENV'] = 'development'
-            env['CI'] = 'true'
-            env['npm_config_yes'] = 'true'
-
-            process = subprocess.Popen(
-                command,
-                shell=True,
-                cwd=working_dir,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-                universal_newlines=True,
-                env=env,
-                encoding='utf-8',
-                errors='replace',
-            )
-
-            start_time = time.time()
-            last_output_time = start_time
-
-            def read_output():
-                nonlocal last_output_time
-                try:
-                    for line in iter(process.stdout.readline, ''):
-                        if line:
-                            output_lines.append(line.rstrip())
-                            last_output_time = time.time()
-                            if show_progress and len(output_lines) % 10 == 0:
-                                safe_print(f"   ... {len(output_lines)} lines processed")
-                except Exception:
-                    pass
-
-            reader_thread = threading.Thread(target=read_output)
-            reader_thread.daemon = True
-            reader_thread.start()
-
-            stall_warning_shown = False
-            while process.poll() is None:
-                elapsed = time.time() - start_time
-                stall_time = time.time() - last_output_time
-
-                if elapsed > timeout:
-                    process.kill()
-                    return f"Error: Command timed out after {timeout}s\nPartial output ({len(output_lines)} lines):\n" + "\n".join(output_lines[-50:])
-
-                if stall_time > 30 and not stall_warning_shown and show_progress:
-                    safe_print(f"   No output for 30s - command may be waiting for input")
-                    safe_print(f"   Press Ctrl+C to interrupt if stuck")
-                    stall_warning_shown = True
-
-                time.sleep(0.5)
-
-            reader_thread.join(timeout=5)
-
-            output = "\n".join(output_lines)
-            output = self._truncate_output(output)
-
-            if show_progress:
-                safe_print(f"   Command completed ({len(output_lines)} lines)")
-
-            return output if output else "(no output)"
-
-        except KeyboardInterrupt:
-            if process:
-                process.kill()
-            return "Command interrupted by user (Ctrl+C)"
-        except Exception as e:
-            if process:
-                process.kill()
-            return f"Error running command: {str(e)}"
-
-    def _truncate_output(self, output: str) -> str:
-        """
-        Truncate output if it exceeds max size.
-
-        Args:
-            output: Raw output
-
-        Returns:
-            Truncated output with indicator
-        """
-        if len(output) > self.max_output:
-            return "... [truncated, showing last portion]\n" + output[-self.max_output:]
-        return output
-
-    def _parse_command_output(self, output: str) -> str:
-        """
-        Parse command output and auto-detect format.
-
-        Adds metadata for JSON/YAML detection and provides
-        helpful guidance for common errors.
-
-        Args:
-            output: Raw command output
-
-        Returns:
-            Annotated output
-        """
-        if not output or output == "(no output)":
-            return output
-
-        stripped = output.strip()
-
-        # Detect Spring Initializr errors
-        if 'start.spring.io' in output or 'spring' in output.lower():
-            error_indicators = [
-                '400 bad request', '404 not found', '500 internal server error',
-                'connection refused', 'unable to resolve', 'network error'
-            ]
-            output_lower = output.lower()
-            for error in error_indicators:
-                if error in output_lower:
-                    guidance = (
-                        "\n\n[Spring Initializr Error Detected]\n"
-                        "The Spring Initializr service returned an error. Common causes:\n"
-                        "1. Invalid dependency names (use 'web' not 'spring-boot-starter-web')\n"
-                        "2. Malformed URL parameters\n"
-                        "3. Network connectivity issues\n\n"
-                        "RECOMMENDED: Use write_file to create Spring Boot files directly:\n"
-                        "- Create pom.xml with required dependencies\n"
-                        "- Create main Application.java class\n"
-                        "- Create application.properties\n"
-                        "This is more reliable than downloading from Spring Initializr."
-                    )
-                    return output + guidance
-
-        # Try JSON detection
-        if stripped.startswith('{') or stripped.startswith('['):
-            try:
-                parsed = json.loads(stripped)
-                format_info = "[Auto-detected: JSON output]\n"
-                if isinstance(parsed, dict):
-                    format_info += f"[Structure: Object with {len(parsed)} keys]\n"
-                elif isinstance(parsed, list):
-                    format_info += f"[Structure: Array with {len(parsed)} items]\n"
-                return format_info + output
-            except json.JSONDecodeError:
-                pass
-
-        # Try YAML detection
-        try:
-            import yaml
-            if ':' in stripped and not stripped.startswith('Error'):
-                lines = stripped.split('\n')
-                yaml_indicators = 0
-                for line in lines[:10]:
-                    if line.strip() and ':' in line:
-                        if line.strip().endswith(':') or ': ' in line:
-                            yaml_indicators += 1
-                    if line.startswith('  ') or line.startswith('- '):
-                        yaml_indicators += 1
-
-                if yaml_indicators >= 3:
-                    try:
-                        parsed = yaml.safe_load(stripped)
-                        if isinstance(parsed, (dict, list)):
-                            format_info = "[Auto-detected: YAML output]\n"
-                            if isinstance(parsed, dict):
-                                format_info += f"[Structure: Object with {len(parsed)} keys]\n"
-                            elif isinstance(parsed, list):
-                                format_info += f"[Structure: Array with {len(parsed)} items]\n"
-                            return format_info + output
-                    except Exception:
-                        pass
-        except ImportError:
-            pass
-
-        return output
-
     def _categorize_command_approach(self, command: str) -> str:
         """
-        Categorize command into approach type for retry tracking.
-
-        This helps detect when the LLM retries the same failing approach.
+        Backward compatibility: Categorize command approach for retry pattern detection.
 
         Args:
-            command: Shell command
+            command: Shell command to categorize
 
         Returns:
-            Approach type string
+            Category string (e.g., "spring_initializr_download", "npm_create_project")
         """
-        command_lower = command.lower()
+        cmd_lower = command.lower()
 
-        # Network download approaches
-        if 'start.spring.io' in command_lower:
-            return 'spring_initializr_download'
-        if 'curl' in command_lower or 'wget' in command_lower:
-            return 'curl_download'
-        if 'invoke-webrequest' in command_lower or 'downloadfile' in command_lower:
-            return 'powershell_download'
+        # Spring Initializr downloads
+        if 'start.spring.io' in cmd_lower:
+            return "spring_initializr_download"
 
-        # Project scaffolding
-        if 'npm create' in command_lower or 'npx create' in command_lower:
-            return 'npm_create_project'
-        if 'npm init' in command_lower:
-            return 'npm_init'
+        # PowerShell downloads
+        if 'invoke-webrequest' in cmd_lower or 'downloadfile' in cmd_lower:
+            return "powershell_download"
 
-        # Directory operations
-        if command_lower.startswith('mkdir '):
-            if '/' in command and '\\' not in command:
-                return 'mkdir_unix_style'
-            return 'mkdir'
+        # curl/wget downloads
+        if ('curl' in cmd_lower or 'wget' in cmd_lower) and ('http://' in cmd_lower or 'https://' in cmd_lower):
+            return "curl_download"
 
-        # Package management
-        if 'npm install' in command_lower or 'npm i ' in command_lower:
-            return 'npm_install'
+        # npm create/npx create
+        if ('npm create' in cmd_lower or 'npx create' in cmd_lower or 'npx -y create' in cmd_lower):
+            return "npm_create_project"
 
-        # General command categories
-        if any(unix_cmd in command_lower.split()[0] for unix_cmd in ['grep', 'cat', 'sed', 'awk', 'find']):
-            return 'unix_command'
+        # npm init
+        if 'npm init' in cmd_lower:
+            return "npm_init"
 
-        return 'shell_command'
+        # mkdir with unix-style paths (forward slashes)
+        if 'mkdir' in cmd_lower and '/' in command:
+            return "mkdir_unix_style"
+
+        # mkdir (general)
+        if 'mkdir' in cmd_lower:
+            return "mkdir"
+
+        # npm install
+        if 'npm install' in cmd_lower or 'npm i ' in cmd_lower or cmd_lower.endswith('npm i'):
+            return "npm_install"
+
+        # Unix commands
+        unix_commands = ['grep', 'cat', 'find', 'ls', 'head', 'tail', 'sed', 'awk']
+        for unix_cmd in unix_commands:
+            if cmd_lower.startswith(unix_cmd + ' ') or cmd_lower == unix_cmd:
+                return "unix_command"
+
+        # Default: shell command
+        return "shell_command"
 
     def _check_retry_pattern(self, command: str, failed_commands: list) -> str:
         """
-        Check if command follows a pattern that has already failed.
+        Backward compatibility: Check if command approach has failed before.
 
         Args:
             command: Command about to be executed
-            failed_commands: List of previously failed commands
+            failed_commands: List of previous failed commands with approach/error info
 
         Returns:
             Warning message if retry pattern detected, empty string otherwise
@@ -652,44 +430,115 @@ class ShellCommandExecutor:
             return ""
 
         current_approach = self._categorize_command_approach(command)
-        failed_approaches = [f['approach'] for f in failed_commands]
 
-        if current_approach in failed_approaches:
-            count = failed_approaches.count(current_approach)
-            if count >= 1:
-                same_approach_failures = [f for f in failed_commands if f['approach'] == current_approach]
-                last_failure = same_approach_failures[-1]
+        # Count how many times this approach has failed
+        failure_count = 0
+        last_error = ""
+        for failed in failed_commands:
+            if failed.get('approach') == current_approach:
+                failure_count += 1
+                last_error = failed.get('error', '')
 
-                suggestions = {
-                    'spring_initializr_download': "STOP using network downloads. Use write_file to create Spring Boot files directly: pom.xml, Application.java, etc.",
-                    'curl_download': "STOP using curl. Use write_file tool to create files directly instead of downloading",
-                    'powershell_download': "STOP using PowerShell downloads. Use write_file tool to create files directly",
-                    'mkdir_unix_style': "Use backslashes (website\\\\frontend) or PowerShell New-Item command",
-                    'npm_create_project': "STOP using npm create. Use write_file to create package.json and source files directly",
-                    'unix_command': "Use platform tools (read_file, search_code, list_files) instead of Unix commands",
-                }
+        # Check for scaffolding approach failures (cross-approach warning)
+        scaffolding_approaches = {
+            'spring_initializr_download', 'npm_create_project', 'npm_init',
+            'curl_download', 'powershell_download'
+        }
+        is_current_scaffolding = current_approach in scaffolding_approaches
+        has_scaffolding_failed = any(
+            failed.get('approach') in scaffolding_approaches
+            for failed in failed_commands
+        )
 
-                suggestion = suggestions.get(current_approach, "Try a completely different approach")
-
+        if failure_count == 0:
+            # No exact match, but check for scaffolding cross-failure
+            if is_current_scaffolding and has_scaffolding_failed:
                 return (
-                    f"CRITICAL: '{current_approach}' approach already failed {count} time(s). "
-                    f"Last error: {last_failure['error'][:100]}... "
-                    f"YOU MUST USE A DIFFERENT STRATEGY. {suggestion}"
+                    "\n[WARNING] A scaffolding approach has already failed. "
+                    "Consider using write_file to create the project structure directly.\n"
                 )
+            return ""
 
-        # Warn if trying scaffolding when others have failed
-        scaffolding_approaches = [
-            'spring_initializr_download', 'curl_download', 'powershell_download', 'npm_create_project'
-        ]
-        if current_approach in scaffolding_approaches:
-            scaffolding_failures = [f for f in failed_commands if f['approach'] in scaffolding_approaches]
-            if scaffolding_failures:
-                return (
-                    f"WARNING: Scaffolding/download approaches have failed {len(scaffolding_failures)} time(s). "
-                    f"STRONGLY RECOMMEND using write_file to create project files directly instead of {current_approach}."
-                )
+        # Specific warnings for known problematic approaches
+        warning_msg = f"\n[CRITICAL WARNING] The approach '{current_approach}' has already failed {failure_count} time(s).\n"
+        # Truncate error message if 200 chars or longer
+        if len(last_error) >= 200:
+            warning_msg += f"Last error: {last_error[:200]}...\n\n"
+        else:
+            warning_msg += f"Last error: {last_error}\n\n"
 
-        return ""
+        # Spring Initializr specific advice
+        if 'spring_initializr' in current_approach:
+            warning_msg += (
+                "RECOMMENDED: Stop trying Spring Initializr downloads.\n"
+                "Instead, use write_file to create the Spring Boot project structure directly:\n"
+                "1. Create pom.xml with required dependencies\n"
+                "2. Create src/main/java/com/example/Application.java\n"
+                "3. Create src/main/resources/application.properties\n"
+            )
+
+        # mkdir unix-style specific advice
+        elif 'mkdir_unix_style' in current_approach:
+            warning_msg += (
+                "RECOMMENDED: Use backslashes (\\) instead of forward slashes (/) for Windows paths,\n"
+                "or use PowerShell's New-Item cmdlet.\n"
+            )
+
+        # General scaffolding advice
+        elif any(term in current_approach for term in ['npm_create', 'npm_init']):
+            warning_msg += (
+                "WARNING: Scaffolding commands often fail in non-interactive environments.\n"
+                "Consider using write_file to create project structure manually.\n"
+            )
+
+        return warning_msg
+
+    def _parse_command_output(self, output: str) -> str:
+        """
+        Backward compatibility: Parse command output.
+
+        Delegates to the injected OutputParser component.
+
+        Args:
+            output: Raw command output
+
+        Returns:
+            Parsed and formatted output
+        """
+        return self._parser.parse(output, max_length=self.max_output)
+
+    def _run_command_streaming(
+        self,
+        command: str,
+        timeout: int,
+        show_progress: bool = True
+    ) -> str:
+        """
+        Backward compatibility: Run command with streaming output.
+
+        This method is kept for backward compatibility with tests.
+        Delegates to the injected SubprocessRunner.
+
+        Args:
+            command: Shell command to execute
+            timeout: Maximum time in seconds
+            show_progress: Show detailed progress
+
+        Returns:
+            Command output
+        """
+        try:
+            result = self._runner.execute(
+                command=command,
+                cwd=str(Path.cwd()),
+                timeout=timeout,
+                stream_output=show_progress
+            )
+            return result.stdout if result.stdout else "(no output)"
+        except TimeoutError as e:
+            return f"Error: {str(e)}"
+        except Exception as e:
+            return f"Error running command: {str(e)}"
 
 
 class CommandTool(Tool):
@@ -716,8 +565,8 @@ class CommandTool(Tool):
         self._executor = executor or self._create_default_executor()
 
     def _create_default_executor(self) -> ShellCommandExecutor:
-        """Create default shell command executor."""
-        return ShellCommandExecutor(self._config)
+        """Create default shell command executor using factory function."""
+        return create_shell_executor(self._config)
 
     @property
     def name(self) -> str:
@@ -742,6 +591,9 @@ class CommandTool(Tool):
         """
         Execute shell command.
 
+        All validation, platform fixes, and execution logic is handled
+        by the injected ShellCommandExecutor and its components.
+
         Args:
             context: ToolContext with project root and settings
             **kwargs: Must include 'command' parameter
@@ -754,31 +606,18 @@ class CommandTool(Tool):
         if not command:
             return ToolResult(False, "", "No command specified")
 
-        # Check for dangerous commands first
-        danger_check = self._executor._check_dangerous_command(command)
-        if danger_check:
-            return ToolResult(False, "", danger_check)
-
-        # Check for platform interceptions
-        intercept = self._executor._check_platform_intercepts(command, context.project_root)
-        if intercept:
-            return ToolResult(False, "", intercept)
-
-        # Dry run check
-        if context.dry_run:
-            return ToolResult(
-                True,
-                f"[DRY RUN] Would run: {command}",
-                metadata={"dry_run": True, "command": command}
-            )
-
         try:
-            # Execute command
-            output = self._executor.run(command, context.project_root, dry_run=False)
+            # Execute command - all security checks, platform fixes, and
+            # validation are handled by the executor and its components
+            output = self._executor.run(command, context.project_root, dry_run=context.dry_run)
 
             # Check if output indicates an error
             if output.startswith("Error"):
                 return ToolResult(False, "", output)
+
+            # Check for dry run indicator
+            if output.startswith("[DRY RUN]"):
+                return ToolResult(True, output, metadata={"dry_run": True, "command": command})
 
             return ToolResult(
                 True,

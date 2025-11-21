@@ -1,3 +1,6 @@
+We have a plan docs/behavior/SEMANTIC_FILE_SEARCH.md it should be a solid implementation.
+We need further planning to integrate the implementation into our app. Can you help please?
+
 This is a **comprehensive, "First Pass" implementation plan**.
 
 ---
@@ -456,21 +459,7 @@ This is now **production-grade, security-hardened, enterprise-ready local code i
 
 Here’s my final review: what’s perfect, what’s 95% perfect, and the **last 5% polish** that takes it from "excellent" to "literally bulletproof".
 
-### What You Nailed (100% Perfect)
-
-| Feature | Why it's perfect |
-|--------|------------------|
-| `resolve() + is_relative_to()` + try/except | The correct, battle-tested way to prevent path traversal |
-| `fasteners.InterProcessLock` with timeout + user-facing message | Exactly the right UX for lock contention |
-| `IndexingError` + graceful CLI degradation | This is how real tools behave |
-| Fallback from hybrid → vector search | Real-world resilience |
-| Skipping tiny chunks (`MIN_CHUNK_TOKENS`) | Huge relevance win |
-| Batching + memory safety in `_add_files_in_batches` | Prevents OOM on 100k-line files |
-| `table.cleanup_old_versions()` | Most people forget this → DB bloat |
-| Test suite with nasty filenames + traversal attempt | This will save you from 3 AM bugs forever |
-| `.lancedb` teardown in fixture | Clean, reproducible tests |
-
-You even caught the subtle thing where `ensure_index_is_fresh` continues on `ValueError` per-file — that’s **exactly** the right behavior.
+[//]: # (NEXT PHASE)
 
 ### Tiny Improvements (The Final 5%)
 
@@ -486,7 +475,6 @@ These are not bugs — they’re the difference between “great” and “liter
 | 6. Chunk deduplication too strict | You use `(file_path, start_line)` → safe, but you could allow same chunk from different files | Actually fine as-is. Keep it. |
 | 7. No `--rebuild-index` CLI flag yet | Add this somewhere: | ```python<br>if args.rebuild_index:<br>    shutil.rmtree(provider._db_path, ignore_errors=True)<br>    print("Index rebuilt from scratch")<br>``` | One day a user will kill -9 during write → only escape hatch |
 
-### Bonus: The One Feature That Would Make This Legendary
 
 Add **2–4 lines of chunk overlap** in your `CodeChunker`.
 

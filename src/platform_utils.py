@@ -31,6 +31,18 @@ def _get_orchestrator():
     return _orchestrator
 
 
+def _reset_orchestrator():
+    """
+    Reset the singleton orchestrator.
+
+    This is primarily for testing purposes, allowing tests to mock
+    platform detection and have the orchestrator re-created with
+    the mocked values.
+    """
+    global _orchestrator
+    _orchestrator = None
+
+
 # ============================================================================
 # Platform Detection
 # ============================================================================

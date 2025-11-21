@@ -1,12 +1,9 @@
-we have 29 failing tests from recent refactoring work. they may highlight errors in code, be bad/duplicate
-  tests, or need updated w/ new imports / apis. can you check into them?
- There are a few test failures remaining that appear to be from incomplete refactoring:
 
 
-<!-- MEDIUM PRIORITY - 30-50% Coverage: -->
+
+<!-- MEDIUM PRIORITY - TEST NEEDED / INVESTIGATION / REPAIR: -->
 
 src\cli\smart_query.py
-
 
 src\cli\research_handlers\testing.py
 src\cli\research_handlers\dependency_info.py
@@ -38,16 +35,19 @@ MANY likely bugs: tests/test_import_utils.py
 
 todos in: tests/agent_tools/test_output_formatter.py
 
+---
 
 too big?
-src/platform/fallback.py
-src/platform/translation.py
-src/orchestrator/core.py
-src/orchestrator/cache.py
-src/orchestrator/rate_limiting/tracker.py
+src/agent/core.py
+src/agent_tools/tools/command_tool.py
 src/cli/exceptions.py
 src/cli/output.py
 src/cli/rich_output.py
 src/context/codebase_context.py
+src/orchestrator/core.py
+src/orchestrator/cache.py
+src/orchestrator/rate_limiting/tracker.py
+src/platform/fallback.py
+src/platform/translation.py
 src/task_router/router.py
-src/agent/core.py
+

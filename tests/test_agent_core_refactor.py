@@ -547,101 +547,171 @@ class TestCommandExecutionWithRetry:
     """Tests for _run_command_with_retry behavior (now in ShellCommandExecutor)."""
 
     @pytest.mark.unit
-    @patch.object(ShellCommandExecutor, '_run_command_streaming')
-    @patch.object(ShellCommandExecutor, '_parse_command_output')
-    def test_successful_command_returns_immediately(self, mock_parse, mock_stream, agent_with_config):
+    def test_successful_command_returns_immediately(self, agent_with_config):
         """Should return immediately on successful command."""
-        mock_stream.return_value = "Success output"
-        mock_parse.return_value = "Parsed: Success output"
+        from src.agent_tools.protocols import ExecutionResult
+        from tests.helpers import MockSubprocessRunner
+
+        # Create mock runner that returns success
+        mock_runner = MockSubprocessRunner(
+            result=ExecutionResult(
+                stdout="Success output",
+                stderr="",
+                exit_code=0,
+                execution_time=0.1
+            )
+        )
 
         executor = agent_with_config._command_executor
+        executor._runner = mock_runner  # Inject mock runner
+
         result = executor._run_command_with_retry("echo test", 10)
 
-        assert mock_stream.call_count == 1
+        assert mock_runner.execute_called
+        assert len(mock_runner.executed_commands) == 1
         assert "Success" in result
 
     @pytest.mark.unit
-    @patch.object(ShellCommandExecutor, '_run_command_streaming')
-    @patch.object(ShellCommandExecutor, '_parse_command_output')
     @patch('time.sleep')
-    def test_retries_on_connection_reset(self, mock_sleep, mock_parse, mock_stream, agent_with_config):
+    def test_retries_on_connection_reset(self, mock_sleep, agent_with_config):
         """Should retry on connection reset error."""
-        mock_stream.side_effect = [
-            "Error: connection reset by peer",
-            "Success output"
-        ]
-        mock_parse.return_value = "Parsed: Success output"
+        from src.agent_tools.protocols import ExecutionResult
 
+        # Create a mock runner that fails then succeeds
+        class MockRunnerWithRetry:
+            def __init__(self):
+                self.call_count = 0
+
+            def execute(self, command, cwd, timeout=None, stream_output=False):
+                self.call_count += 1
+                if self.call_count == 1:
+                    return ExecutionResult(
+                        stdout="Error: connection reset by peer",
+                        stderr="",
+                        exit_code=1,
+                        execution_time=0.1
+                    )
+                return ExecutionResult(
+                    stdout="Success output",
+                    stderr="",
+                    exit_code=0,
+                    execution_time=0.1
+                )
+
+        mock_runner = MockRunnerWithRetry()
         executor = agent_with_config._command_executor
+        executor._runner = mock_runner
+
         result = executor._run_command_with_retry("curl example.com", 10)
 
-        assert mock_stream.call_count == 2
+        assert mock_runner.call_count == 2
         assert mock_sleep.called
         assert "Success" in result
 
     @pytest.mark.unit
-    @patch.object(ShellCommandExecutor, '_run_command_streaming')
-    @patch.object(ShellCommandExecutor, '_parse_command_output')
     @patch('time.sleep')
-    def test_retries_on_timeout_error(self, mock_sleep, mock_parse, mock_stream, agent_with_config):
+    def test_retries_on_timeout_error(self, mock_sleep, agent_with_config):
         """Should retry on timeout errors."""
-        # Pattern needs 'error' AND 'timed out' both present (case insensitive)
-        mock_stream.side_effect = [
-            "npm ERR! network error: request timed out",
-            "Success"
-        ]
-        mock_parse.return_value = "Success"
+        from src.agent_tools.protocols import ExecutionResult
 
+        class MockRunnerWithRetry:
+            def __init__(self):
+                self.call_count = 0
+
+            def execute(self, command, cwd, timeout=None, stream_output=False):
+                self.call_count += 1
+                if self.call_count == 1:
+                    return ExecutionResult(
+                        stdout="npm ERR! network error: request timed out",
+                        stderr="",
+                        exit_code=1,
+                        execution_time=0.1
+                    )
+                return ExecutionResult(stdout="Success", stderr="", exit_code=0, execution_time=0.1)
+
+        mock_runner = MockRunnerWithRetry()
         executor = agent_with_config._command_executor
+        executor._runner = mock_runner
+
         result = executor._run_command_with_retry("npm install", 10)
 
-        assert mock_stream.call_count == 2
+        assert mock_runner.call_count == 2
 
     @pytest.mark.unit
-    @patch.object(ShellCommandExecutor, '_run_command_streaming')
     @patch('time.sleep')
-    def test_gives_up_after_max_retries(self, mock_sleep, mock_stream, agent_with_config):
+    def test_gives_up_after_max_retries(self, mock_sleep, agent_with_config):
         """Should give up after max retry attempts."""
-        mock_stream.return_value = "Error: connection refused repeatedly"
+        from src.agent_tools.protocols import ExecutionResult
+        from tests.helpers import MockSubprocessRunner
+
+        mock_runner = MockSubprocessRunner(
+            result=ExecutionResult(
+                stdout="Error: connection refused repeatedly",
+                stderr="",
+                exit_code=1,
+                execution_time=0.1
+            )
+        )
 
         executor = agent_with_config._command_executor
+        executor._runner = mock_runner
         result = executor._run_command_with_retry("curl example.com", 10, max_retries=3)
 
-        assert mock_stream.call_count == 3
+        assert len(mock_runner.executed_commands) == 3
         assert "failed after 3 attempts" in result
 
     @pytest.mark.unit
-    @patch.object(ShellCommandExecutor, '_run_command_streaming')
-    @patch.object(ShellCommandExecutor, '_parse_command_output')
-    def test_no_retry_on_non_recoverable_error(self, mock_parse, mock_stream, agent_with_config):
+    def test_no_retry_on_non_recoverable_error(self, agent_with_config):
         """Should not retry on non-recoverable errors."""
-        mock_stream.return_value = "Error: file not found"
-        mock_parse.return_value = "Error: file not found"
+        from src.agent_tools.protocols import ExecutionResult
+        from tests.helpers import MockSubprocessRunner
+
+        mock_runner = MockSubprocessRunner(
+            result=ExecutionResult(
+                stdout="Error: file not found",
+                stderr="",
+                exit_code=1,
+                execution_time=0.1
+            )
+        )
 
         executor = agent_with_config._command_executor
+        executor._runner = mock_runner
         result = executor._run_command_with_retry("cat missing.txt", 10)
 
-        # Should only try once
-        assert mock_stream.call_count == 1
+        # Should only try once (non-recoverable error)
+        assert len(mock_runner.executed_commands) == 1
         assert "file not found" in result
 
 
     @pytest.mark.unit
-    @patch.object(ShellCommandExecutor, '_run_command_streaming')
-    @patch.object(ShellCommandExecutor, '_parse_command_output')
     @patch('time.sleep')
-    def test_reports_retry_count_on_success(self, mock_sleep, mock_parse, mock_stream, agent_with_config):
+    def test_reports_retry_count_on_success(self, mock_sleep, agent_with_config):
         """Should report retry count when eventually successful."""
-        mock_stream.side_effect = [
-            "Error: ECONNRESET",
-            "Success"
-        ]
-        mock_parse.return_value = "Parsed output"
+        from src.agent_tools.protocols import ExecutionResult
 
+        class MockRunnerWithRetry:
+            def __init__(self):
+                self.call_count = 0
+
+            def execute(self, command, cwd, timeout=None, stream_output=False):
+                self.call_count += 1
+                if self.call_count == 1:
+                    return ExecutionResult(
+                        stdout="Error: ECONNRESET",
+                        stderr="",
+                        exit_code=1,
+                        execution_time=0.1
+                    )
+                return ExecutionResult(stdout="Success", stderr="", exit_code=0, execution_time=0.1)
+
+        mock_runner = MockRunnerWithRetry()
         executor = agent_with_config._command_executor
+        executor._runner = mock_runner
+
         result = executor._run_command_with_retry("curl example.com", 10)
 
-        assert "retry" in result.lower() or "Parsed output" in result
+        assert "retry" in result.lower() or "success" in result.lower()
 
 
 class TestCommandStreamingExecution:

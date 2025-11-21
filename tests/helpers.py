@@ -1284,6 +1284,187 @@ def create_test_rate_limit_tracker(
 
 
 # =============================================================================
+# Command Tool Protocol Test Doubles
+# =============================================================================
+
+from src.agent_tools.protocols import (
+    ExecutionResult,
+    CommandSecurityProtocol,
+    OutputParserProtocol,
+    CommandAdvisorProtocol,
+    PlatformSanitizerProtocol,
+    SubprocessRunnerProtocol,
+)
+
+
+class MockCommandSecurity:
+    """Test double for CommandSecurityProtocol."""
+
+    def __init__(self, should_block: bool = False, error_message: str = ""):
+        """
+        Initialize mock command security.
+
+        Args:
+            should_block: If True, validate() will raise an exception
+            error_message: Error message for blocked commands
+        """
+        self.should_block = should_block
+        self.error_message = error_message or "Command blocked for security reasons"
+        self.validate_called = False
+        self.validated_commands: List[str] = []
+
+    def validate(self, command: str) -> None:
+        """Validate command safety (mock)."""
+        self.validate_called = True
+        self.validated_commands.append(command)
+        if self.should_block:
+            raise ValueError(self.error_message)
+
+
+class MockOutputParser:
+    """Test double for OutputParserProtocol."""
+
+    def __init__(self, parsed_output: Optional[str] = None, detected_format: str = "text"):
+        """
+        Initialize mock output parser.
+
+        Args:
+            parsed_output: Output to return from parse() (if None, returns input)
+            detected_format: Format to return from detect_format()
+        """
+        self.parsed_output = parsed_output
+        self.detected_format = detected_format
+        self.parse_called = False
+        self.detect_format_called = False
+        self.parsed_inputs: List[str] = []
+
+    def parse(self, raw_output: str, max_length: int = 30000) -> str:
+        """Parse and format raw command output (mock)."""
+        self.parse_called = True
+        self.parsed_inputs.append(raw_output)
+        if self.parsed_output is not None:
+            return self.parsed_output
+        return raw_output[:max_length]
+
+    def detect_format(self, output: str) -> str:
+        """Detect output format (mock)."""
+        self.detect_format_called = True
+        return self.detected_format
+
+
+class MockCommandAdvisor:
+    """Test double for CommandAdvisorProtocol."""
+
+    def __init__(
+        self,
+        advice: Optional[str] = None,
+        enriched_output: Optional[str] = None
+    ):
+        """
+        Initialize mock command advisor.
+
+        Args:
+            advice: Advice to return from analyze_command()
+            enriched_output: Output to return from enrich_output() (if None, returns input)
+        """
+        self.advice = advice
+        self.enriched_output = enriched_output
+        self.analyze_called = False
+        self.enrich_called = False
+        self.analyzed_commands: List[str] = []
+
+    def analyze_command(self, command: str) -> Optional[str]:
+        """Analyze command and provide pre-execution advice (mock)."""
+        self.analyze_called = True
+        self.analyzed_commands.append(command)
+        return self.advice
+
+    def enrich_output(self, output: str, command: str) -> str:
+        """Enrich output with contextual information (mock)."""
+        self.enrich_called = True
+        if self.enriched_output is not None:
+            return self.enriched_output
+        return output
+
+
+class MockPlatformSanitizer:
+    """Test double for PlatformSanitizerProtocol."""
+
+    def __init__(
+        self,
+        sanitized_command: Optional[str] = None,
+        normalized_path: Optional[str] = None
+    ):
+        """
+        Initialize mock platform sanitizer.
+
+        Args:
+            sanitized_command: Command to return from sanitize() (if None, returns input)
+            normalized_path: Path to return from normalize_path() (if None, returns input)
+        """
+        self.sanitized_command = sanitized_command
+        self.normalized_path = normalized_path
+        self.sanitize_called = False
+        self.normalize_path_called = False
+        self.sanitized_commands: List[str] = []
+
+    def sanitize(self, command: str) -> str:
+        """Apply platform-specific command fixes (mock)."""
+        self.sanitize_called = True
+        self.sanitized_commands.append(command)
+        if self.sanitized_command is not None:
+            return self.sanitized_command
+        return command
+
+    def normalize_path(self, path: str) -> str:
+        """Normalize path for current platform (mock)."""
+        self.normalize_path_called = True
+        if self.normalized_path is not None:
+            return self.normalized_path
+        return path
+
+
+class MockSubprocessRunner:
+    """Test double for SubprocessRunnerProtocol."""
+
+    def __init__(
+        self,
+        result: Optional[ExecutionResult] = None,
+        should_timeout: bool = False
+    ):
+        """
+        Initialize mock subprocess runner.
+
+        Args:
+            result: ExecutionResult to return (default: success result)
+            should_timeout: If True, raises TimeoutError
+        """
+        self.result = result or ExecutionResult(
+            stdout="test output",
+            stderr="",
+            exit_code=0,
+            execution_time=0.1
+        )
+        self.should_timeout = should_timeout
+        self.execute_called = False
+        self.executed_commands: List[tuple[str, str]] = []
+
+    def execute(
+        self,
+        command: str,
+        cwd: str,
+        timeout: Optional[float] = None,
+        stream_output: bool = False,
+    ) -> ExecutionResult:
+        """Execute command in subprocess (mock)."""
+        self.execute_called = True
+        self.executed_commands.append((command, cwd))
+        if self.should_timeout:
+            raise TimeoutError(f"Command timed out after {timeout}s")
+        return self.result
+
+
+# =============================================================================
 # Platform Test Doubles
 # =============================================================================
 
