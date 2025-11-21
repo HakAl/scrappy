@@ -1,17 +1,11 @@
-i removed semantic_search_initializer and didn't finish cleanup from cli -- it's probably the correct place to
-  integrate, but i'm not 100%
-
-Got it. You **don’t want to block startup at all** — even for 20–40 seconds on first run.
-
-You want **true zero-block background loading**, even on first launch when the 1.3 GB Jina model needs to be downloaded.
-
-That’s a hard but solvable problem.
+Zero-block background loading**, even on first launch when the 1.3 GB Jina model needs to be downloaded.
 
 FastEmbed + LanceDB + Rich + background thread:
 
 ### The Real Solution: Fully Background Model Download Using Rich via Thread-Safe Live Update
 
-We bypass `tqdm` completely and **replace FastEmbed’s internal downloader** with one that reports progress to a **Rich `Live` object** that lives on the main thread.
+We bypass `tqdm` completely and **replace FastEmbed’s internal downloader** 
+with one that reports progress to a **Rich `Live` object** that lives on the main thread.
 
 This gives you:
 
@@ -24,10 +18,9 @@ This gives you:
 
 ### Step-by-Step Fix (Copy-Paste Ready)
 
-#### 1. Add this file: `src/context/semantic/model_downloader.py`
+#### 1. Example POC
 
 ```python
-# src/context/semantic/model_downloader.py
 import threading
 from pathlib import Path
 from typing import Optional, Callable

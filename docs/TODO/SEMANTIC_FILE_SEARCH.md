@@ -1106,73 +1106,24 @@ class LanceDBSearchProvider:
 [//]: # (TODO)
 
 # P0
-finish semantic search integration -- whe have partial implementation outlined above
+
+Finish semantic search integration -- partial implementation outlined above
+
+Potential integration strategy for desired UX: docs/TODO/FASTEMBED_REVIEW.md
+
+Required Features
     - loads in background on app start with rich progress
     - progress displayed clearly to user
     - progress display goes away shortly after complete
 
- - add logs or a way to interact. where's the db?
- - indexing htmlcov, temp, cache, everything
 
-
+# P1
 
 --------------------------------------------------------
-1.  Token estimator still drifts on minified / Unicode files
+Don't index: htmlcov, temp, cache, everything
 --------------------------------------------------------
-`len(content)/3` is fine for normal source, but collapses on:
-- minified JS (1 char ≈ 1 token)  
-- files with emoji or CJK comments (1 glyph ≈ 2–3 tokens).
 
-Cheap improvement: keep a running **tiktoken** counter once you are within 20 % of the budget:
-
-```python
-import tiktoken
-enc = tiktoken.get_encoding("cl100k_base")
-...
-if used_tokens + cost > max_tokens * 0.8:          # 80 % trigger
-    cost = len(enc.encode(content))
-    if used_tokens + cost > max_tokens:
-        ...
-```
-
-You only pay for the exact count on the last few chunks.
-
---------------------------------------------------------
-2.  Hash collision safety
---------------------------------------------------------
-MD5 is fine for change detection, but if you ever expose `content_hash` to the user (e.g. for de-duplication UI) move to Blake3 or SHA-256 to avoid “but MD5 is broken” conversations.  One-line change, zero perf hit for code-base sizes.
-
---------------------------------------------------------
-3.  FTS “replace=True” blocks readers
---------------------------------------------------------
-Re-building the FTS index locks the table for ~100–400 ms per 10 k rows.  
-LanceDB ≥ 0.6 lets you build incrementally:
-
-```python
-table.create_fts_index("content", replace=False)
-```
-
-Do it once after the **first** batch and never again; deletes are automatically handled.  Readers stay lock-free.
-
-
---------------------------------------------------------
-5.  Optional: HNSW instead of IVF-PQ for < 1 M rows
---------------------------------------------------------
-IVF-PQ is fastest for > 1 M vectors, but for the usual 50 k–200 k code-chunk data set HNSW gives *lower* latency and better recall.  One-liner:
-
-```python
-table.create_index(
-    index_type="HNSW",
-    metric="cosine",
-    m=32,
-    ef_construction=150,
-    replace=True
-)
-```
-
-===
-
-The logic of **"Trust Git first, fall back to regex, check for binary last"** is the correct hierarchy for a developer tool.
+"Trust Git first, fall back to regex, check for binary last" is the correct hierarchy for a developer tool.
 
 ### 1. The "Substring Match" Bug (Critical)
 Your current regexes are too loose.
@@ -1241,9 +1192,9 @@ if stat.st_size > MAX_FILE_SIZE:
 
 ---
 
-### Polished Code (Incorporating Fixes)
+### Example Code
 
-Here is the refined version of your strategy. It fixes the regex boundaries and adds the size limit.
+Example regex boundaries and adds the size limit.
 
 ```python
 from dataclasses import dataclass, field
@@ -1298,87 +1249,62 @@ class IndexFilterConfig:
             return True
             
         return False
-
-class FileEnumerator:
-    def __init__(self, project_path: Path, config: IndexFilterConfig):
-        self.root = project_path
-        self.cfg = config
-
-    def _list_files_git(self) -> set[Path]:
-        try:
-            # -z is crucial for filenames with spaces/newlines
-            cmd = ["git", "ls-files", "-z", "--cached"]
-            if self.cfg.include_untracked:
-                cmd.append("--others")
-                cmd.append("--exclude-standard") # Important: Respect .gitignore for untracked files
-                
-            out = subprocess.check_output(cmd, cwd=self.root, stderr=subprocess.DEVNULL)
-            
-            # Decode and build paths
-            paths = set()
-            for p in out.split(b'\0'):
-                if not p: continue
-                try:
-                    # Git returns bytes relative to root
-                    fpath = self.root / p.decode('utf-8')
-                    if fpath.is_file(): # Handle edge cases where file was deleted but listed
-                        paths.add(fpath)
-                except UnicodeDecodeError:
-                    continue
-            return paths
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            return set()
-
-    def _list_files_plain(self) -> set[Path]:
-        keep = set()
-        for p in self.root.rglob("*"):
-            if p.is_file() and not self.cfg.should_skip(p, self.root):
-                keep.add(p)
-        return keep
-
-    def crawl(self) -> dict[str, str]:
-        is_git_repo = (self.root / ".git").exists()
-        candidates = set()
-
-        # Strategy: If it looks like git, try git. 
-        # If git fails/returns empty in a git repo, do NOT fall back (security).
-        # Only use plain walker if not a git repo or configured to ignore git.
-        if self.cfg.respect_gitignore and is_git_repo:
-            candidates = self._list_files_git()
-            # If git command worked but returned nothing, candidates is empty. 
-            # If git command failed, it returned empty.
-            # Edge case: A new git repo with no commits/staged files will be empty.
-        else:
-            candidates = self._list_files_plain()
-
-        results = {}
-        for path in candidates:
-            rel_str = path.relative_to(self.root).as_posix()
-            
-            # Even if git returned it, apply static filter for binary extensions/locks
-            # (Git tracks package-lock.json, but you might not want to embed it)
-            if self.cfg.should_skip(path, self.root):
-                continue
-                
-            try:
-                # Check size
-                if path.stat().st_size > self.cfg.max_file_size_bytes:
-                    logger.debug(f"Skipping large file {rel_str}")
-                    continue
-                
-                # Check content
-                results[rel_str] = path.read_text(encoding="utf-8")
-            except UnicodeDecodeError:
-                # Binary file that slipped past extension checks
-                continue
-            except Exception as e:
-                logger.warning(f"Could not read {rel_str}: {e}")
-
-        return results
 ```
 
-### Summary of Changes
-1.  **Fix Regex Matches:** Split checks into `parts` check (exact directory names) vs `regex` (extensions).
-2.  **`--exclude-standard`**: Added to the untracked git command so untracked-but-ignored files don't show up.
-3.  **Safety:** `read_text` is wrapped in a size check.
-4.  **Output handling:** Switched `git` output handling to bytes (`b'\0'`) + decode to be safer with weird filenames on different OS environments.
+---
+--------------------------------------------------------
+Token estimator still drifts on minified / Unicode files
+--------------------------------------------------------
+`len(content)/3` is fine for normal source, but collapses on:
+- minified JS (1 char ≈ 1 token)  
+- files with emoji or CJK comments (1 glyph ≈ 2–3 tokens).
+
+Cheap improvement: keep a running **tiktoken** counter once you are within 20 % of the budget:
+
+```python
+import tiktoken
+enc = tiktoken.get_encoding("cl100k_base")
+...
+if used_tokens + cost > max_tokens * 0.8:          # 80 % trigger
+    cost = len(enc.encode(content))
+    if used_tokens + cost > max_tokens:
+        ...
+```
+
+You only pay for the exact count on the last few chunks.
+
+---
+--------------------------------------------------------
+Hash collision safety
+--------------------------------------------------------
+MD5 is fine for change detection, but if you ever expose `content_hash` to the user (e.g. for de-duplication UI) move to Blake3 or SHA-256 to avoid “but MD5 is broken” conversations.  One-line change, zero perf hit for code-base sizes.
+
+---
+--------------------------------------------------------
+FTS “replace=True” blocks readers
+--------------------------------------------------------
+Re-building the FTS index locks the table for ~100–400 ms per 10 k rows.  
+LanceDB ≥ 0.6 lets you build incrementally:
+
+```python
+table.create_fts_index("content", replace=False)
+```
+
+Do it once after the **first** batch and never again; deletes are automatically handled.  Readers stay lock-free.
+---
+
+# P2
+--------------------------------------------------------
+HNSW instead of IVF-PQ for < 1 M rows
+--------------------------------------------------------
+IVF-PQ is fastest for > 1 M vectors, but for the usual 50 k–200 k code-chunk data set HNSW gives *lower* latency and better recall.  One-liner:
+
+```python
+table.create_index(
+    index_type="HNSW",
+    metric="cosine",
+    m=32,
+    ef_construction=150,
+    replace=True
+)
+```

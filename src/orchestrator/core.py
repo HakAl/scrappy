@@ -36,7 +36,14 @@ from .registration import ProviderRegistrar
 from .status_reporter import ProviderStatusReporter
 from .usage_reporter import UsageReporter
 from .context_coordinator import ContextCoordinator
-from .manager_protocols import ContextManagerProtocol, BackgroundTaskManagerProtocol
+from .manager_protocols import (
+    ContextManagerProtocol,
+    BackgroundTaskManagerProtocol,
+    DelegationManagerProtocol,
+    TaskExecutorProtocol,
+    UsageReporterProtocol,
+    StatusReporterProtocol,
+)
 from .factory import OrchestratorFactory, OrchestratorComponents
 
 # Import protocols for type hints (Dependency Inversion Principle)
@@ -78,11 +85,11 @@ class AgentOrchestrator:
         working_memory: Optional[WorkingMemoryProtocol] = None,
         session_manager: Optional[SessionManagerProtocol] = None,
         provider_selector: Optional[ProviderSelectorProtocol] = None,
-        usage_reporter: Optional[UsageReporter] = None,
-        status_reporter: Optional[ProviderStatusReporter] = None,
-        task_executor: Optional[TaskExecutor] = None,
+        usage_reporter: Optional[UsageReporterProtocol] = None,
+        status_reporter: Optional[StatusReporterProtocol] = None,
+        task_executor: Optional[TaskExecutorProtocol] = None,
         context_manager: Optional[ContextManagerProtocol] = None,
-        delegation_manager: Optional[DelegationManager] = None,
+        delegation_manager: Optional[DelegationManagerProtocol] = None,
         background_manager: Optional[BackgroundTaskManagerProtocol] = None,
     ):
         """

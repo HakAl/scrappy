@@ -33,7 +33,14 @@ from .background import BackgroundTaskManager
 from .status_reporter import ProviderStatusReporter
 from .usage_reporter import UsageReporter
 from .context_coordinator import ContextCoordinator
-from .manager_protocols import ContextManagerProtocol, BackgroundTaskManagerProtocol
+from .manager_protocols import (
+    ContextManagerProtocol,
+    BackgroundTaskManagerProtocol,
+    DelegationManagerProtocol,
+    TaskExecutorProtocol,
+    UsageReporterProtocol,
+    StatusReporterProtocol,
+)
 
 # Import protocols for type hints (Dependency Inversion Principle)
 from .protocols import (
@@ -67,11 +74,11 @@ class OrchestratorComponents:
         self.working_memory: Optional[WorkingMemoryProtocol] = None
         self.session_manager: Optional[SessionManagerProtocol] = None
         self.provider_selector: Optional[ProviderSelectorProtocol] = None
-        self.usage_reporter: Optional[UsageReporter] = None
-        self.status_reporter: Optional[ProviderStatusReporter] = None
-        self.task_executor: Optional[TaskExecutor] = None
+        self.usage_reporter: Optional[UsageReporterProtocol] = None
+        self.status_reporter: Optional[StatusReporterProtocol] = None
+        self.task_executor: Optional[TaskExecutorProtocol] = None
         self.context_manager: Optional[ContextManagerProtocol] = None
-        self.delegation_manager: Optional[DelegationManager] = None
+        self.delegation_manager: Optional[DelegationManagerProtocol] = None
 
 
 class OrchestratorFactory:
@@ -252,7 +259,7 @@ class OrchestratorFactory:
             output=output
         )
 
-    def create_usage_reporter(self, cache: CacheProtocol) -> UsageReporter:
+    def create_usage_reporter(self, cache: CacheProtocol) -> UsageReporterProtocol:
         """Create default usage reporter."""
         return UsageReporter(cache=cache, created_at=self.created_at)
 
@@ -262,7 +269,7 @@ class OrchestratorFactory:
         provider_selector: ProviderSelectorProtocol,
         output: OutputInterface,
         brain_name: Optional[str] = None
-    ) -> ProviderStatusReporter:
+    ) -> StatusReporterProtocol:
         """Create default status reporter."""
         return ProviderStatusReporter(
             registry=registry,
@@ -277,7 +284,7 @@ class OrchestratorFactory:
         brain_provider_getter: Optional[Callable] = None,
         brain_name_getter: Optional[Callable] = None,
         task_history_recorder: Optional[Callable] = None
-    ) -> TaskExecutor:
+    ) -> TaskExecutorProtocol:
         """Create default task executor."""
         return TaskExecutor(
             get_brain_provider=brain_provider_getter or (lambda: None),
@@ -307,7 +314,7 @@ class OrchestratorFactory:
         provider_selector: ProviderSelectorProtocol,
         working_memory: WorkingMemoryProtocol,
         context_manager: ContextManagerProtocol
-    ) -> DelegationManager:
+    ) -> DelegationManagerProtocol:
         """
         Create default delegation manager with all collaborators.
 

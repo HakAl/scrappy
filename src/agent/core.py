@@ -76,6 +76,7 @@ from .protocols import (
     DuplicateDetectorProtocol,
     ToolRunnerProtocol,
     ActionExecutorProtocol,
+    ToolRegistryProtocol,
 )
 from ..infrastructure.protocols import PathProviderProtocol
 from ..infrastructure.paths import ScrappyPathProvider
@@ -98,7 +99,7 @@ class CodeAgent:
         orchestrator: Union[OrchestratorAdapter, object],
         project_path: Optional[str] = None,
         config: Optional[AgentConfig] = None,
-        tool_registry: Optional[ToolRegistry] = None,
+        tool_registry: Optional[ToolRegistryProtocol] = None,
         io: Optional[Any] = None,  # CLIIOProtocol - Any to avoid circular import
         file_system: Optional[Any] = None,  # FileSystemProtocol
         platform_utils: Optional[Any] = None,  # PlatformUtilsProtocol
