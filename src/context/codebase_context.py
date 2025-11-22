@@ -624,8 +624,8 @@ Be concise and technical. No fluff."""
 
         Gracefully degrades - semantic search becomes unavailable on failure.
         """
-        # Create Rich progress reporter for this indexing session
-        from ..infrastructure.progress import RichProgressReporter, NullProgressReporter
+        # Create progress reporter for this indexing session
+        from ..infrastructure.progress import RichProgressReporter
         progress = RichProgressReporter()
         progress_started = False
 

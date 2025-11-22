@@ -156,10 +156,29 @@ Architecture Now Properly Integrated:
   │  - explore() auto-uses when ready               │
   └─────────────────────────────────────────────────┘
 
-  Demo Script:
+---
 
-  # Original POC (still works)
-  python scripts/test_semantic_search.py
+Demo Script: scripts/test_semantic_search.py
+Benchmark Script: scripts/benchmark_semantic_search.py
+
+============================================================
+                 Semantic Search Benchmark
+============================================================
+Embedding Generation:    420.50s
+Indexing Operations:       1.38s
+Total Time:              421.88s
+------------------------------------------------------------
+Files Processed:            508
+Total Chunks:               130
+Skipped Chunks:               0
+Batches:                     64
+------------------------------------------------------------
+Avg Chunks/File:           0.26
+Throughput:                0.31 chunks/sec
+============================================================
+
+
+# P0 - Finish semantic search integration
 
 [//]: # (TODO)
 
@@ -168,12 +187,11 @@ Architecture Now Properly Integrated:
 Finish semantic search integration
 
 Required Features
-    - index lancedb when model is ready
+    - index lancedb when model is ready -- complete
     - progress displayed clearly to user
     - progress display goes away shortly after complete
 
 Current status:
-- progress doesn't update -- likely not using rich progress correctly
 - Need rich layout (or another feature) to organize content so progress isn't drawn over user input
 
 ## Root Cause Analysis
