@@ -172,7 +172,7 @@ class SemanticSearchInitializer:
                 self._status = "Loading embedding model..."
 
             # Create chunker (lightweight)
-            chunker = SemanticCodeChunker(chunk_size=100, overlap=3)
+            chunker = SemanticCodeChunker(chunk_size=60, overlap=15)
 
             # Create LanceDB provider (triggers FastEmbed model download if needed)
             # Store database in .scrappy/lancedb/ instead of .lancedb/ at project root

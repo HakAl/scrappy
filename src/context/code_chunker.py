@@ -22,8 +22,8 @@ class SemanticCodeChunker:
 
     def __init__(
         self,
-        chunk_size: int = 100,
-        overlap: int = 3
+        chunk_size: int = 250,
+        overlap: int = 30
     ):
         """
         Initialize chunker (NO I/O, just configuration).

@@ -30,7 +30,7 @@ DB_DIR_NAME = ".lancedb"
 LOCK_FILE_NAME = "update.lock"
 TABLE_NAME = "code_chunks"
 TOKEN_ESTIMATION_CHAR_RATIO = 3.0
-BATCH_SIZE = 1000
+BATCH_SIZE = 64  # Larger batches for efficiency (now thread-safe)
 MIN_CHUNK_SIZE = 20  # Skip very small chunks
 
 
@@ -62,12 +62,9 @@ def _create_embedding_func():
     return get_registry().get("fastembed-jina").create()
 
 
-def _create_code_schema(embedding_func):
+def _create_code_schema():
     """
-    Create schema dynamically with embedding function.
-
-    Args:
-        embedding_func: Initialized embedding function
+    Create schema for code chunks with embeddings.
 
     Returns:
         CodeSchema class for LanceDB table
@@ -79,8 +76,8 @@ def _create_code_schema(embedding_func):
         start_line: int
         end_line: int
         content_hash: str       # MD5 hash for change detection
-        content: str = embedding_func.SourceField()
-        vector: Vector(embedding_func.ndims()) = embedding_func.VectorField()
+        content: str            # Chunk text
+        vector: Vector(384)     # Manually computed embeddings (384-dim for BGE-small)
 
     return CodeSchema
 
@@ -176,7 +173,7 @@ class LanceDBSearchProvider:
                 except Exception as e:
                     logger.warning(f"Error during test embedding generation: {e}")
 
-                self._code_schema = _create_code_schema(self._embedding_func)
+                self._code_schema = _create_code_schema()
                 logger.debug("Embedding function initialized")
             except Exception as e:
                 raise IndexingError(
@@ -474,7 +471,31 @@ class LanceDBSearchProvider:
 
                     if len(batch) >= BATCH_SIZE:
                         logger.debug(f"Adding batch of {len(batch)} chunks to table")
-                        table.add(batch)
+                        try:
+                            import time
+                            # Generate embeddings for the batch (truncate to 2000 chars for speed)
+                            texts = [item["content"][:2000] for item in batch]
+                            logger.debug(f"Generating embeddings for {len(texts)} chunks")
+                            t0 = time.time()
+                            embeddings = self._embedding_func.generate_embeddings(texts)
+                            t1 = time.time()
+                            logger.debug(f"Embedding generation took {t1-t0:.2f}s")
+
+                            # Add vectors to batch
+                            for item, embedding in zip(batch, embeddings):
+                                item["vector"] = embedding
+                            t2 = time.time()
+                            logger.debug(f"Adding vectors to dicts took {t2-t1:.2f}s")
+
+                            table.add(batch)
+                            t3 = time.time()
+                            logger.debug(f"table.add() took {t3-t2:.2f}s")
+                            logger.debug(f"Successfully added batch of {len(batch)} chunks (total: {t3-t0:.2f}s)")
+                        except Exception as e:
+                            logger.error(f"Failed to add batch to table: {e}")
+                            import traceback
+                            logger.debug(traceback.format_exc())
+                            raise
                         batch = []
 
                 logger.debug(f"Indexed {norm_path}: {file_chunk_count} chunks")
@@ -487,7 +508,30 @@ class LanceDBSearchProvider:
 
         if batch:
             logger.debug(f"Adding final batch of {len(batch)} chunks to table")
-            table.add(batch)
+            try:
+                import time
+                # Generate embeddings for final batch
+                texts = [item["content"] for item in batch]
+                logger.debug(f"Generating embeddings for {len(texts)} chunks")
+                t0 = time.time()
+                embeddings = self._embedding_func.generate_embeddings(texts)
+                t1 = time.time()
+                logger.debug(f"Embedding generation took {t1-t0:.2f}s")
+
+                # Add vectors to batch
+                for item, embedding in zip(batch, embeddings):
+                    item["vector"] = embedding
+                t2 = time.time()
+
+                table.add(batch)
+                t3 = time.time()
+                logger.debug(f"table.add() took {t3-t2:.2f}s")
+                logger.debug(f"Successfully added final batch of {len(batch)} chunks (total: {t3-t0:.2f}s)")
+            except Exception as e:
+                logger.error(f"Failed to add final batch to table: {e}")
+                import traceback
+                logger.debug(traceback.format_exc())
+                raise
 
         logger.info(f"Added {total_chunks} chunks total (skipped {skipped_small} small chunks)")
 

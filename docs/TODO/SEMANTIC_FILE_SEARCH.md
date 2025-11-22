@@ -168,6 +168,7 @@ Architecture Now Properly Integrated:
 Finish semantic search integration
 
 Required Features
+    - index lancedb when model is ready
     - progress displayed clearly to user
     - progress display goes away shortly after complete
 

@@ -592,6 +592,7 @@ Be concise and technical. No fluff."""
             result: The initialized semantic search provider (or None)
             error: Exception if initialization failed (or None)
         """
+        logger.info(f"Callback triggered: success={success}, result={result}, error={error}")
         if success and result:
             logger.info("Semantic search model ready, starting auto-indexing...")
             self._notify_indexing_progress("Semantic search ready, starting indexing...")
@@ -600,7 +601,9 @@ Be concise and technical. No fluff."""
             self._semantic_search = result
 
             # Trigger auto-indexing
+            logger.info("Calling _index_for_semantic_search()...")
             self._index_for_semantic_search()
+            logger.info("_index_for_semantic_search() completed")
         elif error:
             logger.warning(f"Semantic search initialization failed: {error}")
             self._notify_indexing_progress(f"Semantic search initialization failed: {error}")
@@ -632,9 +635,12 @@ Be concise and technical. No fluff."""
 
             # Get or create file collector
             self._notify_indexing_progress("Preparing file collector...")
+            logger.info(f"File collector before creation: {self._file_collector}")
             file_collector = self._file_collector
             if file_collector is None:
+                logger.info("Creating default file collector...")
                 file_collector = self._create_default_file_collector()
+                logger.info(f"File collector after creation: {file_collector}")
                 if file_collector is None:
                     logger.warning("No file collector available - skipping semantic indexing")
                     self._notify_indexing_progress("No file collector available")
@@ -653,10 +659,13 @@ Be concise and technical. No fluff."""
             progress.start("Indexing files for semantic search")
             progress_started = True
 
+            logger.info("Starting batch collection...")
             for batch in file_collector.collect_files_batched(batch_size=20):
                 batch_count += 1
                 batch_size = len(batch)
                 total_indexed += batch_size
+                logger.info(f"Received batch {batch_count} with {batch_size} files")
+                logger.debug(f"Sample files: {list(batch.keys())[:3]}")
 
                 # Update progress with cumulative totals
                 progress_msg = f"Indexing files: batch {batch_count} ({total_indexed} files total)"
