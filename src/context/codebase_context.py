@@ -42,9 +42,9 @@ class CodebaseContext:
         git_history_reader: Optional[GitHistoryReader] = None,
         project_detector: Optional[ProjectDetector] = None,
         auto_load_cache: bool = False,
-        semantic_search: Optional['SemanticSearchProtocol'] = None,
         semantic_initializer: Optional[BackgroundInitializerProtocol] = None,
         path_provider: Optional[PathProviderProtocol] = None,
+        file_collector: Optional['FileCollectorProtocol'] = None,
     ):
         """
         Initialize codebase context (dependencies only - NO file I/O by default).
@@ -59,9 +59,9 @@ class CodebaseContext:
             git_history_reader: Injectable git history reader (default: creates new GitHistoryReader)
             project_detector: Injectable project detector (default: creates from project_path)
             auto_load_cache: If True, automatically load cache in constructor (for backwards compatibility)
-            semantic_search: DEPRECATED - Use semantic_initializer instead. Direct injection of initialized search.
-            semantic_initializer: Background initializer for semantic search. Preferred over semantic_search.
+            semantic_initializer: Background initializer for semantic search.
             path_provider: Path provider for data files (auto-creates if None)
+            file_collector: Injectable file collector for semantic search (default: creates SemanticFileCollector)
         """
         # Store config for factory methods
         self._initial_project_path = project_path
@@ -94,10 +94,12 @@ class CodebaseContext:
         self._git_history_reader = git_history_reader or self._create_default_git_history_reader()
         self._project_detector = project_detector or self._create_default_project_detector()
 
-        # Semantic search - supports both old (direct) and new (initializer) patterns
-        self._semantic_search = semantic_search  # Direct injection (deprecated)
-        self._semantic_initializer = semantic_initializer  # Background initializer (preferred)
+        # Semantic search - uses background initializer pattern
+        self._semantic_search = None  # Cached result from semantic_initializer
+        self._semantic_initializer = semantic_initializer  # Background initializer
         self._semantic_search_attempted = False  # Track if we tried to create it
+        self._file_collector = file_collector  # Injected file collector for semantic search
+        self._indexing_progress_callback = None  # Callback for indexing progress updates
 
         # Auto-load cache if requested (for backwards compatibility)
         if auto_load_cache:
@@ -142,6 +144,21 @@ class CodebaseContext:
         """Create default project detector."""
         return ProjectDetector(self.project_path)
 
+    def _create_default_file_collector(self) -> 'FileCollectorProtocol':
+        """
+        Create default file collector for semantic search.
+
+        Returns:
+            SemanticFileCollector with default configuration
+        """
+        try:
+            from .semantic import SemanticFileCollector
+            return SemanticFileCollector(self.project_path)
+        except ImportError:
+            # If semantic search dependencies not available, return a dummy collector
+            logger.debug("Semantic search dependencies not available")
+            return None
+
     def _create_default_semantic_initializer(self) -> Optional[BackgroundInitializerProtocol]:
         """
         Create default semantic search initializer.
@@ -158,6 +175,30 @@ class CodebaseContext:
             from .semantic.initializer import NullInitializer
             return NullInitializer()
 
+    def set_indexing_progress_callback(self, callback) -> None:
+        """
+        Set callback for indexing progress updates.
+
+        The callback will be called with status messages during file indexing.
+
+        Args:
+            callback: Function that takes a string message parameter
+        """
+        self._indexing_progress_callback = callback
+
+    def _notify_indexing_progress(self, message: str) -> None:
+        """
+        Notify registered callback of indexing progress.
+
+        Args:
+            message: Progress message
+        """
+        if self._indexing_progress_callback:
+            try:
+                self._indexing_progress_callback(message)
+            except Exception as e:
+                logger.debug(f"Error in indexing progress callback: {e}")
+
     def start_background_initialization(self) -> None:
         """
         Start background initialization tasks (semantic search model loading, etc.).
@@ -170,6 +211,11 @@ class CodebaseContext:
         if self._semantic_initializer:
             logger.debug("Starting background semantic search initialization")
             self._semantic_initializer.start()
+
+            # Register callback to auto-index when initialization completes
+            self._semantic_initializer.wait_with_callback(
+                self._on_semantic_search_ready
+            )
         else:
             logger.debug("No semantic initializer configured")
 
@@ -192,7 +238,7 @@ class CodebaseContext:
             True if semantic search is available and ready
         """
         if self._semantic_search:
-            return True  # Directly injected, already ready
+            return True  # Already initialized and cached
         if self._semantic_initializer:
             return self._semantic_initializer.is_complete() and \
                    self._semantic_initializer.get_error() is None
@@ -202,12 +248,12 @@ class CodebaseContext:
         """
         Return semantic search provider if available.
 
-        Checks both direct injection and background initializer.
+        Checks cached result from background initializer.
 
         Returns:
             SemanticSearchProtocol instance or None if not available
         """
-        # Check direct injection first (backwards compatibility)
+        # Check if already cached
         if self._semantic_search:
             return self._semantic_search
 
@@ -259,9 +305,8 @@ class CodebaseContext:
         if self.structure.get('has_git'):
             self.git_history = self._get_git_history()
 
-        # Index for semantic search if available
-        if self._semantic_search:
-            self._index_for_semantic_search()
+        # Note: Semantic search indexing happens automatically after model loads
+        # (triggered by background initialization callback, not during explore)
 
         # Mark exploration time (summary will be generated when needed)
         self.explored_at = datetime.now()
@@ -433,15 +478,27 @@ Be concise and technical. No fluff."""
         if not self.is_explored():
             return ""
 
-        # Try semantic search first
-        if self._semantic_search and self._semantic_search.is_indexed():
-            try:
-                result = self._semantic_search.search(query, max_tokens=max_tokens)
-                if result.chunks:
-                    logger.debug(f"Using semantic search ({len(result.chunks)} chunks)")
-                    return self._format_search_result(result)
-            except Exception as e:
-                logger.warning(f"Semantic search failed, falling back to keyword: {e}")
+        # Try semantic search first (lazy indexing on first use)
+        semantic_search = self._ensure_semantic_search()
+        if semantic_search:
+            # Lazy index on first use (if not already indexed)
+            if not semantic_search.is_indexed() and self.is_explored():
+                logger.info("Indexing files for semantic search (first use)...")
+                try:
+                    self._index_for_semantic_search()
+                except Exception as e:
+                    logger.warning(f"Semantic indexing failed: {e}")
+                    semantic_search = None
+
+            # Search if indexed
+            if semantic_search and semantic_search.is_indexed():
+                try:
+                    result = semantic_search.search(query, max_tokens=max_tokens)
+                    if result.chunks:
+                        logger.debug(f"Using semantic search ({len(result.chunks)} chunks)")
+                        return self._format_search_result(result)
+                except Exception as e:
+                    logger.warning(f"Semantic search failed, falling back to keyword: {e}")
 
         # Fall back to keyword matching (existing logic)
         logger.debug("Using keyword-based context")
@@ -524,47 +581,123 @@ Be concise and technical. No fluff."""
         """Get git history information."""
         return self._git_history_reader.get_history(self.project_path)
 
+    def _on_semantic_search_ready(self, success: bool, result, error) -> None:
+        """
+        Callback when semantic search initialization completes.
+
+        Automatically triggers file indexing when the model is ready.
+
+        Args:
+            success: True if initialization succeeded
+            result: The initialized semantic search provider (or None)
+            error: Exception if initialization failed (or None)
+        """
+        if success and result:
+            logger.info("Semantic search model ready, starting auto-indexing...")
+            self._notify_indexing_progress("Semantic search ready, starting indexing...")
+
+            # Cache the result for use
+            self._semantic_search = result
+
+            # Trigger auto-indexing
+            self._index_for_semantic_search()
+        elif error:
+            logger.warning(f"Semantic search initialization failed: {error}")
+            self._notify_indexing_progress(f"Semantic search initialization failed: {error}")
+
     def _index_for_semantic_search(self):
         """
-        Index files for semantic search (called during explore).
+        Index files for semantic search with Rich progress display.
 
-        Gracefully handles errors - semantic search becomes unavailable on failure.
+        Uses batched file collection to prevent memory spikes:
+        - Processes files in batches of 20
+        - Respects .gitignore via git ls-files
+        - Enforces file size limits (5MB per file)
+        - Skips binary files
+        - Gracefully handles errors
+        - Displays progress using Rich (transient, disappears when done)
+
+        Progress updates are sent via the registered callback (if any).
+
+        Gracefully degrades - semantic search becomes unavailable on failure.
         """
+        # Create Rich progress reporter for this indexing session
+        from ..infrastructure.progress import RichProgressReporter, NullProgressReporter
+        progress = RichProgressReporter()
+        progress_started = False
+
         try:
-            logger.info("Starting semantic search indexing...")
+            logger.info("Starting semantic search indexing (batched)...")
             logger.debug(f"Semantic search provider: {self._semantic_search}")
 
-            # Collect file contents
-            files = {}
-            skipped = 0
-            for file_type, file_list in self.file_index.items():
-                logger.debug(f"Processing {len(file_list)} files of type {file_type}")
-                for file_path in file_list:
-                    full_path = self.project_path / file_path
-                    try:
-                        content = full_path.read_text(encoding='utf-8', errors='ignore')
-                        files[file_path] = content
-                    except Exception as e:
-                        logger.debug(f"Skipping {file_path}: {e}")
-                        skipped += 1
+            # Get or create file collector
+            self._notify_indexing_progress("Preparing file collector...")
+            file_collector = self._file_collector
+            if file_collector is None:
+                file_collector = self._create_default_file_collector()
+                if file_collector is None:
+                    logger.warning("No file collector available - skipping semantic indexing")
+                    self._notify_indexing_progress("No file collector available")
+                    return
 
-            logger.info(f"Collected {len(files)} files for indexing (skipped {skipped})")
+            # Set progress reporter on the provider
+            self._semantic_search.set_progress_reporter(progress)
 
-            if not files:
+            # Index files in batches to prevent memory spikes
+            self._notify_indexing_progress("Collecting and indexing files in batches...")
+
+            total_indexed = 0
+            batch_count = 0
+
+            # Start progress with indeterminate total (we don't know how many files yet)
+            progress.start("Indexing files for semantic search")
+            progress_started = True
+
+            for batch in file_collector.collect_files_batched(batch_size=20):
+                batch_count += 1
+                batch_size = len(batch)
+                total_indexed += batch_size
+
+                # Update progress with cumulative totals
+                progress_msg = f"Indexing files: batch {batch_count} ({total_indexed} files total)"
+                progress.update(description=progress_msg)
+
+                self._notify_indexing_progress(
+                    f"Indexing batch {batch_count} ({batch_size} files, "
+                    f"{total_indexed} total)..."
+                )
+
+                logger.debug(f"Indexing batch {batch_count} with {batch_size} files")
+                self._semantic_search.index_files(batch, is_batch=True)
+
+            if total_indexed == 0:
                 logger.warning("No files collected for semantic search indexing")
+                self._notify_indexing_progress("No files to index")
                 return
 
-            # Index files
-            logger.debug(f"Calling index_files with {len(files)} files")
-            self._semantic_search.index_files(files)
-            logger.info(f"Semantic search indexing complete")
+            logger.info(f"Semantic search indexing complete ({total_indexed} files in {batch_count} batches)")
+            self._notify_indexing_progress(f"Indexing complete ({total_indexed} files)")
 
         except Exception as e:
             logger.error(f"Semantic indexing failed: {e}")
             import traceback
             logger.debug(traceback.format_exc())
+
+            self._notify_indexing_progress(f"Indexing failed: {e}")
+            if progress_started:
+                progress.error(str(e))
+
             # Gracefully degrade - disable semantic search
             self._semantic_search = None
+
+        finally:
+            # Always complete progress if it was started
+            if progress_started:
+                progress.complete("Indexing complete")
+
+            # Reset progress reporter to null to avoid affecting future operations
+            if self._semantic_search:
+                self._semantic_search.set_progress_reporter(NullProgressReporter())
 
     def _format_search_result(self, result: 'SearchResult') -> str:
         """

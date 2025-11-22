@@ -144,6 +144,9 @@ class CLI:
         elif self._context_aware:
             self.io.secho("Context: Not explored (use /context to explore)", fg="yellow")
 
+        # Show semantic search initialization progress if in progress
+        self._show_semantic_search_progress()
+
         # Auto-detect and offer to load previous session
         if offer_session_restore:
             self._check_and_offer_session_restore(io=self.io)
@@ -163,6 +166,7 @@ class CLI:
         orch = AgentOrchestrator(
             context_aware=self._context_aware,
             verbose_selection=self._verbose_selection,
+            enable_semantic_search=True,  # Enable for CLI usage
         )
         orch.initialize(
             auto_register=True,
@@ -208,6 +212,74 @@ class CLI:
             tasks=self.tasks,
             logger=self.logger
         )
+
+    def _show_semantic_search_progress(self):
+        """
+        Display semantic search initialization progress with Rich Live.
+
+        Uses Live display for non-interfering, transient progress updates.
+        """
+        import time
+
+        # Check if initialization in progress
+        status = self.orchestrator.context.get_semantic_initialization_status()
+        if not status:
+            return
+
+        # If already complete, don't show progress
+        if self.orchestrator.context.is_semantic_search_ready():
+            return
+
+        try:
+            from rich.console import Console
+            from rich.live import Live
+            from rich.spinner import Spinner
+            from rich.text import Text
+
+            console = Console(stderr=True)
+
+            with Live(
+                Spinner("dots", text=Text("Loading semantic search...", style="cyan")),
+                console=console,
+                transient=True,
+                refresh_per_second=10
+            ) as live:
+                max_wait_seconds = 2.0
+                start_time = time.time()
+
+                while not self.orchestrator.context.is_semantic_search_ready():
+                    # Check timeout
+                    if time.time() - start_time > max_wait_seconds:
+                        live.update(
+                            Spinner("dots", text=Text(
+                                "Semantic search loading in background...",
+                                style="yellow"
+                            ))
+                        )
+                        time.sleep(0.3)
+                        break
+
+                    # Update status
+                    current_status = self.orchestrator.context.get_semantic_initialization_status()
+                    if current_status and current_status != "Not started":
+                        live.update(
+                            Spinner("dots", text=Text(current_status, style="cyan"))
+                        )
+
+                    time.sleep(0.1)
+
+                # Show completion if ready
+                if self.orchestrator.context.is_semantic_search_ready():
+                    live.update(Text("✓ Semantic search ready", style="green"))
+                    time.sleep(0.3)
+                    # Disappears on context exit due to transient=True
+
+        except ImportError:
+            # Fallback for missing Rich
+            if not self.orchestrator.context.is_semantic_search_ready():
+                status = self.orchestrator.context.get_semantic_initialization_status()
+                if status:
+                    self.io.secho(f"Semantic search: {status}", fg="cyan")
 
     def _check_and_offer_session_restore(self, io: Optional[CLIIOProtocol] = None):
         """

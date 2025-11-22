@@ -704,3 +704,72 @@ class BackgroundInitializerProtocol(Protocol):
             Status message (e.g., "Initializing...", "Complete", "Failed")
         """
         ...
+
+
+class ProgressReporterProtocol(Protocol):
+    """
+    Protocol for reporting progress during long-running operations.
+
+    Abstracts progress reporting to enable different display strategies
+    (Rich, logging, callbacks, silent) without changing the core logic.
+
+    Implementations:
+    - RichProgressReporter: Displays progress using Rich library with transient display
+    - LoggingProgressReporter: Reports progress via logging
+    - CallbackProgressReporter: Calls a callback function with progress updates
+    - NullProgressReporter: No-op for when progress reporting is not needed
+
+    Example:
+        def process_files(files: List[str], progress: ProgressReporterProtocol) -> None:
+            progress.start("Processing files", total=len(files))
+            for i, file in enumerate(files):
+                progress.update(i + 1, f"Processing {file}")
+            progress.complete("Processing complete")
+
+        # With Rich display
+        process_files(files, RichProgressReporter())
+
+        # With logging
+        process_files(files, LoggingProgressReporter())
+
+        # Silent
+        process_files(files, NullProgressReporter())
+    """
+
+    def start(self, description: str, total: Optional[int] = None) -> None:
+        """
+        Start progress reporting.
+
+        Args:
+            description: Description of the operation
+            total: Total number of items (None for indeterminate progress)
+        """
+        ...
+
+    def update(self, current: Optional[int] = None, description: Optional[str] = None) -> None:
+        """
+        Update progress.
+
+        Args:
+            current: Current progress count (None to keep existing)
+            description: Updated description (None to keep existing)
+        """
+        ...
+
+    def complete(self, message: str = "Complete") -> None:
+        """
+        Mark progress as complete.
+
+        Args:
+            message: Completion message
+        """
+        ...
+
+    def error(self, message: str) -> None:
+        """
+        Report an error.
+
+        Args:
+            message: Error message
+        """
+        ...

@@ -1749,3 +1749,181 @@ class FakePythonFallback:
     def pwd(self, cwd) -> Dict[str, Any]:
         """Python pwd command."""
         return self._result
+
+
+# =============================================================================
+# Semantic Search Test Doubles
+# =============================================================================
+
+class MockSemanticSearch:
+    """
+    Test double for SemanticSearchProtocol.
+
+    Provides a mock semantic search that doesn't load real models or databases.
+    Use this to test code that depends on semantic search without the overhead
+    of loading FastEmbed and LanceDB.
+
+    Example:
+        search = MockSemanticSearch()
+        search.set_indexed(True)
+        search.set_search_results([
+            {'path': 'test.py', 'lines': (1, 10), 'content': 'def foo():', 'score': 0.9}
+        ])
+
+        result = search.search("find foo function")
+        assert len(result['chunks']) == 1
+    """
+
+    def __init__(self):
+        """Initialize mock semantic search."""
+        self._indexed = False
+        self._search_results: List[Dict[str, Any]] = []
+        self._index_calls: List[Dict[str, str]] = []
+        self._search_calls: List[str] = []
+
+    def index_files(self, files: Dict[str, str]) -> None:
+        """
+        Mock index_files that records calls without actual indexing.
+
+        Args:
+            files: Dict mapping file paths to content
+        """
+        self._index_calls.append(files.copy())
+        self._indexed = True
+
+    def search(
+        self,
+        query: str,
+        max_results: int = 25,
+        max_tokens: int = 4000
+    ) -> Dict[str, Any]:
+        """
+        Mock search that returns preset results.
+
+        Args:
+            query: Search query
+            max_results: Maximum results to return
+            max_tokens: Token budget
+
+        Returns:
+            SearchResult dict with chunks and metadata
+        """
+        self._search_calls.append(query)
+        return {
+            'chunks': self._search_results[:max_results],
+            'tokens_used': sum(len(r.get('content', '')) // 4 for r in self._search_results[:max_results]),
+            'limit_hit': None
+        }
+
+    def is_indexed(self) -> bool:
+        """Check if mock is indexed."""
+        return self._indexed
+
+    def clear_index(self) -> None:
+        """Clear mock index."""
+        self._indexed = False
+        self._index_calls.clear()
+
+    def set_indexed(self, indexed: bool) -> None:
+        """Set indexed state for testing."""
+        self._indexed = indexed
+
+    def set_search_results(self, results: List[Dict[str, Any]]) -> None:
+        """Set results to return from search()."""
+        self._search_results = results
+
+    def get_index_calls(self) -> List[Dict[str, str]]:
+        """Get all index_files() calls for verification."""
+        return self._index_calls
+
+    def get_search_calls(self) -> List[str]:
+        """Get all search() calls for verification."""
+        return self._search_calls
+
+
+class MockSemanticInitializer:
+    """
+    Test double for BackgroundInitializerProtocol.
+
+    Simulates semantic search initialization without actual background threads.
+    Use this to test code that depends on background initialization without
+    the overhead and complexity of real threads.
+
+    Example:
+        initializer = MockSemanticInitializer()
+        initializer.set_result(MockSemanticSearch())
+        initializer.start()
+
+        assert initializer.is_complete()
+        search = initializer.get_result()
+    """
+
+    def __init__(
+        self,
+        auto_complete: bool = True,
+        result: Optional[Any] = None,
+        error: Optional[Exception] = None
+    ):
+        """
+        Initialize mock initializer.
+
+        Args:
+            auto_complete: If True, is_complete() returns True immediately
+            result: Result to return from get_result()
+            error: Error to return from get_error()
+        """
+        self._auto_complete = auto_complete
+        self._result = result
+        self._error = error
+        self._started = False
+        self._complete = auto_complete
+        self._status = "Complete" if auto_complete else "Not started"
+
+    def start(self) -> None:
+        """Mock start - marks as started."""
+        self._started = True
+        if self._auto_complete:
+            self._complete = True
+            self._status = "Complete"
+
+    def is_complete(self) -> bool:
+        """Check if complete."""
+        return self._complete
+
+    def is_running(self) -> bool:
+        """Check if running."""
+        return self._started and not self._complete
+
+    def wait_for_completion(self, timeout: Optional[float] = None) -> bool:
+        """Mock wait - returns complete status."""
+        return self._complete and self._error is None
+
+    def get_result(self) -> Optional[Any]:
+        """Get mock result."""
+        return self._result
+
+    def get_error(self) -> Optional[Exception]:
+        """Get mock error."""
+        return self._error
+
+    def get_status(self) -> str:
+        """Get mock status."""
+        return self._status
+
+    def set_complete(self, complete: bool = True) -> None:
+        """Set completion state for testing."""
+        self._complete = complete
+        self._status = "Complete" if complete else "Running"
+
+    def set_result(self, result: Any) -> None:
+        """Set result for testing."""
+        self._result = result
+
+    def set_error(self, error: Exception) -> None:
+        """Set error for testing."""
+        self._error = error
+        self._status = f"Failed: {error}"
+
+    def set_status(self, status: str) -> None:
+        """Set status message for testing."""
+        self._status = status

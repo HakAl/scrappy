@@ -103,3 +103,55 @@ def pytest_deselected(items):
     reporter.ensure_newline()
     for item in items:
         reporter.line(f"deselected: {item.nodeid}", yellow=True, bold=True)
+
+
+@pytest.fixture
+def mock_semantic_search():
+    """
+    Mock semantic search provider for testing.
+
+    Returns a configured mock that implements SemanticSearchProtocol
+    without loading real FastEmbed models or LanceDB.
+    """
+    mock = Mock()
+    mock.index_files = Mock()
+    mock.search = Mock(return_value={'chunks': [], 'tokens_used': 0})
+    mock.is_indexed = Mock(return_value=False)
+    mock.clear_index = Mock()
+    return mock
+
+
+@pytest.fixture
+def mock_semantic_initializer():
+    """
+    Mock semantic search initializer for testing.
+
+    Returns a configured mock that implements BackgroundInitializerProtocol
+    without actually starting background threads.
+    """
+    mock = Mock()
+    mock.start = Mock()
+    mock.is_complete = Mock(return_value=True)
+    mock.is_running = Mock(return_value=False)
+    mock.wait_for_completion = Mock(return_value=True)
+    mock.get_result = Mock(return_value=None)
+    mock.get_error = Mock(return_value=None)
+    mock.get_status = Mock(return_value="Complete")
+    return mock
+
+
+@pytest.fixture
+def mock_codebase_context(temp_project_dir, mock_semantic_initializer):
+    """
+    Create a mock CodebaseContext with semantic search disabled.
+
+    Returns a context that won't load real databases or models in tests.
+    """
+    from src.context import CodebaseContext
+
+    context = CodebaseContext(
+        project_path=str(temp_project_dir),
+        auto_load_cache=False,
+        semantic_initializer=mock_semantic_initializer
+    )
+    return context

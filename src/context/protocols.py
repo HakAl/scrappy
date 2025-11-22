@@ -479,12 +479,13 @@ class SemanticSearchProtocol(Protocol):
             return SearchResult(chunks=[], tokens_used=0)
     """
 
-    def index_files(self, files: Dict[str, str]) -> None:
+    def index_files(self, files: Dict[str, str], is_batch: bool = False) -> None:
         """
         Index files for semantic search.
 
         Args:
             files: Dict mapping file paths to content
+            is_batch: If True, skip deletion detection (for batched indexing)
 
         Raises:
             IndexingError: If indexing fails
@@ -521,4 +522,57 @@ class SemanticSearchProtocol(Protocol):
 
     def clear_index(self) -> None:
         """Clear the search index."""
+        ...
+
+
+@runtime_checkable
+class FileCollectorProtocol(Protocol):
+    """
+    Protocol for collecting files for semantic search indexing.
+
+    Abstracts file collection to enable:
+    - Respecting .gitignore via git ls-files
+    - File size limits to prevent OOM
+    - Binary file detection
+    - Batched streaming to prevent memory spikes
+    - Testing with mock file sets
+
+    Implementations:
+    - SemanticFileCollector: Git-aware with size limits and batching
+    - MockFileCollector: Fixed file set for testing
+
+    Example:
+        # Batched collection (memory efficient)
+        for batch in collector.collect_files_batched(batch_size=50):
+            process_batch(batch)
+
+        # Or collect all at once (backward compatibility)
+        all_files = collector.collect_files()
+    """
+
+    def collect_files(self) -> Dict[str, str]:
+        """
+        Collect all files for semantic search indexing.
+
+        Note: Loads all files into memory. For large codebases,
+        prefer collect_files_batched() to avoid memory spikes.
+
+        Returns:
+            Dict mapping relative file paths to content
+        """
+        ...
+
+    def collect_files_batched(self, batch_size: int = 50):
+        """
+        Collect files in batches (generator).
+
+        Yields batches of files to prevent loading entire codebase
+        into memory at once.
+
+        Args:
+            batch_size: Number of files per batch
+
+        Yields:
+            Dict[str, str]: Batch of file paths to content
+        """
         ...

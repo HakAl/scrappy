@@ -39,6 +39,7 @@ dependencies = [
     "fasteners>=0.19",
     "tantivy>=0.21.0; sys_platform != 'win32'",
     "tqdm>=4.65.0",
+    "pandas>=2.0.0",
 ]
 
 [project.optional-dependencies]

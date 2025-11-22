@@ -373,6 +373,17 @@ Potential improvements:
 - Add config schema validation with JSON Schema
 - Add config hot-reloading
 - Add config versioning and migration
+### Medium Term (Future Work)
+- [ ] Update external code that imports legacy constants
+- [ ] Add config file loading (JSON/YAML/TOML)
+- [ ] Add environment-based config (dev/test/prod)
+- [ ] Create config migration guide for users
+
+### Long Term (Future Work)
+- [ ] Remove legacy constants (breaking change)
+- [ ] Add config versioning
+- [ ] Add config hot-reloading
+- [ ] Add config encryption for sensitive values
 
 ## References
 

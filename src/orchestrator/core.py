@@ -76,6 +76,7 @@ class AgentOrchestrator:
         enable_cache: bool = True,
         cache_ttl_hours: int = 24,
         verbose_selection: bool = False,
+        enable_semantic_search: bool = False,
         output: Optional[OutputInterface] = None,
         # Injectable dependencies for testability (using protocols for Dependency Inversion)
         registry: Optional[ProviderRegistryProtocol] = None,
@@ -108,6 +109,7 @@ class AgentOrchestrator:
         self.context_aware = context_aware
         self.caching_enabled = enable_cache
         self.verbose_selection = verbose_selection
+        self.enable_semantic_search = enable_semantic_search
 
         # Use injected components or create defaults via factory
         if all([
@@ -136,7 +138,8 @@ class AgentOrchestrator:
                 cache_ttl_hours=cache_ttl_hours,
                 verbose_selection=verbose_selection,
                 context_aware=context_aware,
-                created_at=self.created_at
+                created_at=self.created_at,
+                enable_semantic_search=enable_semantic_search
             )
 
             components = factory.create_all_components(

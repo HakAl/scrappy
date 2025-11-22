@@ -156,165 +156,346 @@ Architecture Now Properly Integrated:
   │  - explore() auto-uses when ready               │
   └─────────────────────────────────────────────────┘
 
-  Demo Scripts Available:
-
-  # Full integration demo with Rich progress
-  python scripts/demo_integration.py
+  Demo Script:
 
   # Original POC (still works)
   python scripts/test_semantic_search.py
-
-
 
 [//]: # (TODO)
 
 # P0
 
-Finish semantic search integration -- partial implementation outlined above
-
-Potential integration strategy for desired UX
+Finish semantic search integration
 
 Required Features
-    - loads in background on app start with rich progress
     - progress displayed clearly to user
     - progress display goes away shortly after complete
 
+Current status:
+- progress doesn't update -- likely not using rich progress correctly
+- Need rich layout (or another feature) to organize content so progress isn't drawn over user input
+
+## Root Cause Analysis
+
+**Issue 1: Progress Never Hides**
+Location: `src/infrastructure/progress.py:61-87`
+
+The `RichProgressReporter.complete()` and `error()` methods have a critical bug:
+```python
+def complete(self, message: str = "Complete") -> None:
+    if self._status:
+        self._status.stop()  # Spinner stops
+        self._status = None
+        # Print completion message that stays visible  <-- BUG!
+        if self._console:
+            self._console.print(f"[green]{message}[/green]")  # Permanent message
+```
+
+The `console.print()` call (lines 73, 87) leaves a **permanent message** that never disappears.
+This violates the transient requirement.
+
+**Issue 2: Progress Interferes with User Input**
+- Progress outputs to stderr via `Console(stderr=True)` (line 42)
+- User prompt uses `io.prompt()` on stdout
+- Both write to same terminal causing visual interference
+- No layout management to separate display regions
+- Rich's `Status` API doesn't prevent overlap with concurrent output
+
+## Implementation Plan
+
+### Step 1: Fix Permanent Message Bug
+
+**File:** `src/infrastructure/progress.py`
+
+Replace `console.print()` with transient status updates:
+
+```python
+import time
+
+def complete(self, message: str = "Complete") -> None:
+    """Mark progress as complete and clean up display (transiently)."""
+    if self._status:
+        # Show completion in status (not print!)
+        self._status.update(f"[green]✓ {message}[/green]")
+        time.sleep(0.5)  # Display briefly
+        self._status.stop()  # Then disappear completely
+        self._status = None
+
+def error(self, message: str) -> None:
+    """Report an error and clean up display (transiently)."""
+    if self._status:
+        # Show error in status (not print!)
+        self._status.update(f"[red]✗ Error: {message}[/red]")
+        time.sleep(1.0)  # Show errors longer
+        self._status.stop()  # Then disappear completely
+        self._status = None
+```
+
+**Why this works:**
+- Status updates are transient by nature
+- `status.stop()` clears the entire status line
+- No permanent messages left on screen
+- Meets P0 requirement: "progress goes away shortly after complete"
+
+### Step 2: Prevent Input Interference with Live Display
+
+**Problem:** `Console.status()` can overlap with `io.prompt()` output.
+
+**Solution:** Use `rich.live.Live` for dedicated non-scrolling display area.
+
+**File:** `src/infrastructure/progress.py`
+
+Add new `LiveProgressReporter` class:
+
+```python
+import time
+from typing import Optional
+from rich.console import Console
+from rich.live import Live
+from rich.spinner import Spinner
+from rich.text import Text
+
+class LiveProgressReporter:
+    """
+    Progress reporter using Rich Live display.
+
+    Live display creates a dedicated area that updates in-place without
+    scrolling or interfering with user input prompts.
+
+    Implements ProgressReporterProtocol.
+    """
+
+    def __init__(self):
+        """Initialize Live progress reporter."""
+        self._live = None
+        self._console = None
+
+    def start(self, description: str, total: Optional[int] = None) -> None:
+        """
+        Start Live progress display.
+
+        Args:
+            description: Operation description
+            total: Total items (unused for spinner display)
+        """
+        try:
+            self._console = Console(stderr=True)
+            renderable = Spinner("dots", text=Text(description, style="cyan"))
+
+            # Live display updates in-place, doesn't scroll
+            # transient=True makes it disappear when stopped
+            self._live = Live(
+                renderable,
+                console=self._console,
+                transient=True,
+                refresh_per_second=10
+            )
+            self._live.start()
+
+        except ImportError:
+            self._live = None
+
+    def update(self, current: Optional[int] = None, description: Optional[str] = None) -> None:
+        """
+        Update progress display.
+
+        Args:
+            current: Current count (unused)
+            description: Updated description
+        """
+        if self._live and description:
+            renderable = Spinner("dots", text=Text(description, style="cyan"))
+            self._live.update(renderable)
+
+    def complete(self, message: str = "Complete") -> None:
+        """
+        Show completion and hide.
+
+        Args:
+            message: Completion message
+        """
+        if self._live:
+            # Show completion briefly
+            self._live.update(Text(f"✓ {message}", style="green"))
+            time.sleep(0.5)
+            # Then disappear (transient=True)
+            self._live.stop()
+            self._live = None
+
+    def error(self, message: str) -> None:
+        """
+        Show error and hide.
+
+        Args:
+            message: Error message
+        """
+        if self._live:
+            # Show error longer
+            self._live.update(Text(f"✗ Error: {message}", style="red"))
+            time.sleep(1.0)
+            # Then disappear
+            self._live.stop()
+            self._live = None
+```
+
+**Why Live is better:**
+- Updates in-place without scrolling
+- Doesn't interfere with concurrent stdout/stderr output
+- Built-in `transient=True` support
+- Thread-safe updates
+- Better refresh control
+
+### Step 3: Update CodebaseContext
+
+**File:** `src/context/codebase_context.py:625-626`
+
+```python
+# OLD
+from ..infrastructure.progress import RichProgressReporter, NullProgressReporter
+progress = RichProgressReporter()
+
+# NEW
+from ..infrastructure.progress import LiveProgressReporter, NullProgressReporter
+progress = LiveProgressReporter()
+```
+
+### Step 4: Update CLI Startup Progress
+
+**File:** `src/cli/core.py:216-278`
+
+Replace `_show_semantic_search_progress()` implementation:
+
+```python
+def _show_semantic_search_progress(self):
+    """
+    Display semantic search initialization progress with Rich Live.
+
+    Uses Live display for non-interfering, transient progress updates.
+    """
+    import time
+
+    # Check if initialization in progress
+    status = self.orchestrator.context.get_semantic_initialization_status()
+    if not status or self.orchestrator.context.is_semantic_search_ready():
+        return
+
+    try:
+        from rich.console import Console
+        from rich.live import Live
+        from rich.spinner import Spinner
+        from rich.text import Text
+
+        console = Console(stderr=True)
+
+        with Live(
+            Spinner("dots", text=Text("Loading semantic search...", style="cyan")),
+            console=console,
+            transient=True,
+            refresh_per_second=10
+        ) as live:
+            max_wait_seconds = 2.0
+            start_time = time.time()
+
+            while not self.orchestrator.context.is_semantic_search_ready():
+                # Check timeout
+                if time.time() - start_time > max_wait_seconds:
+                    live.update(
+                        Spinner("dots", text=Text(
+                            "Semantic search loading in background...",
+                            style="yellow"
+                        ))
+                    )
+                    time.sleep(0.3)
+                    break
+
+                # Update status
+                current_status = self.orchestrator.context.get_semantic_initialization_status()
+                if current_status and current_status != "Not started":
+                    live.update(
+                        Spinner("dots", text=Text(current_status, style="cyan"))
+                    )
+
+                time.sleep(0.1)
+
+            # Show completion if ready
+            if self.orchestrator.context.is_semantic_search_ready():
+                live.update(Text("✓ Semantic search ready", style="green"))
+                time.sleep(0.3)
+                # Disappears on context exit due to transient=True
+
+    except ImportError:
+        # Fallback for missing Rich
+        if not self.orchestrator.context.is_semantic_search_ready():
+            status = self.orchestrator.context.get_semantic_initialization_status()
+            if status:
+                self.io.secho(f"Semantic search: {status}", fg="cyan")
+```
+
+## Testing Plan
+
+**Test 1: Progress Updates During Indexing**
+```bash
+# Start CLI, trigger semantic indexing
+python -m scrappy
+# Verify:
+# - Progress spinner appears
+# - Status text updates with batch numbers
+# - Updates are smooth, no flickering
+```
+
+**Test 2: Progress Auto-Hide**
+```bash
+# After indexing completes
+# Verify:
+# - Completion message shows briefly (0.5s)
+# - Progress disappears completely
+# - No permanent messages left
+# - Prompt is clean
+```
+
+**Test 3: No Input Interference**
+```bash
+# While indexing runs in background
+# Verify:
+# - Can type at prompt without visual corruption
+# - Progress doesn't overwrite prompt
+# - Progress stays in dedicated area
+```
+
+**Test 4: Error Handling**
+```bash
+# Trigger indexing error (e.g., corrupt file)
+# Verify:
+# - Error message shows in red
+# - Displays for 1 second
+# - Then disappears
+# - Progress cleans up properly
+```
+
+## Success Criteria
+
+- ✅ Progress updates visibly during operations (Live.update() works)
+- ✅ Progress doesn't overlap user input (Live manages display area)
+- ✅ Progress auto-hides 0.5s after completion (transient + sleep)
+- ✅ No permanent messages left on screen (no console.print())
+- ✅ Works with background thread initialization (Live is thread-safe)
+- ✅ Degrades gracefully if Rich unavailable (ImportError fallback)
+
+## Files to Modify
+
+1. `src/infrastructure/progress.py`
+   - Fix `RichProgressReporter.complete()` and `.error()` (remove console.print)
+   - Add new `LiveProgressReporter` class
+
+2. `src/context/codebase_context.py`
+   - Line 625-626: Change to `LiveProgressReporter()`
+
+3. `src/cli/core.py`
+   - Lines 216-278: Rewrite `_show_semantic_search_progress()` to use Live
+
+---
 
 # P1
-
---------------------------------------------------------
-Don't index: htmlcov, temp, cache, everything
---------------------------------------------------------
-
-"Trust Git first, fall back to regex, check for binary last" is the correct hierarchy for a developer tool.
-
-### 1. The "Substring Match" Bug (Critical)
-Your current regexes are too loose.
-```python
-r"build", r"dist", r"target"
-```
-**The problem:** These are searching purely for substrings.
-*   `r"build"` will skip `src/builders.py`.
-*   `r"dist"` will skip `src/distributed_systems.py`.
-*   `r"target"` will skip `src/utils/retargeting.ts`.
-
-**The Fix:**
-You need to match these either as **directories** or **exact filenames**, not arbitrary substrings. The cleanest way in your `_should_skip` helper is to check path *parts*, or use stricter regex boundaries.
-
-**Revised Regex Strategy:**
-Update the regexes to match path separators or boundaries.
-```python
-# Match "dist" only if it appears as a complete folder name or file name
-r"(^|/)dist(/|$)", r"(^|/)build(/|$)", r"(^|/)node_modules(/|$)"
-```
-*Or, clearer but slightly more Python code:* leave regexes for extensions (`\.pyc$`) and use a set for directory names.
-
-### 2. The "Fall-back" Security Risk
-```python
-candidates = self._list_files_git() or self._list_files_plain()
-```
-If `git ls-files` fails (e.g., a corrupt git index, or git isn't installed), you silently fall back to `_list_files_plain`.
-**The Risk:** If a user has a `secret.key` file that is ignored via `.gitignore`, and the git command fails, your tool falls back to the regex list. Since `secret.key` isn't in your hardcoded regex list, **it gets indexed**.
-
-**The Fix:**
-Only fall back if `path` is **not** a git repository. If it *is* a git repo but the command fails, you should probably warn/abort rather than ignoring the `.gitignore`.
-
-```python
-def _crawl_filesystem(self) -> dict[str, str]:
-    is_git = (self._project_path / ".git").exists()
-    candidates = set()
-    
-    if self.filter_config.respect_gitignore and is_git:
-        candidates = self._list_files_git()
-        # If git repo exists but returns empty/fails, DO NOT fall back 
-        # unless you really trust your regex list to catch secrets.
-        if not candidates: 
-             # logic to decide if we fall back or warn
-             pass 
-    else:
-        candidates = self._list_files_plain()
-    
-    # ... rest of function
-```
-
-### 3. The "Memory Bomb" (Large Files)
-You are doing `path.read_text()`. If the repo contains a 2GB `server.log` or a minified JS bundle that isn't in `.gitignore`, your process will crash or hang.
-
-**The Fix:**
-Add a simple size check before reading.
-
-```python
-MAX_FILE_SIZE = 1024 * 1024 * 5  # 5MB limit
-
-# ... inside the loop
-stat = path.stat()
-if stat.st_size > MAX_FILE_SIZE:
-    logger.debug(f"Skipping large file: {rel} ({stat.st_size} bytes)")
-    continue
-```
-
----
-
-### Example Code
-
-Example regex boundaries and adds the size limit.
-
-```python
-from dataclasses import dataclass, field
-import re
-import subprocess
-from pathlib import Path
-import logging
-
-logger = logging.getLogger(__name__)
-
-@dataclass
-class IndexFilterConfig:
-    # Mixed strategy: 
-    # 1. Exact directory/file matches (safer than regex for names like "build")
-    # 2. Regex for extensions/patterns
-    
-    ignore_names: set[str] = field(default_factory=lambda: {
-        "__pycache__", "node_modules", ".git", ".svn", ".hg", 
-        ".idea", ".vscode", ".DS_Store", "Thumbs.db",
-        "dist", "build", "target", "venv", ".venv", ".env"
-    })
-    
-    ignore_extensions: list[str] = field(default_factory=lambda: (
-        r"\.py[cod]$", r"\.so$", r"\.dylib$", r"\.dll$", r"\.exe$", 
-        r"\.bin$", r"\.jpe?g$", r"\.png$", r"\.gif$", r"\.svg$", r"\.ico$",
-        r"\.lock$", r"package-lock\.json$", r"yarn\.lock$", 
-    ))
-
-    respect_gitignore: bool = True
-    include_untracked: bool = False
-    max_file_size_bytes: int = 5 * 1024 * 1024  # 5MB
-
-    def __post_init__(self):
-        self._compiled_ext = [re.compile(p, re.I) for p in self.ignore_extensions]
-
-    def should_skip(self, path: Path, root: Path) -> bool:
-        """
-        Checks if path should be skipped based on static rules.
-        path: absolute path
-        root: project root
-        """
-        rel = path.relative_to(root)
-        
-        # 1. Check path parts against denied directory/file names
-        # This prevents "dist" matching "distributed_systems.py"
-        if any(part in self.ignore_names for part in rel.parts):
-            return True
-            
-        # 2. Check regex extensions on the filename
-        filename = path.name
-        if any(r.search(filename) for r in self._compiled_ext):
-            return True
-            
-        return False
-```
-
----
 --------------------------------------------------------
 Token estimator still drifts on minified / Unicode files
 --------------------------------------------------------

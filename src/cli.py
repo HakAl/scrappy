@@ -6,6 +6,9 @@ This module re-exports from the modular CLI package for backward compatibility.
 The actual implementation is in the src/cli/ package.
 """
 
+# import logging
+# logging.basicConfig(level=logging.DEBUG)
+
 # Re-export everything from the cli package
 from cli import (
     CLI,

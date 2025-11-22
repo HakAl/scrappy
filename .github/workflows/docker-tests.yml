@@ -1,0 +1,76 @@
+name: Docker Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test-docker:
+    name: Test on Linux via Docker
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build Docker image
+        run: docker-compose build
+
+      - name: Run semantic search fixture tests
+        run: docker-compose run --rm test-semantic
+
+      - name: Run full test suite
+        run: docker-compose run --rm test
+
+      - name: Run integration demo
+        run: docker-compose run --rm demo
+
+      - name: Verify database creation
+        run: |
+          docker-compose run --rm scrappy bash -c "
+            if [ -d .scrappy/lancedb/code_chunks.lance ]; then
+              echo 'Database created successfully'
+              ls -la .scrappy/lancedb/
+              exit 0
+            else
+              echo 'Database not created!'
+              exit 1
+            fi
+          "
+
+      - name: Clean up
+        if: always()
+        run: docker-compose down -v
+
+  test-matrix:
+    name: Test on Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Run semantic search tests (fast)
+        run: python -m pytest tests/test_semantic_fixtures.py -v
+
+      - name: Run full test suite
+        run: python -m pytest tests/ -v --tb=short

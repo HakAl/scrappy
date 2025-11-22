@@ -10,9 +10,14 @@ Key Components:
     - SemanticCodeChunker: Intelligent code chunking for embeddings
     - SemanticSearchInitializer: Background initializer for heavy dependencies
     - NullInitializer: No-op initializer for testing
+    - SemanticFileCollector: Git-aware file collection with size limits
+    - IndexFilterConfig: Configuration for file filtering
 
 Usage:
-    from context.semantic import LanceDBSearchProvider
+    from context.semantic import LanceDBSearchProvider, SemanticFileCollector
+
+    collector = SemanticFileCollector(project_path)
+    files = collector.collect_files()
 
     provider = LanceDBSearchProvider(project_path, chunker)
     provider.index_files(files)
@@ -22,10 +27,13 @@ Usage:
 from .embeddings import JinaEmbedFunction
 from .provider import LanceDBSearchProvider
 from .initializer import SemanticSearchInitializer, NullInitializer
+from .file_collector import SemanticFileCollector, IndexFilterConfig
 
 __all__ = [
     "JinaEmbedFunction",
     "LanceDBSearchProvider",
     "SemanticSearchInitializer",
     "NullInitializer",
+    "SemanticFileCollector",
+    "IndexFilterConfig",
 ]

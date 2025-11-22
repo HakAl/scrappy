@@ -99,6 +99,7 @@ class OrchestratorFactory:
         created_at: Optional[datetime] = None,
         path_provider: Optional[PathProviderProtocol] = None,
         config: Optional[OrchestratorConfig] = None,
+        enable_semantic_search: bool = False,
     ):
         """
         Initialize factory with configuration.
@@ -113,11 +114,13 @@ class OrchestratorFactory:
             created_at: Creation timestamp
             path_provider: Path provider for data files (auto-creates if None)
             config: OrchestratorConfig instance (creates default if None)
+            enable_semantic_search: Enable background semantic search initialization (default: False for tests)
         """
         self.project_path = project_path
         self.cache_ttl_hours = cache_ttl_hours
         self.verbose_selection = verbose_selection
         self.context_aware = context_aware
+        self.enable_semantic_search = enable_semantic_search
         self.created_at = created_at or datetime.now()
         self.config = config or OrchestratorConfig()
 
@@ -221,7 +224,20 @@ class OrchestratorFactory:
 
     def create_codebase_context(self) -> ContextProvider:
         """Create default codebase context."""
-        return CodebaseContext(self.project_path)
+        context = CodebaseContext(self.project_path)
+
+        # Only initialize semantic search if explicitly enabled
+        if self.enable_semantic_search:
+            try:
+                from ..context.semantic.initializer import SemanticSearchInitializer
+                initializer = SemanticSearchInitializer(context.project_path)
+                context._semantic_initializer = initializer
+                context.start_background_initialization()
+            except ImportError:
+                # Semantic search dependencies not available
+                pass
+
+        return context
 
     def create_cache(self, codebase_context: ContextProvider) -> CacheProtocol:
         """Create default response cache."""

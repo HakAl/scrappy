@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  # Main development environment
+  scrappy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      # Mount source code for live development
+      - ./src:/app/src
+      - ./tests:/app/tests
+      - ./scripts:/app/scripts
+      # Persist data directories
+      - scrappy-data:/app/.scrappy
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    command: bash
+
+  # Run tests
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./src:/app/src
+      - ./tests:/app/tests
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: python -m pytest tests/ -v --tb=short
+
+  # Run semantic search tests specifically
+  test-semantic:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./src:/app/src
+      - ./tests:/app/tests
+      - ./scripts:/app/scripts
+      - scrappy-data:/app/.scrappy
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: python -m pytest tests/test_semantic_fixtures.py -v
+
+  # Run integration demo
+  demo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./src:/app/src
+      - ./scripts:/app/scripts
+      - scrappy-data:/app/.scrappy
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: python scripts/demo_integration.py
+
+  # Run semantic search POC
+  demo-semantic:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./src:/app/src
+      - ./scripts:/app/scripts
+      - scrappy-data:/app/.scrappy
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: python scripts/test_semantic_search.py
+
+volumes:
+  scrappy-data:
+    driver: local

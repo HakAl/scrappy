@@ -21,6 +21,7 @@ except ImportError:
     lancedb = None
 
 from ..protocols import CodeChunkerProtocol, SearchResult
+from ...infrastructure.protocols import ProgressReporterProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +112,7 @@ class LanceDBSearchProvider:
         chunker: CodeChunkerProtocol,
         db_dir_name: str = DB_DIR_NAME,
         lock_timeout: int = 300,  # 5 minutes (large repos need time)
+        progress_reporter: Optional[ProgressReporterProtocol] = None,
     ):
         """
         Initialize search provider (NO I/O in constructor).
@@ -120,6 +122,7 @@ class LanceDBSearchProvider:
             chunker: Code chunking strategy (INJECTED)
             db_dir_name: Database directory name
             lock_timeout: Lock acquisition timeout in seconds
+            progress_reporter: Progress reporter for indexing operations (INJECTED)
         """
         self._project_path = project_path.resolve()
         self._chunker = chunker  # Injected dependency
@@ -131,6 +134,21 @@ class LanceDBSearchProvider:
         self._db = None
         self._embedding_func = None
         self._code_schema = None
+
+        # Progress reporter (defaults to NullProgressReporter if not provided)
+        if progress_reporter is None:
+            from ...infrastructure.progress import NullProgressReporter
+            progress_reporter = NullProgressReporter()
+        self._progress = progress_reporter
+
+    def set_progress_reporter(self, progress_reporter: ProgressReporterProtocol) -> None:
+        """
+        Set or update the progress reporter.
+
+        Args:
+            progress_reporter: Progress reporter to use for indexing operations
+        """
+        self._progress = progress_reporter
 
     def _ensure_db(self):
         """Lazy DB initialization (creates directory and connects)."""
@@ -245,7 +263,7 @@ class LanceDBSearchProvider:
 
     # --- Core: Indexing ---
 
-    def index_files(self, files: Dict[str, str]) -> None:
+    def index_files(self, files: Dict[str, str], is_batch: bool = False) -> None:
         """
         Index files for semantic search (incremental updates).
 
@@ -254,12 +272,13 @@ class LanceDBSearchProvider:
         Strategy:
         1. Snapshot current DB state (path -> hash)
         2. Diff against filesystem state
-        3. Remove stale entries (deleted/modified files)
+        3. Remove stale entries (deleted/modified files) - SKIPPED if is_batch=True
         4. Add new entries (new/modified files)
         5. Update FTS index
 
         Args:
             files: Dict mapping file paths to content
+            is_batch: If True, skip deletion detection (for batched indexing)
 
         Raises:
             IndexingError: If indexing fails
@@ -292,9 +311,9 @@ class LanceDBSearchProvider:
                     df = batch.to_pandas()
                     for _, row in df.iterrows():
                         db_state[row["file_path"]] = row["content_hash"]
-            except Exception:
+            except Exception as e:
                 # Schema mismatch or corruption - rebuild
-                logger.warning("Could not read existing index. Rebuilding...")
+                logger.warning(f"Could not read existing index ({type(e).__name__}: {e}). Rebuilding...")
                 self._create_and_populate(files)
                 return
 
@@ -318,16 +337,18 @@ class LanceDBSearchProvider:
                         paths_to_remove.append(norm_path)
 
             # Check DB against filesystem (detect deletions)
-            fs_paths_set = set()
-            for p in files:
-                try:
-                    fs_paths_set.add(self._normalize_path(p))
-                except ValueError:
-                    pass
+            # SKIP during batched indexing to avoid deleting files from previous batches
+            if not is_batch:
+                fs_paths_set = set()
+                for p in files:
+                    try:
+                        fs_paths_set.add(self._normalize_path(p))
+                    except ValueError:
+                        pass
 
-            for db_path in db_state:
-                if db_path not in fs_paths_set:
-                    paths_to_remove.append(db_path)
+                for db_path in db_state:
+                    if db_path not in fs_paths_set:
+                        paths_to_remove.append(db_path)
 
             # 3. Apply Updates
             if not files_to_add and not paths_to_remove:
@@ -375,26 +396,31 @@ class LanceDBSearchProvider:
             logger.warning("No files to index, skipping table creation")
             return
 
-        table = self._db.create_table(TABLE_NAME, schema=self._code_schema)
-
-        # Normalize keys
+        # Normalize and validate paths BEFORE creating table
         valid_files = {}
         skipped = 0
         for k, v in files.items():
             try:
-                valid_files[self._normalize_path(k)] = v
+                norm_path = self._normalize_path(k)
+                valid_files[norm_path] = v
             except ValueError as e:
-                logger.debug(f"Skipping invalid path {k}: {e}")
+                logger.warning(f"Path normalization failed for {k}: {e}")
+                skipped += 1
+            except Exception as e:
+                logger.error(f"Unexpected error normalizing {k}: {e}")
                 skipped += 1
 
         if skipped > 0:
-            logger.info(f"Skipped {skipped} files with invalid paths")
+            logger.warning(f"Skipped {skipped}/{len(files)} files with invalid paths")
 
         if not valid_files:
-            logger.warning("No valid files after normalization")
+            logger.error(f"No valid files after normalization. Project path: {self._project_path}")
             return
 
-        logger.info(f"Indexing {len(valid_files)} valid files")
+        # Only create table if we have valid files to index
+        logger.info(f"Creating table and indexing {len(valid_files)} valid files")
+        table = self._db.create_table(TABLE_NAME, schema=self._code_schema)
+
         self._add_files_in_batches(table, valid_files)
 
         # Only create FTS if rows exist
@@ -412,8 +438,10 @@ class LanceDBSearchProvider:
         batch = []
         total_chunks = 0
         skipped_small = 0
+        files_processed = 0
+        total_files = len(files)
 
-        logger.debug(f"Processing {len(files)} files for chunking")
+        logger.debug(f"Processing {total_files} files for chunking")
 
         for norm_path, content in files.items():
             try:
@@ -450,6 +478,7 @@ class LanceDBSearchProvider:
                         batch = []
 
                 logger.debug(f"Indexed {norm_path}: {file_chunk_count} chunks")
+                files_processed += 1
 
             except Exception as e:
                 logger.error(f"Failed to chunk/index file {norm_path}: {e}")
