@@ -2,14 +2,9 @@
 I/O abstraction layer for CLI operations.
 
 This module provides a protocol for CLI I/O operations and implementations
-for both real CLI usage (ClickIO) and testing (TestIO).
+for both real CLI usage and testing (TestIO).
 
 Usage:
-    # In production code
-    from src.cli.io_interface import ClickIO
-    io = ClickIO()
-    io.secho("Hello!", fg="green")
-
     # In tests
     from src.cli.io_interface import TestIO
     # or from tests.helpers import MockIO
@@ -122,6 +117,36 @@ class CLIIOProtocol(Protocol):
 
         Returns:
             The input line (without trailing newline)
+        """
+        ...
+
+    def table(
+        self,
+        headers: List[str],
+        rows: List[List[str]],
+        title: Optional[str] = None
+    ) -> None:
+        """Display a table with headers and rows.
+
+        Args:
+            headers: List of column header strings
+            rows: List of row data (each row is a list of strings)
+            title: Optional table title
+        """
+        ...
+
+    def panel(
+        self,
+        content: str,
+        title: Optional[str] = None,
+        border_style: str = "blue"
+    ) -> None:
+        """Display content in a panel with optional title.
+
+        Args:
+            content: The content to display in the panel
+            title: Optional panel title
+            border_style: Border color/style (default 'blue')
         """
         ...
 
@@ -274,64 +299,29 @@ class TestIO:
         """Add a confirmation value to the queue."""
         self._confirmations.append(value)
 
-
-class ClickIO:
-    """Real CLI implementation using click library.
-
-    This is the production implementation that actually outputs to
-    the terminal and reads user input.
-    """
-
-    def echo(self, message: str = "", nl: bool = True) -> None:
-        """Output message using click.echo."""
-        click.echo(message, nl=nl)
-
-    def secho(
+    def table(
         self,
-        message: str,
-        fg: Optional[str] = None,
-        bold: bool = False,
-        nl: bool = True
+        headers: List[str],
+        rows: List[List[str]],
+        title: Optional[str] = None
     ) -> None:
-        """Output styled message using click.secho."""
-        click.secho(message, fg=fg, bold=bold, nl=nl)
+        """Display a table (captured as text output)."""
+        if title:
+            self._output_buffer.append(f"{title}\n")
 
-    def styled_echo(
+        # Simple table formatting
+        self._output_buffer.append(" | ".join(headers) + "\n")
+        self._output_buffer.append("-" * (len(" | ".join(headers))) + "\n")
+        for row in rows:
+            self._output_buffer.append(" | ".join(row) + "\n")
+
+    def panel(
         self,
-        message: str,
-        fg: Optional[str] = None,
-        bold: bool = False,
-        nl: bool = True
+        content: str,
+        title: Optional[str] = None,
+        border_style: str = "blue"
     ) -> None:
-        """Alias for secho() for backwards compatibility."""
-        self.secho(message, fg=fg, bold=bold, nl=nl)
-
-    def style(
-        self,
-        text: str,
-        fg: Optional[str] = None,
-        bold: bool = False
-    ) -> str:
-        """Return styled text using click.style."""
-        return click.style(text, fg=fg, bold=bold)
-
-    def prompt(
-        self,
-        text: str,
-        default: str = "",
-        show_default: bool = True
-    ) -> str:
-        """Get user input using click.prompt."""
-        return click.prompt(text, default=default, show_default=show_default)
-
-    def confirm(
-        self,
-        text: str,
-        default: bool = False
-    ) -> bool:
-        """Get confirmation using click.confirm."""
-        return click.confirm(text, default=default)
-
-    def input_line(self) -> str:
-        """Read raw input line."""
-        return input()
+        """Display a panel (captured as text output)."""
+        if title:
+            self._output_buffer.append(f"=== {title} ===\n")
+        self._output_buffer.append(content + "\n")

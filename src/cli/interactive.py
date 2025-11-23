@@ -20,7 +20,7 @@ from .task_router_handler import CLITaskRouterHandler
 from .tasks import CLITaskExecution
 from .utils.session_utils import display_session_save_error
 from .interactive_banner import render_welcome_banner
-from .rich_output import RichIO
+from .unified_io import UnifiedIO
 
 from .exceptions import (
     CLIError,
@@ -109,8 +109,8 @@ class InteractiveMode:
             return
 
         # Show welcome banner with Rich Panel
-        # Use RichIO if available, otherwise fall back to basic io
-        if isinstance(io, RichIO):
+        # Use UnifiedIO if available, otherwise fall back to basic io
+        if isinstance(io, UnifiedIO):
             render_welcome_banner(io, self.session_context.multiline_mode, self.session_context.auto_route_mode)
         else:
             # Fallback for non-Rich IO (e.g., testing)

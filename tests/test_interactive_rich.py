@@ -14,7 +14,7 @@ from io import StringIO
 
 from rich.console import Console
 
-from src.cli.rich_output import RichIO
+from src.cli.unified_io import UnifiedIO
 from src.cli.display import CLIDisplay
 from src.cli.interactive import InteractiveMode
 from tests.helpers import MockIO, ConfigurableTestOrchestrator
@@ -25,13 +25,13 @@ from tests.helpers import MockIO, ConfigurableTestOrchestrator
 # =============================================================================
 
 def make_capturing_rich_io():
-    """Create a RichIO that captures output for testing.
+    """Create a UnifiedIO that captures output for testing.
 
     Returns:
-        Tuple of (RichIO, Console) where Console has record=True
+        Tuple of (UnifiedIO, Console) where Console has record=True
     """
     console = Console(record=True, force_terminal=True, width=120)
-    io = RichIO(console=console)
+    io = UnifiedIO(console=console)
     return io, console
 
 
@@ -632,7 +632,7 @@ class TestRichDisplayIntegration:
         orch = ConfigurableTestOrchestrator()
         display = CLIDisplay(orch, datetime.now(), io)
 
-        # Use the existing show_status which should work with RichIO
+        # Use the existing show_status which should work with UnifiedIO
         display.show_status()
         output = get_captured_output(console)
 
@@ -642,7 +642,7 @@ class TestRichDisplayIntegration:
 
     @pytest.mark.integration
     def test_rich_io_protocol_compatibility(self):
-        """RichIO should remain compatible with CLIIOProtocol."""
+        """UnifiedIO should remain compatible with CLIIOProtocol."""
         io, console = make_capturing_rich_io()
 
         # All protocol methods should work

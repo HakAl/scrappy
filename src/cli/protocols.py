@@ -5,13 +5,14 @@ This module defines the common interface that all CLI handlers must implement,
 enabling consistent behavior, testability, and type checking across the CLI layer.
 """
 
-from typing import TYPE_CHECKING, Protocol, Dict, Any, List, Optional, Callable, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, Dict, Any, List, Optional, Callable, runtime_checkable, Generator
+from contextlib import contextmanager
+from .io_interface import CLIIOProtocol
 
 if TYPE_CHECKING:
     from ..orchestrator.protocols import Orchestrator
-    from rich.console import Console
+    from rich.console import Console, RenderableType
     from rich.layout import Layout
-    from .io_interface import CLIIOProtocol
 
 
 @runtime_checkable
@@ -44,15 +45,14 @@ class OutputSink(Protocol):
         """
         ...
 
-    def post_renderable(self, obj: Any) -> None:
+    def post_renderable(self, obj: "RenderableType") -> None:
         """Post Rich renderable (Panel, Table, Text, etc.).
 
         Rich renderables preserve formatting, colors, and structure.
         Examples: Panel with borders, Table with columns, styled Text.
 
         Args:
-            obj: Rich renderable object or any object that
-                 satisfies rich.protocol.is_renderable()
+            obj: Rich renderable object (Panel, Table, Text, etc.)
         """
         ...
 
@@ -672,4 +672,141 @@ class DisplayManagerProtocol(Protocol):
 
     def disable_dashboard(self) -> None:
         """Disable dashboard mode for this display manager."""
+        ...
+
+
+@runtime_checkable
+class RichOutputProtocol(Protocol):
+    """Extended Rich-specific output operations.
+
+    Provides Rich library features: panels, tables, syntax highlighting,
+    rules, progress bars, and spinners. Implementations may vary in
+    visual representation (CLI vs TUI) but must maintain consistent API.
+    """
+
+    def panel(
+        self,
+        content: str,
+        title: Optional[str] = None,
+        border_style: str = "blue"
+    ) -> None:
+        """Display content in a panel with optional title.
+
+        Args:
+            content: Content to display in panel
+            title: Optional panel title
+            border_style: Border color/style (default 'blue')
+        """
+        ...
+
+    def table(
+        self,
+        headers: List[str],
+        rows: List[List[str]],
+        title: Optional[str] = None
+    ) -> None:
+        """Display a table with headers and rows.
+
+        Args:
+            headers: Column header strings
+            rows: Row data (each row is a list of strings)
+            title: Optional table title
+        """
+        ...
+
+    def syntax(
+        self,
+        code: str,
+        language: str = "python",
+        line_numbers: bool = False
+    ) -> None:
+        """Display syntax-highlighted code.
+
+        Args:
+            code: Code to highlight
+            language: Programming language for highlighting
+            line_numbers: Whether to show line numbers
+        """
+        ...
+
+    def rule(self, title: Optional[str] = None) -> None:
+        """Display a horizontal rule.
+
+        Args:
+            title: Optional title to display in the rule
+        """
+        ...
+
+    @contextmanager
+    def progress(
+        self,
+        total: int,
+        description: str = "Progress"
+    ) -> Generator["ProgressTracker", None, None]:
+        """Create a progress bar context manager.
+
+        Note: Visual representation varies by output mode.
+        CLI: Rich animated progress bar
+        TUI: Text-based progress messages
+
+        Args:
+            total: Total number of steps
+            description: Description text
+
+        Yields:
+            ProgressTracker for updating progress
+        """
+        ...
+
+    @contextmanager
+    def spinner(
+        self,
+        text: str = "Working...",
+        spinner_style: str = "dots"
+    ) -> Generator[None, None, None]:
+        """Create a spinner for indeterminate operations.
+
+        Note: Visual representation varies by output mode.
+        CLI: Rich animated spinner
+        TUI: Start/end messages or no-op
+
+        Args:
+            text: Text to display next to spinner
+            spinner_style: Spinner animation style (CLI only)
+
+        Yields:
+            None (spinner runs automatically)
+        """
+        ...
+
+    @contextmanager
+    def stream(self) -> Generator["StreamWriter", None, None]:
+        """Create a streaming output context.
+
+        Yields:
+            StreamWriter for streaming text output
+        """
+        ...
+
+
+@runtime_checkable
+class UnifiedIOProtocol(CLIIOProtocol, RichOutputProtocol, Protocol):
+    """Complete IO protocol combining basic CLI and Rich features.
+
+    This protocol unifies:
+    - Basic CLI operations (echo, secho, style, prompt, confirm, input_line)
+    - Rich features (panel, table, syntax, rule)
+    - Context managers (progress, spinner, stream)
+
+    Implementations must support both direct console output (CLI mode)
+    and OutputSink routing (Textual/TUI mode).
+    """
+
+    @property
+    def console(self) -> "Console":
+        """Get the underlying Rich Console instance.
+
+        Returns:
+            Console instance for this IO implementation
+        """
         ...

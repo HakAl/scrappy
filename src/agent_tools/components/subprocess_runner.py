@@ -9,17 +9,12 @@ import os
 import subprocess
 import threading
 import time
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from ..protocols import ExecutionResult
 
-
-def safe_print(msg: str) -> None:
-    """Print message safely, handling encoding errors."""
-    try:
-        print(msg)
-    except (UnicodeEncodeError, UnicodeDecodeError):
-        print(msg.encode('utf-8', errors='replace').decode('utf-8'))
+if TYPE_CHECKING:
+    from src.cli.io_interface import CLIIOProtocol
 
 
 class SubprocessRunner:
@@ -28,11 +23,19 @@ class SubprocessRunner:
 
     This class implements a single responsibility: subprocess execution.
     It does NOT handle security validation, output parsing, or platform fixes.
+
+    Following dependency injection principles, accepts optional IO interface
+    for progress output. If not provided, progress messages are suppressed.
     """
 
-    def __init__(self):
-        """Initialize subprocess runner."""
-        pass
+    def __init__(self, io: Optional["CLIIOProtocol"] = None):
+        """Initialize subprocess runner.
+
+        Args:
+            io: Optional IO interface for progress output. If None,
+                progress messages are suppressed.
+        """
+        self._io = io
 
     def execute(
         self,
@@ -93,8 +96,8 @@ class SubprocessRunner:
                         if line:
                             output_lines.append(line.rstrip())
                             last_output_time = time.time()
-                            if stream_output and len(output_lines) % 10 == 0:
-                                safe_print(f"   ... {len(output_lines)} lines processed")
+                            if stream_output and len(output_lines) % 10 == 0 and self._io:
+                                self._io.echo(f"   ... {len(output_lines)} lines processed")
                 except Exception:
                     pass
 
@@ -111,8 +114,8 @@ class SubprocessRunner:
                     process.kill()
                     raise TimeoutError(f"Command timed out after {timeout}s")
 
-                if stall_time > 30 and not stall_warning_shown and stream_output:
-                    safe_print(f"   No output for 30s - command may be waiting for input")
+                if stall_time > 30 and not stall_warning_shown and stream_output and self._io:
+                    self._io.echo(f"   No output for 30s - command may be waiting for input")
                     stall_warning_shown = True
 
                 time.sleep(0.5)
@@ -123,8 +126,8 @@ class SubprocessRunner:
             stdout = "\n".join(output_lines)
             exit_code = process.returncode
 
-            if stream_output:
-                safe_print(f"   Command completed ({len(output_lines)} lines)")
+            if stream_output and self._io:
+                self._io.echo(f"   Command completed ({len(output_lines)} lines)")
 
             return ExecutionResult(
                 stdout=stdout if stdout else "(no output)",

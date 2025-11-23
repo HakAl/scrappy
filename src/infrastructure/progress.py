@@ -7,7 +7,10 @@ progress display strategies (Rich, logging, callbacks, silent).
 
 import logging
 import time
-from typing import Optional, Callable
+from typing import Optional, Callable, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..cli.io_interface import CLIIOProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -345,3 +348,69 @@ class NullProgressReporter:
     def error(self, message: str) -> None:
         """No-op error."""
         pass
+
+
+class UnifiedIOProgressReporter:
+    """
+    Progress reporter that routes through CLIIOProtocol.
+
+    This ensures progress output goes through the IO abstraction and
+    displays correctly in Textual/TUI mode. Uses simple text messages
+    rather than animated spinners.
+
+    Implements ProgressReporterProtocol.
+    """
+
+    def __init__(self, io: "CLIIOProtocol"):
+        """
+        Initialize progress reporter with IO interface.
+
+        Args:
+            io: CLIIOProtocol instance for output
+        """
+        self._io = io
+        self._description: Optional[str] = None
+
+    def start(self, description: str, total: Optional[int] = None) -> None:
+        """
+        Start progress reporting via IO.
+
+        Args:
+            description: Description of the operation
+            total: Total number of items (None for indeterminate progress)
+        """
+        self._description = description
+        if total is not None:
+            self._io.secho(f"{description} (0/{total})", fg="cyan")
+        else:
+            self._io.secho(f"{description}...", fg="cyan")
+
+    def update(self, current: Optional[int] = None, description: Optional[str] = None) -> None:
+        """
+        Update progress via IO.
+
+        Args:
+            current: Current progress count (ignored - updates are minimal to avoid spam)
+            description: Updated description
+        """
+        if description:
+            self._description = description
+            self._io.secho(f"  {description}", fg="cyan")
+
+    def complete(self, message: str = "Complete") -> None:
+        """
+        Mark progress as complete via IO.
+
+        Args:
+            message: Completion message
+        """
+        self._io.secho(f"{message}", fg="green")
+
+    def error(self, message: str) -> None:
+        """
+        Report an error via IO.
+
+        Args:
+            message: Error message
+        """
+        self._io.secho(f"Error: {message}", fg="red")

@@ -53,12 +53,7 @@ except ImportError:
         return None
 
 
-def safe_print(msg: str) -> None:
-    """Print message safely, handling encoding errors."""
-    try:
-        print(msg)
-    except (UnicodeEncodeError, UnicodeDecodeError):
-        print(msg.encode('utf-8', errors='replace').decode('utf-8'))
+# Removed safe_print() - output should go through injected IO protocol, not print()
 
 
 def create_shell_executor(config: "AgentConfig") -> "ShellCommandExecutor":
@@ -122,6 +117,7 @@ class ShellCommandExecutor:
         advisor: Optional["CommandAdvisorProtocol"] = None,
         runner: Optional["SubprocessRunnerProtocol"] = None,
         parser: Optional["OutputParserProtocol"] = None,
+        io: Optional["CLIIOProtocol"] = None,
     ):
         """
         Initialize executor with configuration and optional dependencies.
@@ -133,6 +129,7 @@ class ShellCommandExecutor:
             advisor: Command advisor (default: creates CommandAdvisor)
             runner: Subprocess runner (default: creates SubprocessRunner)
             parser: Output parser (default: creates OutputParser)
+            io: Optional IO interface for progress output (default: None, suppresses output)
         """
         from ..protocols import (
             CommandSecurityProtocol,
@@ -153,6 +150,7 @@ class ShellCommandExecutor:
         self.config = config
         self.timeout = config.command_timeout
         self.max_output = config.max_command_output
+        self._io = io
 
         # Inject dependencies with defaults
         self._security = security or CommandSecurity(
@@ -162,7 +160,7 @@ class ShellCommandExecutor:
             WindowsSanitizer() if is_windows() else UnixSanitizer()
         )
         self._advisor = advisor or CommandAdvisor()
-        self._runner = runner or SubprocessRunner()
+        self._runner = runner or SubprocessRunner(io=io)
         self._parser = parser or OutputParser()
 
     def run(self, command: str, project_root: Path, dry_run: bool = False) -> str:
@@ -194,8 +192,9 @@ class ShellCommandExecutor:
         if is_windows():
             intercept_info = intercept_spring_initializr_download(command, str(project_root))
             if intercept_info and intercept_info.get('should_intercept'):
-                safe_print(f"   [Platform] {intercept_info['reason']}")
-                safe_print(f"   [Suggestion] {intercept_info['suggested_action']}")
+                if self._io:
+                    self._io.echo(f"   [Platform] {intercept_info['reason']}")
+                    self._io.echo(f"   [Suggestion] {intercept_info['suggested_action']}")
                 params = intercept_info.get('template_params', {})
                 return (
                     f"Error: Spring Initializr downloads are unreliable on Windows. "
@@ -226,14 +225,14 @@ class ShellCommandExecutor:
 
         # 5. Pre-execution advice
         advice = self._advisor.analyze_command(command)
-        if advice:
-            safe_print(f"   [ADVICE] {advice}")
+        if advice and self._io:
+            self._io.echo(f"   [ADVICE] {advice}")
 
         # 6. Check for long-running commands
         is_long_running = self._is_long_running_command(command)
-        if is_long_running:
-            safe_print(f"Long-running command detected")
-            safe_print(f"   Timeout: {self.timeout}s | Streaming output enabled")
+        if is_long_running and self._io:
+            self._io.echo(f"Long-running command detected")
+            self._io.echo(f"   Timeout: {self.timeout}s | Streaming output enabled")
 
         # 7. Execute with retry logic
         try:
@@ -323,7 +322,8 @@ class ShellCommandExecutor:
         for attempt in range(max_retries):
             if attempt > 0:
                 wait_time = 2 ** attempt
-                safe_print(f"   Retry attempt {attempt + 1}/{max_retries} after {wait_time}s delay...")
+                if self._io:
+                    self._io.echo(f"   Retry attempt {attempt + 1}/{max_retries} after {wait_time}s delay...")
                 time.sleep(wait_time)
                 retry_count = attempt
 
@@ -349,7 +349,8 @@ class ShellCommandExecutor:
                 if pattern.lower() in output_lower and 'error' in output_lower:
                     is_recoverable_error = True
                     last_error = output
-                    safe_print(f"   Recoverable error detected: {pattern}")
+                    if self._io:
+                        self._io.echo(f"   Recoverable error detected: {pattern}")
                     break
 
             if not is_recoverable_error:

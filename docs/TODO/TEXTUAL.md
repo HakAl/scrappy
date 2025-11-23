@@ -41,40 +41,20 @@ Output via TextualIO.echo/secho → RichLog widget
 
 ## Current Status: BROKEN
 
-
 ### ISSUES
-- no commands work -- no interactions, commands, chat, agent, plan ... nothing
-  - we can see from logs / cache these 'work', just no display to user
-- banner is fixed static
+
 - the user must click the input row to enter text (rather than anywhere in terminal)
 - can't copy text from textual components
-- banner has odd characters everywhere
-- user input area has changed from: 
+- user input area shows both prompts: 
   - You>
   - Type your message or command
-- all colors are changed -- every single item displayed through textual has a new color differing from original implementation
-- many visual issues noted in: docs/TODO/everything is broken.png
-- startup output is not rendered through textual display:
-```>scrappy
-Initializing Scrappy...
-CLI initialized
-Brain: [1;32mcerebras[0m
-Available providers: [36mgithub, cerebras, groq, gemini, cohere[0m
-Context: Not explored (use /context to explore)
-
-Previous session detected:
-  Saved: 2025-11-23T06:50:49.967531
-  Files cached: 0
-  Searches: 0
-  Discoveries: 0
-  Tasks: 0
-  Has conversation history: Yes
-⠸ Indexing files: batch 3 (60 files total)
-Starting fresh session.
-User declined session restore```
-# Textual Integration - Current Status Analysis
-
-## Root Cause Analysis
+- startup output is rendered with an extra blank line between each line
+  - CLI Initialized - prints twice
+- large blue scrollbar on right (no longer uses terminal scroll area -- black bar on right of window)
+- restore session feature is missing -- previously prompted on app start
+- [DEBUG] _handle_help done printed after /help command
+  - extra new line between each help item
+- 
 
 ### Current Architecture Flow
 
@@ -1226,4 +1206,8 @@ NOT testing:
 - Final smoke test of all features
 
 **Total Estimated Time:** 4-5 days for complete implementation (Phases 0-3).
+
+=== 
+
+
 

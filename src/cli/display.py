@@ -6,7 +6,7 @@ Handles help, status, listings, and usage statistics.
 from datetime import datetime
 
 from .io_interface import CLIIOProtocol
-from .rich_output import RichIO
+from .unified_io import UnifiedIO
 from .validators import validate_provider
 from .display_rich import show_help_table, show_status_rich, show_usage_rich
 
@@ -39,8 +39,8 @@ class CLIDisplay:
         Returns:
             None
         """
-        # Use Rich table if RichIO is available
-        if isinstance(self.io, RichIO):
+        # Use Rich table if UnifiedIO is available
+        if isinstance(self.io, UnifiedIO):
             show_help_table(self.io)
         else:
             # Fallback to basic text display
@@ -82,8 +82,8 @@ class CLIDisplay:
         Returns:
             None
         """
-        # Use Rich panel if RichIO is available
-        if isinstance(self.io, RichIO):
+        # Use Rich panel if UnifiedIO is available
+        if isinstance(self.io, UnifiedIO):
             show_status_rich(self.io, self.orchestrator, self.session_start)
         else:
             # Fallback to basic text display
@@ -186,8 +186,8 @@ class CLIDisplay:
         """
         report = self.orchestrator.get_usage_report()
 
-        # Use Rich tables if RichIO is available
-        if isinstance(self.io, RichIO):
+        # Use Rich tables if UnifiedIO is available
+        if isinstance(self.io, UnifiedIO):
             show_usage_rich(self.io, report)
         else:
             # Fallback to basic text display

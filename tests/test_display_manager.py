@@ -144,14 +144,14 @@ class TestDependencyInjection:
     def test_creates_default_io_when_not_provided(self):
         """DisplayManager should create default IO if not injected."""
         from src.cli.display_manager import DisplayManager
-        from src.cli.rich_output import RichIO
+        from src.cli.unified_io import UnifiedIO
 
         display = DisplayManager()
         io = display.get_io()
 
-        # Should have created default RichIO
+        # Should have created default UnifiedIO
         assert io is not None
-        assert isinstance(io, RichIO)
+        assert isinstance(io, UnifiedIO)
 
     @pytest.mark.unit
     def test_creates_default_dashboard_when_enabled_without_injection(self):

@@ -40,7 +40,7 @@ class IndexingError(Exception):
 
 
 # --- Lazy Embedding Function Setup ---
-# NOTE: JinaEmbedFunction is registered at module import (fast, metadata only)
+# NOTE: EmbedFunction is registered at module import (fast, metadata only)
 # The actual TextEmbedding model is created when .create() is called (lazy)
 
 
@@ -48,18 +48,18 @@ def _create_embedding_func():
     """
     Create embedding function (called lazily on first use).
 
-    Uses the custom fastembed-jina embedding function registered in embeddings.py.
-    This provides Jina AI's code-optimized embeddings via FastEmbed.
+    Uses the custom fastembed-embed embedding function registered in embeddings.py.
+    This provides optimized embeddings via FastEmbed.
 
     Returns:
         Initialized embedding function instance
 
     Raises:
-        Exception: If fastembed-jina is not available or initialization fails
+        Exception: If fastembed-embed is not available or initialization fails
     """
-    # Import here to ensure JinaEmbedFunction is registered
-    from .embeddings import JinaEmbedFunction  # noqa: F401
-    return get_registry().get("fastembed-jina").create()
+    # Import here to ensure EmbedFunction is registered
+    from .embeddings import EmbedFunction  # noqa: F401
+    return get_registry().get("fastembed-embed").create()
 
 
 def _create_code_schema():
@@ -95,7 +95,7 @@ class LanceDBSearchProvider:
     - Graceful error handling
     - Windows path normalization
     - Security (path traversal prevention)
-    - Custom FastEmbed + Jina embeddings for code understanding
+    - Custom FastEmbed + embeddings
 
     Architecture:
     - Follows SOLID principles (dependency injection, single responsibility)
@@ -477,7 +477,7 @@ class LanceDBSearchProvider:
                             texts = [item["content"][:2000] for item in batch]
                             logger.debug(f"Generating embeddings for {len(texts)} chunks")
                             t0 = time.time()
-                            embeddings = self._embedding_func.generate_embeddings(texts)
+                            embeddings = list(self._embedding_func.generate_embeddings(texts))
                             t1 = time.time()
                             logger.debug(f"Embedding generation took {t1-t0:.2f}s")
 
@@ -511,10 +511,10 @@ class LanceDBSearchProvider:
             try:
                 import time
                 # Generate embeddings for final batch
-                texts = [item["content"] for item in batch]
+                texts = [item["content"][:2000] for item in batch]
                 logger.debug(f"Generating embeddings for {len(texts)} chunks")
                 t0 = time.time()
-                embeddings = self._embedding_func.generate_embeddings(texts)
+                embeddings = list(self._embedding_func.generate_embeddings(texts))
                 t1 = time.time()
                 logger.debug(f"Embedding generation took {t1-t0:.2f}s")
 
@@ -562,19 +562,25 @@ class LanceDBSearchProvider:
         if not self.is_indexed():
             return SearchResult(chunks=[], tokens_used=0, limit_hit=None)
 
+        self._ensure_schema()  # Ensure model is loaded
+
         table = self._db.open_table(TABLE_NAME)
+        # 1. Embed the query manually
+        # Note: embed_query returns a generator, use list() + next() or standard methods
+        query_vector = self._embedding_func.generate_embeddings([query])[0]
 
         # Hybrid Search: Vector (semantic) + FTS (keyword)
         try:
             results = (
-                table.search(query, query_type="hybrid")
+                table.search(query_vector, query_type="hybrid") # Pass VECTOR, not string
+                .text(query) # Pass string separately for FTS/Reranking context
                 .limit(max_results)
                 .to_list()
             )
         except Exception as e:
             # Fallback if FTS index broken or missing
             logger.warning(f"Hybrid search failed ({e}), falling back to vector search")
-            results = table.search(query, query_type="vector").limit(max_results).to_list()
+            results = table.search(query_vector, query_type="vector").limit(max_results).to_list()
 
         final_chunks = []
         used_tokens = 0

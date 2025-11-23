@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Optional, Dict
 
 from ..io_interface import CLIIOProtocol, TestIO
-from ..rich_output import RichIO
+from ..unified_io import UnifiedIO
 from ..display import CLIDisplay
 from ..session import CLISessionManager
 from ..codebase import CLICodebaseAnalysis
@@ -46,7 +46,7 @@ def get_io_interface(
         return io
     if test_mode:
         return TestIO()
-    return RichIO()
+    return UnifiedIO()
 
 
 def create_context_state(ctx: Any) -> Dict[str, Any]:
@@ -146,7 +146,7 @@ def create_cli_from_context(ctx: Any, io: Optional[CLIIOProtocol] = None) -> "CL
 
     Args:
         ctx: Click context object with configuration in ctx.obj
-        io: Optional IO interface (creates ClickIO if not provided)
+        io: IO interface
 
     Returns:
         CLI instance configured from context
@@ -181,7 +181,7 @@ def create_cli(config: Dict[str, Any], io: Optional[CLIIOProtocol] = None) -> "C
             - context_aware: Enable context-aware prompts (default True)
             - verbose_selection: Show verbose provider selection (default False)
             - show_provider_status: Show provider status on startup (default False)
-        io: Optional IO interface (creates ClickIO if not provided)
+        io: IO interface (creates if not provided)
 
     Returns:
         CLI instance configured from dict

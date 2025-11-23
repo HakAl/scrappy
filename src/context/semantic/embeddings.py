@@ -1,7 +1,7 @@
 """
 Custom FastEmbed embedding function for LanceDB.
 
-Provides Jina AI embeddings optimized for code understanding.
+Provides embeddings optimized for code understanding.
 Uses FastEmbed for fast, local embedding generation.
 """
 import logging
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 # Module-level cached model (singleton pattern for expensive resource)
 # This ensures TextEmbedding is only loaded once, even if multiple
-# JinaEmbedFunction instances are created by LanceDB
+# EmbedFunction instances are created by LanceDB
 _CACHED_MODEL: Optional[TextEmbedding] = None
 
 
@@ -38,12 +38,12 @@ def _get_or_create_model() -> TextEmbedding:
     return _CACHED_MODEL
 
 
-@register("fastembed-jina")
-class JinaEmbedFunction(TextEmbeddingFunction):
+@register("fastembed-embed")
+class EmbedFunction(TextEmbeddingFunction):
     """
-    Custom embedding function using Jina AI's code-optimized model via FastEmbed.
+    Custom embedding function using model via FastEmbed.
 
-    Model: jinaai/jina-embeddings-v2-base-code
+    Model: BAAI/bge-small-en-v1.5
     - Optimized for code understanding and semantic search
     - 768 dimensions
     - 8K context window
@@ -53,22 +53,22 @@ class JinaEmbedFunction(TextEmbeddingFunction):
         from lancedb.embeddings import get_registry
 
         registry = get_registry()
-        embed_func = registry.get("fastembed-jina").create()
+        embed_func = registry.get("fastembed-embed").create()
 
     Architecture Notes:
         - Registration (@register) happens at module import (fast, metadata only)
         - TextEmbedding model is cached at module level (singleton pattern)
-        - Multiple JinaEmbedFunction instances share the same TextEmbedding model
+        - Multiple EmbedFunction instances share the same TextEmbedding model
         - Follows SOLID: Single responsibility, dependency inversion ready
     """
 
-    name: str = "jinaai/jina-embeddings-v2-base-code"
+    name: str = "BAAI/bge-small-en-v1.5"
 
     def __init__(self, **kwargs):
         """
         Initialize the embedding function.
 
-        This is called lazily when registry.get("fastembed-jina").create() is invoked.
+        This is called lazily when registry.get("fastembed-embed").create() is invoked.
         The TextEmbedding model is cached and reused across all instances.
 
         Args:

@@ -518,7 +518,7 @@ class MockIO:
         """Return a mock progress context manager.
 
         Returns a context manager that provides a mock progress tracker
-        compatible with RichIO.progress().
+        compatible with UnifiedIO.progress().
 
         Args:
             total: Total number of steps
@@ -2012,7 +2012,7 @@ class MockStaticWidget:
 
 
 class MockTextualIO:
-    """Mock TextualIO for testing.
+    """Mock for Textual-based IO (UnifiedIO with OutputSink) for testing.
 
     Implements CLIIOProtocol for testing Textual-based CLI code
     without requiring a real Textual app or terminal.
@@ -2027,7 +2027,7 @@ class MockTextualIO:
     """
 
     def __init__(self, app: Optional[MockTextualApp] = None):
-        """Initialize mock TextualIO.
+        """Initialize mock for Textual IO.
 
         Args:
             app: MockTextualApp instance (creates one if not provided)
@@ -2323,7 +2323,7 @@ class MockIO:
         """Return a mock progress context manager.
 
         Returns a context manager that provides a mock progress tracker
-        compatible with RichIO.progress().
+        compatible with UnifiedIO.progress().
 
         Args:
             total: Total number of steps

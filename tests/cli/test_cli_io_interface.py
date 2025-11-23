@@ -297,22 +297,6 @@ class TestMockIO:
         assert result == "styled"
 
 
-class TestClickIO:
-    """Tests for ClickIO implementation - real CLI output using click."""
-
-    @pytest.mark.unit
-    def test_clickio_style_returns_styled_string(self):
-        """Test that ClickIO.style() returns a styled string."""
-        from src.cli.io_interface import ClickIO
-        io = ClickIO()
-
-        result = io.style("test", fg="green")
-
-        # Result should be a string (with ANSI codes when terminal supports it)
-        assert isinstance(result, str)
-        assert "test" in result
-
-
 class TestIOProtocolUsage:
     """Tests demonstrating how to use the IO protocol in CLI code."""
 

@@ -75,11 +75,22 @@ class OutputHandlerInterface(ABC):
 
 class ConsoleOutputHandler(OutputHandlerInterface):
     """
-    Console output handler that prints to stdout.
+    Console output handler that uses CLIIOProtocol for output.
 
     This is the default handler for CLI usage. It provides
     formatted output for classification decisions and execution status.
+
+    Following dependency injection principles, accepts optional IO interface.
+    If not provided, uses NullOutputHandler behavior (silent).
     """
+
+    def __init__(self, io: Optional['CLIIOProtocol'] = None):
+        """Initialize with optional IO interface.
+
+        Args:
+            io: Optional CLIIOProtocol instance. If None, output is suppressed.
+        """
+        self._io = io
 
     def log_classification(
         self,
@@ -88,12 +99,14 @@ class ConsoleOutputHandler(OutputHandlerInterface):
         complexity: int,
         reasoning: str
     ) -> None:
-        """Print classification information to console."""
-        print(f"\nTask Classification:")
-        print(f"  Type: {task_type}")
-        print(f"  Confidence: {confidence:.2f}")
-        print(f"  Complexity: {complexity}/10")
-        print(f"  Reasoning: {reasoning}")
+        """Output classification information via IO interface."""
+        if not self._io:
+            return
+        self._io.echo(f"\nTask Classification:")
+        self._io.echo(f"  Type: {task_type}")
+        self._io.echo(f"  Confidence: {confidence:.2f}")
+        self._io.echo(f"  Complexity: {complexity}/10")
+        self._io.echo(f"  Reasoning: {reasoning}")
 
     def log_provider_selection(
         self,
@@ -101,17 +114,23 @@ class ConsoleOutputHandler(OutputHandlerInterface):
         model: Optional[str],
         source: str
     ) -> None:
-        """Print provider selection to console."""
+        """Output provider selection via IO interface."""
+        if not self._io:
+            return
         model_info = f" ({model})" if model else ""
-        print(f"  Provider: {provider}{model_info} ({source})")
+        self._io.echo(f"  Provider: {provider}{model_info} ({source})")
 
     def log_execution_start(self, strategy_name: str) -> None:
-        """Print execution start to console."""
-        print(f"  Executing with: {strategy_name}")
+        """Output execution start via IO interface."""
+        if not self._io:
+            return
+        self._io.echo(f"  Executing with: {strategy_name}")
 
     def log_info(self, message: str) -> None:
-        """Print info message to console."""
-        print(f"  {message}")
+        """Output info message via IO interface."""
+        if not self._io:
+            return
+        self._io.echo(f"  {message}")
 
 
 class BufferOutputHandler(OutputHandlerInterface):
@@ -286,7 +305,7 @@ class CLIIOOutputHandler(OutputHandlerInterface):
         Initialize with a CLIIOProtocol instance.
 
         Args:
-            io: CLIIOProtocol instance (RichIO, ClickIO, or TextualIO)
+            io: CLIIOProtocol instance (RichIO, or TextualIO)
         """
         self._io = io
 
@@ -328,18 +347,19 @@ class RichOutputHandler(OutputHandlerInterface):
     Rich-enhanced output handler with formatted tables.
 
     Displays task classification information in visually appealing
-    Rich tables with progress bars for complexity and styled output.
+    tables with progress bars for complexity and styled output.
+
+    Uses injected IO protocol methods (table, panel, etc.).
     """
 
-    def __init__(self, console: Optional[Console] = None):
+    def __init__(self, io: "CLIIOProtocol"):
         """
-        Initialize Rich output handler.
+        Initialize output handler with injected IO.
 
         Args:
-            console: Optional Rich Console instance for testing.
-                    If not provided, creates a default console.
+            io: IO protocol implementation
         """
-        self._console = console if console is not None else Console()
+        self._io = io
         self._classification_data: dict = {}
 
     def log_classification(

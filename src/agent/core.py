@@ -267,8 +267,8 @@ class CodeAgent:
 
     def _create_default_io(self):
         """Create default IO interface."""
-        from ..cli.rich_output import RichIO
-        return RichIO()
+        from ..cli.unified_io import UnifiedIO
+        return UnifiedIO()
 
     def _create_default_file_system(self):
         """Create default file system."""

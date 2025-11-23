@@ -21,7 +21,7 @@ from .core import CLI
 from .utils.cli_factory import create_cli_from_context
 from .utils.session_utils import restore_session_to_cli
 from .utils.error_utils import run_with_error_handling, run_with_recovery
-from .rich_output import RichIO
+from .unified_io import UnifiedIO
 from .validators import validate_path, validate_provider
 from .exceptions import (
     CLIError,
@@ -71,13 +71,13 @@ def cli(ctx, brain, auto_explore, no_context, resume, no_save, show_providers, v
 
     # If no subcommand, start interactive mode
     if ctx.invoked_subcommand is None:
+        # Create CLI normally - no special setup needed
         cli_instance = create_cli_from_context(ctx)
         cli_instance.auto_save = ctx.obj['auto_save']
 
         # Resume previous session if requested
         if resume:
-            io = RichIO()
-            restore_session_to_cli(cli_instance, io)
+            restore_session_to_cli(cli_instance, cli_instance.io)
 
         cli_instance.interactive_mode()
 
@@ -93,7 +93,7 @@ def cli(ctx, brain, auto_explore, no_context, resume, no_save, show_providers, v
 def query(ctx, prompt, provider, model, temperature, max_tokens, with_context):
     """Send a one-shot query to the orchestrator."""
     cli_instance = create_cli_from_context(ctx)
-    io = RichIO()
+    io = cli_instance.io
 
     # Validate provider if explicitly specified
     if provider:
@@ -104,8 +104,8 @@ def query(ctx, prompt, provider, model, temperature, max_tokens, with_context):
                 field="provider",
                 value=provider
             )
-            click.secho(f"Error: {error}", fg="red")
-            click.echo(f"Suggestion: {error.suggestion}")
+            io.secho(f"Error: {error}", fg="red")
+            io.echo(f"Suggestion: {error.suggestion}")
             sys.exit(1)
         target_provider = provider_validation.provider
     else:
@@ -113,7 +113,7 @@ def query(ctx, prompt, provider, model, temperature, max_tokens, with_context):
 
     logger = get_logger("cli.query", io=io)
     logger.info("Query started", extra={"provider": target_provider, "with_context": with_context})
-    click.echo(f"Querying {target_provider}...\n")
+    io.echo(f"Querying {target_provider}...\n")
 
     def execute_query():
         response = cli_instance.orchestrator.delegate(
@@ -125,8 +125,8 @@ def query(ctx, prompt, provider, model, temperature, max_tokens, with_context):
             use_context=with_context if with_context else None
         )
 
-        click.echo(response.content)
-        click.secho(
+        io.echo(response.content)
+        io.secho(
             f"\n[{response.provider}/{response.model} | {response.tokens_used} tokens | {response.latency_ms:.0f}ms]",
             fg="cyan"
         )
@@ -141,7 +141,8 @@ def query(ctx, prompt, provider, model, temperature, max_tokens, with_context):
 def plan(ctx, task, max_steps):
     """Create a task plan."""
     cli_instance = create_cli_from_context(ctx)
-    click.echo(f"Planning: {task}\n")
+    io = cli_instance.io
+    io.echo(f"Planning: {task}\n")
     cli_instance.tasks.plan_task(task)
 
 
@@ -153,8 +154,8 @@ def plan(ctx, task, max_steps):
 def reason(ctx, question, context, evidence):
     """Reason about a question with evidence."""
     cli_instance = create_cli_from_context(ctx)
-    io = RichIO()
-    click.echo(f"Reasoning: {question}\n")
+    io = cli_instance.io
+    io.echo(f"Reasoning: {question}\n")
 
     def execute_reasoning():
         response = cli_instance.orchestrator.reason(
@@ -164,13 +165,13 @@ def reason(ctx, question, context, evidence):
         )
 
         if isinstance(response, dict):
-            click.secho("Analysis:", bold=True)
-            click.echo(response.get('analysis', ''))
-            click.secho("\nConclusion: ", bold=True, nl=False)
-            click.echo(response.get('conclusion', ''))
-            click.echo(f"Confidence: {response.get('confidence', 'N/A')}")
+            io.secho("Analysis:", bold=True)
+            io.echo(response.get('analysis', ''))
+            io.secho("\nConclusion: ", bold=True, nl=False)
+            io.echo(response.get('conclusion', ''))
+            io.echo(f"Confidence: {response.get('confidence', 'N/A')}")
         else:
-            click.echo(response)
+            io.echo(response)
 
     run_with_error_handling(io, execute_reasoning)
 
@@ -218,14 +219,15 @@ def provider_info(ctx, verbose):
     ctx.obj['verbose_selection'] = verbose
     ctx.obj['show_providers'] = True  # Always show status for this command
     cli_instance = create_cli_from_context(ctx)
+    io = cli_instance.io
 
     # Show additional programmatic info if verbose
     if verbose:
         info = cli_instance.orchestrator.get_provider_selection_info()
-        click.secho("\nProgrammatic Info:", bold=True)
-        click.echo(f"  Available: {info['available_providers']}")
-        click.echo(f"  Selected brain: {info['selected_brain']}")
-        click.echo(f"  Priority order: {' > '.join(info['selection_priority'])}")
+        io.secho("\nProgrammatic Info:", bold=True)
+        io.echo(f"  Available: {info['available_providers']}")
+        io.echo(f"  Selected brain: {info['selected_brain']}")
+        io.echo(f"  Priority order: {' > '.join(info['selection_priority'])}")
 
 
 @cli.command()
@@ -253,8 +255,7 @@ def interactive(ctx, resume):
     cli_instance = create_cli_from_context(ctx)
 
     if resume:
-        io = RichIO()
-        restore_session_to_cli(cli_instance, io)
+        restore_session_to_cli(cli_instance, cli_instance.io)
 
     cli_instance.interactive_mode()
 
@@ -266,10 +267,11 @@ def interactive(ctx, resume):
 def context(ctx, clear, refresh):
     """Show and manage codebase context."""
     cli_instance = create_cli_from_context(ctx)
+    io = cli_instance.io
 
     if clear:
         cli_instance.orchestrator.context.clear_cache()
-        click.secho("Context cache cleared.", fg="green")
+        io.secho("Context cache cleared.", fg="green")
     elif refresh:
         cli_instance.session_mgr.manage_context("refresh")
     else:
@@ -283,6 +285,7 @@ def context(ctx, clear, refresh):
 def explore(ctx, path, save):
     """Explore and learn about a codebase."""
     cli_instance = create_cli_from_context(ctx)
+    io = cli_instance.io
 
     # Validate path input with existence and directory checks
     path_validation = validate_path(path, check_exists=True, must_be_dir=True)
@@ -292,28 +295,28 @@ def explore(ctx, path, save):
             path=Path(path),
             operation="explore"
         )
-        click.secho(f"Error: {error}", fg="red")
-        click.echo(f"Suggestion: {error.suggestion}")
+        io.secho(f"Error: {error}", fg="red")
+        io.echo(f"Suggestion: {error.suggestion}")
         sys.exit(1)
 
     path_obj = Path(path_validation.path).resolve()
 
-    click.secho(f"\nExploring: {path_obj}", bold=True)
-    click.echo("-" * 50)
+    io.secho(f"\nExploring: {path_obj}", bold=True)
+    io.echo("-" * 50)
 
     original_cwd = os.getcwd()
     try:
         os.chdir(path_obj)
-        click.echo("Scanning codebase...")
+        io.echo("Scanning codebase...")
         result = cli_instance.orchestrator.explore_project(force=True)
         summary = cli_instance.orchestrator.context.summary or "No summary generated"
     finally:
         os.chdir(original_cwd)
 
-    click.echo()
-    click.secho("Codebase Summary:", bold=True)
-    click.echo("-" * 50)
-    click.echo(summary)
+    io.echo()
+    io.secho("Codebase Summary:", bold=True)
+    io.echo("-" * 50)
+    io.echo(summary)
 
     if save:
         summary_file = path_obj / "CODEBASE_SUMMARY.md"
@@ -321,7 +324,7 @@ def explore(ctx, path, save):
             f.write(f"# Codebase Summary\n\n")
             f.write(f"Generated: {datetime.now().isoformat()}\n\n")
             f.write(summary)
-        click.secho(f"\nSaved to: {summary_file}", fg="green")
+        io.secho(f"\nSaved to: {summary_file}", fg="green")
 
 
 @cli.command()
@@ -342,32 +345,33 @@ def agent(ctx, task, dry_run, no_checkpoint, auto_confirm, max_iterations):
         scrappy agent "Add a health check endpoint to the Flask app"
     """
     cli_instance = create_cli_from_context(ctx)
+    io = cli_instance.io
 
-    click.secho(f"\nCode Agent - Task: {task}", bold=True)
-    click.echo("-" * 60)
+    io.secho(f"\nCode Agent - Task: {task}", bold=True)
+    io.echo("-" * 60)
 
     checkpoint_hash = None
     if not no_checkpoint:
-        click.echo("Creating git checkpoint...")
+        io.echo("Creating git checkpoint...")
         checkpoint_hash = create_git_checkpoint(str(cli_instance.orchestrator.context.project_path))
         if checkpoint_hash:
-            click.secho(f"Checkpoint created: {checkpoint_hash[:8]}", fg="green")
+            io.secho(f"Checkpoint created: {checkpoint_hash[:8]}", fg="green")
         else:
-            click.secho("Could not create checkpoint (not a git repo?)", fg="yellow")
+            io.secho("Could not create checkpoint (not a git repo?)", fg="yellow")
 
     code_agent = CodeAgent(cli_instance.orchestrator)
     code_agent.dry_run = dry_run
 
-    click.echo(f"\nAgent Configuration:")
-    click.echo(f"  Planner (smart tasks): {code_agent.planner}")
-    click.echo(f"  Executor (fast tasks): {code_agent.executor}")
-    click.echo(f"  Project root: {code_agent.project_root}")
-    click.echo(f"  Max iterations: {max_iterations}")
+    io.echo(f"\nAgent Configuration:")
+    io.echo(f"  Planner (smart tasks): {code_agent.planner}")
+    io.echo(f"  Executor (fast tasks): {code_agent.executor}")
+    io.echo(f"  Project root: {code_agent.project_root}")
+    io.echo(f"  Max iterations: {max_iterations}")
     if dry_run:
-        click.secho("  Mode: DRY RUN (no actual changes)", fg="yellow")
+        io.secho("  Mode: DRY RUN (no actual changes)", fg="yellow")
     if auto_confirm:
-        click.secho("  WARNING: Auto-confirm enabled - no approval prompts", fg="red", bold=True)
-    click.echo()
+        io.secho("  WARNING: Auto-confirm enabled - no approval prompts", fg="red", bold=True)
+    io.echo()
 
     logger = get_logger("cli.agent")
     logger.info("Agent started", extra={
@@ -379,37 +383,37 @@ def agent(ctx, task, dry_run, no_checkpoint, auto_confirm, max_iterations):
     try:
         result = code_agent.run(task, max_iterations=max_iterations, auto_confirm=auto_confirm)
 
-        click.echo("\n" + "=" * 60)
+        io.echo("\n" + "=" * 60)
         if result['success']:
-            click.secho("Task Completed Successfully!", fg="green", bold=True)
+            io.secho("Task Completed Successfully!", fg="green", bold=True)
             logger.info("Agent task completed", extra={"task": task, "iterations": result['iterations']})
         else:
-            click.secho("Task Did Not Complete", fg="yellow", bold=True)
+            io.secho("Task Did Not Complete", fg="yellow", bold=True)
             logger.warning("Agent task incomplete", extra={"task": task, "iterations": result['iterations']})
 
-        click.echo(f"Result: {result['result']}")
-        click.echo(f"Iterations: {result['iterations']}")
+        io.echo(f"Result: {result['result']}")
+        io.echo(f"Iterations: {result['iterations']}")
 
         if result['audit_log']:
-            click.secho("\nAudit Log:", bold=True)
+            io.secho("\nAudit Log:", bold=True)
             for entry in result['audit_log']:
-                approved = click.style("Approved", fg="green") if entry['approved'] else click.style("Denied", fg="red")
-                click.echo(f"  [{entry['timestamp'][:19]}] {entry['action']} - {approved}")
+                approved = io.style("Approved", fg="green") if entry['approved'] else io.style("Denied", fg="red")
+                io.echo(f"  [{entry['timestamp'][:19]}] {entry['action']} - {approved}")
 
         log_path = code_agent.save_audit_log()
-        click.secho(f"\nAudit log saved to: {log_path}", fg="cyan")
+        io.secho(f"\nAudit log saved to: {log_path}", fg="cyan")
 
         if checkpoint_hash and not dry_run:
-            click.echo(f"\nTo rollback changes: git reset --hard {checkpoint_hash}")
+            io.echo(f"\nTo rollback changes: git reset --hard {checkpoint_hash}")
 
     except KeyboardInterrupt:
-        click.echo("\n\nAgent interrupted by user.")
+        io.echo("\n\nAgent interrupted by user.")
         logger.info("Agent interrupted by user", extra={"task": task})
         sys.exit(1)
     except CLIError as e:
-        click.secho(f"\nAgent error: {e}", fg="red")
+        io.secho(f"\nAgent error: {e}", fg="red")
         if e.suggestion:
-            click.echo(f"Suggestion: {e.suggestion}")
+            io.echo(f"Suggestion: {e.suggestion}")
         logger.error("Agent CLI error", extra=e.logging_extra())
         sys.exit(1)
     except Exception as e:
@@ -418,8 +422,8 @@ def agent(ctx, task, dry_run, no_checkpoint, auto_confirm, max_iterations):
             task_name=task,
             original=e
         )
-        click.secho(f"\n{error}", fg="red")
-        click.echo(f"Suggestion: {error.suggestion}")
+        io.secho(f"\n{error}", fg="red")
+        io.echo(f"Suggestion: {error.suggestion}")
         logger.exception("Unexpected agent error")
         sys.exit(1)
 
@@ -436,9 +440,12 @@ def main():
         config = get_config()
         config.validate()
     except Exception as e:
-        # If config fails to load/validate, print error but continue with defaults
-        click.secho(f"Warning: Config validation failed: {e}", fg="yellow")
-        click.echo("Continuing with default configuration...\n")
+        # Early warning before Textual UI is available
+        # Use simple UnifiedIO for config warnings
+        from .unified_io import UnifiedIO
+        io = UnifiedIO()
+        io.secho(f"Warning: Config validation failed: {e}", fg="yellow")
+        io.echo("Continuing with default configuration...\n")
 
     cli(obj={})
 

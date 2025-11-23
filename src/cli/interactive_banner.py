@@ -5,19 +5,22 @@ Provides a styled welcome banner using Rich Panel with ASCII art
 and mode status display.
 """
 
-from typing import Any
+from typing import TYPE_CHECKING
 from rich.panel import Panel
 from rich.text import Text
 
+if TYPE_CHECKING:
+    from src.cli.protocols import UnifiedIOProtocol
 
-def display_banner(io: Any) -> None:
+
+def display_banner(io: "UnifiedIOProtocol") -> None:
     """Display banner using appropriate IO.
 
     The TextualConsole automatically detects Panel as a renderable
     and posts it via the message queue, ensuring thread-safe display.
 
     Args:
-        io: IO instance with console property (TextualIO or RichIO)
+        io: UnifiedIO instance with console property for Rich renderables
     """
     # Build banner content
     title_text = Text()
@@ -67,7 +70,7 @@ def display_banner(io: Any) -> None:
 
 
 def render_welcome_banner(
-    io: Any,
+    io: "UnifiedIOProtocol",
     multiline_mode: bool = True,
     auto_route_mode: bool = False
 ) -> None:
@@ -76,7 +79,7 @@ def render_welcome_banner(
     Legacy function for compatibility. New code should use display_banner().
 
     Args:
-        io: IO instance for output
+        io: UnifiedIO instance for output
         multiline_mode: Whether multiline input is enabled
         auto_route_mode: Whether auto-routing is enabled
     """

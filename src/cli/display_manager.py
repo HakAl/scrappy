@@ -1,8 +1,8 @@
 """
-Display manager for coordinating between RichIO and RichDashboard.
+Display manager for coordinating between UnifiedIO and RichDashboard.
 
 This module provides DisplayManager, which coordinates between simple
-RichIO output and full RichDashboard display, enabling seamless mode
+UnifiedIO output and full RichDashboard display, enabling seamless mode
 switching based on configuration.
 
 Protocol-First Design:
@@ -12,12 +12,12 @@ Protocol-First Design:
 
 Usage:
     from src.cli.display_manager import DisplayManager
-    from src.cli.rich_output import RichIO
+    from src.cli.unified_io import UnifiedIO
     from src.cli.rich_dashboard import RichDashboard
 
     # Create display manager with dashboard enabled
     display = DisplayManager(
-        io=RichIO(),
+        io=UnifiedIO(),
         dashboard=RichDashboard(),
         dashboard_enabled=True
     )
@@ -38,16 +38,16 @@ from rich.live import Live
 
 from .io_interface import CLIIOProtocol
 from .protocols import DashboardProtocol
-from .rich_output import RichIO
+from .unified_io import UnifiedIO
 from .rich_dashboard import RichDashboard
 
 
 class DisplayManager:
     """
-    Manages display output coordination between RichIO and RichDashboard.
+    Manages display output coordination between UnifiedIO and RichDashboard.
 
     Implements DisplayManagerProtocol for protocol-based dependency injection.
-    Coordinates between simple output (RichIO) and live dashboard display
+    Coordinates between simple output (UnifiedIO) and live dashboard display
     (RichDashboard), enabling mode switching at runtime.
 
     Responsibilities:
@@ -73,7 +73,7 @@ class DisplayManager:
         Initialize display manager with IO and optional dashboard.
 
         Args:
-            io: IO interface for output. Creates default RichIO if not provided.
+            io: IO interface for output. Creates default UnifiedIO if not provided.
             dashboard: Optional dashboard interface. Creates default if enabled.
             dashboard_enabled: Whether dashboard mode is initially enabled.
 
@@ -94,7 +94,7 @@ class DisplayManager:
 
     def _create_default_io(self) -> CLIIOProtocol:
         """Factory method for default IO."""
-        return RichIO()
+        return UnifiedIO()
 
     def _create_default_dashboard(self) -> DashboardProtocol:
         """Factory method for default dashboard."""
@@ -105,7 +105,7 @@ class DisplayManager:
         Get the IO interface for output.
 
         Returns:
-            CLIIOProtocol implementation (typically RichIO)
+            CLIIOProtocol implementation (typically UnifiedIO)
         """
         return self._io
 

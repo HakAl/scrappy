@@ -45,6 +45,7 @@ class CodebaseContext:
         semantic_initializer: Optional[BackgroundInitializerProtocol] = None,
         path_provider: Optional[PathProviderProtocol] = None,
         file_collector: Optional['FileCollectorProtocol'] = None,
+        io: Optional['CLIIOProtocol'] = None,
     ):
         """
         Initialize codebase context (dependencies only - NO file I/O by default).
@@ -62,6 +63,7 @@ class CodebaseContext:
             semantic_initializer: Background initializer for semantic search.
             path_provider: Path provider for data files (auto-creates if None)
             file_collector: Injectable file collector for semantic search (default: creates SemanticFileCollector)
+            io: Injectable IO interface for progress reporting (default: None, falls back to NullProgressReporter)
         """
         # Store config for factory methods
         self._initial_project_path = project_path
@@ -100,6 +102,9 @@ class CodebaseContext:
         self._semantic_search_attempted = False  # Track if we tried to create it
         self._file_collector = file_collector  # Injected file collector for semantic search
         self._indexing_progress_callback = None  # Callback for indexing progress updates
+
+        # IO interface for progress reporting
+        self._io = io  # Injected IO interface (optional)
 
         # Auto-load cache if requested (for backwards compatibility)
         if auto_load_cache:
@@ -625,8 +630,8 @@ Be concise and technical. No fluff."""
         Gracefully degrades - semantic search becomes unavailable on failure.
         """
         # Create progress reporter for this indexing session
-        from ..infrastructure.progress import RichProgressReporter
-        progress = RichProgressReporter()
+        from ..infrastructure.progress import UnifiedIOProgressReporter, NullProgressReporter
+        progress = UnifiedIOProgressReporter(self._io) if self._io else NullProgressReporter()
         progress_started = False
 
         try:

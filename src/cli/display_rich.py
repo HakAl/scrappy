@@ -14,18 +14,18 @@ from rich.progress import Progress, BarColumn, TextColumn, TaskProgressColumn
 from rich.tree import Tree
 from rich.text import Text
 
-from .rich_output import RichIO
+from .unified_io import UnifiedIO
 
 
 # =============================================================================
 # Help Display
 # =============================================================================
 
-def show_help_table(io: RichIO, category: Optional[str] = None) -> None:
+def show_help_table(io: UnifiedIO, category: Optional[str] = None) -> None:
     """Display help information as a Rich Table.
 
     Args:
-        io: RichIO instance for output
+        io: UnifiedIO instance for output
         category: Optional category filter (e.g., 'provider', 'task')
     """
     # Define command categories
@@ -85,19 +85,16 @@ def show_help_table(io: RichIO, category: Optional[str] = None) -> None:
         if filtered:
             categories = filtered
 
-    # Create table
-    table = Table(title="Available Commands", show_header=True, header_style="bold cyan")
-    table.add_column("Command", style="yellow", width=20)
-    table.add_column("Description", style="white")
-
+    # Build rows with category headers
+    headers = ["Command", "Description"]
+    rows = []
     for cat_name, commands in categories.items():
-        # Add category header as a section
-        table.add_row(f"[bold]{cat_name}[/bold]", "", style="cyan")
+        rows.append([f"--- {cat_name} ---", ""])
         for cmd, desc in commands:
-            table.add_row(f"  {cmd}", desc)
-        table.add_row("", "")  # Spacing between categories
+            rows.append([cmd, desc])
+        rows.append(["", ""])  # Spacing
 
-    io.console.print(table)
+    io.table(headers, rows, title="Available Commands")
 
 
 # =============================================================================
@@ -105,7 +102,7 @@ def show_help_table(io: RichIO, category: Optional[str] = None) -> None:
 # =============================================================================
 
 def show_status_rich(
-    io: RichIO,
+    io: UnifiedIO,
     orchestrator,
     session_start: datetime
 ) -> None:
@@ -119,46 +116,25 @@ def show_status_rich(
     status = orchestrator.status()
 
     # Build status content
-    content = Text()
-
-    # Current brain
     brain = status.get('orchestrator_brain', status.get('brain', 'unknown'))
-    content.append("Current Brain: ", style="bold")
-    content.append(f"{brain}\n", style="bold green")
-
-    # Provider count
     providers = status.get('available_providers', [])
-    content.append("Total Providers: ", style="bold")
-    content.append(f"{len(providers)}\n", style="white")
-
-    # Available providers
-    content.append("Available: ", style="bold")
-    content.append(f"{', '.join(providers)}\n", style="cyan")
-
-    # Tasks completed
     tasks = status.get('tasks_executed', 0)
-    content.append("Tasks Completed: ", style="bold")
-    content.append(f"{tasks}\n", style="white")
-
-    # Session duration
     duration = datetime.now() - session_start
-    content.append("Session Duration: ", style="bold")
-    content.append(str(duration).split('.')[0], style="white")  # Remove microseconds
 
-    # Create panel
-    panel = Panel(
-        content,
-        title="[bold cyan]System Status[/bold cyan]",
-        border_style="cyan"
-    )
-    io.console.print(panel)
+    content = f"""Current Brain: {brain}
+Total Providers: {len(providers)}
+Available: {', '.join(providers)}
+Tasks Completed: {tasks}
+Session Duration: {str(duration).split('.')[0]}"""
+
+    io.panel(content, title="System Status", border_style="cyan")
 
 
 # =============================================================================
 # Rate Limits Display
 # =============================================================================
 
-def show_rate_limits_rich(io: RichIO, rate_data: Dict[str, Any]) -> None:
+def show_rate_limits_rich(io: UnifiedIO, rate_data: Dict[str, Any]) -> None:
     """Display rate limits with progress bars.
 
     Args:
@@ -171,12 +147,9 @@ def show_rate_limits_rich(io: RichIO, rate_data: Dict[str, Any]) -> None:
         io.secho("No rate limit data available.", fg="yellow")
         return
 
-    # Create table for rate limits
-    table = Table(title="Rate Limit Usage", show_header=True, header_style="bold cyan")
-    table.add_column("Provider", style="bold")
-    table.add_column("Requests", justify="right")
-    table.add_column("Usage", width=20)
-    table.add_column("Tokens", justify="right")
+    # Build table data
+    headers = ["Provider", "Requests", "Usage %", "Tokens"]
+    rows = []
 
     for provider_name, data in providers.items():
         requests_today = data.get('requests_today', 0)
@@ -184,46 +157,25 @@ def show_rate_limits_rich(io: RichIO, rate_data: Dict[str, Any]) -> None:
         tokens_today = data.get('tokens_today', 0)
         token_limit = data.get('daily_token_limit', 10000)
 
-        # Calculate percentages
         request_pct = (requests_today / daily_limit * 100) if daily_limit > 0 else 0
-        token_pct = (tokens_today / token_limit * 100) if token_limit > 0 else 0
-
-        # Create progress bar representation
-        bar_width = 15
-        filled = int(request_pct / 100 * bar_width)
-        empty = bar_width - filled
-
-        # Color based on usage
-        if request_pct >= 90:
-            bar_color = "red"
-        elif request_pct >= 70:
-            bar_color = "yellow"
-        else:
-            bar_color = "green"
-
-        progress_bar = f"[{bar_color}]{'|' * filled}[/{bar_color}][dim]{'.' * empty}[/dim]"
-
-        # Format request info
-        request_info = f"{requests_today}/{daily_limit} ({request_pct:.0f}%)"
-
-        # Format token info
+        request_info = f"{requests_today}/{daily_limit}"
         token_info = f"{tokens_today:,}/{token_limit:,}"
 
-        table.add_row(
+        rows.append([
             provider_name.upper(),
             request_info,
-            progress_bar,
+            f"{request_pct:.0f}%",
             token_info
-        )
+        ])
 
-    io.console.print(table)
+    io.table(headers, rows, title="Rate Limit Usage")
 
 
 # =============================================================================
 # Usage Statistics Display
 # =============================================================================
 
-def show_usage_rich(io: RichIO, report: Dict[str, Any]) -> None:
+def show_usage_rich(io: UnifiedIO, report: Dict[str, Any]) -> None:
     """Display usage statistics with Rich formatting.
 
     Args:
@@ -231,76 +183,54 @@ def show_usage_rich(io: RichIO, report: Dict[str, Any]) -> None:
         report: Usage report dictionary
     """
     # Summary panel
-    summary = Text()
-    summary.append("Total Tasks: ", style="bold")
-    summary.append(f"{report.get('total_tasks', 0)}\n", style="green bold")
+    # Build summary content
+    summary_parts = [f"Total Tasks: {report.get('total_tasks', 0)}"]
 
     if 'cached_hits' in report:
-        summary.append("Cache Hits: ", style="bold")
-        summary.append(f"{report['cached_hits']}\n", style="green")
-        summary.append("API Calls: ", style="bold")
-        summary.append(f"{report.get('api_calls', 0)}\n", style="white")
+        summary_parts.append(f"Cache Hits: {report['cached_hits']}")
+        summary_parts.append(f"API Calls: {report.get('api_calls', 0)}")
 
-    summary.append("Session Duration: ", style="bold")
-    summary.append(f"{report.get('session_duration', 'N/A')}", style="white")
+    summary_parts.append(f"Session Duration: {report.get('session_duration', 'N/A')}")
 
-    panel = Panel(
-        summary,
-        title="[bold cyan]Usage Summary[/bold cyan]",
-        border_style="cyan"
-    )
-    io.console.print(panel)
+    io.panel("\n".join(summary_parts), title="Usage Summary", border_style="cyan")
 
     # Provider breakdown table
     by_provider = report.get('by_provider', {})
     if by_provider:
-        table = Table(title="By Provider", show_header=True, header_style="bold cyan")
-        table.add_column("Provider", style="bold")
-        table.add_column("Requests", justify="right")
-        table.add_column("Tokens", justify="right")
-        table.add_column("Avg Tokens", justify="right")
-        table.add_column("Latency", justify="right")
+        headers = ["Provider", "Requests", "Tokens", "Avg Tokens", "Latency"]
+        rows = []
 
         for provider, stats in by_provider.items():
-            table.add_row(
+            rows.append([
                 provider,
                 str(stats.get('count', 0)),
                 f"{stats.get('total_tokens', 0):,}",
                 f"{stats.get('avg_tokens', 0):.1f}",
                 f"{stats.get('total_latency_ms', 0):.0f}ms"
-            )
+            ])
 
-        io.console.print(table)
+        io.table(headers, rows, title="By Provider")
 
     # Cache statistics
     cache_stats = report.get('cache_stats', {})
     if cache_stats:
-        cache_text = Text()
-        cache_text.append("Exact Hit Rate: ", style="bold")
-        cache_text.append(f"{cache_stats.get('exact_hit_rate', 'N/A')}\n", style="white")
-        cache_text.append("Intent Hit Rate: ", style="bold")
-        cache_text.append(f"{cache_stats.get('intent_hit_rate', 'N/A')}\n", style="white")
-
         total_entries = (
             cache_stats.get('exact_cache_entries', 0) +
             cache_stats.get('intent_cache_entries', 0)
         )
-        cache_text.append("Total Entries: ", style="bold")
-        cache_text.append(str(total_entries), style="white")
 
-        cache_panel = Panel(
-            cache_text,
-            title="[bold]Cache Statistics[/bold]",
-            border_style="blue"
-        )
-        io.console.print(cache_panel)
+        cache_content = f"""Exact Hit Rate: {cache_stats.get('exact_hit_rate', 'N/A')}
+Intent Hit Rate: {cache_stats.get('intent_hit_rate', 'N/A')}
+Total Entries: {total_entries}"""
+
+        io.panel(cache_content, title="Cache Statistics", border_style="blue")
 
 
 # =============================================================================
 # Plan/Task Tree Display
 # =============================================================================
 
-def show_plan_tree(io: RichIO, plan: Dict[str, Any]) -> None:
+def show_plan_tree(io: UnifiedIO, plan: Dict[str, Any]) -> None:
     """Display plan and tasks as a Rich Tree structure.
 
     Args:
@@ -326,16 +256,25 @@ def show_plan_tree(io: RichIO, plan: Dict[str, Any]) -> None:
 
         # Format based on status
         if status == 'completed':
-            icon = "[green][x][/green]"
-            style = "dim"
+            icon = "[x]"
         elif status == 'in_progress':
-            icon = "[yellow][>][/yellow]"
-            style = "bold yellow"
+            icon = "[>]"
         else:  # pending
-            icon = "[dim][ ][/dim]"
-            style = "dim"
+            icon = "[ ]"
 
-        task_text = f"{icon} [{style}]{description}[/{style}]"
+        task_text = f"{icon} {description}"
         tree.add(task_text)
 
-    io.console.print(tree)
+    # Use io.echo instead of accessing console directly
+    # Tree rendering will be simpler without Rich formatting
+    io.echo(f"\n{title}:")
+    for task in tasks:
+        status = task.get('status', 'pending')
+        description = task.get('description', 'Unknown task')
+        if status == 'completed':
+            icon = "[x]"
+        elif status == 'in_progress':
+            icon = "[>]"
+        else:
+            icon = "[ ]"
+        io.echo(f"  {icon} {description}")

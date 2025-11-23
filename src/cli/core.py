@@ -20,7 +20,7 @@ from .smart_query import CLISmartQuery
 from .agent_manager import CLIAgentManager
 from .task_router_handler import CLITaskRouterHandler
 from .io_interface import CLIIOProtocol
-from .rich_output import RichIO
+from .unified_io import UnifiedIO
 from .tool_detector import needs_tool_support
 from .input_handler import InputHandler
 from .state_manager import PlanStateManager
@@ -127,6 +127,7 @@ class CLI:
 
         # Display initialization info (unless show_provider_status already did)
         if not self._show_provider_status:
+            self.io.echo("CLI initialized")
             brain_name = self.orchestrator.brain
             if brain_name:
                 self.io.echo(f"Brain: {self.io.style(brain_name, fg='green', bold=True)}")
@@ -159,7 +160,7 @@ class CLI:
 
     def _create_default_io(self) -> CLIIOProtocol:
         """Create default IO interface."""
-        return RichIO()
+        return UnifiedIO()
 
     def _create_default_orchestrator(self) -> AgentOrchestrator:
         """Create default orchestrator."""
@@ -198,19 +199,36 @@ class CLI:
         )
 
     def _create_interactive_mode(self) -> TextualInteractiveMode:
-        """Create TextualInteractiveMode with orchestrator.
+        """Create TextualInteractiveMode with all dependencies.
 
-        TextualInteractiveMode now uses a simplified architecture where
-        the app creates its own IO and routes commands directly to the
-        orchestrator via the delegate() method.
+        Phase 1A: TextualInteractiveMode reuses the TextualIO created before
+        CLI.initialize() ran, ensuring startup messages are buffered properly.
+
+        Returns:
+            TextualInteractiveMode instance ready to launch TUI
         """
-        return TextualInteractiveMode(orchestrator=self.orchestrator)
+        # Create command router for this interactive session
+        command_router = self._create_command_router()
+
+        return TextualInteractiveMode(
+            orchestrator=self.orchestrator,
+            session_context=self.session_context,
+            state_manager=self.state_manager,
+            input_handler=self.input_handler,
+            command_router=command_router,
+            display=self.display,
+            smart=self.smart,
+            task_router=self.task_router,
+            tasks=self.tasks,
+            logger=self.logger,
+            io=self.io  # Pass existing TextualIO created before initialize()
+        )
 
     def _show_semantic_search_progress(self):
         """
-        Display semantic search initialization progress with Rich Live.
+        Display semantic search initialization progress.
 
-        Uses Live display for non-interfering, transient progress updates.
+        Uses IO abstraction for progress display to work with Textual.
         """
         import time
 
@@ -224,51 +242,26 @@ class CLI:
             return
 
         try:
-            from rich.console import Console
-            from rich.live import Live
-            from rich.spinner import Spinner
-            from rich.text import Text
-
-            console = Console(stderr=True)
-
-            with Live(
-                Spinner("dots", text=Text("Loading semantic search...", style="cyan")),
-                console=console,
-                transient=True,
-                refresh_per_second=10
-            ) as live:
+            # Use IO spinner context manager - simpler than Live display
+            with self.io.spinner("Loading semantic search..."):
                 max_wait_seconds = 2.0
                 start_time = time.time()
 
                 while not self.orchestrator.context.is_semantic_search_ready():
                     # Check timeout
                     if time.time() - start_time > max_wait_seconds:
-                        live.update(
-                            Spinner("dots", text=Text(
-                                "Semantic search loading in background...",
-                                style="yellow"
-                            ))
-                        )
-                        time.sleep(0.3)
                         break
-
-                    # Update status
-                    current_status = self.orchestrator.context.get_semantic_initialization_status()
-                    if current_status and current_status != "Not started":
-                        live.update(
-                            Spinner("dots", text=Text(current_status, style="cyan"))
-                        )
 
                     time.sleep(0.1)
 
-                # Show completion if ready
-                if self.orchestrator.context.is_semantic_search_ready():
-                    live.update(Text("[OK] Semantic search ready", style="green"))
-                    time.sleep(0.3)
-                    # Disappears on context exit due to transient=True
+            # Show completion message if ready
+            if self.orchestrator.context.is_semantic_search_ready():
+                self.io.secho("Semantic search ready", fg="green")
+            else:
+                self.io.secho("Semantic search loading in background...", fg="yellow")
 
-        except ImportError:
-            # Fallback for missing Rich
+        except Exception as e:
+            # Gracefully handle any errors
             if not self.orchestrator.context.is_semantic_search_ready():
                 status = self.orchestrator.context.get_semantic_initialization_status()
                 if status:

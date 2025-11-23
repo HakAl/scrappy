@@ -5,8 +5,9 @@ Provides an interactive terminal UI using the Textual framework,
 wrapping the existing InteractiveMode with a modern UI.
 """
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 import logging
+from queue import Queue, Empty
 from textual.app import App, ComposeResult
 from textual.message import Message
 from textual.widgets import Input, RichLog
@@ -56,33 +57,47 @@ class WriteRenderable(Message):
 class TextualOutputAdapter:
     """Adapter that implements OutputSink for Textual App.
 
-    This adapter bridges the OutputSink protocol to Textual's message system,
-    enabling thread-safe posting of output from worker threads to the UI.
+    This adapter bridges the OutputSink protocol to a thread-safe queue.
+    The Textual app consumes from this queue using a worker thread.
+
+    No circular dependency - adapter has no knowledge of the app.
     """
 
-    def __init__(self, app: "ScrappyApp"):
-        """Initialize adapter with reference to Textual app.
-
-        Args:
-            app: The ScrappyApp instance to post messages to
-        """
-        self.app = app
+    def __init__(self):
+        """Initialize adapter with message queue."""
+        self._queue: Queue[tuple[str, Any]] = Queue()
 
     def post_output(self, content: str) -> None:
-        """Post plain text via message.
+        """Post plain text to queue.
 
         Args:
             content: Plain text content to write
         """
-        self.app.post_message(WriteOutput(content))
+        self._queue.put(('output', content))
 
     def post_renderable(self, obj: Any) -> None:
-        """Post Rich renderable via message.
+        """Post Rich renderable to queue.
 
         Args:
             obj: Rich renderable object (Panel, Table, Text, etc.)
         """
-        self.app.post_message(WriteRenderable(obj))
+        self._queue.put(('renderable', obj))
+
+    def get_message(self, block: bool = True, timeout: Optional[float] = None) -> Optional[tuple[str, Any]]:
+        """Get next message from queue.
+
+        Args:
+            block: Whether to block waiting for message
+            timeout: Optional timeout in seconds
+
+        Returns:
+            Tuple of (type, content) where type is 'output' or 'renderable',
+            or None if queue is empty and not blocking
+        """
+        try:
+            return self._queue.get(block=block, timeout=timeout)
+        except Empty:
+            return None
 
 
 class ScrappyApp(App):
@@ -92,7 +107,7 @@ class ScrappyApp(App):
     - Scrollable output area for conversation history (RichLog)
     - Input field for user messages and commands
     - Native terminal copy/paste support (mouse disabled)
-    - Thread-safe message-based output routing
+    - Thread-safe message-based output routing via worker thread
     """
 
     # Disable mouse to restore native terminal copy/paste
@@ -118,21 +133,17 @@ class ScrappyApp(App):
     }
     """
 
-    def __init__(self, orchestrator):
-        """Initialize the Textual app with orchestrator.
+    def __init__(self, interactive_mode: "InteractiveMode", output_adapter: TextualOutputAdapter):
+        """Initialize the Textual app with InteractiveMode.
 
         Args:
-            orchestrator: The orchestrator instance for routing commands
+            interactive_mode: The InteractiveMode instance with UnifiedIO
+            output_adapter: The TextualOutputAdapter to consume messages from
         """
         super().__init__()
-        self.orchestrator = orchestrator
-
-        # Create output adapter and IO
-        self.output_adapter = TextualOutputAdapter(self)
-
-        # Import TextualIO here to avoid circular import issues
-        from src.cli.textual_io import TextualIO
-        self.io = TextualIO(self.output_adapter)
+        self.interactive_mode = interactive_mode
+        self.output_adapter = output_adapter
+        self._should_stop_consumer = False
 
     def compose(self) -> ComposeResult:
         """Create child widgets.
@@ -157,9 +168,38 @@ class ScrappyApp(App):
         # Focus input immediately - fixes "click to type" issue
         self.query_one(Input).focus()
 
-        # Display banner
+        # Start worker thread to consume output queue
+        self.consume_output_queue()
+
+        # Display welcome banner
         from src.cli.interactive_banner import display_banner
-        display_banner(self.io)
+        display_banner(self.interactive_mode.io)
+
+    @work(exclusive=False, thread=True)
+    def consume_output_queue(self) -> None:
+        """Worker thread that consumes output queue and posts to UI.
+
+        Runs continuously, blocking on queue.get() until messages are available.
+        Posts Textual messages to update the UI thread-safely.
+        """
+        while not self._should_stop_consumer and self.is_running:
+            try:
+                # Block waiting for next message (with timeout to check stop flag)
+                message = self.output_adapter.get_message(block=True, timeout=0.1)
+
+                if message is None:
+                    continue
+
+                msg_type, content = message
+
+                # Post to Textual message queue for UI thread
+                if msg_type == 'output':
+                    self.post_message(WriteOutput(content))
+                elif msg_type == 'renderable':
+                    self.post_message(WriteRenderable(content))
+
+            except Exception as e:
+                logger.exception(f"Error consuming output queue: {e}")
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         """Handle user input submission.
@@ -175,9 +215,6 @@ class ScrappyApp(App):
         # Clear input immediately
         self.query_one(Input).value = ""
 
-        # Echo user input
-        self.io.secho(f"You> {user_input}", fg="cyan")
-
         # Process in worker thread
         self.process_command(user_input)
 
@@ -186,29 +223,26 @@ class ScrappyApp(App):
         """Process command in worker thread.
 
         Blocking I/O here won't freeze UI. The @work decorator handles
-        threading automatically.
+        threading automatically. Calls InteractiveMode._process_input()
+        which handles all command routing and output.
 
         Args:
             user_input: The user's input string
         """
         try:
-            # Check for exit commands
-            if user_input.lower() in ["/exit", "/quit", "exit", "quit"]:
+            # Call InteractiveMode to process input (handles commands, routing, and output)
+            should_continue = self.interactive_mode._process_input(user_input)
+
+            # Exit if requested
+            if not should_continue:
                 self.exit()
-                return
-
-            # Route to orchestrator (blocking I/O is ok here)
-            result = self.orchestrator.delegate(user_input)
-
-            # Post result back (thread-safe via message)
-            if result:
-                self.output_adapter.post_output(result)
 
         except Exception as e:
             # Post error (thread-safe via message)
             from rich.text import Text
             error_text = Text(f"Error: {str(e)}", style="red")
             self.output_adapter.post_renderable(error_text)
+            logger.exception("Error processing command")
 
     def on_write_output(self, message: WriteOutput) -> None:
         """Handle plain text output.
