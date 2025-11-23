@@ -14,22 +14,6 @@ if TYPE_CHECKING:
 from .protocols import AgentUIProtocol
 
 
-def safe_print(*args, **kwargs):
-    """Safely handles Unicode encoding errors on Windows."""
-    try:
-        print(*args, **kwargs)
-    except UnicodeEncodeError:
-        text = ' '.join(str(arg) for arg in args)
-        safe_text = text.encode('utf-8', errors='replace').decode('utf-8', errors='replace')
-        try:
-            print(safe_text, **kwargs)
-        except Exception:
-            ascii_text = ''.join(c if ord(c) < 128 else '?' for c in text)
-            print(ascii_text, **kwargs)
-    except Exception:
-        pass
-
-
 class AgentUI:
     """
     Agent user interface implementation.

@@ -3,60 +3,53 @@ Multi-provider operations for the CLI.
 Handles synthesis and delegation across multiple providers.
 """
 
-from typing import Optional
-
 from .io_interface import CLIIOProtocol
-from .rich_output import RichIO
 from .validators import is_empty_or_whitespace, validate_provider
 
 
 class CLIMultiProvider:
     """Handles multi-provider coordination operations."""
 
-    def __init__(self, orchestrator):
+    def __init__(self, orchestrator, io: CLIIOProtocol):
         """Initialize multi-provider handler.
 
         Args:
             orchestrator: The AgentOrchestrator instance
+            io: I/O interface for output
         """
         self.orchestrator = orchestrator
+        self.io = io
 
-    def synthesize_mode(self, io: Optional[CLIIOProtocol] = None):
+    def synthesize_mode(self):
         """Interactive synthesis mode - gather responses from multiple providers.
 
         Prompts user for a question and provider selection, queries each selected
         provider, then synthesizes their responses into a combined answer.
 
-        Args:
-            io: I/O interface for input/output. Defaults to ClickIO if None.
-
         State Changes:
             - Adds discovery to orchestrator working memory with synthesis info
 
         Side Effects:
-            - Prompts user for question and provider selection via io
+            - Prompts user for question and provider selection via self.io
             - Makes multiple LLM API calls (one per provider + synthesis)
-            - Writes progress and results to stdout via io
+            - Writes progress and results to stdout via self.io
 
         Returns:
             None
         """
-        if io is None:
-            io = RichIO()
+        self.io.secho("\nSynthesis Mode", bold=True)
+        self.io.echo("-" * 50)
+        self.io.echo("This will query multiple providers and synthesize their responses.")
 
-        io.secho("\nSynthesis Mode", bold=True)
-        io.echo("-" * 50)
-        io.echo("This will query multiple providers and synthesize their responses.")
-
-        prompt = io.prompt("Enter your question")
+        prompt = self.io.prompt("Enter your question")
         if is_empty_or_whitespace(prompt):
-            io.echo("No question provided.")
+            self.io.echo("No question provided.")
             return
 
         available = self.orchestrator.providers.list_available()
-        io.echo(f"\nAvailable providers: {', '.join(available)}")
+        self.io.echo(f"\nAvailable providers: {', '.join(available)}")
 
-        providers_input = io.prompt("Providers to query (comma-separated, or 'all')")
+        providers_input = self.io.prompt("Providers to query (comma-separated, or 'all')")
 
         if providers_input.lower() == 'all':
             providers_to_use = available
@@ -65,34 +58,34 @@ class CLIMultiProvider:
             providers_to_use = [p for p in providers_to_use if p in available]
 
         if len(providers_to_use) < 2:
-            io.secho("Need at least 2 providers for synthesis.", fg="yellow")
+            self.io.secho("Need at least 2 providers for synthesis.", fg="yellow")
             return
 
-        io.echo(f"\nQuerying: {', '.join(providers_to_use)}")
+        self.io.echo(f"\nQuerying: {', '.join(providers_to_use)}")
 
         results = []
         for provider in providers_to_use:
-            io.echo(f"  Asking {provider}...", nl=False)
+            self.io.echo(f"  Asking {provider}...", nl=False)
             try:
                 response = self.orchestrator.delegate(provider, prompt)
                 results.append(response)  # Append LLMResponse object, not .content
-                io.secho(f" Done ({response.tokens_used} tokens)", fg="green")
+                self.io.secho(f" Done ({response.tokens_used} tokens)", fg="green")
             except Exception as e:
-                io.secho(f" Error: {e}", fg="red")
+                self.io.secho(f" Error: {e}", fg="red")
 
         if len(results) < 2:
-            io.secho("Not enough responses for synthesis.", fg="yellow")
+            self.io.secho("Not enough responses for synthesis.", fg="yellow")
             return
 
-        io.echo("\nSynthesizing responses...")
+        self.io.echo("\nSynthesizing responses...")
         synthesis = self.orchestrator.synthesize(
             results,
             "Combine these perspectives into a comprehensive answer:"
         )
 
-        io.secho(f"\nSynthesized Response:", bold=True)
-        io.echo("-" * 50)
-        io.echo(synthesis)
+        self.io.secho(f"\nSynthesized Response:", bold=True)
+        self.io.echo("-" * 50)
+        self.io.echo(synthesis)
 
         # Save synthesis result to working memory
         self.orchestrator.working_memory.add_discovery(
@@ -100,7 +93,7 @@ class CLIMultiProvider:
             "synthesis"
         )
 
-    def delegate_mode(self, args: str, io: Optional[CLIIOProtocol] = None):
+    def delegate_mode(self, args: str):
         """Delegate a task to a specific provider.
 
         Sends a prompt directly to a specified provider, bypassing the default
@@ -110,37 +103,33 @@ class CLIMultiProvider:
         Args:
             args: Space-separated string of "provider prompt". If empty,
                 prompts user interactively for both.
-            io: I/O interface for input/output. Defaults to ClickIO if None.
 
         State Changes:
             - Adds discovery to orchestrator working memory with delegation info
 
         Side Effects:
-            - May prompt user for provider/prompt via io
+            - May prompt user for provider/prompt via self.io
             - Makes LLM API call to specified provider
-            - Writes response to stdout via io
+            - Writes response to stdout via self.io
 
         Returns:
             None
         """
-        if io is None:
-            io = RichIO()
-
         if not args:
-            io.echo("Usage: /delegate <provider> <prompt>")
-            io.echo("   or: /delegate (for interactive mode)")
+            self.io.echo("Usage: /delegate <provider> <prompt>")
+            self.io.echo("   or: /delegate (for interactive mode)")
 
-            provider = io.prompt("Provider")
-            prompt = io.prompt("Prompt")
+            provider = self.io.prompt("Provider")
+            prompt = self.io.prompt("Prompt")
         else:
             parts = args.split(maxsplit=1)
             if len(parts) < 2:
-                io.echo("Usage: /delegate <provider> <prompt>")
+                self.io.echo("Usage: /delegate <provider> <prompt>")
                 return
             provider, prompt = parts
 
         if is_empty_or_whitespace(provider) or is_empty_or_whitespace(prompt):
-            io.secho("Both provider and prompt are required.", fg="yellow")
+            self.io.secho("Both provider and prompt are required.", fg="yellow")
             return
 
         # Validate provider with availability check
@@ -148,17 +137,17 @@ class CLIMultiProvider:
         validation = validate_provider(provider, available_providers=available)
 
         if not validation.is_valid:
-            io.secho(f"{validation.error}", fg="red")
+            self.io.secho(f"{validation.error}", fg="red")
             return
 
-        io.echo(f"\nDelegating to {validation.provider}...")
+        self.io.echo(f"\nDelegating to {validation.provider}...")
 
         try:
             response = self.orchestrator.delegate(validation.provider, prompt)
-            io.secho(f"\nResponse from {validation.provider}:", bold=True)
-            io.echo("-" * 50)
-            io.echo(response.content)
-            io.secho(
+            self.io.secho(f"\nResponse from {validation.provider}:", bold=True)
+            self.io.echo("-" * 50)
+            self.io.echo(response.content)
+            self.io.secho(
                 f"\n[{response.model} | {response.tokens_used} tokens | {response.latency_ms:.0f}ms]",
                 fg="cyan"
             )
@@ -169,4 +158,4 @@ class CLIMultiProvider:
                 "delegation"
             )
         except Exception as e:
-            io.secho(f"Error: {e}", fg="red")
+            self.io.secho(f"Error: {e}", fg="red")

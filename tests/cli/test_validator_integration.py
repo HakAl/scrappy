@@ -24,7 +24,7 @@ class TestCommandRouterValidation:
 
         # Create all required handlers
         session_start = datetime.now()
-        handlers = initialize_cli_handlers(self.orchestrator, session_start)
+        handlers = initialize_cli_handlers(self.orchestrator, session_start, self.io)
 
         # Create session context for shared state
         self.session_context = SessionContext()

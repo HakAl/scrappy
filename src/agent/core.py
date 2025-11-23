@@ -19,33 +19,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..cli.io_interface import CLIIOProtocol
 
-
-def safe_print(*args, **kwargs):
-    """
-    Print function that safely handles Unicode encoding errors on Windows.
-
-    Replaces unencodable characters instead of crashing with 'charmap' codec error.
-    """
-    try:
-        print(*args, **kwargs)
-    except UnicodeEncodeError:
-        # Fallback: encode with 'replace' error handling
-        text = ' '.join(str(arg) for arg in args)
-        # Replace problematic characters with '?'
-        safe_text = text.encode('utf-8', errors='replace').decode('utf-8', errors='replace')
-        # Try to print the safe version
-        try:
-            print(safe_text, **kwargs)
-        except Exception:
-            # Last resort: strip all non-ASCII
-            ascii_text = ''.join(c if ord(c) < 128 else '?' for c in text)
-            print(ascii_text, **kwargs)
-    except Exception as e:
-        # Catch-all for any other print errors
-        try:
-            print(f"[Output encoding error: {type(e).__name__}]", **kwargs)
-        except Exception:
-            pass  # Give up silently if we can't print at all
 from ..orchestrator_adapter import (
     OrchestratorAdapter,
     AgentOrchestratorAdapter,

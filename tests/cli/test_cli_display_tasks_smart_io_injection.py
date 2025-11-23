@@ -31,31 +31,28 @@ class TestDisplayIOInjection:
         """Set up test fixtures."""
         self.orchestrator = ConfigurableTestOrchestrator()
         self.session_start = datetime.now()
+        self.io = MockIO()
         from src.cli.display import CLIDisplay
-        self.display = CLIDisplay(self.orchestrator, self.session_start)
+        self.display = CLIDisplay(self.orchestrator, self.session_start, self.io)
 
     def test_show_help_accepts_io_parameter(self):
-        """show_help() should accept an io parameter."""
-        io = MockIO()
+        """show_help() should use injected io from constructor."""
+        # Should not raise TypeError
+        self.display.show_help()
 
-        # Should not raise TypeError for unexpected keyword argument
-        self.display.show_help(io=io)
-
-        # Verify output went to io object
-        output = io.get_output()
+        # Verify output went to self.io object
+        output = self.io.get_output()
         assert "Available Commands" in output
 
     def test_show_help_outputs_header(self):
         """show_help() should output header with styling through io."""
-        io = MockIO()
+        self.display.show_help()
 
-        self.display.show_help(io=io)
-
-        output = io.get_output()
+        output = self.io.get_output()
         assert "Available Commands" in output
 
         # Check styled output
-        styled = io.get_styled_outputs()
+        styled = self.io.get_styled_outputs()
         header_outputs = [s for s in styled if "Available Commands" in s['text']]
         assert len(header_outputs) > 0
         assert header_outputs[0]['fg'] == 'cyan'
@@ -63,11 +60,9 @@ class TestDisplayIOInjection:
 
     def test_show_help_outputs_all_sections(self):
         """show_help() should output key command sections through io."""
-        io = MockIO()
+        self.display.show_help()
 
-        self.display.show_help(io=io)
-
-        output = io.get_output()
+        output = self.io.get_output()
 
         # Check key sections are present (fallback mode has condensed sections)
         assert "Chat" in output
@@ -80,11 +75,9 @@ class TestDisplayIOInjection:
 
     def test_show_help_command_styling(self):
         """show_help() should style command names through io."""
-        io = MockIO()
+        self.display.show_help()
 
-        self.display.show_help(io=io)
-
-        output = io.get_output()
+        output = self.io.get_output()
 
         # Commands should be present
         assert "/help" in output
@@ -92,21 +85,17 @@ class TestDisplayIOInjection:
         assert "/plan" in output
 
     def test_show_status_accepts_io_parameter(self):
-        """show_status() should accept an io parameter."""
-        io = MockIO()
+        """show_status() should use injected io from constructor."""
+        self.display.show_status()
 
-        self.display.show_status(io=io)
-
-        output = io.get_output()
+        output = self.io.get_output()
         assert "System Status" in output
 
     def test_show_status_outputs_header(self):
         """show_status() should output header with styling through io."""
-        io = MockIO()
+        self.display.show_status()
 
-        self.display.show_status(io=io)
-
-        styled = io.get_styled_outputs()
+        styled = self.io.get_styled_outputs()
         header_outputs = [s for s in styled if "System Status" in s['text']]
         assert len(header_outputs) > 0
         assert header_outputs[0]['fg'] == 'cyan'
@@ -114,38 +103,31 @@ class TestDisplayIOInjection:
 
     def test_show_status_outputs_brain_info(self):
         """show_status() should output brain info through io."""
-        io = MockIO()
         self.orchestrator.brain = 'anthropic'
 
-        self.display.show_status(io=io)
+        self.display.show_status()
 
-        output = io.get_output()
+        output = self.io.get_output()
         assert "Current Brain" in output
         assert "anthropic" in output
 
     def test_show_status_outputs_providers(self):
         """show_status() should output provider info through io."""
-        io = MockIO()
+        self.display.show_status()
 
-        self.display.show_status(io=io)
-
-        output = io.get_output()
+        output = self.io.get_output()
         assert "Total Providers" in output
         assert "Available" in output
 
     def test_show_status_outputs_session_duration(self):
         """show_status() should output session duration through io."""
-        io = MockIO()
+        self.display.show_status()
 
-        self.display.show_status(io=io)
-
-        output = io.get_output()
+        output = self.io.get_output()
         assert "Session Duration" in output
 
     def test_list_providers_accepts_io_parameter(self):
         """list_providers() should accept an io parameter."""
-        io = MockIO()
-
         # Mock provider info
         self.orchestrator.providers = MagicMock()
         self.orchestrator.providers.get_provider_info.return_value = {
@@ -161,21 +143,19 @@ class TestDisplayIOInjection:
             }
         }
 
-        self.display.list_providers(io=io)
+        self.display.list_providers()
 
-        output = io.get_output()
+        output = self.io.get_output()
         assert "Available Providers" in output
 
     def test_list_providers_outputs_header(self):
         """list_providers() should output header with styling through io."""
-        io = MockIO()
-
         self.orchestrator.providers = MagicMock()
         self.orchestrator.providers.get_provider_info.return_value = {}
 
-        self.display.list_providers(io=io)
+        self.display.list_providers()
 
-        styled = io.get_styled_outputs()
+        styled = self.io.get_styled_outputs()
         header_outputs = [s for s in styled if "Available Providers" in s['text']]
         assert len(header_outputs) > 0
         assert header_outputs[0]['fg'] == 'cyan'
@@ -184,6 +164,9 @@ class TestDisplayIOInjection:
     def test_list_providers_active_provider_styling(self):
         """list_providers() should style active providers in green through io."""
         io = MockIO()
+        # Create a new display instance with the test io
+        from src.cli.display import CLIDisplay
+        display = CLIDisplay(self.orchestrator, self.session_start, io)
 
         self.orchestrator.providers = MagicMock()
         self.orchestrator.providers.get_provider_info.return_value = {
@@ -199,7 +182,7 @@ class TestDisplayIOInjection:
             }
         }
 
-        self.display.list_providers(io=io)
+        display.list_providers()
 
         styled = io.get_styled_outputs()
         active_outputs = [s for s in styled if "Active" in s['text']]
@@ -209,6 +192,9 @@ class TestDisplayIOInjection:
     def test_list_providers_inactive_provider_styling(self):
         """list_providers() should style inactive providers in red through io."""
         io = MockIO()
+        # Create a new display instance with the test io
+        from src.cli.display import CLIDisplay
+        display = CLIDisplay(self.orchestrator, self.session_start, io)
 
         self.orchestrator.providers = MagicMock()
         self.orchestrator.providers.get_provider_info.return_value = {
@@ -224,7 +210,7 @@ class TestDisplayIOInjection:
             }
         }
 
-        self.display.list_providers(io=io)
+        display.list_providers()
 
         styled = io.get_styled_outputs()
         inactive_outputs = [s for s in styled if "Not Configured" in s['text']]
@@ -232,10 +218,13 @@ class TestDisplayIOInjection:
             assert inactive_outputs[0]['fg'] == 'red'
 
     def test_switch_brain_accepts_io_parameter(self):
-        """switch_brain() should accept an io parameter."""
+        """switch_brain() should use injected io from constructor."""
         io = MockIO()
+        # Create a new display instance with the test io
+        from src.cli.display import CLIDisplay
+        display = CLIDisplay(self.orchestrator, self.session_start, io)
 
-        self.display.switch_brain("", io=io)
+        display.switch_brain("")
 
         output = io.get_output()
         assert "Current brain" in output or "Usage" in output
@@ -243,9 +232,12 @@ class TestDisplayIOInjection:
     def test_switch_brain_no_args_shows_current(self):
         """switch_brain() with no args should show current brain through io."""
         io = MockIO()
+        # Create a new display instance with the test io
+        from src.cli.display import CLIDisplay
+        display = CLIDisplay(self.orchestrator, self.session_start, io)
         self.orchestrator.brain = 'anthropic'
 
-        self.display.switch_brain("", io=io)
+        display.switch_brain("")
 
         output = io.get_output()
         assert "Current brain" in output
@@ -254,9 +246,12 @@ class TestDisplayIOInjection:
     def test_switch_brain_success(self):
         """switch_brain() should output success message through io."""
         io = MockIO()
+        # Create a new display instance with the test io
+        from src.cli.display import CLIDisplay
+        display = CLIDisplay(self.orchestrator, self.session_start, io)
         self.orchestrator.brain = 'anthropic'
 
-        self.display.switch_brain("cerebras", io=io)
+        display.switch_brain("cerebras")
 
         output = io.get_output()
         assert "switched" in output.lower()
@@ -271,8 +266,11 @@ class TestDisplayIOInjection:
     def test_switch_brain_invalid_provider(self):
         """switch_brain() should output error for invalid provider through io."""
         io = MockIO()
+        # Create a new display instance with the test io
+        from src.cli.display import CLIDisplay
+        display = CLIDisplay(self.orchestrator, self.session_start, io)
 
-        self.display.switch_brain("invalid_provider", io=io)
+        display.switch_brain("invalid_provider")
 
         output = io.get_output()
         # Invalid provider names fail validation with "Unknown provider" error
@@ -285,10 +283,13 @@ class TestDisplayIOInjection:
             assert error_outputs[0]['fg'] == 'red'
 
     def test_show_usage_accepts_io_parameter(self):
-        """show_usage() should accept an io parameter."""
+        """show_usage() should use injected io from constructor."""
         io = MockIO()
+        # Create a new display instance with the test io
+        from src.cli.display import CLIDisplay
+        display = CLIDisplay(self.orchestrator, self.session_start, io)
 
-        self.display.show_usage(io=io)
+        display.show_usage()
 
         output = io.get_output()
         assert "Usage Statistics" in output
@@ -296,8 +297,11 @@ class TestDisplayIOInjection:
     def test_show_usage_outputs_header(self):
         """show_usage() should output header with styling through io."""
         io = MockIO()
+        # Create a new display instance with the test io
+        from src.cli.display import CLIDisplay
+        display = CLIDisplay(self.orchestrator, self.session_start, io)
 
-        self.display.show_usage(io=io)
+        display.show_usage()
 
         styled = io.get_styled_outputs()
         header_outputs = [s for s in styled if "Usage Statistics" in s['text']]
@@ -308,11 +312,14 @@ class TestDisplayIOInjection:
     def test_show_usage_outputs_totals(self):
         """show_usage() should output totals through io."""
         io = MockIO()
+        # Create a new display instance with the test io
+        from src.cli.display import CLIDisplay
+        display = CLIDisplay(self.orchestrator, self.session_start, io)
 
         # Make some delegate calls to generate usage
         self.orchestrator.delegate('cerebras', 'test')
 
-        self.display.show_usage(io=io)
+        display.show_usage()
 
         output = io.get_output()
         assert "Total Tasks" in output
@@ -321,19 +328,25 @@ class TestDisplayIOInjection:
     def test_show_usage_outputs_by_provider(self):
         """show_usage() should output per-provider stats through io."""
         io = MockIO()
+        # Create a new display instance with the test io
+        from src.cli.display import CLIDisplay
+        display = CLIDisplay(self.orchestrator, self.session_start, io)
 
         # Make delegate calls
         self.orchestrator.delegate('cerebras', 'test')
         self.orchestrator.delegate('groq', 'test')
 
-        self.display.show_usage(io=io)
+        display.show_usage()
 
         output = io.get_output()
         assert "By Provider" in output
 
     def test_list_models_accepts_io_parameter(self):
-        """list_models() should accept an io parameter."""
+        """list_models() should use injected io from constructor."""
         io = MockIO()
+        # Create a new display instance with the test io
+        from src.cli.display import CLIDisplay
+        display = CLIDisplay(self.orchestrator, self.session_start, io)
 
         # Mock providers for list_models
         mock_provider = MagicMock()
@@ -343,7 +356,7 @@ class TestDisplayIOInjection:
         self.orchestrator.providers.list_available.return_value = ['openai']
         self.orchestrator.providers.get.return_value = mock_provider
 
-        self.display.list_models("", io=io)
+        display.list_models("")
 
         output = io.get_output()
         assert "Models" in output
@@ -351,6 +364,9 @@ class TestDisplayIOInjection:
     def test_list_models_all_providers(self):
         """list_models() with no args should list all providers through io."""
         io = MockIO()
+        # Create a new display instance with the test io
+        from src.cli.display import CLIDisplay
+        display = CLIDisplay(self.orchestrator, self.session_start, io)
 
         # Mock providers
         mock_provider = MagicMock()
@@ -360,7 +376,7 @@ class TestDisplayIOInjection:
         self.orchestrator.providers.list_available.return_value = ['openai']
         self.orchestrator.providers.get.return_value = mock_provider
 
-        self.display.list_models("", io=io)
+        display.list_models("")
 
         output = io.get_output()
         assert "All Available Models" in output
@@ -368,6 +384,9 @@ class TestDisplayIOInjection:
     def test_list_models_specific_provider(self):
         """list_models() with provider name should list that provider through io."""
         io = MockIO()
+        # Create a new display instance with the test io
+        from src.cli.display import CLIDisplay
+        display = CLIDisplay(self.orchestrator, self.session_start, io)
 
         mock_provider = MagicMock()
         mock_provider.available_models = ['model1', 'model2']
@@ -376,7 +395,7 @@ class TestDisplayIOInjection:
         self.orchestrator.providers.list_available.return_value = ['openai']
         self.orchestrator.providers.get.return_value = mock_provider
 
-        self.display.list_models("openai", io=io)
+        display.list_models("openai")
 
         output = io.get_output()
         assert "OPENAI Models" in output or "openai" in output.lower()
@@ -384,11 +403,14 @@ class TestDisplayIOInjection:
     def test_list_models_invalid_provider(self):
         """list_models() should output error for invalid provider through io."""
         io = MockIO()
+        # Create a new display instance with the test io
+        from src.cli.display import CLIDisplay
+        display = CLIDisplay(self.orchestrator, self.session_start, io)
 
         self.orchestrator.providers = MagicMock()
         self.orchestrator.providers.list_available.return_value = ['cerebras']
 
-        self.display.list_models("invalid", io=io)
+        display.list_models("invalid")
 
         output = io.get_output()
         # Invalid provider names fail validation with "Unknown provider" error
@@ -403,6 +425,9 @@ class TestDisplayIOInjection:
     def test_list_models_default_indicator(self):
         """list_models() should indicate default model through io."""
         io = MockIO()
+        # Create a new display instance with the test io
+        from src.cli.display import CLIDisplay
+        display = CLIDisplay(self.orchestrator, self.session_start, io)
 
         mock_provider = MagicMock()
         mock_provider.available_models = ['model1', 'model2']
@@ -411,7 +436,7 @@ class TestDisplayIOInjection:
         self.orchestrator.providers.list_available.return_value = ['cerebras']
         self.orchestrator.providers.get.return_value = mock_provider
 
-        self.display.list_models("cerebras", io=io)
+        display.list_models("cerebras")
 
         output = io.get_output()
         assert "default" in output.lower()
@@ -427,20 +452,24 @@ class TestTaskExecutionIOInjection:
     def setup_method(self):
         """Set up test fixtures."""
         self.orchestrator = ConfigurableTestOrchestrator()
+        self.io = MockIO()
         from src.cli.tasks import CLITaskExecution
-        self.tasks = CLITaskExecution(self.orchestrator)
+        self.tasks = CLITaskExecution(self.orchestrator, self.io)
 
     def test_plan_task_accepts_io_parameter(self):
-        """plan_task() should accept an io parameter."""
+        """plan_task() should use injected io from constructor."""
         io = MockIO()
+        # Create a new tasks instance with the test io
+        from src.cli.tasks import CLITaskExecution
+        tasks = CLITaskExecution(self.orchestrator, io)
 
         # Mock the plan method
         self.orchestrator.plan = MagicMock(return_value=[
             {'step': 'Step 1', 'description': 'First step'}
         ])
 
-        # Should not raise TypeError for unexpected keyword argument
-        self.tasks.plan_task("test task", io=io)
+        # Should not raise TypeError
+        tasks.plan_task("test task")
 
         # Verify output went to io object
         output = io.get_output()
@@ -449,10 +478,13 @@ class TestTaskExecutionIOInjection:
     def test_plan_task_outputs_header(self):
         """plan_task() should output task header through io."""
         io = MockIO()
+        # Create a new tasks instance with the test io
+        from src.cli.tasks import CLITaskExecution
+        tasks = CLITaskExecution(self.orchestrator, io)
 
         self.orchestrator.plan = MagicMock(return_value=[])
 
-        self.tasks.plan_task("analyze code", io=io)
+        tasks.plan_task("analyze code")
 
         output = io.get_output()
         assert "Planning: analyze code" in output
@@ -466,13 +498,16 @@ class TestTaskExecutionIOInjection:
     def test_plan_task_outputs_steps(self):
         """plan_task() should output plan steps through io."""
         io = MockIO()
+        # Create a new tasks instance with the test io
+        from src.cli.tasks import CLITaskExecution
+        tasks = CLITaskExecution(self.orchestrator, io)
 
         self.orchestrator.plan = MagicMock(return_value=[
             {'step': 'Step 1', 'description': 'First step'},
             {'step': 'Step 2', 'description': 'Second step'}
         ])
 
-        self.tasks.plan_task("test task", io=io)
+        tasks.plan_task("test task")
 
         output = io.get_output()
         assert "Step 1" in output
@@ -483,12 +518,15 @@ class TestTaskExecutionIOInjection:
     def test_plan_task_outputs_provider_recommendations(self):
         """plan_task() should output provider recommendations through io."""
         io = MockIO()
+        # Create a new tasks instance with the test io
+        from src.cli.tasks import CLITaskExecution
+        tasks = CLITaskExecution(self.orchestrator, io)
 
         self.orchestrator.plan = MagicMock(return_value=[
             {'step': 'Step 1', 'description': 'First step', 'provider_type': 'anthropic'}
         ])
 
-        self.tasks.plan_task("test task", io=io)
+        tasks.plan_task("test task")
 
         output = io.get_output()
         assert "Recommended" in output
@@ -503,10 +541,13 @@ class TestTaskExecutionIOInjection:
     def test_plan_task_error_handling(self):
         """plan_task() should output errors through io."""
         io = MockIO()
+        # Create a new tasks instance with the test io
+        from src.cli.tasks import CLITaskExecution
+        tasks = CLITaskExecution(self.orchestrator, io)
 
         self.orchestrator.plan = MagicMock(side_effect=Exception("Test error"))
 
-        result = self.tasks.plan_task("test task", io=io)
+        result = tasks.plan_task("test task")
 
         output = io.get_output()
         assert "Error" in output
@@ -524,13 +565,16 @@ class TestTaskExecutionIOInjection:
     def test_plan_task_string_steps(self):
         """plan_task() should handle string steps through io."""
         io = MockIO()
+        # Create a new tasks instance with the test io
+        from src.cli.tasks import CLITaskExecution
+        tasks = CLITaskExecution(self.orchestrator, io)
 
         self.orchestrator.plan = MagicMock(return_value=[
             "Step 1: Do something",
             "Step 2: Do another thing"
         ])
 
-        self.tasks.plan_task("test task", io=io)
+        tasks.plan_task("test task")
 
         output = io.get_output()
         assert "Step 1" in output
@@ -539,10 +583,13 @@ class TestTaskExecutionIOInjection:
     def test_plan_task_non_list_response(self):
         """plan_task() should handle non-list responses through io."""
         io = MockIO()
+        # Create a new tasks instance with the test io
+        from src.cli.tasks import CLITaskExecution
+        tasks = CLITaskExecution(self.orchestrator, io)
 
         self.orchestrator.plan = MagicMock(return_value="Single step plan")
 
-        self.tasks.plan_task("test task", io=io)
+        tasks.plan_task("test task")
 
         output = io.get_output()
         assert "Single step plan" in output
@@ -550,6 +597,9 @@ class TestTaskExecutionIOInjection:
     def test_plan_task_returns_steps(self):
         """plan_task() should return the steps for tracking."""
         io = MockIO()
+        # Create a new tasks instance with the test io
+        from src.cli.tasks import CLITaskExecution
+        tasks = CLITaskExecution(self.orchestrator, io)
 
         steps = [
             {'step': 'Step 1', 'description': 'First step'},
@@ -557,27 +607,33 @@ class TestTaskExecutionIOInjection:
         ]
         self.orchestrator.plan = MagicMock(return_value=steps)
 
-        result = self.tasks.plan_task("test task", io=io)
+        result = tasks.plan_task("test task")
 
         assert result == steps
 
     def test_plan_task_saves_to_working_memory(self):
         """plan_task() should save plan to working memory."""
         io = MockIO()
+        # Create a new tasks instance with the test io
+        from src.cli.tasks import CLITaskExecution
+        tasks = CLITaskExecution(self.orchestrator, io)
 
         self.orchestrator.plan = MagicMock(return_value=[
             {'step': 'Step 1', 'description': 'First step'}
         ])
 
-        self.tasks.plan_task("test task", io=io)
+        tasks.plan_task("test task")
 
         # Verify working memory was updated
         summary = self.orchestrator.working_memory.get_summary()
         assert summary['discoveries'] > 0
 
     def test_reason_accepts_io_parameter(self):
-        """reason() should accept an io parameter."""
+        """reason() should use injected io from constructor."""
         io = MockIO()
+        # Create a new tasks instance with the test io
+        from src.cli.tasks import CLITaskExecution
+        tasks = CLITaskExecution(self.orchestrator, io)
 
         # Mock the reason method
         self.orchestrator.reason = MagicMock(return_value={
@@ -587,8 +643,8 @@ class TestTaskExecutionIOInjection:
             'confidence': 'high'
         })
 
-        # Should not raise TypeError for unexpected keyword argument
-        self.tasks.reason("test question", io=io)
+        # Should not raise TypeError
+        tasks.reason("test question")
 
         # Verify output went to io object
         output = io.get_output()
@@ -597,10 +653,13 @@ class TestTaskExecutionIOInjection:
     def test_reason_outputs_header(self):
         """reason() should output question header through io."""
         io = MockIO()
+        # Create a new tasks instance with the test io
+        from src.cli.tasks import CLITaskExecution
+        tasks = CLITaskExecution(self.orchestrator, io)
 
         self.orchestrator.reason = MagicMock(return_value={})
 
-        self.tasks.reason("What is Python?", io=io)
+        tasks.reason("What is Python?")
 
         output = io.get_output()
         assert "Reasoning about: What is Python?" in output
@@ -614,6 +673,9 @@ class TestTaskExecutionIOInjection:
     def test_reason_outputs_analysis(self):
         """reason() should output analysis through io."""
         io = MockIO()
+        # Create a new tasks instance with the test io
+        from src.cli.tasks import CLITaskExecution
+        tasks = CLITaskExecution(self.orchestrator, io)
 
         self.orchestrator.reason = MagicMock(return_value={
             'question': 'test',
@@ -622,7 +684,7 @@ class TestTaskExecutionIOInjection:
             'confidence': 'high'
         })
 
-        self.tasks.reason("test", io=io)
+        tasks.reason("test")
 
         output = io.get_output()
         assert "Analysis" in output
@@ -631,6 +693,9 @@ class TestTaskExecutionIOInjection:
     def test_reason_outputs_conclusion(self):
         """reason() should output conclusion through io."""
         io = MockIO()
+        # Create a new tasks instance with the test io
+        from src.cli.tasks import CLITaskExecution
+        tasks = CLITaskExecution(self.orchestrator, io)
 
         self.orchestrator.reason = MagicMock(return_value={
             'question': 'test',
@@ -639,7 +704,7 @@ class TestTaskExecutionIOInjection:
             'confidence': 'high'
         })
 
-        self.tasks.reason("test", io=io)
+        tasks.reason("test")
 
         output = io.get_output()
         assert "Conclusion" in output
@@ -654,6 +719,9 @@ class TestTaskExecutionIOInjection:
     def test_reason_outputs_confidence(self):
         """reason() should output confidence through io."""
         io = MockIO()
+        # Create a new tasks instance with the test io
+        from src.cli.tasks import CLITaskExecution
+        tasks = CLITaskExecution(self.orchestrator, io)
 
         self.orchestrator.reason = MagicMock(return_value={
             'question': 'test',
@@ -662,7 +730,7 @@ class TestTaskExecutionIOInjection:
             'confidence': 'high'
         })
 
-        self.tasks.reason("test", io=io)
+        tasks.reason("test")
 
         output = io.get_output()
         assert "Confidence" in output
@@ -671,10 +739,13 @@ class TestTaskExecutionIOInjection:
     def test_reason_error_handling(self):
         """reason() should output errors through io."""
         io = MockIO()
+        # Create a new tasks instance with the test io
+        from src.cli.tasks import CLITaskExecution
+        tasks = CLITaskExecution(self.orchestrator, io)
 
         self.orchestrator.reason = MagicMock(side_effect=Exception("API error"))
 
-        self.tasks.reason("test", io=io)
+        tasks.reason("test")
 
         output = io.get_output()
         assert "Error" in output
@@ -689,10 +760,13 @@ class TestTaskExecutionIOInjection:
     def test_reason_string_response(self):
         """reason() should handle string responses through io."""
         io = MockIO()
+        # Create a new tasks instance with the test io
+        from src.cli.tasks import CLITaskExecution
+        tasks = CLITaskExecution(self.orchestrator, io)
 
         self.orchestrator.reason = MagicMock(return_value="Simple string response")
 
-        self.tasks.reason("test", io=io)
+        tasks.reason("test")
 
         output = io.get_output()
         assert "Simple string response" in output
@@ -700,6 +774,9 @@ class TestTaskExecutionIOInjection:
     def test_reason_saves_to_working_memory(self):
         """reason() should save result to working memory."""
         io = MockIO()
+        # Create a new tasks instance with the test io
+        from src.cli.tasks import CLITaskExecution
+        tasks = CLITaskExecution(self.orchestrator, io)
 
         self.orchestrator.reason = MagicMock(return_value={
             'question': 'test',
@@ -708,7 +785,7 @@ class TestTaskExecutionIOInjection:
             'confidence': 'high'
         })
 
-        self.tasks.reason("test question", io=io)
+        tasks.reason("test question")
 
         # Verify working memory was updated
         summary = self.orchestrator.working_memory.get_summary()
@@ -716,116 +793,125 @@ class TestTaskExecutionIOInjection:
 
 
 # =============================================================================
-# Default I/O Parameter Tests
+# Constructor Injection Tests
 # =============================================================================
 
 class TestDisplayTasksSmartDefaultIO:
-    """Tests to verify handlers use ClickIO as default when io is None."""
+    """Tests to verify handlers use constructor-injected IO."""
 
-    def test_display_show_help_uses_default_io(self):
-        """CLIDisplay.show_help should use ClickIO when io is not provided."""
+    def test_display_show_help_uses_constructor_io(self):
+        """CLIDisplay.show_help should use constructor-injected IO (no io parameter)."""
         orchestrator = ConfigurableTestOrchestrator()
+        io = MockIO()
         from src.cli.display import CLIDisplay
-        display = CLIDisplay(orchestrator, datetime.now())
+        display = CLIDisplay(orchestrator, datetime.now(), io)
 
         import inspect
         sig = inspect.signature(display.show_help)
         params = sig.parameters
 
-        assert 'io' in params, "show_help should have an 'io' parameter"
+        assert 'io' not in params, "show_help should NOT have an 'io' parameter (uses self.io)"
 
-    def test_display_show_status_uses_default_io(self):
-        """CLIDisplay.show_status should use ClickIO when io is not provided."""
+    def test_display_show_status_uses_constructor_io(self):
+        """CLIDisplay.show_status should use constructor-injected IO (no io parameter)."""
         orchestrator = ConfigurableTestOrchestrator()
+        io = MockIO()
         from src.cli.display import CLIDisplay
-        display = CLIDisplay(orchestrator, datetime.now())
+        display = CLIDisplay(orchestrator, datetime.now(), io)
 
         import inspect
         sig = inspect.signature(display.show_status)
         params = sig.parameters
 
-        assert 'io' in params, "show_status should have an 'io' parameter"
+        assert 'io' not in params, "show_status should NOT have an 'io' parameter (uses self.io)"
 
-    def test_display_list_providers_uses_default_io(self):
-        """CLIDisplay.list_providers should use ClickIO when io is not provided."""
+    def test_display_list_providers_uses_constructor_io(self):
+        """CLIDisplay.list_providers should use constructor-injected IO (no io parameter)."""
         orchestrator = ConfigurableTestOrchestrator()
+        io = MockIO()
         from src.cli.display import CLIDisplay
-        display = CLIDisplay(orchestrator, datetime.now())
+        display = CLIDisplay(orchestrator, datetime.now(), io)
 
         import inspect
         sig = inspect.signature(display.list_providers)
         params = sig.parameters
 
-        assert 'io' in params, "list_providers should have an 'io' parameter"
+        assert 'io' not in params, "list_providers should NOT have an 'io' parameter (uses self.io)"
 
-    def test_display_switch_brain_uses_default_io(self):
-        """CLIDisplay.switch_brain should use ClickIO when io is not provided."""
+    def test_display_switch_brain_uses_constructor_io(self):
+        """CLIDisplay.switch_brain should use constructor-injected IO (no io parameter)."""
         orchestrator = ConfigurableTestOrchestrator()
+        io = MockIO()
         from src.cli.display import CLIDisplay
-        display = CLIDisplay(orchestrator, datetime.now())
+        display = CLIDisplay(orchestrator, datetime.now(), io)
 
         import inspect
         sig = inspect.signature(display.switch_brain)
         params = sig.parameters
 
-        assert 'io' in params, "switch_brain should have an 'io' parameter"
+        assert 'io' not in params, "switch_brain should NOT have an 'io' parameter (uses self.io)"
 
-    def test_display_show_usage_uses_default_io(self):
-        """CLIDisplay.show_usage should use ClickIO when io is not provided."""
+    def test_display_show_usage_uses_constructor_io(self):
+        """CLIDisplay.show_usage should use constructor-injected IO (no io parameter)."""
         orchestrator = ConfigurableTestOrchestrator()
+        io = MockIO()
         from src.cli.display import CLIDisplay
-        display = CLIDisplay(orchestrator, datetime.now())
+        display = CLIDisplay(orchestrator, datetime.now(), io)
 
         import inspect
         sig = inspect.signature(display.show_usage)
         params = sig.parameters
 
-        assert 'io' in params, "show_usage should have an 'io' parameter"
+        assert 'io' not in params, "show_usage should NOT have an 'io' parameter (uses self.io)"
 
-    def test_display_list_models_uses_default_io(self):
-        """CLIDisplay.list_models should use ClickIO when io is not provided."""
+    def test_display_list_models_uses_constructor_io(self):
+        """CLIDisplay.list_models should use constructor-injected IO (no io parameter)."""
         orchestrator = ConfigurableTestOrchestrator()
+        io = MockIO()
         from src.cli.display import CLIDisplay
-        display = CLIDisplay(orchestrator, datetime.now())
+        display = CLIDisplay(orchestrator, datetime.now(), io)
 
         import inspect
         sig = inspect.signature(display.list_models)
         params = sig.parameters
 
-        assert 'io' in params, "list_models should have an 'io' parameter"
+        assert 'io' not in params, "list_models should NOT have an 'io' parameter (uses self.io)"
 
-    def test_tasks_plan_task_uses_default_io(self):
-        """CLITaskExecution.plan_task should use ClickIO when io is not provided."""
+    def test_tasks_plan_task_uses_constructor_io(self):
+        """CLITaskExecution.plan_task should use constructor-injected IO (no io parameter)."""
         orchestrator = ConfigurableTestOrchestrator()
+        io = MockIO()
         from src.cli.tasks import CLITaskExecution
-        tasks = CLITaskExecution(orchestrator)
+        tasks = CLITaskExecution(orchestrator, io)
 
         import inspect
         sig = inspect.signature(tasks.plan_task)
         params = sig.parameters
 
-        assert 'io' in params, "plan_task should have an 'io' parameter"
+        assert 'io' not in params, "plan_task should NOT have an 'io' parameter (uses self.display.get_io())"
 
-    def test_tasks_reason_uses_default_io(self):
-        """CLITaskExecution.reason should use ClickIO when io is not provided."""
+    def test_tasks_reason_uses_constructor_io(self):
+        """CLITaskExecution.reason should use constructor-injected IO (no io parameter)."""
         orchestrator = ConfigurableTestOrchestrator()
+        io = MockIO()
         from src.cli.tasks import CLITaskExecution
-        tasks = CLITaskExecution(orchestrator)
+        tasks = CLITaskExecution(orchestrator, io)
 
         import inspect
         sig = inspect.signature(tasks.reason)
         params = sig.parameters
 
-        assert 'io' in params, "reason should have an 'io' parameter"
+        assert 'io' not in params, "reason should NOT have an 'io' parameter (uses self.display.get_io())"
 
-    def test_smart_query_uses_default_io(self):
-        """CLISmartQuery.smart_query should use ClickIO when io is not provided."""
+    def test_smart_query_uses_constructor_io(self):
+        """CLISmartQuery.smart_query should use constructor-injected IO (no io parameter)."""
         orchestrator = ConfigurableTestOrchestrator()
+        io = MockIO()
         from src.cli.smart_query import CLISmartQuery
-        smart = CLISmartQuery(orchestrator)
+        smart = CLISmartQuery(orchestrator, io)
 
         import inspect
         sig = inspect.signature(smart.smart_query)
         params = sig.parameters
 
-        assert 'io' in params, "smart_query should have an 'io' parameter"
+        assert 'io' not in params, "smart_query should NOT have an 'io' parameter (uses self.display.get_io())"

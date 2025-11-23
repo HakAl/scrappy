@@ -9,12 +9,10 @@ from ..agent import CodeAgent
 from src.task_router.intent import RegexIntentClassifier, RegexEntityExtractor
 from src.task_router.protocols import IntentResult
 from .io_interface import CLIIOProtocol
-from .rich_output import RichIO
 from .research_prompt_builder import ResearchPromptBuilder
 from .research_handlers import create_default_registry
 from .research_handlers.base import ClassificationResult
 from .display_manager import DisplayManager
-from .protocols import DisplayManagerProtocol
 
 
 class CLISmartQuery:
@@ -23,6 +21,7 @@ class CLISmartQuery:
     def __init__(
         self,
         orchestrator,
+        io: CLIIOProtocol,
         classifier: Optional[RegexIntentClassifier] = None,
         entity_extractor: Optional[RegexEntityExtractor] = None,
         prompt_builder: Optional[ResearchPromptBuilder] = None,
@@ -32,12 +31,14 @@ class CLISmartQuery:
 
         Args:
             orchestrator: The AgentOrchestrator instance
+            io: I/O interface for output
             classifier: Optional intent classifier
             entity_extractor: Optional entity extractor
             prompt_builder: Optional prompt builder
             handler_registry: Optional research handler registry
         """
         self.orchestrator = orchestrator
+        self.display = DisplayManager(io=io, dashboard_enabled=False)
         self.classifier = classifier or self._create_default_classifier()
         self.entity_extractor = entity_extractor or self._create_default_extractor()
         self.prompt_builder = prompt_builder or self._create_default_prompt_builder()
@@ -59,12 +60,7 @@ class CLISmartQuery:
         """Create default research handler registry."""
         return create_default_registry()
 
-    def smart_query(
-        self,
-        query: str,
-        io: Optional[CLIIOProtocol] = None,
-        display: Optional[DisplayManagerProtocol] = None
-    ):
+    def smart_query(self, query: str):
         """Perform a smart query using tools to gather context before answering.
 
         Classifies the query intent, executes relevant research actions using
@@ -77,15 +73,13 @@ class CLISmartQuery:
 
         Args:
             query: The user's question or query string.
-            io: I/O interface for output. Deprecated, use display instead.
-            display: Display manager for coordinated output. Creates default if not provided.
 
         State Changes:
             - Saves research results to orchestrator working memory
             - Adds discovery to orchestrator with query classification info
 
         Side Effects:
-            - Writes progress messages to stdout via io
+            - Writes progress messages to stdout via self.display
             - Reads files and searches codebase using CodeAgent tools
             - Makes LLM API call to generate response
             - Updates dashboard if dashboard mode is enabled
@@ -94,15 +88,8 @@ class CLISmartQuery:
             LLMResponse: The response object containing the answer, provider info,
                 token usage, and latency.
         """
-        # Support backward compatibility with io parameter
-        if display is None:
-            if io is None:
-                display = DisplayManager(dashboard_enabled=False)
-            else:
-                display = DisplayManager(io=io, dashboard_enabled=False)
-
-        io = display.get_io()
-        dashboard = display.get_dashboard()
+        io = self.display.get_io()
+        dashboard = self.display.get_dashboard()
 
         io.secho("\n[Smart Query] Analyzing intent...", fg="cyan", bold=True)
 

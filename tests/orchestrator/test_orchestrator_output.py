@@ -18,38 +18,42 @@ from src.orchestrator.output import (
 
 
 class TestConsoleOutput:
-    """Test ConsoleOutput prints to stdout correctly."""
+    """Test ConsoleOutput logs correctly."""
 
-    def test_info_prints_message(self, capsys):
-        """info() should print the message as-is."""
+    def test_info_prints_message(self, caplog):
+        """info() should log the message."""
+        import logging
+        caplog.set_level(logging.INFO)
         output = ConsoleOutput()
         output.info("Test message")
-        captured = capsys.readouterr()
-        assert captured.out == "Test message\n"
+        assert "Test message" in caplog.text
 
-    def test_warn_prints_with_prefix(self, capsys):
-        """warn() should print message with [WARN] prefix."""
+    def test_warn_prints_with_prefix(self, caplog):
+        """warn() should log warning message."""
         output = ConsoleOutput()
         output.warn("Warning message")
-        captured = capsys.readouterr()
-        assert captured.out == "[WARN] Warning message\n"
+        assert "Warning message" in caplog.text
+        assert any(record.levelname == "WARNING" for record in caplog.records)
 
-    def test_error_prints_with_prefix(self, capsys):
-        """error() should print message with [ERROR] prefix."""
+    def test_error_prints_with_prefix(self, caplog):
+        """error() should log error message."""
         output = ConsoleOutput()
         output.error("Error message")
-        captured = capsys.readouterr()
-        assert captured.out == "[ERROR] Error message\n"
+        assert "Error message" in caplog.text
+        assert any(record.levelname == "ERROR" for record in caplog.records)
 
-    def test_success_prints_with_prefix(self, capsys):
-        """success() should print message with [OK] prefix."""
+    def test_success_prints_with_prefix(self, caplog):
+        """success() should log message with [OK] prefix."""
+        import logging
+        caplog.set_level(logging.INFO)
         output = ConsoleOutput()
         output.success("Success message")
-        captured = capsys.readouterr()
-        assert captured.out == "[OK] Success message\n"
+        assert "[OK] Success message" in caplog.text
 
-    def test_empty_message(self, capsys):
-        """Empty messages should still be printed with proper formatting."""
+    def test_empty_message(self, caplog):
+        """Empty messages should still be logged."""
+        import logging
+        caplog.set_level(logging.INFO)
         output = ConsoleOutput()
 
         output.info("")
@@ -57,34 +61,32 @@ class TestConsoleOutput:
         output.error("")
         output.success("")
 
-        captured = capsys.readouterr()
-        lines = captured.out.split("\n")
+        # At least 4 log records should exist
+        assert len(caplog.records) == 4
 
-        assert lines[0] == ""
-        assert lines[1] == "[WARN] "
-        assert lines[2] == "[ERROR] "
-        assert lines[3] == "[OK] "
-
-    def test_message_with_newlines(self, capsys):
+    def test_message_with_newlines(self, caplog):
         """Messages with embedded newlines should be preserved."""
+        import logging
+        caplog.set_level(logging.INFO)
         output = ConsoleOutput()
         output.info("Line 1\nLine 2")
-        captured = capsys.readouterr()
-        assert captured.out == "Line 1\nLine 2\n"
+        assert "Line 1\nLine 2" in caplog.text
 
-    def test_message_with_special_characters(self, capsys):
+    def test_message_with_special_characters(self, caplog):
         """Messages with special characters should be preserved."""
+        import logging
+        caplog.set_level(logging.INFO)
         output = ConsoleOutput()
         output.info("Path: C:\\Users\\test")
-        captured = capsys.readouterr()
-        assert captured.out == "Path: C:\\Users\\test\n"
+        assert "C:\\Users\\test" in caplog.text
 
-    def test_message_with_unicode(self, capsys):
+    def test_message_with_unicode(self, caplog):
         """Messages with unicode should be handled correctly."""
+        import logging
+        caplog.set_level(logging.INFO)
         output = ConsoleOutput()
         output.info("Test with symbols: [OK] [X]")
-        captured = capsys.readouterr()
-        assert captured.out == "Test with symbols: [OK] [X]\n"
+        assert "Test with symbols: [OK] [X]" in caplog.text
 
 
 class TestNullOutput:

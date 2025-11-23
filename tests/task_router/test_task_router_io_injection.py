@@ -26,6 +26,7 @@ class TestTaskRouterHandlerIOInjection:
     def setup_method(self):
         """Set up test fixtures."""
         self.orchestrator = ConfigurableTestOrchestrator()
+        self.io = MockIO()
 
         # Import here to avoid import errors during collection
         from src.cli.task_router_handler import CLITaskRouterHandler
@@ -40,6 +41,7 @@ class TestTaskRouterHandlerIOInjection:
 
         self.handler = CLITaskRouterHandler(
             orchestrator=self.orchestrator,
+            io=self.io,
             project_root=Path.cwd()
         )
 
@@ -799,6 +801,7 @@ class TestTaskRouterHandlerIntegration:
     def setup_method(self):
         """Set up test fixtures."""
         self.orchestrator = ConfigurableTestOrchestrator()
+        self.io = MockIO()
 
         from src.cli.task_router_handler import CLITaskRouterHandler
         from src.task_router import ClassifiedTask, TaskType, ExecutionResult
@@ -812,6 +815,7 @@ class TestTaskRouterHandlerIntegration:
 
         self.handler = CLITaskRouterHandler(
             orchestrator=self.orchestrator,
+            io=self.io,
             project_root=Path.cwd()
         )
 

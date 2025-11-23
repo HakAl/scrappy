@@ -3,32 +3,25 @@ Code agent management for the CLI.
 Handles running and managing code execution agents with human approval.
 """
 
-from typing import Optional
-
 from ..agent import CodeAgent, create_git_checkpoint, rollback_to_checkpoint
 from .io_interface import CLIIOProtocol
-from .rich_output import RichIO
 from .display_manager import DisplayManager
-from .protocols import DisplayManagerProtocol
 
 
 class CLIAgentManager:
     """Manages code agent execution with human-in-the-loop approval."""
 
-    def __init__(self, orchestrator):
+    def __init__(self, orchestrator, io: CLIIOProtocol):
         """Initialize agent manager.
 
         Args:
             orchestrator: The AgentOrchestrator instance
+            io: I/O interface for output
         """
         self.orchestrator = orchestrator
+        self.display = DisplayManager(io=io, dashboard_enabled=False)
 
-    def run_agent(
-        self,
-        task: str,
-        io: Optional[CLIIOProtocol] = None,
-        display: Optional[DisplayManagerProtocol] = None
-    ):
+    def run_agent(self, task: str):
         """
         Run the code agent on a task with human-in-the-loop approval.
 
@@ -37,13 +30,11 @@ class CLIAgentManager:
 
         Args:
             task: Description of the task for the agent to perform.
-            io: IO interface for input/output. Deprecated, use display instead.
-            display: Display manager for coordinated output. Creates default if not provided.
 
         Side Effects:
             - Prompts user for dry-run mode and checkpoint creation
             - May create a git checkpoint before execution
-            - Displays agent configuration and progress to console
+            - Displays agent configuration and progress to console via self.display
             - Agent may modify project files if not in dry-run mode
             - Displays audit log summary after execution
             - May save audit log to file if user requests
@@ -65,15 +56,8 @@ class CLIAgentManager:
         Returns:
             None
         """
-        # Support backward compatibility with io parameter
-        if display is None:
-            if io is None:
-                display = DisplayManager(dashboard_enabled=False)
-            else:
-                display = DisplayManager(io=io, dashboard_enabled=False)
-
-        io = display.get_io()
-        dashboard = display.get_dashboard()
+        io = self.display.get_io()
+        dashboard = self.display.get_dashboard()
 
         io.secho(f"\nCode Agent - Task: {task}", bold=True)
         io.echo("-" * 60)

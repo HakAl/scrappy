@@ -5,8 +5,6 @@ Handles context, cache, rate limits, and session persistence.
 
 from typing import Any, Dict, List, Optional
 
-from .io_interface import CLIIOProtocol
-from .rich_output import RichIO
 from .context_commands import CLIContextCommands
 from .cache_manager import CacheManager
 from .rate_limiter import RateLimiter
@@ -39,7 +37,7 @@ class CLISessionManager:
         self._rate_limiter = rate_limiter
         self._session_persistence = session_persistence
 
-    def manage_context(self, args: str = "", io: Optional[CLIIOProtocol] = None) -> None:
+    def manage_context(self, args: str = "") -> None:
         """Manage codebase context through the context manager.
 
         Delegates to ContextManager to handle context operations like exploring,
@@ -48,7 +46,6 @@ class CLISessionManager:
         Args:
             args: Command arguments (explore|refresh|clear|clearmem|toggle).
                 Empty string shows context status.
-            io: I/O interface for output. Defaults to ClickIO if None.
 
         State Changes:
             - May modify orchestrator.context_aware flag (toggle)
@@ -56,14 +53,14 @@ class CLISessionManager:
             - May populate context with project data (explore/refresh)
 
         Side Effects:
-            - Writes status or confirmation to stdout via io
+            - Writes status or confirmation to stdout
 
         Returns:
             None
         """
-        self._context_manager.manage_context(args, io)
+        self._context_manager.manage_context(args)
 
-    def manage_cache(self, args: str = "", io: Optional[CLIIOProtocol] = None) -> None:
+    def manage_cache(self, args: str = "") -> None:
         """Manage response cache through the cache manager.
 
         Delegates to CacheManager to handle cache operations like showing stats,
@@ -71,21 +68,20 @@ class CLISessionManager:
 
         Args:
             args: Command arguments (clear|toggle). Empty string shows cache stats.
-            io: I/O interface for output. Defaults to ClickIO if None.
 
         State Changes:
             - May toggle orchestrator caching state (toggle)
             - May clear all cached responses (clear)
 
         Side Effects:
-            - Writes cache statistics or confirmation to stdout via io
+            - Writes cache statistics or confirmation to stdout
 
         Returns:
             None
         """
-        self._cache_manager.manage_cache(args, io)
+        self._cache_manager.manage_cache(args)
 
-    def show_rate_limits(self, args: str = "", io: Optional[CLIIOProtocol] = None) -> None:
+    def show_rate_limits(self, args: str = "") -> None:
         """Show rate limit usage with persistent tracking.
 
         Delegates to RateLimiter to display rate limit information. Tracks usage
@@ -94,26 +90,24 @@ class CLISessionManager:
         Args:
             args: Optional provider name to show specific provider limits,
                 or 'reset' to reset tracking. Empty string shows all providers.
-            io: I/O interface for output. Defaults to ClickIO if None.
 
         State Changes:
             - May reset persistent rate limit tracking (reset)
 
         Side Effects:
-            - Writes rate limit statistics to stdout via io
+            - Writes rate limit statistics to stdout
             - Reads/writes persistent rate limit data
 
         Returns:
             None
         """
-        self._rate_limiter.show_rate_limits(args, io)
+        self._rate_limiter.show_rate_limits(args)
 
     def manage_session(
         self,
         args: str = "",
         conversation_history: Optional[List[Dict[str, str]]] = None,
-        auto_save: bool = True,
-        io: Optional[CLIIOProtocol] = None
+        auto_save: bool = True
     ) -> Dict[str, Any]:
         """Manage session persistence.
 
@@ -121,11 +115,10 @@ class CLISessionManager:
             args: Command arguments
             conversation_history: Current conversation history
             auto_save: Current auto-save setting
-            io: I/O interface for output
 
         Returns:
             dict with keys:
                 - conversation_history: Updated conversation history (if loaded)
                 - auto_save: Updated auto-save setting (if toggled)
         """
-        return self._session_persistence.manage_session(args, conversation_history, auto_save, io)
+        return self._session_persistence.manage_session(args, conversation_history, auto_save)

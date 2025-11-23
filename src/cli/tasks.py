@@ -3,31 +3,24 @@ Task execution functionality for the CLI.
 Handles planning and reasoning operations.
 """
 
-from typing import Optional
-
 from .io_interface import CLIIOProtocol
-from .rich_output import RichIO
 from .display_manager import DisplayManager
-from .protocols import DisplayManagerProtocol
 
 
 class CLITaskExecution:
     """Handles task planning and reasoning operations."""
 
-    def __init__(self, orchestrator):
+    def __init__(self, orchestrator, io: CLIIOProtocol):
         """Initialize task executor.
 
         Args:
             orchestrator: The AgentOrchestrator instance
+            io: I/O interface for output
         """
         self.orchestrator = orchestrator
+        self.display = DisplayManager(io=io, dashboard_enabled=False)
 
-    def plan_task(
-        self,
-        task: str,
-        io: Optional[CLIIOProtocol] = None,
-        display: Optional[DisplayManagerProtocol] = None
-    ):
+    def plan_task(self, task: str):
         """
         Create a task plan.
 
@@ -36,8 +29,6 @@ class CLITaskExecution:
 
         Args:
             task: Description of the task to plan.
-            io: I/O interface for output. Deprecated, use display instead.
-            display: Display manager for coordinated output. Creates default if not provided.
 
         Returns:
             list: List of plan steps (dicts with 'step', 'description', etc.)
@@ -60,15 +51,8 @@ class CLITaskExecution:
         Raises:
             Does not raise; catches exceptions internally and displays error.
         """
-        # Support backward compatibility with io parameter
-        if display is None:
-            if io is None:
-                display = DisplayManager(dashboard_enabled=False)
-            else:
-                display = DisplayManager(io=io, dashboard_enabled=False)
-
-        io = display.get_io()
-        dashboard = display.get_dashboard()
+        io = self.display.get_io()
+        dashboard = self.display.get_dashboard()
 
         io.secho(f"\nPlanning: {task}", bold=True)
         io.echo("-" * 50)
@@ -122,12 +106,7 @@ class CLITaskExecution:
 
         return steps if isinstance(steps, list) else []
 
-    def reason(
-        self,
-        question: str,
-        io: Optional[CLIIOProtocol] = None,
-        display: Optional[DisplayManagerProtocol] = None
-    ):
+    def reason(self, question: str):
         """
         Perform reasoning on a question.
 
@@ -137,8 +116,6 @@ class CLITaskExecution:
 
         Args:
             question: The question to reason about.
-            io: I/O interface for output. Deprecated, use display instead.
-            display: Display manager for coordinated output. Creates default if not provided.
 
         Returns:
             None (displays results to console).
@@ -161,15 +138,8 @@ class CLITaskExecution:
         Raises:
             Does not raise; catches exceptions internally and displays error.
         """
-        # Support backward compatibility with io parameter
-        if display is None:
-            if io is None:
-                display = DisplayManager(dashboard_enabled=False)
-            else:
-                display = DisplayManager(io=io, dashboard_enabled=False)
-
-        io = display.get_io()
-        dashboard = display.get_dashboard()
+        io = self.display.get_io()
+        dashboard = self.display.get_dashboard()
 
         io.secho(f"\nReasoning about: {question}", bold=True)
         io.echo("-" * 50)

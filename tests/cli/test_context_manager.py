@@ -46,12 +46,12 @@ class TestContextStatusDisplay:
         }
         orchestrator.context.summary = "Test project summary"
 
-        manager = CLIContextCommands(orchestrator)
         io = MockIO()
+        manager = CLIContextCommands(orchestrator, io)
 
-        manager.manage_context("", io=io)
+        manager.manage_context("")
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "Context Status:" in output
         assert "test" in output and "project" in output  # Path parts (platform-agnostic)
         assert "Yes" in output  # Explored status
@@ -83,12 +83,12 @@ class TestContextStatusDisplay:
             'discoveries': 0
         }
 
-        manager = CLIContextCommands(orchestrator)
         io = MockIO()
+        manager = CLIContextCommands(orchestrator, io)
 
-        manager.manage_context("", io=io)
+        manager.manage_context("")
 
-        output = io.get_output()
+        output = io.get_all_output()
         # Should show last 5 files
         assert "f4.py" in output
         assert "f5.py" in output
@@ -120,12 +120,12 @@ class TestContextStatusDisplay:
             'discoveries': 0
         }
 
-        manager = CLIContextCommands(orchestrator)
         io = MockIO()
+        manager = CLIContextCommands(orchestrator, io)
 
-        manager.manage_context("", io=io)
+        manager.manage_context("")
 
-        output = io.get_output()
+        output = io.get_all_output()
         # Should NOT show git info
         assert "Git Branch:" not in output
         assert "Git Commits:" not in output
@@ -143,13 +143,13 @@ class TestExploreCommand:
         }
         orchestrator.context.summary = "Cached summary"
 
-        manager = CLIContextCommands(orchestrator)
         io = MockIO()
+        manager = CLIContextCommands(orchestrator, io)
 
-        manager.manage_context("explore", io=io)
+        manager.manage_context("explore")
 
         orchestrator.explore_project.assert_called_once_with(force=False)
-        output = io.get_output()
+        output = io.get_all_output()
         assert "Using cached exploration" in output
         assert "Cached summary" in output
 
@@ -162,12 +162,12 @@ class TestExploreCommand:
         }
         orchestrator.context.summary = "Fresh summary"
 
-        manager = CLIContextCommands(orchestrator)
         io = MockIO()
+        manager = CLIContextCommands(orchestrator, io)
 
-        manager.manage_context("explore", io=io)
+        manager.manage_context("explore")
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "123 files" in output
         assert "Fresh summary" in output
 
@@ -180,12 +180,12 @@ class TestExploreCommand:
         }
         orchestrator.context.summary = None
 
-        manager = CLIContextCommands(orchestrator)
         io = MockIO()
+        manager = CLIContextCommands(orchestrator, io)
 
-        manager.manage_context("explore", io=io)
+        manager.manage_context("explore")
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "Exploring current project" in output
         # Should not crash without summary
 
@@ -202,13 +202,13 @@ class TestRefreshCommand:
         }
         orchestrator.context.summary = "Updated summary"
 
-        manager = CLIContextCommands(orchestrator)
         io = MockIO()
+        manager = CLIContextCommands(orchestrator, io)
 
-        manager.manage_context("refresh", io=io)
+        manager.manage_context("refresh")
 
         orchestrator.explore_project.assert_called_once_with(force=True)
-        output = io.get_output()
+        output = io.get_all_output()
         assert "Force re-exploring" in output
         assert "75 files" in output
         assert "Updated summary" in output
@@ -221,26 +221,26 @@ class TestClearCommands:
         """Should clear context cache from disk."""
         orchestrator = MagicMock()
 
-        manager = CLIContextCommands(orchestrator)
         io = MockIO()
+        manager = CLIContextCommands(orchestrator, io)
 
-        manager.manage_context("clear", io=io)
+        manager.manage_context("clear")
 
         orchestrator.context.clear_cache.assert_called_once()
-        output = io.get_output()
+        output = io.get_all_output()
         assert "Context cache cleared" in output
 
     def test_clearmem_command_clears_working_memory(self):
         """Should clear session working memory."""
         orchestrator = MagicMock()
 
-        manager = CLIContextCommands(orchestrator)
         io = MockIO()
+        manager = CLIContextCommands(orchestrator, io)
 
-        manager.manage_context("clearmem", io=io)
+        manager.manage_context("clearmem")
 
         orchestrator.working_memory.clear.assert_called_once()
-        output = io.get_output()
+        output = io.get_all_output()
         assert "Session working memory cleared" in output
 
 
@@ -252,13 +252,13 @@ class TestToggleCommand:
         orchestrator = MagicMock()
         orchestrator.context_aware = False
 
-        manager = CLIContextCommands(orchestrator)
         io = MockIO()
+        manager = CLIContextCommands(orchestrator, io)
 
-        manager.manage_context("toggle", io=io)
+        manager.manage_context("toggle")
 
         assert orchestrator.context_aware is True
-        output = io.get_output()
+        output = io.get_all_output()
         assert "enabled" in output.lower()
 
     def test_toggles_context_awareness_off(self):
@@ -266,13 +266,13 @@ class TestToggleCommand:
         orchestrator = MagicMock()
         orchestrator.context_aware = True
 
-        manager = CLIContextCommands(orchestrator)
         io = MockIO()
+        manager = CLIContextCommands(orchestrator, io)
 
-        manager.manage_context("toggle", io=io)
+        manager.manage_context("toggle")
 
         assert orchestrator.context_aware is False
-        output = io.get_output()
+        output = io.get_all_output()
         assert "disabled" in output.lower()
 
 
@@ -283,12 +283,12 @@ class TestAddCommand:
         """Should show error when add called without path."""
         orchestrator = MagicMock()
 
-        manager = CLIContextCommands(orchestrator)
         io = MockIO()
+        manager = CLIContextCommands(orchestrator, io)
 
-        manager.manage_context("add", io=io)
+        manager.manage_context("add")
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "Error" in output
         assert "requires a file path" in output
 
@@ -296,12 +296,12 @@ class TestAddCommand:
         """Should accept path argument and display it."""
         orchestrator = MagicMock()
 
-        manager = CLIContextCommands(orchestrator)
         io = MockIO()
+        manager = CLIContextCommands(orchestrator, io)
 
-        manager.manage_context("add src/test.py", io=io)
+        manager.manage_context("add src/test.py")
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "Adding to context" in output
         assert "src/test.py" in output
 
@@ -313,12 +313,12 @@ class TestInputValidation:
         """Should display error and usage for invalid subcommand."""
         orchestrator = MagicMock()
 
-        manager = CLIContextCommands(orchestrator)
         io = MockIO()
+        manager = CLIContextCommands(orchestrator, io)
 
-        manager.manage_context("invalid_command", io=io)
+        manager.manage_context("invalid_command")
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "Usage:" in output
         assert "explore" in output
         assert "refresh" in output
@@ -351,12 +351,12 @@ class TestContextManagerEdgeCases:
             'discoveries': 0
         }
 
-        manager = CLIContextCommands(orchestrator)
         io = MockIO()
+        manager = CLIContextCommands(orchestrator, io)
 
-        manager.manage_context("", io=io)
+        manager.manage_context("")
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "Files Cached: 0" in output
 
     def test_handles_summary_that_is_not_string(self):
@@ -380,12 +380,12 @@ class TestContextManagerEdgeCases:
         }
         orchestrator.context.summary = {'not': 'a string'}  # Non-string summary
 
-        manager = CLIContextCommands(orchestrator)
         io = MockIO()
+        manager = CLIContextCommands(orchestrator, io)
 
-        manager.manage_context("", io=io)
+        manager.manage_context("")
 
-        output = io.get_output()
+        output = io.get_all_output()
         # Should not crash, and should not show project summary section
         assert "Context Status:" in output
         assert "Project Summary:" not in output

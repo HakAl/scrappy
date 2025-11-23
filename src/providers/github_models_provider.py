@@ -7,6 +7,7 @@ GitHub Models provides access to premium models via GitHub PAT:
 - DeepSeek R1, Grok-3, Llama 4, Phi-4, and more
 """
 
+import logging
 import os
 import time
 from typing import Optional
@@ -14,6 +15,8 @@ from typing import Optional
 from .base import LLMProvider, LLMResponse, ProviderLimits
 from ..utils.imports import safe_import
 from ..utils.errors import raise_package_not_installed, raise_env_var_not_found, raise_model_not_supported
+
+logger = logging.getLogger(__name__)
 
 # Safe imports for optional dependencies
 _openai_module, OPENAI_AVAILABLE = safe_import('openai')
@@ -297,7 +300,7 @@ class GitHubModelsProvider(LLMProvider):
                     if response.status_code == 429:
                         # Rate limited - wait and retry
                         wait_time = 2 ** attempt
-                        print(f"[GitHub Models] Rate limited, waiting {wait_time}s (attempt {attempt+1}/{max_retries})")
+                        logger.warning(f"[GitHub Models] Rate limited, waiting {wait_time}s (attempt {attempt+1}/{max_retries})")
                         await asyncio.sleep(wait_time)
                         last_error = Exception(f"Rate limit (429) on attempt {attempt+1}")
                         continue
@@ -360,7 +363,7 @@ class GitHubModelsProvider(LLMProvider):
             except httpx.HTTPStatusError as e:
                 if e.response.status_code == 429 and attempt < max_retries - 1:
                     wait_time = 2 ** attempt
-                    print(f"[GitHub Models] Rate limited, waiting {wait_time}s (attempt {attempt+1}/{max_retries})")
+                    logger.warning(f"[GitHub Models] Rate limited, waiting {wait_time}s (attempt {attempt+1}/{max_retries})")
                     await asyncio.sleep(wait_time)
                     last_error = e
                     continue

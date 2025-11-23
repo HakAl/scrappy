@@ -7,7 +7,6 @@ import json
 from typing import Any, Dict, List, Optional
 
 from .io_interface import CLIIOProtocol
-from .rich_output import RichIO
 from .utils.session_utils import display_session_load_error
 from .validators import validate_subcommand
 
@@ -27,25 +26,27 @@ class SessionPersistence:
             storage operations.
     """
 
-    def __init__(self, orchestrator: Any) -> None:
+    def __init__(self, orchestrator: Any, io: CLIIOProtocol) -> None:
         """Initialize session persistence manager.
 
         Args:
             orchestrator: The AgentOrchestrator instance that provides session
                 operations (save_session, load_session, clear_session,
                 get_working_memory_summary) and context for project path.
+            io: I/O interface for output.
 
         State Changes:
             Sets self.orchestrator to the provided orchestrator instance.
+            Sets self.io to the provided I/O interface.
         """
         self.orchestrator = orchestrator
+        self.io = io
 
     def manage_session(
         self,
         args: str = "",
         conversation_history: Optional[List[Dict[str, str]]] = None,
-        auto_save: bool = True,
-        io: Optional[CLIIOProtocol] = None
+        auto_save: bool = True
     ) -> Dict[str, Any]:
         """Manage session persistence with subcommands.
 
@@ -66,8 +67,6 @@ class SessionPersistence:
             auto_save: Current auto-save setting. When True, session is saved
                 automatically on /quit.
 
-            io: I/O interface for output. Defaults to ClickIO if not provided.
-
         Returns:
             Dict with the following keys:
                 - conversation_history: Updated conversation history (same as input,
@@ -77,7 +76,7 @@ class SessionPersistence:
 
         Side Effects:
             - When args is "": Reads session file and memory stats, displays
-              formatted output (no state changes)
+              formatted output via self.io (no state changes)
             - When args is "save": Calls orchestrator.save_session() which writes
               session data to .llm_team_session.json including file caches,
               search results, git operations, discoveries, and conversation history
@@ -94,9 +93,6 @@ class SessionPersistence:
             >>> result = persistence.manage_session("load")
             >>> history = result['conversation_history']  # Restored history
         """
-        if io is None:
-            io = RichIO()
-
         result = {
             'conversation_history': conversation_history,
             'auto_save': auto_save
@@ -105,83 +101,83 @@ class SessionPersistence:
         # Validate subcommand
         validation = validate_subcommand("session", args)
         if not validation.is_valid:
-            io.secho(validation.error, fg="red")
-            io.echo("Usage: /session [save|load|clear|toggle]")
-            io.echo("  (no args)  - Show session info")
-            io.echo("  save       - Save current session to disk")
-            io.echo("  load       - Load saved session")
-            io.echo("  clear      - Delete saved session file")
-            io.echo("  toggle     - Toggle auto-save on/off")
-            io.echo(f"\nAuto-save: {io.style('ON' if auto_save else 'OFF', fg='green' if auto_save else 'yellow')}")
+            self.io.secho(validation.error, fg="red")
+            self.io.echo("Usage: /session [save|load|clear|toggle]")
+            self.io.echo("  (no args)  - Show session info")
+            self.io.echo("  save       - Save current session to disk")
+            self.io.echo("  load       - Load saved session")
+            self.io.echo("  clear      - Delete saved session file")
+            self.io.echo("  toggle     - Toggle auto-save on/off")
+            self.io.echo(f"\nAuto-save: {self.io.style('ON' if auto_save else 'OFF', fg='green' if auto_save else 'yellow')}")
             return result
 
         if validation.subcommand == "":
             # Show session info
             session_file = self.orchestrator.session_manager.session_file
-            io.secho("\nSession Management:", fg="magenta", bold=True)
-            io.secho("-" * 50, fg="magenta")
-            io.echo(f"Session File: {session_file}")
-            io.echo(f"Session Exists: {'Yes' if session_file.exists() else 'No'}")
+            self.io.secho("\nSession Management:", fg="magenta", bold=True)
+            self.io.secho("-" * 50, fg="magenta")
+            self.io.echo(f"Session File: {session_file}")
+            self.io.echo(f"Session Exists: {'Yes' if session_file.exists() else 'No'}")
 
             if session_file.exists():
                 try:
                     with open(session_file, 'r') as f:
                         data = json.load(f)
-                    io.echo(f"Last Saved: {data.get('saved_at', 'unknown')}")
-                    io.echo(f"Files Cached: {len(data.get('file_reads', {}))}")
-                    io.echo(f"Searches: {len(data.get('search_results', []))}")
-                    io.echo(f"Git Ops: {len(data.get('git_operations', []))}")
-                    io.echo(f"Discoveries: {len(data.get('discoveries', []))}")
-                    io.echo(f"Conversation: {len(data.get('conversation_history', []))} messages")
+                    self.io.echo(f"Last Saved: {data.get('saved_at', 'unknown')}")
+                    self.io.echo(f"Files Cached: {len(data.get('file_reads', {}))}")
+                    self.io.echo(f"Searches: {len(data.get('search_results', []))}")
+                    self.io.echo(f"Git Ops: {len(data.get('git_operations', []))}")
+                    self.io.echo(f"Discoveries: {len(data.get('discoveries', []))}")
+                    self.io.echo(f"Conversation: {len(data.get('conversation_history', []))} messages")
                 except Exception as e:
-                    io.echo(f"Error reading session: {e}")
+                    self.io.echo(f"Error reading session: {e}")
 
             # Show current memory stats
             mem = self.orchestrator.working_memory.get_summary()
-            io.secho("\nCurrent Session Memory:", bold=True)
-            io.echo(f"  Files in memory: {mem['files_cached']}")
-            io.echo(f"  Searches: {mem['recent_searches']}")
-            io.echo(f"  Git ops: {mem['git_operations']}")
-            io.echo(f"  Discoveries: {mem['discoveries']}")
-            io.echo(f"  Conversation: {len(conversation_history or [])} messages")
-            io.echo(f"  Auto-save: {io.style('ON' if auto_save else 'OFF', fg='green' if auto_save else 'yellow')}")
+            self.io.secho("\nCurrent Session Memory:", bold=True)
+            self.io.echo(f"  Files in memory: {mem['files_cached']}")
+            self.io.echo(f"  Searches: {mem['recent_searches']}")
+            self.io.echo(f"  Git ops: {mem['git_operations']}")
+            self.io.echo(f"  Discoveries: {mem['discoveries']}")
+            self.io.echo(f"  Conversation: {len(conversation_history or [])} messages")
+            self.io.echo(f"  Auto-save: {self.io.style('ON' if auto_save else 'OFF', fg='green' if auto_save else 'yellow')}")
 
         elif validation.subcommand == "save":
             try:
                 session_file = self.orchestrator.save_session(conversation_history or [])
-                io.secho(f"Session saved to: {session_file}", fg="green")
-                io.echo(f"  Conversation: {len(conversation_history or [])} messages")
+                self.io.secho(f"Session saved to: {session_file}", fg="green")
+                self.io.echo(f"  Conversation: {len(conversation_history or [])} messages")
             except Exception as e:
-                io.secho(f"Error saving session: {e}", fg="red")
+                self.io.secho(f"Error saving session: {e}", fg="red")
 
         elif validation.subcommand == "load":
             load_result = self.orchestrator.load_session()
             if load_result['status'] == 'loaded':
-                io.secho(f"Session loaded from {load_result['saved_at']}", fg="green")
-                io.echo(f"  Files: {load_result['files_restored']}")
-                io.echo(f"  Searches: {load_result['searches_restored']}")
-                io.echo(f"  Git ops: {load_result['git_ops_restored']}")
-                io.echo(f"  Discoveries: {load_result['discoveries_restored']}")
+                self.io.secho(f"Session loaded from {load_result['saved_at']}", fg="green")
+                self.io.echo(f"  Files: {load_result['files_restored']}")
+                self.io.echo(f"  Searches: {load_result['searches_restored']}")
+                self.io.echo(f"  Git ops: {load_result['git_ops_restored']}")
+                self.io.echo(f"  Discoveries: {load_result['discoveries_restored']}")
 
                 # Restore conversation
                 conversation = load_result.get('conversation_history', [])
                 if conversation:
                     result['conversation_history'] = conversation
-                    io.echo(f"  Conversation: {len(conversation)} messages")
+                    self.io.echo(f"  Conversation: {len(conversation)} messages")
             else:
-                display_session_load_error(io, load_result)
+                display_session_load_error(self.io, load_result)
 
         elif validation.subcommand == "clear":
             self.orchestrator.clear_session()
-            io.secho("Saved session cleared.", fg="green")
+            self.io.secho("Saved session cleared.", fg="green")
 
         elif validation.subcommand == "toggle":
             result['auto_save'] = not auto_save
-            status = io.style("ON", fg="green") if result['auto_save'] else io.style("OFF", fg="yellow")
-            io.echo(f"Auto-save on exit: {status}")
+            status = self.io.style("ON", fg="green") if result['auto_save'] else self.io.style("OFF", fg="yellow")
+            self.io.echo(f"Auto-save on exit: {status}")
             if result['auto_save']:
-                io.echo("Session will be saved automatically on /quit")
+                self.io.echo("Session will be saved automatically on /quit")
             else:
-                io.echo("Session will NOT be saved on /quit (use '/session save' manually)")
+                self.io.echo("Session will NOT be saved on /quit (use '/session save' manually)")
 
         return result

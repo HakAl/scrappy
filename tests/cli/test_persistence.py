@@ -29,12 +29,12 @@ class TestPersistenceShowInfo:
         from src.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
-        persistence = SessionPersistence(orchestrator)
         io = MockIO()
+        persistence = SessionPersistence(orchestrator, io)
 
-        persistence.manage_session(args="", io=io)
+        persistence.manage_session(args="")
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "Session" in output
 
     def test_show_info_displays_session_file_path(self):
@@ -43,12 +43,12 @@ class TestPersistenceShowInfo:
 
         orchestrator = ConfigurableTestOrchestrator()
         orchestrator.context.project_path = Path('/my/project')
-        persistence = SessionPersistence(orchestrator)
         io = MockIO()
+        persistence = SessionPersistence(orchestrator, io)
 
-        persistence.manage_session(args="", io=io)
+        persistence.manage_session(args="")
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "Session File:" in output
 
     def test_show_info_displays_session_exists_status(self):
@@ -56,12 +56,12 @@ class TestPersistenceShowInfo:
         from src.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
-        persistence = SessionPersistence(orchestrator)
         io = MockIO()
+        persistence = SessionPersistence(orchestrator, io)
 
-        persistence.manage_session(args="", io=io)
+        persistence.manage_session(args="")
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "Session Exists:" in output or "Exists:" in output
 
     def test_show_info_displays_current_memory_stats(self):
@@ -69,12 +69,12 @@ class TestPersistenceShowInfo:
         from src.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
-        persistence = SessionPersistence(orchestrator)
         io = MockIO()
+        persistence = SessionPersistence(orchestrator, io)
 
-        persistence.manage_session(args="", io=io)
+        persistence.manage_session(args="")
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "Files" in output
         assert "Searches" in output
 
@@ -83,8 +83,8 @@ class TestPersistenceShowInfo:
         from src.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
-        persistence = SessionPersistence(orchestrator)
         io = MockIO()
+        persistence = SessionPersistence(orchestrator, io)
 
         conversation = [
             {'role': 'user', 'content': 'Hello'},
@@ -94,10 +94,9 @@ class TestPersistenceShowInfo:
         persistence.manage_session(
             args="",
             conversation_history=conversation,
-            io=io
         )
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "2" in output
         assert "Conversation:" in output or "messages" in output.lower()
 
@@ -106,16 +105,15 @@ class TestPersistenceShowInfo:
         from src.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
-        persistence = SessionPersistence(orchestrator)
         io = MockIO()
+        persistence = SessionPersistence(orchestrator, io)
 
         persistence.manage_session(
             args="",
             auto_save=True,
-            io=io
         )
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "Auto-save:" in output or "auto-save" in output.lower()
 
 
@@ -139,12 +137,12 @@ class TestPersistenceShowSavedSessionInfo:
 
         with patch('pathlib.Path.exists', return_value=True):
             with patch('builtins.open', mock_open(read_data=json.dumps(session_data))):
-                persistence = SessionPersistence(orchestrator)
                 io = MockIO()
+                persistence = SessionPersistence(orchestrator, io)
 
-                persistence.manage_session(args="", io=io)
+                persistence.manage_session(args="")
 
-                output = io.get_output()
+                output = io.get_all_output()
                 assert "Last Saved:" in output
                 assert "2024-01-15" in output
 
@@ -156,12 +154,12 @@ class TestPersistenceShowSavedSessionInfo:
 
         with patch('pathlib.Path.exists', return_value=True):
             with patch('builtins.open', mock_open(read_data='invalid json')):
-                persistence = SessionPersistence(orchestrator)
                 io = MockIO()
+                persistence = SessionPersistence(orchestrator, io)
 
-                persistence.manage_session(args="", io=io)
+                persistence.manage_session(args="")
 
-                output = io.get_output()
+                output = io.get_all_output()
                 # Should handle error gracefully
                 assert "Error" in output or "error" in output.lower()
 
@@ -180,14 +178,13 @@ class TestPersistenceSave:
             '/test/session.json'
         )[1]
 
-        persistence = SessionPersistence(orchestrator)
         io = MockIO()
+        persistence = SessionPersistence(orchestrator, io)
 
         conversation = [{'role': 'user', 'content': 'test'}]
         persistence.manage_session(
             args="save",
             conversation_history=conversation,
-            io=io
         )
 
         assert len(save_calls) == 1
@@ -198,16 +195,15 @@ class TestPersistenceSave:
         from src.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
-        persistence = SessionPersistence(orchestrator)
         io = MockIO()
+        persistence = SessionPersistence(orchestrator, io)
 
         persistence.manage_session(
             args="save",
             conversation_history=[],
-            io=io
         )
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "saved" in output.lower()
 
     def test_save_shows_message_count(self):
@@ -215,8 +211,8 @@ class TestPersistenceSave:
         from src.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
-        persistence = SessionPersistence(orchestrator)
         io = MockIO()
+        persistence = SessionPersistence(orchestrator, io)
 
         conversation = [
             {'role': 'user', 'content': '1'},
@@ -226,10 +222,9 @@ class TestPersistenceSave:
         persistence.manage_session(
             args="save",
             conversation_history=conversation,
-            io=io
         )
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "3" in output
 
     def test_save_handles_error(self):
@@ -239,16 +234,15 @@ class TestPersistenceSave:
         orchestrator = ConfigurableTestOrchestrator()
         orchestrator.save_session = Mock(side_effect=Exception("Disk full"))
 
-        persistence = SessionPersistence(orchestrator)
         io = MockIO()
+        persistence = SessionPersistence(orchestrator, io)
 
         persistence.manage_session(
             args="save",
             conversation_history=[],
-            io=io
         )
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "Error" in output or "error" in output.lower()
 
     def test_save_success_styled_green(self):
@@ -256,13 +250,12 @@ class TestPersistenceSave:
         from src.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
-        persistence = SessionPersistence(orchestrator)
         io = MockIO()
+        persistence = SessionPersistence(orchestrator, io)
 
         persistence.manage_session(
             args="save",
             conversation_history=[],
-            io=io
         )
 
         styled = io.get_styled_outputs()
@@ -285,10 +278,10 @@ class TestPersistenceLoad:
             original_load()
         )[1]
 
-        persistence = SessionPersistence(orchestrator)
         io = MockIO()
+        persistence = SessionPersistence(orchestrator, io)
 
-        persistence.manage_session(args="load", io=io)
+        persistence.manage_session(args="load")
 
         assert load_called == [True]
 
@@ -307,12 +300,12 @@ class TestPersistenceLoad:
             'conversation_history': []
         }
 
-        persistence = SessionPersistence(orchestrator)
         io = MockIO()
+        persistence = SessionPersistence(orchestrator, io)
 
-        persistence.manage_session(args="load", io=io)
+        persistence.manage_session(args="load")
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "10" in output  # files
         assert "5" in output   # searches
         assert "3" in output   # git ops
@@ -336,10 +329,10 @@ class TestPersistenceLoad:
             'conversation_history': loaded_conversation
         }
 
-        persistence = SessionPersistence(orchestrator)
         io = MockIO()
+        persistence = SessionPersistence(orchestrator, io)
 
-        result = persistence.manage_session(args="load", io=io)
+        result = persistence.manage_session(args="load")
 
         assert result['conversation_history'] == loaded_conversation
 
@@ -350,12 +343,12 @@ class TestPersistenceLoad:
         orchestrator = ConfigurableTestOrchestrator()
         orchestrator.load_session = lambda: {'status': 'no_session'}
 
-        persistence = SessionPersistence(orchestrator)
         io = MockIO()
+        persistence = SessionPersistence(orchestrator, io)
 
-        persistence.manage_session(args="load", io=io)
+        persistence.manage_session(args="load")
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "No saved session" in output or "No previous session" in output
 
     def test_load_error_shows_message(self):
@@ -368,12 +361,12 @@ class TestPersistenceLoad:
             'message': 'File corrupted'
         }
 
-        persistence = SessionPersistence(orchestrator)
         io = MockIO()
+        persistence = SessionPersistence(orchestrator, io)
 
-        persistence.manage_session(args="load", io=io)
+        persistence.manage_session(args="load")
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "Error" in output or "corrupted" in output.lower()
 
 
@@ -385,17 +378,16 @@ class TestPersistenceToggle:
         from src.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
-        persistence = SessionPersistence(orchestrator)
         io = MockIO()
+        persistence = SessionPersistence(orchestrator, io)
 
         result = persistence.manage_session(
             args="toggle",
             auto_save=True,
-            io=io
         )
 
         assert result['auto_save'] is False
-        output = io.get_output()
+        output = io.get_all_output()
         assert "OFF" in output
 
     def test_toggle_enables_auto_save_when_disabled(self):
@@ -403,17 +395,16 @@ class TestPersistenceToggle:
         from src.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
-        persistence = SessionPersistence(orchestrator)
         io = MockIO()
+        persistence = SessionPersistence(orchestrator, io)
 
         result = persistence.manage_session(
             args="toggle",
             auto_save=False,
-            io=io
         )
 
         assert result['auto_save'] is True
-        output = io.get_output()
+        output = io.get_all_output()
         assert "ON" in output
 
     def test_toggle_shows_behavior_explanation(self):
@@ -421,16 +412,15 @@ class TestPersistenceToggle:
         from src.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
-        persistence = SessionPersistence(orchestrator)
         io = MockIO()
+        persistence = SessionPersistence(orchestrator, io)
 
         persistence.manage_session(
             args="toggle",
             auto_save=False,
-            io=io
         )
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "quit" in output.lower() or "exit" in output.lower()
 
 
@@ -442,12 +432,12 @@ class TestPersistenceInvalidCommand:
         from src.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
-        persistence = SessionPersistence(orchestrator)
         io = MockIO()
+        persistence = SessionPersistence(orchestrator, io)
 
-        persistence.manage_session(args="invalid", io=io)
+        persistence.manage_session(args="invalid")
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "Usage:" in output
         assert "save" in output
         assert "load" in output
@@ -459,16 +449,15 @@ class TestPersistenceInvalidCommand:
         from src.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
-        persistence = SessionPersistence(orchestrator)
         io = MockIO()
+        persistence = SessionPersistence(orchestrator, io)
 
         persistence.manage_session(
             args="help",
             auto_save=True,
-            io=io
         )
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "Auto-save:" in output
 
 
@@ -480,14 +469,13 @@ class TestPersistenceReturnValues:
         from src.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
-        persistence = SessionPersistence(orchestrator)
         io = MockIO()
+        persistence = SessionPersistence(orchestrator, io)
 
         conversation = [{'role': 'user', 'content': 'test'}]
         result = persistence.manage_session(
             args="",
             conversation_history=conversation,
-            io=io
         )
 
         assert 'conversation_history' in result
@@ -498,13 +486,12 @@ class TestPersistenceReturnValues:
         from src.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
-        persistence = SessionPersistence(orchestrator)
         io = MockIO()
+        persistence = SessionPersistence(orchestrator, io)
 
         result = persistence.manage_session(
             args="",
             auto_save=True,
-            io=io
         )
 
         assert 'auto_save' in result
@@ -515,15 +502,14 @@ class TestPersistenceReturnValues:
         from src.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
-        persistence = SessionPersistence(orchestrator)
         io = MockIO()
+        persistence = SessionPersistence(orchestrator, io)
 
         conversation = [{'role': 'user', 'content': 'test'}]
         result = persistence.manage_session(
             args="",  # Show info doesn't modify
             conversation_history=conversation,
             auto_save=True,
-            io=io
         )
 
         assert result['conversation_history'] == conversation
@@ -538,16 +524,15 @@ class TestPersistenceCaseInsensitivity:
         from src.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
-        persistence = SessionPersistence(orchestrator)
 
         for cmd in ["SAVE", "Save", "save", "SaVe"]:
             io = MockIO()
+            persistence = SessionPersistence(orchestrator, io)
             persistence.manage_session(
                 args=cmd,
-                conversation_history=[],
-                io=io
+                conversation_history=[]
             )
-            output = io.get_output()
+            output = io.get_all_output()
             # Should not show usage
             assert "Usage:" not in output
 
@@ -560,14 +545,13 @@ class TestPersistenceDefaultParameters:
         from src.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
-        persistence = SessionPersistence(orchestrator)
         io = MockIO()
+        persistence = SessionPersistence(orchestrator, io)
 
         # Should not raise error
         result = persistence.manage_session(
             args="",
             conversation_history=None,
-            io=io
         )
 
         assert 'conversation_history' in result
@@ -577,10 +561,10 @@ class TestPersistenceDefaultParameters:
         from src.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
-        persistence = SessionPersistence(orchestrator)
         io = MockIO()
+        persistence = SessionPersistence(orchestrator, io)
 
-        result = persistence.manage_session(args="", io=io)
+        result = persistence.manage_session(args="")
 
         # Should have auto_save in result with default value
         assert 'auto_save' in result

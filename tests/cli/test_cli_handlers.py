@@ -69,7 +69,8 @@ class TestCLITaskRouterHandler:
         """Test CLI handler stores orchestrator reference correctly."""
         from src.cli.task_router_handler import CLITaskRouterHandler
 
-        handler = CLITaskRouterHandler(mock_orchestrator)
+        io = MockIO()
+        handler = CLITaskRouterHandler(mock_orchestrator, io)
         assert handler.orchestrator is mock_orchestrator
 
     @pytest.mark.unit
@@ -77,8 +78,10 @@ class TestCLITaskRouterHandler:
         """Test that handler creates task router with correct config."""
         from src.cli.task_router_handler import CLITaskRouterHandler
 
+        io = MockIO()
         handler = CLITaskRouterHandler(
             mock_orchestrator,
+            io,
             project_root=Path("/test/project"),
             auto_confirm=True
         )
@@ -92,7 +95,8 @@ class TestCLITaskRouterHandler:
         """Test handler initializes with empty history."""
         from src.cli.task_router_handler import CLITaskRouterHandler
 
-        handler = CLITaskRouterHandler(mock_orchestrator)
+        io = MockIO()
+        handler = CLITaskRouterHandler(mock_orchestrator, io)
         assert handler.history == []
 
     @pytest.mark.unit
@@ -100,7 +104,8 @@ class TestCLITaskRouterHandler:
         """Test that handle_auto_route adds entry to history."""
         from src.cli.task_router_handler import CLITaskRouterHandler
 
-        handler = CLITaskRouterHandler(mock_orchestrator)
+        io = MockIO()
+        handler = CLITaskRouterHandler(mock_orchestrator, io)
         handler.router = Mock()
         handler.router.route.return_value = mock_router_result
 
@@ -115,7 +120,8 @@ class TestCLITaskRouterHandler:
         """Test that handle_auto_route returns the routing result."""
         from src.cli.task_router_handler import CLITaskRouterHandler
 
-        handler = CLITaskRouterHandler(mock_orchestrator)
+        io = MockIO()
+        handler = CLITaskRouterHandler(mock_orchestrator, io)
         handler.router = Mock()
         handler.router.route.return_value = mock_router_result
 
@@ -129,7 +135,8 @@ class TestCLITaskRouterHandler:
         """Test multiple auto_route calls accumulate in history."""
         from src.cli.task_router_handler import CLITaskRouterHandler
 
-        handler = CLITaskRouterHandler(mock_orchestrator)
+        io = MockIO()
+        handler = CLITaskRouterHandler(mock_orchestrator, io)
         handler.router = Mock()
         handler.router.route.return_value = mock_router_result
 
@@ -147,7 +154,8 @@ class TestCLITaskRouterHandler:
         """Test classify_only returns classification without executing."""
         from src.cli.task_router_handler import CLITaskRouterHandler
 
-        handler = CLITaskRouterHandler(mock_orchestrator)
+        io = MockIO()
+        handler = CLITaskRouterHandler(mock_orchestrator, io)
         handler.router = Mock()
         handler.router.classify_only.return_value = mock_classified_task
 
@@ -164,7 +172,8 @@ class TestCLITaskRouterHandler:
         """Test route_history shows most recent entries."""
         from src.cli.task_router_handler import CLITaskRouterHandler
 
-        handler = CLITaskRouterHandler(mock_orchestrator)
+        io = MockIO()
+        handler = CLITaskRouterHandler(mock_orchestrator, io)
         handler.router = Mock()
         handler.router.route.return_value = mock_router_result
 
@@ -179,7 +188,8 @@ class TestCLITaskRouterHandler:
         """Test failed routing result is stored in history."""
         from src.cli.task_router_handler import CLITaskRouterHandler
 
-        handler = CLITaskRouterHandler(mock_orchestrator)
+        io = MockIO()
+        handler = CLITaskRouterHandler(mock_orchestrator, io)
         handler.router = Mock()
 
         failed_result = Mock()
@@ -213,7 +223,8 @@ class TestCLIAgentManager:
         """Test CLIAgentManager stores orchestrator reference."""
         from src.cli.agent_manager import CLIAgentManager
 
-        manager = CLIAgentManager(mock_orchestrator)
+        io = MockIO()
+        manager = CLIAgentManager(mock_orchestrator, io)
 
         assert manager.orchestrator is mock_orchestrator
 
@@ -240,12 +251,12 @@ class TestCLIAgentManager:
         mock_agent.project_root = Path("/test")
         mock_agent_class.return_value = mock_agent
 
-        manager = CLIAgentManager(mock_orchestrator)
         io = MockIO(
             confirmations=[False, False, True, False]  # dry_run, checkpoint, start, save_log
         )
+        manager = CLIAgentManager(mock_orchestrator, io)
 
-        manager.run_agent("Create file", io=io)
+        manager.run_agent("Create file")
 
         output = io.get_output()
         assert "Task Completed Successfully" in output or "Completed" in output
@@ -272,12 +283,12 @@ class TestCLIAgentManager:
         mock_agent.project_root = Path("/test")
         mock_agent_class.return_value = mock_agent
 
-        manager = CLIAgentManager(mock_orchestrator)
         io = MockIO(
             confirmations=[True, False, True, False]  # dry_run=True
         )
+        manager = CLIAgentManager(mock_orchestrator, io)
 
-        manager.run_agent("Test", io=io)
+        manager.run_agent("Test")
 
         assert mock_agent.dry_run is True
         output = io.get_output()
@@ -298,13 +309,13 @@ class TestCLIAgentManager:
         mock_agent.project_root = Path("/test")
         mock_agent_class.return_value = mock_agent
 
-        manager = CLIAgentManager(mock_orchestrator)
         io = MockIO(
             confirmations=[False, False, True]
         )
+        manager = CLIAgentManager(mock_orchestrator, io)
 
         # Should not raise
-        manager.run_agent("Crashing task", io=io)
+        manager.run_agent("Crashing task")
 
         output = io.get_output()
         assert "error" in output.lower()
@@ -334,12 +345,12 @@ class TestCLIAgentManager:
         mock_agent.project_root = Path("/test")
         mock_agent_class.return_value = mock_agent
 
-        manager = CLIAgentManager(mock_orchestrator)
         io = MockIO(
             confirmations=[False, False, True, False]
         )
+        manager = CLIAgentManager(mock_orchestrator, io)
 
-        manager.run_agent("Important task", io=io)
+        manager.run_agent("Important task")
 
         # Should record discovery in working memory
         discoveries = mock_orchestrator.working_memory._data['discoveries']

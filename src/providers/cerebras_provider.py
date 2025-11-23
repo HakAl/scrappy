@@ -7,6 +7,7 @@ Cerebras provides extremely fast inference on specialized hardware with excellen
 - Models: Llama 3.1 (8B, 70B)
 """
 
+import logging
 import os
 import time
 import json
@@ -15,6 +16,8 @@ from typing import Optional
 from .base import LLMProvider, LLMResponse, ProviderLimits, ModelInfo, ToolCall
 from ..utils.imports import safe_import
 from ..utils.errors import raise_package_not_installed, raise_env_var_not_found, raise_model_not_supported
+
+logger = logging.getLogger(__name__)
 
 # Safe imports for optional dependencies
 _openai_module, OPENAI_AVAILABLE = safe_import('openai')
@@ -345,7 +348,7 @@ class CerebrasProvider(LLMProvider):
                     if response.status_code == 429:
                         # Rate limited - wait and retry
                         wait_time = 2 ** attempt  # Exponential backoff: 1, 2, 4 seconds
-                        print(f"[Cerebras] Rate limited, waiting {wait_time}s (attempt {attempt+1}/{max_retries})")
+                        logger.warning(f"[Cerebras] Rate limited, waiting {wait_time}s (attempt {attempt+1}/{max_retries})")
                         await asyncio.sleep(wait_time)
                         last_error = Exception(f"Rate limit (429) on attempt {attempt+1}")
                         continue
@@ -392,7 +395,7 @@ class CerebrasProvider(LLMProvider):
             except httpx.HTTPStatusError as e:
                 if e.response.status_code == 429 and attempt < max_retries - 1:
                     wait_time = 2 ** attempt
-                    print(f"[Cerebras] Rate limited, waiting {wait_time}s (attempt {attempt+1}/{max_retries})")
+                    logger.warning(f"[Cerebras] Rate limited, waiting {wait_time}s (attempt {attempt+1}/{max_retries})")
                     await asyncio.sleep(wait_time)
                     last_error = e
                     continue

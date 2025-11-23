@@ -1927,3 +1927,436 @@ class MockSemanticInitializer:
     def set_status(self, status: str) -> None:
         """Set status message for testing."""
         self._status = status
+
+
+# =============================================================================
+# Textual TUI Test Doubles
+# =============================================================================
+
+class MockTextualApp:
+    """Mock Textual app for testing.
+
+    Provides test doubles for Textual app components without requiring
+    the full Textual framework or terminal environment.
+
+    Usage:
+        app = MockTextualApp()
+        io = MockTextualIO(app)
+        io.secho("Test message", fg="green")
+
+        assert "Test message" in app.get_output()
+    """
+
+    def __init__(self):
+        """Initialize mock Textual app."""
+        self._output_updates: List[str] = []
+        self._status_updates: List[str] = []
+        self._widgets: Dict[str, Any] = {
+            "#output": MockStaticWidget(),
+            "#status": MockStaticWidget(),
+        }
+        self.exit_called = False
+
+    def query_one(self, selector: str, widget_type=None):
+        """Mock query_one to return mock widgets.
+
+        Args:
+            selector: Widget selector (e.g., "#output")
+            widget_type: Widget type (ignored in mock)
+
+        Returns:
+            Mock widget matching the selector
+        """
+        if selector in self._widgets:
+            return self._widgets[selector]
+        raise LookupError(f"No widget found for selector: {selector}")
+
+    def exit(self):
+        """Mock app exit."""
+        self.exit_called = True
+
+    def get_output(self) -> str:
+        """Get all output updates as a single string."""
+        return "\n".join(self._output_updates)
+
+    def get_status_updates(self) -> List[str]:
+        """Get all status updates."""
+        return self._status_updates.copy()
+
+
+class MockStaticWidget:
+    """Mock Textual Static widget for testing."""
+
+    def __init__(self):
+        """Initialize mock static widget."""
+        self._content = ""
+        self._updates: List[str] = []
+
+    def update(self, content: str) -> None:
+        """Mock update method.
+
+        Args:
+            content: New content for the widget
+        """
+        self._content = content
+        self._updates.append(content)
+
+    @property
+    def renderable(self) -> str:
+        """Get current renderable content."""
+        return self._content
+
+    def get_updates(self) -> List[str]:
+        """Get all updates for verification."""
+        return self._updates.copy()
+
+
+class MockTextualIO:
+    """Mock TextualIO for testing.
+
+    Implements CLIIOProtocol for testing Textual-based CLI code
+    without requiring a real Textual app or terminal.
+
+    Usage:
+        app = MockTextualApp()
+        io = MockTextualIO(app)
+        io.secho("Success!", fg="green")
+
+        assert "Success!" in app.get_output()
+        assert io.get_styled_outputs()[0]['fg'] == 'green'
+    """
+
+    def __init__(self, app: Optional[MockTextualApp] = None):
+        """Initialize mock TextualIO.
+
+        Args:
+            app: MockTextualApp instance (creates one if not provided)
+        """
+        self._app = app or MockTextualApp()
+        self._output_buffer: List[str] = []
+        self._styled_outputs: List[Dict[str, Any]] = []
+
+    def echo(self, message: str = "", nl: bool = True) -> None:
+        """Capture output to internal buffer."""
+        output = message + "\n" if nl else message
+        self._output_buffer.append(output)
+
+        # Also update app's output widget
+        output_widget = self._app.query_one("#output")
+        current = str(output_widget.renderable)
+        new_content = f"{current}\n{message}" if current and nl else f"{current}{message}"
+        output_widget.update(new_content)
+
+    def secho(
+        self,
+        message: str,
+        fg: Optional[str] = None,
+        bold: bool = False,
+        nl: bool = True
+    ) -> None:
+        """Capture styled output and record styling info."""
+        self._styled_outputs.append({
+            'text': message,
+            'fg': fg,
+            'bold': bold,
+            'nl': nl
+        })
+
+        # Add to buffer
+        output = message + "\n" if nl else message
+        self._output_buffer.append(output)
+
+        # Update app's output widget with Rich markup
+        output_widget = self._app.query_one("#output")
+        current = str(output_widget.renderable)
+
+        # Apply Rich markup
+        if fg and bold:
+            formatted = f"[bold {fg}]{message}[/bold {fg}]"
+        elif fg:
+            formatted = f"[{fg}]{message}[/{fg}]"
+        elif bold:
+            formatted = f"[bold]{message}[/bold]"
+        else:
+            formatted = message
+
+        new_content = f"{current}\n{formatted}" if current and nl else f"{current}{formatted}"
+        output_widget.update(new_content)
+
+    def styled_echo(
+        self,
+        message: str,
+        fg: Optional[str] = None,
+        bold: bool = False,
+        nl: bool = True
+    ) -> None:
+        """Alias for secho() for backwards compatibility."""
+        self.secho(message, fg=fg, bold=bold, nl=nl)
+
+    def style(
+        self,
+        text: str,
+        fg: Optional[str] = None,
+        bold: bool = False
+    ) -> str:
+        """Return text with Rich markup."""
+        if fg and bold:
+            return f"[bold {fg}]{text}[/bold {fg}]"
+        elif fg:
+            return f"[{fg}]{text}[/{fg}]"
+        elif bold:
+            return f"[bold]{text}[/bold]"
+        else:
+            return text
+
+    def prompt(
+        self,
+        text: str,
+        default: str = "",
+        show_default: bool = True
+    ) -> str:
+        """Not supported in Textual mode."""
+        raise NotImplementedError("prompt() not supported in Textual mode")
+
+    def confirm(
+        self,
+        text: str,
+        default: bool = False
+    ) -> bool:
+        """Not supported in Textual mode."""
+        raise NotImplementedError("confirm() not supported in Textual mode")
+
+    def input_line(self) -> str:
+        """Not supported in Textual mode."""
+        raise NotImplementedError("input_line() not supported in Textual mode")
+
+    def get_output(self) -> str:
+        """Get all captured output as a single string."""
+        return "".join(self._output_buffer)
+
+    def get_output_lines(self) -> List[str]:
+        """Get captured output as list of lines."""
+        full_output = self.get_output()
+        return full_output.split("\n") if full_output else []
+
+    def get_styled_outputs(self) -> List[Dict[str, Any]]:
+        """Get list of all styled output records."""
+        return self._styled_outputs
+
+    def clear_output(self) -> None:
+        """Clear all captured output."""
+        self._output_buffer = []
+        self._styled_outputs = []
+
+
+class MockTextualProgressReporter:
+    """Mock progress reporter for testing Textual apps.
+
+    Implements ProgressReporterProtocol for testing without a real Textual app.
+
+    Usage:
+        reporter = MockTextualProgressReporter()
+        reporter.start("Processing", total=10)
+        reporter.update(5, "Half done")
+        reporter.complete("Finished")
+
+        assert reporter.get_status_updates()[0] == "Processing (0/10)"
+        assert reporter.complete_called
+    """
+
+    def __init__(self, app: Optional[MockTextualApp] = None):
+        """Initialize mock progress reporter.
+
+        Args:
+            app: MockTextualApp instance (creates one if not provided)
+        """
+        self._app = app or MockTextualApp()
+        self._status_updates: List[str] = []
+        self.start_called = False
+        self.update_called = False
+        self.complete_called = False
+        self.error_called = False
+
+    def start(self, description: str, total: Optional[int] = None) -> None:
+        """Record start call."""
+        self.start_called = True
+        if total is not None:
+            status = f"{description} (0/{total})"
+        else:
+            status = f"{description}..."
+        self._status_updates.append(status)
+        self._update_app_status(f"[cyan]{status}[/cyan]")
+
+    def update(self, current: Optional[int] = None, description: Optional[str] = None) -> None:
+        """Record update call."""
+        self.update_called = True
+        status = description or "Processing..."
+        self._status_updates.append(status)
+        self._update_app_status(f"[cyan]{status}[/cyan]")
+
+    def complete(self, message: str = "Complete") -> None:
+        """Record complete call."""
+        self.complete_called = True
+        self._status_updates.append(message)
+        self._update_app_status(f"[green]{message}[/green]")
+
+    def error(self, message: str) -> None:
+        """Record error call."""
+        self.error_called = True
+        error_msg = f"Error: {message}"
+        self._status_updates.append(error_msg)
+        self._update_app_status(f"[red]{error_msg}[/red]")
+
+    def _update_app_status(self, content: str) -> None:
+        """Update the app's status widget."""
+        try:
+            status_widget = self._app.query_one("#status")
+            status_widget.update(content)
+        except LookupError:
+            pass  # App doesn't have status widget
+
+    def get_status_updates(self) -> List[str]:
+        """Get all status updates for verification."""
+        return self._status_updates.copy()
+
+
+class MockIO:
+    """
+    Mock IO implementation for testing CLI handlers.
+
+    Captures all echo() and secho() calls for assertion in tests.
+    Implements CLIIOProtocol without requiring Rich or Click.
+    """
+
+    def __init__(
+        self,
+        inputs: Optional[List[str]] = None,
+        confirmations: Optional[List[bool]] = None
+    ):
+        """Initialize with empty message buffer."""
+        self.messages: List[str] = []
+        self.styled_messages: List[Dict[str, Any]] = []
+        self._inputs: List[str] = list(inputs) if inputs else []
+        self._confirmations: List[bool] = list(confirmations) if confirmations else []
+        self._input_index = 0
+        self._confirm_index = 0
+
+    def echo(self, message: str = "", nl: bool = True) -> None:
+        """Capture plain echo message."""
+        self.messages.append(message)
+
+    def secho(
+        self,
+        message: str,
+        fg: Optional[str] = None,
+        bg: Optional[str] = None,
+        bold: bool = False,
+        dim: bool = False,
+        underline: bool = False,
+        blink: bool = False,
+        reverse: bool = False,
+        reset: bool = True,
+        nl: bool = True,
+        err: bool = False
+    ) -> None:
+        """Capture styled echo message."""
+        self.styled_messages.append({
+            'message': message,
+            'fg': fg,
+            'bg': bg,
+            'bold': bold,
+            'dim': dim,
+            'underline': underline,
+            'blink': blink,
+            'reverse': reverse,
+            'reset': reset,
+            'nl': nl,
+            'err': err
+        })
+        self.messages.append(message)
+
+    def confirm(self, prompt: str, default: bool = False) -> bool:
+        """Mock confirm - returns preset confirmations or default."""
+        if self._confirm_index < len(self._confirmations):
+            result = self._confirmations[self._confirm_index]
+            self._confirm_index += 1
+            return result
+        return default
+
+    def prompt(self, text: str, default: str = "", show_default: bool = True) -> str:
+        """Mock prompt - returns preset input or default."""
+        if self._input_index < len(self._inputs):
+            result = self._inputs[self._input_index]
+            self._input_index += 1
+            return result
+        return default
+
+    def clear(self) -> None:
+        """Clear message buffers."""
+        self.messages = []
+        self.styled_messages = []
+
+    def clear_output(self) -> None:
+        """Clear all captured output (alias for clear)."""
+        self.clear()
+
+    def get_all_output(self) -> str:
+        """Get all captured output as single string."""
+        return "\n".join(self.messages)
+
+    def get_output(self) -> str:
+        """Get all captured output as single string (alias for get_all_output)."""
+        return self.get_all_output()
+
+    def reset(self) -> None:
+        """Reset all state for reuse between tests."""
+        self.clear()
+        self._input_index = 0
+        self._confirm_index = 0
+
+    def style(self, text: str, fg: Optional[str] = None, bg: Optional[str] = None,
+              bold: bool = False, dim: bool = False) -> str:
+        """Mock style - just returns the text unchanged."""
+        return text
+
+    def progress(self, total: int, description: str = "Progress"):
+        """Return a mock progress context manager.
+
+        Returns a context manager that provides a mock progress tracker
+        compatible with RichIO.progress().
+
+        Args:
+            total: Total number of steps
+            description: Description text for the progress bar
+
+        Returns:
+            Context manager that yields a mock progress tracker
+        """
+        from contextlib import contextmanager
+
+        @contextmanager
+        def _progress_context():
+            # Create a simple mock progress tracker
+            class MockProgressTracker:
+                def __init__(self):
+                    self.current = 0
+
+                def advance(self, amount: int = 1):
+                    self.current += amount
+
+                def update_description(self, description: str):
+                    pass
+
+            yield MockProgressTracker()
+
+        return _progress_context()
+
+    def get_styled_outputs(self) -> List[Dict[str, Any]]:
+        """Get all styled messages with 'text' key for compatibility."""
+        # Convert 'message' to 'text' for compatibility with tests
+        return [{'text': s['message'], **{k: v for k, v in s.items() if k != 'message'}}
+                for s in self.styled_messages]
+
+    def get_output_lines(self) -> List[str]:
+        """Get all captured output as list of lines."""
+        return self.messages.copy()

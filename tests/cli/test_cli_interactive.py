@@ -21,7 +21,7 @@ from src.cli.logging import get_logger
 def create_test_interactive_mode(io, orchestrator):
     """Helper to create InteractiveMode with all dependencies."""
     session_start = datetime.now()
-    handlers = initialize_cli_handlers(orchestrator, session_start)
+    handlers = initialize_cli_handlers(orchestrator, session_start, io)
 
     # Import here to avoid circular imports
     from src.cli.interactive import InteractiveMode

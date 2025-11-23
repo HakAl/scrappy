@@ -1,4 +1,4 @@
-# Core dependencies for Multi-Provider LLM Agent Team
+# Core dependencies for Scrappy
 groq>=0.4.0
 cohere>=5.0.0
 google-generativeai>=0.8.0
@@ -8,6 +8,7 @@ click>=8.0.0
 httpx>=0.25.0  # Async HTTP client for parallel API calls
 aiofiles>=23.0.0  # Async file I/O for non-blocking disk operations
 beautifulsoup4>=4.12.0  # HTML parsing for web content extraction
+textual>=0.47.0  # Terminal UI framework for interactive mode
 
 # Future providers (uncomment when you add them)
 # openai>=1.0.0              # For OpenRouter compatibility

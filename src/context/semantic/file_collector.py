@@ -196,14 +196,16 @@ class SemanticFileCollector:
         # Get candidate files
         if self._filter_config.respect_gitignore and is_git_repo:
             logger.debug("Using git ls-files (respects .gitignore)")
-            candidates = self._list_files_git()
-            if not candidates:
-                logger.warning(
-                    "Git repository detected but git ls-files returned no files. "
-                    "This might indicate a git configuration issue (e.g., ownership). "
-                    "Falling back to plain directory scan."
+            try:
+                candidates = self._list_files_git()
+            except RuntimeError as e:
+                logger.error(
+                    f"Git command failed in git repository: {e}. "
+                    "Returning empty set for security (won't bypass .gitignore)."
                 )
-                candidates = self._list_files_plain()
+                # Security: Don't fallback to plain scan in git repos when git fails
+                # This ensures we never bypass .gitignore
+                return {}
         else:
             if is_git_repo:
                 logger.info("Git repo detected but respect_gitignore=False, using plain scan")
@@ -279,14 +281,16 @@ class SemanticFileCollector:
         # Get candidate files
         if self._filter_config.respect_gitignore and is_git_repo:
             logger.debug("Using git ls-files (respects .gitignore)")
-            candidates = self._list_files_git()
-            if not candidates:
-                logger.warning(
-                    "Git repository detected but git ls-files returned no files. "
-                    "This might indicate a git configuration issue (e.g., ownership). "
-                    "Falling back to plain directory scan."
+            try:
+                candidates = self._list_files_git()
+            except RuntimeError as e:
+                logger.error(
+                    f"Git command failed in git repository: {e}. "
+                    "Returning empty for security (won't bypass .gitignore)."
                 )
-                candidates = self._list_files_plain()
+                # Security: Don't fallback to plain scan in git repos when git fails
+                # This ensures we never bypass .gitignore
+                return  # Empty generator
         else:
             if is_git_repo:
                 logger.info("Git repo detected but respect_gitignore=False, using plain scan")
@@ -360,50 +364,74 @@ class SemanticFileCollector:
 
         Returns:
             Set of relative file paths
+
+        Raises:
+            RuntimeError: If git command fails (to distinguish from "no files found")
         """
         try:
-            # Build git command
-            cmd = ['git', 'ls-files']
+            files = set()
 
-            # Add untracked files if configured
-            if self._filter_config.include_untracked:
-                cmd.extend(['--others', '--exclude-standard'])
-
-            result = subprocess.run(
-                cmd,
+            # Get tracked files
+            result_tracked = subprocess.run(
+                ['git', 'ls-files'],
                 cwd=self._project_path,
                 capture_output=True,
                 text=True,
-                timeout=30,  # Prevent hanging
+                timeout=30,
             )
 
-            if result.returncode != 0:
-                logger.warning(f"git ls-files failed: {result.stderr}")
-                return set()
+            if result_tracked.returncode != 0:
+                logger.warning(f"git ls-files failed: {result_tracked.stderr}")
+                raise RuntimeError(f"git ls-files failed: {result_tracked.stderr}")
 
-            # Parse output (one file per line)
-            files = set()
-            for line in result.stdout.strip().split('\n'):
-                if line:  # Skip empty lines
+            # Parse tracked files
+            for line in result_tracked.stdout.strip().split('\n'):
+                if line:
                     path = Path(line)
-                    # Apply additional filtering
                     if not self._filter_config.should_skip_by_path(
                         self._project_path / path,
                         self._project_path
                     ):
                         files.add(line)
 
+            # Add untracked files if configured
+            if self._filter_config.include_untracked:
+                result_untracked = subprocess.run(
+                    ['git', 'ls-files', '--others', '--exclude-standard'],
+                    cwd=self._project_path,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+
+                if result_untracked.returncode != 0:
+                    logger.warning(f"git ls-files --others failed: {result_untracked.stderr}")
+                    raise RuntimeError(f"git ls-files --others failed: {result_untracked.stderr}")
+
+                # Parse untracked files
+                for line in result_untracked.stdout.strip().split('\n'):
+                    if line:
+                        path = Path(line)
+                        if not self._filter_config.should_skip_by_path(
+                            self._project_path / path,
+                            self._project_path
+                        ):
+                            files.add(line)
+
             return files
 
         except subprocess.TimeoutExpired:
             logger.error("git ls-files timed out after 30 seconds")
-            return set()
+            raise RuntimeError("git ls-files timed out")
         except FileNotFoundError:
             logger.warning("git command not found")
-            return set()
+            raise RuntimeError("git command not found")
+        except RuntimeError:
+            # Re-raise RuntimeError (git failures)
+            raise
         except Exception as e:
             logger.error(f"Unexpected error running git ls-files: {e}")
-            return set()
+            raise RuntimeError(f"Unexpected error running git ls-files: {e}")
 
     def _list_files_plain(self) -> Set[str]:
         """

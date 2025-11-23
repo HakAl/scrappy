@@ -163,7 +163,7 @@ class LiveProgressReporter:
             from rich.text import Text
 
             # Show completion briefly
-            self._live.update(Text(f"✓ {message}", style="green"))
+            self._live.update(Text(f"[OK] {message}", style="green"))
             time.sleep(0.5)
             # Then disappear (transient=True)
             self._live.stop()
@@ -180,7 +180,7 @@ class LiveProgressReporter:
             from rich.text import Text
 
             # Show error longer
-            self._live.update(Text(f"✗ Error: {message}", style="red"))
+            self._live.update(Text(f"[ERROR] {message}", style="red"))
             time.sleep(1.0)
             # Then disappear
             self._live.stop()

@@ -31,12 +31,12 @@ class TestRateLimiterDisplay:
         # Mock the storage path to return the new path
         orchestrator.rate_tracker._storage.path = Path('/test/.scrappy/rate_limits.json')
 
-        limiter = RateLimiter(orchestrator)
         io = MockIO()
+        limiter = RateLimiter(orchestrator, io)
 
-        limiter.show_rate_limits("", io=io)
+        limiter.show_rate_limits("")
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "No usage data recorded yet" in output
         assert "Rate limits will be tracked" in output
         assert ("rate_limits.json" in output or ".scrappy" in output)
@@ -58,12 +58,12 @@ class TestRateLimiterDisplay:
         orchestrator.check_rate_limit_warnings.return_value = []
         orchestrator.context.project_path = Path('/test')
 
-        limiter = RateLimiter(orchestrator)
         io = MockIO()
+        limiter = RateLimiter(orchestrator, io)
 
-        limiter.show_rate_limits("", io=io)
+        limiter.show_rate_limits("")
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "OPENAI" in output
         assert "100 requests" in output
         assert "50,000 tokens" in output
@@ -81,12 +81,12 @@ class TestRateLimiterDisplay:
         orchestrator.check_rate_limit_warnings.return_value = []
         orchestrator.context.project_path = Path('/test')
 
-        limiter = RateLimiter(orchestrator)
         io = MockIO()
+        limiter = RateLimiter(orchestrator, io)
 
-        limiter.show_rate_limits("openai", io=io)
+        limiter.show_rate_limits("openai")
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "OPENAI" in output
         assert "ANTHROPIC" not in output
 
@@ -98,12 +98,12 @@ class TestRateLimiterDisplay:
             'providers': {'openai': {'total_requests_today': 1, 'total_tokens_today': 1, 'total_requests_month': 1, 'by_model': {}}}
         }
 
-        limiter = RateLimiter(orchestrator)
         io = MockIO()
+        limiter = RateLimiter(orchestrator, io)
 
-        limiter.show_rate_limits("nonexistent", io=io)
+        limiter.show_rate_limits("nonexistent")
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "not found" in output.lower()
 
     def test_displays_warnings_when_approaching_limits(self):
@@ -121,12 +121,12 @@ class TestRateLimiterDisplay:
         ]
         orchestrator.context.project_path = Path('/test')
 
-        limiter = RateLimiter(orchestrator)
         io = MockIO()
+        limiter = RateLimiter(orchestrator, io)
 
-        limiter.show_rate_limits("", io=io)
+        limiter.show_rate_limits("")
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "WARNINGS" in output
         assert "90%" in output
 
@@ -137,26 +137,26 @@ class TestRateLimiterReset:
     def test_resets_all_tracking_when_confirmed(self):
         """Should reset all data when user confirms."""
         orchestrator = MagicMock()
-        limiter = RateLimiter(orchestrator)
         io = MockIO(confirmations=[True])
+        limiter = RateLimiter(orchestrator, io)
 
-        limiter.show_rate_limits("reset", io=io)
+        limiter.show_rate_limits("reset")
 
         orchestrator.reset_rate_tracking.assert_called_once_with()
-        output = io.get_output()
+        output = io.get_all_output()
         assert "reset" in output.lower()
 
 
     def test_resets_specific_provider_when_confirmed(self):
         """Should reset only specified provider when confirmed."""
         orchestrator = MagicMock()
-        limiter = RateLimiter(orchestrator)
         io = MockIO(confirmations=[True])
+        limiter = RateLimiter(orchestrator, io)
 
-        limiter.show_rate_limits("reset openai", io=io)
+        limiter.show_rate_limits("reset openai")
 
         orchestrator.reset_rate_tracking.assert_called_once_with("openai")
-        output = io.get_output()
+        output = io.get_all_output()
         assert "openai" in output.lower()
         assert "reset" in output.lower()
 
@@ -183,14 +183,14 @@ class TestRateLimiterQuotaDisplay:
         orchestrator.check_rate_limit_warnings.return_value = []
         orchestrator.context.project_path = Path('/test')
 
-        limiter = RateLimiter(orchestrator)
         io = MockIO()
+        limiter = RateLimiter(orchestrator, io)
 
-        limiter.show_rate_limits("", io=io)
+        limiter.show_rate_limits("")
 
         # Check that percentage is shown with green ANSI code
         # ANSI green code is \x1b[32m
-        output = io.get_output()
+        output = io.get_all_output()
         assert '50.0%' in output  # 50/100 = 50%
         assert '\x1b[32m' in output  # Contains green color code
 
@@ -213,14 +213,14 @@ class TestRateLimiterQuotaDisplay:
         orchestrator.check_rate_limit_warnings.return_value = []
         orchestrator.context.project_path = Path('/test')
 
-        limiter = RateLimiter(orchestrator)
         io = MockIO()
+        limiter = RateLimiter(orchestrator, io)
 
-        limiter.show_rate_limits("", io=io)
+        limiter.show_rate_limits("")
 
         # Check for red ANSI code on high percentage (>= 90%)
         # ANSI red code is \x1b[31m
-        output = io.get_output()
+        output = io.get_all_output()
         assert '95.0%' in output  # 950/1000 = 95%
         assert '\x1b[31m' in output  # Contains red color code
 
@@ -256,12 +256,12 @@ class TestRateLimiterModelBreakdown:
         orchestrator.check_rate_limit_warnings.return_value = []
         orchestrator.context.project_path = Path('/test')
 
-        limiter = RateLimiter(orchestrator)
         io = MockIO()
+        limiter = RateLimiter(orchestrator, io)
 
-        limiter.show_rate_limits("", io=io)
+        limiter.show_rate_limits("")
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "gpt-4" in output
         assert "gpt-3.5-turbo" in output
         assert "12:30:00" in output  # Parsed timestamp
@@ -290,10 +290,10 @@ class TestRateLimiterModelBreakdown:
         orchestrator.check_rate_limit_warnings.return_value = []
         orchestrator.context.project_path = Path('/test')
 
-        limiter = RateLimiter(orchestrator)
         io = MockIO()
+        limiter = RateLimiter(orchestrator, io)
 
-        limiter.show_rate_limits("", io=io)
+        limiter.show_rate_limits("")
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "never" in output.lower()

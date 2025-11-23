@@ -97,24 +97,29 @@ def extract_context_options(ctx: Any) -> Dict[str, Any]:
     }
 
 
-def initialize_cli_handlers(orchestrator: "Orchestrator", session_start: datetime) -> Dict[str, Any]:
+def initialize_cli_handlers(
+    orchestrator: "Orchestrator",
+    session_start: datetime,
+    io: CLIIOProtocol
+) -> Dict[str, Any]:
     """
     Create and return all CLI component handlers.
 
     Args:
         orchestrator: AgentOrchestrator instance
         session_start: Session start datetime for display handler
+        io: I/O interface for output
 
     Returns:
         Dict with all 8 standard handlers
     """
-    # Create session manager dependencies first
-    context_manager = CLIContextCommands(orchestrator)
-    cache_manager = CacheManager(orchestrator)
-    rate_limiter = RateLimiter(orchestrator)
-    session_persistence = SessionPersistence(orchestrator)
+    # Create session manager dependencies first (all need io)
+    context_manager = CLIContextCommands(orchestrator, io)
+    cache_manager = CacheManager(orchestrator, io)
+    rate_limiter = RateLimiter(orchestrator, io)
+    session_persistence = SessionPersistence(orchestrator, io)
 
-    # Create session manager with all dependencies
+    # Create session manager with all dependencies (no io - delegates have it)
     session_mgr = CLISessionManager(
         orchestrator=orchestrator,
         context_manager=context_manager,
@@ -124,14 +129,14 @@ def initialize_cli_handlers(orchestrator: "Orchestrator", session_start: datetim
     )
 
     return {
-        'display': CLIDisplay(orchestrator, session_start),
+        'display': CLIDisplay(orchestrator, session_start, io),
         'session_mgr': session_mgr,
-        'codebase': CLICodebaseAnalysis(orchestrator),
-        'tasks': CLITaskExecution(orchestrator),
-        'multiprovider': CLIMultiProvider(orchestrator),
-        'smart': CLISmartQuery(orchestrator),
-        'agent_mgr': CLIAgentManager(orchestrator),
-        'task_router': CLITaskRouterHandler(orchestrator),
+        'codebase': CLICodebaseAnalysis(orchestrator, io),
+        'tasks': CLITaskExecution(orchestrator, io),
+        'multiprovider': CLIMultiProvider(orchestrator, io),
+        'smart': CLISmartQuery(orchestrator, io),
+        'agent_mgr': CLIAgentManager(orchestrator, io),
+        'task_router': CLITaskRouterHandler(orchestrator, io),
     }
 
 

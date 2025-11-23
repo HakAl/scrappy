@@ -15,6 +15,7 @@ from .output_handler import (
     ConsoleOutputHandler,
     BufferOutputHandler,
     NullOutputHandler,
+    CLIIOOutputHandler,
 )
 from .router import TaskRouter
 from .strategies import (
@@ -49,6 +50,7 @@ __all__ = [
     "ConsoleOutputHandler",
     "BufferOutputHandler",
     "NullOutputHandler",
+    "CLIIOOutputHandler",
     # Strategies
     "ExecutionStrategy",
     "ExecutionResult",

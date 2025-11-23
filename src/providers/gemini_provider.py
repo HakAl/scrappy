@@ -11,12 +11,15 @@ Current quotas (as of 2025-11-15):
 - gemini-2.0-flash-exp: 50 RPD
 """
 
+import logging
 import os
 import time
 from typing import Optional
 
 from .base import LLMProvider, LLMResponse, ProviderLimits, ModelInfo
 from ..utils.imports import safe_import
+
+logger = logging.getLogger(__name__)
 from ..utils.errors import (
     raise_package_not_installed, raise_env_var_not_found,
     raise_model_not_supported, ErrorFormatter
@@ -233,7 +236,7 @@ class GeminiProvider(LLMProvider):
                 response.metadata['original_model'] = preferred_model
 
                 if model != preferred_model:
-                    print(f"[Gemini] Fallback: {preferred_model} -> {model}")
+                    logger.info(f"[Gemini] Fallback: {preferred_model} -> {model}")
 
                 return response
 
@@ -242,7 +245,7 @@ class GeminiProvider(LLMProvider):
 
                 # Check if this is a rate limit error
                 if 'quota' in error_str or 'rate' in error_str or '429' in error_str or 'resource' in error_str:
-                    print(f"[Gemini] {model} rate limited, trying next...")
+                    logger.warning(f"[Gemini] {model} rate limited, trying next...")
                     self._limited_models.add(model)
                     last_error = e
                     continue
@@ -342,7 +345,7 @@ class GeminiProvider(LLMProvider):
         Call this at the start of a new day or when you know limits have reset.
         """
         self._limited_models.clear()
-        print("[Gemini] Rate limit tracking reset")
+        logger.info("[Gemini] Rate limit tracking reset")
 
     def get_usage_summary(self) -> dict:
         """Get summary of model usage in this session."""
@@ -483,7 +486,7 @@ class GeminiProvider(LLMProvider):
                 response.metadata['original_model'] = preferred_model
 
                 if model != preferred_model:
-                    print(f"[Gemini] Fallback: {preferred_model} -> {model}")
+                    logger.info(f"[Gemini] Fallback: {preferred_model} -> {model}")
 
                 return response
 
@@ -492,7 +495,7 @@ class GeminiProvider(LLMProvider):
 
                 # Check if this is a rate limit error
                 if 'quota' in error_str or 'rate' in error_str or '429' in error_str or 'resource' in error_str:
-                    print(f"[Gemini] {model} rate limited, trying next...")
+                    logger.warning(f"[Gemini] {model} rate limited, trying next...")
                     self._limited_models.add(model)
                     last_error = e
                     continue

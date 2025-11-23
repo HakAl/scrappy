@@ -24,10 +24,10 @@ class TestSynthesizeMode:
     def test_rejects_empty_question(self):
         """Should exit when user provides empty question."""
         orchestrator = MagicMock()
-        handler = CLIMultiProvider(orchestrator)
         io = MockIO(inputs=[""])  # Empty question
+        handler = CLIMultiProvider(orchestrator, io)
 
-        handler.synthesize_mode(io=io)
+        handler.synthesize_mode()
 
         output = io.get_output()
         assert "No question provided" in output
@@ -39,10 +39,10 @@ class TestSynthesizeMode:
         orchestrator.delegate.return_value = make_response("Response", tokens_used=100)
         orchestrator.synthesize.return_value = "Synthesized answer"
 
-        handler = CLIMultiProvider(orchestrator)
         io = MockIO(inputs=["What is AI?", "all"])
+        handler = CLIMultiProvider(orchestrator, io)
 
-        handler.synthesize_mode(io=io)
+        handler.synthesize_mode()
 
         # Should have queried all 3 providers
         assert orchestrator.delegate.call_count == 3
@@ -54,10 +54,10 @@ class TestSynthesizeMode:
         orchestrator.delegate.return_value = make_response("Response", tokens_used=100)
         orchestrator.synthesize.return_value = "Synthesized answer"
 
-        handler = CLIMultiProvider(orchestrator)
         io = MockIO(inputs=["What is AI?", "openai, anthropic"])
+        handler = CLIMultiProvider(orchestrator, io)
 
-        handler.synthesize_mode(io=io)
+        handler.synthesize_mode()
 
         # Should have queried only 2 providers
         assert orchestrator.delegate.call_count == 2
@@ -74,10 +74,10 @@ class TestSynthesizeMode:
         orchestrator.delegate.return_value = make_response("Response", tokens_used=100)
         orchestrator.synthesize.return_value = "Synthesized answer"
 
-        handler = CLIMultiProvider(orchestrator)
         io = MockIO(inputs=["Test question", "openai, invalid, anthropic"])
+        handler = CLIMultiProvider(orchestrator, io)
 
-        handler.synthesize_mode(io=io)
+        handler.synthesize_mode()
 
         # Should only call valid providers
         assert orchestrator.delegate.call_count == 2
@@ -90,10 +90,10 @@ class TestSynthesizeMode:
         orchestrator = MagicMock()
         orchestrator.providers.list_available.return_value = ['openai', 'anthropic']
 
-        handler = CLIMultiProvider(orchestrator)
         io = MockIO(inputs=["Test question", "openai"])  # Only 1 provider
+        handler = CLIMultiProvider(orchestrator, io)
 
-        handler.synthesize_mode(io=io)
+        handler.synthesize_mode()
 
         output = io.get_output()
         assert "at least 2 providers" in output.lower()
@@ -113,10 +113,10 @@ class TestSynthesizeMode:
         ]
         orchestrator.synthesize.return_value = "Synthesized from 2 responses"
 
-        handler = CLIMultiProvider(orchestrator)
         io = MockIO(inputs=["Test question", "all"])
+        handler = CLIMultiProvider(orchestrator, io)
 
-        handler.synthesize_mode(io=io)
+        handler.synthesize_mode()
 
         output = io.get_output()
         # Should show error for failed provider
@@ -135,10 +135,10 @@ class TestSynthesizeMode:
             Exception("API error")
         ]
 
-        handler = CLIMultiProvider(orchestrator)
         io = MockIO(inputs=["Test question", "all"])
+        handler = CLIMultiProvider(orchestrator, io)
 
-        handler.synthesize_mode(io=io)
+        handler.synthesize_mode()
 
         output = io.get_output()
         assert "Not enough responses for synthesis" in output
@@ -152,10 +152,10 @@ class TestSynthesizeMode:
         orchestrator.delegate.return_value = make_response("Provider response", tokens_used=100)
         orchestrator.synthesize.return_value = "This is the synthesized answer"
 
-        handler = CLIMultiProvider(orchestrator)
         io = MockIO(inputs=["What is AI?", "all"])
+        handler = CLIMultiProvider(orchestrator, io)
 
-        handler.synthesize_mode(io=io)
+        handler.synthesize_mode()
 
         output = io.get_output()
         assert "Synthesized Response" in output
@@ -168,10 +168,10 @@ class TestSynthesizeMode:
         orchestrator.delegate.return_value = make_response("Response", tokens_used=100)
         orchestrator.synthesize.return_value = "Synthesized"
 
-        handler = CLIMultiProvider(orchestrator)
         io = MockIO(inputs=["What is AI?", "all"])
+        handler = CLIMultiProvider(orchestrator, io)
 
-        handler.synthesize_mode(io=io)
+        handler.synthesize_mode()
 
         # Should have recorded discovery
         orchestrator.working_memory.add_discovery.assert_called_once()
@@ -200,10 +200,10 @@ class TestDelegateMode:
             tokens_used=150
         )
 
-        handler = CLIMultiProvider(orchestrator)
         io = MockIO()
+        handler = CLIMultiProvider(orchestrator, io)
 
-        handler.delegate_mode("openai What is AI?", io=io)
+        handler.delegate_mode("openai What is AI?")
 
         # Should have called delegate with correct provider and prompt
         orchestrator.delegate.assert_called_once_with('openai', 'What is AI?')
@@ -224,10 +224,10 @@ class TestDelegateMode:
         orchestrator.providers.list_available.return_value = ['openai']
         orchestrator.delegate.return_value = make_response("Response", tokens_used=100)
 
-        handler = CLIMultiProvider(orchestrator)
         io = MockIO(inputs=["openai", "Test prompt"])
+        handler = CLIMultiProvider(orchestrator, io)
 
-        handler.delegate_mode("", io=io)
+        handler.delegate_mode("")
 
         # Should have used inputs
         assert orchestrator.delegate.called
@@ -238,10 +238,10 @@ class TestDelegateMode:
     def test_rejects_missing_prompt(self):
         """Should show usage when only provider provided."""
         orchestrator = MagicMock()
-        handler = CLIMultiProvider(orchestrator)
         io = MockIO()
+        handler = CLIMultiProvider(orchestrator, io)
 
-        handler.delegate_mode("openai", io=io)  # Missing prompt
+        handler.delegate_mode("openai")  # Missing prompt
 
         output = io.get_output()
         assert "Usage:" in output
@@ -251,10 +251,10 @@ class TestDelegateMode:
     def test_rejects_empty_provider(self):
         """Should warn when provider is empty."""
         orchestrator = MagicMock()
-        handler = CLIMultiProvider(orchestrator)
         io = MockIO(inputs=["", "Some prompt"])
+        handler = CLIMultiProvider(orchestrator, io)
 
-        handler.delegate_mode("", io=io)
+        handler.delegate_mode("")
 
         output = io.get_output()
         assert "required" in output.lower()
@@ -263,10 +263,10 @@ class TestDelegateMode:
     def test_rejects_empty_prompt(self):
         """Should warn when prompt is empty."""
         orchestrator = MagicMock()
-        handler = CLIMultiProvider(orchestrator)
         io = MockIO(inputs=["openai", ""])
+        handler = CLIMultiProvider(orchestrator, io)
 
-        handler.delegate_mode("", io=io)
+        handler.delegate_mode("")
 
         output = io.get_output()
         assert "required" in output.lower()
@@ -277,10 +277,10 @@ class TestDelegateMode:
         orchestrator = MagicMock()
         orchestrator.providers.list_available.return_value = ['openai', 'anthropic']
 
-        handler = CLIMultiProvider(orchestrator)
         io = MockIO()
+        handler = CLIMultiProvider(orchestrator, io)
 
-        handler.delegate_mode("invalid_provider What is AI?", io=io)
+        handler.delegate_mode("invalid_provider What is AI?")
 
         output = io.get_output()
         # Should show error from validation
@@ -304,10 +304,10 @@ class TestDelegateMode:
         response.latency_ms = 1500.5
         orchestrator.delegate.return_value = response
 
-        handler = CLIMultiProvider(orchestrator)
         io = MockIO()
+        handler = CLIMultiProvider(orchestrator, io)
 
-        handler.delegate_mode("openai What is AI?", io=io)
+        handler.delegate_mode("openai What is AI?")
 
         output = io.get_output()
         assert "gpt-4-turbo" in output
@@ -327,10 +327,10 @@ class TestDelegateMode:
         orchestrator.providers.list_available.return_value = ['openai']
         orchestrator.delegate.side_effect = Exception("API rate limit exceeded")
 
-        handler = CLIMultiProvider(orchestrator)
         io = MockIO()
+        handler = CLIMultiProvider(orchestrator, io)
 
-        handler.delegate_mode("openai Test prompt", io=io)
+        handler.delegate_mode("openai Test prompt")
 
         output = io.get_output()
         assert "Error" in output
@@ -349,10 +349,10 @@ class TestDelegateMode:
         orchestrator.providers.list_available.return_value = ['openai']
         orchestrator.delegate.return_value = make_response("Response", tokens_used=175)
 
-        handler = CLIMultiProvider(orchestrator)
         io = MockIO()
+        handler = CLIMultiProvider(orchestrator, io)
 
-        handler.delegate_mode("openai What is AI?", io=io)
+        handler.delegate_mode("openai What is AI?")
 
         # Should have recorded discovery
         orchestrator.working_memory.add_discovery.assert_called_once()

@@ -1,6 +1,6 @@
 # Claude Code Guidelines
 
-**CRITICAL: Never use emojis or special characters in code.**
+**CRITICAL: Never use emojis or special characters.**
 
 ---
 

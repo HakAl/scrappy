@@ -142,7 +142,10 @@ class CommandRouter:
 
     def _handle_help(self, args: str) -> bool:
         """Handle /help command."""
+        # DEBUG: Prove this executes
+        self.io.secho("[DEBUG] _handle_help called", fg="yellow")
         self.display.show_help()
+        self.io.secho("[DEBUG] _handle_help done", fg="yellow")
         return True
 
     def _handle_status(self, args: str) -> bool:
@@ -172,17 +175,17 @@ class CommandRouter:
 
     def _handle_context(self, args: str) -> bool:
         """Handle /context command."""
-        self.session_mgr.manage_context(args, io=self.io)
+        self.session_mgr.manage_context(args)
         return True
 
     def _handle_cache(self, args: str) -> bool:
         """Handle /cache command."""
-        self.session_mgr.manage_cache(args, io=self.io)
+        self.session_mgr.manage_cache(args)
         return True
 
     def _handle_session(self, args: str) -> bool:
         """Handle /session command."""
-        result = self.session_mgr.manage_session(args, self.session_context.conversation_history, self.session_context.auto_save, io=self.io)
+        result = self.session_mgr.manage_session(args, self.session_context.conversation_history, self.session_context.auto_save)
         if result.get('conversation_history') is not None:
             self.session_context.conversation_history = result['conversation_history']
         if result.get('auto_save') is not None:
@@ -191,7 +194,7 @@ class CommandRouter:
 
     def _handle_limits(self, args: str) -> bool:
         """Handle /limits command."""
-        self.session_mgr.show_rate_limits(args, io=self.io)
+        self.session_mgr.show_rate_limits(args)
         return True
 
     def _handle_plan(self, args: str) -> bool:
@@ -367,13 +370,19 @@ class CommandRouter:
             return True
 
         # Dispatch via registry
+        import logging
+        logger = logging.getLogger(__name__)
         handler = self._command_registry.get(cmd)
+        logger.debug(f"[route] Looking up cmd='{cmd}', handler found: {handler is not None}")
         if handler:
+            logger.debug(f"[route] Calling handler for '{cmd}'")
             result = handler(args)
+            logger.debug(f"[route] Handler returned: {result}")
             io.echo()
             return result
 
         # Unknown command
+        logger.debug(f"[route] Unknown command: '{cmd}'")
         io.secho(f"Unknown command: {cmd}", fg="yellow")
         io.echo("Type /help for available commands.")
         io.echo()

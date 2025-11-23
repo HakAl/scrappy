@@ -15,6 +15,7 @@ Use sparingly! Best for:
 - NOT for high-volume agent communication
 """
 
+import logging
 import os
 import time
 from typing import Optional
@@ -22,6 +23,8 @@ from typing import Optional
 from .base import LLMProvider, LLMResponse, ProviderLimits
 from ..utils.imports import safe_import
 from ..utils.errors import raise_package_not_installed, raise_env_var_not_found, raise_model_not_supported
+
+logger = logging.getLogger(__name__)
 
 # Safe import for optional dependency
 cohere, COHERE_AVAILABLE = safe_import('cohere')
@@ -125,8 +128,8 @@ class CohereProvider(LLMProvider):
         # Warn about usage
         self._calls_made += 1
         if self._calls_made % 10 == 0:
-            print(f"WARNING: Cohere calls this session: {self._calls_made}")
-            print(f"Remember: Trial key has 1000 calls/month limit!")
+            logger.warning(f"Cohere calls this session: {self._calls_made}")
+            logger.warning(f"Remember: Trial key has 1000 calls/month limit!")
 
         start_time = time.time()
 

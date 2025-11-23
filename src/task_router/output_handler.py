@@ -272,6 +272,57 @@ class FileOutputHandler(OutputHandlerInterface):
         self._write(f"  {message}")
 
 
+class CLIIOOutputHandler(OutputHandlerInterface):
+    """
+    Adapter that wraps CLIIOProtocol to implement OutputHandlerInterface.
+
+    This enables the task router to use the injected CLI IO system,
+    ensuring output goes to the correct UI (Rich/Click/Textual) instead
+    of directly to stdout via print().
+    """
+
+    def __init__(self, io):
+        """
+        Initialize with a CLIIOProtocol instance.
+
+        Args:
+            io: CLIIOProtocol instance (RichIO, ClickIO, or TextualIO)
+        """
+        self._io = io
+
+    def log_classification(
+        self,
+        task_type: str,
+        confidence: float,
+        complexity: int,
+        reasoning: str
+    ) -> None:
+        """Output classification information via injected IO."""
+        self._io.echo("\nTask Classification:")
+        self._io.echo(f"  Type: {task_type}")
+        self._io.echo(f"  Confidence: {confidence:.2f}")
+        self._io.echo(f"  Complexity: {complexity}/10")
+        self._io.echo(f"  Reasoning: {reasoning}")
+
+    def log_provider_selection(
+        self,
+        provider: str,
+        model: Optional[str],
+        source: str
+    ) -> None:
+        """Output provider selection via injected IO."""
+        model_info = f" ({model})" if model else ""
+        self._io.echo(f"  Provider: {provider}{model_info} ({source})")
+
+    def log_execution_start(self, strategy_name: str) -> None:
+        """Output execution start via injected IO."""
+        self._io.echo(f"  Executing with: {strategy_name}")
+
+    def log_info(self, message: str) -> None:
+        """Output info message via injected IO."""
+        self._io.echo(f"  {message}")
+
+
 class RichOutputHandler(OutputHandlerInterface):
     """
     Rich-enhanced output handler with formatted tables.

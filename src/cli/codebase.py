@@ -6,10 +6,8 @@ Handles scanning, analyzing, and summarizing codebases.
 import os
 from pathlib import Path
 from datetime import datetime
-from typing import Optional
 
 from .io_interface import CLIIOProtocol
-from .rich_output import RichIO
 from .config.defaults import (
     MAX_TOKENS_SUMMARY,
     TEMPERATURE_LOW,
@@ -27,15 +25,17 @@ from .config.paths import SKIP_DIRS
 class CLICodebaseAnalysis:
     """Handles codebase exploration and analysis operations."""
 
-    def __init__(self, orchestrator):
+    def __init__(self, orchestrator, io: CLIIOProtocol):
         """Initialize codebase analyzer.
 
         Args:
             orchestrator: The AgentOrchestrator instance
+            io: I/O interface for output
         """
         self.orchestrator = orchestrator
+        self.io = io
 
-    def explore_codebase(self, path: str = "", io: Optional[CLIIOProtocol] = None):
+    def explore_codebase(self, path: str = ""):
         """Explore and generate a comprehensive summary of a codebase.
 
         Scans the directory structure, reads key files, and uses LLM to generate
@@ -46,7 +46,6 @@ class CLICodebaseAnalysis:
 
         Args:
             path: Directory path to explore. If empty, prompts user for input.
-            io: I/O interface for output. Defaults to ClickIO if None.
 
         State Changes:
             - Adds discovery to orchestrator working memory
@@ -55,37 +54,34 @@ class CLICodebaseAnalysis:
         Side Effects:
             - Reads files from disk to analyze codebase
             - Makes LLM API call to generate summary
-            - Writes progress and summary to stdout via io/click
+            - Writes progress and summary to stdout via self.io
             - May write CODEBASE_SUMMARY.md file if user confirms
 
         Returns:
             None
         """
-        if io is None:
-            io = RichIO()
-
         if not path:
-            path = io.prompt("Directory to explore", default=".")
+            path = self.io.prompt("Directory to explore", default=".")
 
         path = Path(path).resolve()
         if not path.exists():
-            io.secho(f"Path does not exist: {path}", fg="red")
+            self.io.secho(f"Path does not exist: {path}", fg="red")
             return
 
         if not path.is_dir():
-            io.secho(f"Not a directory: {path}", fg="red")
+            self.io.secho(f"Not a directory: {path}", fg="red")
             return
 
-        io.secho(f"\nExploring: {path}", bold=True)
-        io.echo("-" * 50)
+        self.io.secho(f"\nExploring: {path}", bold=True)
+        self.io.echo("-" * 50)
 
         # Check if exploring current project or different directory
         is_current_project = path == self.orchestrator.context.project_path
 
         if is_current_project:
             # Use orchestrator's context system for proper persistence
-            io.echo("Using context-aware exploration...")
-            with io.progress(total=2, description="Scanning codebase") as progress:
+            self.io.echo("Using context-aware exploration...")
+            with self.io.progress(total=2, description="Scanning codebase") as progress:
                 # Step 1: Explore and scan files
                 result = self.orchestrator.context.explore(force=True)
                 progress.advance(1)
@@ -111,8 +107,8 @@ class CLICodebaseAnalysis:
             )
         else:
             # For external directories, use standalone exploration (legacy behavior)
-            io.echo("Exploring external directory (not persisted to context)...")
-            with io.progress(total=4, description="Scanning codebase") as progress:
+            self.io.echo("Exploring external directory (not persisted to context)...")
+            with self.io.progress(total=4, description="Scanning codebase") as progress:
                 source_files = self._find_source_files(path)
                 progress.advance(1)
                 structure = self._analyze_structure(path, source_files)
@@ -128,22 +124,22 @@ class CLICodebaseAnalysis:
                 str(path)
             )
 
-        io.echo()
-        io.secho("Codebase Summary:", bold=True)
-        io.echo("-" * 50)
-        io.echo(summary)
+        self.io.echo()
+        self.io.secho("Codebase Summary:", bold=True)
+        self.io.echo("-" * 50)
+        self.io.echo(summary)
 
         if is_current_project:
-            io.secho("\nContext saved! Use /context to view status.", fg="green")
+            self.io.secho("\nContext saved! Use /context to view status.", fg="green")
 
         # Offer to save summary
-        if io.confirm("\nSave summary to file?", default=False):
+        if self.io.confirm("\nSave summary to file?", default=False):
             summary_file = path / "CODEBASE_SUMMARY.md"
             with open(summary_file, 'w', encoding='utf-8') as f:
                 f.write(f"# Codebase Summary\n\n")
                 f.write(f"Generated: {datetime.now().isoformat()}\n\n")
                 f.write(summary)
-            io.secho(f"Saved to: {summary_file}", fg="green")
+            self.io.secho(f"Saved to: {summary_file}", fg="green")
 
     def _find_source_files(self, path: Path) -> dict:
         """Find all source files organized by type/category.

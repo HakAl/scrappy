@@ -5,9 +5,12 @@ Provides concrete implementations of PathProviderProtocol for production
 and testing environments.
 """
 
+import logging
 from pathlib import Path
 from typing import Optional
 from .protocols import PathProviderProtocol
+
+logger = logging.getLogger(__name__)
 
 
 class ScrappyPathProvider:
@@ -145,17 +148,17 @@ def migrate_legacy_files(
                     backup_path = project_root / f"{old_name}.backup"
                     old_path.rename(backup_path)
                     if verbose:
-                        print(f"Backed up {old_name} to {backup_path.name}")
+                        logger.info(f"Backed up {old_name} to {backup_path.name}")
                     results[old_name] = True
                 else:
                     # Move to new location
                     old_path.rename(new_path)
                     if verbose:
-                        print(f"Migrated {old_name} to {new_path.relative_to(project_root)}")
+                        logger.info(f"Migrated {old_name} to {new_path.relative_to(project_root)}")
                     results[old_name] = True
             except Exception as e:
                 if verbose:
-                    print(f"Failed to migrate {old_name}: {e}")
+                    logger.error(f"Failed to migrate {old_name}: {e}")
                 results[old_name] = False
         else:
             results[old_name] = True  # File doesn't exist, no migration needed

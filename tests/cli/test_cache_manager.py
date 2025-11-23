@@ -26,12 +26,12 @@ class TestCacheManagerShowStats:
         from src.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
-        manager = CacheManager(orchestrator)
         io = MockIO()
+        manager = CacheManager(orchestrator, io)
 
-        manager.manage_cache(args="", io=io)
+        manager.manage_cache(args="")
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "Cache Statistics:" in output
         assert "Total Entries:" in output
 
@@ -40,12 +40,12 @@ class TestCacheManagerShowStats:
         from src.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
-        manager = CacheManager(orchestrator)
         io = MockIO()
+        manager = CacheManager(orchestrator, io)
 
-        manager.manage_cache(args="", io=io)
+        manager.manage_cache(args="")
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "Exact Cache Hits:" in output
         assert "Intent Cache Hits:" in output
 
@@ -54,12 +54,12 @@ class TestCacheManagerShowStats:
         from src.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
-        manager = CacheManager(orchestrator)
         io = MockIO()
+        manager = CacheManager(orchestrator, io)
 
-        manager.manage_cache(args="", io=io)
+        manager.manage_cache(args="")
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "Cache Misses:" in output
 
     def test_show_cache_stats_displays_hit_rates(self):
@@ -67,12 +67,12 @@ class TestCacheManagerShowStats:
         from src.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
-        manager = CacheManager(orchestrator)
         io = MockIO()
+        manager = CacheManager(orchestrator, io)
 
-        manager.manage_cache(args="", io=io)
+        manager.manage_cache(args="")
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "Hit Rate:" in output
 
     def test_show_cache_stats_displays_cache_file_location(self):
@@ -80,12 +80,12 @@ class TestCacheManagerShowStats:
         from src.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
-        manager = CacheManager(orchestrator)
         io = MockIO()
+        manager = CacheManager(orchestrator, io)
 
-        manager.manage_cache(args="", io=io)
+        manager.manage_cache(args="")
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "Cache File:" in output
 
     def test_show_cache_stats_displays_caching_enabled_status(self):
@@ -94,12 +94,12 @@ class TestCacheManagerShowStats:
 
         orchestrator = ConfigurableTestOrchestrator()
         orchestrator.caching_enabled = True
-        manager = CacheManager(orchestrator)
         io = MockIO()
+        manager = CacheManager(orchestrator, io)
 
-        manager.manage_cache(args="", io=io)
+        manager.manage_cache(args="")
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "Caching:" in output
 
     def test_show_cache_stats_colors_good_hit_rate_green(self):
@@ -118,12 +118,12 @@ class TestCacheManagerShowStats:
             'intent_hit_rate': '50.0%',
             'cache_file': '/test/.cache'
         }
-        manager = CacheManager(orchestrator)
         io = MockIO()
+        manager = CacheManager(orchestrator, io)
 
-        manager.manage_cache(args="", io=io)
+        manager.manage_cache(args="")
 
-        output = io.get_output()
+        output = io.get_all_output()
         # Check that hit rate > 50% is displayed with green ANSI code
         # ANSI green code is \x1b[32m
         assert '60.0%' in output
@@ -145,12 +145,12 @@ class TestCacheManagerShowStats:
             'intent_hit_rate': '10.0%',
             'cache_file': '/test/.cache'
         }
-        manager = CacheManager(orchestrator)
         io = MockIO()
+        manager = CacheManager(orchestrator, io)
 
-        manager.manage_cache(args="", io=io)
+        manager.manage_cache(args="")
 
-        output = io.get_output()
+        output = io.get_all_output()
         # Check that hit rate <= 50% is displayed with yellow ANSI code
         # ANSI yellow code is \x1b[33m
         assert '20.0%' in output
@@ -168,10 +168,10 @@ class TestCacheManagerClear:
         clear_called = []
         orchestrator.clear_cache = lambda: clear_called.append(True)
 
-        manager = CacheManager(orchestrator)
         io = MockIO()
+        manager = CacheManager(orchestrator, io)
 
-        manager.manage_cache(args="clear", io=io)
+        manager.manage_cache(args="clear")
 
         assert clear_called == [True]
 
@@ -180,12 +180,12 @@ class TestCacheManagerClear:
         from src.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
-        manager = CacheManager(orchestrator)
         io = MockIO()
+        manager = CacheManager(orchestrator, io)
 
-        manager.manage_cache(args="clear", io=io)
+        manager.manage_cache(args="clear")
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "cleared" in output.lower()
 
     def test_clear_confirmation_is_styled_green(self):
@@ -193,12 +193,12 @@ class TestCacheManagerClear:
         from src.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
-        manager = CacheManager(orchestrator)
         io = MockIO()
+        manager = CacheManager(orchestrator, io)
 
-        manager.manage_cache(args="clear", io=io)
+        manager.manage_cache(args="clear")
 
-        output = io.get_output()
+        output = io.get_all_output()
         # Check that cleared message contains green ANSI code
         # ANSI green code is \x1b[32m
         assert 'cleared' in output
@@ -214,13 +214,13 @@ class TestCacheManagerToggle:
 
         orchestrator = ConfigurableTestOrchestrator()
         orchestrator.caching_enabled = True
-        manager = CacheManager(orchestrator)
         io = MockIO()
+        manager = CacheManager(orchestrator, io)
 
-        manager.manage_cache(args="toggle", io=io)
+        manager.manage_cache(args="toggle")
 
         assert orchestrator.caching_enabled is False
-        output = io.get_output()
+        output = io.get_all_output()
         assert "disabled" in output.lower()
 
     def test_toggle_enables_caching_when_disabled(self):
@@ -229,13 +229,13 @@ class TestCacheManagerToggle:
 
         orchestrator = ConfigurableTestOrchestrator()
         orchestrator.caching_enabled = False
-        manager = CacheManager(orchestrator)
         io = MockIO()
+        manager = CacheManager(orchestrator, io)
 
-        manager.manage_cache(args="toggle", io=io)
+        manager.manage_cache(args="toggle")
 
         assert orchestrator.caching_enabled is True
-        output = io.get_output()
+        output = io.get_all_output()
         assert "enabled" in output.lower()
 
     def test_toggle_returns_new_state(self):
@@ -250,10 +250,10 @@ class TestCacheManagerToggle:
             toggle_results[-1]
         )[1]
 
-        manager = CacheManager(orchestrator)
         io = MockIO()
+        manager = CacheManager(orchestrator, io)
 
-        manager.manage_cache(args="toggle", io=io)
+        manager.manage_cache(args="toggle")
 
         assert len(toggle_results) == 1
 
@@ -266,12 +266,12 @@ class TestCacheManagerInvalidCommand:
         from src.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
-        manager = CacheManager(orchestrator)
         io = MockIO()
+        manager = CacheManager(orchestrator, io)
 
-        manager.manage_cache(args="invalid", io=io)
+        manager.manage_cache(args="invalid")
 
-        output = io.get_output()
+        output = io.get_all_output()
         assert "Usage:" in output
         assert "clear" in output
         assert "toggle" in output
@@ -281,12 +281,12 @@ class TestCacheManagerInvalidCommand:
         from src.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
-        manager = CacheManager(orchestrator)
         io = MockIO()
+        manager = CacheManager(orchestrator, io)
 
-        manager.manage_cache(args="help", io=io)
+        manager.manage_cache(args="help")
 
-        output = io.get_output()
+        output = io.get_all_output()
         # Should have descriptions
         assert "statistics" in output.lower() or "Show" in output
 
@@ -299,12 +299,12 @@ class TestCacheManagerCaseInsensitivity:
         from src.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
-        manager = CacheManager(orchestrator)
+        io = MockIO()
+        manager = CacheManager(orchestrator, io)
 
         for cmd in ["CLEAR", "Clear", "clear", "ClEaR"]:
-            io = MockIO()
-            manager.manage_cache(args=cmd, io=io)
-            output = io.get_output()
+            manager.manage_cache(args=cmd)
+            output = io.get_all_output()
             # Should not show usage
             assert "Usage:" not in output
 
@@ -313,12 +313,12 @@ class TestCacheManagerCaseInsensitivity:
         from src.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
-        manager = CacheManager(orchestrator)
+        io = MockIO()
+        manager = CacheManager(orchestrator, io)
 
         for cmd in ["TOGGLE", "Toggle", "toggle"]:
             orchestrator.caching_enabled = True  # Reset state
-            io = MockIO()
-            manager.manage_cache(args=cmd, io=io)
+            manager.manage_cache(args=cmd)
             assert orchestrator.caching_enabled is False
 
 

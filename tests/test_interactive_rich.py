@@ -134,7 +134,7 @@ class TestHelpCommandsTable:
         """Help display should use Rich Table for command listing."""
         io, console = make_capturing_rich_io()
         orch = ConfigurableTestOrchestrator()
-        display = CLIDisplay(orch, datetime.now())
+        display = CLIDisplay(orch, datetime.now(), io)
 
         from src.cli.display_rich import show_help_table
 
@@ -235,7 +235,7 @@ class TestStatusDisplayComponents:
         """Status display should group information in panels."""
         io, console = make_capturing_rich_io()
         orch = ConfigurableTestOrchestrator()
-        display = CLIDisplay(orch, datetime.now())
+        display = CLIDisplay(orch, datetime.now(), io)
 
         from src.cli.display_rich import show_status_rich
 
@@ -436,7 +436,7 @@ class TestUsageStatisticsRich:
         """Usage stats should display provider breakdown in a table."""
         io, console = make_capturing_rich_io()
         orch = ConfigurableTestOrchestrator()
-        display = CLIDisplay(orch, datetime.now())
+        display = CLIDisplay(orch, datetime.now(), io)
 
         from src.cli.display_rich import show_usage_rich
 
@@ -630,10 +630,10 @@ class TestRichDisplayIntegration:
         """Display methods should use the provided IO interface."""
         io, console = make_capturing_rich_io()
         orch = ConfigurableTestOrchestrator()
-        display = CLIDisplay(orch, datetime.now())
+        display = CLIDisplay(orch, datetime.now(), io)
 
         # Use the existing show_status which should work with RichIO
-        display.show_status(io)
+        display.show_status()
         output = get_captured_output(console)
 
         # Should produce output
@@ -661,10 +661,10 @@ class TestRichDisplayIntegration:
         # This test ensures robustness
         io, console = make_capturing_rich_io()
         orch = ConfigurableTestOrchestrator()
-        display = CLIDisplay(orch, datetime.now())
+        display = CLIDisplay(orch, datetime.now(), io)
 
         # The existing method should still work
-        display.show_help(io)
+        display.show_help()
         output = get_captured_output(console)
 
         # Should still show help content

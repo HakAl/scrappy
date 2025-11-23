@@ -26,7 +26,7 @@ from .input_handler import InputHandler
 from .state_manager import PlanStateManager
 from .session_context import SessionContext
 from .command_router import CommandRouter
-from .interactive import InteractiveMode
+from .textual_interactive import TextualInteractiveMode
 from .utils.session_utils import display_previous_session_detected
 from .utils.cli_factory import initialize_cli_handlers
 from .exceptions import CLIError, SessionError, TaskExecutionError
@@ -86,7 +86,7 @@ class CLI:
         self.session_context = SessionContext()
 
         # Initialize component handlers using factory
-        handlers = initialize_cli_handlers(self.orchestrator, self.session_start)
+        handlers = initialize_cli_handlers(self.orchestrator, self.session_start, self.io)
         self.display = handlers['display']
         self.session_mgr = handlers['session_mgr']
         self.codebase = handlers['codebase']
@@ -197,9 +197,9 @@ class CLI:
             state_manager=self.state_manager
         )
 
-    def _create_interactive_mode(self) -> InteractiveMode:
-        """Create InteractiveMode with all dependencies."""
-        return InteractiveMode(
+    def _create_interactive_mode(self) -> TextualInteractiveMode:
+        """Create TextualInteractiveMode with all dependencies."""
+        return TextualInteractiveMode(
             io=self.io,
             orchestrator=self.orchestrator,
             session_context=self.session_context,
@@ -270,7 +270,7 @@ class CLI:
 
                 # Show completion if ready
                 if self.orchestrator.context.is_semantic_search_ready():
-                    live.update(Text("✓ Semantic search ready", style="green"))
+                    live.update(Text("[OK] Semantic search ready", style="green"))
                     time.sleep(0.3)
                     # Disappears on context exit due to transient=True
 

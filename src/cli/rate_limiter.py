@@ -7,7 +7,6 @@ from typing import Optional
 import logging
 
 from .io_interface import CLIIOProtocol
-from .rich_output import RichIO
 from .validators import validate_subcommand
 from src.infrastructure.formatters import RateLimitFormatter, RateLimitFormatterProtocol
 
@@ -30,6 +29,7 @@ class RateLimiter:
     def __init__(
         self,
         orchestrator,
+        io: CLIIOProtocol,
         formatter: Optional[RateLimitFormatterProtocol] = None
     ) -> None:
         """Initialize rate limiter.
@@ -38,16 +38,19 @@ class RateLimiter:
             orchestrator: The AgentOrchestrator instance that provides rate limit
                 operations (get_rate_limit_status, reset_rate_tracking,
                 check_rate_limit_warnings) and context for project path.
+            io: I/O interface for output.
             formatter: Optional formatter for display. Defaults to RateLimitFormatter.
 
         State Changes:
             Sets self.orchestrator to the provided orchestrator instance.
+            Sets self.io to the provided I/O interface.
             Sets self.formatter to the provided formatter or creates default.
         """
         self.orchestrator = orchestrator
+        self.io = io
         self.formatter = formatter or RateLimitFormatter()
 
-    def show_rate_limits(self, args: str = "", io: Optional[CLIIOProtocol] = None) -> None:
+    def show_rate_limits(self, args: str = "") -> None:
         """Display and manage rate limit usage data.
 
         Shows persistent rate limit tracking data including requests and tokens
@@ -61,14 +64,12 @@ class RateLimiter:
                 - "reset <provider>": Reset specific provider's data (with confirmation)
                 - "<provider>": Filter display to specific provider only
 
-            io: I/O interface for output. Defaults to ClickIO if not provided.
-
         Returns:
-            None. Results are displayed via the io interface.
+            None. Results are displayed via self.io interface.
 
         Side Effects:
             - When args is "": Reads rate limit status from orchestrator and
-              displays formatted output (no state changes)
+              displays formatted output via self.io (no state changes)
             - When args is "reset": Prompts for confirmation, then calls
               orchestrator.reset_rate_tracking() which clears persisted tracking
               data in .llm_rate_limits.json
@@ -90,18 +91,15 @@ class RateLimiter:
             >>> rate_limiter.show_rate_limits("reset")  # Reset all
             >>> rate_limiter.show_rate_limits("reset openai")  # Reset openai only
         """
-        if io is None:
-            io = RichIO()
-
         # Validate subcommand
         validation = validate_subcommand("limits", args)
         if not validation.is_valid:
-            io.secho(validation.error, fg="red")
-            io.echo("Usage: /limits [reset [provider]|<provider>]")
-            io.echo("  (no args)     - Show all providers' usage")
-            io.echo("  reset         - Reset all tracking data")
-            io.echo("  reset <name>  - Reset specific provider")
-            io.echo("  <provider>    - Show specific provider only")
+            self.io.secho(validation.error, fg="red")
+            self.io.echo("Usage: /limits [reset [provider]|<provider>]")
+            self.io.echo("  (no args)     - Show all providers' usage")
+            self.io.echo("  reset         - Reset all tracking data")
+            self.io.echo("  reset <name>  - Reset specific provider")
+            self.io.echo("  <provider>    - Show specific provider only")
             return
 
         # Handle reset subcommand
@@ -109,14 +107,14 @@ class RateLimiter:
             if validation.args:
                 # Reset specific provider
                 provider_name = validation.args
-                if io.confirm(f"Reset rate limit tracking for {provider_name}?", default=False):
+                if self.io.confirm(f"Reset rate limit tracking for {provider_name}?", default=False):
                     self.orchestrator.reset_rate_tracking(provider_name)
-                    io.secho(f"Rate limit tracking for {provider_name} reset.", fg="green")
+                    self.io.secho(f"Rate limit tracking for {provider_name} reset.", fg="green")
             else:
                 # Reset all
-                if io.confirm("Reset all rate limit tracking data?", default=False):
+                if self.io.confirm("Reset all rate limit tracking data?", default=False):
                     self.orchestrator.reset_rate_tracking()
-                    io.secho("Rate limit tracking data reset.", fg="green")
+                    self.io.secho("Rate limit tracking data reset.", fg="green")
             return
 
         # Get rate limit status
@@ -127,16 +125,16 @@ class RateLimiter:
 
         # Format and display status using formatter
         formatted_output = self.formatter.format_status(status, provider_filter)
-        io.echo(formatted_output)
+        self.io.echo(formatted_output)
 
         # Check for warnings and display if present
         warnings = self.orchestrator.check_rate_limit_warnings()
         if warnings:
             warnings_output = self.formatter.format_warnings(warnings)
-            io.echo(warnings_output)
+            self.io.echo(warnings_output)
 
         # Show tracker file location (get from rate tracker storage)
         tracker_file = self.orchestrator.rate_tracker._storage.path
         if tracker_file:
             tracker_location = self.formatter.format_tracker_file_location(str(tracker_file))
-            io.echo(tracker_location)
+            self.io.echo(tracker_location)

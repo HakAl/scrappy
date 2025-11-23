@@ -23,10 +23,10 @@ class TestExploreCodebasePathValidation:
     def test_rejects_nonexistent_path(self):
         """Should display error when path doesn't exist."""
         orchestrator = MagicMock()
-        analyzer = CLICodebaseAnalysis(orchestrator)
         io = MockIO()
+        analyzer = CLICodebaseAnalysis(orchestrator, io)
 
-        analyzer.explore_codebase("/nonexistent/path/that/does/not/exist", io=io)
+        analyzer.explore_codebase("/nonexistent/path/that/does/not/exist")
 
         output = io.get_output()
         assert "does not exist" in output.lower()
@@ -44,7 +44,8 @@ class TestFindSourceFiles:
         ]
 
         orchestrator = MagicMock()
-        analyzer = CLICodebaseAnalysis(orchestrator)
+        io = MockIO()
+        analyzer = CLICodebaseAnalysis(orchestrator, io)
 
         files = analyzer._find_source_files(Path('/test'))
 
@@ -63,7 +64,8 @@ class TestFindSourceFiles:
         ]
 
         orchestrator = MagicMock()
-        analyzer = CLICodebaseAnalysis(orchestrator)
+        io = MockIO()
+        analyzer = CLICodebaseAnalysis(orchestrator, io)
 
         files = analyzer._find_source_files(Path('/test'))
 
@@ -81,7 +83,8 @@ class TestAnalyzeStructure:
     def test_detects_readme_presence(self, mock_iterdir, mock_exists):
         """Should detect README.md or README file."""
         orchestrator = MagicMock()
-        analyzer = CLICodebaseAnalysis(orchestrator)
+        io = MockIO()
+        analyzer = CLICodebaseAnalysis(orchestrator, io)
 
         with patch.object(Path, 'exists', return_value=True):
             structure = analyzer._analyze_structure(Path('/test'), {'python': []})
@@ -93,7 +96,8 @@ class TestAnalyzeStructure:
     def test_detects_python_project_indicators(self, mock_iterdir, mock_exists):
         """Should detect requirements.txt and pyproject.toml."""
         orchestrator = MagicMock()
-        analyzer = CLICodebaseAnalysis(orchestrator)
+        io = MockIO()
+        analyzer = CLICodebaseAnalysis(orchestrator, io)
 
         def exists_side_effect(self):
             filename = str(self).split('\\')[-1].split('/')[-1]
@@ -124,7 +128,8 @@ class TestAnalyzeStructure:
         mock_iterdir.return_value = [mock_dir1, mock_dir2, mock_hidden]
 
         orchestrator = MagicMock()
-        analyzer = CLICodebaseAnalysis(orchestrator)
+        io = MockIO()
+        analyzer = CLICodebaseAnalysis(orchestrator, io)
 
         structure = analyzer._analyze_structure(Path('/test'), {})
 
@@ -141,7 +146,8 @@ class TestGenerateCodebaseSummary:
         orchestrator = MagicMock()
         orchestrator.delegate.return_value = Mock(content="Generated summary text")
 
-        analyzer = CLICodebaseAnalysis(orchestrator)
+        io = MockIO()
+        analyzer = CLICodebaseAnalysis(orchestrator, io)
 
         structure = {
             'total_files': 10,
@@ -172,7 +178,8 @@ class TestGenerateCodebaseSummary:
         orchestrator = MagicMock()
         orchestrator.delegate.side_effect = Exception("API error")
 
-        analyzer = CLICodebaseAnalysis(orchestrator)
+        io = MockIO()
+        analyzer = CLICodebaseAnalysis(orchestrator, io)
 
         structure = {
             'total_files': 5,

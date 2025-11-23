@@ -231,8 +231,13 @@ class InteractiveMode:
 
         # Handle commands
         if self.input_handler.is_command(user_input):
+            import logging
+            logger = logging.getLogger(__name__)
             cmd, args = self.input_handler.parse_command(user_input)
-            return self.command_router.route(cmd, args)
+            logger.debug(f"[_process_input] Routing command: {cmd}, args: {args}")
+            result = self.command_router.route(cmd, args)
+            logger.debug(f"[_process_input] Command result: {result}")
+            return result
 
         # Regular chat
         self.session_context.conversation_history.append({

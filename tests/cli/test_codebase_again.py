@@ -18,6 +18,8 @@ from unittest.mock import Mock, MagicMock
 
 import pytest
 
+from tests.helpers import MockIO
+
 # ---------------------------------------------------------------------------
 # Helpers & Fixtures
 # ---------------------------------------------------------------------------
@@ -56,8 +58,9 @@ def tmp_project() -> Path:
 def analysis():
     """Fresh CLICodebaseAnalysis instance with fake orchestrator."""
     orch = FakeOrchestrator()
+    io = MockIO()
     from src.cli.codebase import CLICodebaseAnalysis
-    return CLICodebaseAnalysis(orch)
+    return CLICodebaseAnalysis(orch, io)
 
 
 

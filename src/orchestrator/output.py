@@ -5,30 +5,33 @@ Provides implementations for output operations.
 The OutputInterface protocol is defined in protocols.py.
 """
 
+import logging
 from typing import List, Tuple
 
 # Import protocol from centralized location
 from .protocols import OutputInterface
 
+logger = logging.getLogger(__name__)
+
 
 class ConsoleOutput:
-    """Standard console output implementation."""
+    """Standard console output implementation using Python logging."""
 
     def info(self, message: str) -> None:
-        """Print informational message to stdout."""
-        print(message)
+        """Log informational message."""
+        logger.info(message)
 
     def warn(self, message: str) -> None:
-        """Print warning message with [WARN] prefix."""
-        print(f"[WARN] {message}")
+        """Log warning message."""
+        logger.warning(message)
 
     def error(self, message: str) -> None:
-        """Print error message with [ERROR] prefix."""
-        print(f"[ERROR] {message}")
+        """Log error message."""
+        logger.error(message)
 
     def success(self, message: str) -> None:
-        """Print success message with [OK] prefix."""
-        print(f"[OK] {message}")
+        """Log success message."""
+        logger.info(f"[OK] {message}")
 
 
 class NullOutput:
