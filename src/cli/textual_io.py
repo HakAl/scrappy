@@ -5,102 +5,99 @@ Implements CLIIOProtocol by writing to Textual widgets instead of
 direct console output, enabling rich terminal UI interactions.
 """
 
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, Any
 import sys
 import logging
-import threading
 from rich.console import Console
-from textual.widgets import RichLog
-
-if TYPE_CHECKING:
-    from src.cli.textual_app import ScrappyApp
+from rich.text import Text
+from rich.protocol import is_renderable
+from src.cli.protocols import OutputSink
 
 logger = logging.getLogger(__name__)
+
+
+class TextualConsole(Console):
+    """Console that intercepts Rich objects and posts to Textual.
+
+    This hybrid console extends Rich Console to intercept print() calls
+    and route them appropriately:
+    - Strings: Convert to Rich Text with markup, post as renderable
+    - Renderables (Panel, Table, etc.): Post directly
+    - Other types: Convert to string, then to Text
+
+    This ensures all output goes through the message queue for thread safety.
+    """
+
+    def __init__(self, output_sink: OutputSink):
+        """Initialize console with output sink.
+
+        Args:
+            output_sink: OutputSink protocol implementation to post output to
+        """
+        super().__init__(force_terminal=False)
+        self.output_sink = output_sink
+
+    def print(self, *objects, **kwargs) -> None:
+        """Intercept print calls and route to appropriate output method.
+
+        Routes based on object type:
+        - Strings: Convert to Rich Text with markup
+        - Renderables: Send directly
+        - Other: Convert to string then Text
+
+        Args:
+            *objects: Objects to print
+            **kwargs: Keyword arguments (ignored, kept for compatibility)
+        """
+        for obj in objects:
+            if isinstance(obj, str):
+                # Handle Rich markup like "[bold red]Error[/]"
+                renderable = Text.from_markup(obj)
+                self.output_sink.post_renderable(renderable)
+            elif is_renderable(obj):
+                # Panel, Table, Markdown, etc.
+                self.output_sink.post_renderable(obj)
+            else:
+                # Fallback for primitives (int, dict, etc.)
+                renderable = Text(str(obj))
+                self.output_sink.post_renderable(renderable)
 
 
 class TextualIO:
     """Textual-based IO implementation.
 
-    Implements CLIIOProtocol by writing to Textual widgets
-    instead of console. All output goes to the RichLog widget,
-    with full Rich markup and renderable support.
-
-    Acts as a file-like object for Rich Console - write() method
-    immediately posts messages to the Textual app (no buffering).
+    Implements CLIIOProtocol using OutputSink protocol for dependency inversion.
+    All output is routed through the OutputSink interface, enabling testing
+    with mocks and clean separation from Textual internals.
     """
 
-    def __init__(self, app: "ScrappyApp"):
-        """Initialize TextualIO with reference to the Textual app.
+    def __init__(self, output_sink: OutputSink):
+        """Initialize TextualIO with output sink.
 
         Args:
-            app: The ScrappyApp instance to write output to
+            output_sink: OutputSink protocol implementation to post output to
         """
-        self._app = app
-        # Console writes directly to self (via write() method)
-        self._console = Console(file=self, force_terminal=True, width=120)
+        self.output_sink = output_sink
+        self._console = TextualConsole(output_sink)
 
     @property
-    def console(self) -> Console:
-        """Return the Rich Console for rendering Rich objects.
+    def console(self) -> TextualConsole:
+        """Return console that posts to Textual.
 
         Returns:
-            Console instance that writes to this TextualIO
+            TextualConsole instance that routes through OutputSink
         """
         return self._console
 
-    def write(self, text: str) -> int:
-        """File-like write method for Rich Console.
-
-        Called by Rich Console when rendering output. Immediately
-        posts message to Textual app (no buffering).
-
-        Args:
-            text: The text to write (may include ANSI codes, Rich markup)
-
-        Returns:
-            Number of characters written
-        """
-        from src.cli.textual_app import WriteOutput
-
-        if text:
-            logger.debug(
-                f"[TextualIO.write] Posting {len(text)} chars from thread: "
-                f"{threading.current_thread().name}"
-            )
-            try:
-                self._app.post_message(WriteOutput(text))
-            except Exception as e:
-                logger.error(f"CRITICAL: Failed to post message: {e}")
-                sys.stderr.write(f"{text}\n")
-
-        return len(text)
-
-    def flush(self) -> None:
-        """File-like flush method.
-
-        No-op since we don't buffer - all writes are immediate.
-        """
-        pass
-
     def echo(self, message: str = "", nl: bool = True) -> None:
-        """Output a message to the RichLog widget via message.
+        """Output a plain text message.
 
         Args:
             message: The text to output
             nl: Whether to append a newline (default True)
         """
-        # Import here to avoid circular dependency
-        from src.cli.textual_app import WriteOutput
-
         content = message + ("\n" if nl else "")
-        logger.debug(
-            f"[TextualIO.echo] Posting from thread: {threading.current_thread().name}"
-        )
-        try:
-            self._app.post_message(WriteOutput(content))
-        except Exception as e:
-            logger.error(f"CRITICAL: Failed to post message: {e}")
-            sys.stderr.write(f"{content}\n")
+        self.output_sink.post_output(content)
 
     def secho(
         self,
@@ -109,7 +106,10 @@ class TextualIO:
         bold: bool = False,
         nl: bool = True
     ) -> None:
-        """Output a styled message with Rich markup via message.
+        """Output a styled message using Rich markup.
+
+        Converts Click-style color names to Rich markup and posts
+        as a renderable Text object.
 
         Args:
             message: The text to output
@@ -117,19 +117,36 @@ class TextualIO:
             bold: Whether to make text bold
             nl: Whether to append a newline (default True)
         """
-        # Import here to avoid circular dependency
-        from src.cli.textual_app import WriteOutput
+        # Convert Click colors to Rich markup
+        color_map = {
+            "cyan": "cyan",
+            "yellow": "yellow",
+            "red": "red",
+            "green": "green",
+            "blue": "blue",
+            "magenta": "magenta",
+            "white": "white",
+            "black": "black",
+        }
 
-        styled = self._apply_style(message, fg, bold)
-        content = styled + ("\n" if nl else "")
-        logger.debug(
-            f"[TextualIO.secho] Posting from thread: {threading.current_thread().name}"
-        )
-        try:
-            self._app.post_message(WriteOutput(content))
-        except Exception as e:
-            logger.error(f"CRITICAL: Failed to post message: {e}")
-            sys.stderr.write(f"{content}\n")
+        # Build Rich markup
+        styled_text = message
+        if fg or bold:
+            rich_color = color_map.get(fg, fg) if fg else None
+            if rich_color and bold:
+                styled_text = f"[bold {rich_color}]{message}[/bold {rich_color}]"
+            elif rich_color:
+                styled_text = f"[{rich_color}]{message}[/{rich_color}]"
+            elif bold:
+                styled_text = f"[bold]{message}[/bold]"
+
+        # Add newline if requested
+        if nl:
+            styled_text += "\n"
+
+        # Convert to Text renderable and post
+        renderable = Text.from_markup(styled_text)
+        self.output_sink.post_renderable(renderable)
 
     def styled_echo(
         self,
@@ -164,7 +181,29 @@ class TextualIO:
         Returns:
             The text with Rich markup tags
         """
-        return self._apply_style(text, fg, bold)
+        # Convert Click colors to Rich markup
+        color_map = {
+            "cyan": "cyan",
+            "yellow": "yellow",
+            "red": "red",
+            "green": "green",
+            "blue": "blue",
+            "magenta": "magenta",
+            "white": "white",
+            "black": "black",
+        }
+
+        # Build Rich markup
+        if fg and bold:
+            rich_color = color_map.get(fg, fg)
+            return f"[bold {rich_color}]{text}[/bold {rich_color}]"
+        elif fg:
+            rich_color = color_map.get(fg, fg)
+            return f"[{rich_color}]{text}[/{rich_color}]"
+        elif bold:
+            return f"[bold]{text}[/bold]"
+        else:
+            return text
 
     def prompt(
         self,
@@ -222,29 +261,3 @@ class TextualIO:
             "input_line() not supported in Textual mode. "
             "Use Input widget events instead."
         )
-
-    def _apply_style(
-        self,
-        text: str,
-        fg: Optional[str] = None,
-        bold: bool = False
-    ) -> str:
-        """Apply Rich markup styling to text.
-
-        Args:
-            text: The text to style
-            fg: Foreground color
-            bold: Whether to make text bold
-
-        Returns:
-            Text with Rich markup tags
-        """
-        # Build Rich markup
-        if fg and bold:
-            return f"[bold {fg}]{text}[/bold {fg}]"
-        elif fg:
-            return f"[{fg}]{text}[/{fg}]"
-        elif bold:
-            return f"[bold]{text}[/bold]"
-        else:
-            return text

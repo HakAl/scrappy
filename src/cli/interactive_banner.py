@@ -5,25 +5,19 @@ Provides a styled welcome banner using Rich Panel with ASCII art
 and mode status display.
 """
 
-from typing import Optional
+from typing import Any
 from rich.panel import Panel
 from rich.text import Text
-from rich.console import Group
-
-from .rich_output import RichIO
 
 
-def render_welcome_banner(
-    io: RichIO,
-    multiline_mode: bool = True,
-    auto_route_mode: bool = False
-) -> None:
-    """Render the welcome banner as a Rich Panel.
+def display_banner(io: Any) -> None:
+    """Display banner using appropriate IO.
+
+    The TextualConsole automatically detects Panel as a renderable
+    and posts it via the message queue, ensuring thread-safe display.
 
     Args:
-        io: RichIO instance for output
-        multiline_mode: Whether multiline input is enabled
-        auto_route_mode: Whether auto-routing is enabled
+        io: IO instance with console property (TextualIO or RichIO)
     """
     # Build banner content
     title_text = Text()
@@ -52,9 +46,8 @@ def render_welcome_banner(
     commands_text.append("(any text)", style="bright_white")
     commands_text.append(" - Chat with current brain")
 
-    # Combine content - use Group for multiple renderables
-    # Title centered, commands left-aligned
-    title_text.append("\n")  # Add newline after title
+    # Combine content
+    title_text.append("\n")
     content = Text()
     content.append_text(title_text)
     content.append_text(commands_text)
@@ -66,25 +59,31 @@ def render_welcome_banner(
         border_style="cyan",
         padding=(1, 2)
     )
+
+    # The console.print() now routes correctly
+    # TextualConsole detects Panel as renderable and posts it
     io.console.print(panel)
-
-    # Display mode statuses
-    _render_mode_statuses(io, multiline_mode, auto_route_mode)
+    io.echo()
 
 
-def _render_mode_statuses(
-    io: RichIO,
-    multiline_mode: bool,
-    auto_route_mode: bool
+def render_welcome_banner(
+    io: Any,
+    multiline_mode: bool = True,
+    auto_route_mode: bool = False
 ) -> None:
-    """Render the current mode status indicators.
+    """Render the welcome banner as a Rich Panel.
+
+    Legacy function for compatibility. New code should use display_banner().
 
     Args:
-        io: RichIO instance for output
+        io: IO instance for output
         multiline_mode: Whether multiline input is enabled
         auto_route_mode: Whether auto-routing is enabled
     """
-    # Multiline mode status
+    # Display main banner
+    display_banner(io)
+
+    # Display mode statuses
     if multiline_mode:
         io.secho(
             "Multiline input: ON (end line with \\ to continue, /ml to toggle)",
@@ -93,7 +92,6 @@ def _render_mode_statuses(
     else:
         io.secho("Multiline input: OFF (/ml to toggle)", fg="yellow")
 
-    # Auto-routing mode status
     if auto_route_mode:
         io.secho("Auto-routing: ON (task-aware execution)", fg="green")
     else:

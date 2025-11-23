@@ -15,6 +15,49 @@ if TYPE_CHECKING:
 
 
 @runtime_checkable
+class OutputSink(Protocol):
+    """Abstraction for posting output to UI.
+
+    This protocol enables different UI implementations (Rich console,
+    Textual TUI, testing mocks) to receive output without coupling
+    the application logic to specific UI frameworks.
+
+    Implementations must handle both plain text and Rich renderables
+    (Panel, Table, Text, etc.) to preserve formatting.
+
+    Following SOLID principles:
+    - Dependency Inversion: High-level modules depend on this abstraction
+    - Interface Segregation: Focused, single-purpose interface for output
+    - Open/Closed: New UI implementations can be added without modification
+
+    Implementations:
+    - TextualOutputAdapter: Posts to Textual app via messages
+    - RichOutputAdapter: Renders to Rich console directly
+    - MockOutputSink: Test double for testing
+    """
+
+    def post_output(self, content: str) -> None:
+        """Post plain text output.
+
+        Args:
+            content: Plain text string to display
+        """
+        ...
+
+    def post_renderable(self, obj: Any) -> None:
+        """Post Rich renderable (Panel, Table, Text, etc.).
+
+        Rich renderables preserve formatting, colors, and structure.
+        Examples: Panel with borders, Table with columns, styled Text.
+
+        Args:
+            obj: Rich renderable object or any object that
+                 satisfies rich.protocol.is_renderable()
+        """
+        ...
+
+
+@runtime_checkable
 class CLIHandlerProtocol(Protocol):
     """Protocol defining common interface for all CLI handlers.
 

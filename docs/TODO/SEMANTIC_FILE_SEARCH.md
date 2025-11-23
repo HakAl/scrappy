@@ -187,12 +187,12 @@ Throughput:                0.31 chunks/sec
 Finish semantic search integration
 
 Required Features
-    - index lancedb when model is ready -- complete
+    - index lancedb when model is ready -- finished
     - progress displayed clearly to user
     - progress display goes away shortly after complete
 
 Current status:
-- Need rich layout (or another feature) to organize content so progress isn't drawn over user input
+- Need to organize content so progress isn't drawn over user input
 
 ## Root Cause Analysis
 

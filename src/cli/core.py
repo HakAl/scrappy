@@ -198,20 +198,13 @@ class CLI:
         )
 
     def _create_interactive_mode(self) -> TextualInteractiveMode:
-        """Create TextualInteractiveMode with all dependencies."""
-        return TextualInteractiveMode(
-            io=self.io,
-            orchestrator=self.orchestrator,
-            session_context=self.session_context,
-            state_manager=self.state_manager,
-            input_handler=self.input_handler,
-            command_router=self._create_command_router(),
-            display=self.display,
-            smart=self.smart,
-            task_router=self.task_router,
-            tasks=self.tasks,
-            logger=self.logger
-        )
+        """Create TextualInteractiveMode with orchestrator.
+
+        TextualInteractiveMode now uses a simplified architecture where
+        the app creates its own IO and routes commands directly to the
+        orchestrator via the delegate() method.
+        """
+        return TextualInteractiveMode(orchestrator=self.orchestrator)
 
     def _show_semantic_search_progress(self):
         """
