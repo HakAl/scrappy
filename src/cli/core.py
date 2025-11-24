@@ -329,14 +329,6 @@ class CLI:
 
                 if result.get('status') == 'loaded':
                     io.secho("Session restored successfully!", fg="green")
-                    io.echo(f"  Files: {result['files_restored']}")
-                    io.echo(f"  Searches: {result['searches_restored']}")
-                    io.echo(f"  Git ops: {result['git_ops_restored']}")
-                    io.echo(f"  Discoveries: {result['discoveries_restored']}")
-                    self.logger.info("Session restored", extra={
-                        "files": result['files_restored'],
-                        "searches": result['searches_restored'],
-                    })
                 else:
                     error_msg = result.get('message', 'unknown error')
                     io.secho(f"Could not restore session: {error_msg}", fg="red")

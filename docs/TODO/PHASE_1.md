@@ -1,93 +1,12 @@
 Phase 1 Issue Fix Plan
 
-  Issue Severity Classification
-
-  CRITICAL (Blocks Usage):
-  - Issue #6: Input becomes unusable after classification questions (HTTP + worker thread deadlock)
-
-  HIGH (Major UX Problems):
-  - Issue #2: Output covered by input (layout overlap)
-  - Issue #4: Must click input to focus (broken focus management)
-
-  MEDIUM (Usability Issues):
-  - Issue #3: Session restoration markup artifacts + duplicates
-  - Issue #5: Can't copy text from Textual components
-
-  LOW (Cosmetic):
-  - Issue #1: No '>' cursor before input placeholder
-
-  ---
   Fix Order (Dependency-Based)
 
-  2. Issue #2 - Fix layout overlap (needed for visibility)
   3. Issue #4 - Fix focus management (needed for usability)
-  4. Issue #3 - Fix session restoration messages (cleanup)
   5. Issue #5 - Fix text copying (enable selection)
-  6. Issue #1 - Add input cursor prefix (polish)
   7. Issue #6 - Fix HTTP/worker thread deadlock (CRITICAL - fixes app freezing)
 
   ---
-  Issue #2: Output Covered By Input (Layout Overlap)
-
-  Root Cause
-
-  The Input widget with dock: bottom may not be properly reserving space, causing RichLog to extend behind it.
-
-  Fix: Add Explicit Layout Container
-
-  # In textual_app.py, update CSS:
-  CSS = """
-  Screen {
-      layout: vertical;
-  }
-
-  #output_container {
-      height: 1fr;
-      overflow-y: auto;
-  }
-
-  RichLog {
-      height: 100%;
-      border: none;
-      padding: 0 1 1 1;  /* Add bottom padding to prevent overlap */
-      background: transparent;
-      scrollbar-size-vertical: 1;
-  }
-
-  #input_container {
-      height: auto;
-      background: $surface;
-      padding: 1;
-      border-top: solid $primary;
-  }
-
-  Input {
-      height: 1;
-      border: none;
-      background: transparent;
-  }
-  """
-
-  # Update compose() method:
-  def compose(self) -> ComposeResult:
-      from textual.containers import VerticalScroll, Container
-
-      # Scrollable output area
-      with Container(id="output_container"):
-          yield RichLog(
-              id="output",
-              highlight=True,
-              markup=True,
-              auto_scroll=True,
-              wrap=True
-          )
-
-      # Fixed input area at bottom
-      with Container(id="input_container"):
-          yield Input(
-              id="input",
-              placeholder="Type your message or command...",
-          )
 
   ---
   Issue #4: Must Click Input To Focus
@@ -135,171 +54,54 @@ class ScrappyApp(App):
                 self.query_one(Input).focus()
                 # The key event continues to propagate to the newly focused widget
 
-  ---
-  Issue #3: Session Restoration Markup Artifacts
-
-  Root Cause
-
-  The input_confirm() method in OutputSinkAdapter (unified_io.py:693) creates a Text object with Rich markup, but
-  the markup tags like [dim] are being displayed literally instead of being rendered.
-
-  Fix: Properly Render Markup
-
-  # In unified_io.py, update input_confirm() method (line 684):
-  def input_confirm(self, text: str, default: bool = False) -> bool:
-      """Auto-approve confirmation with warning (Phase 1 limitation)."""
-      is_routine = (
-          "restore" in text.lower() and "session" in text.lower()
-      ) or default is True
-
-      if is_routine:
-          # FIX: Use Text.from_markup() to properly render markup
-          message = Text.from_markup(f"{text} [dim](auto-confirmed)[/dim]")
-          self._sink.post_renderable(message)
-          return True
-
-      # ... rest of method ...
-
-  Also Fix: Duplicate Session Messages
-
-  The "Session restored" message appears multiple times. This suggests session restoration is being called multiple
-  times. Need to trace where this is happening:
-
-  # Search for session restoration code
-  grep -r "Session restored" src/
-  grep -r "restore.*session" src/ -i
-
-  Once identified, add a flag to prevent duplicate restoration:
-  # In session_context.py or wherever restoration happens:
-  class SessionContext:
-      def __init__(self):
-          self._restoration_attempted = False
-
-      def restore_session(self):
-          if self._restoration_attempted:
-              return
-          self._restoration_attempted = True
-          # ... actual restoration logic ...
 
   ---
+
   Issue #5: Can't Copy Text
 
-  Root Cause
+`ALLOW_SELECT` is exactly the right strategy, but you generally cannot just pass it as an argument to the standard `RichLog`. You usually need to subclass it.
 
-  Despite ENABLE_MOUSE = False in textual_app.py:114, text selection may not be working due to Textual's default
-  behavior or terminal limitations.
+Here is why it happens and how to fix it properly.
 
-  Fix A: Verify Terminal Mode
+### The Problem
+By default, `RichLog` (and `Log`) captures your mouse clicks to handle **scrolling**. If you click and drag inside the log, Textual interprets that as "pan/scroll the view," not "select text."
 
-  # In textual_app.py, add:
-  class ScrappyApp(App):
-      ENABLE_MOUSE = False
+### The Fix
+You need to explicitly tell the widget to prioritize selection over scrolling interactions.
 
-      def on_mount(self) -> None:
-          # Explicitly disable mouse capture
-          from textual import log
-          log(f"Mouse enabled: {self.mouse_over}")
+#### 1. The Subclass Method (Cleanest)
+Create a custom log class that enables selection by default.
 
-          # Force terminal into selection mode
-          import sys
-          if hasattr(sys.stdout, 'fileno'):
-              try:
-                  # Ensure raw mode isn't interfering
-                  import termios
-                  import tty
-                  fd = sys.stdout.fileno()
-                  old_settings = termios.tcgetattr(fd)
-                  log(f"Terminal settings: {old_settings}")
-              except Exception as e:
-                  log(f"Could not check terminal settings: {e}")
+```python
+from textual.widgets import RichLog
 
-          # ... rest of on_mount ...
+class CopyableLog(RichLog):
+    # This class var enables the mouse selection behavior
+    ALLOW_SELECT = True
 
-  Fix B: Add Copy Command
+# Usage in your app:
+# yield CopyableLog()
+```
 
-  If native terminal copy doesn't work, add explicit copy command:
-  # In textual_app.py:
-  from textual.reactive import var
+#### 2. The Instance Method (Quickest)
+If you don't want to make a new class, you can set the attribute on the instance in your `on_mount` or after querying it.
 
-  class ScrappyApp(App):
-      BINDINGS = [
-          ("ctrl+shift+c", "copy_output", "Copy Last Output"),
-      ]
+```python
+def on_mount(self):
+    log = self.query_one(RichLog)
+    log.allow_select = True
+```
 
-      show_selection_mode = var(False)
-
-      def action_copy_output(self) -> None:
-          """Copy last output to clipboard."""
-          import pyperclip
-          output_widget = self.query_one(RichLog)
-
-          # Get plain text from last N lines
-          lines = output_widget.lines[-20:]  # Last 20 lines
-          text = "\n".join(str(line.text) for line in lines)
-
-          pyperclip.copy(text)
-          self.notify("Copied last 20 lines to clipboard", severity="information")
+### Important Trade-offs
+1.  **Selection vs. Scrolling:** Once you enable `allow_select`, clicking and dragging inside the log will **select text**, which means you can no longer click and drag to **scroll**. Users will have to use the scrollbar or the mouse wheel to scroll.
+2.  **Rich Objects:** `RichLog` renders complex objects (tables, trees, panels). When you select and copy them, you get the **plain text** representation. It usually looks fine, but it won't preserve the "Rich" structure (colors/styles) in the clipboard.
 
   ---
-  Issue #1: No '>' Cursor Before Input
+  
 
-  Fix: Add Prompt Prefix via CSS Pseudo-Element
 
-  # In textual_app.py CSS, update Input styling:
-  CSS = """
-  # ... other styles ...
 
-  Input {
-      height: 1;
-      border: none;
-      background: transparent;
-  }
-
-  /* Add '>' prefix before input */
-  Input:focus {
-      border: none;
-  }
-
-  /* Use padding to make room for '>' */
-  Input {
-      padding-left: 3;  /* Make room for "> " */
-  }
-  """
-
-  # Alternative: Use a Label widget next to Input
-  def compose(self) -> ComposeResult:
-      # ... other widgets ...
-
-      with Container(id="input_container"):
-          yield Label(">", id="input_prompt")  # Add prompt indicator
-          yield Input(
-              id="input",
-              placeholder="Type your message or command...",
-          )
-
-  # Update CSS for side-by-side layout:
-  CSS = """
-  # ... other styles ...
-
-  #input_container {
-      layout: horizontal;
-      height: auto;
-      background: $surface;
-      padding: 1;
-  }
-
-  #input_prompt {
-      width: 2;
-      content-align: center middle;
-      color: $accent;
-  }
-
-  Input {
-      width: 1fr;
-      border: none;
-      background: transparent;
-  }
-  """
+need more planning:
 
   ---
   Issue #6: Input Unusable After Classification (CRITICAL)

@@ -128,7 +128,7 @@ class ScrappyApp(App):
         border: none;
         padding: 0 1 1 1;
         background: transparent;
-        scrollbar-size-vertical: 1;
+        scrollbar-size-vertical: 0;
     }
 
     #input_container {

@@ -142,10 +142,7 @@ class CommandRouter:
 
     def _handle_help(self, args: str) -> bool:
         """Handle /help command."""
-        # DEBUG: Prove this executes
-        self.io.secho("[DEBUG] _handle_help called", fg="yellow")
         self.display.show_help()
-        self.io.secho("[DEBUG] _handle_help done", fg="yellow")
         return True
 
     def _handle_status(self, args: str) -> bool:
