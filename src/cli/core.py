@@ -11,17 +11,8 @@ if TYPE_CHECKING:
     from ..infrastructure.protocols import BackgroundInitializerProtocol
 
 from ..orchestrator import AgentOrchestrator
-from .display import CLIDisplay
-from .session import CLISessionManager
-from .codebase import CLICodebaseAnalysis
-from .tasks import CLITaskExecution
-from .multiprovider import CLIMultiProvider
-from .smart_query import CLISmartQuery
-from .agent_manager import CLIAgentManager
-from .task_router_handler import CLITaskRouterHandler
 from .io_interface import CLIIOProtocol
 from .unified_io import UnifiedIO
-from .tool_detector import needs_tool_support
 from .input_handler import InputHandler
 from .state_manager import PlanStateManager
 from .session_context import SessionContext
@@ -29,8 +20,7 @@ from .command_router import CommandRouter
 from .textual_interactive import TextualInteractiveMode
 from .utils.session_utils import display_previous_session_detected
 from .utils.cli_factory import initialize_cli_handlers
-from .exceptions import CLIError, SessionError, TaskExecutionError
-from .error_recovery import graceful_degrade, error_recovery_context
+from .error_recovery import graceful_degrade
 from .logging import get_logger
 
 
@@ -118,7 +108,7 @@ class CLI:
         if self._verbose_selection:
             self.io.secho("Verbose provider selection enabled", fg="yellow")
 
-        # Log initialization
+        # Log initialization (outputs to IO)
         self.logger.info("CLI initialized", extra={
             "brain": self.orchestrator.brain,
             "auto_explore": self._auto_explore,
@@ -127,7 +117,6 @@ class CLI:
 
         # Display initialization info (unless show_provider_status already did)
         if not self._show_provider_status:
-            self.io.echo("CLI initialized")
             brain_name = self.orchestrator.brain
             if brain_name:
                 self.io.echo(f"Brain: {self.io.style(brain_name, fg='green', bold=True)}")
@@ -158,9 +147,18 @@ class CLI:
 
     # Factory methods for default dependencies
 
+    # todo wrong type
+    # todo wrong type
+    # todo wrong type
+    # todo wrong type
     def _create_default_io(self) -> CLIIOProtocol:
-        """Create default IO interface."""
-        return UnifiedIO()
+        """Create default IO interface for CLI (Textual).
+
+        CLI always uses Textual, so this creates UnifiedIO with OutputSink.
+        """
+        from .textual_app import TextualOutputAdapter
+        output_adapter = TextualOutputAdapter()
+        return UnifiedIO(output_sink=output_adapter)
 
     def _create_default_orchestrator(self) -> AgentOrchestrator:
         """Create default orchestrator."""
@@ -186,6 +184,10 @@ class CLI:
         return CommandRouter(
             io=self.io,
             orchestrator=self.orchestrator,
+            # todo wrong type
+            # todo wrong type
+            # todo wrong type
+            # todo wrong type
             session_context=self.session_context,
             display=self.display,
             session_mgr=self.session_mgr,
@@ -212,6 +214,10 @@ class CLI:
 
         return TextualInteractiveMode(
             orchestrator=self.orchestrator,
+            # todo wrong type
+            # todo wrong type
+            # todo wrong type
+            # todo wrong type
             session_context=self.session_context,
             state_manager=self.state_manager,
             input_handler=self.input_handler,

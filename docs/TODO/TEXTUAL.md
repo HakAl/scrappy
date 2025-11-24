@@ -43,18 +43,9 @@ Output via TextualIO.echo/secho → RichLog widget
 
 ### ISSUES
 
-- the user must click the input row to enter text (rather than anywhere in terminal)
+- user must click the input row to enter text (rather than anywhere in terminal)
 - can't copy text from textual components
-- user input area shows both prompts: 
-  - You>
-  - Type your message or command
-- startup output is rendered with an extra blank line between each line
-  - CLI Initialized - prints twice
-- large blue scrollbar on right (no longer uses terminal scroll area -- black bar on right of window)
-- restore session feature is missing -- previously prompted on app start
-- [DEBUG] _handle_help done printed after /help command
-  - extra new line between each help item
-- 
+- there's no '>' cursor before the input placeholder
 
 ### Current Architecture Flow
 
@@ -71,79 +62,6 @@ orchestrator.delegate(user_input)
     ↓
 Output goes nowhere visible
 ```
-
-### The Disconnect
-
-**What we changed:**
-1. Removed InteractiveMode from the flow
-2. ScrappyApp now calls `orchestrator.delegate()` directly
-3. Created TextualIO with OutputSink that posts to message queue
-
-**The problem:**
-- The orchestrator instance was initialized in core.py with a DIFFERENT IO (likely RichIO or ClickIO)
-- When we call `orchestrator.delegate()`, it uses its injected IO to write output
-- That IO is NOT our TextualIO, so output never reaches the Textual widgets
-- The orchestrator has no knowledge of our message-based TextualIO
-
-### Evidence
-
-Looking at `src/cli/textual_app.py`:
-```python
-def __init__(self, orchestrator):
-    self.orchestrator = orchestrator
-    self.output_adapter = TextualOutputAdapter(self)
-    self.io = TextualIO(self.output_adapter)  # Creates NEW IO
-```
-
-But the orchestrator was already initialized with a different IO:
-```python
-# In core.py or wherever orchestrator is created
-orchestrator = create_orchestrator(io=some_other_io)  # Uses RichIO or ClickIO
-```
-
-When we call `orchestrator.delegate()`, it uses `some_other_io`, not our `TextualIO`.
-
-## Architecture Options
-
-### Option 1: Pass TextualIO to Orchestrator (WRONG)
-**Approach**: Re-initialize orchestrator with TextualIO
-**Problem**:
-- Orchestrator is created before we know if we're using Textual
-- Would require major refactoring of initialization order
-- Breaks existing non-Textual mode
-
-### Option 2: Restore InteractiveMode Bridge (LIKELY CORRECT)
-**Approach**: Use InteractiveMode as originally designed, but with our new TextualIO
-**Why this works**:
-- InteractiveMode is designed to receive IO via dependency injection
-- InteractiveMode has all the command routing logic
-- We just need to ensure InteractiveMode gets our TextualIO
-
-**Original working flow (from old textual_interactive.py):**
-```
-1. Create ScrappyApp (not yet initialized)
-2. Create TextualIO(app)
-3. Create InteractiveMode(io=TextualIO, orchestrator, ...)
-4. Initialize app with InteractiveMode
-5. App calls interactive_mode._process_input()
-```
-
-**What we broke:**
-- Removed InteractiveMode from the flow
-- App now calls orchestrator directly
-- Lost the IO injection that InteractiveMode provided
-
-### Option 3: IO Swapping/Proxying (COMPLEX)
-**Approach**: Intercept all IO calls at orchestrator level
-**Problems**:
-- Requires changing orchestrator or its dependencies
-- Fragile and hard to maintain
-- Goes against dependency injection principles
-
-
-===
-
-## COMPREHENSIVE REMEDIATION PLAN
 
 ### Core Problem Analysis
 
@@ -1128,86 +1046,3 @@ def run(self):
 22. [ ] Confirmations require user input in CLI mode
 
 ---
-
-### Key Architectural Observations
-
-**1. Dependency Inversion Principle (SOLID)**
-This fix properly applies DIP by injecting IOProtocol implementation at runtime. The orchestrator depends on
-abstractions (IOProtocol), not concretions (TextualIO). This is CORRECT architecture.
-
-**2. InteractiveMode as Abstraction Boundary**
-InteractiveMode is the CORRECT abstraction - it's designed as a bridge between IO implementations and orchestrator.
-However, it was designed for synchronous/blocking operations, creating an impedance mismatch with async Textual.
-
-**3. The Async Impedance Mismatch Problem**
-```
-BlockingWorld              |  AsyncWorld
-                          |
-InteractiveMode           |  TextualIO
-  - Runs in thread        |    - Event loop
-  - Blocking I/O calls    |    - Async operations
-  - Expects sync prompts  |    - Cannot block
-```
-
-**Future Consideration:** Should there be a `AsyncInteractiveMode` that's natively async-aware? Or should
-InteractiveMode be refactored to support both sync and async IO implementations via an adapter pattern?
-
-**4. Security by Visibility**
-The auto-confirm warnings aren't just UX polish - they're a security control. By making auto-confirmed operations
-visually obvious (red, blinking, high-contrast), we prevent silent execution of destructive operations.
-
-**5. Phased Limitations are Acceptable**
-It's better to ship Textual mode with documented limitations (no mid-execution prompts) than to:
-- Ship with hidden bugs (UI freezes)
-- Block the entire feature waiting for Phase 3 async refactoring
-- Create a false sense of completeness
-
-**6. Testing Philosophy Alignment**
-"Tests must prove features work, not just exercise code." The testing protocol above tests:
-- User-visible behavior (output appears, UI responsive)
-- Failure modes (blocking calls handled gracefully)
-- Regression (CLI mode unchanged)
-
-NOT testing:
-- "TextualIO was instantiated" (who cares?)
-- "post_output was called" (proves nothing about UX)
-- Internal state (implementation detail)
-
----
-
-### Implementation Sequence
-
-**Day 1: Audit & Foundation**
-- Complete Phase 0 async audit (create ASYNC_AUDIT.md)
-- Implement Phase 1A (IO plumbing + message handlers)
-- Run Backend Test Group 1 (basic output)
-
-**Day 2: Safety & Rendering**
-- Implement Phase 1B (async safety guards with security warnings)
-- Implement Phase 2.1-2.3 (CSS & visual fixes)
-- Run Backend Test Group 3 (async safety) + Frontend Test Group 4 (visual quality)
-
-**Day 3: UI Polish & Phase 3 Foundation**
-- Complete Phase 2.4 (startup output buffering)
-- Implement Phase 3.1 (ThreadSafeAsyncBridge)
-- Implement Phase 3.2 (Modal screens)
-- Run Frontend Test Group 5 (interaction)
-
-**Day 4: Phase 3 Integration & Testing**
-- Implement Phase 3.3-3.5 (TextualIO bridge integration)
-- Run all test groups sequentially
-- Fix any issues discovered during testing
-- Verify regression tests (CLI mode unchanged)
-
-**Day 5: Edge Cases & Documentation**
-- Test edge cases (cancellation, concurrent prompts, modal stacking)
-- Document known limitations (if any remain)
-- Create user-facing documentation for Textual mode
-- Final smoke test of all features
-
-**Total Estimated Time:** 4-5 days for complete implementation (Phases 0-3).
-
-=== 
-
-
-

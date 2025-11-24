@@ -33,20 +33,27 @@ def get_io_interface(
     test_mode: bool = False
 ) -> CLIIOProtocol:
     """
-    Get or create appropriate IO interface.
+    Get or create appropriate IO interface for CLI (interactive mode).
+
+    CLI always uses Textual, so this creates UnifiedIO with OutputSink.
 
     Args:
         io: Existing IO interface to use (takes precedence)
         test_mode: If True and no io provided, create TestIO
 
     Returns:
-        CLIIOProtocol compatible interface
+        CLIIOProtocol compatible interface with Textual OutputSink
     """
     if io is not None:
         return io
     if test_mode:
         return TestIO()
-    return UnifiedIO()
+
+    # CLI === Textual (interactive mode)
+    # Create UnifiedIO with OutputSink for Textual routing
+    from ..textual_app import TextualOutputAdapter
+    output_adapter = TextualOutputAdapter()
+    return UnifiedIO(output_sink=output_adapter)
 
 
 def create_context_state(ctx: Any) -> Dict[str, Any]:

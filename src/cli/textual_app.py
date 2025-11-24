@@ -121,16 +121,19 @@ class ScrappyApp(App):
     RichLog {
         height: 1fr;
         border: none;
-        padding: 1;
+        padding: 0;
         background: transparent;
+        scrollbar-size-vertical: 0;
     }
 
     Input {
         dock: bottom;
-        height: 3;
         border: none;
         background: $surface;
+        padding-top: 1;
+        padding-left: 1;
     }
+    
     """
 
     def __init__(self, interactive_mode: "InteractiveMode", output_adapter: TextualOutputAdapter):
@@ -160,7 +163,8 @@ class ScrappyApp(App):
         )
         yield Input(
             id="input",
-            placeholder="You> Type your message or command..."
+            placeholder="Type your message or command...",
+
         )
 
     def on_mount(self) -> None:

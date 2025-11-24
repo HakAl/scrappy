@@ -63,10 +63,9 @@ def display_banner(io: "UnifiedIOProtocol") -> None:
         padding=(1, 2)
     )
 
-    # The console.print() now routes correctly
-    # TextualConsole detects Panel as renderable and posts it
-    io.console.print(panel)
-    io.echo()
+    # CLI always uses Textual, so output_sink is always present
+    # Route through OutputSink to Textual message queue
+    io.output_sink.post_renderable(panel)
 
 
 def render_welcome_banner(

@@ -93,7 +93,12 @@ class DisplayManager:
         self._live_context: Optional[Live] = None
 
     def _create_default_io(self) -> CLIIOProtocol:
-        """Factory method for default IO."""
+        """Factory method for default IO.
+
+        WARNING: This factory should ONLY be used by tests for convenience.
+        Production code MUST inject IO via the constructor parameter.
+        Creating multiple UnifiedIO instances breaks TUI mode routing.
+        """
         return UnifiedIO()
 
     def _create_default_dashboard(self) -> DashboardProtocol:

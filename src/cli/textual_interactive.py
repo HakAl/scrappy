@@ -120,23 +120,26 @@ class TextualInteractiveMode:
     def run(self) -> None:
         """Launch the Textual TUI application.
 
-        Phase 1A Implementation (FIXED):
-        Reuses the existing UnifiedIO created before CLI.initialize() ran.
-        This ensures startup messages were buffered and will be displayed on mount.
+        Uses the existing UnifiedIO with OutputSink created by CLI factory.
+        All output (including startup messages) will be routed through Textual.
         """
-        # Reuse existing UnifiedIO (created in commands.py before CLI.initialize())
-        unified_io = self.io
-        output_adapter = unified_io.output_sink
+        # Get output_adapter from existing UnifiedIO (created by CLI factory)
+        output_adapter = self.io.output_sink
+        if output_adapter is None:
+            raise RuntimeError(
+                "CLI must be initialized with Textual IO (UnifiedIO with OutputSink). "
+                "This is a programming error - CLI should always use Textual."
+            )
 
-        # CRITICAL FIX - Inject orchestrator output adapter
+        # Inject orchestrator output adapter
         # This routes ALL orchestrator output (delegate(), registration, etc.)
         # through the Textual message queue
         orchestrator_output = OrchestratorOutputAdapter(output_adapter)
         self.orchestrator.output = orchestrator_output
 
-        # Create InteractiveMode with existing UnifiedIO
+        # Create InteractiveMode with existing Textual IO
         interactive_mode = InteractiveMode(
-            io=unified_io,
+            io=self.io,  # Use existing Textual IO, not creating new one
             orchestrator=self.orchestrator,
             session_context=self.session_context,
             state_manager=self.state_manager,

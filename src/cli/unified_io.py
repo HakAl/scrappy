@@ -544,9 +544,12 @@ class OutputSinkAdapter:
         self._console = console
 
     def output_plain(self, text: str, nl: bool = True) -> None:
-        """Output plain text through sink."""
-        content = text + ('\n' if nl else '')
-        self._sink.post_output(content)
+        """Output plain text through sink.
+
+        Note: RichLog.write() handles line breaks automatically,
+        so we don't add extra newlines to avoid double-spacing.
+        """
+        self._sink.post_output(text)
 
     def output_styled(
         self,
@@ -555,7 +558,11 @@ class OutputSinkAdapter:
         bold: bool = False,
         nl: bool = True
     ) -> None:
-        """Output styled text through sink as Rich Text."""
+        """Output styled text through sink as Rich Text.
+
+        Note: RichLog.write() handles line breaks automatically,
+        so we don't add extra newlines to avoid double-spacing.
+        """
         color_map = {
             "cyan": "cyan", "yellow": "yellow", "red": "red",
             "green": "green", "blue": "blue", "magenta": "magenta",
@@ -571,9 +578,6 @@ class OutputSinkAdapter:
                 styled_text = f"[{rich_color}]{text}[/{rich_color}]"
             elif bold:
                 styled_text = f"[bold]{text}[/bold]"
-
-        if nl:
-            styled_text += "\n"
 
         renderable = Text.from_markup(styled_text)
         self._sink.post_renderable(renderable)
@@ -679,6 +683,18 @@ class OutputSinkAdapter:
 
     def input_confirm(self, text: str, default: bool = False) -> bool:
         """Auto-approve confirmation with warning (Phase 1 limitation)."""
+        # Non-destructive operations (session restore, etc.) - simple message
+        is_routine = (
+            "restore" in text.lower() and "session" in text.lower()
+        ) or default is True
+
+        if is_routine:
+            # Simple dim message for routine operations
+            message = Text(f"{text} [dim](auto-confirmed)[/dim]")
+            self._sink.post_renderable(message)
+            return True
+
+        # Destructive operations - big red warning
         warning_panel = Panel(
             f"[bold white on red] AUTO-CONFIRMED [/]\n\n"
             f"[white]{text}[/]\n\n"

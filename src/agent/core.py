@@ -266,7 +266,12 @@ class CodeAgent:
     # Factory methods for default dependencies
 
     def _create_default_io(self):
-        """Create default IO interface."""
+        """Create default IO interface.
+
+        WARNING: This factory should ONLY be used by tests for convenience.
+        Production code MUST inject IO via the constructor parameter.
+        Creating multiple UnifiedIO instances breaks TUI mode routing.
+        """
         from ..cli.unified_io import UnifiedIO
         return UnifiedIO()
 

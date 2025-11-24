@@ -226,7 +226,7 @@ class CommandRouter:
         if not args:
             io.echo("Usage: /agent <task description>")
         else:
-            self.agent_mgr.run_agent(args, io=io)
+            self.agent_mgr.run_agent(args)
             if self.state_manager.plan_active:
                 self.state_manager.prompt_task_progression(io)
         return True
