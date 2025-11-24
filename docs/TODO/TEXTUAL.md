@@ -43,20 +43,16 @@ Output via TextualIO.echo/secho → RichLog widget
 
 ### ISSUES
 
-- unclear loading is happening for long queries or threading issue with classification?
-
-Hard:
-- Table output is all white -- need ability to customize table display
-- user must click the input row to enter text (rather than anywhere in terminal)
-  - need to manage focus? what's the pattern? global focus manager or simpler?
 - can't copy text from textual components
   - config?
+- 
 - Input becomes unusable after asking a question that requires classification with user clarification
   - no response occurs until app exit
   - keystrokes only work 1/3 times
   - very difficult to do anything, but kill the terminal
   - no errors in debug.log
   - problem with http + worker thread??
+- help table output is all white -- need ability to customize table display
 
 ### Current Architecture Flow
 

@@ -1,58 +1,7 @@
 Phase 1 Issue Fix Plan
 
-  Fix Order (Dependency-Based)
-
-  3. Issue #4 - Fix focus management (needed for usability)
-  5. Issue #5 - Fix text copying (enable selection)
-  7. Issue #6 - Fix HTTP/worker thread deadlock (CRITICAL - fixes app freezing)
-
-  ---
-
-  ---
-  Issue #4: Must Click Input To Focus
-
-  Root Cause
-
-  Focus is set in on_mount() but may be lost after banner display or output writes.
-
-    Psuedo code rough strategy:
-
-from textual.app import App, ComposeResult
-from textual.widgets import Input, Header, Footer, Static
-from textual.containers import Container
-
-class ScrappyApp(App):
-    BINDINGS = [("ctrl+c", "quit", "Quit")]
-
-    def compose(self) -> ComposeResult:
-        yield Header()
-        # A container to hold text output/banners
-        yield Container(id="output_area")
-        yield Input(placeholder="Type command here...")
-        yield Footer()
-
-    def on_mount(self) -> None:
-        """Focus immediately on startup."""
-        self.query_one(Input).focus()
-
-    def on_click(self, event) -> None:
-        """If user clicks the blank background, refocus input."""
-        # Using 'self.screen' ensures we catch clicks on the root background
-        if event.target == self.screen:
-            self.query_one(Input).focus()
-
-    def on_key(self, event) -> None:
-        """Auto-focus input if user starts typing."""
-        # If we are focused on the Input, let it handle the key naturally
-        if self.query_one(Input).has_focus:
-            return
-
-        # If we are scrolling a log or looking at a list, don't steal focus!
-        # Only steal focus if the current focus is 'None' or the 'Screen' itself.
-        if self.screen.focused is None or self.screen.focused == self.screen:
-            if event.is_printable:
-                self.query_one(Input).focus()
-                # The key event continues to propagate to the newly focused widget
+Issue #5
+- can't copy text from textual components
 
 
   ---

@@ -20,6 +20,16 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+class CopyableLog(RichLog):
+    """RichLog subclass that enables text selection and copying.
+
+    By setting ALLOW_SELECT = True, users can click and drag to select text
+    within the log, then copy it using standard terminal shortcuts.
+    Note: This disables click-and-drag scrolling - users must use scrollbar or mouse wheel.
+    """
+    ALLOW_SELECT = True
+
+
 class WriteOutput(Message):
     """Message for thread-safe output to RichLog widget.
 
@@ -175,7 +185,7 @@ class ScrappyApp(App):
 
         # Scrollable output area
         with Container(id="output_container"):
-            yield RichLog(
+            yield CopyableLog(
                 id="output",
                 highlight=True,
                 markup=True,
@@ -193,8 +203,9 @@ class ScrappyApp(App):
 
     def on_mount(self) -> None:
         """Called when app starts."""
-        # Focus input immediately - fixes "click to type" issue
-        self.query_one(Input).focus()
+        # Cache input reference and focus immediately
+        self._input = self.query_one(Input)
+        self._input.focus()
 
         # Start worker thread to consume output queue
         self.consume_output_queue()
@@ -202,6 +213,49 @@ class ScrappyApp(App):
         # Display welcome banner
         from src.cli.interactive_banner import display_banner
         display_banner(self.interactive_mode.io)
+
+    def on_click(self, event) -> None:
+        """Refocus input when clicking anywhere that's not the input field.
+
+        This allows users to click anywhere in the terminal and immediately
+        start typing without explicitly clicking the input field.
+
+        Args:
+            event: The click event
+        """
+        # Get the widget that was clicked
+        clicked_widget = event.widget if hasattr(event, 'widget') else None
+
+        # Refocus input if clicking anything except the input or log
+        if clicked_widget is not None and not isinstance(clicked_widget, Input):
+            self._input.focus()
+            # Clear selection by setting cursor position after focus completes
+            def clear_selection():
+                self._input.cursor_position = len(self._input.value)
+            self.call_after_refresh(clear_selection)
+
+    def on_key(self, event) -> None:
+        """Auto-focus input when user starts typing.
+
+        This allows users to simply start typing from anywhere, and the
+        input will automatically receive focus. Respects focus on other
+        interactive widgets (like scrollable logs).
+
+        Args:
+            event: The key event
+        """
+        # Already focused on input, let it handle naturally
+        if self._input.has_focus:
+            return
+
+        # Don't steal focus from other interactive widgets
+        focused = self.screen.focused
+        if focused is not None and focused != self.screen:
+            return
+
+        # Auto-focus on printable characters
+        if event.is_printable:
+            self._input.focus()
 
     @work(exclusive=False, thread=True)
     def consume_output_queue(self) -> None:
@@ -241,7 +295,7 @@ class ScrappyApp(App):
             return
 
         # Clear input immediately
-        self.query_one(Input).value = ""
+        self._input.value = ""
 
         # Process in worker thread
         self.process_command(user_input)
@@ -281,7 +335,7 @@ class ScrappyApp(App):
         Args:
             message: The WriteOutput message containing content to display
         """
-        output = self.query_one("#output", RichLog)
+        output = self.query_one("#output", CopyableLog)
         output.write(message.content)
 
     def on_write_renderable(self, message: WriteRenderable) -> None:
@@ -293,5 +347,5 @@ class ScrappyApp(App):
         Args:
             message: The WriteRenderable message containing renderable to display
         """
-        output = self.query_one("#output", RichLog)
+        output = self.query_one("#output", CopyableLog)
         output.write(message.renderable)
