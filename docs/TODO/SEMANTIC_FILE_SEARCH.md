@@ -158,25 +158,6 @@ Architecture Now Properly Integrated:
 
 ---
 
-Demo Script: scripts/test_semantic_search.py
-Benchmark Script: scripts/benchmark_semantic_search.py
-
-============================================================
-                 Semantic Search Benchmark
-============================================================
-Embedding Generation:    420.50s
-Indexing Operations:       1.38s
-Total Time:              421.88s
-------------------------------------------------------------
-Files Processed:            508
-Total Chunks:               130
-Skipped Chunks:               0
-Batches:                     64
-------------------------------------------------------------
-Avg Chunks/File:           0.26
-Throughput:                0.31 chunks/sec
-============================================================
-
 
 # P0 - Finish semantic search integration
 

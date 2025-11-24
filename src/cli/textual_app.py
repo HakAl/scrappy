@@ -10,7 +10,7 @@ import logging
 from queue import Queue, Empty
 from textual.app import App, ComposeResult
 from textual.message import Message
-from textual.widgets import Input, RichLog
+from textual.widgets import Input, RichLog, Label
 from textual import work
 from src.cli.protocols import OutputSink
 
@@ -118,22 +118,39 @@ class ScrappyApp(App):
         layout: vertical;
     }
 
-    RichLog {
+    #output_container {
         height: 1fr;
+        overflow-y: auto;
+    }
+
+    RichLog {
+        height: 100%;
         border: none;
-        padding: 0;
+        padding: 0 1 1 1;
         background: transparent;
-        scrollbar-size-vertical: 0;
+        scrollbar-size-vertical: 1;
+    }
+
+    #input_container {
+        layout: horizontal;
+        height: auto;
+        background: $surface;
+        padding: 1;
+    }
+
+    #input_prompt {
+        width: 2;
+        content-align: center middle;
+        color: $accent;
     }
 
     Input {
-        dock: bottom;
+        width: 1fr;
+        height: 1;
         border: none;
-        background: $surface;
-        padding-top: 1;
-        padding-left: 1;
+        background: transparent;
     }
-    
+
     """
 
     def __init__(self, interactive_mode: "InteractiveMode", output_adapter: TextualOutputAdapter):
@@ -154,18 +171,25 @@ class ScrappyApp(App):
         Yields:
             Widget instances for the app layout
         """
-        yield RichLog(
-            id="output",
-            highlight=True,
-            markup=True,
-            auto_scroll=True,
-            wrap=True
-        )
-        yield Input(
-            id="input",
-            placeholder="Type your message or command...",
+        from textual.containers import Container
 
-        )
+        # Scrollable output area
+        with Container(id="output_container"):
+            yield RichLog(
+                id="output",
+                highlight=True,
+                markup=True,
+                auto_scroll=True,
+                wrap=True
+            )
+
+        # Fixed input area at bottom
+        with Container(id="input_container"):
+            yield Label(">", id="input_prompt")
+            yield Input(
+                id="input",
+                placeholder="Type your message or command...",
+            )
 
     def on_mount(self) -> None:
         """Called when app starts."""

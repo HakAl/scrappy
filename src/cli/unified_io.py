@@ -690,7 +690,7 @@ class OutputSinkAdapter:
 
         if is_routine:
             # Simple dim message for routine operations
-            message = Text(f"{text} [dim](auto-confirmed)[/dim]")
+            message = Text.from_markup(f"{text} [dim](auto-confirmed)[/dim]")
             self._sink.post_renderable(message)
             return True
 

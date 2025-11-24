@@ -2,7 +2,8 @@
 
 ## Executive Summary
 
-This audit identifies all blocking I/O operations in the Scrappy codebase that could cause UI freezes when running in Textual mode. The findings categorize operations by severity, location, and impact on the Textual integration.
+This audit identifies all blocking I/O operations in the Scrappy codebase that could cause UI freezes when running in Textual mode. 
+The findings categorize operations by severity, location, and impact on the Textual integration.
 
 ## Audit Date
 2025-11-23
