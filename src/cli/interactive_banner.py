@@ -63,9 +63,15 @@ def display_banner(io: "UnifiedIOProtocol") -> None:
         padding=(1, 2)
     )
 
-    # CLI always uses Textual, so output_sink is always present
-    # Route through OutputSink to Textual message queue
-    io.output_sink.post_renderable(panel)
+    # Route through OutputSink if available (TUI mode), otherwise print directly
+    if hasattr(io, 'output_sink') and io.output_sink is not None:
+        io.output_sink.post_renderable(panel)
+    elif hasattr(io, 'console'):
+        # Fallback: print directly to console (non-TUI mode)
+        io.console.print(panel)
+    else:
+        # Last resort: echo the text content
+        io.echo(str(content))
 
 
 def render_welcome_banner(

@@ -43,17 +43,9 @@ Output via TextualIO.echo/secho → RichLog widget
 
 ### ISSUES
 
-- ask question - it's not added to log, no answer returns, app becomes unresponsive looks like no http requests happen
-
 - can't copy text from textual components
   - config?
-- 
-- Input becomes unusable after asking a question that requires classification with user clarification
-  - no response occurs until app exit
-  - keystrokes only work 1/3 times
-  - very difficult to do anything, but kill the terminal
-  - no errors in debug.log
-  - problem with http + worker thread??
+
 - help table output is all white -- need ability to customize table display
 
 ### Current Architecture Flow

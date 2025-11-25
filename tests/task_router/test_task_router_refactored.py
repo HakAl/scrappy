@@ -231,11 +231,13 @@ class TestOutputHandler:
     """
 
     @pytest.mark.unit
-    def test_console_output_handler_prints_to_stdout(self, capsys):
-        """Test that ConsoleOutputHandler writes to stdout."""
+    def test_console_output_handler_prints_to_stdout(self):
+        """Test that ConsoleOutputHandler writes to provided IO."""
         from src.task_router.output_handler import ConsoleOutputHandler
+        from tests.helpers import MockIO
 
-        handler = ConsoleOutputHandler()
+        mock_io = MockIO()
+        handler = ConsoleOutputHandler(io=mock_io)
         handler.log_classification(
             task_type="RESEARCH",
             confidence=0.85,
@@ -243,37 +245,41 @@ class TestOutputHandler:
             reasoning="Test reasoning"
         )
 
-        captured = capsys.readouterr()
-        assert "RESEARCH" in captured.out
-        assert "0.85" in captured.out
-        assert "Test reasoning" in captured.out
+        output = mock_io.get_output()
+        assert "RESEARCH" in output
+        assert "0.85" in output
+        assert "Test reasoning" in output
 
     @pytest.mark.unit
-    def test_console_output_handler_logs_provider_selection(self, capsys):
+    def test_console_output_handler_logs_provider_selection(self):
         """Test that provider selection is logged."""
         from src.task_router.output_handler import ConsoleOutputHandler
+        from tests.helpers import MockIO
 
-        handler = ConsoleOutputHandler()
+        mock_io = MockIO()
+        handler = ConsoleOutputHandler(io=mock_io)
         handler.log_provider_selection(
             provider="cerebras",
             model="llama-3.3-70b",
             source="hint"
         )
 
-        captured = capsys.readouterr()
-        assert "cerebras" in captured.out
-        assert "llama-3.3-70b" in captured.out
+        output = mock_io.get_output()
+        assert "cerebras" in output
+        assert "llama-3.3-70b" in output
 
     @pytest.mark.unit
-    def test_console_output_handler_logs_execution_start(self, capsys):
+    def test_console_output_handler_logs_execution_start(self):
         """Test that execution start is logged."""
         from src.task_router.output_handler import ConsoleOutputHandler
+        from tests.helpers import MockIO
 
-        handler = ConsoleOutputHandler()
+        mock_io = MockIO()
+        handler = ConsoleOutputHandler(io=mock_io)
         handler.log_execution_start(strategy_name="DirectExecutor")
 
-        captured = capsys.readouterr()
-        assert "DirectExecutor" in captured.out
+        output = mock_io.get_output()
+        assert "DirectExecutor" in output
 
     @pytest.mark.unit
     def test_buffer_output_handler_captures_output(self):

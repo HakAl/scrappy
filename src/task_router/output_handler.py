@@ -349,17 +349,17 @@ class RichOutputHandler(OutputHandlerInterface):
     Displays task classification information in visually appealing
     tables with progress bars for complexity and styled output.
 
-    Uses injected IO protocol methods (table, panel, etc.).
+    Uses Rich Console for formatted output.
     """
 
-    def __init__(self, io: "CLIIOProtocol"):
+    def __init__(self, console: Console):
         """
-        Initialize output handler with injected IO.
+        Initialize output handler with Rich Console.
 
         Args:
-            io: IO protocol implementation
+            console: Rich Console for formatted output
         """
-        self._io = io
+        self._console = console
         self._classification_data: dict = {}
 
     def log_classification(

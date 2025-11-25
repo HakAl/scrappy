@@ -153,6 +153,15 @@ todos in: tests/agent_tools/test_output_formatter.py
 
 ---
 
+failing tests: tests/context/test_code_chunker.py
+
+test_chunk_multiple_chunks_with_overlap
+test_chunk_exact_fit_no_remainder
+
+
+---
+
+
 too big?
 src/agent/core.py
 src/agent_tools/tools/command_tool.py

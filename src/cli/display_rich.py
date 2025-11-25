@@ -267,7 +267,7 @@ def show_plan_tree(io: UnifiedIO, plan: Dict[str, Any]) -> None:
 
     # Use io.echo instead of accessing console directly
     # Tree rendering will be simpler without Rich formatting
-    io.echo(f"\n{title}:")
+    io.echo(f"\n{goal}:")
     for task in tasks:
         status = task.get('status', 'pending')
         description = task.get('description', 'Unknown task')
