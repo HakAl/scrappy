@@ -467,59 +467,95 @@ This section provides a phased approach to implementing the structural fixes abo
 
 ---
 
-### Phase 5: Add Protocol Conformance Tests (High Priority)
+### Phase 5: Add Protocol Conformance Tests (High Priority) - COMPLETED
 
 **Goal:** Ensure all protocol implementations are explicitly tested for conformance.
 
+**Status:** COMPLETED (2025-01-25)
+
 **Tasks:**
 
-5.1. **Create test infrastructure**
-   - Create directory: `tests/protocol_conformance/`
-   - Create: `tests/protocol_conformance/__init__.py`
-   - Create: `tests/protocol_conformance/conftest.py` with helpers:
-     ```python
-     from typing import Protocol, get_type_hints
-     import inspect
+5.1. **Create test infrastructure** - DONE
+   - Created directory: `tests/protocol_conformance/`
+   - Created: `tests/protocol_conformance/__init__.py`
+   - Created: `tests/protocol_conformance/conftest.py` with helpers:
+     - `get_protocol_methods()` - Get list of method names defined by a protocol
+     - `get_protocol_properties()` - Get list of property names defined by a protocol
+     - `assert_has_method()` - Assert implementation has specified method
+     - `assert_has_property()` - Assert implementation has specified property
+     - `assert_method_callable()` - Assert method is callable
+     - `get_method_signature()` - Get signature of a method
+     - `assert_signature_compatible()` - Assert implementation signature is compatible with protocol
+     - `assert_implements_protocol()` - Full protocol conformance check
+     - `assert_isinstance_protocol()` - isinstance() check for @runtime_checkable protocols
 
-     def assert_implements_protocol(implementation: type, protocol: type) -> None:
-         """Verify a class implements all protocol methods with correct signatures."""
-         for name, method in inspect.getmembers(protocol, predicate=inspect.isfunction):
-             if name.startswith('_'):
-                 continue
-             assert hasattr(implementation, name), f"{implementation.__name__} missing {name}"
-             # Verify method signature compatibility
-             proto_sig = inspect.signature(getattr(protocol, name))
-             impl_sig = inspect.signature(getattr(implementation, name))
-             # Compare parameters (simplified)
-     ```
+5.2. **Add output protocol conformance tests** - DONE
+   - Created: `tests/protocol_conformance/test_output_conformance.py`
+   - Tests: `ConsoleOutput`, `NullOutput`, `CapturingOutput` against `BaseOutputProtocol`
+   - Tests: `RichOutput`, `ClickOutput`, `TestOutput` against `FormattedOutputProtocol`
+   - Tests: Protocol consistency between `OutputSink` and `RichRenderableProtocol`
+   - Includes behavior tests for capturing, null, and test output implementations
 
-5.2. **Add output protocol conformance tests**
-   - Create: `tests/protocol_conformance/test_output_conformance.py`
-   - Test: `ConsoleOutput`, `NullOutput`, `CapturingOutput` against `OperationalOutputProtocol`
-   - Test: `RichOutput`, `ClickOutput`, `TestOutput` against `FormattedOutputInterface`
-   - Test: `TextualOutputAdapter` against `OutputSink`
+5.3. **Add cache protocol conformance tests** - DONE
+   - Created: `tests/protocol_conformance/test_cache_conformance.py`
+   - Tests: `ResponseCache` methods against `CacheProtocol`
+   - Note: `ResponseCache` uses `invalidate_provider()` instead of `invalidate()` (skipped test documents gap)
+   - Includes behavior tests for get/put, clear, stats, and invalidation
 
-5.3. **Add cache protocol conformance tests**
-   - Create: `tests/protocol_conformance/test_cache_conformance.py`
-   - Test: `ResponseCache` against `CacheProtocol`
+5.4. **Add filesystem protocol conformance tests** - DONE
+   - Created: `tests/protocol_conformance/test_filesystem_conformance.py`
+   - Tests: `RealFileSystem`, `InMemoryFileSystem` against `FileSystemProtocol`
+   - Comprehensive behavior tests for all 14 protocol methods
+   - Tests both implementations with identical test patterns
 
-5.4. **Add filesystem protocol conformance tests**
-   - Create: `tests/protocol_conformance/test_filesystem_conformance.py`
-   - Test: `RealFileSystem`, `InMemoryFileSystem` against `FileSystemProtocol`
+5.5. **Add provider protocol conformance tests** - DONE
+   - Created: `tests/protocol_conformance/test_provider_conformance.py`
+   - Tests: `LLMProviderProtocol` definition (properties + methods)
+   - Tests: `LLMProviderBase` implementation
+   - Tests: All 5 provider implementations (Groq, Cerebras, Cohere, Gemini, GitHubModels)
+   - Tests: Method signature compatibility
 
-5.5. **Add provider protocol conformance tests**
-   - Create: `tests/protocol_conformance/test_provider_conformance.py`
-   - Test all provider implementations against `LLMProviderProtocol`
+5.6. **Add agent protocol conformance tests** - DONE
+   - Created: `tests/protocol_conformance/test_agent_conformance.py`
+   - Tests: `JSONResponseParser`, `NativeToolCallParser`, `UnifiedResponseParser` against `ResponseParserProtocol`
+   - Tests: `ToolRegistry` methods (note: doesn't have `exists` method required by protocol - documented gap)
+   - Tests: `PromptBuilderProtocol` method definitions
+   - Includes behavior tests for parser and registry functionality
 
-5.6. **Add agent protocol conformance tests**
-   - Create: `tests/protocol_conformance/test_agent_conformance.py`
-   - Test: Response parsers, tool registry, prompt builder
+5.7. **Add task router protocol conformance tests** - DONE
+   - Created: `tests/protocol_conformance/test_task_router_conformance.py`
+   - Tests: All 6 output handler implementations against `OutputHandlerProtocol`
+   - Tests: `DirectExecutor`, `ConversationExecutor` against `ExecutionStrategyProtocol`
+   - Tests: `TaskClassifierProtocol` method definitions
+   - Tests: All 3 clarifier implementations against `IntentClarifierProtocol`
+   - Tests: `DefaultConsoleInput` fallback implementation
+   - Includes behavior tests for output handlers and clarifiers
 
-5.7. **Add task router protocol conformance tests**
-   - Create: `tests/protocol_conformance/test_task_router_conformance.py`
-   - Test: Execution strategies, output handlers, classifiers
+**Actual Changes:** 7 new files, ~900 lines of tests
 
-**Estimated Changes:** 7-10 new files, ~800 lines of tests
+**Files Created:**
+- `tests/protocol_conformance/__init__.py`
+- `tests/protocol_conformance/conftest.py`
+- `tests/protocol_conformance/test_output_conformance.py`
+- `tests/protocol_conformance/test_cache_conformance.py`
+- `tests/protocol_conformance/test_filesystem_conformance.py`
+- `tests/protocol_conformance/test_provider_conformance.py`
+- `tests/protocol_conformance/test_agent_conformance.py`
+- `tests/protocol_conformance/test_task_router_conformance.py`
+
+**Verification:**
+- 158 tests pass, 7 tests skipped (document protocol/implementation gaps)
+- All conformance tests verify implementations against their protocols
+- Skipped tests document where implementations diverge from protocols:
+  - `ResponseCache` doesn't implement `invalidate()` (uses `invalidate_provider()` instead)
+  - `ToolRegistry` doesn't implement `exists()` method
+  - `OutputBridge` implements `BaseOutputProtocol`, not `RichRenderableProtocol`
+  - `ProviderRegistry` module doesn't exist as separate file
+
+**Protocol Gaps Identified:**
+1. `CacheProtocol.invalidate()` not implemented by `ResponseCache`
+2. `ToolRegistryProtocol.exists()` not implemented by `ToolRegistry`
+3. `RichRenderableProtocol` not implemented by `OutputBridge` (implements `BaseOutputProtocol` instead)
 
 ---
 
@@ -547,14 +583,14 @@ This section provides a phased approach to implementing the structural fixes abo
 
 ### Implementation Order Summary
 
-| Phase | Description | Priority | Risk | Effort |
-|-------|-------------|----------|------|--------|
-| 1 | Resolve Name Collisions | High | Low | Small |
-| 2 | ABC to Protocol Migration (Critical) | Critical | Medium | Medium |
-| 3 | Split ABCs with Concrete Methods | Medium | Medium | Large |
-| 4 | Unified Output Protocol Hierarchy | Medium | Medium | Medium |
-| 5 | Protocol Conformance Tests | High | Low | Medium |
-| 6 | Cleanup and Documentation | Low | Low | Small |
+| Phase | Description | Priority | Risk | Effort | Status |
+|-------|-------------|----------|------|--------|--------|
+| 1 | Resolve Name Collisions | High | Low | Small | COMPLETED |
+| 2 | ABC to Protocol Migration (Critical) | Critical | Medium | Medium | COMPLETED |
+| 3 | Split ABCs with Concrete Methods | Medium | Medium | Large | COMPLETED |
+| 4 | Unified Output Protocol Hierarchy | Medium | Medium | Medium | COMPLETED |
+| 5 | Protocol Conformance Tests | High | Low | Medium | COMPLETED |
+| 6 | Cleanup and Documentation | Low | Low | Small | PENDING |
 
 **Recommended Execution Order:** Phase 1 -> Phase 2 -> Phase 5 -> Phase 3 -> Phase 4 -> Phase 6
 

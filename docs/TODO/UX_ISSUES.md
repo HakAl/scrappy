@@ -1,6 +1,61 @@
 # UX Issues
 
 Problem:
+/explore command fails. 
+ Error: CLICodebaseAnalysis.explore_codebase() got an unexpected keyword argument 'io'
+
+Solution:
+Investigate and repair
+
+---
+
+Problem:
+ansi artifacts in /cache command output.
+/cache:
+ [36m[1m
+ Cache Statistics:[0m
+ [36m--------------------------------------------------[0m
+ Total Entries: 0
+ Exact Cache Hits: 0
+ Intent Cache Hits: 0
+ Cache Misses: 0
+ Cache Saves: 0
+ Exact Hit Rate: [33m0.0%[0m
+ Intent Hit Rate: [33m0.0%[0m
+ Cache File: .scrappy\response_cache.json
+ Caching: [32mEnabled[0m
+
+Solution:
+find why / where this occurs and plan to fix.
+
+---
+
+Problem:
+/usage command output is 3 tables with different styles. 
+ ╭────────────────────────────── Usage Summary ───────────────────────────────╮
+ │ Total Tasks: 1                                                             │
+ │ Cache Hits: 0                                                              │
+ │ API Calls: 1                                                               │
+ │ Session Duration: 0:04:13.394599                                           │
+ ╰────────────────────────────────────────────────────────────────────────────╯
+                       By Provider
+ ┏━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━┓
+ ┃ Provider ┃ Requests ┃ Tokens ┃ Avg Tokens ┃ Latency ┃
+ ┡━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━┩
+ │ cerebras │ 1        │ 623    │ 623.0      │ 1016ms  │
+ └──────────┴──────────┴────────┴────────────┴─────────┘
+ ╭───────────────────────────── Cache Statistics ─────────────────────────────╮
+ │ Exact Hit Rate: 0.0%                                                       │
+ │ Intent Hit Rate: 0.0%                                                      │
+ │ Total Entries: 1                                                           │
+ ╰────────────────────────────────────────────────────────────────────────────╯
+
+Solution:
+Combine to one cohesive display.
+
+---
+
+Problem:
 You>  /explore
 Directory to explore [.]
 
