@@ -33,7 +33,8 @@ from .types import (
     ConversationState
 )
 from .audit import AuditLogger
-from .response_parser import ResponseParser, JSONResponseParser, ParseResult, UnifiedResponseParser
+from .response_parser import JSONResponseParser, ParseResult, UnifiedResponseParser
+from .protocols import ResponseParserProtocol
 
 # Import new components
 from .ui import AgentUI
@@ -154,7 +155,7 @@ class CodeAgent:
         self._audit_logger = audit_logger or self._create_default_audit_logger()
 
         # Response parser
-        self._response_parser: ResponseParser = response_parser or self._create_default_response_parser()
+        self._response_parser: ResponseParserProtocol = response_parser or self._create_default_response_parser()
 
         # Tool context
         # Note: Can't use self.ui yet as it's not created until after tool_context

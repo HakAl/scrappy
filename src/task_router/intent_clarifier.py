@@ -1,64 +1,18 @@
 """
-Intent clarification interfaces and implementations.
+Intent clarification implementations.
 
 This module provides injectable intent clarification to make the code testable.
-Following the dependency inversion principle, we define an interface (Protocol)
-that can be swapped with different implementations.
-
-DEPRECATION NOTICE:
-IntentClarifierInterface (ABC) is deprecated. Use IntentClarifierProtocol from
-protocols.py instead. The ABC will be removed in a future version.
+Following the dependency inversion principle, implementations conform to the
+IntentClarifierProtocol defined in protocols.py.
 """
-import warnings
-from abc import ABC, abstractmethod
 from dataclasses import replace
-from typing import Callable, Optional, Union
+from typing import Callable, Optional
 
 from .classifier import ClassifiedTask, TaskType
-from .protocols import DefaultConsoleInput, TaskRouterInputProtocol
+from .protocols import DefaultConsoleInput, IntentClarifierProtocol, TaskRouterInputProtocol
 
 
-class IntentClarifierInterface(ABC):
-    """
-    Interface for intent clarification.
-
-    DEPRECATED: Use IntentClarifierProtocol instead.
-
-    This ABC is maintained for backwards compatibility. New code should
-    implement the IntentClarifierProtocol from protocols.py instead of
-    inheriting from this class.
-
-    Implementations can provide interactive, automatic, or null clarification.
-    This makes the code testable and flexible.
-    """
-
-    def __init_subclass__(cls, **kwargs):
-        """Emit deprecation warning when subclassing."""
-        super().__init_subclass__(**kwargs)
-        # Only warn for external subclasses, not the ones in this module
-        if cls.__module__ != __name__:
-            warnings.warn(
-                f"{cls.__name__} inherits from IntentClarifierInterface which is "
-                "deprecated. Implement IntentClarifierProtocol instead.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-
-    @abstractmethod
-    def clarify(self, task: ClassifiedTask) -> ClassifiedTask:
-        """
-        Clarify user intent for an ambiguous task.
-
-        Args:
-            task: The classified task that may need clarification
-
-        Returns:
-            ClassifiedTask with potentially updated task_type and confidence
-        """
-        pass
-
-
-class InteractiveClarifier(IntentClarifierInterface):
+class InteractiveClarifier:
     """
     Interactive clarifier that prompts the user for input.
 
@@ -188,7 +142,7 @@ class _LegacyInputAdapter:
         self._output_fn(message)
 
 
-class AutoClarifier(IntentClarifierInterface):
+class AutoClarifier:
     """
     Automatic clarifier that applies a default action without prompting.
 
@@ -230,7 +184,7 @@ class AutoClarifier(IntentClarifierInterface):
         return task
 
 
-class NullClarifier(IntentClarifierInterface):
+class NullClarifier:
     """
     Null clarifier that never modifies tasks.
 

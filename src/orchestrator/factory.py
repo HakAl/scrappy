@@ -24,7 +24,10 @@ from .memory import WorkingMemory
 from .session import SessionManager
 from .task_executor import TaskExecutor
 from .provider_selector import ProviderSelector
-from .output import OutputInterface, ConsoleOutput
+from .output import OperationalOutputProtocol, ConsoleOutput
+
+# Backward compatibility alias
+OutputInterface = OperationalOutputProtocol
 from .delegation import DelegationManager
 from .retry_orchestrator import RetryOrchestrator
 from .prompt_augmenter import PromptAugmenter

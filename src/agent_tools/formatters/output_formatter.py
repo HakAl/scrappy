@@ -4,7 +4,6 @@ Output formatting for agent tool results.
 Provides injectable formatters to colorize and style output.
 """
 
-from abc import ABC, abstractmethod
 from typing import Protocol, Optional
 
 # Rich imports only for RichDirectoryFormatter

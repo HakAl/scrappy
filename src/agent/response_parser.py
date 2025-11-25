@@ -2,12 +2,13 @@
 Response parsing for LLM agent responses.
 
 Abstracts the parsing of LLM responses into structured actions,
-supporting both JSON text parsing and future native tool calling.
+supporting both JSON text parsing and native tool calling.
+
+All parsers implement the ResponseParserProtocol from protocols.py.
 """
 
 import json
 import re
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Dict, Any, Optional
 
@@ -23,24 +24,7 @@ class ParseResult:
     error: Optional[str] = None
 
 
-class ResponseParser(ABC):
-    """Abstract base class for parsing LLM responses into actions."""
-
-    @abstractmethod
-    def parse(self, response_text: str) -> ParseResult:
-        """
-        Parse an LLM response into a structured action.
-
-        Args:
-            response_text: Raw text response from the LLM
-
-        Returns:
-            ParseResult containing the parsed action details
-        """
-        pass
-
-
-class JSONResponseParser(ResponseParser):
+class JSONResponseParser:
     """
     Parser for JSON-formatted LLM responses.
 
@@ -223,7 +207,7 @@ class JSONResponseParser(ResponseParser):
         )
 
 
-class NativeToolCallParser(ResponseParser):
+class NativeToolCallParser:
     """
     Parser for native tool calling responses.
 
@@ -297,7 +281,7 @@ class NativeToolCallParser(ResponseParser):
         )
 
 
-class UnifiedResponseParser(ResponseParser):
+class UnifiedResponseParser:
     """
     Parser that auto-detects between JSON text and native tool calling.
 

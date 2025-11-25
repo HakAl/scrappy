@@ -25,11 +25,13 @@ if TYPE_CHECKING:
 
 
 class OrchestratorOutputAdapter:
-    """Adapter that bridges orchestrator OutputInterface to Textual OutputSink.
+    """Adapter that bridges orchestrator OperationalOutputProtocol to Textual OutputSink.
 
     This fixes the "split-brain" issue by routing ALL orchestrator output
     (including from delegate(), registration messages, etc.) through the
     Textual message queue.
+
+    Implements the OperationalOutputProtocol interface (info, warn, error, success).
     """
 
     def __init__(self, output_sink: OutputSink):

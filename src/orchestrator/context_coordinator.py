@@ -14,7 +14,10 @@ except ImportError:
     from context import CodebaseContext
     from context.protocols import CodebaseContextProtocol
 
-from .protocols import OutputInterface
+from .protocols import OperationalOutputProtocol
+
+# Backward compatibility alias
+OutputInterface = OperationalOutputProtocol
 from .output import ConsoleOutput
 
 

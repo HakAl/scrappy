@@ -6,7 +6,10 @@ Handles presentation logic for displaying provider configuration and selection s
 
 from typing import Optional
 
-from src.orchestrator.protocols import OutputInterface
+from src.orchestrator.protocols import OperationalOutputProtocol
+
+# Backward compatibility alias
+OutputInterface = OperationalOutputProtocol
 
 
 class ProviderStatusReporter:

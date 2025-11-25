@@ -26,8 +26,8 @@ from .metrics_collector import MetricsCollector, RouterMetrics
 from .output_handler import (
     ConsoleOutputHandler,
     NullOutputHandler,
-    OutputHandlerInterface,
 )
+from .protocols import OutputHandlerProtocol
 from .provider_resolver import ProviderResolver
 from .pure_functions import (
     build_classification_metadata,
@@ -42,10 +42,10 @@ from .strategies import (
     ConversationExecutor,
     DirectExecutor,
     ExecutionResult,
-    ExecutionStrategy,
     OrchestratorLike,
     ResearchExecutor,
 )
+from .protocols import ExecutionStrategyProtocol
 from .validator import InputValidator
 
 
@@ -67,13 +67,13 @@ class TaskRouter:
         auto_confirm_direct: bool = False,
         verbose: bool = True,
         intent_clarifier: Optional[IntentClarifierProtocol] = None,
-        output_handler: Optional[OutputHandlerInterface] = None,
+        output_handler: Optional[OutputHandlerProtocol] = None,
         input_handler: Optional[TaskRouterInputProtocol] = None,
         validator: Optional[InputValidator] = None,
         classifier: Optional[TaskClassifier] = None,
         metrics_collector: Optional[MetricsCollector] = None,
         provider_resolver: Optional[ProviderResolver] = None,
-        strategies: Optional[Dict[TaskType, ExecutionStrategy]] = None,
+        strategies: Optional[Dict[TaskType, ExecutionStrategyProtocol]] = None,
         clarification_config: Optional[ClarificationConfigProtocol] = None,
     ):
         """
@@ -117,7 +117,7 @@ class TaskRouter:
         self.provider_resolver = provider_resolver or ProviderResolver(orchestrator=orchestrator)
 
         # Inject strategies or use defaults
-        self.strategies: Dict[TaskType, ExecutionStrategy] = (
+        self.strategies: Dict[TaskType, ExecutionStrategyProtocol] = (
             strategies or self._create_default_strategies()
         )
 
@@ -146,9 +146,9 @@ class TaskRouter:
         """Get confidence threshold from config (for backwards compatibility)."""
         return self._clarification_config.confidence_threshold
 
-    def _create_default_strategies(self) -> Dict[TaskType, ExecutionStrategy]:
+    def _create_default_strategies(self) -> Dict[TaskType, ExecutionStrategyProtocol]:
         """Create default execution strategies (factory method for defaults only)."""
-        strategies: Dict[TaskType, ExecutionStrategy] = {}
+        strategies: Dict[TaskType, ExecutionStrategyProtocol] = {}
 
         # Direct command executor (no AI needed)
         strategies[TaskType.DIRECT_COMMAND] = DirectExecutor(
@@ -472,7 +472,7 @@ What is the user's PRIMARY intent? Respond with JSON only."""
 
         return result
 
-    def _get_strategy(self, task: ClassifiedTask) -> Optional[ExecutionStrategy]:
+    def _get_strategy(self, task: ClassifiedTask) -> Optional[ExecutionStrategyProtocol]:
         """Get the execution strategy for a task type."""
         strategy = self.strategies.get(task.task_type)
 
@@ -492,7 +492,7 @@ What is the user's PRIMARY intent? Respond with JSON only."""
     def _should_execute(
         self,
         task: ClassifiedTask,
-        strategy: ExecutionStrategy
+        strategy: ExecutionStrategyProtocol
     ) -> bool:
         """
         Check if execution should proceed.
@@ -569,7 +569,7 @@ What is the user's PRIMARY intent? Respond with JSON only."""
         """Classify task without executing (for debugging/preview)."""
         return self.classifier.classify(user_input)
 
-    def set_strategy(self, task_type: TaskType, strategy: ExecutionStrategy):
+    def set_strategy(self, task_type: TaskType, strategy: ExecutionStrategyProtocol):
         """Override a strategy for a task type."""
         self.strategies[task_type] = strategy
 

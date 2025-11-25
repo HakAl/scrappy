@@ -2,12 +2,12 @@
 Execution strategies for different task types.
 
 Each strategy is now in its own module for better organization and maintainability.
+All strategies implement ExecutionStrategyProtocol from protocols.py.
 """
 
 # Base classes and types
 from .base import (
     ExecutionResult,
-    ExecutionStrategy,
     ProviderAwareStrategy,
     ContextLike,
     ProviderRegistryLike,
@@ -24,7 +24,6 @@ from .agent_executor import AgentExecutor
 __all__ = [
     # Base classes
     'ExecutionResult',
-    'ExecutionStrategy',
     'ProviderAwareStrategy',
     'ContextLike',
     'ProviderRegistryLike',

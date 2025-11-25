@@ -38,10 +38,13 @@ from .protocols import (
     ProviderSelectorProtocol,
     ProviderRegistryProtocol,
     WorkingMemoryProtocol,
-    OutputInterface,
+    OperationalOutputProtocol,
     ContextProvider,
     OrchestratorAdapter,
 )
+
+# Backward compatibility alias (deprecated - use OperationalOutputProtocol)
+OutputInterface = OperationalOutputProtocol
 from .manager_protocols import (
     DelegationManagerProtocol,
     TaskExecutorProtocol,
@@ -71,7 +74,8 @@ __all__ = [
     'ProviderSelectorProtocol',
     'ProviderRegistryProtocol',
     'WorkingMemoryProtocol',
-    'OutputInterface',
+    'OperationalOutputProtocol',
+    'OutputInterface',  # Deprecated alias for backward compatibility
     'ContextProvider',
     'OrchestratorAdapter',
     'DelegationManagerProtocol',

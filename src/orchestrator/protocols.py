@@ -611,12 +611,15 @@ class WorkingMemoryProtocol(Protocol):
 
 
 @runtime_checkable
-class OutputInterface(Protocol):
+class OperationalOutputProtocol(Protocol):
     """
-    Protocol for output operations.
+    Protocol for operational output (logging/status messages).
 
     Abstracts output operations to enable testing without actual console
     output and support different output strategies.
+
+    For formatted CLI output with styling and user interaction,
+    see FormattedOutputInterface in src/cli/output.py.
 
     Implementations:
     - ConsoleOutput: Standard console output with print
@@ -624,7 +627,7 @@ class OutputInterface(Protocol):
     - CapturingOutput: Captures messages for testing/inspection
 
     Example:
-        def notify(output: OutputInterface, message: str, is_error: bool) -> None:
+        def notify(output: OperationalOutputProtocol, message: str, is_error: bool) -> None:
             if is_error:
                 output.error(message)
             else:
@@ -666,6 +669,10 @@ class OutputInterface(Protocol):
             message: Success message to output
         """
         ...
+
+
+# Backward compatibility alias (deprecated - use OperationalOutputProtocol)
+OutputInterface = OperationalOutputProtocol
 
 
 @runtime_checkable

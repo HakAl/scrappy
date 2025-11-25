@@ -6,10 +6,10 @@ import time
 from typing import Optional
 
 from ..classifier import ClassifiedTask, TaskType
-from .base import ExecutionResult, ExecutionStrategy, OrchestratorLike
+from .base import ExecutionResult, OrchestratorLike
 
 
-class ConversationExecutor(ExecutionStrategy):
+class ConversationExecutor:
     """
     Simple conversation handling without task execution.
 

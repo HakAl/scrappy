@@ -1,15 +1,18 @@
 """
 Output abstraction for the orchestrator.
 
-Provides implementations for output operations.
-The OutputInterface protocol is defined in protocols.py.
+Provides implementations for operational output (logging/status messages).
+The OperationalOutputProtocol protocol is defined in protocols.py.
 """
 
 import logging
 from typing import List, Tuple
 
 # Import protocol from centralized location
-from .protocols import OutputInterface
+from .protocols import OperationalOutputProtocol
+
+# Backward compatibility alias (deprecated - use OperationalOutputProtocol)
+OutputInterface = OperationalOutputProtocol
 
 logger = logging.getLogger(__name__)
 

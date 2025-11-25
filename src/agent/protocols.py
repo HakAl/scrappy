@@ -109,51 +109,29 @@ class ResponseParserProtocol(Protocol):
     Implementations:
     - UnifiedResponseParser: Auto-detects format (JSON/native tools)
     - JSONResponseParser: Parses JSON-formatted responses
-    - NativeToolParser: Parses native tool call responses
-    - MockParser: Returns preset parse results for testing
+    - NativeToolCallParser: Parses native tool call responses
 
     Example:
-        def parse_response(parser: ResponseParserProtocol, text: str) -> List[Dict[str, Any]]:
+        def parse_response(parser: ResponseParserProtocol, text: str) -> ParseResult:
             result = parser.parse(text)
-            return result.actions
+            return result
     """
 
     def parse(self, response_text: str) -> Any:
         """
-        Parse LLM response into structured format.
+        Parse LLM response into structured ParseResult.
 
         Args:
             response_text: Raw LLM response text
 
         Returns:
-            Parsed result object containing:
-            - thoughts: List of agent thoughts
-            - actions: List of actions to execute
-            - raw_text: Original response text
-        """
-        ...
-
-    def extract_actions(self, response_text: str) -> List[Dict[str, Any]]:
-        """
-        Extract actions from response.
-
-        Args:
-            response_text: Raw LLM response text
-
-        Returns:
-            List of action dictionaries
-        """
-        ...
-
-    def validate(self, response_text: str) -> bool:
-        """
-        Validate response format.
-
-        Args:
-            response_text: Raw LLM response text
-
-        Returns:
-            True if response is valid, False otherwise
+            ParseResult containing:
+            - thought: Agent's reasoning
+            - action: Tool to execute
+            - parameters: Tool parameters
+            - is_complete: Whether task is finished
+            - result_text: Final result if complete
+            - error: Error message if parsing failed
         """
         ...
 

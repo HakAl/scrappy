@@ -1,8 +1,9 @@
 """
 Base classes and protocols for execution strategies.
+
+All strategies implement the ExecutionStrategyProtocol from protocols.py.
 """
 
-from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 
@@ -169,27 +170,7 @@ class ToolRegistryLike(Protocol):
         ...
 
 
-class ExecutionStrategy(ABC):
-    """Abstract base for execution strategies."""
-
-    @abstractmethod
-    def execute(self, task: ClassifiedTask) -> ExecutionResult:
-        """Execute the classified task."""
-        pass
-
-    @abstractmethod
-    def can_handle(self, task: ClassifiedTask) -> bool:
-        """Check if this strategy can handle the task."""
-        pass
-
-    @property
-    @abstractmethod
-    def name(self) -> str:
-        """Strategy name for logging."""
-        pass
-
-
-class ProviderAwareStrategy(ExecutionStrategy):
+class ProviderAwareStrategy:
     """
     Base class for strategies that need provider resolution.
 

@@ -37,8 +37,13 @@ def configure_output(use_rich: bool = True) -> None:
     _config['use_rich'] = use_rich
 
 
-class OutputInterface(ABC):
-    """Abstract base class for output implementations."""
+class FormattedOutputInterface(ABC):
+    """Abstract base class for formatted output implementations.
+
+    Provides library-agnostic styled output with user interaction capabilities.
+    For operational logging (info/warn/error), see OperationalOutputProtocol
+    in src/orchestrator/protocols.py.
+    """
 
     @abstractmethod
     def print(
@@ -144,7 +149,7 @@ class OutputInterface(ABC):
             return ""
 
 
-class TestOutput(OutputInterface):
+class TestOutput(FormattedOutputInterface):
     """Test output implementation that captures output for testing.
 
     Usage in tests:
@@ -241,7 +246,7 @@ class TestOutput(OutputInterface):
         self._styled_calls = []
 
 
-class RichOutput(OutputInterface):
+class RichOutput(FormattedOutputInterface):
     """Output implementation using Rich library."""
 
     def __init__(self):
@@ -326,7 +331,7 @@ class RichOutput(OutputInterface):
             return default
 
 
-class ClickOutput(OutputInterface):
+class ClickOutput(FormattedOutputInterface):
     """Output implementation using Click library."""
 
     def __init__(self):
@@ -376,7 +381,7 @@ class ClickOutput(OutputInterface):
         return self._click.confirm(text, default=default)
 
 
-def create_output() -> OutputInterface:
+def create_output() -> FormattedOutputInterface:
     """Factory function to create output instance.
 
     Returns appropriate output implementation based on configuration
@@ -398,7 +403,7 @@ def create_output() -> OutputInterface:
         raise ImportError("Either rich or click library must be installed")
 
 
-class Output(OutputInterface):
+class Output(FormattedOutputInterface):
     """Main output class that delegates to configured implementation.
 
     This is the primary class consumers should use. Implementation library

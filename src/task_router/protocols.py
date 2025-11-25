@@ -636,3 +636,134 @@ class DefaultConsoleInput:
     def output(self, message: str) -> None:
         """Output message to console."""
         print(message)
+
+
+@runtime_checkable
+class OutputHandlerProtocol(Protocol):
+    """
+    Protocol for output handling in task router.
+
+    Abstracts output handling to enable testing without actual I/O
+    and support different output strategies (console, buffer, file, null).
+
+    Implementations:
+    - ConsoleOutputHandler: Outputs via CLIIOProtocol
+    - BufferOutputHandler: Captures output in memory for testing
+    - NullOutputHandler: No-op for silent mode
+    - FileOutputHandler: Writes to file
+    - CLIIOOutputHandler: Adapter wrapping CLIIOProtocol
+    - RichOutputHandler: Rich-enhanced formatted output
+
+    Example:
+        def log_task(handler: OutputHandlerProtocol, task_type: str, conf: float) -> None:
+            handler.log_classification(task_type, conf, 5, "determined by LLM")
+            handler.log_execution_start("ResearchStrategy")
+    """
+
+    def log_classification(
+        self,
+        task_type: str,
+        confidence: float,
+        complexity: int,
+        reasoning: str
+    ) -> None:
+        """
+        Log task classification information.
+
+        Args:
+            task_type: Classified task type
+            confidence: Classification confidence (0.0 to 1.0)
+            complexity: Task complexity (0-10)
+            reasoning: Classification reasoning
+        """
+        ...
+
+    def log_provider_selection(
+        self,
+        provider: str,
+        model: Optional[str],
+        source: str
+    ) -> None:
+        """
+        Log provider selection information.
+
+        Args:
+            provider: Selected provider name
+            model: Selected model name (optional)
+            source: Selection source (e.g., "classifier hint", "fallback")
+        """
+        ...
+
+    def log_execution_start(self, strategy_name: str) -> None:
+        """
+        Log execution start with strategy name.
+
+        Args:
+            strategy_name: Name of execution strategy being used
+        """
+        ...
+
+    def log_info(self, message: str) -> None:
+        """
+        Log general information message.
+
+        Args:
+            message: Information message to log
+        """
+        ...
+
+
+@runtime_checkable
+class ExecutionStrategyProtocol(Protocol):
+    """
+    Protocol for task execution strategies.
+
+    Defines the contract for executing classified tasks. Each strategy
+    handles a specific type of task (research, code generation, conversation, etc.).
+
+    Implementations:
+    - DirectExecutor: Simple pass-through execution
+    - ResearchExecutor: Codebase exploration and research
+    - AgentExecutor: Full agent-based code generation
+    - ConversationExecutor: Conversational responses
+
+    Example:
+        def execute_task(strategy: ExecutionStrategyProtocol, task: ClassifiedTask) -> ExecutionResult:
+            if strategy.can_handle(task):
+                return strategy.execute(task)
+            raise ValueError(f"Strategy {strategy.name} cannot handle task")
+    """
+
+    @property
+    def name(self) -> str:
+        """
+        Strategy name for logging and identification.
+
+        Returns:
+            Human-readable strategy name
+        """
+        ...
+
+    def execute(self, task: Any) -> Any:
+        """
+        Execute the classified task.
+
+        Args:
+            task: ClassifiedTask to execute
+
+        Returns:
+            ExecutionResult with output and metadata
+        """
+        ...
+
+    def can_handle(self, task: Any) -> bool:
+        """
+        Check if this strategy can handle the given task.
+
+        Args:
+            task: ClassifiedTask to check
+
+        Returns:
+            True if strategy can handle task, False otherwise
+        """
+        ...

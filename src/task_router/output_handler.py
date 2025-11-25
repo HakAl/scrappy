@@ -1,11 +1,12 @@
 """
-Output handling interfaces and implementations.
+Output handling implementations.
 
 This module provides injectable output handling to separate business logic
 from I/O concerns. This makes the code testable and allows easy switching
 between console, file, buffer, or silent output.
+
+All handlers implement the OutputHandlerProtocol from protocols.py.
 """
-from abc import ABC, abstractmethod
 from typing import List, Optional
 
 from rich.console import Console
@@ -18,7 +19,6 @@ def format_complexity_bar(complexity: int, width: int = 10) -> str:
     Format complexity as a visual progress bar with percentage.
 
     Args:
-        complexity: Complexity value from 0-10
         complexity: Complexity value from 0-10
         width: Width of the progress bar in characters
 
@@ -33,47 +33,7 @@ def format_complexity_bar(complexity: int, width: int = 10) -> str:
     return f"{bar} {percentage}%"
 
 
-class OutputHandlerInterface(ABC):
-    """
-    Interface for handling output/logging.
-
-    Implementations can write to console, file, buffer, or nowhere.
-    This makes business logic testable by capturing output.
-    """
-
-    @abstractmethod
-    def log_classification(
-        self,
-        task_type: str,
-        confidence: float,
-        complexity: int,
-        reasoning: str
-    ) -> None:
-        """Log task classification information."""
-        pass
-
-    @abstractmethod
-    def log_provider_selection(
-        self,
-        provider: str,
-        model: Optional[str],
-        source: str
-    ) -> None:
-        """Log provider selection information."""
-        pass
-
-    @abstractmethod
-    def log_execution_start(self, strategy_name: str) -> None:
-        """Log execution start with strategy name."""
-        pass
-
-    @abstractmethod
-    def log_info(self, message: str) -> None:
-        """Log general information message."""
-        pass
-
-
-class ConsoleOutputHandler(OutputHandlerInterface):
+class ConsoleOutputHandler:
     """
     Console output handler that uses CLIIOProtocol for output.
 
@@ -133,7 +93,7 @@ class ConsoleOutputHandler(OutputHandlerInterface):
         self._io.echo(f"  {message}")
 
 
-class BufferOutputHandler(OutputHandlerInterface):
+class BufferOutputHandler:
     """
     Buffer output handler that captures output in memory.
 
@@ -193,7 +153,7 @@ class BufferOutputHandler(OutputHandlerInterface):
         self._buffer.clear()
 
 
-class NullOutputHandler(OutputHandlerInterface):
+class NullOutputHandler:
     """
     Null output handler that produces no output.
 
@@ -232,7 +192,7 @@ class NullOutputHandler(OutputHandlerInterface):
         pass
 
 
-class FileOutputHandler(OutputHandlerInterface):
+class FileOutputHandler:
     """
     File output handler that writes to a file.
 
@@ -291,9 +251,9 @@ class FileOutputHandler(OutputHandlerInterface):
         self._write(f"  {message}")
 
 
-class CLIIOOutputHandler(OutputHandlerInterface):
+class CLIIOOutputHandler:
     """
-    Adapter that wraps CLIIOProtocol to implement OutputHandlerInterface.
+    Adapter that wraps CLIIOProtocol to implement OutputHandlerProtocol.
 
     This enables the task router to use the injected CLI IO system,
     ensuring output goes to the correct UI (Rich/Click/Textual) instead
@@ -342,7 +302,7 @@ class CLIIOOutputHandler(OutputHandlerInterface):
         self._io.echo(f"  {message}")
 
 
-class RichOutputHandler(OutputHandlerInterface):
+class RichOutputHandler:
     """
     Rich-enhanced output handler with formatted tables.
 

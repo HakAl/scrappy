@@ -6,13 +6,11 @@ Routes tasks to optimal execution strategies based on complexity and type.
 from .classifier import TaskType, TaskClassifier, ClassifiedTask
 from .config import ClarificationConfig
 from .intent_clarifier import (
-    IntentClarifierInterface,
     InteractiveClarifier,
     AutoClarifier,
     NullClarifier,
 )
 from .output_handler import (
-    OutputHandlerInterface,
     ConsoleOutputHandler,
     BufferOutputHandler,
     NullOutputHandler,
@@ -20,7 +18,6 @@ from .output_handler import (
 )
 from .router import TaskRouter
 from .strategies import (
-    ExecutionStrategy,
     ExecutionResult,
     DirectExecutor,
     ResearchExecutor,
@@ -34,6 +31,8 @@ from .protocols import (
     MetricsCollectorProtocol,
     TaskRouterInputProtocol,
     DefaultConsoleInput,
+    OutputHandlerProtocol,
+    ExecutionStrategyProtocol,
 )
 
 __all__ = [
@@ -46,18 +45,15 @@ __all__ = [
     # Router
     "TaskRouter",
     # Intent Clarification
-    "IntentClarifierInterface",
     "InteractiveClarifier",
     "AutoClarifier",
     "NullClarifier",
     # Output Handling
-    "OutputHandlerInterface",
     "ConsoleOutputHandler",
     "BufferOutputHandler",
     "NullOutputHandler",
     "CLIIOOutputHandler",
     # Strategies
-    "ExecutionStrategy",
     "ExecutionResult",
     "DirectExecutor",
     "ResearchExecutor",
@@ -72,4 +68,6 @@ __all__ = [
     "MetricsCollectorProtocol",
     "TaskRouterInputProtocol",
     "DefaultConsoleInput",
+    "OutputHandlerProtocol",
+    "ExecutionStrategyProtocol",
 ]

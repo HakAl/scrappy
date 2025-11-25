@@ -8,10 +8,10 @@ from pathlib import Path
 from typing import Optional
 
 from ..classifier import ClassifiedTask, TaskClassifier, TaskType
-from .base import ExecutionResult, ExecutionStrategy
+from .base import ExecutionResult
 
 
-class DirectExecutor(ExecutionStrategy):
+class DirectExecutor:
     """
     Direct command execution without agent loop.
 
