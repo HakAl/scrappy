@@ -4,6 +4,7 @@ Routes tasks to optimal execution strategies based on complexity and type.
 """
 
 from .classifier import TaskType, TaskClassifier, ClassifiedTask
+from .config import ClarificationConfig
 from .intent_clarifier import (
     IntentClarifierInterface,
     InteractiveClarifier,
@@ -40,6 +41,8 @@ __all__ = [
     "TaskType",
     "TaskClassifier",
     "ClassifiedTask",
+    # Configuration
+    "ClarificationConfig",
     # Router
     "TaskRouter",
     # Intent Clarification

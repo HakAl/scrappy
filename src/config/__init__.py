@@ -1,7 +1,7 @@
 """
 Configuration module for LLM delegation system.
 
-Exports all delegation-related configuration constants.
+Exports all delegation-related configuration constants and config loaders.
 """
 
 from .delegation import (
@@ -24,6 +24,14 @@ from .delegation import (
     # Timeout Configuration
     DEFAULT_REQUEST_TIMEOUT_SECONDS,
 )
+from .loaders import (
+    FileConfigLoader,
+    ChainedConfigLoader,
+)
+from .protocols import (
+    ConfigLoaderProtocol,
+    ConfigLoadError,
+)
 
 __all__ = [
     # Request Configuration
@@ -44,4 +52,10 @@ __all__ = [
 
     # Timeout Configuration
     'DEFAULT_REQUEST_TIMEOUT_SECONDS',
+
+    # Config Loading
+    'ConfigLoaderProtocol',
+    'ConfigLoadError',
+    'FileConfigLoader',
+    'ChainedConfigLoader',
 ]

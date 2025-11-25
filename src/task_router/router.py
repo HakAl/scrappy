@@ -4,6 +4,7 @@ Central task router that dispatches to appropriate execution strategies.
 
 import json
 import time
+import warnings
 from dataclasses import replace
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
@@ -11,15 +12,15 @@ from typing import Callable, Dict, List, Optional, Tuple
 from .classifier import ClassifiedTask, TaskClassifier, TaskType
 from .intent_clarifier import (
     AutoClarifier,
-    IntentClarifierInterface,
     InteractiveClarifier,
 )
+from .config import ClarificationConfig
 from .protocols import (
     ClarificationConfigProtocol,
     DefaultConsoleInput,
+    IntentClarifierProtocol,
     TaskRouterInputProtocol,
 )
-from src.config.schema import ClarificationConfig
 from .json_extractor import JSONExtractor
 from .metrics_collector import MetricsCollector, RouterMetrics
 from .output_handler import (
@@ -65,7 +66,7 @@ class TaskRouter:
         project_root: Optional[Path] = None,
         auto_confirm_direct: bool = False,
         verbose: bool = True,
-        intent_clarifier: Optional[IntentClarifierInterface] = None,
+        intent_clarifier: Optional[IntentClarifierProtocol] = None,
         output_handler: Optional[OutputHandlerInterface] = None,
         input_handler: Optional[TaskRouterInputProtocol] = None,
         validator: Optional[InputValidator] = None,
@@ -125,7 +126,15 @@ class TaskRouter:
         self._post_hooks: List[Callable[[ExecutionResult], ExecutionResult]] = []
 
         # Clarification configuration (injectable for testing)
-        self._clarification_config = clarification_config or ClarificationConfig()
+        if clarification_config is None:
+            warnings.warn(
+                "Default confidence_threshold changed from 0.65 to 0.7 in v2.0. "
+                "Pass explicit ClarificationConfig to suppress this warning.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            clarification_config = ClarificationConfig()
+        self._clarification_config = clarification_config
 
         # Intent clarification settings
         self.clarify_on_low_confidence = True

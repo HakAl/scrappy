@@ -5,6 +5,8 @@ Verifies that all dependencies can be passed explicitly through the constructor,
 enabling better testability and flexibility.
 """
 
+import warnings
+
 import pytest
 from unittest.mock import Mock, MagicMock
 from pathlib import Path
@@ -17,6 +19,7 @@ from src.task_router import (
     NullOutputHandler,
     NullClarifier,
     InputValidator,
+    ClarificationConfig,
 )
 from src.task_router.metrics_collector import MetricsCollector, RouterMetrics
 from src.task_router.provider_resolver import ProviderResolver
@@ -218,4 +221,63 @@ class TestAllDependenciesInjectedTogether:
         # And they should all have been used
         custom_classifier.classify.assert_called_once()
         custom_metrics.update.assert_called_once()
+
+
+class TestClarificationConfigDeprecationWarning:
+    """Tests for deprecation warning when not passing explicit config."""
+
+    def test_emits_warning_when_config_not_provided(self):
+        """TaskRouter should emit deprecation warning when clarification_config is None."""
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+
+            router = TaskRouter(
+                output_handler=NullOutputHandler(),
+                intent_clarifier=NullClarifier(),
+                # clarification_config NOT provided
+            )
+
+            # Check warning was issued
+            deprecation_warnings = [
+                warning
+                for warning in w
+                if issubclass(warning.category, DeprecationWarning)
+                and "confidence_threshold" in str(warning.message)
+            ]
+            assert len(deprecation_warnings) == 1
+            assert "0.65" in str(deprecation_warnings[0].message)
+            assert "0.7" in str(deprecation_warnings[0].message)
+
+    def test_no_warning_when_config_provided(self):
+        """TaskRouter should NOT emit warning when clarification_config is provided."""
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+
+            router = TaskRouter(
+                output_handler=NullOutputHandler(),
+                intent_clarifier=NullClarifier(),
+                clarification_config=ClarificationConfig(),  # Explicitly provided
+            )
+
+            # Check NO warning was issued for confidence_threshold
+            deprecation_warnings = [
+                warning
+                for warning in w
+                if issubclass(warning.category, DeprecationWarning)
+                and "confidence_threshold" in str(warning.message)
+            ]
+            assert len(deprecation_warnings) == 0
+
+    def test_uses_default_config_when_not_provided(self):
+        """TaskRouter should use default ClarificationConfig when not provided."""
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+
+            router = TaskRouter(
+                output_handler=NullOutputHandler(),
+                intent_clarifier=NullClarifier(),
+            )
+
+            # Default config should be used
+            assert router.confidence_threshold == 0.7
 

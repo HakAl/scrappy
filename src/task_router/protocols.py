@@ -126,56 +126,22 @@ class IntentClarifierProtocol(Protocol):
     Implementations:
     - InteractiveClarifier: Interactive user prompts for clarification
     - AutoClarifier: Automatic clarification based on heuristics
-    - NoOpClarifier: No clarification (uses original input)
+    - NullClarifier: No clarification (returns task unchanged)
 
     Example:
         def clarify_intent(clarifier: IntentClarifierProtocol, task: Any) -> Any:
-            if clarifier.needs_clarification(task):
-                return clarifier.clarify(task)
-            return task
+            return clarifier.clarify(task)
     """
 
-    def needs_clarification(self, classified_task: Any) -> bool:
-        """
-        Check if task needs clarification.
-
-        Args:
-            classified_task: Classified task object
-
-        Returns:
-            True if clarification needed, False otherwise
-        """
-        ...
-
-    def clarify(
-        self,
-        classified_task: Any,
-        options: Optional[List[str]] = None,
-    ) -> Any:
+    def clarify(self, classified_task: Any) -> Any:
         """
         Clarify task intent.
 
         Args:
             classified_task: Classified task to clarify
-            options: Optional list of clarification options
 
         Returns:
-            Clarified task object
-        """
-        ...
-
-    def get_clarification_options(
-        self,
-        classified_task: Any,
-    ) -> List[Dict[str, str]]:
-        """
-        Get clarification options for task.
-
-        Args:
-            classified_task: Classified task
-
-        Returns:
-            List of option dictionaries with 'value' and 'description'
+            Clarified task object (may be the same or modified)
         """
         ...
 

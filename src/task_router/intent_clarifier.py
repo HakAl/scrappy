@@ -4,7 +4,12 @@ Intent clarification interfaces and implementations.
 This module provides injectable intent clarification to make the code testable.
 Following the dependency inversion principle, we define an interface (Protocol)
 that can be swapped with different implementations.
+
+DEPRECATION NOTICE:
+IntentClarifierInterface (ABC) is deprecated. Use IntentClarifierProtocol from
+protocols.py instead. The ABC will be removed in a future version.
 """
+import warnings
 from abc import ABC, abstractmethod
 from dataclasses import replace
 from typing import Callable, Optional, Union
@@ -17,9 +22,27 @@ class IntentClarifierInterface(ABC):
     """
     Interface for intent clarification.
 
+    DEPRECATED: Use IntentClarifierProtocol instead.
+
+    This ABC is maintained for backwards compatibility. New code should
+    implement the IntentClarifierProtocol from protocols.py instead of
+    inheriting from this class.
+
     Implementations can provide interactive, automatic, or null clarification.
     This makes the code testable and flexible.
     """
+
+    def __init_subclass__(cls, **kwargs):
+        """Emit deprecation warning when subclassing."""
+        super().__init_subclass__(**kwargs)
+        # Only warn for external subclasses, not the ones in this module
+        if cls.__module__ != __name__:
+            warnings.warn(
+                f"{cls.__name__} inherits from IntentClarifierInterface which is "
+                "deprecated. Implement IntentClarifierProtocol instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
 
     @abstractmethod
     def clarify(self, task: ClassifiedTask) -> ClassifiedTask:

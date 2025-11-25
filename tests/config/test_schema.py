@@ -6,9 +6,11 @@ These tests verify:
 - Validation rejects invalid values
 - Immutability is enforced (frozen dataclass)
 """
+import warnings
+
 import pytest
 
-from src.config.schema import ClarificationConfig
+from src.task_router.config import ClarificationConfig
 
 
 class TestClarificationConfig:
@@ -109,3 +111,65 @@ class TestClarificationConfig:
         assert hasattr(config, 'high_confidence_bypass')
         # Check it's runtime checkable
         assert isinstance(config, ClarificationConfigProtocol)
+
+    @pytest.mark.unit
+    def test_from_dict_uses_defaults(self):
+        """from_dict should use default values when keys are missing."""
+        config = ClarificationConfig.from_dict({})
+        assert config.confidence_threshold == 0.7
+        assert config.high_confidence_bypass == 0.9
+
+    @pytest.mark.unit
+    def test_from_dict_overrides_defaults(self):
+        """from_dict should override defaults with provided values."""
+        config = ClarificationConfig.from_dict({
+            "confidence_threshold": 0.6,
+            "high_confidence_bypass": 0.85,
+        })
+        assert config.confidence_threshold == 0.6
+        assert config.high_confidence_bypass == 0.85
+
+    @pytest.mark.unit
+    def test_from_dict_partial_override(self):
+        """from_dict should allow partial override of defaults."""
+        config = ClarificationConfig.from_dict({
+            "confidence_threshold": 0.5,
+        })
+        assert config.confidence_threshold == 0.5
+        assert config.high_confidence_bypass == 0.9  # default
+
+    @pytest.mark.unit
+    def test_from_dict_validates_values(self):
+        """from_dict should validate values."""
+        with pytest.raises(ValueError):
+            ClarificationConfig.from_dict({
+                "confidence_threshold": 1.5,  # invalid
+            })
+
+
+class TestDeprecatedImport:
+    """Tests for deprecated import from src.config.schema."""
+
+    @pytest.mark.unit
+    def test_deprecated_import_emits_warning(self):
+        """Importing from src.config.schema should emit deprecation warning."""
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            # Import from deprecated location
+            from src.config.schema import ClarificationConfig as DeprecatedConfig
+            # Check warning was issued
+            assert len(w) == 1
+            assert issubclass(w[0].category, DeprecationWarning)
+            assert "deprecated" in str(w[0].message).lower()
+            assert "src.task_router.config" in str(w[0].message)
+
+    @pytest.mark.unit
+    def test_deprecated_import_returns_same_class(self):
+        """Deprecated import should return the same class."""
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            from src.config.schema import ClarificationConfig as DeprecatedConfig
+        from src.task_router.config import ClarificationConfig
+
+        # Should be the exact same class
+        assert DeprecatedConfig is ClarificationConfig
