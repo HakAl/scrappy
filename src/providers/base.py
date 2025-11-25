@@ -3,11 +3,15 @@ Base classes for LLM providers.
 
 This module defines the abstract interface that all LLM providers must implement,
 making it easy to add new providers (OpenRouter, HuggingFace, etc.) in the future.
+
+Architecture:
+- LLMProviderProtocol: Defines the contract (what providers MUST implement)
+- LLMProviderBase: Optional base class with shared utilities (providers MAY extend)
+- LLMProvider: Legacy alias for backward compatibility (use LLMProviderBase instead)
 """
 
-from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Protocol, runtime_checkable
 from datetime import datetime
 from enum import Enum
 import asyncio
@@ -164,36 +168,36 @@ class ProviderLimits:
     remaining_tokens: Optional[int] = None
 
 
-class LLMProvider(ABC):
+@runtime_checkable
+class LLMProviderProtocol(Protocol):
     """
-    Abstract base class for LLM providers.
+    Protocol defining the contract for LLM providers.
+
+    This is the minimal interface that ALL providers MUST implement.
+    Use this for type hints and dependency injection.
 
     To add a new provider:
     1. Create a new file (e.g., openrouter_provider.py)
-    2. Inherit from LLMProvider
-    3. Implement all abstract methods
+    2. Implement all protocol methods
+    3. Optionally extend LLMProviderBase for shared utilities
     4. Register in ProviderRegistry
     """
 
     @property
-    @abstractmethod
     def name(self) -> str:
         """Unique identifier for this provider."""
-        pass
+        ...
 
     @property
-    @abstractmethod
     def available_models(self) -> list[str]:
         """List of model IDs available from this provider."""
-        pass
+        ...
 
     @property
-    @abstractmethod
     def default_model(self) -> str:
         """Default model to use if none specified."""
-        pass
+        ...
 
-    @abstractmethod
     def chat(
         self,
         messages: list[dict[str, str]],
@@ -216,12 +220,59 @@ class LLMProvider(ABC):
         Returns:
             LLMResponse with standardized format
         """
-        pass
+        ...
 
-    @abstractmethod
     def get_limits(self) -> ProviderLimits:
         """Get current rate limit information."""
-        pass
+        ...
+
+
+class LLMProviderBase:
+    """
+    Optional base class for LLM providers with shared utilities.
+
+    Provides default implementations for common functionality.
+    Providers MAY extend this class to get these utilities for free,
+    but they don't have to - they only need to satisfy LLMProviderProtocol.
+
+    Includes:
+    - Async chat wrapper (runs sync in executor)
+    - Availability check
+    - Cost estimation (returns 0.0 by default)
+    - Tool calling stub (raises NotImplementedError)
+    - Model info lookup with auto-detection
+    - Instruction-tuned model filtering
+    """
+
+    @property
+    def name(self) -> str:
+        """Unique identifier for this provider. MUST be overridden."""
+        raise NotImplementedError("Subclasses must implement 'name' property")
+
+    @property
+    def available_models(self) -> list[str]:
+        """List of model IDs available from this provider. MUST be overridden."""
+        raise NotImplementedError("Subclasses must implement 'available_models' property")
+
+    @property
+    def default_model(self) -> str:
+        """Default model to use if none specified. MUST be overridden."""
+        raise NotImplementedError("Subclasses must implement 'default_model' property")
+
+    def chat(
+        self,
+        messages: list[dict[str, str]],
+        model: Optional[str] = None,
+        max_tokens: int = 1000,
+        temperature: float = 0.7,
+        **kwargs
+    ) -> LLMResponse:
+        """Send a chat completion request. MUST be overridden."""
+        raise NotImplementedError("Subclasses must implement 'chat' method")
+
+    def get_limits(self) -> ProviderLimits:
+        """Get current rate limit information. MUST be overridden."""
+        raise NotImplementedError("Subclasses must implement 'get_limits' method")
 
     async def chat_async(
         self,
@@ -348,6 +399,10 @@ class LLMProvider(ABC):
         ]
 
 
+# Backward compatibility alias
+LLMProvider = LLMProviderBase
+
+
 class ProviderRegistry:
     """
     Central registry for all LLM providers.
@@ -365,13 +420,13 @@ class ProviderRegistry:
     """
 
     def __init__(self):
-        self._providers: dict[str, LLMProvider] = {}
+        self._providers: dict[str, LLMProviderProtocol] = {}
 
-    def register(self, provider: LLMProvider) -> None:
+    def register(self, provider: LLMProviderProtocol) -> None:
         """Register a new provider."""
         self._providers[provider.name] = provider
 
-    def get(self, name: str) -> LLMProvider:
+    def get(self, name: str) -> LLMProviderProtocol:
         """Get a provider by name."""
         if name not in self._providers:
             raise KeyError(f"Provider '{name}' not registered. Available: {list(self._providers.keys())}")

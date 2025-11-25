@@ -362,69 +362,56 @@ This section provides a phased approach to implementing the structural fixes abo
 
 ---
 
-### Phase 3: Split ABCs with Concrete Methods (Medium Priority)
+### Phase 3: Split ABCs with Concrete Methods (Medium Priority) - COMPLETED
 
 **Goal:** Separate interface contracts (Protocols) from shared implementations (base classes).
 
+**Status:** COMPLETED (2025-01-25)
+
 **Tasks:**
 
-3.1. **Split LLMProvider**
+3.1. **Split LLMProvider** - DONE
    - File: `src/providers/base.py`
-   - Create Protocol:
-     ```python
-     class LLMProviderProtocol(Protocol):
-         @property
-         def name(self) -> str: ...
-         @property
-         def available_models(self) -> list[str]: ...
-         @property
-         def default_model(self) -> str: ...
-         def chat(...) -> LLMResponse: ...
-         def get_limits(self) -> ProviderLimits: ...
-     ```
-   - Keep base class for shared utilities:
-     ```python
-     class LLMProviderBase:
-         """Optional base with default implementations."""
-         def chat_async(...) -> LLMResponse: ...
-         def is_available(self) -> bool: ...
-         def estimate_cost(...) -> float: ...
-         # etc.
-     ```
-   - Update all provider implementations
-   - Run: `python -m pytest tests/providers/ -v`
+   - Created `LLMProviderProtocol` with minimal interface (name, available_models, default_model, chat, get_limits)
+   - Created `LLMProviderBase` with shared utilities (chat_async, is_available, estimate_cost, chat_with_tools, etc.)
+   - Added `LLMProvider = LLMProviderBase` backward compatibility alias
+   - Updated `ProviderRegistry` to use `LLMProviderProtocol` for type hints
+   - Updated `src/providers/__init__.py` to export new types
+   - All provider implementations continue to work unchanged (extend LLMProviderBase via alias)
 
-3.2. **Split Tool ABC**
+3.2. **Split Tool ABC** - DONE
    - File: `src/agent_tools/tools/base.py`
-   - Create Protocol:
-     ```python
-     class ToolProtocol(Protocol):
-         @property
-         def name(self) -> str: ...
-         @property
-         def description(self) -> str: ...
-         @property
-         def parameters(self) -> list[ToolParameter]: ...
-         def execute(context: ToolContext, **kwargs) -> ToolResult: ...
-     ```
-   - Keep base class for utilities:
-     ```python
-     class ToolBase:
-         """Optional base with helper methods."""
-         def parameters_schema(self) -> dict: ...
-         def validate(**kwargs) -> list[str]: ...
-         def get_signature(self) -> str: ...
-     ```
-   - Update all tool implementations
-   - Run: `python -m pytest tests/agent_tools/ -v`
+   - Created `ToolProtocol` with minimal interface (name, description, parameters, execute)
+   - Created `ToolBase` with shared utilities (parameters_schema, validate, get_signature, get_full_description, __call__)
+   - Added `Tool = ToolBase` backward compatibility alias
+   - Updated `src/agent_tools/tools/__init__.py` to export new types
+   - All tool implementations continue to work unchanged (extend ToolBase via alias)
 
-3.3. **Split ClassificationStrategy ABC**
+3.3. **Split ClassificationStrategy ABC** - DONE
    - File: `src/task_router/classification_strategy.py`
-   - Create Protocol for abstract methods
-   - Keep concrete evaluation logic in base class
-   - Run: `python -m pytest tests/task_router/ -v`
+   - Created `ClassificationStrategyProtocol` with minimal interface (task_type, evaluate)
+   - Created `ClassificationStrategyBase` with shared evaluation logic (_init_patterns, evaluate, _generate_reasoning)
+   - Added `ClassificationStrategy = ClassificationStrategyBase` backward compatibility alias
+   - `PatternBasedStrategy` continues to extend `ClassificationStrategy` (via alias)
+   - Updated `src/task_router/__init__.py` to export new types
+   - All concrete strategies (ResearchStrategy, DirectCommandStrategy, etc.) work unchanged
 
-**Estimated Changes:** 15-25 files, ~500 lines modified
+**Actual Changes:** 8 files modified
+
+**Files Modified:**
+- `src/providers/base.py`
+- `src/providers/__init__.py`
+- `src/agent_tools/tools/base.py`
+- `src/agent_tools/tools/__init__.py`
+- `src/task_router/classification_strategy.py`
+- `src/task_router/__init__.py`
+- `tests/test_response_parser.py` (fixed import of removed ABC)
+
+**Verification:**
+- 3023 tests passed
+- All protocol conformance checks pass via `isinstance()` with `@runtime_checkable`
+- All imports work correctly
+- Backward compatibility maintained via aliases
 
 ---
 

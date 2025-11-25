@@ -3,12 +3,16 @@ Base tool abstraction for the code agent.
 
 Provides a clean interface for creating tools with automatic
 parameter validation and description generation.
+
+Architecture:
+- ToolProtocol: Defines the contract (what tools MUST implement)
+- ToolBase: Optional base class with shared utilities (tools MAY extend)
+- Tool: Legacy alias for backward compatibility (use ToolBase instead)
 """
 
-from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, Protocol
+from typing import TYPE_CHECKING, Optional, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from ...agent_config import AgentConfig
@@ -98,11 +102,15 @@ class ToolResult:
     metadata: dict = field(default_factory=dict)
 
 
-class Tool(ABC):
+@runtime_checkable
+class ToolProtocol(Protocol):
     """
-    Abstract base class for all agent tools.
+    Protocol defining the contract for agent tools.
 
-    Subclasses must implement:
+    This is the minimal interface that ALL tools MUST implement.
+    Use this for type hints and dependency injection.
+
+    Tools implementing this protocol must provide:
     - name: Tool identifier
     - description: Human-readable description
     - parameters: List of ToolParameter definitions
@@ -110,22 +118,68 @@ class Tool(ABC):
     """
 
     @property
-    @abstractmethod
     def name(self) -> str:
         """Unique identifier for the tool."""
-        pass
+        ...
 
     @property
-    @abstractmethod
     def description(self) -> str:
         """Human-readable description of what the tool does."""
-        pass
+        ...
 
     @property
-    @abstractmethod
     def parameters(self) -> list[ToolParameter]:
         """List of parameters this tool accepts."""
-        pass
+        ...
+
+    def execute(self, context: ToolContext, **kwargs) -> ToolResult:
+        """
+        Execute the tool with given parameters.
+
+        Args:
+            context: ToolContext with shared resources
+            **kwargs: Tool-specific parameters
+
+        Returns:
+            ToolResult with success status and output
+        """
+        ...
+
+
+class ToolBase:
+    """
+    Optional base class for agent tools with shared utilities.
+
+    Provides default implementations for common functionality.
+    Tools MAY extend this class to get these utilities for free,
+    but they don't have to - they only need to satisfy ToolProtocol.
+
+    Includes:
+    - Parameter schema generation (OpenAI-compatible JSON)
+    - Parameter validation
+    - Signature generation
+    - Description formatting
+    - __call__ convenience method
+    """
+
+    @property
+    def name(self) -> str:
+        """Unique identifier for the tool. MUST be overridden."""
+        raise NotImplementedError("Subclasses must implement 'name' property")
+
+    @property
+    def description(self) -> str:
+        """Human-readable description of what the tool does. MUST be overridden."""
+        raise NotImplementedError("Subclasses must implement 'description' property")
+
+    @property
+    def parameters(self) -> list[ToolParameter]:
+        """List of parameters this tool accepts. MUST be overridden."""
+        raise NotImplementedError("Subclasses must implement 'parameters' property")
+
+    def execute(self, context: ToolContext, **kwargs) -> ToolResult:
+        """Execute the tool with given parameters. MUST be overridden."""
+        raise NotImplementedError("Subclasses must implement 'execute' method")
 
     @property
     def parameters_schema(self) -> dict:
@@ -165,20 +219,6 @@ class Tool(ABC):
             "properties": properties,
             "required": required
         }
-
-    @abstractmethod
-    def execute(self, context: ToolContext, **kwargs) -> ToolResult:
-        """
-        Execute the tool with given parameters.
-
-        Args:
-            context: ToolContext with shared resources
-            **kwargs: Tool-specific parameters
-
-        Returns:
-            ToolResult with success status and output
-        """
-        pass
 
     def validate(self, **kwargs) -> tuple[bool, Optional[str]]:
         """
@@ -243,3 +283,7 @@ class Tool(ABC):
             return result.output
         else:
             return f"Error: {result.error or result.output}"
+
+
+# Backward compatibility alias
+Tool = ToolBase

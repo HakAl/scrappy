@@ -3,13 +3,18 @@ Classification strategy interface and base classes.
 
 Defines the strategy pattern for task classification, allowing different
 classification approaches to be encapsulated and easily extended.
+
+Architecture:
+- ClassificationStrategyProtocol: Defines the contract (what strategies MUST implement)
+- ClassificationStrategyBase: Base class with shared evaluation logic
+- PatternBasedStrategy: Convenience base for pattern-matching strategies
+- ClassificationStrategy: Legacy alias for backward compatibility
 """
 
 import re
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Protocol, runtime_checkable
 
 
 class TaskType(Enum):
@@ -30,13 +35,44 @@ class StrategyResult:
     extracted_command: Optional[str] = None
 
 
-class ClassificationStrategy(ABC):
+@runtime_checkable
+class ClassificationStrategyProtocol(Protocol):
     """
-    Base class for classification strategies.
+    Protocol defining the contract for classification strategies.
+
+    This is the minimal interface that ALL strategies MUST implement.
+    Use this for type hints and dependency injection.
+    """
+
+    def task_type(self) -> TaskType:
+        """Return the task type this strategy identifies."""
+        ...
+
+    def evaluate(self, user_input: str) -> StrategyResult:
+        """
+        Evaluate input against this strategy.
+
+        Args:
+            user_input: User input to classify
+
+        Returns:
+            StrategyResult with score and metadata
+        """
+        ...
+
+
+class ClassificationStrategyBase:
+    """
+    Base class for classification strategies with shared evaluation logic.
 
     Each strategy encapsulates the logic for identifying one task type.
     Strategies evaluate input and return a score indicating how well
     the input matches their task type.
+
+    Includes:
+    - Pattern storage and initialization
+    - Default pattern-based evaluation logic
+    - Reasoning generation
     """
 
     def __init__(self):
@@ -44,15 +80,13 @@ class ClassificationStrategy(ABC):
         self.patterns: List[Tuple[str, float, str]] = []
         self._init_patterns()
 
-    @abstractmethod
     def _init_patterns(self) -> None:
-        """Initialize pattern matchers for this strategy."""
+        """Initialize pattern matchers for this strategy. Override in subclasses."""
         pass
 
-    @abstractmethod
     def task_type(self) -> TaskType:
-        """Return the task type this strategy identifies."""
-        pass
+        """Return the task type this strategy identifies. MUST be overridden."""
+        raise NotImplementedError("Subclasses must implement 'task_type' method")
 
     def evaluate(self, user_input: str) -> StrategyResult:
         """
@@ -102,6 +136,10 @@ class ClassificationStrategy(ABC):
 
         pattern_str = ", ".join(patterns[:3])
         return f"{self.task_type().value}: {pattern_str}"
+
+
+# Backward compatibility alias
+ClassificationStrategy = ClassificationStrategyBase
 
 
 class PatternBasedStrategy(ClassificationStrategy):

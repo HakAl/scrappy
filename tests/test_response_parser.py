@@ -7,10 +7,10 @@ by isolating parsing logic.
 """
 import pytest
 from src.agent.response_parser import (
-    ResponseParser,
     JSONResponseParser,
     ParseResult
 )
+from src.agent.protocols import ResponseParserProtocol
 
 
 class TestParseResultDataStructure:

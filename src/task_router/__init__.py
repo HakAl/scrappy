@@ -4,6 +4,13 @@ Routes tasks to optimal execution strategies based on complexity and type.
 """
 
 from .classifier import TaskType, TaskClassifier, ClassifiedTask
+from .classification_strategy import (
+    ClassificationStrategy,
+    ClassificationStrategyBase,
+    ClassificationStrategyProtocol,
+    PatternBasedStrategy,
+    StrategyResult,
+)
 from .config import ClarificationConfig
 from .intent_clarifier import (
     InteractiveClarifier,
@@ -40,6 +47,12 @@ __all__ = [
     "TaskType",
     "TaskClassifier",
     "ClassifiedTask",
+    # Classification Strategies
+    "ClassificationStrategyProtocol",
+    "ClassificationStrategyBase",
+    "ClassificationStrategy",  # Legacy alias
+    "PatternBasedStrategy",
+    "StrategyResult",
     # Configuration
     "ClarificationConfig",
     # Router
