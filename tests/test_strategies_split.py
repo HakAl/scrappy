@@ -318,8 +318,10 @@ class TestResearchExecutorBehavior:
             preferred_provider="groq"
         )
 
+        # Use a codebase-related query to go through the codebase research path
+        # which uses the research loop (positional args)
         task = ClassifiedTask(
-            original_input="explain recursion",
+            original_input="explain the function in this project",
             task_type=TaskType.RESEARCH,
             confidence=0.9,
             reasoning="Research"
@@ -328,8 +330,12 @@ class TestResearchExecutorBehavior:
         executor.execute(task)
 
         # Check that delegate was called with groq
+        # The call may use positional or keyword args depending on the code path
         call_args = mock_orchestrator.delegate.call_args
-        assert call_args[0][0] == "groq"
+        if call_args[0]:  # Positional args
+            assert call_args[0][0] == "groq"
+        else:  # Keyword args
+            assert call_args.kwargs.get('provider') == "groq"
 
     @pytest.mark.unit
     def test_research_executor_handles_errors_gracefully(self, mock_orchestrator):

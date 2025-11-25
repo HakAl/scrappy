@@ -257,7 +257,7 @@ class CommandRouter:
 
     def _handle_explore(self, args: str) -> bool:
         """Handle /explore command."""
-        self.codebase.explore_codebase(args, io=self.io)
+        self.codebase.explore_codebase(args)
         return True
 
     def _handle_classify(self, args: str) -> bool:

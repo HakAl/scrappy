@@ -13,13 +13,16 @@ from .research_protocols import (
     PromptBuilderProtocol,
     ToolBundleProtocol,
     ResponseCleanerProtocol,
-    ResearchLoopProtocol
+    ResearchLoopProtocol,
+    ResearchSubclassifierProtocol
 )
 from .path_resolver import PathResolver
 from .prompt_builder import PromptBuilder
 from .tool_bundle import ToolBundle
 from .response_cleaner import ResponseCleaner
 from .research_loop import ResearchLoop
+from .research_subclassifier import ResearchSubclassifier
+from .research_subtype import ResearchSubtype
 
 
 class ResearchExecutor(ProviderAwareStrategy):
@@ -53,7 +56,8 @@ class ResearchExecutor(ProviderAwareStrategy):
         prompt_builder: Optional[PromptBuilderProtocol] = None,
         tool_bundle: Optional[ToolBundleProtocol] = None,
         response_cleaner: Optional[ResponseCleanerProtocol] = None,
-        research_loop: Optional[ResearchLoopProtocol] = None
+        research_loop: Optional[ResearchLoopProtocol] = None,
+        subclassifier: Optional[ResearchSubclassifierProtocol] = None
     ):
         """
         Initialize research executor.
@@ -71,6 +75,7 @@ class ResearchExecutor(ProviderAwareStrategy):
             tool_bundle: Tool bundle for execution
             response_cleaner: Response cleaner
             research_loop: Research iteration loop
+            subclassifier: Research subtype classifier
         """
         super().__init__(orchestrator)
         self.preferred_provider = preferred_provider
@@ -83,6 +88,7 @@ class ResearchExecutor(ProviderAwareStrategy):
         self._prompt_builder = prompt_builder or self._create_default_prompt_builder()
         self._response_cleaner = response_cleaner or self._create_default_response_cleaner()
         self._research_loop = research_loop or self._create_default_research_loop()
+        self._subclassifier = subclassifier or self._create_default_subclassifier()
 
     def _create_default_path_resolver(self) -> PathResolverProtocol:
         """Create default path resolver."""
@@ -114,6 +120,9 @@ class ResearchExecutor(ProviderAwareStrategy):
             response_cleaner=self._response_cleaner
         )
 
+    def _create_default_subclassifier(self) -> ResearchSubclassifierProtocol:
+        """Create default research subclassifier."""
+        return ResearchSubclassifier()
 
     @property
     def name(self) -> str:
@@ -132,47 +141,18 @@ class ResearchExecutor(ProviderAwareStrategy):
         start_time = time.time()
 
         try:
-            # Step 1: Auto-explore codebase if needed
-            self._path_resolver.auto_explore_if_needed(task)
-
-            # Step 2: Select provider
-            provider_to_use = self._resolve_and_validate_provider(self.preferred_provider)
-
-            # Step 3: Build prompts
+            # Step 0: Subclassify research type
             context_summary = self._get_context_summary()
-            system_prompt = self._prompt_builder.build_system_prompt(
-                has_tools=self._tool_bundle.has_tools()
-            )
-            initial_prompt = self._prompt_builder.build_research_prompt(
-                task=task,
-                context_summary=context_summary
+            research_subtype = self._subclassifier.classify(
+                task.original_input,
+                context_summary
             )
 
-            # Step 4: Run research loop
-            final_response, tool_calls_made, total_tokens = self._research_loop.run(
-                provider=provider_to_use,
-                initial_prompt=initial_prompt,
-                system_prompt=system_prompt,
-                task=task,
-                max_iterations=self.max_tool_iterations
-            )
-
-            execution_time = time.time() - start_time
-
-            # Step 5: Return result
-            return ExecutionResult(
-                success=True,
-                output=final_response,
-                execution_time=execution_time,
-                tokens_used=total_tokens,
-                provider_used=provider_to_use,
-                metadata={
-                    "task_type": "research",
-                    "complexity": task.complexity_score,
-                    "tool_calls": tool_calls_made,
-                    "iterations": len(tool_calls_made) + 1
-                }
-            )
+            # Route to appropriate execution path
+            if research_subtype == ResearchSubtype.GENERAL:
+                return self._execute_general_research(task, context_summary, start_time)
+            else:
+                return self._execute_codebase_research(task, context_summary, start_time)
 
         except Exception as e:
             return ExecutionResult(
@@ -182,6 +162,143 @@ class ResearchExecutor(ProviderAwareStrategy):
                 execution_time=time.time() - start_time,
                 metadata={"tool_calls": []}
             )
+
+    def _execute_general_research(
+        self,
+        task: ClassifiedTask,
+        context_summary: Optional[str],
+        start_time: float
+    ) -> ExecutionResult:
+        """
+        Execute general knowledge research without codebase tools.
+
+        Uses only web tools if available, otherwise falls back to direct LLM.
+        """
+        provider_to_use = self._resolve_and_validate_provider(self.preferred_provider)
+
+        # Build system prompt - only mention web tools if available
+        if self._tool_bundle.has_web_tools():
+            system_prompt = self._build_general_research_system_prompt()
+            # Run with web tools only via research loop
+            # The loop will reject non-web tool calls
+            final_response, tool_calls_made, total_tokens = self._research_loop.run(
+                provider=provider_to_use,
+                initial_prompt=self._build_general_research_prompt(task),
+                system_prompt=system_prompt,
+                task=task,
+                max_iterations=self.max_tool_iterations,
+                allowed_tools=self._tool_bundle.WEB_ONLY_TOOLS
+            )
+        else:
+            # No tools - direct LLM call
+            # Note: pass provider as positional to match OrchestratorLike protocol
+            response = self.orchestrator.delegate(
+                provider_to_use,
+                task.original_input,
+                system_prompt="You are a helpful assistant. Answer the question directly and concisely."
+            )
+            final_response = response.content if hasattr(response, 'content') else str(response)
+            tool_calls_made = []
+            total_tokens = getattr(response, 'tokens_used', 0)
+
+        execution_time = time.time() - start_time
+
+        return ExecutionResult(
+            success=True,
+            output=final_response,
+            execution_time=execution_time,
+            tokens_used=total_tokens,
+            provider_used=provider_to_use,
+            metadata={
+                "task_type": "research",
+                "research_subtype": "general",
+                "complexity": task.complexity_score,
+                "tool_calls": tool_calls_made,
+                "iterations": len(tool_calls_made) + 1
+            }
+        )
+
+    def _execute_codebase_research(
+        self,
+        task: ClassifiedTask,
+        context_summary: Optional[str],
+        start_time: float
+    ) -> ExecutionResult:
+        """
+        Execute codebase research with full tool access.
+
+        This is the original research execution path.
+        """
+        # Step 1: Auto-explore codebase if needed
+        self._path_resolver.auto_explore_if_needed(task)
+
+        # Step 2: Select provider
+        provider_to_use = self._resolve_and_validate_provider(self.preferred_provider)
+
+        # Step 3: Build prompts
+        system_prompt = self._prompt_builder.build_system_prompt(
+            has_tools=self._tool_bundle.has_tools()
+        )
+        initial_prompt = self._prompt_builder.build_research_prompt(
+            task=task,
+            context_summary=context_summary
+        )
+
+        # Step 4: Run research loop
+        final_response, tool_calls_made, total_tokens = self._research_loop.run(
+            provider=provider_to_use,
+            initial_prompt=initial_prompt,
+            system_prompt=system_prompt,
+            task=task,
+            max_iterations=self.max_tool_iterations
+        )
+
+        execution_time = time.time() - start_time
+
+        # Step 5: Return result
+        return ExecutionResult(
+            success=True,
+            output=final_response,
+            execution_time=execution_time,
+            tokens_used=total_tokens,
+            provider_used=provider_to_use,
+            metadata={
+                "task_type": "research",
+                "research_subtype": "codebase",
+                "complexity": task.complexity_score,
+                "tool_calls": tool_calls_made,
+                "iterations": len(tool_calls_made) + 1
+            }
+        )
+
+    def _build_general_research_system_prompt(self) -> str:
+        """Build system prompt for general knowledge research."""
+        web_tool_desc = self._tool_bundle.get_web_tool_descriptions()
+        if web_tool_desc:
+            return f"""You are a helpful research assistant answering general knowledge questions.
+
+You have access to web tools for fetching information:
+{web_tool_desc}
+
+HOW TO USE TOOLS:
+If you need to look up current information, respond with:
+```json
+{{"tool": "tool_name", "parameters": {{"param1": "value1"}}}}
+```
+
+IMPORTANT:
+- Only use web_fetch or web_search tools - no codebase tools are available
+- If the question can be answered from your knowledge, answer directly
+- Use tools only when current/specific information is needed"""
+        else:
+            return "You are a helpful assistant. Answer the question directly and concisely."
+
+    def _build_general_research_prompt(self, task: ClassifiedTask) -> str:
+        """Build prompt for general knowledge research."""
+        return f"""User Question:
+{task.original_input}
+
+Answer the question directly. Use web tools only if you need current information."""
 
     def _get_context_summary(self) -> Optional[str]:
         """Get project context summary if available."""

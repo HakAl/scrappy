@@ -41,11 +41,11 @@ class TestValidateSubcommand:
         assert result.subcommand == ""
 
     # Valid subcommands for context command
-    def test_context_explore_valid(self):
-        """Should accept 'explore' as valid context subcommand."""
+    def test_context_explore_removed(self):
+        """Should reject 'explore' (removed in Phase 2, use /explore instead)."""
         result = validate_subcommand("context", "explore")
-        assert result.is_valid
-        assert result.subcommand == "explore"
+        assert not result.is_valid
+        # explore was removed - users should use /explore command instead
 
     def test_context_refresh_valid(self):
         """Should accept 'refresh' as valid context subcommand."""
@@ -119,11 +119,11 @@ class TestValidateSubcommand:
         assert result.is_valid
         assert result.subcommand == "clear"
 
-    def test_context_explore_mixed_case_valid(self):
+    def test_context_refresh_mixed_case_valid(self):
         """Should accept mixed case subcommands."""
-        result = validate_subcommand("context", "Explore")
+        result = validate_subcommand("context", "Refresh")
         assert result.is_valid
-        assert result.subcommand == "explore"
+        assert result.subcommand == "refresh"
 
     def test_session_save_mixed_case_valid(self):
         """Should normalize mixed case to lowercase."""

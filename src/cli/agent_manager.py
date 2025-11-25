@@ -93,10 +93,6 @@ class CLIAgentManager:
             io.secho("  Mode: DRY RUN (no actual changes)", fg="yellow")
         io.echo()
 
-        if not io.confirm("Start agent?", default=True):
-            io.echo("Agent cancelled.")
-            return
-
         # Run agent
         if dashboard:
             dashboard.set_state("executing", "Running code agent...")

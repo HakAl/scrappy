@@ -49,7 +49,8 @@ class ResearchLoop:
         initial_prompt: str,
         system_prompt: str,
         task: ClassifiedTask,
-        max_iterations: int
+        max_iterations: int,
+        allowed_tools: Optional[List[str]] = None
     ) -> Tuple[str, List[Dict[str, object]], int]:
         """
         Run the research loop with tool calling.
@@ -60,6 +61,9 @@ class ResearchLoop:
             system_prompt: System prompt with tool instructions
             task: The classified task being executed
             max_iterations: Maximum number of tool iterations
+            allowed_tools: Optional list of allowed tool names.
+                          If None, all tools in the bundle are allowed.
+                          If provided, only these tools can be executed.
 
         Returns:
             Tuple of (final_response, tool_calls_made, total_tokens)
@@ -95,6 +99,13 @@ class ResearchLoop:
 
             # Check for tool call
             tool_call = self._parse_tool_call(response_text) if self.tool_bundle.has_tools() else None
+
+            # Validate tool is in allowed list (if restricted)
+            if tool_call and allowed_tools is not None:
+                tool_name = tool_call.get('tool')
+                if tool_name not in allowed_tools:
+                    # Tool not allowed - treat as if no tool call was made
+                    tool_call = None
 
             if tool_call and iteration < max_iterations:
                 # Execute tool

@@ -380,6 +380,14 @@ class OutputStrategyProtocol(Protocol):
         """
         ...
 
+    def supports_color(self) -> bool:
+        """Check if output supports ANSI color codes.
+
+        Returns:
+            True if terminal supports colors, False otherwise.
+        """
+        ...
+
 
 class DirectConsoleOutput:
     """Strategy for direct Rich Console output (CLI mode).
@@ -521,6 +529,14 @@ class DirectConsoleOutput:
             return input()
         except EOFError:
             return ""
+
+    def supports_color(self) -> bool:
+        """Check if console supports ANSI color codes.
+
+        Returns:
+            True if the Rich Console has color support enabled.
+        """
+        return self._console.is_terminal and not self._console.no_color
 
 
 class OutputSinkAdapter:
@@ -714,6 +730,14 @@ class OutputSinkAdapter:
             "input_line() not supported in Textual mode. "
             "Use Input widget events instead."
         )
+
+    def supports_color(self) -> bool:
+        """Check if TUI output supports colors.
+
+        Returns:
+            True - Textual TUI always supports Rich markup/colors.
+        """
+        return True
 
 
 class UnifiedIO:
@@ -941,3 +965,13 @@ class UnifiedIO:
         """Create a streaming output context."""
         with self._strategy.stream_context() as writer:
             yield writer
+
+    def supports_color(self) -> bool:
+        """Check if output supports ANSI color codes.
+
+        Returns:
+            True if the output destination supports colors.
+            - CLI mode: Based on terminal capabilities
+            - TUI mode: Always True (Rich/Textual supports colors)
+        """
+        return self._strategy.supports_color()

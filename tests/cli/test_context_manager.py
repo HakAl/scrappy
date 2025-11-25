@@ -131,36 +131,17 @@ class TestContextStatusDisplay:
         assert "Git Commits:" not in output
 
 
-class TestExploreCommand:
-    """Test project exploration command."""
+class TestExploreSubcommandRemoved:
+    """Test that explore subcommand was removed from /context.
 
-    def test_explores_using_cache_when_available(self):
-        """Should use cached data when force=False."""
+    Note: The explore functionality was consolidated into the standalone
+    /explore command (Issue 8 - command consolidation). These tests verify
+    that /context explore now returns an error directing users to /explore.
+    """
+
+    def test_explore_subcommand_shows_error(self):
+        """Should show error when explore subcommand is used."""
         orchestrator = MagicMock()
-        orchestrator.explore_project.return_value = {
-            'status': 'cached',
-            'total_files': 50
-        }
-        orchestrator.context.summary = "Cached summary"
-
-        io = MockIO()
-        manager = CLIContextCommands(orchestrator, io)
-
-        manager.manage_context("explore")
-
-        orchestrator.explore_project.assert_called_once_with(force=False)
-        output = io.get_all_output()
-        assert "Using cached exploration" in output
-        assert "Cached summary" in output
-
-    def test_explores_and_shows_file_count(self):
-        """Should display number of files found during exploration."""
-        orchestrator = MagicMock()
-        orchestrator.explore_project.return_value = {
-            'status': 'explored',
-            'total_files': 123
-        }
-        orchestrator.context.summary = "Fresh summary"
 
         io = MockIO()
         manager = CLIContextCommands(orchestrator, io)
@@ -168,17 +149,13 @@ class TestExploreCommand:
         manager.manage_context("explore")
 
         output = io.get_all_output()
-        assert "123 files" in output
-        assert "Fresh summary" in output
+        assert "Unknown subcommand" in output
+        # Should not call explore_project
+        orchestrator.explore_project.assert_not_called()
 
-    def test_handles_exploration_without_summary(self):
-        """Should work when context has no summary."""
+    def test_explore_subcommand_shows_valid_options(self):
+        """Should list valid subcommands when explore is attempted."""
         orchestrator = MagicMock()
-        orchestrator.explore_project.return_value = {
-            'status': 'explored',
-            'total_files': 10
-        }
-        orchestrator.context.summary = None
 
         io = MockIO()
         manager = CLIContextCommands(orchestrator, io)
@@ -186,8 +163,23 @@ class TestExploreCommand:
         manager.manage_context("explore")
 
         output = io.get_all_output()
-        assert "Exploring current project" in output
-        # Should not crash without summary
+        # Should show valid options
+        assert "refresh" in output
+        assert "clear" in output
+
+    def test_explore_not_in_valid_subcommands(self):
+        """Verify explore is not listed as a valid subcommand."""
+        orchestrator = MagicMock()
+
+        io = MockIO()
+        manager = CLIContextCommands(orchestrator, io)
+
+        manager.manage_context("explore")
+
+        output = io.get_all_output()
+        # The error message lists valid options - explore should not be among them
+        # Valid options: add, clear, clearmem, refresh, toggle
+        assert "Valid options:" in output or "Usage:" in output
 
 
 class TestRefreshCommand:
@@ -320,7 +312,7 @@ class TestInputValidation:
 
         output = io.get_all_output()
         assert "Usage:" in output
-        assert "explore" in output
+        # Note: 'explore' was removed and consolidated into /explore command
         assert "refresh" in output
         assert "clear" in output
         assert "clearmem" in output

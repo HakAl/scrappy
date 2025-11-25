@@ -61,7 +61,7 @@ class CLICodebaseAnalysis:
             None
         """
         if not path:
-            path = self.io.prompt("Directory to explore", default=".")
+            path = "."
 
         path = Path(path).resolve()
         if not path.exists():

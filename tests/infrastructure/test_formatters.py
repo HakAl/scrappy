@@ -484,6 +484,102 @@ class TestCacheFormatter:
         assert "\x1b" in result  # Has color codes
 
 
+class TestStatsFormatterColorDisabled:
+    """Tests for StatsFormatter with color disabled (Phase 2 Issue 2)."""
+
+    def test_format_header_without_color(self):
+        """Formatter creates header without ANSI codes when use_color=False."""
+        formatter = StatsFormatter(use_color=False)
+        result = formatter.format_header("Test Header", width=30)
+
+        assert "Test Header" in result
+        assert "-" in result  # Contains separator
+        assert "\x1b" not in result  # No ANSI codes
+
+    def test_format_percentage_without_color(self):
+        """Formatter displays percentage without ANSI codes when use_color=False."""
+        formatter = StatsFormatter(use_color=False)
+        result = formatter.format_percentage(50, 100)
+
+        assert "50.0%" in result
+        assert "\x1b" not in result  # No ANSI codes
+
+    def test_format_percentage_with_label_without_color(self):
+        """Formatter displays labeled percentage without ANSI codes."""
+        formatter = StatsFormatter(use_color=False)
+        result = formatter.format_percentage(75, 100, label="Usage")
+
+        assert "Usage:" in result
+        assert "75.0%" in result
+        assert "\x1b" not in result  # No ANSI codes
+
+    def test_format_boolean_status_without_color(self):
+        """Formatter displays boolean status without ANSI codes when use_color=False."""
+        formatter = StatsFormatter(use_color=False)
+
+        enabled_result = formatter.format_boolean_status(True)
+        assert enabled_result == "Enabled"
+        assert "\x1b" not in enabled_result
+
+        disabled_result = formatter.format_boolean_status(False)
+        assert disabled_result == "Disabled"
+        assert "\x1b" not in disabled_result
+
+
+class TestCacheFormatterColorDisabled:
+    """Tests for CacheFormatter with color disabled (Phase 2 Issue 2)."""
+
+    def test_format_hit_rate_without_color(self):
+        """Formatter displays hit rate without ANSI codes when use_color=False."""
+        formatter = CacheFormatter(use_color=False)
+        result = formatter.format_hit_rate("75.0%", "Hit Rate")
+
+        assert "Hit Rate: 75.0%" in result
+        assert "\x1b" not in result  # No ANSI codes
+
+    def test_format_toggle_message_without_color(self):
+        """Formatter displays toggle message without ANSI codes when use_color=False."""
+        formatter = CacheFormatter(use_color=False)
+
+        enabled_result = formatter.format_toggle_message(True)
+        assert "enabled" in enabled_result
+        assert "\x1b" not in enabled_result
+
+        disabled_result = formatter.format_toggle_message(False)
+        assert "disabled" in disabled_result
+        assert "\x1b" not in disabled_result
+
+    def test_format_clear_message_without_color(self):
+        """Formatter displays clear message without ANSI codes when use_color=False."""
+        formatter = CacheFormatter(use_color=False)
+        result = formatter.format_clear_message()
+
+        assert "cleared" in result
+        assert "\x1b" not in result  # No ANSI codes
+
+    def test_format_stats_without_color(self):
+        """Formatter displays full stats without ANSI codes when use_color=False."""
+        formatter = CacheFormatter(use_color=False)
+        stats = {
+            'exact_cache_entries': 10,
+            'intent_cache_entries': 5,
+            'exact_hits': 8,
+            'intent_hits': 3,
+            'exact_misses': 2,
+            'saves': 15,
+            'exact_hit_rate': '80.0%',
+            'intent_hit_rate': '60.0%',
+            'cache_file': '/path/to/cache.json'
+        }
+
+        result = formatter.format_stats(stats, enabled=True)
+
+        assert "Cache Statistics" in result
+        assert "80.0%" in result
+        assert "Enabled" in result
+        assert "\x1b" not in result  # No ANSI codes
+
+
 class TestExtractTimeFromTimestamp:
     """Tests for timestamp extraction utility."""
 

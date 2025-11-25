@@ -15,7 +15,19 @@ class CacheFormatter(StatsFormatter):
 
     Provides formatting for cache statistics including hit rates,
     entry counts, and cache status.
+
+    Args:
+        use_color: Whether to include ANSI color codes in output.
+            Defaults to True. Inherited from StatsFormatter.
     """
+
+    def __init__(self, use_color: bool = True):
+        """Initialize formatter with color preference.
+
+        Args:
+            use_color: Whether to use ANSI color codes in output.
+        """
+        super().__init__(use_color=use_color)
 
     def format_stats(self, stats: Dict[str, Any], enabled: bool) -> str:
         """Format cache statistics for display.
@@ -75,8 +87,11 @@ class CacheFormatter(StatsFormatter):
             label: Label for the rate (default: "Hit Rate")
 
         Returns:
-            Formatted line with color (green > 50%, yellow <= 50%)
+            Formatted line with color (green > 50%, yellow <= 50%) if use_color is True
         """
+        if not self._use_color:
+            return f"{label}: {rate_str}"
+
         # Extract numeric value from string
         try:
             rate_value = float(rate_str.rstrip('%'))
@@ -95,16 +110,24 @@ class CacheFormatter(StatsFormatter):
             new_state: New caching state (True = enabled, False = disabled)
 
         Returns:
-            Formatted success message with color
+            Formatted success message with color (if use_color is True)
         """
         status = "enabled" if new_state else "disabled"
+        message = f"Response caching {status}."
+
+        if not self._use_color:
+            return message
+
         color = "green" if new_state else "yellow"
-        return click.style(f"Response caching {status}.", fg=color)
+        return click.style(message, fg=color)
 
     def format_clear_message(self) -> str:
         """Format the cache clear success message.
 
         Returns:
-            Formatted success message
+            Formatted success message (with color if use_color is True)
         """
-        return click.style("Response cache cleared.", fg="green")
+        message = "Response cache cleared."
+        if not self._use_color:
+            return message
+        return click.style(message, fg="green")

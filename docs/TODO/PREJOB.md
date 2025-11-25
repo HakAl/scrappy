@@ -1,4 +1,25 @@
-That is a solid plan. If you ship **Todo (Planning)**, **Semantic Search (Context)**, and the **Test Runner (Verification)**, you have a complete "Agentic Loop."
+
+---
+
+## Issue 5: Agent keeps trying to apply changes after user declines
+
+**Problem:**
+Agent broken if user answers no, keeps trying to apply changes.
+
+**Root Cause:**
+Need to identify the specific code path. The agent loop is in `src/agent/core.py`. When a user declines an action in the approval flow, the agent may not be properly handling the rejection state and continues attempting the same action.
+
+**Status:** NEEDS REPRODUCTION
+- Awaiting reproduction steps from testing
+
+**Solution:**
+Research agent routing in `src/agent/core.py` to understand the approval loop and add proper exit conditions when user declines.
+
+**Files:**
+- `src/agent/core.py` - Agent main loop
+- `src/cli/agent_manager.py` - Agent execution wrapper
+
+Ship **Todo (Planning)**, **Semantic Search (Context)**, and the **Test Runner (Verification)**, you have a complete "Agentic Loop."
 
 *   **Plan:** "I know what to do."
 *   **Search:** "I found the code to change."
@@ -8,7 +29,7 @@ That is the "Holy Trinity" of a coding assistant.
 
 However, "Feature Complete" is not the same as "Release Ready." Since you are looking to release this (even if just to friends or open source), here are the **3 boring things** you need to wrap around those features to make it actually usable by others.
 
-### 1. The "Onboarding" Experience (The Setup)
+### The "Onboarding" Experience (The Setup)
 You know how to run your app because you have your `.env` file set up and your Python environment perfect. A new user does not.
 
 *   **The Config Command:** You need a `my-cli init` or `configure` command.
@@ -18,7 +39,7 @@ You know how to run your app because you have your `.env` file set up and your P
 *   **The Dependency Check:**
     *   When the app starts, check if `git` is installed. Check if `pytest` or `npm` is available (for the test runner). Fail gracefully if they aren't.
 
-### 2. The "Safety" Rails (Crucial for Release)
+### The "Safety" Rails (Crucial for Release)
 You are giving an LLM access to the file system and shell. If you release this, you are liable (socially, if not legally) if it deletes someone's project.
 
 *   **The "Y/N" Gate:**
@@ -28,8 +49,9 @@ You are giving an LLM access to the file system and shell. If you release this, 
     *   *Config:* Allow power users to set `--auto-approve` flag, but **never** make it default.
 *   **The "System Ignore":**
     *   Hardcode a block on modifying `.git/` folder contents directly. You don't want the LLM corrupting the git index.
+*   * Disclaimers!
 
-### 3. The "Help" & "Status" (UX)
+### The "Help" & "Status" (UX)
 With the **Todo Tool** running, the agent has invisible state. Users will get confused.
 
 *   **Visibility:**
@@ -58,3 +80,53 @@ You start next week. Don't burn out trying to make it perfect.
 4.  **README:** Write 3 sentences on how to use the "Agent" mode.
 
 Good luck! Shipping a working agent CLI is a massive achievement.
+
+
+---
+
+It sounds like you have a solid roadmap for the next few days.
+
+Since you mentioned "including that [#3 Test Runner] with the TODO feature," here is a specific piece of advice on how to make those two work together to actually "close the loop."
+
+### The "Definition of Done" Pattern
+
+The biggest mistake agents make is assuming they are done because they finished writing the code. They often forget to check if it actually runs.
+
+You should "include" the Test Runner in the Todo feature by **biasing the Planner to always add a verification step.**
+
+**1. The Implicit Prompting Strategy**
+When the user asks the agent to create a plan (or when your classifier triggers it), inject a rule into the `create_plan` system prompt:
+
+> "Every plan must end with a 'Verification' step. If the user did not provide a specific test, your last step must be to run existing tests or create a minimal reproduction script to verify the changes."
+
+**2. The "Refusal to Exit" Logic**
+In your agent loop, if the agent tries to mark the final task as `[x] Done` but has *not* called the `test_runner` tool in the conversation history:
+
+*   **Intercept the action.**
+*   **System Response:** "You are trying to complete the plan, but you haven't run any tests to verify your changes. Please run the `test_runner` or explain why verification is unnecessary."
+
+### A Quick Tip on the "Onboarding" (API Keys)
+
+Since you're adding the API key prompt (good move), make sure you check for it **before** loading your heavy libraries (like LanceDB or FastEmbed).
+
+**Bad UX:**
+`Loading AI models... (10 seconds)` -> `Error: No API Key found.`
+
+**Good UX:**
+```python
+# main.py
+def main():
+    # 1. Fast check (read .env or config file)
+    if not has_api_key():
+        print("Welcome! Let's set up your API key.")
+        setup_wizard() # input() loop -> save to file
+        print("Setup complete! Initializing engine...\n")
+
+    # 2. ONLY NOW import the heavy stuff
+    from my_app.heavy_engine import Agent 
+    # ...
+```
+
+This makes the CLI feel snappy and respectful of the user's time.
+
+Good luck with the sprint! Shipping a "Plan -> Code -> Verify" loop is a huge milestone. You're going to crush it at the new job.

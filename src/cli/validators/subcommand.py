@@ -38,7 +38,7 @@ class SubcommandValidationResult:
 # Empty string is implicitly allowed for all commands (show status)
 COMMAND_SUBCOMMANDS: Dict[str, Set[str]] = {
     "cache": {"clear", "toggle"},
-    "context": {"explore", "refresh", "clear", "clearmem", "toggle", "add"},
+    "context": {"refresh", "clear", "clearmem", "toggle", "add"},  # "explore" removed - use /explore instead
     "session": {"save", "load", "clear", "toggle"},
     "limits": {"reset"},  # Special handling for provider filter
 }

@@ -30,6 +30,23 @@ class ToolBundle:
         'git_recent_changes',
     ]
 
+    WEB_ONLY_TOOLS = [
+        'web_fetch',
+        'web_search',
+    ]
+
+    CODEBASE_TOOLS = [
+        'read_file',
+        'list_files',
+        'list_directory',
+        'search_code',
+        'git_log',
+        'git_diff',
+        'git_blame',
+        'git_show',
+        'git_recent_changes',
+    ]
+
     def __init__(
         self,
         tool_registry: Optional["ToolRegistry"] = None,
@@ -81,6 +98,45 @@ class ToolBundle:
             True if tool is allowed, False otherwise
         """
         return tool_name in self.RESEARCH_TOOLS
+
+    def has_web_tools(self) -> bool:
+        """Check if web tools are available."""
+        if not self._tool_registry:
+            return False
+        return any(
+            self._tool_registry.get(tool_name) is not None
+            for tool_name in self.WEB_ONLY_TOOLS
+        )
+
+    def get_web_tool_descriptions(self) -> str:
+        """
+        Get formatted descriptions of web-only tools.
+
+        Returns:
+            Multi-line string with web tool descriptions
+        """
+        if not self._tool_registry:
+            return ""
+
+        descriptions = []
+        for tool_name in self.WEB_ONLY_TOOLS:
+            tool = self._tool_registry.get(tool_name)
+            if tool:
+                descriptions.append(f"- {tool.get_full_description()}")
+
+        return "\n".join(descriptions)
+
+    def is_web_tool(self, tool_name: str) -> bool:
+        """
+        Check if a tool is a web-only tool.
+
+        Args:
+            tool_name: Name of the tool to check
+
+        Returns:
+            True if tool is a web tool, False otherwise
+        """
+        return tool_name in self.WEB_ONLY_TOOLS
 
     def execute_tool(self, tool_call: Dict[str, object]) -> str:
         """

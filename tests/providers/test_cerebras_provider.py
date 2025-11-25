@@ -291,7 +291,8 @@ def test_get_model_for_task(provider):
     assert provider.get_model_for_task("fast") == "llama3.1-8b"
     assert provider.get_model_for_task("high_volume") == "llama3.1-8b"
     assert provider.get_model_for_task("quality") == "llama-3.3-70b"
-    assert provider.get_model_for_task("unknown_task") == "llama3.1-8b"
+    # Unknown tasks use the default model (qwen instruct for better tool-calling)
+    assert provider.get_model_for_task("unknown_task") == "qwen-3-235b-a22b-instruct-2507"
 
 def test_get_model_info(provider):
     """Verify detailed model info retrieval."""

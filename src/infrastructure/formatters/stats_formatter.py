@@ -13,7 +13,20 @@ class StatsFormatter:
 
     Provides formatting utilities for headers, key-value pairs,
     percentages, and numbers with color coding.
+
+    Args:
+        use_color: Whether to include ANSI color codes in output.
+            Defaults to True. Set to False for terminals that don't
+            support colors to avoid ANSI artifacts.
     """
+
+    def __init__(self, use_color: bool = True):
+        """Initialize formatter with color preference.
+
+        Args:
+            use_color: Whether to use ANSI color codes in output.
+        """
+        self._use_color = use_color
 
     def format_header(self, title: str, width: int = 60) -> str:
         """Format a header with title and separator.
@@ -23,10 +36,14 @@ class StatsFormatter:
             width: Total width of the header (default: 60)
 
         Returns:
-            Formatted header string with ANSI color codes
+            Formatted header string, with ANSI codes if use_color is True
         """
-        header = click.style(f"\n{title}", fg="cyan", bold=True)
-        separator = click.style("-" * width, fg="cyan")
+        if self._use_color:
+            header = click.style(f"\n{title}", fg="cyan", bold=True)
+            separator = click.style("-" * width, fg="cyan")
+        else:
+            header = f"\n{title}"
+            separator = "-" * width
         return f"{header}\n{separator}"
 
     def format_key_value(self, key: str, value: Any, indent: int = 0) -> str:
@@ -59,7 +76,7 @@ class StatsFormatter:
             show_numbers: Whether to show numbers (e.g., "10/100 (10%)")
 
         Returns:
-            Formatted string with color based on percentage
+            Formatted string with color based on percentage (if use_color is True)
             Colors: green < 75%, yellow < 90%, red >= 90%
         """
         if total == 0:
@@ -76,11 +93,17 @@ class StatsFormatter:
         else:
             text = f"{percentage:.1f}%"
 
+        # Apply color only if enabled
+        if self._use_color:
+            styled_text = click.style(text, fg=color)
+        else:
+            styled_text = text
+
         # Add label if provided
         if label:
-            return f"{label}: {click.style(text, fg=color)}"
+            return f"{label}: {styled_text}"
         else:
-            return click.style(text, fg=color)
+            return styled_text
 
     def format_number(self, value: int, with_commas: bool = True) -> str:
         """Format a number for display.
@@ -127,9 +150,11 @@ class StatsFormatter:
             false_label: Label for False (default: "Disabled")
 
         Returns:
-            Colored status string
+            Colored status string (if use_color is True), plain text otherwise
         """
-        if value:
-            return click.style(true_label, fg="green")
-        else:
-            return click.style(false_label, fg="red")
+        label = true_label if value else false_label
+        if not self._use_color:
+            return label
+
+        color = "green" if value else "red"
+        return click.style(label, fg=color)

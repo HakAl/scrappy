@@ -9,6 +9,7 @@ swapping implementations.
 from pathlib import Path
 from typing import Protocol, Optional, Dict, List
 from ..classifier import ClassifiedTask
+from .research_subtype import ResearchSubtype
 
 
 class PromptBuilderProtocol(Protocol):
@@ -137,7 +138,8 @@ class ResearchLoopProtocol(Protocol):
         initial_prompt: str,
         system_prompt: str,
         task: ClassifiedTask,
-        max_iterations: int
+        max_iterations: int,
+        allowed_tools: Optional[List[str]] = None
     ) -> tuple[str, List[Dict[str, object]], int]:
         """
         Run the research loop with tool calling.
@@ -148,6 +150,9 @@ class ResearchLoopProtocol(Protocol):
             system_prompt: System prompt with tool instructions
             task: The classified task being executed
             max_iterations: Maximum number of tool iterations
+            allowed_tools: Optional list of allowed tool names.
+                          If None, all tools in the bundle are allowed.
+                          If provided, only these tools can be executed.
 
         Returns:
             Tuple of (final_response, tool_calls_made, total_tokens)
@@ -186,5 +191,32 @@ class ResponseCleanerProtocol(Protocol):
 
         Returns:
             Fallback response summarizing tool results
+        """
+        ...
+
+
+class ResearchSubclassifierProtocol(Protocol):
+    """
+    Defines the contract for sub-classifying research queries.
+
+    Determines whether a research query is about the codebase (requiring
+    codebase tools) or general knowledge (requiring only web tools or
+    direct LLM response).
+    """
+
+    def classify(
+        self,
+        query: str,
+        context_summary: Optional[str] = None
+    ) -> ResearchSubtype:
+        """
+        Classify a research query as codebase or general knowledge.
+
+        Args:
+            query: The user's research query
+            context_summary: Optional project context summary for better classification
+
+        Returns:
+            ResearchSubtype.CODEBASE or ResearchSubtype.GENERAL
         """
         ...

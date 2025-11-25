@@ -25,25 +25,26 @@ class CLIContextCommands:
 
         Handles multiple subcommands:
         - (no args): Display context status, working memory, and project summary
-        - explore: Explore project using cache if available
         - refresh: Force re-exploration of the project
         - clear: Clear cached context data
         - clearmem: Clear session working memory
         - toggle: Toggle context-aware prompts on/off
 
+        Note: Use /explore command for codebase exploration instead of /context explore.
+
         Args:
-            args: Subcommand string (explore|refresh|clear|clearmem|toggle).
+            args: Subcommand string (refresh|clear|clearmem|toggle).
                 Empty string displays status.
 
         State Changes:
-            - explore/refresh: Populates orchestrator.context with project data
+            - refresh: Populates orchestrator.context with project data
             - clear: Removes cached context from disk
             - clearmem: Clears orchestrator working memory
             - toggle: Flips orchestrator.context_aware boolean
 
         Side Effects:
             - Writes formatted output to stdout via self.io
-            - explore/refresh: May read many files from disk
+            - refresh: May read many files from disk
             - clear: Deletes context cache file
 
         Returns:
@@ -53,14 +54,15 @@ class CLIContextCommands:
         validation = validate_subcommand("context", args)
         if not validation.is_valid:
             self.io.secho(validation.error, fg="red")
-            self.io.echo("Usage: /context [explore|refresh|clear|clearmem|toggle|add]")
+            self.io.echo("Usage: /context [refresh|clear|clearmem|toggle|add]")
             self.io.echo("  (no args)  - Show context status and working memory")
-            self.io.echo("  explore    - Explore project (uses cache if available)")
             self.io.echo("  refresh    - Force re-exploration")
             self.io.echo("  clear      - Clear cached context")
             self.io.echo("  clearmem   - Clear session working memory")
             self.io.echo("  toggle     - Toggle context-aware prompts")
             self.io.echo("  add <path> - Add file to context")
+            self.io.echo("")
+            self.io.echo("Tip: Use /explore to explore the codebase")
             return
 
         if validation.subcommand == "":
@@ -100,19 +102,6 @@ class CLIContextCommands:
                 if summary and isinstance(summary, str):
                     self.io.secho("\nProject Summary:", bold=True)
                     self.io.echo(summary)
-
-        elif validation.subcommand == "explore":
-            self.io.echo("Exploring current project...")
-            result = self.orchestrator.explore_project(force=False)
-            if result['status'] == 'cached':
-                self.io.secho("Using cached exploration.", fg="cyan")
-            else:
-                self.io.secho(f"Found {result['total_files']} files.", fg="green")
-
-            summary = self.orchestrator.context.summary
-            if summary and isinstance(summary, str):
-                self.io.secho("\nGenerated Summary:", bold=True)
-                self.io.echo(summary)
 
         elif validation.subcommand == "refresh":
             self.io.echo("Force re-exploring project...")

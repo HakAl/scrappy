@@ -106,7 +106,7 @@ class CerebrasProvider(LLMProviderBase):
 
     @property
     def default_model(self) -> str:
-        return 'llama3.1-8b'
+        return 'qwen-3-235b-a22b-instruct-2507'
 
     @property
     def supports_tool_calling(self) -> bool:

@@ -34,7 +34,8 @@ class CacheManager:
             orchestrator: The AgentOrchestrator instance that provides cache
                 operations (get_cache_stats, clear_cache, toggle_cache).
             io: I/O interface for output.
-            formatter: Optional formatter for display. Defaults to CacheFormatter.
+            formatter: Optional formatter for display. Defaults to CacheFormatter
+                with color support based on io.supports_color().
 
         State Changes:
             Sets self.orchestrator to the provided orchestrator instance.
@@ -43,7 +44,12 @@ class CacheManager:
         """
         self.orchestrator = orchestrator
         self.io = io
-        self.formatter = formatter or CacheFormatter()
+        # Create formatter with color support based on IO capabilities
+        if formatter is not None:
+            self.formatter = formatter
+        else:
+            use_color = getattr(io, 'supports_color', lambda: True)()
+            self.formatter = CacheFormatter(use_color=use_color)
 
     def manage_cache(self, args: str = "") -> None:
         """Manage response cache with subcommands.

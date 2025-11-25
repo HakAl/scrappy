@@ -54,7 +54,7 @@ def show_help_table(io: UnifiedIO, category: Optional[str] = None) -> None:
         ],
         'Context Management': [
             ('/context', 'Show context status'),
-            ('/context explore', 'Explore current project'),
+            ('/context refresh', 'Force re-exploration'),
             ('/context clear', 'Clear cached context'),
             ('/context toggle', 'Toggle context awareness'),
         ],
@@ -70,8 +70,7 @@ def show_help_table(io: UnifiedIO, category: Optional[str] = None) -> None:
             ('/session clear', 'Delete saved session'),
         ],
         'System': [
-            ('/quit', 'Exit the CLI'),
-            ('/exit', 'Exit the CLI'),
+            ('/quit, /exit', 'Exit the CLI'),
         ],
     }
 
@@ -178,21 +177,25 @@ def show_rate_limits_rich(io: UnifiedIO, rate_data: Dict[str, Any]) -> None:
 def show_usage_rich(io: UnifiedIO, report: Dict[str, Any]) -> None:
     """Display usage statistics with Rich formatting.
 
+    Uses consistent table styling throughout for visual coherence.
+
     Args:
         io: RichIO instance for output
         report: Usage report dictionary
     """
-    # Summary panel
-    # Build summary content
-    summary_parts = [f"Total Tasks: {report.get('total_tasks', 0)}"]
+    # Summary as a table (consistent styling with other sections)
+    summary_headers = ["Metric", "Value"]
+    summary_rows = [
+        ["Total Tasks", str(report.get('total_tasks', 0))],
+    ]
 
     if 'cached_hits' in report:
-        summary_parts.append(f"Cache Hits: {report['cached_hits']}")
-        summary_parts.append(f"API Calls: {report.get('api_calls', 0)}")
+        summary_rows.append(["Cache Hits", str(report.get('cached_hits', 0))])
+        summary_rows.append(["API Calls", str(report.get('api_calls', 0))])
 
-    summary_parts.append(f"Session Duration: {report.get('session_duration', 'N/A')}")
+    summary_rows.append(["Session Duration", report.get('session_duration', 'N/A')])
 
-    io.panel("\n".join(summary_parts), title="Usage Summary", border_style="cyan")
+    io.table(summary_headers, summary_rows, title="Usage Summary")
 
     # Provider breakdown table
     by_provider = report.get('by_provider', {})
@@ -211,7 +214,7 @@ def show_usage_rich(io: UnifiedIO, report: Dict[str, Any]) -> None:
 
         io.table(headers, rows, title="By Provider")
 
-    # Cache statistics
+    # Cache statistics as a table (consistent with other sections)
     cache_stats = report.get('cache_stats', {})
     if cache_stats:
         total_entries = (
@@ -219,11 +222,14 @@ def show_usage_rich(io: UnifiedIO, report: Dict[str, Any]) -> None:
             cache_stats.get('intent_cache_entries', 0)
         )
 
-        cache_content = f"""Exact Hit Rate: {cache_stats.get('exact_hit_rate', 'N/A')}
-Intent Hit Rate: {cache_stats.get('intent_hit_rate', 'N/A')}
-Total Entries: {total_entries}"""
+        cache_headers = ["Metric", "Value"]
+        cache_rows = [
+            ["Exact Hit Rate", cache_stats.get('exact_hit_rate', 'N/A')],
+            ["Intent Hit Rate", cache_stats.get('intent_hit_rate', 'N/A')],
+            ["Total Entries", str(total_entries)],
+        ]
 
-        io.panel(cache_content, title="Cache Statistics", border_style="blue")
+        io.table(cache_headers, cache_rows, title="Cache Statistics")
 
 
 # =============================================================================
