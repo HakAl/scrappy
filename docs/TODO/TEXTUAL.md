@@ -43,6 +43,8 @@ Output via TextualIO.echo/secho → RichLog widget
 
 ### ISSUES
 
+- ask question - it's not added to log, no answer returns, app becomes unresponsive looks like no http requests happen
+
 - can't copy text from textual components
   - config?
 - 

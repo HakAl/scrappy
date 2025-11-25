@@ -12,22 +12,11 @@ from textual.app import App, ComposeResult
 from textual.message import Message
 from textual.widgets import Input, RichLog, Label
 from textual import work
-from src.cli.protocols import OutputSink
 
 if TYPE_CHECKING:
     from .interactive import InteractiveMode
 
 logger = logging.getLogger(__name__)
-
-
-class CopyableLog(RichLog):
-    """RichLog subclass that enables text selection and copying.
-
-    By setting ALLOW_SELECT = True, users can click and drag to select text
-    within the log, then copy it using standard terminal shortcuts.
-    Note: This disables click-and-drag scrolling - users must use scrollbar or mouse wheel.
-    """
-    ALLOW_SELECT = True
 
 
 class WriteOutput(Message):
@@ -185,7 +174,7 @@ class ScrappyApp(App):
 
         # Scrollable output area
         with Container(id="output_container"):
-            yield CopyableLog(
+            yield RichLog(
                 id="output",
                 highlight=True,
                 markup=True,
@@ -335,7 +324,7 @@ class ScrappyApp(App):
         Args:
             message: The WriteOutput message containing content to display
         """
-        output = self.query_one("#output", CopyableLog)
+        output = self.query_one("#output", RichLog)
         output.write(message.content)
 
     def on_write_renderable(self, message: WriteRenderable) -> None:
@@ -347,5 +336,5 @@ class ScrappyApp(App):
         Args:
             message: The WriteRenderable message containing renderable to display
         """
-        output = self.query_one("#output", CopyableLog)
+        output = self.query_one("#output", RichLog)
         output.write(message.renderable)
