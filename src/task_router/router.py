@@ -14,6 +14,7 @@ from .intent_clarifier import (
     IntentClarifierInterface,
     InteractiveClarifier,
 )
+from .protocols import DefaultConsoleInput, TaskRouterInputProtocol
 from .json_extractor import JSONExtractor
 from .metrics_collector import MetricsCollector, RouterMetrics
 from .output_handler import (
@@ -61,6 +62,7 @@ class TaskRouter:
         verbose: bool = True,
         intent_clarifier: Optional[IntentClarifierInterface] = None,
         output_handler: Optional[OutputHandlerInterface] = None,
+        input_handler: Optional[TaskRouterInputProtocol] = None,
         validator: Optional[InputValidator] = None,
         classifier: Optional[TaskClassifier] = None,
         metrics_collector: Optional[MetricsCollector] = None,
@@ -77,6 +79,9 @@ class TaskRouter:
             verbose: Print routing decisions
             intent_clarifier: Injectable clarifier for ambiguous tasks (default: InteractiveClarifier)
             output_handler: Injectable output handler (default: based on verbose)
+            input_handler: Injectable input handler for user prompts/confirmations
+                          (default: DefaultConsoleInput). IMPORTANT: In Textual mode,
+                          inject CLIIOInputAdapter to avoid blocking on input().
             validator: Injectable input validator (default: InputValidator)
             classifier: Injectable task classifier (default: TaskClassifier)
             metrics_collector: Injectable metrics collector (default: MetricsCollector)
@@ -88,8 +93,11 @@ class TaskRouter:
         self.auto_confirm_direct = auto_confirm_direct
         self.verbose = verbose
 
+        # Input handler for user interaction (confirmations, prompts)
+        self._input_handler = input_handler or DefaultConsoleInput()
+
         # Dependency injection - use provided or create defaults
-        self.intent_clarifier = intent_clarifier or InteractiveClarifier()
+        self.intent_clarifier = intent_clarifier or InteractiveClarifier(io=self._input_handler)
         self.output_handler = output_handler or (
             ConsoleOutputHandler() if verbose else NullOutputHandler()
         )
@@ -490,12 +498,14 @@ What is the user's PRIMARY intent? Respond with JSON only."""
             return False
 
         if action == "confirm":
-            # Side effect: user interaction
+            # Side effect: user interaction via injected input handler
+            # (avoids blocking in Textual worker threads)
             if self.verbose:
                 self.output_handler.log_info(f"Command: {task.extracted_command}")
-                response = input("  Execute? [y/N]: ").strip().lower()
-                return response in ['y', 'yes']
-            return False
+            return self._input_handler.confirm(
+                f"  Execute '{task.extracted_command}'? [y/N]: ",
+                default=False
+            )
 
         return True
 

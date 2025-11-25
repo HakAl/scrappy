@@ -31,6 +31,8 @@ from .protocols import (
     IntentClarifierProtocol,
     TaskRouterProtocol,
     MetricsCollectorProtocol,
+    TaskRouterInputProtocol,
+    DefaultConsoleInput,
 )
 
 __all__ = [
@@ -65,4 +67,6 @@ __all__ = [
     "IntentClarifierProtocol",
     "TaskRouterProtocol",
     "MetricsCollectorProtocol",
+    "TaskRouterInputProtocol",
+    "DefaultConsoleInput",
 ]

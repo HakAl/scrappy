@@ -68,7 +68,8 @@ The existing architecture has a clean protocol for input:
 - `CLIIOProtocol.confirm()` - yes/no confirmation
 - `CLIIOProtocol.input_line()` - raw line input
 
-These are already correctly implemented in `UnifiedIO` with Textual support via `OutputSinkAdapter` which auto-approves with warnings.
+These are already correctly implemented in `UnifiedIO` with Textual support via 
+`OutputSinkAdapter` which auto-approves with warnings.
 
 ### 2. No Direct `input()` Calls in Business Logic
 
@@ -88,11 +89,11 @@ The `TaskRouter` and its collaborators need an `InputProtocol` injected that:
 
 ## Implementation Plan
 
-### Phase 1: Define InputProtocol for Task Router
+### Phase 1: Define InputProtocol and Default Implementation
 
 **File:** `src/task_router/protocols.py` (new or extend existing)
 
-Create a minimal protocol that task router components need:
+Create a minimal protocol and shared default implementation:
 
 ```python
 class TaskRouterInputProtocol(Protocol):
@@ -109,28 +110,56 @@ class TaskRouterInputProtocol(Protocol):
     def output(self, message: str) -> None:
         """Output a message to user."""
         ...
+
+
+class DefaultConsoleInput:
+    """Fallback implementation using stdin. For CLI/non-Textual contexts.
+
+    This is the shared default used by both IntentClarifier and TaskRouter
+    when no IO protocol is injected.
+    """
+
+    def prompt(self, text: str, default: str = "") -> str:
+        try:
+            result = input(text)
+            return result if result else default
+        except (EOFError, KeyboardInterrupt):
+            return default
+
+    def confirm(self, text: str, default: bool = False) -> bool:
+        try:
+            result = input(text).strip().lower()
+            return result in ('y', 'yes')
+        except (EOFError, KeyboardInterrupt):
+            return default
+
+    def output(self, message: str) -> None:
+        print(message)
 ```
 
-This is deliberately minimal - just what the task router needs.
+The protocol is deliberately minimal - just what the task router needs. The `DefaultConsoleInput`
+class is shared by both `IntentClarifier` and `TaskRouter` to avoid duplication.
 
 ### Phase 2: Refactor IntentClarifier
 
 **File:** `src/task_router/intent_clarifier.py`
 
-#### 2.1 Update InteractiveClarifier to use protocol
+Update InteractiveClarifier to use the shared protocol and default:
 
 ```python
+from src.task_router.protocols import TaskRouterInputProtocol, DefaultConsoleInput
+
 class InteractiveClarifier(IntentClarifierInterface):
     def __init__(self, io: Optional[TaskRouterInputProtocol] = None):
         """
         Initialize interactive clarifier.
 
         Args:
-            io: Input protocol for user interaction. If None, creates
-                a default console-based implementation (for backwards
-                compatibility with non-Textual usage).
+            io: Input protocol for user interaction. If None, uses
+                DefaultConsoleInput for backwards compatibility with
+                non-Textual usage.
         """
-        self._io = io or _DefaultConsoleInput()
+        self._io = io or DefaultConsoleInput()
 
     def clarify(self, task: ClassifiedTask) -> ClassifiedTask:
         self._io.output(f"\nIntent Clarification Needed")
@@ -145,30 +174,6 @@ class InteractiveClarifier(IntentClarifierInterface):
         # ... handle choice ...
 ```
 
-#### 2.2 Create default console implementation (fallback)
-
-```python
-class _DefaultConsoleInput:
-    """Fallback input for non-Textual contexts (one-shot commands)."""
-
-    def prompt(self, text: str, default: str = "") -> str:
-        try:
-            result = input(text)
-            return result if result else default
-        except EOFError:
-            return default
-
-    def confirm(self, text: str, default: bool = False) -> bool:
-        try:
-            result = input(f"{text} [y/N]: ").strip().lower()
-            return result in ('y', 'yes')
-        except EOFError:
-            return default
-
-    def output(self, message: str) -> None:
-        print(message)
-```
-
 ### Phase 3: Refactor TaskRouter._should_execute()
 
 **File:** `src/task_router/router.py`
@@ -176,6 +181,8 @@ class _DefaultConsoleInput:
 #### 3.1 Add input protocol to TaskRouter
 
 ```python
+from src.task_router.protocols import TaskRouterInputProtocol, DefaultConsoleInput
+
 class TaskRouter:
     def __init__(
         self,
@@ -189,7 +196,7 @@ class TaskRouter:
         # ... rest of params ...
     ):
         # ...
-        self._input_handler = input_handler or _DefaultConsoleInput()
+        self._input_handler = input_handler or DefaultConsoleInput()
 ```
 
 #### 3.2 Update _should_execute()
@@ -272,18 +279,60 @@ Search for remaining direct `input()` calls:
 
 These are all in the IO layer itself, which is correct.
 
+### Phase 7: Add Regression Guard Test
+
+**File:** `tests/task_router/test_no_blocking_input.py` (new)
+
+Add an AST-based test that prevents future `input()` calls from sneaking into task router code:
+
+```python
+"""Guard test to prevent direct input() calls in task router code."""
+import ast
+from pathlib import Path
+
+import pytest
+
+
+def test_no_direct_input_calls_in_task_router():
+    """Ensure no direct input() calls in task router code.
+
+    Direct input() calls block forever in Textual worker threads.
+    All input must go through TaskRouterInputProtocol.
+
+    The only allowed location is DefaultConsoleInput in protocols.py.
+    """
+    task_router_dir = Path("src/task_router")
+    allowed_files = {"protocols.py"}  # DefaultConsoleInput lives here
+
+    for py_file in task_router_dir.glob("**/*.py"):
+        if py_file.name in allowed_files:
+            continue
+
+        tree = ast.parse(py_file.read_text())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                if isinstance(node.func, ast.Name) and node.func.id == "input":
+                    pytest.fail(
+                        f"Direct input() call in {py_file}:{node.lineno}. "
+                        f"Use TaskRouterInputProtocol instead."
+                    )
+```
+
+This test will catch any accidental reintroduction of blocking `input()` calls.
+
 ---
 
 ## File Changes Summary
 
 | File | Change Type | Description |
 |------|-------------|-------------|
-| `src/task_router/protocols.py` | Create/Extend | Add `TaskRouterInputProtocol` |
+| `src/task_router/protocols.py` | Create/Extend | Add `TaskRouterInputProtocol` and `DefaultConsoleInput` |
 | `src/task_router/intent_clarifier.py` | Modify | Inject IO protocol, remove direct `input()` |
 | `src/task_router/router.py` | Modify | Add `input_handler` param, fix `_should_execute()` |
 | `src/cli/task_router_handler.py` | Modify | Add `CLIIOInputAdapter`, inject into router |
 | `tests/task_router/test_intent_clarifier.py` | Modify | Test with mock IO |
 | `tests/task_router/test_task_router.py` | Modify | Test input handler injection |
+| `tests/task_router/test_no_blocking_input.py` | Create | Regression guard against direct `input()` calls |
 
 ---
 
@@ -340,16 +389,20 @@ This is documented as "Phase 1 Limitation" in the code. Future phases can add mo
 
 ## Success Criteria
 
-1. No `input()` calls in `src/task_router/` except in fallback `_DefaultConsoleInput`
+1. No `input()` calls in `src/task_router/` except in `DefaultConsoleInput` (in `protocols.py`)
 2. Textual app never hangs on any user input
 3. All existing tests pass
 4. New tests verify IO protocol injection
-5. Warning panels appear for auto-approved confirmations
+5. Regression guard test passes (no stray `input()` calls)
+6. Warning panels appear for auto-approved confirmations
 
 ---
 
 ## Future Work (Out of Scope)
-
+ - Clarification output - InteractiveClarifier.clarify() always outputs the menu, even when clarification isn't
+  needed. The check _needs_intent_clarification happens BEFORE clarify() is called, but in your output with 100%
+  confidence, it's still showing the clarification menu - which means _needs_intent_clarification is returning True
+  incorrectly.
 - **Phase 3 Modal Dialogs**: Replace auto-approve with actual Textual modal screens
 - **Async Input Methods**: Non-blocking input that waits for user response
 - **Input Request Queue**: Bi-directional communication between worker and UI threads

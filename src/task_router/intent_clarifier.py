@@ -7,9 +7,10 @@ that can be swapped with different implementations.
 """
 from abc import ABC, abstractmethod
 from dataclasses import replace
-from typing import Callable, Optional
+from typing import Callable, Optional, Union
 
 from .classifier import ClassifiedTask, TaskType
+from .protocols import DefaultConsoleInput, TaskRouterInputProtocol
 
 
 class IntentClarifierInterface(ABC):
@@ -41,11 +42,16 @@ class InteractiveClarifier(IntentClarifierInterface):
     This is the default clarifier for CLI usage. It asks the user
     to choose between different interpretations of their request.
 
-    The input source is injectable to enable testing.
+    The input source is injectable via TaskRouterInputProtocol to enable:
+    - Non-blocking input in Textual UI
+    - Testable code with mock input
+    - CLI fallback via DefaultConsoleInput
     """
 
     def __init__(
         self,
+        io: Optional[TaskRouterInputProtocol] = None,
+        # Legacy parameters for backwards compatibility
         input_fn: Optional[Callable[[str], str]] = None,
         output_fn: Optional[Callable[[str], None]] = None
     ):
@@ -53,11 +59,30 @@ class InteractiveClarifier(IntentClarifierInterface):
         Initialize interactive clarifier.
 
         Args:
-            input_fn: Function to get user input (default: builtins.input)
-            output_fn: Function to display prompts (default: print)
+            io: Input protocol for user interaction. If None, uses
+                DefaultConsoleInput for backwards compatibility with
+                non-Textual usage.
+            input_fn: DEPRECATED - Legacy function to get user input.
+                      Use io parameter instead.
+            output_fn: DEPRECATED - Legacy function to display prompts.
+                       Use io parameter instead.
+
+        Note:
+            If both io and legacy parameters are provided, io takes precedence.
+            Legacy parameters are maintained for backwards compatibility but
+            will be removed in a future version.
         """
-        self.input_fn = input_fn or input
-        self.output_fn = output_fn or print
+        if io is not None:
+            self._io = io
+        elif input_fn is not None or output_fn is not None:
+            # Legacy mode: wrap functions in adapter
+            self._io = _LegacyInputAdapter(
+                input_fn=input_fn or input,
+                output_fn=output_fn or print
+            )
+        else:
+            # Default: use shared console input
+            self._io = DefaultConsoleInput()
 
     def clarify(self, task: ClassifiedTask) -> ClassifiedTask:
         """
@@ -68,16 +93,16 @@ class InteractiveClarifier(IntentClarifierInterface):
         2. Actually DO this for you (execute/create/modify)
         3. Keep current classification
         """
-        self.output_fn(f"\nIntent Clarification Needed")
-        self.output_fn(f"   Classified as: {task.task_type.value} (confidence: {task.confidence:.0%})")
-        self.output_fn(f"   Input: \"{task.original_input}\"")
-        self.output_fn(f"\nDid you want me to:")
-        self.output_fn(f"  [1] EXPLAIN how to do this (research/information only)")
-        self.output_fn(f"  [2] Actually DO this for you (execute/create/modify)")
-        self.output_fn(f"  [3] Keep current classification ({task.task_type.value})")
+        self._io.output(f"\nIntent Clarification Needed")
+        self._io.output(f"   Classified as: {task.task_type.value} (confidence: {task.confidence:.0%})")
+        self._io.output(f"   Input: \"{task.original_input}\"")
+        self._io.output(f"\nDid you want me to:")
+        self._io.output(f"  [1] EXPLAIN how to do this (research/information only)")
+        self._io.output(f"  [2] Actually DO this for you (execute/create/modify)")
+        self._io.output(f"  [3] Keep current classification ({task.task_type.value})")
 
         try:
-            choice = self.input_fn("\nChoice [1/2/3]: ").strip()
+            choice = self._io.prompt("\nChoice [1/2/3]: ", default="3").strip()
         except (EOFError, KeyboardInterrupt):
             # User cancelled, keep original
             return task
@@ -101,6 +126,43 @@ class InteractiveClarifier(IntentClarifierInterface):
         # else: choice == "3" or invalid input, keep original
 
         return task
+
+
+class _LegacyInputAdapter:
+    """
+    Adapter to wrap legacy input_fn/output_fn in TaskRouterInputProtocol.
+
+    This maintains backwards compatibility with code that passed
+    input_fn and output_fn to InteractiveClarifier.
+    """
+
+    def __init__(
+        self,
+        input_fn: Callable[[str], str],
+        output_fn: Callable[[str], None]
+    ):
+        self._input_fn = input_fn
+        self._output_fn = output_fn
+
+    def prompt(self, text: str, default: str = "") -> str:
+        """Get text input using legacy function."""
+        try:
+            result = self._input_fn(text)
+            return result if result else default
+        except (EOFError, KeyboardInterrupt):
+            return default
+
+    def confirm(self, text: str, default: bool = False) -> bool:
+        """Get yes/no confirmation using legacy function."""
+        try:
+            result = self._input_fn(text).strip().lower()
+            return result in ('y', 'yes')
+        except (EOFError, KeyboardInterrupt):
+            return default
+
+    def output(self, message: str) -> None:
+        """Output message using legacy function."""
+        self._output_fn(message)
 
 
 class AutoClarifier(IntentClarifierInterface):

@@ -536,3 +536,89 @@ class IntentServiceProtocol(Protocol):
             Action object ready to be executed
         """
         ...
+
+
+@runtime_checkable
+class TaskRouterInputProtocol(Protocol):
+    """
+    Protocol for user input in task router components.
+
+    This protocol abstracts user input to enable:
+    - Non-blocking input in Textual UI (via CLIIOProtocol adapters)
+    - Testable code with mock input
+    - CLI fallback via DefaultConsoleInput
+
+    Implementations:
+    - DefaultConsoleInput: Fallback using stdin (for CLI/non-Textual contexts)
+    - CLIIOInputAdapter: Adapts CLIIOProtocol for Textual compatibility
+
+    IMPORTANT: Direct input() calls in task router code will block forever
+    in Textual worker threads. Always use this protocol instead.
+    """
+
+    def prompt(self, text: str, default: str = "") -> str:
+        """
+        Get text input from user.
+
+        Args:
+            text: Prompt text to display
+            default: Default value if user provides no input
+
+        Returns:
+            User's input or default value
+        """
+        ...
+
+    def confirm(self, text: str, default: bool = False) -> bool:
+        """
+        Get yes/no confirmation from user.
+
+        Args:
+            text: Confirmation prompt text
+            default: Default value if user provides no input
+
+        Returns:
+            True if user confirms, False otherwise
+        """
+        ...
+
+    def output(self, message: str) -> None:
+        """
+        Output a message to user.
+
+        Args:
+            message: Message to display
+        """
+        ...
+
+
+class DefaultConsoleInput:
+    """
+    Fallback implementation using stdin.
+
+    For CLI/non-Textual contexts where direct console input is safe.
+    This is the shared default used by both IntentClarifier and TaskRouter
+    when no IO protocol is injected.
+
+    WARNING: Do NOT use this in Textual worker threads - it will block forever.
+    """
+
+    def prompt(self, text: str, default: str = "") -> str:
+        """Get text input from console."""
+        try:
+            result = input(text)
+            return result if result else default
+        except (EOFError, KeyboardInterrupt):
+            return default
+
+    def confirm(self, text: str, default: bool = False) -> bool:
+        """Get yes/no confirmation from console."""
+        try:
+            result = input(text).strip().lower()
+            return result in ('y', 'yes')
+        except (EOFError, KeyboardInterrupt):
+            return default
+
+    def output(self, message: str) -> None:
+        """Output message to console."""
+        print(message)

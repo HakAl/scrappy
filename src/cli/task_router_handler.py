@@ -7,8 +7,43 @@ from pathlib import Path
 from typing import Optional
 
 from ..task_router import TaskRouter, ClassifiedTask
+from ..task_router.protocols import TaskRouterInputProtocol
 from ..orchestrator.protocols import Orchestrator
 from .io_interface import CLIIOProtocol
+
+
+class CLIIOInputAdapter:
+    """
+    Adapts CLIIOProtocol to TaskRouterInputProtocol.
+
+    This adapter routes input requests through the CLI IO layer, which:
+    - In Textual mode: auto-approves with warning panels (non-blocking)
+    - In CLI mode: uses console input directly
+
+    This ensures that task router components don't call input() directly,
+    which would block forever in Textual worker threads.
+    """
+
+    def __init__(self, io: CLIIOProtocol):
+        """
+        Initialize adapter.
+
+        Args:
+            io: CLI IO protocol implementation (UnifiedIO or similar)
+        """
+        self._io = io
+
+    def prompt(self, text: str, default: str = "") -> str:
+        """Get text input via CLI IO layer."""
+        return self._io.prompt(text, default=default)
+
+    def confirm(self, text: str, default: bool = False) -> bool:
+        """Get yes/no confirmation via CLI IO layer."""
+        return self._io.confirm(text, default=default)
+
+    def output(self, message: str) -> None:
+        """Output message via CLI IO layer."""
+        self._io.echo(message)
 
 
 class CLITaskRouterHandler:
@@ -67,15 +102,27 @@ class CLITaskRouterHandler:
         return Path.cwd()
 
     def _create_default_router(self) -> TaskRouter:
-        """Create default task router with CLI IO integration."""
-        from src.task_router import CLIIOOutputHandler
+        """Create default task router with CLI IO integration.
+
+        Creates router with:
+        - CLIIOOutputHandler for output (console/Textual compatible)
+        - CLIIOInputAdapter for input (non-blocking in Textual mode)
+        - InteractiveClarifier with same input adapter (no direct input() calls)
+        """
+        from src.task_router import CLIIOOutputHandler, InteractiveClarifier
+
+        # Create input adapter that routes through UnifiedIO
+        # This ensures no direct input() calls that would block in Textual
+        input_adapter = CLIIOInputAdapter(self.io)
 
         return TaskRouter(
             orchestrator=self.orchestrator,
             project_root=self.project_root,
             auto_confirm_direct=self.auto_confirm,
             verbose=True,
-            output_handler=CLIIOOutputHandler(self.io)
+            output_handler=CLIIOOutputHandler(self.io),
+            input_handler=input_adapter,
+            intent_clarifier=InteractiveClarifier(io=input_adapter),
         )
 
     def handle_auto_route(self, user_input: str):
