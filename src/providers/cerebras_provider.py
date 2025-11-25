@@ -13,7 +13,7 @@ import time
 import json
 from typing import Optional
 
-from .base import LLMProvider, LLMResponse, ProviderLimits, ModelInfo, ToolCall
+from .base import LLMProviderBase, LLMResponse, ProviderLimits, ModelInfo, ToolCall
 from ..utils.imports import safe_import
 from ..utils.errors import raise_package_not_installed, raise_env_var_not_found, raise_model_not_supported
 
@@ -26,7 +26,7 @@ OpenAI = getattr(_openai_module, 'OpenAI', None) if _openai_module else None
 httpx, HTTPX_AVAILABLE = safe_import('httpx')
 
 
-class CerebrasProvider(LLMProvider):
+class CerebrasProvider(LLMProviderBase):
     """
     Cerebras provider for ultra-fast LLM inference.
 

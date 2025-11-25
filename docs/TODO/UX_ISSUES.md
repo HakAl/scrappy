@@ -75,7 +75,6 @@ Research agent routing to understand problem. Steps to reproduce and added conte
 Problem:
 Using coding assistant for research query.
 BAD ROUTING -- EG:
----
 You>  who is the best coder to live dijkstra, turing?
 
 Task Classification:

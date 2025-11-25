@@ -12,10 +12,10 @@ from urllib.parse import urlparse
 
 import httpx
 
-from .base import Tool, ToolParameter, ToolResult, ToolContext
+from .base import ToolBase, ToolParameter, ToolResult, ToolContext
 
 
-class WebFetchTool(Tool):
+class WebFetchTool(ToolBase):
     """Fetch content from URLs (documentation, APIs, web pages)."""
 
     # Safety: Block potentially dangerous domains
@@ -240,7 +240,7 @@ class WebFetchTool(Tool):
             return ToolResult(False, "", f"Request failed: {str(e)}")
 
 
-class WebSearchTool(Tool):
+class WebSearchTool(ToolBase):
     """Search documentation and package registries."""
 
     # Pre-configured search endpoints

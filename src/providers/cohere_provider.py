@@ -20,7 +20,7 @@ import os
 import time
 from typing import Optional
 
-from .base import LLMProvider, LLMResponse, ProviderLimits
+from .base import LLMProviderBase, LLMResponse, ProviderLimits
 from ..utils.imports import safe_import
 from ..utils.errors import raise_package_not_installed, raise_env_var_not_found, raise_model_not_supported
 
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 cohere, COHERE_AVAILABLE = safe_import('cohere')
 
 
-class CohereProvider(LLMProvider):
+class CohereProvider(LLMProviderBase):
     """
     Cohere provider for chat and specialized NLP tasks.
 

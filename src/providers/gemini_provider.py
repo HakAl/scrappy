@@ -16,7 +16,7 @@ import os
 import time
 from typing import Optional
 
-from .base import LLMProvider, LLMResponse, ProviderLimits, ModelInfo
+from .base import LLMProviderBase, LLMResponse, ProviderLimits, ModelInfo
 from ..utils.imports import safe_import
 
 logger = logging.getLogger(__name__)
@@ -38,7 +38,7 @@ else:
 httpx, HTTPX_AVAILABLE = safe_import('httpx')
 
 
-class GeminiProvider(LLMProvider):
+class GeminiProvider(LLMProviderBase):
     """
     Google Gemini provider with automatic model fallback.
 

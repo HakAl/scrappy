@@ -16,8 +16,6 @@ except ImportError:
 
 from .protocols import OperationalOutputProtocol
 
-# Backward compatibility alias
-OutputInterface = OperationalOutputProtocol
 from .output import ConsoleOutput
 
 
@@ -46,7 +44,7 @@ class ContextCoordinator:
     def __init__(
         self,
         context: CodebaseContextProtocol,
-        output: Optional[OutputInterface] = None,
+        output: Optional[OperationalOutputProtocol] = None,
         generate_summary_func: Optional[Callable[[str], str]] = None,
     ):
         """

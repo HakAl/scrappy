@@ -1,6 +1,5 @@
 # LLM Provider implementations
 from .base import (
-    LLMProvider,
     LLMProviderProtocol,
     LLMProviderBase,
     LLMResponse,
@@ -17,8 +16,6 @@ __all__ = [
     'LLMProviderProtocol',
     # Base class (use for inheritance)
     'LLMProviderBase',
-    # Legacy alias (backward compatibility)
-    'LLMProvider',
     # Data classes
     'LLMResponse',
     'ProviderRegistry',

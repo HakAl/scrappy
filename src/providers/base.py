@@ -6,8 +6,7 @@ making it easy to add new providers (OpenRouter, HuggingFace, etc.) in the futur
 
 Architecture:
 - LLMProviderProtocol: Defines the contract (what providers MUST implement)
-- LLMProviderBase: Optional base class with shared utilities (providers MAY extend)
-- LLMProvider: Legacy alias for backward compatibility (use LLMProviderBase instead)
+- LLMProviderBase: Base class with shared utilities (providers extend this)
 """
 
 from dataclasses import dataclass, field
@@ -399,8 +398,6 @@ class LLMProviderBase:
         ]
 
 
-# Backward compatibility alias
-LLMProvider = LLMProviderBase
 
 
 class ProviderRegistry:

@@ -12,7 +12,7 @@ import os
 import time
 from typing import Optional
 
-from .base import LLMProvider, LLMResponse, ProviderLimits
+from .base import LLMProviderBase, LLMResponse, ProviderLimits
 from ..utils.imports import safe_import
 from ..utils.errors import raise_package_not_installed, raise_env_var_not_found, raise_model_not_supported
 
@@ -25,7 +25,7 @@ OpenAI = getattr(_openai_module, 'OpenAI', None) if _openai_module else None
 httpx, HTTPX_AVAILABLE = safe_import('httpx')
 
 
-class GitHubModelsProvider(LLMProvider):
+class GitHubModelsProvider(LLMProviderBase):
     """
     GitHub Models provider for premium LLM access.
 

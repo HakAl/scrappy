@@ -25,14 +25,14 @@ except ImportError:
         GitHubModelsProvider,
     )
 
-from .output import OutputInterface
+from .output import OperationalOutputProtocol
 from .protocols import ProviderRegistryProtocol  # For type hints (Dependency Inversion)
 
 
 class ProviderRegistrar:
     """Handles provider auto-registration."""
 
-    def __init__(self, registry: ProviderRegistryProtocol, output: OutputInterface):
+    def __init__(self, registry: ProviderRegistryProtocol, output: OperationalOutputProtocol):
         """
         Initialize the registrar.
 

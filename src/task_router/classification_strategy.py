@@ -8,7 +8,6 @@ Architecture:
 - ClassificationStrategyProtocol: Defines the contract (what strategies MUST implement)
 - ClassificationStrategyBase: Base class with shared evaluation logic
 - PatternBasedStrategy: Convenience base for pattern-matching strategies
-- ClassificationStrategy: Legacy alias for backward compatibility
 """
 
 import re
@@ -138,11 +137,7 @@ class ClassificationStrategyBase:
         return f"{self.task_type().value}: {pattern_str}"
 
 
-# Backward compatibility alias
-ClassificationStrategy = ClassificationStrategyBase
-
-
-class PatternBasedStrategy(ClassificationStrategy):
+class PatternBasedStrategy(ClassificationStrategyBase):
     """
     Base class for pattern-based strategies.
 

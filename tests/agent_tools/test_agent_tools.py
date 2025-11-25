@@ -9,7 +9,7 @@ from src.agent_tools.tools.base import (
     ToolContext,
     ToolParameter,
     ToolResult,
-    Tool
+    ToolBase
 )
 from src.agent_tools.tools.registry import ToolRegistry
 
@@ -56,12 +56,12 @@ class TestToolContext:
 
 
 class TestToolBaseClass:
-    """Tests for Tool abstract base class."""
+    """Tests for ToolBase abstract base class."""
 
     @pytest.fixture
     def sample_tool(self):
         """Create a concrete tool implementation for testing."""
-        class EchoTool(Tool):
+        class EchoTool(ToolBase):
             @property
             def name(self):
                 return "echo"
@@ -162,7 +162,7 @@ class TestToolRegistry:
     @pytest.fixture
     def mock_tool(self):
         """Create a mock tool."""
-        tool = Mock(spec=Tool)
+        tool = Mock(spec=ToolBase)
         tool.name = "mock_tool"
         tool.description = "A mock tool"
         tool.get_full_description.return_value = "mock_tool() - A mock tool"
@@ -197,7 +197,7 @@ class TestToolRegistry:
     @pytest.mark.unit
     def test_list_tools_multiple(self, registry, mock_tool):
         """Test listing multiple tools."""
-        tool2 = Mock(spec=Tool)
+        tool2 = Mock(spec=ToolBase)
         tool2.name = "another_tool"
         tool2.description = "Another tool"
 

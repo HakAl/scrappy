@@ -9,7 +9,7 @@ import subprocess
 from pathlib import Path
 from typing import Set, Dict, List, Any
 
-from .base import Tool, ToolParameter, ToolResult, ToolContext
+from .base import ToolBase, ToolParameter, ToolResult, ToolContext
 
 
 # Python standard library modules (comprehensive list)
@@ -120,7 +120,7 @@ IMPORT_TO_PYPI = {
 }
 
 
-class AnalyzePythonDependenciesTool(Tool):
+class AnalyzePythonDependenciesTool(ToolBase):
     """Analyze Python imports to generate requirements.txt content."""
 
     @property

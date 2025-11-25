@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
-from .base import Tool, ToolParameter, ToolResult, ToolContext
+from .base import ToolBase, ToolParameter, ToolResult, ToolContext
 
 if TYPE_CHECKING:
     from ...agent_config import AgentConfig
@@ -541,7 +541,7 @@ class ShellCommandExecutor:
             return f"Error running command: {str(e)}"
 
 
-class CommandTool(Tool):
+class CommandTool(ToolBase):
     """
     Tool wrapper for shell command execution.
 

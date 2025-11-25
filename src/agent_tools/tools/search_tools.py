@@ -9,10 +9,10 @@ import re
 from pathlib import Path
 from typing import Optional
 
-from .base import Tool, ToolParameter, ToolResult, ToolContext
+from .base import ToolBase, ToolParameter, ToolResult, ToolContext
 
 
-class SearchCodeTool(Tool):
+class SearchCodeTool(ToolBase):
     """Search for patterns in code files with regex, AST-aware, and context support."""
 
     @property

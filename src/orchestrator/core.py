@@ -26,7 +26,7 @@ from .memory import WorkingMemory
 from .session import SessionManager
 from .task_executor import TaskExecutor
 from .provider_selector import ProviderSelector
-from .output import OutputInterface, ConsoleOutput
+from .output import OperationalOutputProtocol, ConsoleOutput
 from .delegation import DelegationManager
 from .retry_orchestrator import RetryOrchestrator
 from .prompt_augmenter import PromptAugmenter
@@ -77,7 +77,7 @@ class AgentOrchestrator:
         cache_ttl_hours: int = 24,
         verbose_selection: bool = False,
         enable_semantic_search: bool = False,
-        output: Optional[OutputInterface] = None,
+        output: Optional[OperationalOutputProtocol] = None,
         # Injectable dependencies for testability (using protocols for Dependency Inversion)
         registry: Optional[ProviderRegistryProtocol] = None,
         codebase_context: Optional[ContextProvider] = None,

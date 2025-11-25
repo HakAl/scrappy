@@ -149,10 +149,10 @@ class TestToolRegistryBehavior:
     def test_registry_register_and_get(self):
         """register() and get() should work together."""
         from src.agent_tools.tools.registry import ToolRegistry
-        from src.agent_tools.tools.base import Tool, ToolParameter, ToolResult, ToolContext
+        from src.agent_tools.tools.base import ToolBase, ToolParameter, ToolResult, ToolContext
 
         # Create a minimal test tool
-        class TestTool(Tool):
+        class TestTool(ToolBase):
             @property
             def name(self) -> str:
                 return "test_tool"
@@ -179,9 +179,9 @@ class TestToolRegistryBehavior:
     def test_registry_list_all_returns_tools(self):
         """list_all() should return list of registered tools."""
         from src.agent_tools.tools.registry import ToolRegistry
-        from src.agent_tools.tools.base import Tool, ToolParameter, ToolResult, ToolContext
+        from src.agent_tools.tools.base import ToolBase, ToolParameter, ToolResult, ToolContext
 
-        class TestTool(Tool):
+        class TestTool(ToolBase):
             @property
             def name(self) -> str:
                 return "list_test_tool"
@@ -218,9 +218,9 @@ class TestToolRegistryBehavior:
     def test_registry_register_duplicate_raises(self):
         """register() should raise ValueError for duplicate tools."""
         from src.agent_tools.tools.registry import ToolRegistry
-        from src.agent_tools.tools.base import Tool, ToolResult, ToolContext
+        from src.agent_tools.tools.base import ToolBase, ToolResult, ToolContext
 
-        class TestTool(Tool):
+        class TestTool(ToolBase):
             @property
             def name(self) -> str:
                 return "duplicate_tool"
@@ -248,9 +248,9 @@ class TestToolRegistryBehavior:
     def test_registry_unregister_removes_tool(self):
         """unregister() should remove tool from registry."""
         from src.agent_tools.tools.registry import ToolRegistry
-        from src.agent_tools.tools.base import Tool, ToolResult, ToolContext
+        from src.agent_tools.tools.base import ToolBase, ToolResult, ToolContext
 
-        class TestTool(Tool):
+        class TestTool(ToolBase):
             @property
             def name(self) -> str:
                 return "unregister_test"

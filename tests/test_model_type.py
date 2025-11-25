@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 # Import will fail until implementation exists
 try:
-    from src.providers.base import ModelType, ModelInfo, LLMProvider
+    from src.providers.base import ModelType, ModelInfo, LLMProviderBase
     IMPORTS_AVAILABLE = True
 except ImportError:
     IMPORTS_AVAILABLE = False

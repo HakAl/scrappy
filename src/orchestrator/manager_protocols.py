@@ -9,7 +9,7 @@ from typing import Protocol, Dict, Any, List, Optional, Callable, Coroutine, run
 from datetime import datetime
 from pathlib import Path
 
-from ..providers.base import LLMResponse, LLMProvider
+from ..providers.base import LLMResponse, LLMProviderBase
 
 try:
     from ..context import CodebaseContextProtocol
@@ -399,7 +399,7 @@ class ProviderRegistrarProtocol(Protocol):
 
     def register_provider(
         self,
-        provider: LLMProvider,
+        provider: LLMProviderBase,
         force: bool = False,
     ) -> bool:
         """

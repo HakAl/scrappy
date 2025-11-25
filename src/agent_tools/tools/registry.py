@@ -6,7 +6,7 @@ Provides centralized tool management with auto-generated descriptions.
 
 from typing import Optional
 
-from .base import Tool, ToolContext
+from .base import ToolBase, ToolContext
 
 
 class ToolRegistry:
@@ -22,9 +22,9 @@ class ToolRegistry:
 
     def __init__(self):
         """Initialize empty registry."""
-        self._tools: dict[str, Tool] = {}
+        self._tools: dict[str, ToolBase] = {}
 
-    def register(self, tool: Tool) -> None:
+    def register(self, tool: ToolBase) -> None:
         """
         Register a tool in the registry.
 
@@ -48,7 +48,7 @@ class ToolRegistry:
         if name in self._tools:
             del self._tools[name]
 
-    def get(self, name: str) -> Optional[Tool]:
+    def get(self, name: str) -> Optional[ToolBase]:
         """
         Get a tool by name.
 
@@ -69,12 +69,12 @@ class ToolRegistry:
         """
         return list(self._tools.keys())
 
-    def list_all(self) -> list[Tool]:
+    def list_all(self) -> list[ToolBase]:
         """
         List all registered tool instances.
 
         Returns:
-            List of Tool objects
+            List of ToolBase objects
         """
         return list(self._tools.values())
 

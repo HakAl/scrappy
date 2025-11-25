@@ -1,16 +1,20 @@
 <!-- MEDIUM PRIORITY - TEST NEEDED / INVESTIGATION / REPAIR: -->
 
-  Protocol Gaps Identified:
+Protocol Gaps Identified:
 
-  The skipped tests document where implementations don't fully conform to protocols - useful for future refactoring:
-  1. CacheProtocol.invalidate() not implemented by ResponseCache
-  2. ToolRegistryProtocol.exists() not implemented by ToolRegistry
-  3. RichRenderableProtocol not implemented by OutputBridge
-  4. ProviderRegistry doesn't exist as a separate module
+Skipped tests document where implementations don't fully conform to protocols - useful for future refactoring:
+1. CacheProtocol.invalidate() not implemented by ResponseCache
+2. ToolRegistryProtocol.exists() not implemented by ToolRegistry
+3. RichRenderableProtocol not implemented by OutputBridge
+4. ProviderRegistry doesn't exist as a separate module
+
+---
 
 Problem:
 Many tests have been commented out and marked #todo that may expose issues in code.
 Investigate and determine what is required to resolve.
+
+---
 
 src\cli\smart_query.py
 
@@ -19,6 +23,8 @@ src\cli\research_handlers\dependency_info.py
 src\cli\research_handlers\architecture.py 
 src\cli\research_handlers\configuration.py
 src\cli\research_handlers\documentation.py
+
+---
 
 [//]: # (agent_tools)
 3 failing tests in: test_search_tools.py

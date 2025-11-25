@@ -5,7 +5,6 @@ Routes tasks to optimal execution strategies based on complexity and type.
 
 from .classifier import TaskType, TaskClassifier, ClassifiedTask
 from .classification_strategy import (
-    ClassificationStrategy,
     ClassificationStrategyBase,
     ClassificationStrategyProtocol,
     PatternBasedStrategy,
@@ -50,7 +49,6 @@ __all__ = [
     # Classification Strategies
     "ClassificationStrategyProtocol",
     "ClassificationStrategyBase",
-    "ClassificationStrategy",  # Legacy alias
     "PatternBasedStrategy",
     "StrategyResult",
     # Configuration

@@ -7,11 +7,11 @@ Provides git log, diff, blame, show, and recent changes operations.
 import subprocess
 from typing import Optional
 
-from .base import Tool, ToolParameter, ToolResult, ToolContext
+from .base import ToolBase, ToolParameter, ToolResult, ToolContext
 from ..formatters import OutputFormatter, GitOutputFormatter, NullFormatter
 
 
-class GitTool(Tool):
+class GitTool(ToolBase):
     """Base class for git tools with common functionality."""
 
     def __init__(self, formatter: Optional[OutputFormatter] = None):

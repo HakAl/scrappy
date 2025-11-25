@@ -285,5 +285,3 @@ class ToolBase:
             return f"Error: {result.error or result.output}"
 
 
-# Backward compatibility alias
-Tool = ToolBase

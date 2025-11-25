@@ -11,8 +11,6 @@ from typing import List, Tuple
 # Import protocol from centralized location
 from .protocols import OperationalOutputProtocol
 
-# Backward compatibility alias (deprecated - use OperationalOutputProtocol)
-OutputInterface = OperationalOutputProtocol
 
 logger = logging.getLogger(__name__)
 

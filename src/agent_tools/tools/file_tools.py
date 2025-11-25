@@ -7,10 +7,10 @@ Provides read, write, list, and directory tree operations.
 from pathlib import Path
 from typing import Any, Optional
 
-from .base import Tool, ToolParameter, ToolResult, ToolContext
+from .base import ToolBase, ToolParameter, ToolResult, ToolContext
 
 
-class ReadFileTool(Tool):
+class ReadFileTool(ToolBase):
     """Read contents of a file."""
 
     @property
@@ -54,7 +54,7 @@ class ReadFileTool(Tool):
             return ToolResult(False, "", f"Error reading file: {str(e)}")
 
 
-class WriteFileTool(Tool):
+class WriteFileTool(ToolBase):
     """Write content to a file."""
 
     @property
@@ -212,7 +212,7 @@ class WriteFileTool(Tool):
             return ToolResult(False, "", f"Error writing file: {str(e)}")
 
 
-class ListFilesTool(Tool):
+class ListFilesTool(ToolBase):
     """List files matching a pattern."""
 
     @property
@@ -269,7 +269,7 @@ class ListFilesTool(Tool):
             return ToolResult(False, "", f"Error listing files: {str(e)}")
 
 
-class ListDirectoryTool(Tool):
+class ListDirectoryTool(ToolBase):
     """Show directory tree structure."""
 
     def __init__(self, output_interface=None):

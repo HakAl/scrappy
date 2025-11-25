@@ -5,7 +5,7 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime
 
-from src.providers.base import LLMResponse, ProviderLimits, LLMProvider, ProviderRegistry
+from src.providers.base import LLMResponse, ProviderLimits, LLMProviderBase, ProviderRegistry
 
 
 class TestLLMResponse:
@@ -86,7 +86,7 @@ class TestProviderRegistry:
     @pytest.fixture
     def mock_provider_class(self):
         """Create a mock provider class."""
-        class MockProvider(LLMProvider):
+        class MockProvider(LLMProviderBase):
             @property
             def name(self):
                 return "mock"

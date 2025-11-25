@@ -8,8 +8,6 @@ from typing import Optional
 
 from src.orchestrator.protocols import OperationalOutputProtocol
 
-# Backward compatibility alias
-OutputInterface = OperationalOutputProtocol
 
 
 class ProviderStatusReporter:
@@ -29,7 +27,7 @@ class ProviderStatusReporter:
         self,
         registry,
         provider_selector,
-        output: OutputInterface,
+        output: OperationalOutputProtocol,
         brain_name: Optional[str],
         verbose_selection: bool
     ):

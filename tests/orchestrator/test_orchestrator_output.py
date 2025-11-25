@@ -10,7 +10,7 @@ from io import StringIO
 import sys
 
 from src.orchestrator.output import (
-    OutputInterface,
+    OperationalOutputProtocol,
     ConsoleOutput,
     NullOutput,
     CapturingOutput,

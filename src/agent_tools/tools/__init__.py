@@ -1,6 +1,6 @@
 """Tool abstractions for the code agent."""
 
-from .base import Tool, ToolProtocol, ToolBase, ToolResult, ToolContext, ToolParameter
+from .base import ToolProtocol, ToolBase, ToolResult, ToolContext, ToolParameter
 from .registry import ToolRegistry
 from .file_tools import ReadFileTool, WriteFileTool, ListFilesTool, ListDirectoryTool
 from .git_tools import GitLogTool, GitDiffTool, GitBlameTool, GitShowTool, GitRecentChangesTool, GitStatusTool
@@ -12,8 +12,6 @@ __all__ = [
     'ToolProtocol',
     # Base class (use for inheritance)
     'ToolBase',
-    # Legacy alias (backward compatibility)
-    'Tool',
     # Data classes
     'ToolResult',
     'ToolContext',

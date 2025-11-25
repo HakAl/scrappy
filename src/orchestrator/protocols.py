@@ -8,7 +8,7 @@ enabling loose coupling and better testability throughout the codebase.
 from typing import Protocol, Optional, Dict, Any, List, runtime_checkable
 from datetime import datetime
 
-from ..providers.base import LLMResponse, LLMProvider, ProviderLimits
+from ..providers.base import LLMResponse, LLMProviderBase, ProviderLimits
 
 
 @runtime_checkable
@@ -458,23 +458,23 @@ class ProviderRegistryProtocol(Protocol):
     - TestProviderRegistry: Registry with mock providers for testing
 
     Example:
-        def get_model(registry: ProviderRegistryProtocol, name: str) -> LLMProvider:
+        def get_model(registry: ProviderRegistryProtocol, name: str) -> LLMProviderBase:
             return registry.get(name)
     """
 
-    def register(self, provider: LLMProvider) -> None:
+    def register(self, provider: LLMProviderBase) -> None:
         """
         Register a provider.
 
         Args:
-            provider: LLMProvider instance to register
+            provider: LLMProviderBase instance to register
 
         Raises:
             ValueError: If provider with same name already registered
         """
         ...
 
-    def get(self, name: str) -> LLMProvider:
+    def get(self, name: str) -> LLMProviderBase:
         """
         Get provider by name.
 
@@ -482,7 +482,7 @@ class ProviderRegistryProtocol(Protocol):
             name: Provider name
 
         Returns:
-            LLMProvider instance
+            LLMProviderBase instance
 
         Raises:
             KeyError: If provider not found
@@ -617,8 +617,6 @@ from ..protocols.output import BaseOutputProtocol
 # This maintains backward compatibility while using the unified hierarchy
 OperationalOutputProtocol = BaseOutputProtocol
 
-# Backward compatibility alias (deprecated - use OperationalOutputProtocol or BaseOutputProtocol)
-OutputInterface = OperationalOutputProtocol
 
 
 @runtime_checkable

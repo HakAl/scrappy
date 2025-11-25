@@ -26,8 +26,6 @@ from .task_executor import TaskExecutor
 from .provider_selector import ProviderSelector
 from .output import OperationalOutputProtocol, ConsoleOutput
 
-# Backward compatibility alias
-OutputInterface = OperationalOutputProtocol
 from .delegation import DelegationManager
 from .retry_orchestrator import RetryOrchestrator
 from .prompt_augmenter import PromptAugmenter
@@ -69,7 +67,7 @@ class OrchestratorComponents:
     """
 
     def __init__(self):
-        self.output: Optional[OutputInterface] = None
+        self.output: Optional[OperationalOutputProtocol] = None
         self.registry: Optional[ProviderRegistryProtocol] = None
         self.background_manager: Optional[BackgroundTaskManagerProtocol] = None
         self.codebase_context: Optional[ContextProvider] = None
@@ -213,7 +211,7 @@ class OrchestratorFactory:
 
         return components
 
-    def create_output(self) -> OutputInterface:
+    def create_output(self) -> OperationalOutputProtocol:
         """Create default output interface."""
         return ConsoleOutput()
 
@@ -278,7 +276,7 @@ class OrchestratorFactory:
     def create_provider_selector(
         self,
         registry: ProviderRegistryProtocol,
-        output: OutputInterface,
+        output: OperationalOutputProtocol,
         config: OrchestratorConfig
     ) -> ProviderSelectorProtocol:
         """Create default provider selector."""
@@ -297,7 +295,7 @@ class OrchestratorFactory:
         self,
         registry: ProviderRegistryProtocol,
         provider_selector: ProviderSelectorProtocol,
-        output: OutputInterface,
+        output: OperationalOutputProtocol,
         brain_name: Optional[str] = None
     ) -> StatusReporterProtocol:
         """Create default status reporter."""
@@ -325,7 +323,7 @@ class OrchestratorFactory:
     def create_context_manager(
         self,
         codebase_context: ContextProvider,
-        output: OutputInterface,
+        output: OperationalOutputProtocol,
         task_executor: TaskExecutor
     ) -> ContextCoordinator:
         """Create default context coordinator."""
@@ -339,7 +337,7 @@ class OrchestratorFactory:
         self,
         registry: ProviderRegistryProtocol,
         cache: CacheProtocol,
-        output: OutputInterface,
+        output: OperationalOutputProtocol,
         rate_tracker: RateLimitTrackerProtocol,
         provider_selector: ProviderSelectorProtocol,
         working_memory: WorkingMemoryProtocol,

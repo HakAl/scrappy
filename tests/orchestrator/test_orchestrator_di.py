@@ -14,7 +14,7 @@ from src.orchestrator.rate_limiter import RateLimitTracker
 from src.orchestrator.memory import WorkingMemory
 from src.orchestrator.session import SessionManager
 from src.orchestrator.provider_selector import ProviderSelector
-from src.orchestrator.protocols import OutputInterface
+from src.orchestrator.protocols import OperationalOutputProtocol
 from src.orchestrator.output import NullOutput
 
 
@@ -216,7 +216,7 @@ class TestDependencyInjectionEdgeCases:
 
     def test_output_already_injectable(self, tmp_path):
         """Output interface was already injectable - verify still works."""
-        mock_output = Mock(spec=OutputInterface)
+        mock_output = Mock(spec=OperationalOutputProtocol)
 
         orch = AgentOrchestrator(
             project_path=str(tmp_path),
