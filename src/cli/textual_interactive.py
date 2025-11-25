@@ -9,7 +9,10 @@ from typing import TYPE_CHECKING
 from .textual_app import ScrappyApp, TextualOutputAdapter
 from .unified_io import UnifiedIO
 from .interactive import InteractiveMode
-from .protocols import OutputSink
+from .output_bridge import OutputBridge
+
+# Re-export for backward compatibility
+OrchestratorOutputAdapter = OutputBridge
 
 if TYPE_CHECKING:
     from ..orchestrator.protocols import Orchestrator
@@ -22,47 +25,6 @@ if TYPE_CHECKING:
     from .task_router_handler import CLITaskRouterHandler
     from .tasks import CLITaskExecution
     from .logging import CLILogger
-
-
-class OrchestratorOutputAdapter:
-    """Adapter that bridges orchestrator OperationalOutputProtocol to Textual OutputSink.
-
-    This fixes the "split-brain" issue by routing ALL orchestrator output
-    (including from delegate(), registration messages, etc.) through the
-    Textual message queue.
-
-    Implements the OperationalOutputProtocol interface (info, warn, error, success).
-    """
-
-    def __init__(self, output_sink: OutputSink):
-        """Initialize with OutputSink (TextualOutputAdapter).
-
-        Args:
-            output_sink: OutputSink protocol implementation (TextualOutputAdapter)
-        """
-        self.output_sink = output_sink
-
-    def info(self, message: str) -> None:
-        """Output informational message."""
-        self.output_sink.post_output(message + "\n")
-
-    def warn(self, message: str) -> None:
-        """Output warning message."""
-        from rich.text import Text
-        warning_text = Text(message, style="yellow")
-        self.output_sink.post_renderable(warning_text)
-
-    def error(self, message: str) -> None:
-        """Output error message."""
-        from rich.text import Text
-        error_text = Text(message, style="red bold")
-        self.output_sink.post_renderable(error_text)
-
-    def success(self, message: str) -> None:
-        """Output success message."""
-        from rich.text import Text
-        success_text = Text(message, style="green")
-        self.output_sink.post_renderable(success_text)
 
 
 class TextualInteractiveMode:
@@ -133,10 +95,10 @@ class TextualInteractiveMode:
                 "This is a programming error - CLI should always use Textual."
             )
 
-        # Inject orchestrator output adapter
-        # This routes ALL orchestrator output (delegate(), registration, etc.)
-        # through the Textual message queue
-        orchestrator_output = OrchestratorOutputAdapter(output_adapter)
+        # Inject output bridge to route orchestrator output through Textual
+        # OutputBridge implements BaseOutputProtocol (info/warn/error/success)
+        # and routes all messages through the Textual OutputSink
+        orchestrator_output = OutputBridge(output_adapter)
         self.orchestrator.output = orchestrator_output
 
         # Create InteractiveMode with existing Textual IO

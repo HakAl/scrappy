@@ -415,48 +415,55 @@ This section provides a phased approach to implementing the structural fixes abo
 
 ---
 
-### Phase 4: Create Unified Output Protocol Hierarchy (Medium Priority)
+### Phase 4: Create Unified Output Protocol Hierarchy (Medium Priority) - COMPLETED
 
 **Goal:** Establish a clean protocol hierarchy for all output abstractions.
 
+**Status:** COMPLETED (2025-01-25)
+
 **Tasks:**
 
-4.1. **Create base output protocol**
-   - Create file: `src/protocols/output.py`
-   - Define:
-     ```python
-     class BaseOutputProtocol(Protocol):
-         def info(self, message: str) -> None: ...
-         def warn(self, message: str) -> None: ...
-         def error(self, message: str) -> None: ...
-         def success(self, message: str) -> None: ...
-     ```
+4.1. **Create base output protocol** - DONE
+   - Created file: `src/protocols/output.py`
+   - Defined `BaseOutputProtocol` with info, warn, error, success methods
+   - Added `@runtime_checkable` decorator for isinstance() checks
 
-4.2. **Create extended protocols**
-   - In same file, add:
-     ```python
-     class FormattedOutputProtocol(BaseOutputProtocol, Protocol):
-         def print(self, text: str, color: str | None = None, bold: bool = False) -> None: ...
-         def style(self, text: str, color: str | None = None, bold: bool = False) -> str: ...
-         def prompt(self, text: str, default: str = "") -> str: ...
-         def confirm(self, text: str, default: bool = False) -> bool: ...
+4.2. **Create extended protocols** - DONE
+   - Created `FormattedOutputProtocol` extending `BaseOutputProtocol` with:
+     - print, style, prompt, confirm methods
+   - Created `RichRenderableProtocol` with:
+     - post_output, post_renderable methods
+   - Added backward compatibility alias: `OperationalOutputProtocol = BaseOutputProtocol`
 
-     class RichRenderableProtocol(Protocol):
-         def post_output(self, content: str) -> None: ...
-         def post_renderable(self, obj: RenderableType) -> None: ...
-     ```
+4.3. **Update existing implementations** - DONE
+   - `src/orchestrator/protocols.py`: Now imports and re-exports `BaseOutputProtocol` from central location
+   - `src/cli/output.py`: `FormattedOutputInterface` now implements `FormattedOutputProtocol` methods (info/warn/error/success)
+   - `src/cli/protocols.py`: `OutputSink` docstring updated to reference `RichRenderableProtocol`
 
-4.3. **Update existing implementations**
-   - `src/orchestrator/output.py`: Implement `BaseOutputProtocol`
-   - `src/cli/output.py`: Implement `FormattedOutputProtocol`
-   - `src/cli/protocols.py`: `OutputSink` extends or is compatible with `RichRenderableProtocol`
+4.4. **Consolidate adapters** - DONE
+   - Created `src/cli/output_bridge.py` with:
+     - `OutputBridge`: Bridges `BaseOutputProtocol` to `OutputSink` for TUI mode
+     - `ConsoleOutputBridge`: Direct console output for CLI mode
+     - `create_output_bridge()`: Factory function for mode-based routing
+   - `textual_interactive.py`: Now uses `OutputBridge` from centralized module
+   - `OrchestratorOutputAdapter` is now an alias to `OutputBridge` for backward compatibility
 
-4.4. **Consolidate adapters**
-   - Create unified `OutputBridge` class
-   - Deprecate: `OrchestratorOutputAdapter`, `OutputSinkAdapter` (or reduce to thin wrappers)
-   - Route based on output mode (CLI/TUI/Test)
+**Actual Changes:** 8 files modified, ~200 lines added
 
-**Estimated Changes:** 8-12 files, ~300 lines modified
+**Files Modified:**
+- `src/protocols/output.py` (new file)
+- `src/protocols/__init__.py`
+- `src/orchestrator/protocols.py`
+- `src/cli/output.py`
+- `src/cli/protocols.py`
+- `src/cli/output_bridge.py` (new file)
+- `src/cli/textual_interactive.py`
+
+**Verification:**
+- All 54 output-related tests pass
+- All 967+ CLI tests pass
+- Protocol conformance verified via isinstance() checks
+- Backward compatibility maintained via aliases
 
 ---
 

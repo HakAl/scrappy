@@ -19,9 +19,13 @@ if TYPE_CHECKING:
 class OutputSink(Protocol):
     """Abstraction for posting output to UI.
 
-    This protocol enables different UI implementations (Rich console,
-    Textual TUI, testing mocks) to receive output without coupling
-    the application logic to specific UI frameworks.
+    This protocol is functionally equivalent to RichRenderableProtocol
+    in src/protocols/output.py. It enables different UI implementations
+    (Rich console, Textual TUI, testing mocks) to receive output without
+    coupling the application logic to specific UI frameworks.
+
+    Note: This protocol exists for backward compatibility. New code should
+    prefer importing RichRenderableProtocol from src/protocols/output.py.
 
     Implementations must handle both plain text and Rich renderables
     (Panel, Table, Text, etc.) to preserve formatting.

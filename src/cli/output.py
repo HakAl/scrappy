@@ -4,6 +4,9 @@ Generic output abstraction layer.
 Provides library-agnostic output interface. Implementation library (click, rich, etc.)
 is completely hidden from consumers. Use adapter pattern to swap implementations.
 
+This module implements the FormattedOutputProtocol from src/protocols/output.py,
+which extends BaseOutputProtocol with styled output and user interaction.
+
 Usage:
     from src.cli.output import Output, TestOutput
 
@@ -40,9 +43,12 @@ def configure_output(use_rich: bool = True) -> None:
 class FormattedOutputInterface(ABC):
     """Abstract base class for formatted output implementations.
 
-    Provides library-agnostic styled output with user interaction capabilities.
-    For operational logging (info/warn/error), see OperationalOutputProtocol
-    in src/orchestrator/protocols.py.
+    Implements the FormattedOutputProtocol from src/protocols/output.py,
+    providing both:
+    - BaseOutputProtocol methods: info, warn, error, success
+    - Formatted output methods: print, style, prompt, confirm
+
+    For operational logging only, see BaseOutputProtocol in src/protocols/output.py.
     """
 
     @abstractmethod
@@ -115,6 +121,39 @@ class FormattedOutputInterface(ABC):
             True for yes, False for no
         """
         pass
+
+    # BaseOutputProtocol methods - default implementations using print()
+    def info(self, message: str) -> None:
+        """Output informational message.
+
+        Args:
+            message: Information message to output
+        """
+        self.print(message)
+
+    def warn(self, message: str) -> None:
+        """Output warning message.
+
+        Args:
+            message: Warning message to output
+        """
+        self.print(message, color="yellow")
+
+    def error(self, message: str) -> None:
+        """Output error message.
+
+        Args:
+            message: Error message to output
+        """
+        self.print(message, color="red", bold=True)
+
+    def success(self, message: str) -> None:
+        """Output success message.
+
+        Args:
+            message: Success message to output
+        """
+        self.print(message, color="green")
 
     # Backward compatibility methods
     def echo(self, message: str = "", nl: bool = True) -> None:

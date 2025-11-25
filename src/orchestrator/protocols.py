@@ -610,68 +610,14 @@ class WorkingMemoryProtocol(Protocol):
         ...
 
 
-@runtime_checkable
-class OperationalOutputProtocol(Protocol):
-    """
-    Protocol for operational output (logging/status messages).
+# Import the unified output protocol from the central protocols module
+from ..protocols.output import BaseOutputProtocol
 
-    Abstracts output operations to enable testing without actual console
-    output and support different output strategies.
+# OperationalOutputProtocol is now an alias to BaseOutputProtocol
+# This maintains backward compatibility while using the unified hierarchy
+OperationalOutputProtocol = BaseOutputProtocol
 
-    For formatted CLI output with styling and user interaction,
-    see FormattedOutputInterface in src/cli/output.py.
-
-    Implementations:
-    - ConsoleOutput: Standard console output with print
-    - NullOutput: Silent output (discards all messages)
-    - CapturingOutput: Captures messages for testing/inspection
-
-    Example:
-        def notify(output: OperationalOutputProtocol, message: str, is_error: bool) -> None:
-            if is_error:
-                output.error(message)
-            else:
-                output.info(message)
-    """
-
-    def info(self, message: str) -> None:
-        """
-        Output an informational message.
-
-        Args:
-            message: Information message to output
-        """
-        ...
-
-    def warn(self, message: str) -> None:
-        """
-        Output a warning message.
-
-        Args:
-            message: Warning message to output
-        """
-        ...
-
-    def error(self, message: str) -> None:
-        """
-        Output an error message.
-
-        Args:
-            message: Error message to output
-        """
-        ...
-
-    def success(self, message: str) -> None:
-        """
-        Output a success message.
-
-        Args:
-            message: Success message to output
-        """
-        ...
-
-
-# Backward compatibility alias (deprecated - use OperationalOutputProtocol)
+# Backward compatibility alias (deprecated - use OperationalOutputProtocol or BaseOutputProtocol)
 OutputInterface = OperationalOutputProtocol
 
 

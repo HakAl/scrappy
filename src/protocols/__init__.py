@@ -19,7 +19,15 @@ from .delegation import (
     ProviderSelectorProtocol,
 )
 
+from .output import (
+    BaseOutputProtocol,
+    FormattedOutputProtocol,
+    RichRenderableProtocol,
+    OperationalOutputProtocol,
+)
+
 __all__ = [
+    # Delegation protocols
     'LLMRequest',
     'PromptAugmenterProtocol',
     'CacheProtocol',
@@ -31,4 +39,9 @@ __all__ = [
     'WorkingMemoryProtocol',
     'OutputInterfaceProtocol',
     'ProviderSelectorProtocol',
+    # Output protocols
+    'BaseOutputProtocol',
+    'FormattedOutputProtocol',
+    'RichRenderableProtocol',
+    'OperationalOutputProtocol',
 ]
