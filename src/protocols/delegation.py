@@ -210,7 +210,34 @@ class RetryOrchestratorProtocol(Protocol):
         max_retries: int = 3,
     ) -> tuple[Any, dict]:
         """
-        Execute a request with retries and provider fallback.
+        Execute a request with retries and provider fallback (async).
+
+        Args:
+            request: The LLM request to execute
+            excluded_providers: Providers already attempted (for fallback)
+            max_retries: Maximum retry attempts per provider
+
+        Returns:
+            Tuple of (LLMResponse, task_record dict with metadata)
+
+        Raises:
+            RetryExhaustedError: When all providers and retries exhausted
+            ProviderNotFoundError: When requested provider doesn't exist
+            Other exceptions: For non-retryable errors
+        """
+        ...
+
+    def execute_with_retry_sync(
+        self,
+        request: LLMRequest,
+        excluded_providers: set[str],
+        max_retries: int = 3,
+    ) -> tuple[Any, dict]:
+        """
+        Execute a request with retries and provider fallback (sync).
+
+        Synchronous version that uses provider.chat() directly instead of
+        provider.chat_async(). Safe to call from any thread.
 
         Args:
             request: The LLM request to execute

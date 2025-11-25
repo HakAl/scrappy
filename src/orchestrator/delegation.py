@@ -129,10 +129,12 @@ class DelegationManager:
         **kwargs
     ) -> tuple[LLMResponse, dict]:
         """
-        Synchronous wrapper around delegate_async.
+        Synchronous delegation with caching, prompt augmentation, and retry/fallback.
 
-        This is a thin wrapper that calls asyncio.run() on the async implementation.
-        All business logic is in delegate_async() to avoid duplication.
+        This method uses synchronous provider methods (provider.chat()) directly,
+        making it safe to call from any thread including Textual worker threads.
+
+        For async code, use delegate_async() directly.
 
         Args:
             provider_name: Initial provider to try
@@ -155,22 +157,93 @@ class DelegationManager:
             AllProvidersRateLimitedError: If all providers are rate limited
             ValueError: If input validation fails
         """
-        return asyncio.run(
-            self.delegate_async(
-                provider_name=provider_name,
-                prompt=prompt,
-                model=model,
-                system_prompt=system_prompt,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                use_context=use_context,
-                use_cache=use_cache,
-                intent_classification=intent_classification,
-                auto_fallback=auto_fallback,
-                max_retries=max_retries,
-                **kwargs
+        # Determine settings
+        should_use_context = use_context if use_context is not None else self._context_aware
+        should_use_cache = use_cache if use_cache is not None else True
+
+        # Step 1: Augment prompt with context and working memory
+        final_prompt = self._prompt_augmenter.augment(prompt, use_context=should_use_context)
+
+        # Step 2: Check cache first
+        cached_response = None
+        intent_cache_hit = False
+        if should_use_cache:
+            cached_response = self._cache.get(
+                provider_name, final_prompt, model, system_prompt, max_tokens, temperature
             )
+            if not cached_response and intent_classification:
+                cached_response = self._cache.get_by_intent(
+                    intent_classification.get('intent', ''),
+                    intent_classification.get('entities', {}),
+                    intent_classification.get('keywords', []),
+                    provider_name,
+                    model
+                )
+                if cached_response:
+                    intent_cache_hit = True
+
+        if cached_response:
+            task_record = {
+                'timestamp': datetime.now().isoformat(),
+                'provider': provider_name,
+                'model': cached_response.model,
+                'tokens_used': cached_response.tokens_used,
+                'latency_ms': 0.0,
+                'context_augmented': should_use_context,
+                'cached': True,
+                'intent_cache_hit': intent_cache_hit,
+                'async': False,
+            }
+            return cached_response, task_record
+
+        # Step 3: Create LLMRequest object (validates inputs)
+        request = LLMRequest(
+            prompt=final_prompt,
+            provider=provider_name,
+            model=model,
+            system_prompt=system_prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            use_context=use_context,
+            use_cache=use_cache,
+            intent_classification=intent_classification,
+            auto_fallback=auto_fallback,
+            kwargs=kwargs,
         )
+
+        # Step 4: Execute with retry/fallback using SYNC method
+        response, retry_metadata = self._retry_orchestrator.execute_with_retry_sync(
+            request=request,
+            excluded_providers=set(),
+            max_retries=max_retries,
+        )
+
+        # Step 5: Store in cache
+        if should_use_cache:
+            self._cache.put(response, final_prompt, model, system_prompt, max_tokens, temperature)
+            if intent_classification:
+                self._cache.put_by_intent(
+                    response,
+                    intent_classification.get('intent', ''),
+                    intent_classification.get('entities', {}),
+                    intent_classification.get('keywords', [])
+                )
+
+        # Step 6: Create final task record
+        task_record = {
+            'timestamp': datetime.now().isoformat(),
+            'provider': retry_metadata['provider'],
+            'model': retry_metadata['model'],
+            'tokens_used': retry_metadata['tokens_used'],
+            'latency_ms': retry_metadata['latency_ms'],
+            'context_augmented': should_use_context,
+            'cached': False,
+            'async': False,
+            'fallback': retry_metadata['fallback'],
+            'attempts': retry_metadata['attempts'],
+        }
+
+        return response, task_record
 
     async def delegate_async(
         self,
@@ -309,10 +382,12 @@ class DelegationManager:
         **kwargs
     ) -> list[LLMResponse]:
         """
-        Process multiple tasks with same provider (synchronous wrapper).
+        Process multiple tasks with same provider (synchronous).
 
-        This is a thin wrapper around batch_delegate_async. All business logic
-        is in the async implementation.
+        This method processes tasks sequentially using the sync delegate() method,
+        making it safe to call from any thread including Textual worker threads.
+
+        For parallel async processing, use batch_delegate_async() directly.
 
         Args:
             tasks: List of task dicts with 'prompt' and optional 'system_prompt', 'kwargs'
@@ -322,9 +397,20 @@ class DelegationManager:
         Returns:
             List of LLMResponse objects in the same order as input tasks
         """
-        return asyncio.run(
-            self.batch_delegate_async(tasks, provider_name, **kwargs)
-        )
+        results = []
+        for task in tasks:
+            task_kwargs = task.get('kwargs', {})
+            task_kwargs.update(kwargs)
+
+            result, _ = self.delegate(
+                provider_name=provider_name,
+                prompt=task['prompt'],
+                system_prompt=task.get('system_prompt'),
+                **task_kwargs
+            )
+            results.append(result)
+
+        return results
 
     async def batch_delegate_async(
         self,

@@ -276,22 +276,117 @@ the entire call chain async-aware. This requires more changes but is cleaner.
 
 ---
 
-# QUICK FIX TO TEST
+# UPDATE: Sync path implemented but issue persists
 
-Add this to the top of `src/orchestrator/delegation.py`:
+The sync changes have been implemented:
+- `DelegationManager.delegate()` now uses `execute_with_retry_sync()` (no asyncio.run)
+- `DelegationManager.delegate_batch()` iterates sequentially using sync delegate()
+- `RetryOrchestrator.execute_with_retry_sync()` added - uses `provider.chat()` and `time.sleep()`
+- `base.py` fixed: `get_event_loop()` -> `get_running_loop()`
 
-```python
-import threading
+**Tests pass (30/30)** but the Textual freeze persists.
 
-def delegate(self, ...):
-    # Temporary fix: detect if we're in a worker thread
-    if threading.current_thread() is not threading.main_thread():
-        # We're in a worker thread - DON'T use asyncio.run()
-        # Instead, call the sync provider methods directly
-        return self._delegate_sync_fallback(...)
+---
 
-    # Original async path for main thread
-    return asyncio.run(self.delegate_async(...))
+# DEEPER INVESTIGATION NEEDED
+
+Since the sync path fix didn't resolve the issue, the problem is elsewhere. Possible causes:
+
+## 1. Output Queue Never Consumed?
+
+The architecture:
+```
+Worker Thread: process_command() -> _process_input() -> orchestrator.delegate()
+                    |
+                    v
+               io.echo() -> OutputSinkAdapter.output_plain() -> sink.post_output()
+                    |
+                    v
+               TextualOutputAdapter._queue.put()
+                    |
+Consumer Thread: consume_output_queue() polls queue, posts WriteOutput messages
+                    |
+                    v
+Main Thread: on_write_output() -> RichLog.write()
 ```
 
-This should immediately unblock the Textual UI.
+**Questions:**
+- Is the consumer thread (`consume_output_queue`) actually running?
+- Is `self._should_stop_consumer` being set prematurely?
+- Is `self.is_running` returning False?
+
+## 2. Message Never Posted to Textual?
+
+In `textual_app.py:267-270`:
+```python
+if msg_type == 'output':
+    self.post_message(WriteOutput(content))
+```
+
+**Questions:**
+- Is `post_message()` failing silently?
+- Is the Textual event loop blocked?
+
+## 3. Worker Thread Deadlock?
+
+The `@work(exclusive=True, thread=True)` decorator on `process_command`:
+- `exclusive=True` means only one instance runs at a time
+- If a previous worker is stuck, new ones won't run
+
+**Questions:**
+- Is there a previous command still "running"?
+- Is there a lock or semaphore blocking?
+
+## 4. LLM Call Hangs (Even with Sync)?
+
+Even with sync `provider.chat()`, the HTTP request itself could hang:
+- Network timeout not set
+- DNS resolution blocking
+- SSL handshake blocking
+
+**Questions:**
+- Does it work with a mock provider that returns instantly?
+- What provider is being used? Does it have timeouts configured?
+
+---
+
+# DEBUGGING STEPS
+
+Add print statements (not logging - direct to stderr) to trace execution:
+
+```python
+# In textual_app.py process_command()
+import sys
+
+@work(exclusive=True, thread=True)
+def process_command(self, user_input: str) -> None:
+    print(f"[WORKER] Starting: {user_input[:30]}", file=sys.stderr, flush=True)
+    try:
+        should_continue = self.interactive_mode._process_input(user_input)
+        print(f"[WORKER] Finished: {should_continue}", file=sys.stderr, flush=True)
+    except Exception as e:
+        print(f"[WORKER] Error: {e}", file=sys.stderr, flush=True)
+```
+
+```python
+# In interactive.py _process_input() at the start of handle_auto_route path
+print(f"[ROUTE] Starting auto_route", file=sys.stderr, flush=True)
+result = self.task_router.handle_auto_route(user_input)
+print(f"[ROUTE] Finished auto_route", file=sys.stderr, flush=True)
+```
+
+```python
+# In router.py route() around strategy.execute()
+print(f"[ROUTER] Before strategy.execute()", file=sys.stderr, flush=True)
+result = strategy.execute(classified)
+print(f"[ROUTER] After strategy.execute()", file=sys.stderr, flush=True)
+```
+
+```python
+# In research_loop.py run() around orchestrator.delegate()
+print(f"[LOOP] Before delegate()", file=sys.stderr, flush=True)
+response = self.orchestrator.delegate(...)
+print(f"[LOOP] After delegate()", file=sys.stderr, flush=True)
+```
+
+This will show exactly where execution stops.

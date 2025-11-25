@@ -4,6 +4,82 @@ We can see all background processes work, but no output.
 
 Root Cause: unknown
 
+Root Cause Analysis - Textual App Freeze
+
+  I've identified multiple blocking input() calls that can cause the Textual app to freeze when running in worker
+  threads. These are the root causes:
+
+  Critical Issues Found
+
+  1. TaskRouter Direct Command Confirmation (src/task_router/router.py:496)
+
+  if action == "confirm":
+      if self.verbose:
+          self.output_handler.log_info(f"Command: {task.extracted_command}")
+          response = input("  Execute? [y/N]: ").strip().lower()  # BLOCKS FOREVER
+
+  When a task is classified as DIRECT_COMMAND and requires confirmation, this calls input() directly. In a Textual
+  worker thread, this will block forever waiting for stdin that never comes.
+
+  2. InteractiveClarifier (src/task_router/intent_clarifier.py:80)
+
+  def clarify(self, task: ClassifiedTask) -> ClassifiedTask:
+      # ...
+      try:
+          choice = self.input_fn("\nChoice [1/2/3]: ").strip()  # Default is input()
+
+  The InteractiveClarifier is the default clarifier (line 92 of router.py). When a task has low confidence (< 0.65)
+  and clarify_on_low_confidence is True, this will be called, blocking forever.
+
+  The flow that triggers this:
+  1. User types a query in Textual
+  2. Worker thread processes via process_command()
+  3. _process_input() calls task_router.handle_auto_route()
+  4. router.route() classifies the task
+  5. If confidence is low, _clarify_intent() is called
+  6. InteractiveClarifier.clarify() calls input() - BLOCKED
+
+  3. Why This Only Happens with Auto-Route (Not Direct Chat)
+
+  Direct chat (orchestrator.delegate()) doesn't go through the TaskRouter at all - it goes straight to the
+  DelegationManager. The TaskRouter is only used when:
+  - auto_route_mode is enabled, OR
+  - The query is detected as needing tools (needs_tool_support(user_input))
+
+  This explains why "direct chat works but handle_auto_route doesn't".
+
+  Solution
+
+  The CLITaskRouterHandler._create_default_router() needs to inject a non-blocking clarifier and disable the direct
+  input() confirmation:
+
+  def _create_default_router(self) -> TaskRouter:
+      """Create default task router with CLI IO integration."""
+      from src.task_router import CLIIOOutputHandler, AutoClarifier  # Add AutoClarifier
+
+      return TaskRouter(
+          orchestrator=self.orchestrator,
+          project_root=self.project_root,
+          auto_confirm_direct=True,  # Skip the input() confirmation
+          verbose=True,
+          output_handler=CLIIOOutputHandler(self.io),
+          intent_clarifier=AutoClarifier(default_action="escalate")  # Non-blocking
+      )
+
+  Or better yet, the Textual mode should detect when it's running and configure appropriately.
+
+  Secondary Issue: RichOutputHandler._console Not Initialized
+
+  In src/task_router/output_handler.py:400, the RichOutputHandler class references self._console but never
+  initializes it:
+  def log_classification(self, ...):
+      # ...
+      self._console.print(table)  # AttributeError: 'RichOutputHandler' has no attribute '_console'
+
+  This would cause an error if RichOutputHandler is ever used.
+
+
+
 ---
   
 https://textual.textualize.io/guide/workers/#thread-workers

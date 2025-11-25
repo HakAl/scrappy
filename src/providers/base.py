@@ -248,7 +248,8 @@ class LLMProvider(ABC):
             LLMResponse with standardized format
         """
         # Default: run sync version in thread pool
-        loop = asyncio.get_event_loop()
+        # Use get_running_loop() instead of deprecated get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             None,
             lambda: self.chat(messages, model, max_tokens, temperature, **kwargs)

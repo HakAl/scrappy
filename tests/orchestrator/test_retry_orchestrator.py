@@ -41,13 +41,34 @@ class FakeProvider:
         self.fail_with = fail_with
         self.response_content = response_content
         self.call_count = 0
+        self.sync_call_count = 0
 
     async def chat_async(self, messages, model=None, **kwargs):
-        """Simulate LLM call with configurable failure."""
+        """Simulate async LLM call with configurable failure."""
         self.call_count += 1
 
         # Fail for configured number of times
         if self.call_count <= self.fail_count:
+            raise self.fail_with
+
+        # Success
+        return LLMResponse(
+            content=self.response_content,
+            model=model or self.default_model,
+            provider=self.name,
+            tokens_used=100,
+            input_tokens=50,
+            output_tokens=50,
+            latency_ms=100.0,
+            timestamp=datetime.now(),
+        )
+
+    def chat(self, messages, model=None, **kwargs):
+        """Simulate sync LLM call with configurable failure."""
+        self.sync_call_count += 1
+
+        # Fail for configured number of times
+        if self.sync_call_count <= self.fail_count:
             raise self.fail_with
 
         # Success
@@ -545,3 +566,154 @@ class TestRetryOrchestratorEdgeCases:
         # Verify: Should have used cerebras (first available fallback)
         assert response.provider == "cerebras"
         assert metadata['fallback'] is True
+
+
+class TestRetryOrchestratorSyncPath:
+    """Tests for the synchronous execute_with_retry_sync method."""
+
+    def test_sync_succeeds_on_first_attempt(self, orchestrator, fake_registry):
+        """Verify sync request succeeds without retries when provider responds."""
+        # Setup: Provider that succeeds immediately
+        provider = FakeProvider('groq', fail_count=0)
+        fake_registry.add(provider)
+
+        # Execute using SYNC method
+        request = LLMRequest(
+            prompt="test prompt",
+            provider="groq",
+        )
+        response, metadata = orchestrator.execute_with_retry_sync(
+            request=request,
+            excluded_providers=set(),
+        )
+
+        # Verify
+        assert response.content == "test response"
+        assert response.provider == "groq"
+        assert metadata['provider'] == "groq"
+        assert metadata['attempts'] == 1
+        assert metadata['fallback'] is False
+        assert provider.sync_call_count == 1  # Used sync method
+
+    def test_sync_succeeds_after_retry(self, orchestrator, fake_registry, fake_output):
+        """Verify sync request succeeds after retrying on rate limit."""
+        # Setup: Provider that fails once with rate limit, then succeeds
+        provider = FakeProvider(
+            'groq',
+            fail_count=1,
+            fail_with=RateLimitError('groq', 'rate limited'),
+        )
+        fake_registry.add(provider)
+
+        # Execute using SYNC method
+        request = LLMRequest(prompt="test prompt", provider="groq")
+        response, metadata = orchestrator.execute_with_retry_sync(
+            request=request,
+            excluded_providers=set(),
+            max_retries=3,
+        )
+
+        # Verify
+        assert response.content == "test response"
+        assert provider.sync_call_count == 2  # Failed once, succeeded on retry
+        assert metadata['attempts'] == 2
+        assert len(fake_output.warnings) > 0  # Should have warned about retry
+
+    def test_sync_falls_back_to_next_provider(
+        self,
+        orchestrator,
+        fake_registry,
+        fake_output,
+    ):
+        """Verify sync orchestrator falls back to next provider when first exhausted."""
+        # Setup: First provider always fails, second succeeds
+        groq = FakeProvider(
+            'groq',
+            fail_count=999,
+            fail_with=RateLimitError('groq', 'rate limited'),
+        )
+        cerebras = FakeProvider('cerebras', fail_count=0)
+        fake_registry.add(groq)
+        fake_registry.add(cerebras)
+
+        # Execute using SYNC method
+        request = LLMRequest(prompt="test prompt", provider="groq")
+        response, metadata = orchestrator.execute_with_retry_sync(
+            request=request,
+            excluded_providers=set(),
+            max_retries=2,
+        )
+
+        # Verify
+        assert response.provider == "cerebras"  # Fell back to cerebras
+        assert metadata['fallback'] is True
+        assert response.metadata['fallback_from'] == "groq"
+        assert response.metadata['fallback_to'] == "cerebras"
+        assert groq.sync_call_count == 2  # Tried max_retries times
+        assert cerebras.sync_call_count == 1  # Succeeded on first attempt
+
+    def test_sync_raises_when_all_providers_exhausted(
+        self,
+        orchestrator,
+        fake_registry,
+        fake_output,
+    ):
+        """Verify error raised when all providers are rate limited (sync)."""
+        # Setup: All providers fail
+        groq = FakeProvider(
+            'groq',
+            fail_count=999,
+            fail_with=RateLimitError('groq', 'rate limited'),
+        )
+        cerebras = FakeProvider(
+            'cerebras',
+            fail_count=999,
+            fail_with=RateLimitError('cerebras', 'rate limited'),
+        )
+        gemini = FakeProvider(
+            'gemini',
+            fail_count=999,
+            fail_with=RateLimitError('gemini', 'rate limited'),
+        )
+        fake_registry.add(groq)
+        fake_registry.add(cerebras)
+        fake_registry.add(gemini)
+
+        # Execute & Verify
+        request = LLMRequest(prompt="test prompt", provider="groq")
+        with pytest.raises(AllProvidersRateLimitedError) as exc_info:
+            orchestrator.execute_with_retry_sync(
+                request=request,
+                excluded_providers=set(),
+                max_retries=1,
+            )
+
+        # Verify error message includes attempted providers
+        assert 'groq' in exc_info.value.attempted_providers
+        assert 'cerebras' in exc_info.value.attempted_providers
+        assert 'gemini' in exc_info.value.attempted_providers
+
+    def test_sync_raises_non_rate_limit_errors_immediately(
+        self,
+        orchestrator,
+        fake_registry,
+    ):
+        """Verify non-rate-limit errors are raised immediately without retry (sync)."""
+        # Setup: Provider that fails with non-rate-limit error
+        provider = FakeProvider(
+            'groq',
+            fail_count=999,
+            fail_with=ValueError("Invalid model configuration"),
+        )
+        fake_registry.add(provider)
+
+        # Execute & Verify
+        request = LLMRequest(prompt="test prompt", provider="groq")
+        with pytest.raises(ValueError, match="Invalid model configuration"):
+            orchestrator.execute_with_retry_sync(
+                request=request,
+                excluded_providers=set(),
+            )
+
+        # Verify it didn't retry
+        assert provider.sync_call_count == 1  # Only tried once
