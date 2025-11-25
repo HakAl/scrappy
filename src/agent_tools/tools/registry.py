@@ -38,15 +38,20 @@ class ToolRegistry:
             raise ValueError(f"Tool '{tool.name}' already registered")
         self._tools[tool.name] = tool
 
-    def unregister(self, name: str) -> None:
+    def unregister(self, name: str) -> bool:
         """
         Remove a tool from the registry.
 
         Args:
             name: Tool name to remove
+
+        Returns:
+            True if tool was unregistered, False if not found
         """
         if name in self._tools:
             del self._tools[name]
+            return True
+        return False
 
     def get(self, name: str) -> Optional[ToolBase]:
         """
@@ -59,6 +64,18 @@ class ToolRegistry:
             Tool instance or None if not found
         """
         return self._tools.get(name)
+
+    def exists(self, name: str) -> bool:
+        """
+        Check if a tool is registered.
+
+        Args:
+            name: Tool name
+
+        Returns:
+            True if tool is registered, False otherwise
+        """
+        return name in self._tools
 
     def list_tools(self) -> list[str]:
         """

@@ -532,23 +532,62 @@ class ResponseCache:
             'cache_file': str(self.cache_file) if self.cache_file else 'memory only'
         }
 
-    def invalidate_provider(self, provider: str):
-        """Invalidate all cache entries for a specific provider."""
+    def invalidate(
+        self,
+        provider: Optional[str] = None,
+        prompt: Optional[str] = None,
+    ) -> int:
+        """
+        Invalidate specific cache entries.
+
+        Args:
+            provider: Provider name to filter by (None for all providers)
+            prompt: Prompt substring to filter by (None for all prompts)
+
+        Returns:
+            Number of entries invalidated
+        """
+        count = 0
+
+        # Build filter function based on provided criteria
+        def matches_criteria(entry: dict) -> bool:
+            if provider is not None and entry.get('provider') != provider:
+                return False
+            # Note: We can't filter by prompt directly since we only store hashed keys
+            # For prompt filtering, we'd need to store the original prompt
+            return True
+
         # Invalidate from exact cache
         keys_to_remove = [
             key for key, entry in self._cache.items()
-            if entry.get('provider') == provider
+            if matches_criteria(entry)
         ]
         for key in keys_to_remove:
             del self._cache[key]
+            count += 1
 
         # Invalidate from intent cache
         intent_keys_to_remove = [
             key for key, entry in self._intent_cache.items()
-            if entry.get('provider') == provider
+            if matches_criteria(entry)
         ]
         for key in intent_keys_to_remove:
             del self._intent_cache[key]
+            count += 1
 
-        if self.persistence:
+        if self.persistence and count > 0:
             self._save_cache()
+
+        return count
+
+    def invalidate_provider(self, provider: str) -> int:
+        """
+        Invalidate all cache entries for a specific provider.
+
+        Args:
+            provider: Provider name to invalidate
+
+        Returns:
+            Number of entries invalidated
+        """
+        return self.invalidate(provider=provider)

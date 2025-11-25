@@ -186,20 +186,19 @@ class TestCohereProvider:
         assert response.input_tokens == 0
         assert response.output_tokens == 0
 
-# todo
-    # def test_chat_warning_10_calls(self, provider_with_mock_clients):
-    #     """Test warning is printed every 10 calls."""
-    #     messages = [{"role": "user", "content": "Test"}]
-    #
-    #     with patch('builtins.print') as mock_print:
-    #         # Make 10 calls
-    #         for _ in range(10):
-    #             provider_with_mock_clients.chat(messages)
-    #
-    #         # Should print warning after 10 calls
-    #         mock_print.assert_called()
-    #         warning_call = mock_print.call_args_list[-1]
-    #         assert "WARNING: Cohere calls this session: 10" in str(warning_call)
+    def test_chat_warning_10_calls(self, provider_with_mock_clients, caplog):
+        """Test warning is logged every 10 calls."""
+        import logging
+        messages = [{"role": "user", "content": "Test"}]
+
+        with caplog.at_level(logging.WARNING):
+            # Make 10 calls
+            for _ in range(10):
+                provider_with_mock_clients.chat(messages)
+
+            # Should log warning after 10 calls
+            assert "Cohere calls this session: 10" in caplog.text
+            assert "1000 calls/month limit" in caplog.text
 
     def test_chat_empty_content(self, provider_with_mock_clients, mock_cohere_client_v2):
         """Test chat with empty content in response."""
@@ -241,20 +240,25 @@ class TestCohereProvider:
         assert recommended_model == expected_model
 
 
-# todo
-    # def test_embed_custom_model(self, provider_with_mock_clients, mock_cohere_client_v1):
-    #     """Test embedding with custom model."""
-    #     texts = ["Test text"]
-    #
-    #     embeddings = provider_with_mock_clients.embed(texts, model="embed-multilingual-v3.0")
-    #
-    #     # Verify correct model was used
-    #     mock_cohere_client_v1.embed.assert_called_once_with(
-    #         texts=texts,
-    #         model="embed-multilingual-v3.0",
-    #         input_type='search_document'
-    #     )
-    #     assert embeddings == [[0.1, 0.2, 0.3]]
+    def test_embed_custom_model(self, mock_cohere_client_v2, mock_cohere_client_v1):
+        """Test embedding with custom model."""
+        with patch('src.providers.cohere_provider.cohere') as mock_cohere:
+            mock_cohere.ClientV2.return_value = mock_cohere_client_v2
+            mock_cohere.Client.return_value = mock_cohere_client_v1
+
+            provider = CohereProvider(api_key="test-key")
+            texts = ["Test text"]
+
+            embeddings = provider.embed(texts, model="embed-multilingual-v3.0")
+
+            # Verify correct model was used
+            mock_cohere_client_v1.embed.assert_called_once_with(
+                texts=texts,
+                model="embed-multilingual-v3.0",
+                input_type='search_document'
+            )
+            # Mock returns [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
+            assert embeddings == [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
 
     def test_embed_counts_toward_limit(self, provider_with_mock_clients):
         """Test that embed calls count toward session limit."""

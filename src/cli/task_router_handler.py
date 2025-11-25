@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from ..task_router import TaskRouter, ClassifiedTask
+from ..task_router.config import ClarificationConfig
 from ..task_router.protocols import TaskRouterInputProtocol
 from ..orchestrator.protocols import Orchestrator
 from .io_interface import CLIIOProtocol
@@ -123,6 +124,7 @@ class CLITaskRouterHandler:
             output_handler=CLIIOOutputHandler(self.io),
             input_handler=input_adapter,
             intent_clarifier=InteractiveClarifier(io=input_adapter),
+            clarification_config=ClarificationConfig(),
         )
 
     def handle_auto_route(self, user_input: str):

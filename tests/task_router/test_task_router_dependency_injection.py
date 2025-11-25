@@ -45,6 +45,7 @@ class TestTaskRouterDependencyInjection:
             classifier=custom_classifier,
             output_handler=NullOutputHandler(),
             intent_clarifier=NullClarifier(),
+            clarification_config=ClarificationConfig(),
         )
 
         # Assert - the custom classifier should be used
@@ -61,6 +62,7 @@ class TestTaskRouterDependencyInjection:
             metrics_collector=custom_metrics,
             output_handler=NullOutputHandler(),
             intent_clarifier=NullClarifier(),
+            clarification_config=ClarificationConfig(),
         )
 
         # Assert
@@ -77,6 +79,7 @@ class TestTaskRouterDependencyInjection:
             provider_resolver=custom_resolver,
             output_handler=NullOutputHandler(),
             intent_clarifier=NullClarifier(),
+            clarification_config=ClarificationConfig(),
         )
 
         # Assert
@@ -112,6 +115,7 @@ class TestInjectedClassifierIsUsed:
             classifier=custom_classifier,
             output_handler=NullOutputHandler(),
             intent_clarifier=NullClarifier(),
+            clarification_config=ClarificationConfig(),
         )
 
         # Act
@@ -140,6 +144,7 @@ class TestInjectedMetricsCollectorIsUsed:
             metrics_collector=custom_metrics,
             output_handler=NullOutputHandler(),
             intent_clarifier=NullClarifier(),
+            clarification_config=ClarificationConfig(),
         )
 
         # Act
@@ -167,6 +172,7 @@ class TestInjectedProviderResolverIsUsed:
             provider_resolver=custom_resolver,
             output_handler=NullOutputHandler(),
             intent_clarifier=NullClarifier(),
+            clarification_config=ClarificationConfig(),
         )
 
         # Act
@@ -209,6 +215,7 @@ class TestAllDependenciesInjectedTogether:
             provider_resolver=custom_resolver,
             output_handler=NullOutputHandler(),
             intent_clarifier=NullClarifier(),
+            clarification_config=ClarificationConfig(),
         )
 
         result = router.route("test")

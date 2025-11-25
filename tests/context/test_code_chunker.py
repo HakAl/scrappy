@@ -2,26 +2,8 @@ import pytest
 from typing import List
 from unittest.mock import Mock
 
-
-# Assuming these are the protocol definitions
-class CodeChunk:
-    def __init__(self, start_line: int, end_line: int, file_path: str):
-        self.start_line = start_line
-        self.end_line = end_line
-        self.file_path = file_path
-
-    def __eq__(self, other):
-        return (self.start_line == other.start_line and
-                self.end_line == other.end_line and
-                self.file_path == other.file_path)
-
-
-class CodeChunkerProtocol:
-    def chunk(self, file_path: str, content: str) -> List[CodeChunk]:
-        raise NotImplementedError
-
-
-# Import the actual class
+# Import actual protocol classes
+from src.context.protocols import CodeChunk, CodeChunkerProtocol
 from src.context.code_chunker import SemanticCodeChunker
 
 
@@ -72,52 +54,58 @@ class TestSemanticCodeChunker:
         assert result[0].end_line == 3
         assert result[0].file_path == "test.py"
 
-# TODO
-    # def test_chunk_multiple_chunks_with_overlap(self):
-    #     """Test chunking with multiple chunks and overlap."""
-    #     chunker = SemanticCodeChunker(chunk_size=5, overlap=2)
-    #     content = "\n".join([f"line{i}" for i in range(1, 13)])  # 12 lines
-    #
-    #     result = chunker.chunk("test.py", content)
-    #
-    #     # Should create 3 chunks:
-    #     # Chunk 1: lines 1-5
-    #     # Chunk 2: lines 4-8 (overlaps 4-5 with chunk 1)
-    #     # Chunk 3: lines 7-11 (overlaps 7-8 with chunk 2)
-    #     # Remaining: line 12 (should be in last chunk)
-    #
-    #     assert len(result) == 3
-    #
-    #     # First chunk
-    #     assert result[0].start_line == 1
-    #     assert result[0].end_line == 5
-    #
-    #     # Second chunk
-    #     assert result[1].start_line == 4
-    #     assert result[1].end_line == 8
-    #
-    #     # Third chunk
-    #     assert result[2].start_line == 7
-    #     assert result[2].end_line == 11
+    def test_chunk_multiple_chunks_with_overlap(self):
+        """Test chunking with multiple chunks and overlap."""
+        chunker = SemanticCodeChunker(chunk_size=5, overlap=2)
+        content = "\n".join([f"line{i}" for i in range(1, 13)])  # 12 lines
 
-# todo
-    # def test_chunk_exact_fit_no_remainder(self):
-    #     """Test chunking when content fits exactly into chunks."""
-    #     chunker = SemanticCodeChunker(chunk_size=4, overlap=1)
-    #     content = "\n".join([f"line{i}" for i in range(1, 9)])  # 8 lines
-    #
-    #     result = chunker.chunk("test.py", content)
-    #
-    #     # Should create 2 chunks:
-    #     # Chunk 1: lines 1-4
-    #     # Chunk 2: lines 4-7 (overlaps line 4)
-    #     # Line 8 should be in second chunk
-    #
-    #     assert len(result) == 2
-    #     assert result[0].start_line == 1
-    #     assert result[0].end_line == 4
-    #     assert result[1].start_line == 4
-    #     assert result[1].end_line == 7
+        result = chunker.chunk("test.py", content)
+
+        # Algorithm: step = chunk_size - overlap = 5 - 2 = 3
+        # i=0: start=1, end=5, i+=3 -> i=3
+        # i=3: start=4, end=8, i+=3 -> i=6
+        # i=6: start=7, end=11, i+=3 -> i=9
+        # i=9: start=10, end=12, i+=3 -> i=12 (exit)
+        # Creates 4 chunks with the trailing partial chunk
+
+        assert len(result) == 4
+
+        # First chunk
+        assert result[0].start_line == 1
+        assert result[0].end_line == 5
+
+        # Second chunk (overlaps lines 4-5 with chunk 1)
+        assert result[1].start_line == 4
+        assert result[1].end_line == 8
+
+        # Third chunk (overlaps lines 7-8 with chunk 2)
+        assert result[2].start_line == 7
+        assert result[2].end_line == 11
+
+        # Fourth chunk (trailing partial, overlaps lines 10-11 with chunk 3)
+        assert result[3].start_line == 10
+        assert result[3].end_line == 12
+
+    def test_chunk_exact_fit_no_remainder(self):
+        """Test chunking when content fits exactly into chunks."""
+        chunker = SemanticCodeChunker(chunk_size=4, overlap=1)
+        content = "\n".join([f"line{i}" for i in range(1, 9)])  # 8 lines
+
+        result = chunker.chunk("test.py", content)
+
+        # Algorithm: step = chunk_size - overlap = 4 - 1 = 3
+        # i=0: start=1, end=4, i+=3 -> i=3
+        # i=3: start=4, end=7, i+=3 -> i=6
+        # i=6: start=7, end=8, i+=3 -> i=9 (exit)
+        # Creates 3 chunks
+
+        assert len(result) == 3
+        assert result[0].start_line == 1
+        assert result[0].end_line == 4
+        assert result[1].start_line == 4
+        assert result[1].end_line == 7
+        assert result[2].start_line == 7
+        assert result[2].end_line == 8
 
     def test_chunk_large_content(self):
         """Test chunking large content with default settings."""
@@ -170,20 +158,20 @@ class TestSemanticCodeChunker:
         expected_lines = len(content.splitlines())
         assert result[-1].end_line == expected_lines
 
-# todo
-    # def test_protocol_compliance(self):
-    #     """Test that the class implements CodeChunkerProtocol correctly."""
-    #     chunker = SemanticCodeChunker()
-    #
-    #     # Should have chunk method
-    #     assert hasattr(chunker, 'chunk')
-    #     assert callable(getattr(chunker, 'chunk'))
-    #
-    #     # Should return List[CodeChunk]
-    #     result = chunker.chunk("test.py", "line1\nline2")
-    #     assert isinstance(result, list)
-    #     assert len(result) > 0
-    #     assert isinstance(result[0], CodeChunk)
+    def test_protocol_compliance(self):
+        """Test that the class implements CodeChunkerProtocol correctly."""
+        chunker = SemanticCodeChunker()
+
+        # Should have chunk method
+        assert hasattr(chunker, 'chunk')
+        assert callable(getattr(chunker, 'chunk'))
+
+        # Should return List[CodeChunk]
+        result = chunker.chunk("test.py", "line1\nline2")
+        assert isinstance(result, list)
+        assert len(result) > 0
+        # CodeChunk is a dataclass, so isinstance check works
+        assert isinstance(result[0], CodeChunk)
 
     def test_edge_case_zero_overlap(self):
         """Test chunking with zero overlap."""

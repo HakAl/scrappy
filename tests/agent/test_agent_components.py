@@ -13,6 +13,7 @@ from src.agent.types import AgentAction, ActionResult, ConversationState
 
 class TestAgentUI:
     """Test double for AgentUIProtocol."""
+    __test__ = False  # Prevent pytest from collecting this as a test class
 
     def __init__(self):
         self.shown_thinking = []

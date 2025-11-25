@@ -7,6 +7,8 @@ from pathlib import Path
 from unittest.mock import Mock, MagicMock, patch
 from dataclasses import dataclass
 
+from src.task_router.config import ClarificationConfig
+
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -45,6 +47,20 @@ def mock_provider(mock_llm_response):
     )
     provider.is_available.return_value = True
     return provider
+
+
+@pytest.fixture
+def default_clarification_config():
+    """
+    Provide explicit ClarificationConfig to suppress deprecation warnings.
+
+    The default threshold changed from 0.65 to 0.7 in v2.0.
+    By providing explicit config, we:
+    1. Suppress the deprecation warning
+    2. Make test behavior deterministic
+    3. Document the expected threshold in tests
+    """
+    return ClarificationConfig(confidence_threshold=0.7, high_confidence_bypass=0.9)
 
 
 @pytest.fixture

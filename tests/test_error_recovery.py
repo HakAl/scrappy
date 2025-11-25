@@ -11,6 +11,7 @@ from src.providers.base import LLMResponse, ProviderRegistry
 from src.orchestrator.cache import ResponseCache
 from src.orchestrator.memory import WorkingMemory
 from src.task_router.classifier import TaskClassifier, TaskType
+from src.task_router.config import ClarificationConfig
 from src.task_router.router import TaskRouter
 from src.context import CodebaseContext
 
@@ -153,14 +154,14 @@ class TestTaskRouterErrorHandling:
     """Tests for task router error handling."""
 
     @pytest.fixture
-    def router(self):
+    def router(self, default_clarification_config):
         """Create router without orchestrator."""
-        return TaskRouter(orchestrator=None, verbose=False)
+        return TaskRouter(orchestrator=None, verbose=False, clarification_config=default_clarification_config)
 
     @pytest.mark.unit
-    def test_router_handles_none_orchestrator(self):
+    def test_router_handles_none_orchestrator(self, default_clarification_config):
         """Test router handles None orchestrator."""
-        router = TaskRouter(orchestrator=None)
+        router = TaskRouter(orchestrator=None, clarification_config=default_clarification_config)
         assert router.orchestrator is None
 
     @pytest.mark.unit

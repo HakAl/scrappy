@@ -1,7 +1,9 @@
 # UX Issues
 
+---
+
 Problem:
-/explore command fails. 
+/explore - command fails. 
  Error: CLICodebaseAnalysis.explore_codebase() got an unexpected keyword argument 'io'
 
 Solution:
@@ -31,7 +33,7 @@ find why / where this occurs and plan to fix.
 ---
 
 Problem:
-/usage command output is 3 tables with different styles. 
+/usage - command output is 3 tables with different styles. 
  ╭────────────────────────────── Usage Summary ───────────────────────────────╮
  │ Total Tasks: 1                                                             │
  │ Cache Hits: 0                                                              │

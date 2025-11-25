@@ -5,6 +5,7 @@ Migrated from test_classification_improvements.py and examples/test_task_router.
 """
 import pytest
 from src.task_router.classifier import TaskClassifier, ClassifiedTask, TaskType
+from src.task_router.config import ClarificationConfig
 
 
 @pytest.fixture
@@ -161,11 +162,11 @@ class TestConfidenceScoring:
         assert result.confidence < 0.8
 
     @pytest.mark.unit
-    def test_confidence_affects_escalation(self):
+    def test_confidence_affects_escalation(self, default_clarification_config):
         """Test that low confidence tasks may need escalation."""
         from src.task_router.router import TaskRouter
 
-        router = TaskRouter(orchestrator=None, verbose=False)
+        router = TaskRouter(orchestrator=None, verbose=False, clarification_config=default_clarification_config)
 
         task = ClassifiedTask(
             original_input="create something for me",
@@ -188,7 +189,7 @@ class TestIntentClarification:
     """
 
     @pytest.mark.unit
-    def test_conflicting_intents_high_confidence_no_clarification(self):
+    def test_conflicting_intents_high_confidence_no_clarification(self, default_clarification_config):
         """Test that high confidence bypasses conflicting signal checks.
 
         This is the Phase 2 fix: when classifier returns high confidence,
@@ -197,7 +198,7 @@ class TestIntentClarification:
         from src.task_router.router import TaskRouter
         from dataclasses import replace
 
-        router = TaskRouter(orchestrator=None, verbose=False)
+        router = TaskRouter(orchestrator=None, verbose=False, clarification_config=default_clarification_config)
         classifier = TaskClassifier()
 
         # "explain how to create requirements.txt" classified as CODE_GENERATION
@@ -209,12 +210,12 @@ class TestIntentClarification:
         assert not needs_clarify
 
     @pytest.mark.unit
-    def test_conflicting_intents_medium_confidence_needs_clarification(self):
+    def test_conflicting_intents_medium_confidence_needs_clarification(self, default_clarification_config):
         """Test that medium confidence with conflicting signals needs clarification."""
         from src.task_router.router import TaskRouter
         from dataclasses import replace
 
-        router = TaskRouter(orchestrator=None, verbose=False)
+        router = TaskRouter(orchestrator=None, verbose=False, clarification_config=default_clarification_config)
         classifier = TaskClassifier()
 
         # Force medium confidence to test conflicting signal behavior
@@ -225,11 +226,11 @@ class TestIntentClarification:
         assert needs_clarify
 
     @pytest.mark.unit
-    def test_clear_intents_no_clarification(self):
+    def test_clear_intents_no_clarification(self, default_clarification_config):
         """Test that clear intents don't need clarification."""
         from src.task_router.router import TaskRouter
 
-        router = TaskRouter(orchestrator=None, verbose=False)
+        router = TaskRouter(orchestrator=None, verbose=False, clarification_config=default_clarification_config)
         classifier = TaskClassifier()
 
         clear_cases = [
@@ -244,11 +245,11 @@ class TestIntentClarification:
             assert not needs_clarify, f"Shouldn't need clarification: {input_text}"
 
     @pytest.mark.unit
-    def test_question_with_action_words_high_confidence(self):
+    def test_question_with_action_words_high_confidence(self, default_clarification_config):
         """Test that high confidence bypasses question+action check."""
         from src.task_router.router import TaskRouter
 
-        router = TaskRouter(orchestrator=None, verbose=False)
+        router = TaskRouter(orchestrator=None, verbose=False, clarification_config=default_clarification_config)
         classifier = TaskClassifier()
 
         task = classifier.classify("can you create a file?")

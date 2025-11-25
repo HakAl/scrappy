@@ -242,7 +242,7 @@ class ToolRegistryProtocol(Protocol):
         """
         ...
 
-    def get(self, name: str) -> Any:
+    def get(self, name: str) -> Optional[Any]:
         """
         Get tool by name.
 
@@ -250,10 +250,7 @@ class ToolRegistryProtocol(Protocol):
             name: Tool name
 
         Returns:
-            Tool object/function
-
-        Raises:
-            KeyError: If tool not found
+            Tool object/function, or None if not found
         """
         ...
 

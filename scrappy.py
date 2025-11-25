@@ -44,18 +44,28 @@ if sys.platform == 'win32':
     os.environ['PYTHONIOENCODING'] = 'utf-8:replace'
 
 # Configure logging to file for debugging (before other imports)
+import atexit
 import logging
 from pathlib import Path
+
 log_file = Path.cwd() / ".scrappy" / "debug.log"
 log_file.parent.mkdir(parents=True, exist_ok=True)
+
+# Create handler explicitly so we can close it on exit
+file_handler = logging.FileHandler(log_file, mode='w')
+file_handler.setLevel(logging.DEBUG)
+file_handler.setFormatter(
+    logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+)
+
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(log_file, mode='w'),
-        logging.StreamHandler()
-    ]
+    handlers=[file_handler, logging.StreamHandler()]
 )
+
+# Register cleanup to prevent ResourceWarning about unclosed file
+atexit.register(file_handler.close)
 
 from src.cli import main
 

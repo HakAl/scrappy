@@ -10,7 +10,7 @@ import pytest
 from dataclasses import dataclass
 
 from src.task_router.classifier import ClassifiedTask, TaskType
-from src.config.schema import ClarificationConfig
+from src.task_router.config import ClarificationConfig
 
 
 # Import the pure functions module (will be created)

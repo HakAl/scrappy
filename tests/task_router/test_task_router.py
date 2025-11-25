@@ -7,6 +7,7 @@ import time
 
 from src.task_router.router import TaskRouter
 from src.task_router.classifier import TaskClassifier, ClassifiedTask, TaskType
+from src.task_router.config import ClarificationConfig
 from src.task_router.strategies import ExecutionResult
 from src.task_router.intent_clarifier import NullClarifier
 
@@ -15,8 +16,8 @@ class TestConfidenceEscalation:
     """Tests for confidence-based task escalation."""
 
     @pytest.fixture
-    def router(self):
-        return TaskRouter(orchestrator=None, verbose=False)
+    def router(self, default_clarification_config):
+        return TaskRouter(orchestrator=None, verbose=False, clarification_config=default_clarification_config)
 
     @pytest.mark.unit
     def test_low_confidence_research_with_action_word_escalates(self, router):
@@ -65,8 +66,8 @@ class TestIntentClarification:
     """Tests for intent clarification detection."""
 
     @pytest.fixture
-    def router(self):
-        return TaskRouter(orchestrator=None, verbose=False)
+    def router(self, default_clarification_config):
+        return TaskRouter(orchestrator=None, verbose=False, clarification_config=default_clarification_config)
 
     @pytest.mark.unit
     def test_conflicting_intent_high_confidence_no_clarification(self, router):

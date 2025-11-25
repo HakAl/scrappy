@@ -1,33 +1,34 @@
 <!-- todo  -->
 
 - Parallel tool execution - Run independent tools concurrently
-- Test runner tool
 
 ---
 
 New Tools to Add (High Impact)
 
-  2. Database Query Tool
+1 - Semantic Code Search Tool
+
+  - Use local embeddings
+  - Find similar code patterns, not just text matches
+  - Would enable: "Find code similar to this error handler"
+
+2 - TODO Tool
+
+3 - Test Runner Tool
+
+  - Execute pytest/jest/etc with structured output parsing
+  - Coverage reporting
+  - Would enable: "Run tests and show me failures"
+
+4 - Database Query Tool
 
   - Execute SQL queries (SELECT only for safety)
   - Schema introspection
   - Would enable: "Show me the users table structure"
 
-  3. Semantic Code Search Tool
+5 - Dependency Analysis Tool
 
-  - Use Cohere embeddings (already have provider!)
-  - Find similar code patterns, not just text matches
-  - Would enable: "Find code similar to this error handler"
-
-  4. Test Runner Tool
-
-  - Execute pytest/jest with structured output parsing
-  - Coverage reporting
-  - Would enable: "Run tests and show me failures"
-
-  5. Dependency Analysis Tool
-
-  - Parse package.json/requirements.txt
+  - Parse package.json/requirements.txt/etc
   - Check outdated packages, security vulnerabilities
   - Would enable: "Check for vulnerable dependencies"
 

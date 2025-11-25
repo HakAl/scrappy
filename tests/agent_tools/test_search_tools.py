@@ -64,22 +64,6 @@ class TestInternalTextLogic:
         assert "---" not in text_output
         assert text_output.count("test.py:4: ") == 1  # Ensure line 3 appears once
 
-# todo?
-#     def test_context_separation(self, tool):
-#         """If matches are far apart, they should be separated by '---'."""
-#         # Lines: 0(match), 1, 2, 3, 4(match)
-#         # Context=0.
-#         content = "match1\n1\n2\n3\nmatch2"
-#
-#         results = tool._search_text(
-#             content, "match", use_regex=False, case_sensitive=False,
-#             context_lines=0, rel_path=Path("test.py")
-#         )
-#
-#         assert len(results) == 3
-#         assert "match1" in results[0]
-#         assert results[1] == "---"
-#         assert "match2" in results[2]
 
 
 
@@ -88,57 +72,58 @@ class TestInternalTextLogic:
 class TestSearchExecution:
     """Tests the full 'execute' flow with real files."""
 
-# todo?
-#     def test_finds_text_in_files(self, tool, mock_context):
-#         """Should find patterns in multiple files respecting file glob."""
-#         # Setup
-#         (mock_context.project_root / "src").mkdir()
-#         (mock_context.project_root / "src/main.py").write_text("def hello():\n    print('Hello World')")
-#         (mock_context.project_root / "README.md").write_text("Hello World")
-#         (mock_context.project_root / "other.txt").write_text("Hello World")
-#
-#         # Execute: Search for "World" in .py files only
-#         result = tool.execute(mock_context, pattern="World", file_pattern="*.py")
-#
-#         assert result.success
-#         assert "src/main.py" in result.output
-#         assert "README.md" not in result.output
-#         assert "matches" in result.metadata
-#
-#     def test_ast_search_types(self, tool, mock_context):
-#         """Test various AST search types on a complex file."""
-#         code = """
-# import os
-# from sys import path as sys_path
-#
-# class MyClass:
-#     def my_method(self):
-#         pass
-#
-# def my_func():
-#     pass
-# """
-#         (mock_context.project_root / "test.py").write_text(code)
-#
-#         # 1. Test Function search
-#         res_func = tool.execute(mock_context, pattern="my_func", search_type="function")
-#         assert "[function] my_func" in res_func.output
-#
-#         # 2. Test Class search
-#         res_class = tool.execute(mock_context, pattern="MyClass", search_type="class")
-#         assert "[class] MyClass" in res_class.output
-#
-#         # 3. Test Method search
-#         res_method = tool.execute(mock_context, pattern="my_method", search_type="method")
-#         assert "[method] MyClass.my_method" in res_method.output
-#
-#         # 4. Test Import search (Standard)
-#         res_imp = tool.execute(mock_context, pattern="os", search_type="import")
-#         assert "[import] os" in res_imp.output
-#
-#         # 5. Test Import search (From/As)
-#         res_imp_from = tool.execute(mock_context, pattern="path", search_type="import")
-#         assert "sys_path" in res_imp_from.output or "path" in res_imp_from.output
+    def test_finds_text_in_files(self, tool, mock_context):
+        """Should find patterns in multiple files respecting file glob."""
+        # Setup
+        (mock_context.project_root / "src").mkdir()
+        (mock_context.project_root / "src/main.py").write_text("def hello():\n    print('Hello World')")
+        (mock_context.project_root / "README.md").write_text("Hello World")
+        (mock_context.project_root / "other.txt").write_text("Hello World")
+
+        # Execute: Search for "World" in .py files only
+        # Note: rglob("*.py") recursively finds all .py files including in subdirs
+        result = tool.execute(mock_context, pattern="World", file_pattern="*.py")
+
+        assert result.success
+        # Check that main.py is found (could be src/main.py or src\main.py on Windows)
+        assert "main.py" in result.output
+        assert "README.md" not in result.output
+        assert "matches" in result.metadata
+
+    def test_ast_search_types(self, tool, mock_context):
+        """Test various AST search types on a complex file."""
+        code = """import os
+from sys import path as sys_path
+
+class MyClass:
+    def my_method(self):
+        pass
+
+def my_func():
+    pass
+"""
+        (mock_context.project_root / "test.py").write_text(code)
+
+        # 1. Test Function search
+        res_func = tool.execute(mock_context, pattern="my_func", search_type="function")
+        assert "[function] my_func" in res_func.output
+
+        # 2. Test Class search
+        res_class = tool.execute(mock_context, pattern="MyClass", search_type="class")
+        assert "[class] MyClass" in res_class.output
+
+        # 3. Test Method search
+        res_method = tool.execute(mock_context, pattern="my_method", search_type="method")
+        assert "[method] MyClass.my_method" in res_method.output
+
+        # 4. Test Import search (Standard)
+        res_imp = tool.execute(mock_context, pattern="os", search_type="import")
+        assert "[import] os" in res_imp.output
+
+        # 5. Test Import search (From/As) - search for "path" finds from-import
+        res_imp_from = tool.execute(mock_context, pattern="path", search_type="import")
+        # Should find either sys.path or the alias sys_path
+        assert "[from-import]" in res_imp_from.output
 
     def test_ignore_directories(self, tool, mock_context):
         """Should ignore .git and __pycache__."""
@@ -151,13 +136,15 @@ class TestSearchExecution:
         assert result.success
         assert "No matches found" in result.output
 
-# todo?
-    # def test_regex_error_handling(self, tool, mock_context):
-    #     """Should return a failed ToolResult if regex is invalid."""
-    #     result = tool.execute(mock_context, pattern="[unclosed", use_regex=True)
-    #
-    #     assert not result.success
-    #     assert "Invalid regex pattern" in result.error
+    def test_regex_error_handling(self, tool, mock_context):
+        """Should return a failed ToolResult if regex is invalid."""
+        # Need at least one .py file to trigger the regex error during search
+        (mock_context.project_root / "dummy.py").write_text("some content")
+
+        result = tool.execute(mock_context, pattern="[unclosed", use_regex=True)
+
+        assert not result.success
+        assert "Invalid regex pattern" in result.error
 
     def test_result_truncation(self, tool, mock_context):
         """Should truncate results exceeding config.max_search_results."""

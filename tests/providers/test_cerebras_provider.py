@@ -293,14 +293,20 @@ def test_get_model_for_task(provider):
     assert provider.get_model_for_task("quality") == "llama-3.3-70b"
     assert provider.get_model_for_task("unknown_task") == "llama3.1-8b"
 
-# todo
-# def test_get_model_info(provider):
-#     """Verify detailed model info retrieval."""
-#     # Known model
-#     info = provider.get_model_info("llama3.1-8b")
-#     assert info.context_window == 8192
-#     assert info.input_cost == 0.0  # Free tier implies 0 cost usually, or unspecified
-#
-#     # Unknown model (should fall back to generic)
-#     info_generic = provider.get_model_info("unknown-model")
-#     assert info_generic.model_id == "unknown-model"
+def test_get_model_info(provider):
+    """Verify detailed model info retrieval."""
+    from src.providers.base import ModelInfo
+
+    # Known model
+    info = provider.get_model_info("llama3.1-8b")
+    assert isinstance(info, ModelInfo)
+    assert info.id == "llama3.1-8b"
+    assert info.context_length == 8192
+    assert info.rpd == 14400
+    assert info.tpm == 60000
+    assert info.quality == "good"
+    assert info.speed == "ultra_fast"
+
+    # Unknown model (should fall back to generic via parent class)
+    info_generic = provider.get_model_info("unknown-model")
+    assert info_generic.id == "unknown-model"

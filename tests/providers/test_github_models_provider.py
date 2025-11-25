@@ -201,16 +201,19 @@ class TestGitHubModelsProvider:
         assert limits.remaining_requests == 9999
         assert limits.remaining_tokens == 9999995
 
-# todo
-    # def test_get_limits_default(self, provider_with_mock_client):
-    #     """Test get_limits returns default values when no cache available."""
-    #     limits = provider_with_mock_client.get_limits()
-    #
-    #     assert isinstance(limits, ProviderLimits)
-    #     assert limits.requests_per_day is None
-    #     assert limits.tokens_per_day is None
-    #     assert limits.remaining_requests is None
-    #     assert limits.remaining_tokens is None
+    def test_get_limits_default(self, provider_with_mock_client):
+        """Test get_limits returns model defaults when no cache available."""
+        # Before any API call, cached limits have no remaining_requests set
+        # So get_limits() falls back to model defaults
+        limits = provider_with_mock_client.get_limits()
+
+        assert isinstance(limits, ProviderLimits)
+        # Falls back to default model (gpt-4o) limits from MODELS config
+        assert limits.requests_per_day == 10000  # gpt-4o rpd
+        assert limits.tokens_per_day == 10000000  # gpt-4o tpd
+        # remaining_* are None since we haven't made an API call yet
+        assert limits.remaining_requests is None
+        assert limits.remaining_tokens is None
 
     @pytest.mark.parametrize("task_type,expected_model", [
         ("fast", "gpt-4o-mini"),
@@ -225,25 +228,24 @@ class TestGitHubModelsProvider:
         recommended_model = provider_with_mock_client.get_model_for_task(task_type)
         assert recommended_model == expected_model
 
-# todo
-    # @pytest.mark.asyncio
-    # async def test_chat_async_basic(self, provider_with_mock_client, mock_httpx_response):
-    #     """Test basic async chat functionality."""
-    #     messages = [{"role": "user", "content": "Hello async"}]
-    #
-    #     with patch('src.providers.github_models_provider.HTTPX_AVAILABLE', True):
-    #         with patch('httpx.AsyncClient') as mock_client_class:
-    #             mock_client = AsyncMock()
-    #             mock_client_class.return_value.__aenter__.return_value = mock_client
-    #             mock_client.post = AsyncMock(return_value=mock_httpx_response)
-    #
-    #             response = await provider_with_mock_client.chat_async(messages)
-    #
-    #             assert isinstance(response, LLMResponse)
-    #             assert response.content == "Async test response"
-    #             assert response.model == "gpt-4o"
-    #             assert response.provider == "github"
-    #             assert response.async is True
+    @pytest.mark.asyncio
+    async def test_chat_async_basic(self, provider_with_mock_client, mock_httpx_response):
+        """Test basic async chat functionality."""
+        messages = [{"role": "user", "content": "Hello async"}]
+
+        with patch('src.providers.github_models_provider.HTTPX_AVAILABLE', True):
+            with patch('httpx.AsyncClient') as mock_client_class:
+                mock_client = AsyncMock()
+                mock_client_class.return_value.__aenter__.return_value = mock_client
+                mock_client.post = AsyncMock(return_value=mock_httpx_response)
+
+                response = await provider_with_mock_client.chat_async(messages)
+
+                assert isinstance(response, LLMResponse)
+                assert response.content == "Async test response"
+                assert response.model == "gpt-4o"
+                assert response.provider == "github"
+                assert response.metadata['async'] is True
 
     @pytest.mark.asyncio
     async def test_chat_async_rate_limit_retry(self, provider_with_mock_client):

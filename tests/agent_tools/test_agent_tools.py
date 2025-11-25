@@ -232,6 +232,38 @@ class TestToolRegistry:
         for tool_name in expected_tools:
             assert tool_name in tools, f"Expected {tool_name} in default registry"
 
+    @pytest.mark.unit
+    def test_exists_returns_true_for_registered_tool(self, registry, mock_tool):
+        """Test exists() returns True for registered tools."""
+        registry.register(mock_tool)
+        assert registry.exists("mock_tool") is True
+
+    @pytest.mark.unit
+    def test_exists_returns_false_for_unregistered_tool(self, registry):
+        """Test exists() returns False for tools not registered."""
+        assert registry.exists("nonexistent") is False
+
+    @pytest.mark.unit
+    def test_exists_returns_false_after_unregister(self, registry, mock_tool):
+        """Test exists() returns False after tool is unregistered."""
+        registry.register(mock_tool)
+        assert registry.exists("mock_tool") is True
+        registry.unregister("mock_tool")
+        assert registry.exists("mock_tool") is False
+
+    @pytest.mark.unit
+    def test_unregister_returns_true_when_tool_exists(self, registry, mock_tool):
+        """Test unregister() returns True when tool was removed."""
+        registry.register(mock_tool)
+        result = registry.unregister("mock_tool")
+        assert result is True
+
+    @pytest.mark.unit
+    def test_unregister_returns_false_when_tool_not_found(self, registry):
+        """Test unregister() returns False when tool doesn't exist."""
+        result = registry.unregister("nonexistent")
+        assert result is False
+
 
 class TestFileToolsSafety:
     """Security tests for file tools."""

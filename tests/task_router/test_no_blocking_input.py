@@ -11,6 +11,8 @@ from pathlib import Path
 
 import pytest
 
+from src.task_router.config import ClarificationConfig
+
 
 class TestNoBlockingInput:
     """Test suite to ensure no direct input() calls sneak into task router code."""
@@ -177,7 +179,7 @@ class TestTaskRouterInputHandler:
         from src.task_router.router import TaskRouter
 
         mock_input = MagicMock()
-        router = TaskRouter(input_handler=mock_input)
+        router = TaskRouter(input_handler=mock_input, clarification_config=ClarificationConfig())
 
         assert router._input_handler is mock_input
 
@@ -186,7 +188,7 @@ class TestTaskRouterInputHandler:
         from src.task_router.protocols import DefaultConsoleInput
         from src.task_router.router import TaskRouter
 
-        router = TaskRouter()
+        router = TaskRouter(clarification_config=ClarificationConfig())
 
         assert isinstance(router._input_handler, DefaultConsoleInput)
 
@@ -194,7 +196,7 @@ class TestTaskRouterInputHandler:
         """TaskRouter should share input_handler with InteractiveClarifier by default."""
         from src.task_router.router import TaskRouter
 
-        router = TaskRouter()
+        router = TaskRouter(clarification_config=ClarificationConfig())
 
         # The clarifier should use the same input handler
         # (through the _io attribute)

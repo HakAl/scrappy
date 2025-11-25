@@ -528,6 +528,7 @@ class PythonCommandFallbackImpl:
             }
 
         results = []
+        not_found = False
         for cmd in args:
             if cmd.startswith('-'):
                 continue
@@ -536,10 +537,11 @@ class PythonCommandFallbackImpl:
                 results.append(path)
             else:
                 results.append(f'{cmd} not found')
+                not_found = True
 
         return {
             'output': '\n'.join(results),
-            'returncode': 0 if results else 1,
+            'returncode': 1 if not_found else 0,
             'used_fallback': True
         }
 

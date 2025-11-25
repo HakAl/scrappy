@@ -374,6 +374,100 @@ class TestCacheClear:
         # May need adjustment based on actual implementation
 
 
+class TestCacheInvalidate:
+    """Tests for granular cache invalidation."""
+
+    @pytest.fixture
+    def cache(self):
+        return ResponseCache()
+
+    @pytest.mark.unit
+    def test_invalidate_returns_count(self, cache):
+        """Test that invalidate returns number of removed entries."""
+        response = LLMResponse("test", "model", "provider")
+        cache.put(response, "prompt1", "model")
+        cache.put(response, "prompt2", "model")
+
+        count = cache.invalidate(provider="provider")
+        assert count == 2
+
+    @pytest.mark.unit
+    def test_invalidate_by_provider_only(self, cache):
+        """Test invalidating all entries for a specific provider."""
+        response1 = LLMResponse("test1", "model", "provider1")
+        response2 = LLMResponse("test2", "model", "provider2")
+
+        cache.put(response1, "prompt1", "model")
+        cache.put(response1, "prompt2", "model")
+        cache.put(response2, "prompt3", "model")
+
+        count = cache.invalidate(provider="provider1")
+
+        assert count == 2
+        # provider1 entries should be gone
+        assert cache.get("provider1", "prompt1", model="model") is None
+        assert cache.get("provider1", "prompt2", model="model") is None
+        # provider2 entry should remain
+        assert cache.get("provider2", "prompt3", model="model") is not None
+
+    @pytest.mark.unit
+    def test_invalidate_all_when_no_filters(self, cache):
+        """Test that invalidate with no filters removes all entries."""
+        response1 = LLMResponse("test1", "model", "provider1")
+        response2 = LLMResponse("test2", "model", "provider2")
+
+        cache.put(response1, "prompt1", "model")
+        cache.put(response2, "prompt2", "model")
+
+        count = cache.invalidate()
+
+        assert count == 2
+        stats = cache.get_stats()
+        assert stats["exact_cache_entries"] == 0
+
+    @pytest.mark.unit
+    def test_invalidate_returns_zero_for_empty_cache(self, cache):
+        """Test that invalidate returns 0 when cache is empty."""
+        count = cache.invalidate(provider="nonexistent")
+        assert count == 0
+
+    @pytest.mark.unit
+    def test_invalidate_includes_intent_cache(self, cache):
+        """Test that invalidate also clears intent cache entries."""
+        response = LLMResponse("test", "model", "provider")
+
+        # Add to both exact and intent caches
+        cache.put(response, "prompt", "model")
+        cache.put_by_intent(response, "intent", {"file_path": ["test.py"]}, [])
+
+        count = cache.invalidate(provider="provider")
+
+        # Should have removed from both caches
+        assert count == 2
+        stats = cache.get_stats()
+        assert stats["exact_cache_entries"] == 0
+        assert stats["intent_cache_entries"] == 0
+
+    @pytest.mark.unit
+    def test_invalidate_provider_returns_count(self, cache):
+        """Test that invalidate_provider now returns count."""
+        response = LLMResponse("test", "model", "provider")
+        cache.put(response, "prompt1", "model")
+        cache.put(response, "prompt2", "model")
+
+        count = cache.invalidate_provider("provider")
+        assert count == 2
+
+    @pytest.mark.unit
+    def test_invalidate_provider_returns_zero_when_not_found(self, cache):
+        """Test invalidate_provider returns 0 when provider not found."""
+        response = LLMResponse("test", "model", "provider1")
+        cache.put(response, "prompt", "model")
+
+        count = cache.invalidate_provider("provider2")
+        assert count == 0
+
+
 class TestCachePersistence:
     """Tests for cache file persistence."""
 
