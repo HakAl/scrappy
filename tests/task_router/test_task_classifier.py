@@ -180,19 +180,48 @@ class TestConfidenceScoring:
 
 
 class TestIntentClarification:
-    """Tests for intent clarification detection."""
+    """Tests for intent clarification detection.
+
+    Phase 2 behavior: high confidence (>= 0.9) bypasses conflicting signal checks.
+    This prevents false positives like "how to make google?" triggering clarification
+    when the classifier is confident it's a research query.
+    """
 
     @pytest.mark.unit
-    def test_conflicting_intents_detected(self):
-        """Test that conflicting intents are detected for clarification."""
+    def test_conflicting_intents_high_confidence_no_clarification(self):
+        """Test that high confidence bypasses conflicting signal checks.
+
+        This is the Phase 2 fix: when classifier returns high confidence,
+        we trust it even if there are conflicting signals in the text.
+        """
         from src.task_router.router import TaskRouter
+        from dataclasses import replace
 
         router = TaskRouter(orchestrator=None, verbose=False)
         classifier = TaskClassifier()
 
-        # Conflicting: explain + create
+        # "explain how to create requirements.txt" classified as CODE_GENERATION
+        # with 100% confidence - no clarification needed
         task = classifier.classify("explain how to create requirements.txt")
+        assert task.confidence >= 0.9, "Test assumes high confidence from classifier"
         needs_clarify = router._needs_intent_clarification(task)
+        # High confidence bypasses conflicting signal check
+        assert not needs_clarify
+
+    @pytest.mark.unit
+    def test_conflicting_intents_medium_confidence_needs_clarification(self):
+        """Test that medium confidence with conflicting signals needs clarification."""
+        from src.task_router.router import TaskRouter
+        from dataclasses import replace
+
+        router = TaskRouter(orchestrator=None, verbose=False)
+        classifier = TaskClassifier()
+
+        # Force medium confidence to test conflicting signal behavior
+        task = classifier.classify("explain how to create requirements.txt")
+        task = replace(task, confidence=0.8, task_type=TaskType.RESEARCH)
+        needs_clarify = router._needs_intent_clarification(task)
+        # Medium confidence (0.7 <= conf < 0.9) with conflicting signals needs clarification
         assert needs_clarify
 
     @pytest.mark.unit
@@ -215,14 +244,19 @@ class TestIntentClarification:
             assert not needs_clarify, f"Shouldn't need clarification: {input_text}"
 
     @pytest.mark.unit
-    def test_question_with_action_words(self):
-        """Test that questions with action words may need clarification."""
+    def test_question_with_action_words_high_confidence(self):
+        """Test that high confidence bypasses question+action check."""
         from src.task_router.router import TaskRouter
 
         router = TaskRouter(orchestrator=None, verbose=False)
         classifier = TaskClassifier()
 
         task = classifier.classify("can you create a file?")
-        needs_clarify = router._needs_intent_clarification(task)
-        # Question + action word = ambiguous
-        assert needs_clarify
+        # If classifier is highly confident, no clarification needed
+        if task.confidence >= 0.9:
+            needs_clarify = router._needs_intent_clarification(task)
+            assert not needs_clarify, "High confidence should bypass clarification"
+        else:
+            # Medium/low confidence with question + action = needs clarification
+            needs_clarify = router._needs_intent_clarification(task)
+            assert needs_clarify, "Medium confidence with question+action needs clarification"

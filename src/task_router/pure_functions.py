@@ -17,9 +17,10 @@ Benefits:
 import json
 import re
 from dataclasses import replace
-from typing import Optional
+from typing import Optional, Union
 
 from .classifier import ClassifiedTask, TaskType
+from .protocols import ClarificationConfigProtocol
 
 
 # Action indicators used for detecting action intent
@@ -158,27 +159,47 @@ def create_escalated_task(task: ClassifiedTask) -> ClassifiedTask:
     )
 
 
-def needs_clarification(task: ClassifiedTask, confidence_threshold: float) -> bool:
+def needs_clarification(
+    task: ClassifiedTask,
+    config: Union[ClarificationConfigProtocol, float],
+) -> bool:
     """
     Determine if a task needs user clarification due to ambiguity.
 
     Returns True when:
-    - Confidence is below threshold
-    - Has conflicting signals (action verb + question pattern)
-    - Task type is RESEARCH but has strong action indicators
+    - Confidence is below confidence_threshold
+    - Confidence is in medium range AND has conflicting signals
+
+    Returns False when:
+    - Confidence is at or above high_confidence_bypass (trust the classifier)
 
     Args:
         task: The classified task
-        confidence_threshold: Threshold below which clarification is needed
+        config: ClarificationConfigProtocol with threshold values, or
+                a float for backwards compatibility (treated as confidence_threshold
+                with high_confidence_bypass=0.9)
 
     Returns:
         True if task needs user clarification
     """
+    # Backwards compatibility: accept float as confidence_threshold
+    if isinstance(config, float):
+        confidence_threshold = config
+        high_confidence_bypass = 0.9
+    else:
+        confidence_threshold = config.confidence_threshold
+        high_confidence_bypass = config.high_confidence_bypass
+
     # Low confidence always needs clarification
     if task.confidence < confidence_threshold:
         return True
 
-    # Check for conflicting signals
+    # High confidence means classifier is sure - trust it completely
+    # Skip conflicting signal checks for high confidence classifications
+    if task.confidence >= high_confidence_bypass:
+        return False
+
+    # Medium confidence range: check for conflicting signals
     if has_conflicting_signals(task.original_input, task.task_type):
         return True
 

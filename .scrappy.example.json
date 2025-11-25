@@ -42,5 +42,11 @@
   "separator_width_standard": 50,
   "separator_width_wide": 60,
 
-  "max_iterations": 10
+  "max_iterations": 10,
+
+  "clarification": {
+    "_comment": "Controls when user clarification is requested for ambiguous tasks",
+    "confidence_threshold": 0.7,
+    "high_confidence_bypass": 0.9
+  }
 }

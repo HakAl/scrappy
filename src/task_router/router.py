@@ -14,7 +14,12 @@ from .intent_clarifier import (
     IntentClarifierInterface,
     InteractiveClarifier,
 )
-from .protocols import DefaultConsoleInput, TaskRouterInputProtocol
+from .protocols import (
+    ClarificationConfigProtocol,
+    DefaultConsoleInput,
+    TaskRouterInputProtocol,
+)
+from src.config.schema import ClarificationConfig
 from .json_extractor import JSONExtractor
 from .metrics_collector import MetricsCollector, RouterMetrics
 from .output_handler import (
@@ -67,7 +72,8 @@ class TaskRouter:
         classifier: Optional[TaskClassifier] = None,
         metrics_collector: Optional[MetricsCollector] = None,
         provider_resolver: Optional[ProviderResolver] = None,
-        strategies: Optional[Dict[TaskType, ExecutionStrategy]] = None
+        strategies: Optional[Dict[TaskType, ExecutionStrategy]] = None,
+        clarification_config: Optional[ClarificationConfigProtocol] = None,
     ):
         """
         Initialize TaskRouter with execution strategies.
@@ -87,6 +93,8 @@ class TaskRouter:
             metrics_collector: Injectable metrics collector (default: MetricsCollector)
             provider_resolver: Injectable provider resolver (default: ProviderResolver)
             strategies: Injectable execution strategies (default: created via factory)
+            clarification_config: Injectable config for clarification behavior
+                                 (default: ClarificationConfig with default thresholds)
         """
         self.orchestrator = orchestrator
         self.project_root = project_root or Path.cwd()
@@ -116,11 +124,18 @@ class TaskRouter:
         self._pre_hooks: List[Callable[[ClassifiedTask], ClassifiedTask]] = []
         self._post_hooks: List[Callable[[ExecutionResult], ExecutionResult]] = []
 
+        # Clarification configuration (injectable for testing)
+        self._clarification_config = clarification_config or ClarificationConfig()
+
         # Intent clarification settings
         self.clarify_on_low_confidence = True
-        self.confidence_threshold = 0.65
         self.escalate_on_low_confidence = True
         self.use_llm_classification = True  # Use LLM for low-confidence cases
+
+    @property
+    def confidence_threshold(self) -> float:
+        """Get confidence threshold from config (for backwards compatibility)."""
+        return self._clarification_config.confidence_threshold
 
     def _create_default_strategies(self) -> Dict[TaskType, ExecutionStrategy]:
         """Create default execution strategies (factory method for defaults only)."""
@@ -163,11 +178,12 @@ class TaskRouter:
 
         Returns True when:
         - Confidence is below threshold
-        - Has conflicting signals (action verb + question pattern)
-        - Task type is RESEARCH but has strong action indicators
-        - Has both explanation words AND action words (ambiguous intent)
+        - Confidence is in medium range AND has conflicting signals
+
+        Returns False when:
+        - Confidence is at or above high_confidence_bypass (trust the classifier)
         """
-        return needs_clarification(task, self.confidence_threshold)
+        return needs_clarification(task, self._clarification_config)
 
     def _clarify_intent(self, task: ClassifiedTask) -> ClassifiedTask:
         """

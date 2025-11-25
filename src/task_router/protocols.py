@@ -12,6 +12,54 @@ from dataclasses import dataclass
 
 
 @runtime_checkable
+class ClarificationConfigProtocol(Protocol):
+    """
+    Configuration for clarification behavior.
+
+    Controls when user clarification is requested based on confidence levels.
+
+    Implementations:
+    - ClarificationConfig: Dataclass with yaml-loaded values
+    - TestClarificationConfig: Test double with configurable thresholds
+
+    Example:
+        def check_clarification(config: ClarificationConfigProtocol, confidence: float) -> bool:
+            if confidence < config.confidence_threshold:
+                return True  # Low confidence, always clarify
+            if confidence >= config.high_confidence_bypass:
+                return False  # High confidence, trust classifier
+            # Medium confidence, check for conflicting signals
+            return has_conflicting_signals(...)
+    """
+
+    @property
+    def confidence_threshold(self) -> float:
+        """
+        Confidence below this always needs clarification.
+
+        Tasks with confidence below this value will always prompt
+        for user clarification, regardless of other signals.
+
+        Default: 0.7
+        """
+        ...
+
+    @property
+    def high_confidence_bypass(self) -> float:
+        """
+        Confidence at or above this bypasses conflicting signal checks.
+
+        When the classifier is highly confident (>= this value),
+        we trust it completely and skip the conflicting signals check.
+        This prevents false positives like "how to make google?" triggering
+        clarification even though it's clearly a research query.
+
+        Default: 0.9
+        """
+        ...
+
+
+@runtime_checkable
 class TaskClassifierProtocol(Protocol):
     """
     Protocol for task classification.

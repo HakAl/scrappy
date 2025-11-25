@@ -51,6 +51,12 @@ separator_width_wide: 60     # Wide separators
 # Command defaults
 max_iterations: 10          # Max iterations for iterative commands
 
+# Clarification settings
+# Controls when user clarification is requested for ambiguous tasks
+clarification:
+  confidence_threshold: 0.7      # Below this, always clarify
+  high_confidence_bypass: 0.9    # Above this, skip conflicting signal checks
+
 # You can also specify environment-specific configs:
 # development:
 #   temperature_default: 0.9

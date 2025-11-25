@@ -7,9 +7,10 @@ separated from side effects (I/O, logging, external calls).
 Following TDD: these tests are written first to define expected behavior.
 """
 import pytest
-from dataclasses import replace
+from dataclasses import dataclass
 
 from src.task_router.classifier import ClassifiedTask, TaskType
+from src.config.schema import ClarificationConfig
 
 
 # Import the pure functions module (will be created)
@@ -23,6 +24,13 @@ from src.task_router.pure_functions import (
     parse_llm_classification_response,
     build_classification_metadata,
 )
+
+
+@dataclass
+class FakeClarificationConfig:
+    """Test double for ClarificationConfigProtocol."""
+    confidence_threshold: float = 0.7
+    high_confidence_bypass: float = 0.9
 
 
 class TestHasActionIndicators:
@@ -218,7 +226,7 @@ class TestCreateEscalatedTask:
 
 
 class TestNeedsClarification:
-    """Tests for needs_clarification pure function."""
+    """Tests for needs_clarification pure function (backwards compatibility with float)."""
 
     @pytest.mark.unit
     def test_low_confidence_needs_clarification(self):
@@ -229,7 +237,7 @@ class TestNeedsClarification:
             confidence=0.3,
             reasoning="Low confidence"
         )
-        assert needs_clarification(task, confidence_threshold=0.65) is True
+        assert needs_clarification(task, 0.65) is True
 
     @pytest.mark.unit
     def test_high_confidence_no_clarification(self):
@@ -240,7 +248,7 @@ class TestNeedsClarification:
             confidence=0.9,
             reasoning="High confidence"
         )
-        assert needs_clarification(task, confidence_threshold=0.65) is False
+        assert needs_clarification(task, 0.65) is False
 
     @pytest.mark.unit
     def test_conflicting_signals_need_clarification(self):
@@ -251,7 +259,7 @@ class TestNeedsClarification:
             confidence=0.8,
             reasoning="Has both explain and create"
         )
-        assert needs_clarification(task, confidence_threshold=0.65) is True
+        assert needs_clarification(task, 0.65) is True
 
     @pytest.mark.unit
     def test_action_classified_as_research_needs_clarification(self):
@@ -262,7 +270,7 @@ class TestNeedsClarification:
             confidence=0.8,
             reasoning="Classified as research"
         )
-        assert needs_clarification(task, confidence_threshold=0.65) is True
+        assert needs_clarification(task, 0.65) is True
 
     @pytest.mark.unit
     def test_question_with_action_needs_clarification(self):
@@ -273,7 +281,184 @@ class TestNeedsClarification:
             confidence=0.7,
             reasoning="Has question mark and create"
         )
-        assert needs_clarification(task, confidence_threshold=0.65) is True
+        assert needs_clarification(task, 0.65) is True
+
+
+class TestNeedsClarificationWithConfig:
+    """Tests for needs_clarification with ClarificationConfigProtocol."""
+
+    @pytest.mark.unit
+    def test_low_confidence_always_needs_clarification(self):
+        """Confidence below threshold always needs clarification."""
+        config = FakeClarificationConfig(
+            confidence_threshold=0.7,
+            high_confidence_bypass=0.9
+        )
+        task = ClassifiedTask(
+            original_input="do something",
+            task_type=TaskType.RESEARCH,
+            confidence=0.5,
+            reasoning="Low confidence"
+        )
+        assert needs_clarification(task, config) is True
+
+    @pytest.mark.unit
+    def test_high_confidence_bypasses_all_checks(self):
+        """Confidence >= high_confidence_bypass skips conflicting signal checks."""
+        config = FakeClarificationConfig(
+            confidence_threshold=0.7,
+            high_confidence_bypass=0.9
+        )
+        # This task has conflicting signals (question + action verb)
+        # but 100% confidence should bypass the check
+        task = ClassifiedTask(
+            original_input="how to make google?",
+            task_type=TaskType.RESEARCH,
+            confidence=1.0,
+            reasoning="100% confidence research"
+        )
+        assert needs_clarification(task, config) is False
+
+    @pytest.mark.unit
+    def test_high_confidence_with_action_verb_no_clarification(self):
+        """High confidence RESEARCH with action verb should NOT clarify (the fix)."""
+        config = FakeClarificationConfig(
+            confidence_threshold=0.7,
+            high_confidence_bypass=0.9
+        )
+        # This was the bug: "how to make google?" triggered clarification
+        # even with 100% confidence because "make" is in strong_action_verbs
+        task = ClassifiedTask(
+            original_input="how to make google?",
+            task_type=TaskType.RESEARCH,
+            confidence=1.0,  # 100% confidence
+            reasoning="High confidence research query"
+        )
+        # Should NOT need clarification because confidence >= high_confidence_bypass
+        assert needs_clarification(task, config) is False
+
+    @pytest.mark.unit
+    def test_medium_confidence_with_conflicting_signals_needs_clarification(self):
+        """Medium confidence with conflicting signals needs clarification."""
+        config = FakeClarificationConfig(
+            confidence_threshold=0.7,
+            high_confidence_bypass=0.9
+        )
+        task = ClassifiedTask(
+            original_input="explain how to create a file",
+            task_type=TaskType.RESEARCH,
+            confidence=0.8,  # Medium: >= 0.7 but < 0.9
+            reasoning="Medium confidence"
+        )
+        # Should need clarification because in medium range AND has conflicting signals
+        assert needs_clarification(task, config) is True
+
+    @pytest.mark.unit
+    def test_medium_confidence_without_conflicting_signals_no_clarification(self):
+        """Medium confidence without conflicting signals should not clarify."""
+        config = FakeClarificationConfig(
+            confidence_threshold=0.7,
+            high_confidence_bypass=0.9
+        )
+        task = ClassifiedTask(
+            original_input="explain python decorators",
+            task_type=TaskType.RESEARCH,
+            confidence=0.8,  # Medium: >= 0.7 but < 0.9
+            reasoning="Medium confidence"
+        )
+        # Should NOT need clarification because no conflicting signals
+        assert needs_clarification(task, config) is False
+
+    @pytest.mark.unit
+    def test_at_high_confidence_threshold_no_clarification(self):
+        """Exactly at high_confidence_bypass should not need clarification."""
+        config = FakeClarificationConfig(
+            confidence_threshold=0.7,
+            high_confidence_bypass=0.9
+        )
+        task = ClassifiedTask(
+            original_input="create a new file",
+            task_type=TaskType.RESEARCH,
+            confidence=0.9,  # Exactly at high_confidence_bypass
+            reasoning="At threshold"
+        )
+        # Should NOT need clarification even with action verb
+        assert needs_clarification(task, config) is False
+
+    @pytest.mark.unit
+    def test_just_below_high_confidence_with_conflict_needs_clarification(self):
+        """Just below high_confidence_bypass with conflict should clarify."""
+        config = FakeClarificationConfig(
+            confidence_threshold=0.7,
+            high_confidence_bypass=0.9
+        )
+        task = ClassifiedTask(
+            original_input="create a new file",
+            task_type=TaskType.RESEARCH,
+            confidence=0.89,  # Just below high_confidence_bypass
+            reasoning="Just below threshold"
+        )
+        # Should need clarification because < 0.9 AND has action verb
+        assert needs_clarification(task, config) is True
+
+    @pytest.mark.unit
+    def test_with_real_clarification_config(self):
+        """Test with real ClarificationConfig dataclass."""
+        config = ClarificationConfig(
+            confidence_threshold=0.7,
+            high_confidence_bypass=0.9
+        )
+        task = ClassifiedTask(
+            original_input="how to make google?",
+            task_type=TaskType.RESEARCH,
+            confidence=1.0,
+            reasoning="High confidence"
+        )
+        # Should NOT need clarification
+        assert needs_clarification(task, config) is False
+
+    @pytest.mark.unit
+    def test_backwards_compatibility_with_float(self):
+        """Test that float parameter still works for backwards compatibility."""
+        task = ClassifiedTask(
+            original_input="explain python",
+            task_type=TaskType.RESEARCH,
+            confidence=0.5,
+            reasoning="Low confidence"
+        )
+        # Using float directly should still work
+        assert needs_clarification(task, 0.65) is True
+
+    @pytest.mark.unit
+    def test_custom_config_thresholds(self):
+        """Test with custom threshold values."""
+        # Stricter config: require higher confidence
+        strict_config = FakeClarificationConfig(
+            confidence_threshold=0.8,
+            high_confidence_bypass=0.95
+        )
+        task = ClassifiedTask(
+            original_input="create a file",
+            task_type=TaskType.RESEARCH,
+            confidence=0.75,
+            reasoning="Would pass default config"
+        )
+        # Should need clarification with strict config (0.75 < 0.8)
+        assert needs_clarification(task, strict_config) is True
+
+        # Lenient config: accept lower confidence
+        lenient_config = FakeClarificationConfig(
+            confidence_threshold=0.5,
+            high_confidence_bypass=0.8
+        )
+        task = ClassifiedTask(
+            original_input="create a file",
+            task_type=TaskType.RESEARCH,
+            confidence=0.85,  # >= 0.8 high_confidence_bypass
+            reasoning="High confidence"
+        )
+        # Should NOT need clarification with lenient config
+        assert needs_clarification(task, lenient_config) is False
 
 
 class TestDetermineExecutionAction:
@@ -446,7 +631,8 @@ class TestPureFunctionIntegration:
         )
 
         # Should need clarification due to conflicting signals
-        assert needs_clarification(task, confidence_threshold=0.65) is True
+        # (confidence 0.7 is in medium range: >= 0.65 and < 0.9)
+        assert needs_clarification(task, 0.65) is True
 
     @pytest.mark.unit
     def test_execution_decision_flow(self):
