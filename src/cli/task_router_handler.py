@@ -125,6 +125,7 @@ class CLITaskRouterHandler:
             input_handler=input_adapter,
             intent_clarifier=InteractiveClarifier(io=input_adapter),
             clarification_config=ClarificationConfig(),
+            io=self.io,  # Pass io for AgentExecutor to use
         )
 
     def handle_auto_route(self, user_input: str):

@@ -120,7 +120,7 @@ class CLISmartQuery:
         io.secho("\n[Smart Query] Researching...", fg="cyan", bold=True)
 
         # Create a research agent (read-only)
-        agent = CodeAgent(self.orchestrator)
+        agent = CodeAgent(self.orchestrator, io=io)
 
         # Gather context using handlers based on the classification
         research_results = []

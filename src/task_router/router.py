@@ -7,7 +7,7 @@ import time
 import warnings
 from dataclasses import replace
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .classifier import ClassifiedTask, TaskClassifier, TaskType
 from .intent_clarifier import (
@@ -75,6 +75,7 @@ class TaskRouter:
         provider_resolver: Optional[ProviderResolver] = None,
         strategies: Optional[Dict[TaskType, ExecutionStrategyProtocol]] = None,
         clarification_config: Optional[ClarificationConfigProtocol] = None,
+        io: Optional[Any] = None,  # CLIIOProtocol - for passing to AgentExecutor
     ):
         """
         Initialize TaskRouter with execution strategies.
@@ -96,11 +97,14 @@ class TaskRouter:
             strategies: Injectable execution strategies (default: created via factory)
             clarification_config: Injectable config for clarification behavior
                                  (default: ClarificationConfig with default thresholds)
+            io: CLIIOProtocol instance for passing to AgentExecutor. In TUI mode,
+                this should be the bridged UnifiedIO to avoid deadlocks.
         """
         self.orchestrator = orchestrator
         self.project_root = project_root or Path.cwd()
         self.auto_confirm_direct = auto_confirm_direct
         self.verbose = verbose
+        self._io = io  # Store for passing to AgentExecutor
 
         # Input handler for user interaction (confirmations, prompts)
         self._input_handler = input_handler or DefaultConsoleInput()
@@ -174,7 +178,8 @@ class TaskRouter:
                 orchestrator=self.orchestrator,
                 project_root=self.project_root,
                 max_iterations=10,
-                require_approval=True
+                require_approval=True,
+                io=self._io,
             )
 
         return strategies

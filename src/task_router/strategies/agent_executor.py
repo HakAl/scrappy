@@ -4,7 +4,7 @@ Full agent loop with planning and tool use.
 
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from ..classifier import ClassifiedTask, TaskType
 from .base import ExecutionResult, ProviderAwareStrategy, OrchestratorLike
@@ -33,12 +33,14 @@ class AgentExecutor(ProviderAwareStrategy):
         orchestrator: OrchestratorLike,
         project_root: Optional[Path] = None,
         max_iterations: int = 10,
-        require_approval: bool = True
+        require_approval: bool = True,
+        io: Optional[Any] = None,  # CLIIOProtocol - Any to avoid circular import
     ):
         super().__init__(orchestrator)
         self.project_root = project_root or Path.cwd()
         self.max_iterations = max_iterations
         self.require_approval = require_approval
+        self.io = io
 
     @property
     def name(self) -> str:
@@ -66,7 +68,8 @@ class AgentExecutor(ProviderAwareStrategy):
             # Initialize CodeAgent
             agent = CodeAgent(
                 orchestrator=adapter,
-                project_path=str(self.project_root)
+                project_path=str(self.project_root),
+                io=self.io,
             )
             # Configure agent settings
             agent.config.max_iterations = self.max_iterations

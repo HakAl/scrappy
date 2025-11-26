@@ -202,8 +202,54 @@ def _create_default_router(self) -> TaskRouter:
 ## Related Files
 
 - `src/cli/agent_manager.py` - FIXED in AGENT_BUG_CLEANUP.md
-- `src/task_router/strategies/agent_executor.py` - Needs fix
-- `src/task_router/router.py` - Needs fix
-- `src/cli/task_router_handler.py` - Needs fix
-- `src/cli/smart_query.py` - Low priority fix
+- `src/task_router/strategies/agent_executor.py` - FIXED (2025-11-26)
+- `src/task_router/router.py` - FIXED (2025-11-26)
+- `src/cli/task_router_handler.py` - FIXED (2025-11-26)
+- `src/cli/smart_query.py` - FIXED (2025-11-26)
 - `src/cli/commands.py` - No fix needed
+
+---
+
+## Completion Status
+
+### Phase 1: AgentExecutor IO Injection - COMPLETED (2025-11-26)
+
+All three phases implemented:
+
+1. **AgentExecutor** - Added `io` parameter to `__init__`, stored as `self.io`, passed to `CodeAgent` in `execute()`
+2. **TaskRouter** - Added `io` parameter to `__init__`, stored as `self._io`, passed to `AgentExecutor` in `_create_default_strategies()`
+3. **CLITaskRouterHandler** - Passes `io=self.io` to `TaskRouter` in `_create_default_router()`
+
+**Tests Verified:**
+- All 425 task_router tests pass
+- All 30 io_injection tests pass
+- Signature verification confirms `io` parameter present
+
+**Call Chain Now (Fixed):**
+```
+TUI Mode
+  -> CLITaskRouterHandler(io=bridged_unified_io)
+     -> TaskRouter(io=bridged_unified_io)
+        -> AgentExecutor(io=bridged_unified_io)
+           -> CodeAgent(io=bridged_unified_io)  # Now has bridged IO!
+              -> agent.run()
+                 -> ActionExecutor needs approval
+                    -> self.ui.prompt_confirm()
+                       -> self.io.confirm()  # Uses bridged IO - no deadlock!
+```
+
+### smart_query.py Fix - COMPLETED (2025-11-26)
+
+Simple one-line fix: Pass `io` to `CodeAgent` on line 123.
+
+```python
+# Before
+agent = CodeAgent(self.orchestrator)
+
+# After
+agent = CodeAgent(self.orchestrator, io=io)
+```
+
+### Remaining Work
+
+All identified IO injection issues have been resolved.
