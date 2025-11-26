@@ -809,3 +809,147 @@ class FileCollectorProtocol(Protocol):
             Dict[str, str]: Batch of file paths to content
         """
         ...
+
+
+@runtime_checkable
+class SemanticSearchManagerProtocol(Protocol):
+    """
+    Protocol for managing semantic search lifecycle.
+
+    Coordinates semantic search initialization, indexing, and search operations.
+    Separates the complexity of background initialization, event handling,
+    and progress reporting from CodebaseContext.
+
+    Single Responsibility: Coordinate semantic search lifecycle.
+
+    Implementations:
+    - SemanticSearchManager: Full lifecycle management with background init
+    - MockSemanticSearchManager: Preset results for testing
+    - NullSemanticSearchManager: No-op for when semantic search unavailable
+
+    Example:
+        def setup_search(manager: SemanticSearchManagerProtocol) -> None:
+            manager.start_background_init()
+            # Do other work...
+            if manager.is_ready():
+                result = manager.search("error handling")
+    """
+
+    def start_background_init(self) -> None:
+        """
+        Start background initialization of semantic search dependencies.
+
+        Non-blocking - returns immediately. Use is_ready() or
+        process_events() to check completion status.
+        """
+        ...
+
+    def is_ready(self) -> bool:
+        """
+        Check if semantic search is ready to use.
+
+        Returns:
+            True if initialized and indexed, False otherwise
+        """
+        ...
+
+    def get_status(self) -> Optional[str]:
+        """
+        Get human-readable initialization status.
+
+        Returns:
+            Status string (e.g., "Loading model...", "Ready", "Failed")
+            None if no initializer configured
+        """
+        ...
+
+    def search(self, query: str, max_tokens: int = 4000) -> Optional['SearchResult']:
+        """
+        Search indexed codebase semantically.
+
+        Args:
+            query: Search query
+            max_tokens: Maximum tokens in results
+
+        Returns:
+            SearchResult if available, None if not ready
+        """
+        ...
+
+    def index_files(self, file_collector: 'FileCollectorProtocol') -> None:
+        """
+        Index files for semantic search.
+
+        Args:
+            file_collector: Collector providing files to index
+        """
+        ...
+
+    def process_events(self) -> int:
+        """
+        Process pending background events.
+
+        Should be called periodically from main thread.
+
+        Returns:
+            Number of events processed
+        """
+        ...
+
+    def set_progress_callback(self, callback) -> None:
+        """
+        Set callback for progress updates during indexing.
+
+        Args:
+            callback: Function taking a string message
+        """
+        ...
+
+
+@runtime_checkable
+class ContextAugmenterProtocol(Protocol):
+    """
+    Protocol for augmenting prompts with codebase context.
+
+    Builds context blocks for prompt augmentation from various
+    sources (summary, structure, git history, semantic search).
+
+    Single Responsibility: Format context for prompts.
+
+    Implementations:
+    - ContextAugmenter: Full context augmentation
+    - MockContextAugmenter: Fixed context for testing
+    - NullContextAugmenter: Returns prompts unchanged
+
+    Example:
+        def enhance_prompt(augmenter: ContextAugmenterProtocol, prompt: str) -> str:
+            return augmenter.augment(prompt)
+    """
+
+    def augment(self, prompt: str, include_files: bool = False) -> str:
+        """
+        Augment a prompt with codebase context.
+
+        Args:
+            prompt: Original user prompt
+            include_files: Whether to include file listings
+
+        Returns:
+            Augmented prompt with context blocks
+        """
+        ...
+
+    def get_relevant_context(self, query: str, max_tokens: int = 4000) -> str:
+        """
+        Get context relevant to a specific query.
+
+        Uses semantic search if available, falls back to keyword matching.
+
+        Args:
+            query: Query to find relevant context for
+            max_tokens: Maximum tokens to return
+
+        Returns:
+            Relevant context string
+        """
+        ...

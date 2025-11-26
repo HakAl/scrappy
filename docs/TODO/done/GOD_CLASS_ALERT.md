@@ -5,7 +5,7 @@
 | File | Lines | Status | Priority |
 |------|-------|--------|----------|
 | `src/agent/core.py` | 766 | REFACTORED (was 1107) | DONE |
-| `src/context/codebase_context.py` | 960 | NEEDS REFACTOR | MEDIUM |
+| `src/context/codebase_context.py` | 927 | REFACTORED (was 1040) | DONE |
 | `src/orchestrator/core.py` | 779 | ALREADY REFACTORED | LOW |
 | `src/task_router/router.py` | 581 | ACCEPTABLE | LOW |
 
@@ -368,15 +368,33 @@ At 581 lines, `TaskRouter` is reasonable for its complexity:
 - Full backward compatibility maintained
 - All existing tests continue to pass
 
-### Sprint 2: CodebaseContext Cleanup
+### Sprint 2: CodebaseContext Cleanup - COMPLETED 2025-11-26
 
-1. **Extract `SemanticSearchManager`**
-   - Move background init, indexing, search coordination
+1. **Define protocols** - DONE
+   - `SemanticSearchManagerProtocol` - added to `src/context/protocols.py`
+   - `ContextAugmenterProtocol` - added to `src/context/protocols.py`
 
-2. **Extract `ContextAugmenter`**
-   - Move `augment_prompt` and `get_relevant_context`
+2. **Extract `SemanticSearchManager`** - DONE
+   - Created `src/context/semantic_manager.py` (~270 lines)
+   - Moved background init, indexing, search coordination
+   - Added `NullSemanticSearchManager` for testing/disabled state
 
-3. **Update tests**
+3. **Extract `ContextAugmenter`** - DONE
+   - Created `src/context/augmenter.py` (~200 lines)
+   - Moved `augment_prompt` and `get_relevant_context`
+   - Uses provider pattern for data access
+   - Added `NullContextAugmenter` for testing/disabled state
+
+4. **Refactor CodebaseContext** - DONE
+   - Updated to use `SemanticSearchManager` for all semantic search operations
+   - Updated to use `ContextAugmenter` for all context augmentation
+   - Full backward compatibility maintained via delegation
+   - All existing public methods continue to work
+
+5. **Write tests for extracted components** - DONE
+   - `tests/context/test_semantic_manager.py` - 22 tests
+   - `tests/context/test_augmenter.py` - 17 tests
+   - All 39 tests passing
 
 ### Sprint 3: Minor Cleanups (If Time Permits)
 
@@ -419,14 +437,34 @@ New tests created:
 - `tests/agent/test_agent_loop.py` (13 tests)
 - `tests/agent/test_provider_strategy.py` (13 tests)
 
-### Planned (Sprint 2):
+### Completed (Sprint 2):
 
 | File | Before | After | Reduction |
 |------|--------|-------|-----------|
-| `src/context/codebase_context.py` | 960 | ~600 | 37% |
+| `src/context/codebase_context.py` | 1040 | 927 | 11% |
 
-Files to create:
-- `src/context/semantic_manager.py` (~200 lines)
-- `src/context/augmenter.py` (~150 lines)
+New files created:
+- `src/context/semantic_manager.py` (270 lines)
+- `src/context/augmenter.py` (200 lines)
+
+New tests created:
+- `tests/context/test_semantic_manager.py` (22 tests)
+- `tests/context/test_augmenter.py` (17 tests)
+
+### Overall Results:
+
+| File | Before | After | Reduction |
+|------|--------|-------|-----------|
+| `src/agent/core.py` | 1107 | 766 | 31% |
+| `src/context/codebase_context.py` | 1040 | 927 | 11% |
+| **Total** | 2147 | 1693 | 21% |
+
+New focused classes created:
+- `src/agent/agent_loop.py` (450 lines)
+- `src/agent/provider_strategy.py` (100 lines)
+- `src/context/semantic_manager.py` (270 lines)
+- `src/context/augmenter.py` (200 lines)
+
+New tests created: 65 tests (26 + 39)
 
 **Key benefit:** Each class has a single responsibility and is independently testable.

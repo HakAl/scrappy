@@ -1,0 +1,379 @@
+"""
+Semantic search lifecycle management.
+
+Coordinates semantic search initialization, indexing, and search operations.
+Extracts the semantic search complexity from CodebaseContext for better
+testability and single responsibility.
+"""
+
+import logging
+from pathlib import Path
+from typing import Optional, Callable, TYPE_CHECKING
+
+from ..infrastructure.protocols import (
+    BackgroundInitializerProtocol,
+    ProgressReporterProtocol,
+)
+from ..infrastructure.threading import (
+    EventQueueProtocol,
+    ThreadSafeEventQueue,
+    BackgroundEvent,
+    EventType,
+)
+
+if TYPE_CHECKING:
+    from .protocols import (
+        SemanticSearchProtocol,
+        FileCollectorProtocol,
+        SearchResult,
+    )
+
+logger = logging.getLogger(__name__)
+
+
+class SemanticSearchManager:
+    """
+    Manages semantic search lifecycle.
+
+    Coordinates semantic search initialization, indexing, and search operations.
+    Separates the complexity of background initialization, event handling,
+    and progress reporting from CodebaseContext.
+
+    Single Responsibility: Coordinate semantic search lifecycle.
+
+    Usage:
+        manager = SemanticSearchManager(project_path)
+        manager.start_background_init()
+
+        # Later, in event loop
+        manager.process_events()
+
+        # When ready
+        if manager.is_ready():
+            result = manager.search("error handling")
+    """
+
+    def __init__(
+        self,
+        project_path: Path,
+        initializer: Optional[BackgroundInitializerProtocol] = None,
+        event_queue: Optional[EventQueueProtocol] = None,
+        io: Optional['CLIIOProtocol'] = None,
+    ):
+        """
+        Initialize semantic search manager.
+
+        Args:
+            project_path: Path to project root
+            initializer: Background initializer for semantic search (auto-created if None)
+            event_queue: Event queue for background notifications (auto-created if None)
+            io: IO interface for progress reporting (optional)
+        """
+        self._project_path = project_path
+        self._event_queue = event_queue or ThreadSafeEventQueue()
+        self._io = io
+
+        # Semantic search state
+        self._semantic_search: Optional['SemanticSearchProtocol'] = None
+        self._initializer = initializer
+        self._progress_callback: Optional[Callable[[str], None]] = None
+        self._is_indexed = False
+
+    @property
+    def event_queue(self) -> EventQueueProtocol:
+        """Get the event queue for external processing."""
+        return self._event_queue
+
+    def set_initializer(self, initializer: BackgroundInitializerProtocol) -> None:
+        """
+        Set the background initializer.
+
+        Args:
+            initializer: Background initializer to use
+        """
+        self._initializer = initializer
+
+    def start_background_init(self) -> None:
+        """
+        Start background initialization of semantic search.
+
+        Non-blocking - returns immediately. Use is_ready() or
+        process_events() to check completion status.
+        """
+        if not self._initializer:
+            self._initializer = self._create_default_initializer()
+
+        if self._initializer:
+            logger.debug("Starting background semantic search initialization")
+
+            # Register event handler
+            self._event_queue.register_handler(
+                "semantic_search",
+                self._handle_event,
+            )
+
+            self._initializer.start()
+        else:
+            logger.debug("No semantic initializer available")
+
+    def _create_default_initializer(self) -> Optional[BackgroundInitializerProtocol]:
+        """Create default semantic search initializer."""
+        try:
+            from .semantic.initializer import SemanticSearchInitializer
+            logger.debug("Creating SemanticSearchInitializer with event queue")
+            return SemanticSearchInitializer(
+                self._project_path,
+                event_queue=self._event_queue,
+            )
+        except ImportError as e:
+            logger.debug(f"Semantic search dependencies not available: {e}")
+            from .semantic.initializer import NullInitializer
+            return NullInitializer()
+
+    def _handle_event(self, event: BackgroundEvent) -> None:
+        """
+        Handle semantic search events (runs on main thread via event queue).
+
+        Args:
+            event: Background event from semantic search initialization
+        """
+        if event.event_type == EventType.INIT_COMPLETE:
+            logger.info("Semantic search model ready (via event)")
+            self._notify_progress("Semantic search ready")
+
+            # Cache the result
+            self._semantic_search = event.data
+
+        elif event.event_type == EventType.INIT_FAILED:
+            logger.warning(f"Semantic search initialization failed: {event.error}")
+            self._notify_progress(f"Semantic search initialization failed: {event.error}")
+
+    def is_ready(self) -> bool:
+        """
+        Check if semantic search is ready to use.
+
+        Returns:
+            True if initialized and ready for search, False otherwise
+        """
+        if self._semantic_search:
+            return True
+        if self._initializer:
+            return (
+                self._initializer.is_complete()
+                and self._initializer.get_error() is None
+            )
+        return False
+
+    def get_status(self) -> Optional[str]:
+        """
+        Get human-readable initialization status.
+
+        Returns:
+            Status string, None if no initializer configured
+        """
+        if self._initializer:
+            return self._initializer.get_status()
+        return None
+
+    def get_search_provider(self) -> Optional['SemanticSearchProtocol']:
+        """
+        Get the semantic search provider if available.
+
+        Returns:
+            SemanticSearchProtocol instance or None if not available
+        """
+        if self._semantic_search:
+            return self._semantic_search
+
+        # Check if background initializer has completed
+        if self._initializer and self._initializer.is_complete():
+            result = self._initializer.get_result()
+            if result:
+                self._semantic_search = result
+                return result
+            else:
+                error = self._initializer.get_error()
+                logger.debug(f"Semantic search initialization failed: {error}")
+                return None
+
+        return None
+
+    def search(self, query: str, max_tokens: int = 4000) -> Optional['SearchResult']:
+        """
+        Search indexed codebase semantically.
+
+        Args:
+            query: Search query
+            max_tokens: Maximum tokens in results
+
+        Returns:
+            SearchResult if available, None if not ready
+        """
+        provider = self.get_search_provider()
+        if not provider or not provider.is_indexed():
+            return None
+
+        try:
+            return provider.search(query, max_tokens=max_tokens)
+        except Exception as e:
+            logger.warning(f"Semantic search failed: {e}")
+            return None
+
+    def index_files(self, file_collector: 'FileCollectorProtocol') -> None:
+        """
+        Index files for semantic search.
+
+        Uses batched file collection to prevent memory spikes.
+
+        Args:
+            file_collector: Collector providing files to index
+        """
+        provider = self.get_search_provider()
+        if not provider:
+            logger.warning("Cannot index - semantic search not available")
+            return
+
+        # Create progress reporter
+        from ..infrastructure.progress import UnifiedIOProgressReporter, NullProgressReporter
+        progress = UnifiedIOProgressReporter(self._io) if self._io else NullProgressReporter()
+        progress_started = False
+
+        try:
+            logger.info("Starting semantic search indexing (batched)...")
+            self._notify_progress("Preparing file collector...")
+
+            if file_collector is None:
+                logger.warning("No file collector available - skipping indexing")
+                self._notify_progress("No file collector available")
+                return
+
+            # Set progress reporter on the provider
+            provider.set_progress_reporter(progress)
+
+            self._notify_progress("Collecting and indexing files in batches...")
+
+            total_indexed = 0
+            batch_count = 0
+
+            progress.start("Indexing files for semantic search")
+            progress_started = True
+
+            logger.info("Starting batch collection...")
+            for batch in file_collector.collect_files_batched(batch_size=20):
+                batch_count += 1
+                batch_size = len(batch)
+                total_indexed += batch_size
+                logger.info(f"Received batch {batch_count} with {batch_size} files")
+
+                progress_msg = f"Indexing files: batch {batch_count} ({total_indexed} files total)"
+                progress.update(description=progress_msg)
+
+                self._notify_progress(
+                    f"Indexing batch {batch_count} ({batch_size} files, "
+                    f"{total_indexed} total)..."
+                )
+
+                logger.debug(f"Indexing batch {batch_count} with {batch_size} files")
+                provider.index_files(batch, is_batch=True)
+
+            if total_indexed == 0:
+                logger.warning("No files collected for semantic search indexing")
+                self._notify_progress("No files to index")
+                return
+
+            self._is_indexed = True
+            logger.info(f"Semantic search indexing complete ({total_indexed} files)")
+            self._notify_progress(f"Indexing complete ({total_indexed} files)")
+
+        except Exception as e:
+            logger.error(f"Semantic indexing failed: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
+
+            self._notify_progress(f"Indexing failed: {e}")
+            if progress_started:
+                progress.error(str(e))
+
+            # Gracefully degrade - disable semantic search
+            self._semantic_search = None
+
+        finally:
+            if progress_started:
+                progress.complete("Indexing complete")
+
+            # Reset progress reporter
+            if provider:
+                provider.set_progress_reporter(NullProgressReporter())
+
+    def process_events(self) -> int:
+        """
+        Process pending background events.
+
+        Should be called periodically from main thread.
+
+        Returns:
+            Number of events processed
+        """
+        return self._event_queue.process_pending()
+
+    def set_progress_callback(self, callback: Optional[Callable[[str], None]]) -> None:
+        """
+        Set callback for progress updates.
+
+        Args:
+            callback: Function taking a string message (or None to clear)
+        """
+        self._progress_callback = callback
+
+    def _notify_progress(self, message: str) -> None:
+        """Notify registered callback of progress."""
+        if self._progress_callback:
+            try:
+                self._progress_callback(message)
+            except Exception as e:
+                logger.debug(f"Error in progress callback: {e}")
+
+
+class NullSemanticSearchManager:
+    """
+    No-op semantic search manager.
+
+    Used when semantic search is not available or for testing.
+    """
+
+    @property
+    def event_queue(self) -> EventQueueProtocol:
+        """Get a null event queue."""
+        return ThreadSafeEventQueue()
+
+    def start_background_init(self) -> None:
+        """No-op."""
+        pass
+
+    def is_ready(self) -> bool:
+        """Always returns False."""
+        return False
+
+    def get_status(self) -> Optional[str]:
+        """Returns None."""
+        return None
+
+    def get_search_provider(self) -> None:
+        """Returns None."""
+        return None
+
+    def search(self, query: str, max_tokens: int = 4000) -> None:
+        """Returns None."""
+        return None
+
+    def index_files(self, file_collector: 'FileCollectorProtocol') -> None:
+        """No-op."""
+        pass
+
+    def process_events(self) -> int:
+        """Returns 0."""
+        return 0
+
+    def set_progress_callback(self, callback: Optional[Callable[[str], None]]) -> None:
+        """No-op."""
+        pass

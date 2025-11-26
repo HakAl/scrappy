@@ -7,7 +7,7 @@ Provides automatic project exploration and context augmentation for prompts.
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from .file_scanner import FileScanner
 
@@ -25,6 +25,11 @@ from ..infrastructure.threading import (
     BackgroundEvent,
     EventType,
 )
+from .semantic_manager import SemanticSearchManager
+from .augmenter import ContextAugmenter
+
+if TYPE_CHECKING:
+    from .protocols import SemanticSearchManagerProtocol, ContextAugmenterProtocol
 
 
 class CodebaseContext:
@@ -53,6 +58,8 @@ class CodebaseContext:
         file_collector: Optional['FileCollectorProtocol'] = None,
         io: Optional['CLIIOProtocol'] = None,
         event_queue: Optional[EventQueueProtocol] = None,
+        semantic_manager: Optional['SemanticSearchManagerProtocol'] = None,
+        context_augmenter: Optional['ContextAugmenterProtocol'] = None,
     ):
         """
         Initialize codebase context (dependencies only - NO file I/O by default).
@@ -67,12 +74,14 @@ class CodebaseContext:
             git_history_reader: Injectable git history reader (default: creates new GitHistoryReader)
             project_detector: Injectable project detector (default: creates from project_path)
             auto_load_cache: If True, automatically load cache in constructor (for backwards compatibility)
-            semantic_initializer: Background initializer for semantic search.
+            semantic_initializer: Background initializer for semantic search (deprecated, use semantic_manager)
             path_provider: Path provider for data files (auto-creates if None)
             file_collector: Injectable file collector for semantic search (default: creates SemanticFileCollector)
             io: Injectable IO interface for progress reporting (default: None, falls back to NullProgressReporter)
             event_queue: Event queue for main-thread-safe background notifications.
                         If None, creates a default ThreadSafeEventQueue.
+            semantic_manager: Injectable semantic search manager (default: creates SemanticSearchManager)
+            context_augmenter: Injectable context augmenter (default: creates ContextAugmenter)
         """
         # Store config for factory methods
         self._initial_project_path = project_path
@@ -105,18 +114,35 @@ class CodebaseContext:
         self._git_history_reader = git_history_reader or self._create_default_git_history_reader()
         self._project_detector = project_detector or self._create_default_project_detector()
 
-        # Semantic search - uses background initializer pattern
-        self._semantic_search = None  # Cached result from semantic_initializer
-        self._semantic_initializer = semantic_initializer  # Background initializer
-        self._semantic_search_attempted = False  # Track if we tried to create it
-        self._file_collector = file_collector  # Injected file collector for semantic search
-        self._indexing_progress_callback = None  # Callback for indexing progress updates
-
         # IO interface for progress reporting
         self._io = io  # Injected IO interface (optional)
 
         # Event queue for main-thread-safe background notifications
         self._event_queue = event_queue or ThreadSafeEventQueue()
+
+        # File collector for semantic search
+        self._file_collector = file_collector
+
+        # === Semantic Search Manager (extracted) ===
+        # If semantic_manager is provided, use it; otherwise create default
+        if semantic_manager:
+            self._semantic_manager = semantic_manager
+        else:
+            self._semantic_manager = SemanticSearchManager(
+                project_path=self.project_path,
+                initializer=semantic_initializer,
+                event_queue=self._event_queue,
+                io=self._io,
+            )
+
+        # Backward compatibility: expose underlying state via manager
+        self._semantic_search = None  # Cached for backward compatibility
+        self._semantic_initializer = semantic_initializer  # Backward compatibility
+        self._indexing_progress_callback = None  # Callback for indexing progress updates
+
+        # === Context Augmenter (extracted) ===
+        # Defer augmenter creation until first use since it needs data providers
+        self._context_augmenter = context_augmenter  # May be None initially
 
         # Auto-load cache if requested (for backwards compatibility)
         if auto_load_cache:
@@ -136,6 +162,24 @@ class CodebaseContext:
             The event queue used for background-to-main-thread communication
         """
         return self._event_queue
+
+    def _get_or_create_augmenter(self) -> ContextAugmenter:
+        """
+        Get or create the context augmenter with proper data providers.
+
+        Lazily creates augmenter on first use since providers need self reference.
+        """
+        if self._context_augmenter is None:
+            self._context_augmenter = ContextAugmenter(
+                project_path=self.project_path,
+                summary_provider=lambda: self.summary,
+                structure_provider=lambda: self.structure,
+                git_history_provider=lambda: self.git_history,
+                file_index_provider=lambda: self.file_index,
+                is_explored_provider=lambda: self.is_explored(),
+                semantic_manager=self._semantic_manager,
+            )
+        return self._context_augmenter
 
     def restore_from_cache(self):
         """
@@ -215,6 +259,8 @@ class CodebaseContext:
             callback: Function that takes a string message parameter
         """
         self._indexing_progress_callback = callback
+        # Also set on semantic manager for delegation
+        self._semantic_manager.set_progress_callback(callback)
 
     def _notify_indexing_progress(self, message: str) -> None:
         """
@@ -241,18 +287,12 @@ class CodebaseContext:
         Use process_background_events() periodically from the main thread to
         process completion events.
         """
-        if self._semantic_initializer:
-            logger.debug("Starting background semantic search initialization")
+        # Delegate to semantic manager
+        self._semantic_manager.start_background_init()
 
-            # Register event handler for semantic search events
-            self._event_queue.register_handler(
-                "semantic_search",
-                self._handle_semantic_event,
-            )
-
-            self._semantic_initializer.start()
-        else:
-            logger.debug("No semantic initializer configured")
+        # Set up callback bridge for backward compatibility
+        if self._indexing_progress_callback:
+            self._semantic_manager.set_progress_callback(self._indexing_progress_callback)
 
     def process_background_events(self) -> int:
         """
@@ -264,7 +304,8 @@ class CodebaseContext:
         Returns:
             Number of events processed
         """
-        return self._event_queue.process_pending()
+        # Delegate to semantic manager (which owns the event queue)
+        return self._semantic_manager.process_events()
 
     def _handle_semantic_event(self, event: BackgroundEvent) -> None:
         """
@@ -299,9 +340,8 @@ class CodebaseContext:
         Returns:
             Status string if initializer exists, None otherwise
         """
-        if self._semantic_initializer:
-            return self._semantic_initializer.get_status()
-        return None
+        # Delegate to semantic manager
+        return self._semantic_manager.get_status()
 
     def is_semantic_search_ready(self) -> bool:
         """
@@ -310,12 +350,8 @@ class CodebaseContext:
         Returns:
             True if semantic search is available and ready
         """
-        if self._semantic_search:
-            return True  # Already initialized and cached
-        if self._semantic_initializer:
-            return self._semantic_initializer.is_complete() and \
-                   self._semantic_initializer.get_error() is None
-        return False
+        # Delegate to semantic manager
+        return self._semantic_manager.is_ready()
 
     def _ensure_semantic_search(self) -> Optional['SemanticSearchProtocol']:
         """
@@ -326,23 +362,8 @@ class CodebaseContext:
         Returns:
             SemanticSearchProtocol instance or None if not available
         """
-        # Check if already cached
-        if self._semantic_search:
-            return self._semantic_search
-
-        # Check if background initializer has completed
-        if self._semantic_initializer and self._semantic_initializer.is_complete():
-            result = self._semantic_initializer.get_result()
-            if result:
-                # Cache the result for future calls
-                self._semantic_search = result
-                return result
-            else:
-                error = self._semantic_initializer.get_error()
-                logger.debug(f"Semantic search initialization failed: {error}")
-                return None
-
-        return None
+        # Delegate to semantic manager
+        return self._semantic_manager.get_search_provider()
 
     def is_explored(self) -> bool:
         """Check if the codebase has been explored."""
@@ -486,54 +507,9 @@ Be concise and technical. No fluff."""
         Returns:
             Augmented prompt with context
         """
-        if not self.is_explored():
-            return user_prompt
-
-        context_parts = []
-
-        # Add project summary if available
-        if self.summary:
-            context_parts.append(f"Project Context:\n{self.summary}")
-
-        # Add structure info
-        if self.structure:
-            structure_info = [
-                f"Project: {self.project_path.name}",
-                f"Files: {self.structure.get('total_files', 0)} total",
-                f"Languages: {', '.join(k for k, v in self.structure.get('by_type', {}).items() if v > 0 and k != 'other')}",
-            ]
-            context_parts.append("Structure:\n" + "\n".join(structure_info))
-
-        # Add git history info
-        if self.git_history:
-            git_info = []
-            if self.git_history.get('current_branch'):
-                git_info.append(f"Branch: {self.git_history['current_branch']}")
-            if self.git_history.get('recent_commits'):
-                commits = self.git_history['recent_commits'][:5]
-                git_info.append(f"Recent commits:\n" + "\n".join(f"  {c}" for c in commits))
-            if self.git_history.get('recently_changed_files'):
-                changed = self.git_history['recently_changed_files'][:10]
-                git_info.append(f"Recently changed: {', '.join(changed)}")
-            if git_info:
-                context_parts.append("Git History:\n" + "\n".join(git_info))
-
-        # Optionally include relevant file listings
-        if include_files and self.file_index:
-            # Include Python files as they're most relevant
-            py_files = self.file_index.get('python', [])[:20]
-            if py_files:
-                context_parts.append(f"Python files:\n" + "\n".join(f"  - {f}" for f in py_files))
-
-        if context_parts:
-            context_block = "\n\n".join(context_parts)
-            return f"""[Codebase Context]
-{context_block}
-
-[User Request]
-{user_prompt}"""
-
-        return user_prompt
+        # Delegate to context augmenter
+        augmenter = self._get_or_create_augmenter()
+        return augmenter.augment(user_prompt, include_files=include_files)
 
     def get_relevant_context(self, query: str, max_tokens: int = 4000) -> str:
         """
@@ -548,34 +524,19 @@ Be concise and technical. No fluff."""
         Returns:
             Relevant context string
         """
-        if not self.is_explored():
-            return ""
-
-        # Try semantic search first (lazy indexing on first use)
-        semantic_search = self._ensure_semantic_search()
-        if semantic_search:
-            # Lazy index on first use (if not already indexed)
-            if not semantic_search.is_indexed() and self.is_explored():
+        # Check for lazy indexing (for backward compatibility)
+        if self.is_explored():
+            semantic_search = self._ensure_semantic_search()
+            if semantic_search and not semantic_search.is_indexed():
                 logger.info("Indexing files for semantic search (first use)...")
                 try:
                     self._index_for_semantic_search()
                 except Exception as e:
                     logger.warning(f"Semantic indexing failed: {e}")
-                    semantic_search = None
 
-            # Search if indexed
-            if semantic_search and semantic_search.is_indexed():
-                try:
-                    result = semantic_search.search(query, max_tokens=max_tokens)
-                    if result.chunks:
-                        logger.debug(f"Using semantic search ({len(result.chunks)} chunks)")
-                        return self._format_search_result(result)
-                except Exception as e:
-                    logger.warning(f"Semantic search failed, falling back to keyword: {e}")
-
-        # Fall back to keyword matching (existing logic)
-        logger.debug("Using keyword-based context")
-        return self._get_keyword_context(query)
+        # Delegate to context augmenter
+        augmenter = self._get_or_create_augmenter()
+        return augmenter.get_relevant_context(query, max_tokens=max_tokens)
 
     def _scan_files(self) -> dict:
         """Scan project for source files."""
@@ -696,101 +657,28 @@ Be concise and technical. No fluff."""
         """
         Index files for semantic search with Rich progress display.
 
+        Delegates to SemanticSearchManager for the actual indexing logic.
+
         Uses batched file collection to prevent memory spikes:
         - Processes files in batches of 20
         - Respects .gitignore via git ls-files
         - Enforces file size limits (5MB per file)
         - Skips binary files
         - Gracefully handles errors
-        - Displays progress using Rich (transient, disappears when done)
 
         Progress updates are sent via the registered callback (if any).
-
-        Gracefully degrades - semantic search becomes unavailable on failure.
         """
-        # Create progress reporter for this indexing session
-        from ..infrastructure.progress import UnifiedIOProgressReporter, NullProgressReporter
-        progress = UnifiedIOProgressReporter(self._io) if self._io else NullProgressReporter()
-        progress_started = False
-
-        try:
-            logger.info("Starting semantic search indexing (batched)...")
-            logger.debug(f"Semantic search provider: {self._semantic_search}")
-
-            # Get or create file collector
-            self._notify_indexing_progress("Preparing file collector...")
-            logger.info(f"File collector before creation: {self._file_collector}")
-            file_collector = self._file_collector
+        # Get or create file collector
+        file_collector = self._file_collector
+        if file_collector is None:
+            file_collector = self._create_default_file_collector()
             if file_collector is None:
-                logger.info("Creating default file collector...")
-                file_collector = self._create_default_file_collector()
-                logger.info(f"File collector after creation: {file_collector}")
-                if file_collector is None:
-                    logger.warning("No file collector available - skipping semantic indexing")
-                    self._notify_indexing_progress("No file collector available")
-                    return
-
-            # Set progress reporter on the provider
-            self._semantic_search.set_progress_reporter(progress)
-
-            # Index files in batches to prevent memory spikes
-            self._notify_indexing_progress("Collecting and indexing files in batches...")
-
-            total_indexed = 0
-            batch_count = 0
-
-            # Start progress with indeterminate total (we don't know how many files yet)
-            progress.start("Indexing files for semantic search")
-            progress_started = True
-
-            logger.info("Starting batch collection...")
-            for batch in file_collector.collect_files_batched(batch_size=20):
-                batch_count += 1
-                batch_size = len(batch)
-                total_indexed += batch_size
-                logger.info(f"Received batch {batch_count} with {batch_size} files")
-                logger.debug(f"Sample files: {list(batch.keys())[:3]}")
-
-                # Update progress with cumulative totals
-                progress_msg = f"Indexing files: batch {batch_count} ({total_indexed} files total)"
-                progress.update(description=progress_msg)
-
-                self._notify_indexing_progress(
-                    f"Indexing batch {batch_count} ({batch_size} files, "
-                    f"{total_indexed} total)..."
-                )
-
-                logger.debug(f"Indexing batch {batch_count} with {batch_size} files")
-                self._semantic_search.index_files(batch, is_batch=True)
-
-            if total_indexed == 0:
-                logger.warning("No files collected for semantic search indexing")
-                self._notify_indexing_progress("No files to index")
+                logger.warning("No file collector available - skipping semantic indexing")
+                self._notify_indexing_progress("No file collector available")
                 return
 
-            logger.info(f"Semantic search indexing complete ({total_indexed} files in {batch_count} batches)")
-            self._notify_indexing_progress(f"Indexing complete ({total_indexed} files)")
-
-        except Exception as e:
-            logger.error(f"Semantic indexing failed: {e}")
-            import traceback
-            logger.debug(traceback.format_exc())
-
-            self._notify_indexing_progress(f"Indexing failed: {e}")
-            if progress_started:
-                progress.error(str(e))
-
-            # Gracefully degrade - disable semantic search
-            self._semantic_search = None
-
-        finally:
-            # Always complete progress if it was started
-            if progress_started:
-                progress.complete("Indexing complete")
-
-            # Reset progress reporter to null to avoid affecting future operations
-            if self._semantic_search:
-                self._semantic_search.set_progress_reporter(NullProgressReporter())
+        # Delegate to semantic manager
+        self._semantic_manager.index_files(file_collector)
 
     def _format_search_result(self, result: 'SearchResult') -> str:
         """
