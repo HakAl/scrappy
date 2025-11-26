@@ -392,8 +392,15 @@ class OutputStrategyProtocol(Protocol):
 class DirectConsoleOutput:
     """Strategy for direct Rich Console output (CLI mode).
 
+    WARNING: CLI MODE ONLY. This strategy is only selected when
+    output_sink is None in UnifiedIO. Never instantiate directly
+    for TUI mode - use OutputSinkAdapter instead.
+
     Provides full Rich functionality with blocking input.
     All features work exactly as in standalone Rich library.
+
+    Input methods (prompt, confirm, input_line) use blocking calls
+    that will hang worker threads in TUI mode.
     """
 
     def __init__(self, console: Console):
@@ -504,7 +511,12 @@ class DirectConsoleOutput:
         default: str = "",
         show_default: bool = True
     ) -> str:
-        """Get blocking user input."""
+        """Get blocking user input.
+
+        WARNING: CLI MODE ONLY. Uses blocking input() that will hang
+        in TUI worker threads. In TUI mode, OutputSinkAdapter.input_prompt()
+        routes through Textual's modal input system.
+        """
         prompt_text = text
         if show_default and default:
             prompt_text = f"{text} [{default}]"
@@ -517,14 +529,24 @@ class DirectConsoleOutput:
             return default
 
     def input_confirm(self, text: str, default: bool = False) -> bool:
-        """Get blocking confirmation."""
+        """Get blocking confirmation.
+
+        WARNING: CLI MODE ONLY. Uses blocking Confirm.ask() that will hang
+        in TUI worker threads. In TUI mode, OutputSinkAdapter.input_confirm()
+        routes through Textual's modal confirmation system.
+        """
         try:
             return Confirm.ask(text, default=default, console=self._console)
         except EOFError:
             return default
 
     def input_line(self) -> str:
-        """Read blocking input line."""
+        """Read blocking input line.
+
+        WARNING: CLI MODE ONLY. Uses blocking input() that will hang
+        in TUI worker threads. In TUI mode, OutputSinkAdapter.input_line()
+        routes through Textual's Input widget.
+        """
         try:
             return input()
         except EOFError:
@@ -824,6 +846,19 @@ class UnifiedIO:
             self._strategy: OutputStrategyProtocol = OutputSinkAdapter(output_sink, self._console)
         else:
             self._strategy = DirectConsoleOutput(self._console)
+
+    @property
+    def is_tui_mode(self) -> bool:
+        """Check if running in TUI (Textual) mode.
+
+        This is the single source of truth for mode detection.
+        Returns True when output_sink is not None, indicating
+        output should be routed through Textual.
+
+        Returns:
+            True if in TUI mode, False for CLI mode.
+        """
+        return self._output_sink is not None
 
     @property
     def console(self) -> Console:

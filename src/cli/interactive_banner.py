@@ -63,14 +63,16 @@ def display_banner(io: "UnifiedIOProtocol") -> None:
         padding=(1, 2)
     )
 
-    # Route through OutputSink if available (TUI mode), otherwise print directly
-    if hasattr(io, 'output_sink') and io.output_sink is not None:
+    # Route through appropriate output channel based on mode
+    # Use is_tui_mode property as single source of truth for mode detection
+    if hasattr(io, 'is_tui_mode') and io.is_tui_mode:
+        # TUI mode: post renderable through OutputSink for thread-safe display
         io.output_sink.post_renderable(panel)
     elif hasattr(io, 'console'):
-        # Fallback: print directly to console (non-TUI mode)
+        # CLI mode: print directly to Rich Console
         io.console.print(panel)
     else:
-        # Last resort: echo the text content
+        # Last resort: echo the text content (for non-standard IO implementations)
         io.echo(str(content))
 
 

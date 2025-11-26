@@ -150,14 +150,24 @@ class RichDirectoryFormatter:
 
     Provides Rich-styled directory tree output as alternative to click.style.
     Handles directories, files with extension-based coloring, and file sizes.
+
+    NOTE: This class uses a Rich Console internally for RENDERING text with
+    ANSI codes, not for output. The console.print() call is wrapped in
+    console.capture() to convert Rich Text objects to strings. Actual output
+    happens elsewhere when these strings are displayed via the IO interface.
+
+    This means this class is safe to use in both CLI and TUI modes - it only
+    generates formatted strings, it does not output them.
     """
 
     def __init__(self, console: Optional[Console] = None):
         """Initialize with optional Rich console.
 
         Args:
-            console: Optional Rich Console instance. If not provided,
-                    a default console will be created.
+            console: Optional Rich Console instance for rendering text.
+                    If not provided, a default console will be created.
+                    The console is used only for string rendering via capture(),
+                    not for direct output.
         """
         if not HAS_RICH:
             raise ImportError("Rich library is required for RichDirectoryFormatter")
@@ -165,7 +175,7 @@ class RichDirectoryFormatter:
         self._console = console if console is not None else self._create_default_console()
 
     def _create_default_console(self) -> Console:
-        """Create default Rich console."""
+        """Create default Rich console for rendering."""
         return Console()
 
     def format_directory_name(self, name: str) -> str:

@@ -23,10 +23,21 @@ class RichProgressReporter:
     less intrusive than Progress bars. Automatically cleans up on completion.
 
     Implements ProgressReporterProtocol.
+
+    WARNING: CLI MODE ONLY. This reporter outputs directly to the console
+    and will bypass Textual's output routing in TUI mode. For TUI-compatible
+    progress reporting, use UnifiedIOProgressReporter instead, or use the
+    create_progress_reporter() factory function which automatically selects
+    the correct reporter.
     """
 
     def __init__(self):
-        """Initialize Rich progress reporter."""
+        """Initialize Rich progress reporter.
+
+        Note:
+            For TUI mode, use UnifiedIOProgressReporter instead which routes
+            through the IO abstraction.
+        """
         self._status = None
         self._console = None
 
@@ -99,10 +110,21 @@ class LiveProgressReporter:
     scrolling or interfering with user input prompts.
 
     Implements ProgressReporterProtocol.
+
+    WARNING: CLI MODE ONLY. This reporter outputs directly to the console
+    and will bypass Textual's output routing in TUI mode. For TUI-compatible
+    progress reporting, use UnifiedIOProgressReporter instead, or use the
+    create_progress_reporter() factory function which automatically selects
+    the correct reporter.
     """
 
     def __init__(self):
-        """Initialize Live progress reporter."""
+        """Initialize Live progress reporter.
+
+        Note:
+            For TUI mode, use UnifiedIOProgressReporter instead which routes
+            through the IO abstraction.
+        """
         self._live = None
         self._console = None
 
@@ -414,3 +436,56 @@ class UnifiedIOProgressReporter:
             message: Error message
         """
         self._io.secho(f"Error: {message}", fg="red")
+
+
+def create_progress_reporter(
+    io: Optional["CLIIOProtocol"] = None,
+    use_live: bool = False,
+    use_spinner: bool = True,
+):
+    """
+    Factory function to create the appropriate progress reporter based on mode.
+
+    This function selects the correct progress reporter implementation:
+    - If io is None: Returns NullProgressReporter (silent)
+    - If io is in TUI mode: Returns UnifiedIOProgressReporter (routes through IO)
+    - If io is in CLI mode with use_live=True: Returns LiveProgressReporter
+    - If io is in CLI mode with use_spinner=True: Returns RichProgressReporter
+    - Otherwise: Returns UnifiedIOProgressReporter
+
+    Args:
+        io: Optional CLIIOProtocol instance
+        use_live: Use Rich Live display (CLI mode only)
+        use_spinner: Use Rich Status spinner (CLI mode only)
+
+    Returns:
+        Progress reporter appropriate for the current mode
+
+    Example:
+        # In TUI mode, always uses IO-based reporter
+        reporter = create_progress_reporter(io)
+
+        # In CLI mode with animated spinner
+        reporter = create_progress_reporter(io, use_spinner=True)
+
+        # In CLI mode with live display
+        reporter = create_progress_reporter(io, use_live=True)
+    """
+    if io is None:
+        return NullProgressReporter()
+
+    # Import here to avoid circular imports
+    from ..cli.mode_utils import is_tui_mode
+
+    if is_tui_mode(io):
+        # TUI mode: always use IO-based reporter
+        return UnifiedIOProgressReporter(io)
+
+    # CLI mode: select based on options
+    if use_live:
+        return LiveProgressReporter()
+    if use_spinner:
+        return RichProgressReporter()
+
+    # Default: use IO-based reporter (works in both modes)
+    return UnifiedIOProgressReporter(io)

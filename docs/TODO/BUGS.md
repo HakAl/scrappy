@@ -1,6 +1,11 @@
 ## Issues 
 
 ---
+ensure no semantic search index occurs from one shot commands 
+-- unless directly triggered by user, no semantic search for non interactive mode
+---
+
+---
 Problem:
 /explore freezes app
 

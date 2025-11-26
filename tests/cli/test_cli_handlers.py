@@ -228,6 +228,61 @@ class TestCLIAgentManager:
 
         assert manager.orchestrator is mock_orchestrator
 
+    @pytest.mark.unit
+    def test_agent_manager_stores_io_directly(self, mock_orchestrator):
+        """Test CLIAgentManager stores io directly per DI principles.
+
+        Phase 2 of AGENT_BUG_CLEANUP: io should be stored directly on
+        the manager instance, not just passed through to DisplayManager.
+        """
+        from src.cli.agent_manager import CLIAgentManager
+
+        io = MockIO()
+        manager = CLIAgentManager(mock_orchestrator, io)
+
+        # io should be stored directly on the manager
+        assert hasattr(manager, 'io')
+        assert manager.io is io
+
+    @pytest.mark.unit
+    @patch('src.cli.agent_manager.CodeAgent')
+    @patch('src.cli.agent_manager.create_git_checkpoint')
+    def test_run_agent_passes_io_to_code_agent(self, mock_checkpoint, mock_agent_class, mock_orchestrator):
+        """Test run_agent passes bridged io to CodeAgent constructor.
+
+        Phase 3 of AGENT_BUG_CLEANUP: This is the critical test that verifies
+        the fix for the TUI deadlock bug. The io instance must be passed to
+        CodeAgent so that agent confirmations use the bridged io, not a new
+        unbridged RichIO instance.
+        """
+        from src.cli.agent_manager import CLIAgentManager
+
+        mock_checkpoint.return_value = None
+        mock_agent = Mock()
+        mock_agent.run.return_value = {
+            "success": True,
+            "result": "Task completed",
+            "iterations": 1,
+            "audit_log": []
+        }
+        mock_agent.planner = "cerebras"
+        mock_agent.executor = "groq"
+        mock_agent.project_root = Path("/test")
+        mock_agent_class.return_value = mock_agent
+
+        io = MockIO(
+            confirmations=[False, False, False]  # dry_run, checkpoint, save_log
+        )
+        manager = CLIAgentManager(mock_orchestrator, io)
+
+        manager.run_agent("Test task")
+
+        # Verify CodeAgent was called with io=io
+        mock_agent_class.assert_called_once()
+        call_kwargs = mock_agent_class.call_args[1]
+        assert 'io' in call_kwargs
+        assert call_kwargs['io'] is io
+
 
   # Should show checkpoint hash
 

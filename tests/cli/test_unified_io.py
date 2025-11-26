@@ -18,6 +18,7 @@ from rich.text import Text
 
 from src.cli.unified_io import UnifiedIO, ProgressTracker, StreamWriter, SimplifiedProgressTracker
 from src.cli.protocols import OutputSink, UnifiedIOProtocol
+from src.cli.mode_utils import is_tui_mode, get_output_sink
 
 
 class MockOutputSink:
@@ -57,6 +58,11 @@ class TestUnifiedIOCLIMode:
         """UnifiedIO implements UnifiedIOProtocol."""
         io = UnifiedIO()
         assert isinstance(io, UnifiedIOProtocol)
+
+    def test_is_tui_mode_false_in_cli_mode(self):
+        """is_tui_mode returns False when output_sink is None."""
+        io = UnifiedIO()
+        assert io.is_tui_mode is False
 
     def test_console_property(self):
         """UnifiedIO provides console property."""
@@ -177,6 +183,12 @@ class TestUnifiedIOCLIMode:
 
 class TestUnifiedIOTUIMode:
     """Test UnifiedIO in TUI mode (with output_sink)."""
+
+    def test_is_tui_mode_true_in_tui_mode(self):
+        """is_tui_mode returns True when output_sink is provided."""
+        sink = MockOutputSink()
+        io = UnifiedIO(output_sink=sink)
+        assert io.is_tui_mode is True
 
     def test_routes_through_sink(self):
         """TUI mode routes all output through OutputSink."""
@@ -524,3 +536,47 @@ class TestProtocolCompliance:
 
         assert hasattr(io, 'console')
         assert isinstance(io.console, Console)
+
+
+class TestModeUtils:
+    """Test mode detection utility functions."""
+
+    def test_is_tui_mode_with_cli_io(self):
+        """is_tui_mode returns False for CLI mode UnifiedIO."""
+        io = UnifiedIO()
+        assert is_tui_mode(io) is False
+
+    def test_is_tui_mode_with_tui_io(self):
+        """is_tui_mode returns True for TUI mode UnifiedIO."""
+        sink = MockOutputSink()
+        io = UnifiedIO(output_sink=sink)
+        assert is_tui_mode(io) is True
+
+    def test_is_tui_mode_with_unknown_object(self):
+        """is_tui_mode returns False for objects without is_tui_mode attr."""
+
+        class FakeIO:
+            pass
+
+        fake = FakeIO()
+        assert is_tui_mode(fake) is False
+
+    def test_get_output_sink_cli_mode(self):
+        """get_output_sink returns None in CLI mode."""
+        io = UnifiedIO()
+        assert get_output_sink(io) is None
+
+    def test_get_output_sink_tui_mode(self):
+        """get_output_sink returns the OutputSink in TUI mode."""
+        sink = MockOutputSink()
+        io = UnifiedIO(output_sink=sink)
+        assert get_output_sink(io) is sink
+
+    def test_get_output_sink_unknown_object(self):
+        """get_output_sink returns None for objects without output_sink attr."""
+
+        class FakeIO:
+            pass
+
+        fake = FakeIO()
+        assert get_output_sink(fake) is None

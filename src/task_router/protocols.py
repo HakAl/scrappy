@@ -5,10 +5,13 @@ Defines abstract interfaces for task classification, clarification,
 routing, metrics collection, and intent classification.
 """
 
-from typing import Protocol, Dict, Any, List, Optional, runtime_checkable
+from typing import Protocol, Dict, Any, List, Optional, runtime_checkable, TYPE_CHECKING
 from enum import Enum
 from datetime import datetime
 from dataclasses import dataclass
+
+if TYPE_CHECKING:
+    from ..cli.io_interface import CLIIOProtocol
 
 
 @runtime_checkable
@@ -614,7 +617,12 @@ class DefaultConsoleInput:
     This is the shared default used by both IntentClarifier and TaskRouter
     when no IO protocol is injected.
 
-    WARNING: Do NOT use this in Textual worker threads - it will block forever.
+    WARNING: CLI MODE ONLY. Do NOT use this in Textual worker threads - it will
+    block forever because input() blocks the worker thread waiting for stdin
+    that will never arrive (Textual handles input differently).
+
+    For TUI mode, use IOBasedInput instead, or use the create_task_router_input()
+    factory function which automatically selects the correct implementation.
     """
 
     def prompt(self, text: str, default: str = "") -> str:
@@ -636,6 +644,90 @@ class DefaultConsoleInput:
     def output(self, message: str) -> None:
         """Output message to console."""
         print(message)
+
+
+class IOBasedInput:
+    """
+    Input implementation that delegates to CLIIOProtocol.
+
+    This adapter allows task router components to get user input
+    through the IO abstraction, which correctly handles both CLI
+    and TUI modes. In TUI mode, the IO interface routes prompts
+    through Textual's modal system.
+
+    Implements TaskRouterInputProtocol.
+    """
+
+    def __init__(self, io: "CLIIOProtocol"):
+        """Initialize with CLIIOProtocol instance.
+
+        Args:
+            io: CLIIOProtocol instance for input/output operations
+        """
+        self._io = io
+
+    def prompt(self, text: str, default: str = "") -> str:
+        """Get text input via IO interface.
+
+        Args:
+            text: Prompt text to display
+            default: Default value if user provides no input
+
+        Returns:
+            User's input or default value
+        """
+        return self._io.prompt(text, default=default)
+
+    def confirm(self, text: str, default: bool = False) -> bool:
+        """Get yes/no confirmation via IO interface.
+
+        Args:
+            text: Confirmation prompt text
+            default: Default value if user provides no input
+
+        Returns:
+            True if user confirms, False otherwise
+        """
+        return self._io.confirm(text, default=default)
+
+    def output(self, message: str) -> None:
+        """Output message via IO interface.
+
+        Args:
+            message: Message to display
+        """
+        self._io.echo(message)
+
+
+def create_task_router_input(io: Optional["CLIIOProtocol"] = None) -> TaskRouterInputProtocol:
+    """
+    Factory function to create the appropriate input handler based on mode.
+
+    This function selects the correct input implementation:
+    - If io is None: Returns DefaultConsoleInput (for backward compatibility)
+    - If io is provided: Returns IOBasedInput (routes through IO abstraction)
+
+    Using IOBasedInput is preferred because it:
+    - Works correctly in both CLI and TUI modes
+    - Routes prompts through Textual's modal system in TUI mode
+    - Avoids blocking worker threads with stdin reads
+
+    Args:
+        io: Optional CLIIOProtocol instance
+
+    Returns:
+        TaskRouterInputProtocol implementation appropriate for the context
+
+    Example:
+        # With IO interface (recommended)
+        input_handler = create_task_router_input(io)
+
+        # Without IO interface (fallback, CLI only)
+        input_handler = create_task_router_input()
+    """
+    if io is None:
+        return DefaultConsoleInput()
+    return IOBasedInput(io)
 
 
 @runtime_checkable

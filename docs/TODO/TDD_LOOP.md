@@ -1,3 +1,82 @@
+## Proposed Cycle
+
+The stakes are high for accuracy. 
+If the AI writes code before it knows how to verify it, it is likely to hallucinate a solution that "looks" right but doesn't work.
+
+Proposed cycle optimizing this flow for robustness and user experience:
+
+In TDD: `Write Test (Fail) -> Implement (Pass) -> Refactor`
+
+**Why this matters**
+Implementation first biases test generation. 
+AI might write a "soft" test just to make its own implementation pass.
+Force the app to generate the *verification strategy* (the test) before the *implementation*.
+
+### The "Prompt User" Strategy (Human-in-the-Loop)
+*Prompt user at any time?*
+**Answer:** Yes, strategically. Too many prompts make a CLI tool annoying; too few make it dangerous.
+
+**Best Checkpoints:**
+1.  **The "Architect" Checkpoint (Pre-Code):**
+    *   *When:* After the Plan/Design phase, but before any file is touched.
+    *   *Why:* This is the cheapest place to fix a misunderstanding.
+    *   *UX:* "I plan to create 3 files and modify `server.ts`. I will use a Factory pattern. Proceed? [Y/n/d (details)]"
+2.  **The "Stuck" Checkpoint (Error Loop):**
+    *   *When:* If the implementation fails the test > 2 times.
+    *   *Why:* Don't let the agent burn tokens in an infinite loop of failure. Ask the human for help.
+
+### 3. The Proposed "Improved" Cycle
+Flow that integrates strict TDD and strategic user prompts:
+
+```mermaid
+graph TD
+    Start[User Request] --> Plan[1. Scoping & Planning]
+    Plan --> Architecture[2. Design/Architecture Strategy]
+    
+    Architecture --> Prompt{User Review Plan?}
+    Prompt -- No (YOLO mode) --> TestGen
+    Prompt -- Yes --> UserCheck[User Approves/Refines]
+    UserCheck --> TestGen
+    
+    subgraph "The TDD Loop (Phase N)"
+        TestGen[3. Create Failing Test / Spec]
+        TestGen --> RunTestFail[Ensure Test Fails (Red)]
+        RunTestFail --> Implement[4. Write Implementation]
+        Implement --> RunTestPass[Run Test (Green?)]
+        
+        RunTestPass -- Pass --> Refactor[5. Refactor/Cleanup]
+        RunTestPass -- Fail --> Fix[Self-Correction Loop]
+        
+        Fix -- Success --> Refactor
+        Fix -- Stuck (x3 tries) --> HumanHelp[Prompt User for Context]
+    end
+    
+    Refactor --> NextPhase{More Phases?}
+    NextPhase -- Yes --> TestGen
+    NextPhase -- No --> Done
+```
+
+### Phase Strategy Details
+
+#### Phase 1: Planning & Scoping
+*   **Add Context Gathering:** Before planning, the app should explicitly explore the current environment and specific scope.
+*   **"Design Principles" Step:** Explicitly asking the LLM to "Thinking about SOLID principles..." / etc before generating code improves output quality.
+
+#### Phase 2: Implementation (The N loop)
+*   **Atomic Commits:** add git integration here.
+    *   Tests Pass? -> **git commit**.
+    *   Tests Fail? -> **git reset --hard** (wipe the bad attempt) -> Try again.
+    *   This prevents the "messy workspace" problem where a failed attempt leaves debris behind.
+
+#### Phase 3: The User Prompt
+*   **Configurability is Key:**
+    *   Default: **Interactive.** (Show plan, ask for confirmation).
+    *   Flag: `--yolo` or `--auto`. (Skip plan review, only prompt on failure).
+    *   Flag: `--dry-run`. (Generate the plan and tests, but do not implement).
+
+---
+
+## POC -- Judge / Magistrate Pattern Implementation Plan
 
 ### 1. Dependencies
 

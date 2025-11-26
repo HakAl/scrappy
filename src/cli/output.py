@@ -181,7 +181,12 @@ class FormattedOutputInterface(ABC):
         self.print(message, color=fg, bold=bold, newline=nl)
 
     def input_line(self) -> str:
-        """Read raw line of input."""
+        """Read raw line of input.
+
+        WARNING: CLI MODE ONLY. This method uses blocking input()
+        which will hang in TUI worker threads. In TUI mode, use
+        Input widget events or IOBasedInput from task_router.protocols.
+        """
         try:
             return input()
         except EOFError:
@@ -286,7 +291,23 @@ class TestOutput(FormattedOutputInterface):
 
 
 class RichOutput(FormattedOutputInterface):
-    """Output implementation using Rich library."""
+    """Output implementation using Rich library.
+
+    WARNING: CLI MODE ONLY. Do NOT use in Textual/TUI mode.
+
+    This class creates its own Rich Console instance and outputs directly
+    to stdout. In TUI mode, all output must route through UnifiedIO's
+    OutputSinkAdapter to ensure thread-safe rendering in the Textual app.
+
+    For TUI-compatible output, use:
+    - UnifiedIO with output_sink parameter (routes through OutputSink)
+    - CLIIOProtocol methods (echo, secho, panel, etc.)
+
+    This class is intended for:
+    - Standalone CLI scripts
+    - Non-interactive command output
+    - Tests (with TestOutput or captured console)
+    """
 
     def __init__(self):
         """Initialize Rich output."""
@@ -346,7 +367,12 @@ class RichOutput(FormattedOutputInterface):
         text: str,
         default: str = ""
     ) -> str:
-        """Get user input using Rich prompt."""
+        """Get user input using Rich prompt.
+
+        WARNING: CLI MODE ONLY. Uses blocking input() call that will
+        hang in TUI worker threads. In TUI mode, use CLIIOProtocol.prompt()
+        which routes through Textual's modal input system.
+        """
         prompt_text = text
         if default:
             prompt_text = f"{text} [{default}]"
@@ -363,7 +389,12 @@ class RichOutput(FormattedOutputInterface):
         text: str,
         default: bool = False
     ) -> bool:
-        """Get confirmation using Rich."""
+        """Get confirmation using Rich.
+
+        WARNING: CLI MODE ONLY. Uses blocking Confirm.ask() call that will
+        hang in TUI worker threads. In TUI mode, use CLIIOProtocol.confirm()
+        which routes through Textual's modal confirmation system.
+        """
         try:
             return self._Confirm.ask(text, default=default, console=self._console)
         except EOFError:

@@ -7,11 +7,14 @@ between console, file, buffer, or silent output.
 
 All handlers implement the OutputHandlerProtocol from protocols.py.
 """
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 
 from rich.console import Console
 from rich.table import Table
 from rich.text import Text
+
+if TYPE_CHECKING:
+    from ..cli.io_interface import CLIIOProtocol
 
 
 def format_complexity_bar(complexity: int, width: int = 10) -> str:
@@ -310,6 +313,11 @@ class RichOutputHandler:
     tables with progress bars for complexity and styled output.
 
     Uses Rich Console for formatted output.
+
+    WARNING: CLI MODE ONLY. This handler outputs directly to the console
+    and will bypass Textual's output routing in TUI mode. For TUI-compatible
+    output, use CLIIOOutputHandler instead, or use the create_output_handler()
+    factory function which automatically selects the correct handler.
     """
 
     def __init__(self, console: Console):
@@ -318,6 +326,10 @@ class RichOutputHandler:
 
         Args:
             console: Rich Console for formatted output
+
+        Note:
+            For TUI mode, use CLIIOOutputHandler instead which routes
+            through the IO abstraction.
         """
         self._console = console
         self._classification_data: dict = {}
@@ -404,3 +416,46 @@ class RichOutputHandler:
             message: The info message to display
         """
         self._console.print(f"  {message}")
+
+
+def create_output_handler(io: Optional['CLIIOProtocol'] = None, rich_tables: bool = False):
+    """
+    Factory function to create the appropriate output handler based on mode.
+
+    This function selects the correct output handler implementation:
+    - If io is None: Returns NullOutputHandler (silent)
+    - If io is in TUI mode: Always returns CLIIOOutputHandler (routes through IO)
+    - If io is in CLI mode and rich_tables=True: Returns RichOutputHandler
+    - If io is in CLI mode and rich_tables=False: Returns CLIIOOutputHandler
+
+    Args:
+        io: Optional CLIIOProtocol instance
+        rich_tables: Whether to use Rich tables for output (CLI mode only)
+
+    Returns:
+        OutputHandlerProtocol implementation appropriate for the current mode
+
+    Example:
+        # In TUI mode, always routes through IO
+        handler = create_output_handler(io)
+
+        # In CLI mode with fancy tables
+        handler = create_output_handler(io, rich_tables=True)
+    """
+    if io is None:
+        return NullOutputHandler()
+
+    # Import here to avoid circular imports
+    from ..cli.mode_utils import is_tui_mode
+
+    if is_tui_mode(io):
+        # TUI mode: always use IO-based handler
+        return CLIIOOutputHandler(io)
+
+    if rich_tables:
+        # CLI mode with Rich tables
+        console = getattr(io, 'console', None) or Console()
+        return RichOutputHandler(console=console)
+
+    # CLI mode with simple output
+    return CLIIOOutputHandler(io)

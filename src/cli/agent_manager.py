@@ -16,9 +16,10 @@ class CLIAgentManager:
 
         Args:
             orchestrator: The AgentOrchestrator instance
-            io: I/O interface for output
+            io: I/O interface for output (stored directly for DI)
         """
         self.orchestrator = orchestrator
+        self.io = io  # Store directly per CLAUDE.md DI principles
         self.display = DisplayManager(io=io, dashboard_enabled=False)
 
     def run_agent(self, task: str):
@@ -56,7 +57,7 @@ class CLIAgentManager:
         Returns:
             None
         """
-        io = self.display.get_io()
+        io = self.io  # Use stored reference directly
         dashboard = self.display.get_dashboard()
 
         io.secho(f"\nCode Agent - Task: {task}", bold=True)
@@ -80,8 +81,8 @@ class CLIAgentManager:
             else:
                 io.secho("Could not create checkpoint (not a git repo?)", fg="yellow")
 
-        # Create agent
-        agent = CodeAgent(self.orchestrator)
+        # Create agent with bridged io instance
+        agent = CodeAgent(self.orchestrator, io=io)
         agent.dry_run = dry_run
 
         # Show agent configuration
