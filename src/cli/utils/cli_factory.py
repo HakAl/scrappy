@@ -22,10 +22,13 @@ from ..context_commands import CLIContextCommands
 from ..cache_manager import CacheManager
 from ..rate_limiter import RateLimiter
 from ..persistence import SessionPersistence
+from ..user_interaction import get_user_interaction
+from ..protocols import UserInteractionProtocol
 
 if TYPE_CHECKING:
     from ..core import CLI
     from ...orchestrator.protocols import Orchestrator
+    from ..textual_app import ThreadSafeAsyncBridge
 
 
 def get_io_interface(
@@ -107,7 +110,8 @@ def extract_context_options(ctx: Any) -> Dict[str, Any]:
 def initialize_cli_handlers(
     orchestrator: "Orchestrator",
     session_start: datetime,
-    io: CLIIOProtocol
+    io: CLIIOProtocol,
+    bridge: Optional["ThreadSafeAsyncBridge"] = None,
 ) -> Dict[str, Any]:
     """
     Create and return all CLI component handlers.
@@ -116,6 +120,7 @@ def initialize_cli_handlers(
         orchestrator: AgentOrchestrator instance
         session_start: Session start datetime for display handler
         io: I/O interface for output
+        bridge: Optional ThreadSafeAsyncBridge for TUI mode modal dialogs
 
     Returns:
         Dict with all 8 standard handlers
@@ -135,14 +140,17 @@ def initialize_cli_handlers(
         session_persistence=session_persistence
     )
 
+    # Get mode-aware user interaction handler
+    interaction = get_user_interaction(io, bridge)
+
     return {
         'display': CLIDisplay(orchestrator, session_start, io),
         'session_mgr': session_mgr,
         'codebase': CLICodebaseAnalysis(orchestrator, io),
         'tasks': CLITaskExecution(orchestrator, io),
-        'multiprovider': CLIMultiProvider(orchestrator, io),
+        'multiprovider': CLIMultiProvider(orchestrator, io, interaction),
         'smart': CLISmartQuery(orchestrator, io),
-        'agent_mgr': CLIAgentManager(orchestrator, io),
+        'agent_mgr': CLIAgentManager(orchestrator, io, interaction),
         'task_router': CLITaskRouterHandler(orchestrator, io),
     }
 

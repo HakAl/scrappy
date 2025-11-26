@@ -3,24 +3,39 @@ Code agent management for the CLI.
 Handles running and managing code execution agents with human approval.
 """
 
+from typing import TYPE_CHECKING, Optional
+
 from ..agent import CodeAgent, create_git_checkpoint, rollback_to_checkpoint
 from .io_interface import CLIIOProtocol
 from .display_manager import DisplayManager
+from .user_interaction import CLIUserInteraction
+
+if TYPE_CHECKING:
+    from .protocols import UserInteractionProtocol
 
 
 class CLIAgentManager:
     """Manages code agent execution with human-in-the-loop approval."""
 
-    def __init__(self, orchestrator, io: CLIIOProtocol):
+    def __init__(
+        self,
+        orchestrator,
+        io: CLIIOProtocol,
+        user_interaction: Optional["UserInteractionProtocol"] = None,
+    ):
         """Initialize agent manager.
 
         Args:
             orchestrator: The AgentOrchestrator instance
             io: I/O interface for output (stored directly for DI)
+            user_interaction: Optional interaction handler for prompts/confirms.
+                Defaults to CLIUserInteraction if not provided.
         """
         self.orchestrator = orchestrator
         self.io = io  # Store directly per CLAUDE.md DI principles
         self.display = DisplayManager(io=io, dashboard_enabled=False)
+        # Inject user interaction - defaults to CLI mode
+        self._interaction = user_interaction or CLIUserInteraction(io)
 
     def run_agent(self, task: str):
         """
@@ -68,9 +83,13 @@ class CLIAgentManager:
             dashboard.set_state("idle", "Awaiting user input")
             dashboard.update_thought_process(f"Task: {task}")
 
-        # Safety options
-        dry_run = io.confirm("Run in dry-run mode? (no actual changes)", default=False)
-        create_checkpoint = io.confirm("Create git checkpoint before running?", default=True)
+        # Safety options - use injected interaction handler for mode-aware prompts
+        dry_run = self._interaction.confirm(
+            "Run in dry-run mode? (no actual changes)", default=False
+        )
+        create_checkpoint = self._interaction.confirm(
+            "Create git checkpoint before running?", default=True
+        )
 
         checkpoint_hash = None
         if create_checkpoint:
@@ -122,13 +141,13 @@ class CLIAgentManager:
                     io.echo(f"  [{entry['timestamp'][:19]}] {entry['action']} - {approved}")
 
             # Offer to save audit log
-            if io.confirm("\nSave audit log to file?", default=False):
+            if self._interaction.confirm("Save audit log to file?", default=False):
                 log_path = agent.save_audit_log()
                 io.secho(f"Saved to: {log_path}", fg="green")
 
             # Offer rollback if checkpoint was created
             if checkpoint_hash and not dry_run:
-                if io.confirm("\nRollback to checkpoint?", default=False):
+                if self._interaction.confirm("Rollback to checkpoint?", default=False):
                     if rollback_to_checkpoint(checkpoint_hash, str(agent.project_root)):
                         io.secho(f"Rolled back to {checkpoint_hash[:8]}", fg="green")
                     else:

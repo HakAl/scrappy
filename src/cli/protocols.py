@@ -892,3 +892,121 @@ class StatusComponentProtocol(Protocol):
         properties directly (e.g., label.update(), progress.progress = X).
         """
         ...
+
+
+@runtime_checkable
+class UserInteractionProtocol(Protocol):
+    """Protocol for user interactions that may block.
+
+    This abstraction allows CLI mode to use blocking prompts
+    while TUI mode uses modal dialogs via ThreadSafeAsyncBridge.
+
+    The key insight: in CLI mode, prompt()/confirm() block the main thread.
+    In TUI mode, worker threads cannot block - they must use the bridge
+    to request modal dialogs from the main thread.
+
+    Implementations:
+    - CLIUserInteraction: Blocking prompts for CLI mode
+    - TUIUserInteraction: Modal dialogs via bridge for TUI mode
+    - AutoApproveInteraction: Fallback with sensible defaults
+
+    Example:
+        def get_user_confirmation(interaction: UserInteractionProtocol) -> bool:
+            if interaction.confirm("Proceed with changes?", default=False):
+                path = interaction.prompt("Enter output path:", default="output.txt")
+                return True
+            return False
+    """
+
+    def confirm(self, question: str, default: bool = False) -> bool:
+        """Get yes/no confirmation from user.
+
+        Args:
+            question: Question to ask user
+            default: Default value if user provides no input
+
+        Returns:
+            True for yes/confirm, False for no/cancel
+        """
+        ...
+
+    def prompt(self, message: str, default: str = "") -> str:
+        """Get text input from user.
+
+        Args:
+            message: Prompt message to display
+            default: Default value if user provides no input
+
+        Returns:
+            User's text input or default value
+        """
+        ...
+
+
+@runtime_checkable
+class AgentManagerProtocol(Protocol):
+    """Protocol for code agent management.
+
+    Defines the contract for managing code agent execution with
+    human-in-the-loop approval for file operations.
+
+    Implementations should:
+    - Initialize the code agent with proper configuration
+    - Handle dry-run vs live execution modes
+    - Manage git checkpoints for rollback capability
+    - Coordinate user approval for file modifications
+    - Track and display execution progress
+
+    Example:
+        def execute_agent_task(mgr: AgentManagerProtocol, task: str):
+            mgr.run_agent(task)
+    """
+
+    orchestrator: "Orchestrator"
+
+    def run_agent(self, task: str) -> None:
+        """Run the code agent on a task.
+
+        Args:
+            task: Natural language description of the coding task
+        """
+        ...
+
+
+@runtime_checkable
+class MultiProviderProtocol(Protocol):
+    """Protocol for multi-provider operations.
+
+    Defines the contract for coordinating queries across multiple
+    LLM providers, enabling synthesis and comparison of responses.
+
+    Implementations should:
+    - Query multiple providers concurrently
+    - Synthesize responses into coherent output
+    - Allow delegation to specific providers
+    - Handle provider failures gracefully
+
+    Example:
+        def multi_query(mp: MultiProviderProtocol, query: str):
+            mp.synthesize_mode()  # Interactive synthesis
+            # or
+            mp.delegate_mode("openai")  # Delegate to specific provider
+    """
+
+    orchestrator: "Orchestrator"
+
+    def synthesize_mode(self) -> None:
+        """Interactive synthesis mode.
+
+        Prompts user for query and provider selection, then
+        queries multiple providers and synthesizes responses.
+        """
+        ...
+
+    def delegate_mode(self, args: str) -> None:
+        """Delegate to specific provider.
+
+        Args:
+            args: Provider specification and optional query
+        """
+        ...

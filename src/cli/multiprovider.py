@@ -3,22 +3,37 @@ Multi-provider operations for the CLI.
 Handles synthesis and delegation across multiple providers.
 """
 
+from typing import TYPE_CHECKING, Optional
+
 from .io_interface import CLIIOProtocol
 from .validators import is_empty_or_whitespace, validate_provider
+from .user_interaction import CLIUserInteraction
+
+if TYPE_CHECKING:
+    from .protocols import UserInteractionProtocol
 
 
 class CLIMultiProvider:
     """Handles multi-provider coordination operations."""
 
-    def __init__(self, orchestrator, io: CLIIOProtocol):
+    def __init__(
+        self,
+        orchestrator,
+        io: CLIIOProtocol,
+        user_interaction: Optional["UserInteractionProtocol"] = None,
+    ):
         """Initialize multi-provider handler.
 
         Args:
             orchestrator: The AgentOrchestrator instance
             io: I/O interface for output
+            user_interaction: Optional interaction handler for prompts/confirms.
+                Defaults to CLIUserInteraction if not provided.
         """
         self.orchestrator = orchestrator
         self.io = io
+        # Inject user interaction - defaults to CLI mode
+        self._interaction = user_interaction or CLIUserInteraction(io)
 
     def synthesize_mode(self):
         """Interactive synthesis mode - gather responses from multiple providers.
@@ -41,7 +56,8 @@ class CLIMultiProvider:
         self.io.echo("-" * 50)
         self.io.echo("This will query multiple providers and synthesize their responses.")
 
-        prompt = self.io.prompt("Enter your question")
+        # Use injected interaction handler for mode-aware prompts
+        prompt = self._interaction.prompt("Enter your question")
         if is_empty_or_whitespace(prompt):
             self.io.echo("No question provided.")
             return
@@ -49,7 +65,9 @@ class CLIMultiProvider:
         available = self.orchestrator.providers.list_available()
         self.io.echo(f"\nAvailable providers: {', '.join(available)}")
 
-        providers_input = self.io.prompt("Providers to query (comma-separated, or 'all')")
+        providers_input = self._interaction.prompt(
+            "Providers to query (comma-separated, or 'all')"
+        )
 
         if providers_input.lower() == 'all':
             providers_to_use = available
@@ -119,8 +137,9 @@ class CLIMultiProvider:
             self.io.echo("Usage: /delegate <provider> <prompt>")
             self.io.echo("   or: /delegate (for interactive mode)")
 
-            provider = self.io.prompt("Provider")
-            prompt = self.io.prompt("Prompt")
+            # Use injected interaction handler for mode-aware prompts
+            provider = self._interaction.prompt("Provider")
+            prompt = self._interaction.prompt("Prompt")
         else:
             parts = args.split(maxsplit=1)
             if len(parts) < 2:

@@ -1,5 +1,38 @@
 ## Issues 
 
+--
+Problem: Users unable to scroll log content.??
+--
+
+---
+agent output log outside .scrappy/ dir: .agent_audit.json
+---
+
+---
+Problem: 
+tool output bad UX:
+        Tool Request
+ ┏━━━━━━━━━━┳━━━━━━━━━━━━━━━━┓
+ ┃ Property ┃ Value          ┃
+ ┡━━━━━━━━━━╇━━━━━━━━━━━━━━━━┩
+ │ Tool     │ list_directory │
+ │ path     │ .              │
+ └──────────┴────────────────┘
+ Auto-approved (safe operation)
+ Executing: list_directory
+ ╭─────────────────────────────────────────────────────────────────── Result ────────────────────────────────────────────────────────────────────╮
+ │ ToolResult(success=True, output='./\n|-- api/\n|   `-- v1/\n|       |-- tests/\n|       |-- __init__.py (113B)\n|       `-- routes.py         │
+ │ (3.3KB)\n|-- frontend/\n|   |-- public/\n|   |   |-- favicon.ico (3.8KB)\n|   |   |-- index.html (1.7KB)\n|   |   |-- logo192.png (5.2KB)\n|  │
+ │ |   |-- logo512.png (9.4KB)\n|   |   |-- manifest.json (492B)\n|   |   `-- robots.txt (67B)\n|   |-- src/\n|   |   |-- components/\n|   |     │
+ │ |-- pages/\n|   |   |-- App.css (564B)\n|   |   |-- App.js (1.1KB)\n|   |   |-- App.test.js (246B)\n|   |   |-- index.css (366B)\n|   |   |-- │
+ │ index.js (535B)\n|   |   |-- logo.svg (2.6KB)\n|   |   |-- reportWebVitals.js (362B)\n|   |   |-- router.js (407B)\n|   |   `-- setupTests.js │
+ │ (241B)\n|   |-- .gitignore (310B)\n|   |-- package-lock.json (648.1KB)\n|   |-- package.json (849B)\n|   `-- README.md (3.3KB)\n|--           │
+ │ workers/\n|   `-- scraper.py (1.2KB)\n|-- .gitignore (7B)\n|-- check_index.py (443B)\n|-- dir_parser.rs (730B)\n|-- fibonacci_generator.py    │
+ │ (1.4KB)\n|-- FibonacciGenerator.java (812B)\n|-- GraphicsChampion.cpp (1.3KB)\n|-- requirements.txt (90B)\n`-- ShapeCalculator.cs (1.0KB)',   │
+ │ error=None, metadata={'line_count': 40, 'truncated': False})                                                                                  │
+ ╰─────────────────────────────────────────────────────────────────────────
+---
+
 ---
 ensure no semantic search index occurs from one shot commands 
 -- unless directly triggered by user, no semantic search for non interactive mode

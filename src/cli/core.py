@@ -9,6 +9,7 @@ from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..infrastructure.protocols import BackgroundInitializerProtocol
+    from .textual_app import ThreadSafeAsyncBridge
 
 from ..orchestrator import AgentOrchestrator
 from .io_interface import CLIIOProtocol
@@ -227,7 +228,8 @@ class CLI:
             task_router=self.task_router,
             tasks=self.tasks,
             logger=self.logger,
-            io=self.io  # Pass existing TextualIO created before initialize()
+            io=self.io,  # Pass existing TextualIO created before initialize()
+            cli=self  # Pass CLI reference for handler reinitialization with bridge
         )
 
     def _show_semantic_search_progress(self):
@@ -340,6 +342,33 @@ class CLI:
             # Non-interactive environment or user cancelled
             io.secho("Starting fresh session.", fg="yellow")
             self.logger.info("Session restore skipped (non-interactive)")
+
+    def reinitialize_handlers_with_bridge(self, bridge: "ThreadSafeAsyncBridge") -> None:
+        """
+        Re-initialize handlers that need the TUI bridge for modal dialogs.
+
+        Called by TextualInteractiveMode.run() after the ScrappyApp creates
+        the ThreadSafeAsyncBridge. This allows handlers like CLIAgentManager
+        and CLIMultiProvider to use modal dialogs instead of blocking prompts.
+
+        Args:
+            bridge: The ThreadSafeAsyncBridge from ScrappyApp
+
+        Side Effects:
+            - Recreates agent_mgr and multiprovider with TUI-aware interaction
+            - Updates command_router reference if it exists
+        """
+        from .user_interaction import get_user_interaction
+
+        # Get TUI-aware interaction handler
+        interaction = get_user_interaction(self.io, bridge)
+
+        # Re-create handlers that use user interaction
+        from .agent_manager import CLIAgentManager
+        from .multiprovider import CLIMultiProvider
+
+        self.agent_mgr = CLIAgentManager(self.orchestrator, self.io, interaction)
+        self.multiprovider = CLIMultiProvider(self.orchestrator, self.io, interaction)
 
     def interactive_mode(self):
         """

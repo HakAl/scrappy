@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from .task_router_handler import CLITaskRouterHandler
     from .tasks import CLITaskExecution
     from .logging import CLILogger
+    from .core import CLI
 
 
 class TextualInteractiveMode:
@@ -52,7 +53,8 @@ class TextualInteractiveMode:
         task_router: "CLITaskRouterHandler",
         tasks: "CLITaskExecution",
         logger: "CLILogger",
-        io: UnifiedIO
+        io: UnifiedIO,
+        cli: "CLI" = None
     ):
         """Initialize TextualInteractiveMode with all dependencies.
 
@@ -68,6 +70,7 @@ class TextualInteractiveMode:
             tasks: Task execution handler
             logger: Logger for structured logging
             io: UnifiedIO instance (created before CLI.initialize() ran)
+            cli: Optional CLI instance for handler reinitialization with bridge
         """
         self.orchestrator = orchestrator
         self.session_context = session_context
@@ -80,6 +83,7 @@ class TextualInteractiveMode:
         self.tasks = tasks
         self.logger = logger
         self.io = io
+        self._cli = cli
 
     def run(self) -> None:
         """Launch the Textual TUI application.
@@ -122,6 +126,14 @@ class TextualInteractiveMode:
         # Phase 3: Inject bridge into UnifiedIO for modal dialogs
         # This enables prompt() and confirm() to show modals instead of auto-approving
         self.io.set_bridge(app.bridge)
+
+        # Phase 2: Reinitialize handlers with bridge for TUI-aware user interaction
+        # This allows CLIAgentManager and CLIMultiProvider to use modal dialogs
+        if self._cli is not None:
+            self._cli.reinitialize_handlers_with_bridge(app.bridge)
+            # Update command router's references to the new handlers
+            self.command_router.agent_mgr = self._cli.agent_mgr
+            self.command_router.multiprovider = self._cli.multiprovider
 
         # Launch the TUI
         app.run()

@@ -1,45 +1,50 @@
 # Agent/TUI Bug Cleanup - Implementation Plan
 
+## STATUS: COMPLETED (2025-11-26)
+
+All phases have been implemented and tested. The TUI/Agent bug that caused freezing due to blocking prompts in worker threads has been resolved via:
+
+1. **Protocol-First Design**: `UserInteractionProtocol` abstracts user prompts/confirmations
+2. **Three Implementations**: CLI (blocking), TUI (modal dialogs via bridge), AutoApprove (fallback)
+3. **Dependency Injection**: Handlers receive interaction strategy via constructor
+4. **Bridge Wiring**: `TextualInteractiveMode.run()` reinitializes handlers with TUI bridge
+
+**Test Results**: 31 tests pass in `test_user_interaction.py`, 18 tests pass in `test_multiprovider.py`
+
+---
+
 ## ADDED SCOPE: IO Path Verification
 
 Before implementation, verify the IO instance flows correctly from ScrappyApp to CLIAgentManager:
 
-### Phase 0: Trace and Verify IO Flow
+### Phase 0: Trace and Verify IO Flow [COMPLETED 2025-11-26]
 
 **Objective:** Confirm that the `io` instance used by `CLIAgentManager` is the TUI-enabled `UnifiedIO` with the correct `output_sink`.
 
-**Verification Steps:**
+**Verification Results:**
 
-1. **Trace io from CLI to CLIAgentManager:**
-   - `CLI.__init__` creates `UnifiedIO` with `TextualOutputAdapter` (core.py:68)
-   - `initialize_cli_handlers(orchestrator, session_start, io)` receives this io (core.py:79)
-   - `CLIAgentManager(orchestrator, io)` receives io (cli_factory.py:145)
-   - `DisplayManager(io=io, dashboard_enabled=False)` stores io (agent_manager.py:22)
-   - `self.display.get_io()` retrieves io in `run_agent()` (agent_manager.py:59)
+| Check | Result |
+|-------|--------|
+| `io.is_tui_mode` | `True` |
+| `io.output_sink` | Not None (TextualOutputAdapter) |
+| Bridge wired | Yes (`bridge=WIRED`) |
+| Modal dialogs | Working (user clicked through them) |
 
-2. **Add diagnostic assertion (temporary, for verification):**
-   ```python
-   # In CLIAgentManager.run_agent(), add at start:
-   io = self.display.get_io()
-   assert hasattr(io, 'is_tui_mode'), f"IO missing is_tui_mode: {type(io)}"
-   if io.is_tui_mode:
-       assert io.output_sink is not None, "TUI mode but output_sink is None"
-   ```
+**Diagnostic output:**
+```
+[DIAG] IO verification: TUI mode, bridge=WIRED
+```
 
-3. **Verify bridge injection timing:**
-   - `TextualInteractiveMode.run()` calls `self.io.set_bridge(app.bridge)` (textual_interactive.py:124)
-   - This happens AFTER `CLI.__init__` creates handlers
-   - The bridge is injected into the SAME `io` instance that handlers already have
+**Conclusion:** The existing IO infrastructure is working correctly. The `UnifiedIO` instance flows properly from `CLI.__init__` through `initialize_cli_handlers` to `CLIAgentManager`, and the bridge is correctly injected by `TextualInteractiveMode.run()` before any commands execute.
 
-**Expected Result:**
-- `io.is_tui_mode` returns `True` when running in TUI
-- `io.output_sink` is the `TextualOutputAdapter` instance
-- Bridge is available for modal dialogs via `io._strategy._bridge`
+**IO Flow (verified):**
+1. `CLI.__init__` creates `UnifiedIO` with `TextualOutputAdapter` (core.py:68)
+2. `initialize_cli_handlers(orchestrator, session_start, io)` receives this io (core.py:79)
+3. `CLIAgentManager(orchestrator, io)` receives io and stores as `self.io` (cli_factory.py:145)
+4. `TextualInteractiveMode.run()` calls `self.io.set_bridge(app.bridge)` (textual_interactive.py:124)
+5. `CLIAgentManager.run_agent()` uses `self.io` which now has bridge wired
 
-**If Verification Fails:**
-- Check if a different io instance is being created somewhere
-- Check if DisplayManager is creating its own io
-- Check the command_router to interactive_mode to ScrappyApp wiring
+**Next Steps:** Proceed to Phase 1 (Define Protocols)
 
 ---
 
@@ -185,7 +190,7 @@ class AutoApproveInteraction:
         return default
 ```
 
-### Phase 3: Refactor Agent Manager
+### Phase 3: Refactor Agent Manager [COMPLETED 2025-11-26]
 
 **File:** `src/cli/agent_manager.py`
 
@@ -226,7 +231,7 @@ class CLIAgentManager:
             io.secho(f"Saved to: {log_path}", fg="green")
 ```
 
-### Phase 4: Refactor Multi-Provider
+### Phase 4: Refactor Multi-Provider [COMPLETED 2025-11-26]
 
 **File:** `src/cli/multiprovider.py`
 
@@ -253,7 +258,7 @@ class CLIMultiProvider:
         )
 ```
 
-### Phase 5: Update Factory Functions
+### Phase 5: Update Factory Functions [COMPLETED 2025-11-26]
 
 **File:** `src/cli/utils/cli_factory.py`
 
@@ -306,9 +311,9 @@ def initialize_cli_handlers(
     }
 ```
 
-### Phase 6: Wire Bridge in TUI Mode
+### Phase 6: Wire Bridge in TUI Mode [COMPLETED 2025-11-26]
 
-**File:** `src/cli/textual_app.py`
+**File:** `src/cli/textual_app.py` and `src/cli/textual_interactive.py`
 
 Ensure bridge is passed through to factory when creating handlers:
 
@@ -372,18 +377,30 @@ class ScrappyApp(App):
 2. Confirm `io.is_tui_mode == True` and `io.output_sink is not None`
 3. Remove diagnostic assertions after verification
 
-### Phase 1-6: Core Implementation
+### Phase 1: Core Implementation [COMPLETED 2025-11-26]
 
-1. Add protocols to `protocols.py`
-2. Create `user_interaction.py` with all 3 implementations
-3. Add `get_user_interaction()` to factory
-4. Refactor `CLIAgentManager` to use injected interaction
-5. Write tests for agent manager
-6. Refactor `CLIMultiProvider` to use injected interaction
-7. Write tests for multi-provider
-8. Update `initialize_cli_handlers()` with bridge parameter
-9. Wire bridge in `textual_app.py`
-10. End-to-end testing
+1. [x] Add protocols to `protocols.py` - Added UserInteractionProtocol, AgentManagerProtocol, MultiProviderProtocol
+2. [x] Create `user_interaction.py` with all 3 implementations - CLIUserInteraction, TUIUserInteraction, AutoApproveInteraction
+3. [x] Add `get_user_interaction()` to factory - Added to cli_factory.py
+4. [x] Refactor `CLIAgentManager` to use injected interaction - Uses self._interaction
+5. [x] Write tests for agent manager - 25 tests in test_user_interaction.py
+6. [x] Refactor `CLIMultiProvider` to use injected interaction - Uses self._interaction
+7. [x] Write tests for multi-provider - 18 existing tests still pass
+8. [x] Update `initialize_cli_handlers()` with bridge parameter - Added optional bridge param
+
+### Phase 2: Bridge Wiring [COMPLETED 2025-11-26]
+
+9. [x] Wire bridge in CLI and TextualInteractiveMode
+   - Added `CLI.reinitialize_handlers_with_bridge(bridge)` method
+   - Updated `TextualInteractiveMode.__init__()` to accept optional CLI reference
+   - Updated `TextualInteractiveMode.run()` to call `cli.reinitialize_handlers_with_bridge()`
+   - Command router's `agent_mgr` and `multiprovider` references updated after reinitialization
+10. [x] Added tests for bridge wiring (6 new tests in `TestBridgeWiring` class)
+11. [x] End-to-end testing - Manual verification in TUI mode
+    - Tested `/agent please create a db repo for the api`
+    - Modal dialogs appeared for dry-run, checkpoint, and save audit log prompts
+    - User clicked Yes to all - agent completed successfully in ~24 seconds
+    - No freezing or deadlocks - bridge wiring working correctly
 
 ---
 
