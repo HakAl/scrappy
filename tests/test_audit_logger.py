@@ -3,6 +3,7 @@ Tests for the AuditLogger crash-safe persistence functionality.
 """
 
 import json
+import threading
 import pytest
 from pathlib import Path
 from datetime import datetime
@@ -187,6 +188,41 @@ class TestCrashHandlers:
         with open(audit_file) as f:
             data = json.load(f)
         assert len(data['actions']) == 1
+
+    def test_signal_registration_skipped_in_worker_thread(self, tmp_path):
+        """Signal registration should be skipped when called from non-main thread."""
+        path_provider = TempPathProvider(tmp_path)
+        audit_logger = AuditLogger(path_provider=path_provider)
+        error_holder = []
+
+        def worker():
+            try:
+                # This should NOT crash - it should skip signal registration
+                audit_logger.enable_auto_save()
+            except Exception as e:
+                error_holder.append(e)
+
+        thread = threading.Thread(target=worker)
+        thread.start()
+        thread.join()
+
+        # Verify no exception was raised
+        assert len(error_holder) == 0, f"Unexpected error: {error_holder}"
+
+        # Verify signals were not registered (flag should be False from worker context)
+        # because we returned early from _register_crash_handlers
+        assert not audit_logger._crash_handlers_registered
+
+    def test_enable_auto_save_works_from_main_thread(self, tmp_path):
+        """Signal registration should work when called from main thread."""
+        path_provider = TempPathProvider(tmp_path)
+        audit_logger = AuditLogger(path_provider=path_provider)
+
+        # This should work fine from main thread
+        audit_logger.enable_auto_save()
+
+        # Verify handlers were registered
+        assert audit_logger._crash_handlers_registered
 
 
 class TestCrashRecovery:

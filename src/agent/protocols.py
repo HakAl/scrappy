@@ -869,3 +869,143 @@ class ActionExecutorProtocol(Protocol):
             ActionResult with execution details
         """
         ...
+
+
+# =============================================================================
+# Agent Loop Protocols (Phase 1 Refactoring)
+# =============================================================================
+
+@runtime_checkable
+class AgentLoopProtocol(Protocol):
+    """
+    Protocol for coordinating the agent's think-plan-execute-evaluate cycle.
+
+    Abstracts the core agent loop to enable testing with controlled
+    execution flow and support different loop strategies.
+
+    Implementations:
+    - AgentLoop: Full agent loop with all stages
+    - TestAgentLoop: Minimal loop for testing
+    - SingleStepLoop: Executes only one iteration (for testing)
+
+    Example:
+        def run_task(loop: AgentLoopProtocol, task: str) -> EvaluationResult:
+            state = ConversationState(...)
+            return loop.run(task, state)
+    """
+
+    def run(self, task: str, state: Any) -> Any:
+        """
+        Run the complete agent loop until completion or max iterations.
+
+        Args:
+            task: Task description to accomplish
+            state: ConversationState to track progress
+
+        Returns:
+            EvaluationResult with completion status
+        """
+        ...
+
+    def think(self, state: Any) -> Any:
+        """
+        Generate the next thought/action from the LLM.
+
+        Args:
+            state: Current conversation state
+
+        Returns:
+            AgentThought containing raw LLM response
+        """
+        ...
+
+    def plan(self, thought: Any) -> Any:
+        """
+        Parse the LLM response into a structured action.
+
+        Args:
+            thought: Raw thought from think()
+
+        Returns:
+            AgentAction with parsed action details
+        """
+        ...
+
+    def execute(self, action: Any, state: Any) -> Any:
+        """
+        Execute the planned action (tool call).
+
+        Args:
+            action: Parsed action from plan()
+            state: Current conversation state
+
+        Returns:
+            ActionResult with execution details
+        """
+        ...
+
+    def evaluate(self, action: Any, result: Any, state: Any) -> Any:
+        """
+        Evaluate whether the task is complete.
+
+        Args:
+            action: The action that was planned
+            result: The result of executing the action
+            state: Current conversation state
+
+        Returns:
+            EvaluationResult indicating whether to continue
+        """
+        ...
+
+
+@runtime_checkable
+class ProviderSelectionStrategyProtocol(Protocol):
+    """
+    Protocol for selecting LLM providers for agent tasks.
+
+    Abstracts provider selection to enable testing with controlled
+    provider choices and support different selection strategies.
+
+    Implementations:
+    - DynamicProviderStrategy: Rate-limit-aware selection via orchestrator
+    - StaticProviderStrategy: Fixed provider preferences from config
+    - RoundRobinStrategy: Rotate through available providers
+
+    Example:
+        def get_provider(strategy: ProviderSelectionStrategyProtocol) -> str:
+            provider = strategy.get_planner()
+            if provider is None:
+                raise ValueError("No provider available")
+            return provider
+    """
+
+    def get_planner(self) -> Optional[str]:
+        """
+        Get recommended provider for planning/reasoning tasks.
+
+        Returns:
+            Provider name, or None if no provider available
+        """
+        ...
+
+    def get_executor(self) -> Optional[str]:
+        """
+        Get recommended provider for execution tasks.
+
+        Returns:
+            Provider name, or None if no provider available
+        """
+        ...
+
+    def supports_dynamic_selection(self) -> bool:
+        """
+        Check if strategy supports dynamic provider selection.
+
+        Dynamic selection means the provider may change between calls
+        based on rate limits, availability, or other factors.
+
+        Returns:
+            True if dynamic selection supported, False for static
+        """
+        ...

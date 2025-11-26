@@ -5,7 +5,9 @@ Extracted from core.py to improve modularity.
 """
 
 import asyncio
+import threading
 import uuid
+from collections import deque
 from datetime import datetime
 
 
@@ -34,7 +36,8 @@ class BackgroundTaskManager:
     def __init__(self):
         """Initialize with empty task tracking."""
         self._tasks: dict[str, asyncio.Task] = {}
-        self._errors: list[dict] = []
+        self._errors: deque = deque(maxlen=50)  # Thread-safe for append, auto-limits size
+        self._lock = threading.Lock()  # Protects _tasks dict operations
 
     def submit_background_task(self, coro) -> str:
         """
@@ -52,15 +55,18 @@ class BackgroundTaskManager:
         task_id = str(uuid.uuid4())
         task = asyncio.create_task(coro)
 
-        # Track by ID
-        self._tasks[task_id] = task
+        # Track by ID (thread-safe)
+        with self._lock:
+            self._tasks[task_id] = task
 
         # Set up cleanup callback
         def on_done(t):
-            # Remove from tracking
-            self._tasks.pop(task_id, None)
+            # Remove from tracking (thread-safe)
+            with self._lock:
+                self._tasks.pop(task_id, None)
 
             # Capture any errors
+            # Note: deque.append is thread-safe, and maxlen auto-limits size
             try:
                 exc = t.exception()
                 if exc:
@@ -69,9 +75,6 @@ class BackgroundTaskManager:
                         'error': str(exc),
                         'type': type(exc).__name__
                     })
-                    # Keep only last 50 errors
-                    if len(self._errors) > 50:
-                        self._errors = self._errors[-50:]
             except asyncio.CancelledError:
                 pass  # Task was cancelled, not an error
 
@@ -86,9 +89,12 @@ class BackgroundTaskManager:
         Returns:
             Dict with pending task count and recent errors
         """
+        with self._lock:
+            pending_count = len(self._tasks)
+        # deque slicing creates a new list, which is safe
         return {
-            'pending_tasks': len(self._tasks),
-            'recent_errors': self._errors[-10:],
+            'pending_tasks': pending_count,
+            'recent_errors': list(self._errors)[-10:],
             'total_errors': len(self._errors)
         }
 
@@ -104,15 +110,16 @@ class BackgroundTaskManager:
         Returns:
             Dict with completion status
         """
-        if not self._tasks:
-            return {
-                'status': 'no_pending',
-                'completed': 0,
-                'errors': len(self._errors)
-            }
+        with self._lock:
+            if not self._tasks:
+                return {
+                    'status': 'no_pending',
+                    'completed': 0,
+                    'errors': len(self._errors)
+                }
 
-        pending_count = len(self._tasks)
-        tasks = list(self._tasks.values())
+            pending_count = len(self._tasks)
+            tasks = list(self._tasks.values())
 
         try:
             # Wait for all tasks with timeout
@@ -145,7 +152,8 @@ class BackgroundTaskManager:
         Returns:
             True if task was found and cancelled, False otherwise
         """
-        task = self._tasks.get(task_id)
+        with self._lock:
+            task = self._tasks.get(task_id)
         if task is None:
             return False
 

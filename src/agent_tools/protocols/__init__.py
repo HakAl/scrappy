@@ -6,7 +6,7 @@ must follow, enabling dependency injection and testability.
 """
 
 from dataclasses import dataclass
-from typing import Protocol, Optional
+from typing import Protocol, Optional, List
 
 
 @dataclass
@@ -161,6 +161,47 @@ class SubprocessRunnerProtocol(Protocol):
         ...
 
 
+class ThreadSafeOutputCollectorProtocol(Protocol):
+    """Contract for thread-safe output collection.
+
+    Implementations provide synchronized access to output lines
+    collected from subprocess streams, ensuring data integrity
+    when accessed from multiple threads.
+    """
+
+    def append(self, line: str) -> None:
+        """Thread-safe append of output line.
+
+        Args:
+            line: Output line to append
+        """
+        ...
+
+    def get_lines(self) -> List[str]:
+        """Get copy of all collected lines.
+
+        Returns:
+            Copy of the lines list (not a reference)
+        """
+        ...
+
+    def get_last_output_time(self) -> float:
+        """Get timestamp of last output.
+
+        Returns:
+            Unix timestamp of last append operation
+        """
+        ...
+
+    def line_count(self) -> int:
+        """Get current line count.
+
+        Returns:
+            Number of lines collected
+        """
+        ...
+
+
 __all__ = [
     'ExecutionResult',
     'CommandSecurityProtocol',
@@ -168,4 +209,5 @@ __all__ = [
     'CommandAdvisorProtocol',
     'PlatformSanitizerProtocol',
     'SubprocessRunnerProtocol',
+    'ThreadSafeOutputCollectorProtocol',
 ]

@@ -17,6 +17,43 @@ src/agent/
   audit.py                # Audit logging
 ```
 
+### Execution Flow
+
+```
+Main Thread                           Worker Thread (Callback)
+===========                           ========================
+/agent command
+    |
+    v
+agent_manager.run_agent()
+    |
+    v
+CodeAgent.__init__()
+    |
+    +---> Orchestrator created
+    |         |
+    |         v
+    |     context.start_background_initialization()
+    |         |
+    |         v
+    |     SemanticSearchInitializer.start()
+    |         |
+    |         v
+    |     wait_with_callback() ---------> Creates Thread
+    |                                         |
+    v                                         v
+CodeAgent.run()                         _on_semantic_search_ready()
+    |                                         |
+    v                                         v
+enable_auto_save()                      _index_for_semantic_search()
+    |                                         |
+    v                                         v
+_register_crash_handlers()              [If any audit logging triggered]
+    |                                         |
+    v                                         v
+signal.signal()                          signal.signal()
+
+
 ### Core Components
 
 | Component | Responsibility |

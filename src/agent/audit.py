@@ -6,11 +6,15 @@ Provides logging and persistence of agent actions for traceability.
 
 import atexit
 import json
+import logging
 import signal
 import sys
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
+
+logger = logging.getLogger(__name__)
 
 from ..infrastructure.protocols import PathProviderProtocol
 from ..infrastructure.paths import ScrappyPathProvider
@@ -81,6 +85,13 @@ class AuditLogger:
     def _register_crash_handlers(self) -> None:
         """Register handlers to save audit log on crash or unexpected exit."""
         if self._crash_handlers_registered:
+            return
+
+        # Signal handlers can only be registered from the main thread
+        if threading.current_thread() is not threading.main_thread():
+            logger.debug("Skipping signal registration - not main thread")
+            # Still register atexit handler as it works from any thread
+            atexit.register(self._on_exit)
             return
 
         # Register atexit handler for normal exit

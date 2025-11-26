@@ -19,6 +19,12 @@ from .project_detector import ProjectDetector
 from .config_loader import get_truncation_defaults, get_extensions_config, get_paths_config
 from ..infrastructure.protocols import PathProviderProtocol, BackgroundInitializerProtocol
 from ..infrastructure.paths import ScrappyPathProvider
+from ..infrastructure.threading import (
+    EventQueueProtocol,
+    ThreadSafeEventQueue,
+    BackgroundEvent,
+    EventType,
+)
 
 
 class CodebaseContext:
@@ -46,6 +52,7 @@ class CodebaseContext:
         path_provider: Optional[PathProviderProtocol] = None,
         file_collector: Optional['FileCollectorProtocol'] = None,
         io: Optional['CLIIOProtocol'] = None,
+        event_queue: Optional[EventQueueProtocol] = None,
     ):
         """
         Initialize codebase context (dependencies only - NO file I/O by default).
@@ -64,6 +71,8 @@ class CodebaseContext:
             path_provider: Path provider for data files (auto-creates if None)
             file_collector: Injectable file collector for semantic search (default: creates SemanticFileCollector)
             io: Injectable IO interface for progress reporting (default: None, falls back to NullProgressReporter)
+            event_queue: Event queue for main-thread-safe background notifications.
+                        If None, creates a default ThreadSafeEventQueue.
         """
         # Store config for factory methods
         self._initial_project_path = project_path
@@ -106,6 +115,9 @@ class CodebaseContext:
         # IO interface for progress reporting
         self._io = io  # Injected IO interface (optional)
 
+        # Event queue for main-thread-safe background notifications
+        self._event_queue = event_queue or ThreadSafeEventQueue()
+
         # Auto-load cache if requested (for backwards compatibility)
         if auto_load_cache:
             self._load_cache()
@@ -114,6 +126,16 @@ class CodebaseContext:
     def cache_file(self) -> Path:
         """Get path to context cache file."""
         return self._path_provider.context_file()
+
+    @property
+    def event_queue(self) -> EventQueueProtocol:
+        """
+        Get the event queue for processing background events.
+
+        Returns:
+            The event queue used for background-to-main-thread communication
+        """
+        return self._event_queue
 
     def restore_from_cache(self):
         """
@@ -173,8 +195,11 @@ class CodebaseContext:
         """
         try:
             from .semantic.initializer import SemanticSearchInitializer
-            logger.debug("Creating SemanticSearchInitializer")
-            return SemanticSearchInitializer(self.project_path)
+            logger.debug("Creating SemanticSearchInitializer with event queue")
+            return SemanticSearchInitializer(
+                self.project_path,
+                event_queue=self._event_queue,
+            )
         except ImportError as e:
             logger.debug(f"Semantic search dependencies not available: {e}")
             from .semantic.initializer import NullInitializer
@@ -212,17 +237,60 @@ class CodebaseContext:
         in background threads.
 
         Call this early in application startup to pre-load heavy dependencies.
+
+        Use process_background_events() periodically from the main thread to
+        process completion events.
         """
         if self._semantic_initializer:
             logger.debug("Starting background semantic search initialization")
-            self._semantic_initializer.start()
 
-            # Register callback to auto-index when initialization completes
-            self._semantic_initializer.wait_with_callback(
-                self._on_semantic_search_ready
+            # Register event handler for semantic search events
+            self._event_queue.register_handler(
+                "semantic_search",
+                self._handle_semantic_event,
             )
+
+            self._semantic_initializer.start()
         else:
             logger.debug("No semantic initializer configured")
+
+    def process_background_events(self) -> int:
+        """
+        Process pending background events.
+
+        Should be called periodically from the main thread to handle
+        completion events from background initialization tasks.
+
+        Returns:
+            Number of events processed
+        """
+        return self._event_queue.process_pending()
+
+    def _handle_semantic_event(self, event: BackgroundEvent) -> None:
+        """
+        Handle semantic search events (runs on main thread via event queue).
+
+        This replaces the old _on_semantic_search_ready callback that was
+        called from a worker thread.
+
+        Args:
+            event: Background event from semantic search initialization
+        """
+        if event.event_type == EventType.INIT_COMPLETE:
+            logger.info("Semantic search model ready (via event), starting auto-indexing...")
+            self._notify_indexing_progress("Semantic search ready, starting indexing...")
+
+            # Cache the result for use
+            self._semantic_search = event.data
+
+            # Trigger auto-indexing
+            logger.info("Calling _index_for_semantic_search()...")
+            self._index_for_semantic_search()
+            logger.info("_index_for_semantic_search() completed")
+
+        elif event.event_type == EventType.INIT_FAILED:
+            logger.warning(f"Semantic search initialization failed: {event.error}")
+            self._notify_indexing_progress(f"Semantic search initialization failed: {event.error}")
 
     def get_semantic_initialization_status(self) -> Optional[str]:
         """
@@ -588,15 +656,26 @@ Be concise and technical. No fluff."""
 
     def _on_semantic_search_ready(self, success: bool, result, error) -> None:
         """
-        Callback when semantic search initialization completes.
+        DEPRECATED: Callback when semantic search initialization completes.
 
-        Automatically triggers file indexing when the model is ready.
+        This method was called from a worker thread by wait_with_callback().
+        It has been replaced by _handle_semantic_event() which is called
+        on the main thread via the event queue.
+
+        Kept for backwards compatibility but logs a deprecation warning.
 
         Args:
             success: True if initialization succeeded
             result: The initialized semantic search provider (or None)
             error: Exception if initialization failed (or None)
         """
+        import warnings
+        warnings.warn(
+            "_on_semantic_search_ready is deprecated. Use event queue pattern instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         logger.info(f"Callback triggered: success={success}, result={result}, error={error}")
         if success and result:
             logger.info("Semantic search model ready, starting auto-indexing...")

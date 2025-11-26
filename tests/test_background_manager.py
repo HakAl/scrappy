@@ -11,6 +11,8 @@ Following CLAUDE.md guidelines:
 
 import pytest
 import asyncio
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from src.orchestrator.background import BackgroundTaskManager
 
 
@@ -376,3 +378,197 @@ class TestEdgeCases:
         # Should have error details
         assert 'error' in error or 'message' in error
         assert 'type' in error or 'error_type' in error
+
+
+class TestBackgroundTaskManagerThreadSafety:
+    """Test thread safety of BackgroundTaskManager.
+
+    Phase 5 of AGENT_BUG_REMEDIATION_PLAN.md:
+    - Verifies _tasks dict operations are thread-safe
+    - Verifies _errors deque operations are thread-safe
+    - Stress tests concurrent access patterns
+    """
+
+    @pytest.mark.asyncio
+    async def test_concurrent_task_submission(self):
+        """Multiple rapid submissions should not corrupt task tracking."""
+        manager = BackgroundTaskManager()
+        task_ids = []
+
+        async def slow_task():
+            await asyncio.sleep(0.1)
+
+        # Submit 10 tasks rapidly from the main async context
+        # This tests that internal data structures handle rapid concurrent modifications
+        for _ in range(10):
+            task_id = manager.submit_background_task(slow_task())
+            task_ids.append(task_id)
+
+        # Should have exactly 10 unique task IDs
+        assert len(task_ids) == 10
+        assert len(set(task_ids)) == 10  # All unique
+
+        # Verify status is consistent
+        status = manager.get_task_status()
+        assert status['pending_tasks'] == 10
+
+    @pytest.mark.asyncio
+    async def test_concurrent_status_access(self):
+        """Concurrent status reads should not corrupt data."""
+        manager = BackgroundTaskManager()
+
+        async def slow_task():
+            await asyncio.sleep(0.2)
+
+        # Submit some tasks
+        for _ in range(5):
+            manager.submit_background_task(slow_task())
+
+        statuses = []
+        lock = threading.Lock()
+
+        def read_status():
+            for _ in range(10):
+                status = manager.get_task_status()
+                with lock:
+                    statuses.append(status)
+
+        # Start multiple threads reading status
+        threads = []
+        for _ in range(5):
+            t = threading.Thread(target=read_status)
+            threads.append(t)
+            t.start()
+
+        for t in threads:
+            t.join()
+
+        # Should have 50 status reads (5 threads x 10 reads each)
+        assert len(statuses) == 50
+        # All statuses should be valid dicts
+        for status in statuses:
+            assert 'pending_tasks' in status
+            assert 'recent_errors' in status
+            assert 'total_errors' in status
+
+    @pytest.mark.asyncio
+    async def test_error_deque_thread_safety(self):
+        """Error recording via deque should be thread-safe."""
+        manager = BackgroundTaskManager()
+
+        async def failing_task():
+            raise ValueError("Test error")
+
+        # Submit 20 failing tasks
+        for _ in range(20):
+            manager.submit_background_task(failing_task())
+
+        # Wait for all to fail
+        await asyncio.sleep(0.1)
+
+        # Check status from multiple threads simultaneously
+        statuses = []
+        lock = threading.Lock()
+
+        def check_errors():
+            for _ in range(5):
+                status = manager.get_task_status()
+                with lock:
+                    statuses.append(status['total_errors'])
+
+        threads = []
+        for _ in range(5):
+            t = threading.Thread(target=check_errors)
+            threads.append(t)
+            t.start()
+
+        for t in threads:
+            t.join()
+
+        # All reads should show 20 errors (all tasks failed)
+        assert all(count == 20 for count in statuses)
+
+    @pytest.mark.asyncio
+    async def test_error_deque_maxlen_respected(self):
+        """Error deque should auto-limit to 50 entries."""
+        manager = BackgroundTaskManager()
+
+        async def failing_task(n):
+            raise ValueError(f"Error {n}")
+
+        # Submit 60 failing tasks (more than maxlen of 50)
+        for i in range(60):
+            manager.submit_background_task(failing_task(i))
+
+        # Wait for all to fail
+        await asyncio.sleep(0.2)
+
+        status = manager.get_task_status()
+        # Should cap at 50 due to deque maxlen
+        assert status['total_errors'] == 50
+
+    @pytest.mark.asyncio
+    async def test_concurrent_cancel_and_status_access(self):
+        """Concurrent cancel and status operations should not cause corruption."""
+        manager = BackgroundTaskManager()
+        submitted_ids = []
+        cancelled_results = []
+        status_results = []
+        lock = threading.Lock()
+
+        async def slow_task():
+            await asyncio.sleep(1.0)
+
+        # Submit tasks from async context
+        for _ in range(5):
+            task_id = manager.submit_background_task(slow_task())
+            submitted_ids.append(task_id)
+
+        def cancel_from_thread():
+            """Cancel tasks from a separate thread."""
+            for task_id in submitted_ids:
+                result = manager.cancel_task(task_id)
+                with lock:
+                    cancelled_results.append(result)
+
+        def read_status_from_thread():
+            """Read status from a separate thread."""
+            for _ in range(10):
+                status = manager.get_task_status()
+                with lock:
+                    status_results.append(status)
+
+        # Start canceller and status reader threads
+        cancel_thread = threading.Thread(target=cancel_from_thread)
+        status_thread = threading.Thread(target=read_status_from_thread)
+
+        cancel_thread.start()
+        status_thread.start()
+
+        cancel_thread.join()
+        status_thread.join()
+
+        # Should not have crashed - that's the key test
+        # All status reads should be valid
+        assert len(status_results) == 10
+        for status in status_results:
+            assert 'pending_tasks' in status
+            assert 'recent_errors' in status
+
+    @pytest.mark.asyncio
+    async def test_has_lock_attribute(self):
+        """Manager should have thread lock for synchronization."""
+        manager = BackgroundTaskManager()
+        # Verify internal lock exists (implementation detail, but important for thread safety)
+        assert hasattr(manager, '_lock')
+        assert isinstance(manager._lock, type(threading.Lock()))
+
+    @pytest.mark.asyncio
+    async def test_errors_is_deque(self):
+        """Manager should use deque for errors (thread-safe append)."""
+        from collections import deque
+        manager = BackgroundTaskManager()
+        # Verify internal errors is a deque
+        assert hasattr(manager, '_errors')
+        assert isinstance(manager._errors, deque)
+        assert manager._errors.maxlen == 50

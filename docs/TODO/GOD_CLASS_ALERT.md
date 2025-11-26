@@ -4,7 +4,7 @@
 
 | File | Lines | Status | Priority |
 |------|-------|--------|----------|
-| `src/agent/core.py` | 1107 | NEEDS REFACTOR | HIGH |
+| `src/agent/core.py` | 766 | REFACTORED (was 1107) | DONE |
 | `src/context/codebase_context.py` | 960 | NEEDS REFACTOR | MEDIUM |
 | `src/orchestrator/core.py` | 779 | ALREADY REFACTORED | LOW |
 | `src/task_router/router.py` | 581 | ACCEPTABLE | LOW |
@@ -208,6 +208,10 @@ src/agent_tools/tools/
 
 ## Priority 2: CodebaseContext Refactoring (src/context/codebase_context.py)
 
+## NEW CHANGES TO CONSIDER
+EVENT QUEUE
+EVENT CALLBACK / HANDLERS event_queue , _handle_semantic_event, process_background_events etc
+
 ### Current Problems
 
 The `CodebaseContext` class (960 lines) has multiple responsibilities:
@@ -336,23 +340,33 @@ At 581 lines, `TaskRouter` is reasonable for its complexity:
 
 ## Implementation Order
 
-### Sprint 1: CodeAgent Core Extraction (Highest Impact)
+### Sprint 1: CodeAgent Core Extraction (Highest Impact) - COMPLETED 2025-11-26
 
-1. **Create protocols first**
-   - `AgentLoopProtocol`
-   - `ProviderSelectionStrategyProtocol`
+1. **Create protocols first** - DONE
+   - `AgentLoopProtocol` - added to `src/agent/protocols.py`
+   - `ProviderSelectionStrategyProtocol` - added to `src/agent/protocols.py`
 
-2. **Extract `AgentLoop`**
-   - Move `_think`, `_plan_action`, `_execute`, `_evaluate`, `_update_conversation`
-   - Update `CodeAgent.run()` to use `AgentLoop`
+2. **Extract `AgentLoop`** - DONE
+   - Created `src/agent/agent_loop.py` (~450 lines)
+   - Moved `_think`, `_plan_action`, `_execute`, `_evaluate`, `_update_conversation`
+   - Updated `CodeAgent.run()` to delegate to `AgentLoop`
+   - Original methods kept as backward-compatibility wrappers
 
-3. **Extract `ProviderSelectionStrategy`**
-   - Move provider selection logic from `__init__`
-   - Create `DynamicProviderStrategy` and `StaticProviderStrategy`
+3. **Extract `ProviderSelectionStrategy`** - DONE
+   - Created `src/agent/provider_strategy.py` (~100 lines)
+   - `DynamicProviderStrategy` - rate-limit-aware selection via orchestrator
+   - `StaticProviderStrategy` - fixed provider preferences from config
+   - `create_provider_strategy()` factory function
 
-4. **Write tests for extracted components**
-   - Test `AgentLoop` with mock dependencies
-   - Test strategies independently
+4. **Write tests for extracted components** - DONE
+   - `tests/agent/test_agent_loop.py` - 13 tests
+   - `tests/agent/test_provider_strategy.py` - 13 tests
+   - All 26 tests passing
+
+**Results:**
+- `src/agent/core.py`: 1107 lines -> 766 lines (31% reduction)
+- Full backward compatibility maintained
+- All existing tests continue to pass
 
 ### Sprint 2: CodebaseContext Cleanup
 
@@ -391,19 +405,28 @@ These files were listed but are acceptable:
 
 ## Success Metrics
 
-After refactoring:
+### Completed (Sprint 1):
 
 | File | Before | After | Reduction |
 |------|--------|-------|-----------|
-| `src/agent/core.py` | 1107 | ~400 | 64% |
-| `src/context/codebase_context.py` | 960 | ~600 | 37% |
+| `src/agent/core.py` | 1107 | 766 | 31% |
 
 New files created:
-- `src/agent/agent_loop.py` (~300 lines)
-- `src/agent/provider_strategy.py` (~100 lines)
+- `src/agent/agent_loop.py` (450 lines)
+- `src/agent/provider_strategy.py` (100 lines)
+
+New tests created:
+- `tests/agent/test_agent_loop.py` (13 tests)
+- `tests/agent/test_provider_strategy.py` (13 tests)
+
+### Planned (Sprint 2):
+
+| File | Before | After | Reduction |
+|------|--------|-------|-----------|
+| `src/context/codebase_context.py` | 960 | ~600 | 37% |
+
+Files to create:
 - `src/context/semantic_manager.py` (~200 lines)
 - `src/context/augmenter.py` (~150 lines)
-
-Total lines: ~3067 -> ~1750 in "core" files + ~750 in new focused files
 
 **Key benefit:** Each class has a single responsibility and is independently testable.

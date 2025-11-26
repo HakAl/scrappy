@@ -224,39 +224,6 @@ class PromptScreen(ModalScreen[str]):
     with Enter or the Submit button, or cancel with the Cancel button.
     """
 
-    DEFAULT_CSS = """
-    PromptScreen {
-        align: center middle;
-    }
-
-    PromptScreen > Container {
-        width: 60;
-        height: auto;
-        border: thick $accent;
-        background: $panel-bg;
-        padding: 1;
-        layout: vertical;
-    }
-
-    PromptScreen Label {
-        margin-bottom: 1;
-    }
-
-    PromptScreen Input {
-        margin: 1 0;
-    }
-
-    PromptScreen #button_row {
-        height: auto;
-        align-horizontal: center;
-        margin-top: 1;
-    }
-
-    PromptScreen Button {
-        margin: 0 1;
-    }
-    """
-
     def __init__(self, prompt_message: str, default: str = "") -> None:
         """Initialize prompt screen.
 
@@ -299,35 +266,6 @@ class ConfirmScreen(ModalScreen[bool]):
 
     Displays a question with Yes/No buttons. Returns True for Yes,
     False for No or if dialog is dismissed.
-    """
-
-    DEFAULT_CSS = """
-    ConfirmScreen {
-        align: center middle;
-    }
-
-    ConfirmScreen > Container {
-        width: 60;
-        height: auto;
-        border: thick $accent;
-        background: $panel-bg;
-        padding: 1;
-        layout: vertical;
-    }
-
-    ConfirmScreen Label {
-        margin-bottom: 1;
-    }
-
-    ConfirmScreen #button_row {
-        height: auto;
-        align-horizontal: center;
-        margin-top: 1;
-    }
-
-    ConfirmScreen Button {
-        margin: 0 1;
-    }
     """
 
     def __init__(self, question: str) -> None:

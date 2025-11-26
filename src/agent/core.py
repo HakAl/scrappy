@@ -2,10 +2,12 @@
 Core Code Agent implementation.
 
 The main CodeAgent class with tool use and safety features.
+
+Note: The agent loop logic has been extracted to AgentLoop (agent_loop.py)
+and provider selection to ProviderSelectionStrategy (provider_strategy.py)
+as part of the god class refactoring effort.
 """
 
-import json
-import re
 import subprocess
 from pathlib import Path
 from typing import Optional, Union, Any
@@ -33,7 +35,7 @@ from .types import (
     ConversationState
 )
 from .audit import AuditLogger
-from .response_parser import JSONResponseParser, ParseResult, UnifiedResponseParser
+from .response_parser import UnifiedResponseParser
 from .protocols import ResponseParserProtocol
 
 # Import new components
@@ -43,6 +45,10 @@ from .duplicate_detector import DuplicateDetector
 from .tool_runner import ToolRunner
 from .action_executor import ActionExecutor
 
+# Import extracted components (Phase 1 refactoring)
+from .agent_loop import AgentLoop
+from .provider_strategy import create_provider_strategy
+
 # Import protocols
 from .protocols import (
     AgentUIProtocol,
@@ -51,6 +57,8 @@ from .protocols import (
     ToolRunnerProtocol,
     ActionExecutorProtocol,
     ToolRegistryProtocol,
+    AgentLoopProtocol,
+    ProviderSelectionStrategyProtocol,
 )
 from ..infrastructure.protocols import PathProviderProtocol
 from ..infrastructure.paths import ScrappyPathProvider
@@ -88,6 +96,9 @@ class CodeAgent:
         duplicate_detector: Optional[DuplicateDetectorProtocol] = None,
         tool_runner: Optional[ToolRunnerProtocol] = None,
         action_executor: Optional[ActionExecutorProtocol] = None,
+        # Phase 1 refactoring: extracted components
+        provider_strategy: Optional[ProviderSelectionStrategyProtocol] = None,
+        agent_loop: Optional[AgentLoopProtocol] = None,
     ):
         """
         Initialize the code agent with dependency injection.
@@ -219,50 +230,39 @@ class CodeAgent:
         # Store orchestrator reference for dynamic provider selection
         self._orchestrator = orchestrator
 
-        # Check if orchestrator supports smart provider selection
-        self._use_dynamic_selection = hasattr(orchestrator, 'get_recommended_provider')
+        # Phase 1 refactoring: Use ProviderSelectionStrategy instead of inline logic
+        # Check if adapter has a preferred provider override (from task routing)
+        preferred_provider = None
+        if hasattr(self.adapter, 'get_preferred_provider'):
+            pref_provider, pref_model = self.adapter.get_preferred_provider()
+            if pref_provider and pref_provider in available:
+                preferred_provider = pref_provider
 
-        if self._use_dynamic_selection:
-            # Let orchestrator decide provider based on task type and rate limits
-            # Get initial recommendation for display purposes
-            if hasattr(orchestrator, 'get_recommended_provider'):
-                self.planner = orchestrator.get_recommended_provider('planning')
-                self.executor = orchestrator.get_recommended_provider('execution')
-            else:
-                self.planner = available[0] if available else None
-                self.executor = self.planner
-        else:
-            # Fallback to legacy static selection if orchestrator doesn't support it
-            # Check if adapter has a preferred provider override (from task routing)
-            preferred_provider = None
-            if hasattr(self.adapter, 'get_preferred_provider'):
-                pref_provider, pref_model = self.adapter.get_preferred_provider()
-                if pref_provider and pref_provider in available:
-                    preferred_provider = pref_provider
+        # Create provider strategy (factory chooses dynamic vs static)
+        self._provider_strategy = provider_strategy or create_provider_strategy(
+            orchestrator=orchestrator,
+            config=self.config,
+            available_providers=available,
+            preferred_provider=preferred_provider,
+        )
 
-            # Select planner based on preferences (prefer adapter override)
-            self.planner = None
-            if preferred_provider:
-                self.planner = preferred_provider
-            else:
-                for pref in self.config.planner_preferences:
-                    if pref in available:
-                        self.planner = pref
-                        break
-            if self.planner is None:
-                self.planner = available[0] if available else None
+        # Backward compatibility: expose planner/executor properties
+        self._use_dynamic_selection = self._provider_strategy.supports_dynamic_selection()
+        self.planner = self._provider_strategy.get_planner()
+        self.executor = self._provider_strategy.get_executor()
 
-            # Select executor based on preferences (prefer adapter override)
-            self.executor = None
-            if preferred_provider:
-                self.executor = preferred_provider
-            else:
-                for pref in self.config.executor_preferences:
-                    if pref in available:
-                        self.executor = pref
-                        break
-            if self.executor is None:
-                self.executor = self.planner
+        # Phase 1 refactoring: Create AgentLoop
+        self._agent_loop = agent_loop or AgentLoop(
+            orchestrator=self.adapter,
+            action_executor=self.action_executor,
+            response_parser=self._response_parser,
+            ui=self.ui,
+            tool_registry=self.tool_registry,
+            provider_strategy=self._provider_strategy,
+            config=self.config,
+            audit_logger=self._audit_logger,
+            tools=self.tools,
+        )
 
     # Factory methods for default dependencies
 
@@ -558,13 +558,16 @@ class CodeAgent:
         self.ui.show_tool_request(action, params)
         return self.ui.prompt_confirm("Allow?", default=False)
 
-    # ========== Decoupled Agent Loop Methods ==========
+    # ========== Decoupled Agent Loop Methods (Backward Compatibility) ==========
+    # These methods now delegate to AgentLoop but are kept for backward compatibility
+    # and testing purposes. New code should use AgentLoop directly.
 
     def _think(self, state: ConversationState) -> AgentThought:
         """
         Generate the next thought/action from the LLM.
 
         This is the reasoning stage where the agent decides what to do next.
+        Delegates to AgentLoop.think() for backward compatibility.
 
         Args:
             state: Current conversation state
@@ -572,148 +575,17 @@ class CodeAgent:
         Returns:
             AgentThought containing raw LLM response
         """
-        import sys
-        import time
-
-        # Get current recommended provider (may change between calls due to rate limits)
-        if self._use_dynamic_selection and hasattr(self._orchestrator, 'get_recommended_provider'):
-            current_provider = self._orchestrator.get_recommended_provider('planning')
-            # Update cached value for display
-            self.planner = current_provider
-        else:
-            current_provider = self.planner
-
-        # Show progress indicator during API call
-        if state.iteration == 1:
-            self.ui.show_provider_status(current_provider, "Analyzing task (this may take a moment)...")
-        else:
-            self.ui.show_provider_status(current_provider, "Thinking...")
-
-        # Build the prompt with conversation history for multi-turn
-        if len(state.messages) == 2:
-            # First iteration: just use the task
-            user_prompt = state.messages[-1]['content']
-        else:
-            # Subsequent iterations: include conversation history
-            history_parts = []
-            for msg in state.messages[2:]:  # Skip system prompt and initial task
-                role = msg['role'].upper()
-                history_parts.append(f"{role}: {msg['content']}")
-            history_text = "\n\n".join(history_parts)
-            user_prompt = f"Previous conversation:\n{history_text}\n\nBased on the above, continue with the task. Remember to respond with valid JSON."
-
-        # Track API call time for first iteration
-        start_time = time.time()
-
-        # Check if orchestrator adapter has delegate_with_tools
-        # and if provider supports native tool calling
-        has_delegate_with_tools = hasattr(self.orch, 'delegate_with_tools')
-        provider_supports_tools = False
-
-        if has_delegate_with_tools and hasattr(self._orchestrator, '_registry'):
-            provider_obj = self._orchestrator._registry.get(current_provider)
-            if provider_obj and hasattr(provider_obj, 'supports_tool_calling'):
-                provider_supports_tools = provider_obj.supports_tool_calling
-
-        # Use native tool calling if both adapter and provider support it
-        if has_delegate_with_tools and provider_supports_tools:
-            # Get tool schemas in OpenAI format
-            tools = self.tool_registry.to_openai_schema()
-
-            # Add run_command tool (not in registry, manual schema)
-            tools.append({
-                "type": "function",
-                "function": {
-                    "name": "run_command",
-                    "description": "Execute a shell command. Use for git operations, builds, tests, etc.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "command": {
-                                "type": "string",
-                                "description": "The shell command to execute"
-                            },
-                            "explanation": {
-                                "type": "string",
-                                "description": "Brief explanation of what the command does"
-                            }
-                        },
-                        "required": ["command"]
-                    }
-                }
-            })
-
-            # Add "complete" tool for task completion
-            tools.append({
-                "type": "function",
-                "function": {
-                    "name": "complete",
-                    "description": "Mark the task as complete and provide final result",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "result": {
-                                "type": "string",
-                                "description": "Final result or summary of completed task"
-                            }
-                        },
-                        "required": ["result"]
-                    }
-                }
-            })
-
-            response = self.orch.delegate_with_tools(
-                provider_name=current_provider,
-                prompt=user_prompt,
-                tools=tools,
-                system_prompt=state.system_prompt,
-                max_tokens=self.config.default_max_tokens,
-                temperature=self.config.default_temperature,
-                tool_choice="auto"
-            )
-            actual_provider = response.provider
-        else:
-            # Fall back to regular delegate with JSON parsing
-            if self._use_dynamic_selection:
-                response = self.orch.delegate(
-                    provider_name=None,  # Let orchestrator decide
-                    prompt=user_prompt,
-                    system_prompt=state.system_prompt,
-                    max_tokens=self.config.default_max_tokens,
-                    temperature=self.config.default_temperature,
-                    use_context=False,  # Context already in system prompt
-                    task_type='planning'  # Inform orchestrator this is a planning task
-                )
-                # Update planner to reflect what was actually used
-                actual_provider = response.provider
-            else:
-                response = self.orch.delegate(
-                    current_provider,
-                    user_prompt,
-                    system_prompt=state.system_prompt,
-                    max_tokens=self.config.default_max_tokens,
-                    temperature=self.config.default_temperature,
-                    use_context=False  # Context already in system prompt
-                )
-                actual_provider = current_provider
-
-        # Report latency on first call (helps user understand wait times)
-        if state.iteration == 1:
-            elapsed = time.time() - start_time
-            self.ui.show_provider_status(actual_provider, f"Response received ({elapsed:.1f}s)", color="green")
-
-        return AgentThought(
-            raw_response=response.content,
-            provider=actual_provider,
-            iteration=state.iteration,
-            llm_response=response  # Store full response for native tool calls
-        )
+        result = self._agent_loop.think(state)
+        # Update cached planner for backward compat
+        self.planner = self._provider_strategy.get_planner()
+        return result
 
     def _plan_action(self, thought: AgentThought) -> AgentAction:
         """
         Parse the LLM response into a structured action.
 
         This is the planning stage where we extract the action to take.
+        Delegates to AgentLoop.plan() for backward compatibility.
 
         Args:
             thought: Raw thought from _think()
@@ -721,33 +593,14 @@ class CodeAgent:
         Returns:
             AgentAction with parsed action details
         """
-        # Check if we have a full LLMResponse with actual tool_calls (non-empty list)
-        # Empty list or None means fall back to JSON parsing
-        if (thought.llm_response and
-            thought.llm_response.tool_calls is not None and
-            len(thought.llm_response.tool_calls) > 0):
-            # Use the response parser to handle LLMResponse objects
-            # UnifiedResponseParser will automatically detect and use NativeToolCallParser
-            parse_result = self._response_parser.parse(thought.llm_response)
-        else:
-            # Fall back to parsing raw text response (JSON format)
-            # This handles: no llm_response, tool_calls=None, or tool_calls=[]
-            parse_result = self._response_parser.parse(thought.raw_response)
-
-        return AgentAction(
-            thought=parse_result.thought,
-            action=parse_result.action,
-            parameters=parse_result.parameters,
-            is_complete=parse_result.is_complete,
-            result_text=parse_result.result_text
-        )
+        return self._agent_loop.plan(thought)
 
     def _execute(self, action: AgentAction, state: ConversationState) -> ActionResult:
         """
         Execute the planned action (tool call).
 
         This is the execution stage where the tool is actually run.
-        Delegates to ActionExecutor for all execution logic.
+        Delegates to AgentLoop.execute() for backward compatibility.
 
         Args:
             action: Parsed action from _plan_action()
@@ -756,10 +609,9 @@ class CodeAgent:
         Returns:
             ActionResult with execution details
         """
-        # Delegate to ActionExecutor
-        result = self.action_executor.execute(action, state, dry_run=self.dry_run)
+        result = self._agent_loop.execute(action, state)
 
-        # Log action for audit trail
+        # Log action for audit trail (for backward compat - AgentLoop also logs)
         if result.executed:
             self._log_action(action.action, action.parameters, result.output, result.approved)
 
@@ -775,6 +627,7 @@ class CodeAgent:
         Evaluate whether the task is complete and if we should continue.
 
         This is the evaluation stage where we check completion criteria.
+        Delegates to AgentLoop.evaluate() for backward compatibility.
 
         Args:
             action: The action that was planned
@@ -784,60 +637,7 @@ class CodeAgent:
         Returns:
             EvaluationResult indicating whether to continue or complete
         """
-        # Check if task is complete (AFTER executing any actions)
-        if action.is_complete or action.action == 'complete':
-            # Verify that at least one meaningful action was performed
-            meaningful_actions = [
-                t for t in state.tools_executed
-                if t in self.config.meaningful_actions
-            ]
-
-            if not meaningful_actions and not self.dry_run:
-                self.ui.show_warning("Agent declared completion without performing any file operations.")
-                self.io.echo("Requesting agent to actually execute the task...")
-                return EvaluationResult(
-                    is_complete=False,
-                    should_continue=True,
-                    reason="No meaningful actions performed yet"
-                )
-
-            final_result = action.result_text or 'Task completed'
-            self.ui.show_rule("Task Complete")
-            self.ui.show_result(final_result, title="Final Result")
-            self._log_action('complete', {}, final_result, True)
-
-            return EvaluationResult(
-                is_complete=True,
-                should_continue=False,
-                reason="Task marked as complete",
-                final_result=final_result
-            )
-
-        # Smart completion: DISABLED - rely on explicit agent completion signals
-        # The heuristic approach was too aggressive, stopping after simple write operations
-        # even when the task had multiple components. Let the LLM decide when it's done.
-        #
-        # Previous logic checked for write_file operations and declared "done" prematurely.
-        # This caused issues with complex multi-part tasks (e.g., backend + frontend).
-        #
-        # Now the agent must explicitly call action='complete' or set is_complete=True.
-        # This gives the LLM control over task completion semantics.
-        pass  # Intentionally disabled heuristic completion
-
-        # Check max iterations
-        if state.iteration >= state.max_iterations:
-            return EvaluationResult(
-                is_complete=False,
-                should_continue=False,
-                reason=f"Max iterations ({state.max_iterations}) reached"
-            )
-
-        # Continue with more iterations
-        return EvaluationResult(
-            is_complete=False,
-            should_continue=True,
-            reason="Task not yet complete"
-        )
+        return self._agent_loop.evaluate(action, result, state)
 
     def _update_conversation(
         self,
@@ -849,122 +649,21 @@ class CodeAgent:
         """
         Update the conversation history based on the action and result.
 
+        Delegates to AgentLoop.update_conversation() for backward compatibility.
+
         Args:
             state: Conversation state to update
             thought: The raw thought from LLM
             action: The parsed action
             result: The execution result
         """
-        if result.executed:
-            # Tool was executed successfully
-            state.messages.append({
-                'role': 'assistant',
-                'content': thought.raw_response
-            })
-
-            # Track action in history for duplicate detection
-            action_record = {
-                "action": result.action,
-                "parameters": result.parameters
-            }
-            state.action_history.append(action_record)
-            state.last_action = action_record
-
-            # Track failed commands for retry detection
-            if action.action == 'run_command' and not result.success:
-                command = action.parameters.get('command', '')
-                if command:
-                    approach = self._categorize_command_approach(command)
-                    state.failed_commands.append({
-                        'command': command,
-                        'error': result.output[:200],
-                        'approach': approach,
-                        'iteration': state.iteration
-                    })
-                    self.io.secho(f"   [Tracked] Failed '{approach}' approach", fg="yellow")
-
-            # Build user message with tool result and any retry warnings
-            user_message = f"Tool result for {result.action}:\n{result.output}\n"
-
-            # Inject retry warnings if any failures were tracked
-            if state.retry_warnings:
-                user_message += "\n--- IMPORTANT WARNINGS ---\n"
-                for warning in state.retry_warnings:
-                    user_message += f"- {warning}\n"
-                user_message += "--- END WARNINGS ---\n"
-                # Clear warnings after injecting
-                state.retry_warnings.clear()
-
-            # For write_file operations, encourage verification
-            if result.action == 'write_file':
-                file_path = result.parameters.get('path', 'the file')
-                user_message += f"\nSuggestion: Consider reading {file_path} to verify the content is correct.\n"
-
-            user_message += "\nContinue with the task or mark as complete if done."
-
-            state.messages.append({
-                'role': 'user',
-                'content': user_message
-            })
-            state.tools_executed.append(result.action)
-        elif not result.approved and result.action in self.tools:
-            # Tool was denied by user
-            state.messages.append({
-                'role': 'assistant',
-                'content': thought.raw_response
-            })
-            state.messages.append({
-                'role': 'user',
-                'content': f"User denied the {result.action} action. Please try a different approach or explain why this action is necessary."
-            })
-        elif result.approved and not result.executed and result.action in self.tools:
-            # Tool was approved but not executed (e.g., duplicate detected)
-            state.messages.append({
-                'role': 'assistant',
-                'content': thought.raw_response
-            })
-            state.messages.append({
-                'role': 'user',
-                'content': result.output  # Contains warning message (e.g., duplicate detection)
-            })
-        elif action.action == 'retry_parse':
-            # Parse failure - provide detailed JSON format instructions
-            state.messages.append({
-                'role': 'assistant',
-                'content': thought.raw_response
-            })
-            state.messages.append({
-                'role': 'user',
-                'content': result.output  # Contains the detailed JSON format instructions
-            })
-        elif action.action not in self.tools and action.action != 'complete' and action.action != 'error':
-            # Unknown action
-            state.messages.append({
-                'role': 'assistant',
-                'content': thought.raw_response
-            })
-            state.messages.append({
-                'role': 'user',
-                'content': f"Unknown action '{action.action}'. Available tools: {', '.join(self.tools.keys())}"
-            })
-        elif action.is_complete and not result.executed:
-            # Agent wants to complete but no action executed and no meaningful work done
-            meaningful_actions = [t for t in state.tools_executed if t in self.config.meaningful_actions]
-            if not meaningful_actions and not self.dry_run:
-                state.messages.append({
-                    'role': 'assistant',
-                    'content': thought.raw_response
-                })
-                state.messages.append({
-                    'role': 'user',
-                    'content': "You declared the task complete but haven't actually created or modified any files. Please respond with a JSON object containing an action to execute. Use the write_file tool to actually create the requested code. Example format:\n{\n  \"thought\": \"your reasoning\",\n  \"action\": \"write_file\",\n  \"parameters\": {\"path\": \"filename\", \"content\": \"code here\"}\n}"
-                })
+        self._agent_loop.update_conversation(state, thought, action, result)
 
     def run(self, task: str, max_iterations: int = 10, auto_confirm: bool = False) -> dict:
         """
         Run the agent on a task using decoupled stages.
 
-        The agent loop follows clear stages:
+        The agent loop follows clear stages (delegated to AgentLoop):
         1. Think - LLM generates next thought/action
         2. Plan - Parse response into structured action
         3. Execute - Run the tool
@@ -1015,9 +714,6 @@ class CodeAgent:
                 use_native_tools = provider_obj.supports_tool_calling and hasattr(self.orch, 'delegate_with_tools')
 
         # Build the complete system prompt with task context
-        # PromptBuilder now includes all operational guidance (strategy, efficiency,
-        # completion semantics, safety rules) as proper sections
-        # Skip JSON format instructions if using native tool calling
         system_prompt = prompt_builder.build(task=task, use_native_tools=use_native_tools)
 
         # Initialize conversation state
@@ -1033,58 +729,21 @@ class CodeAgent:
             auto_confirm=auto_confirm
         )
 
-        # Main agent loop - decoupled stages with crash safety
-        self.ui.show_progress("Starting agent loop...")
+        # Phase 1 refactoring: Delegate to AgentLoop
         try:
-            while state.iteration < state.max_iterations:
-                state.iteration += 1
-                # Minimal iteration indicator (only show on first iteration)
-                if state.iteration == 1:
-                    self.io.secho("Working...", fg="cyan")
+            self.io.secho("Working...", fg="cyan")
+            result = self._agent_loop.run(task, state, dry_run=self.dry_run)
 
-                # Stage 1: Think - LLM generates next thought/action
-                thought = self._think(state)
+            # Update audit log with result
+            if result['success']:
+                self._audit_logger.mark_complete(True, result['result'])
+            else:
+                self._audit_logger.mark_complete(False, result['result'])
 
-                # Stage 2: Plan - Parse response into structured action
-                action = self._plan_action(thought)
+            # Add audit_log to result for backward compatibility
+            result['audit_log'] = self.audit_log
+            return result
 
-                # Stage 3: Execute - Run the tool
-                result = self._execute(action, state)
-
-                # Stage 4: Evaluate - Check if task is complete
-                evaluation = self._evaluate(action, result, state)
-
-                # Update conversation history
-                self._update_conversation(state, thought, action, result)
-
-                # Check evaluation result
-                if evaluation.is_complete:
-                    self._audit_logger.mark_complete(True, evaluation.final_result)
-                    return {
-                        'success': True,
-                        'result': evaluation.final_result,
-                        'iterations': state.iteration,
-                        'audit_log': self.audit_log
-                    }
-
-                if not evaluation.should_continue:
-                    # Max iterations or other stopping condition
-                    self._audit_logger.mark_complete(False, evaluation.reason)
-                    return {
-                        'success': False,
-                        'result': evaluation.reason,
-                        'iterations': state.iteration,
-                        'audit_log': self.audit_log
-                    }
-
-            # Max iterations reached (shouldn't get here but safety check)
-            self._audit_logger.mark_complete(False, f'Max iterations ({max_iterations}) reached')
-            return {
-                'success': False,
-                'result': f'Max iterations ({max_iterations}) reached',
-                'iterations': state.iteration,
-                'audit_log': self.audit_log
-            }
         except KeyboardInterrupt:
             # User cancelled - save partial state
             self.io.echo("")  # New line

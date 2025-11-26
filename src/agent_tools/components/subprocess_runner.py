@@ -12,6 +12,7 @@ import time
 from typing import Optional, TYPE_CHECKING
 
 from ..protocols import ExecutionResult
+from .output_collector import ThreadSafeOutputCollector
 
 if TYPE_CHECKING:
     from src.cli.io_interface import CLIIOProtocol
@@ -61,7 +62,7 @@ class SubprocessRunner:
         """
         timeout = timeout or 120  # Default 2 minutes
 
-        output_lines = []
+        collector = ThreadSafeOutputCollector()
         process = None
         start_time = time.time()
 
@@ -87,17 +88,13 @@ class SubprocessRunner:
                 errors='replace',
             )
 
-            last_output_time = start_time
-
             def read_output():
-                nonlocal last_output_time
                 try:
                     for line in iter(process.stdout.readline, ''):
                         if line:
-                            output_lines.append(line.rstrip())
-                            last_output_time = time.time()
-                            if stream_output and len(output_lines) % 10 == 0 and self._io:
-                                self._io.echo(f"   ... {len(output_lines)} lines processed")
+                            collector.append(line.rstrip())
+                            if stream_output and collector.line_count() % 10 == 0 and self._io:
+                                self._io.echo(f"   ... {collector.line_count()} lines processed")
                 except Exception:
                     pass
 
@@ -108,7 +105,7 @@ class SubprocessRunner:
             stall_warning_shown = False
             while process.poll() is None:
                 elapsed = time.time() - start_time
-                stall_time = time.time() - last_output_time
+                stall_time = time.time() - collector.get_last_output_time()
 
                 if elapsed > timeout:
                     process.kill()
@@ -123,11 +120,11 @@ class SubprocessRunner:
             reader_thread.join(timeout=5)
 
             execution_time = time.time() - start_time
-            stdout = "\n".join(output_lines)
+            stdout = "\n".join(collector.get_lines())
             exit_code = process.returncode
 
             if stream_output and self._io:
-                self._io.echo(f"   Command completed ({len(output_lines)} lines)")
+                self._io.echo(f"   Command completed ({collector.line_count()} lines)")
 
             return ExecutionResult(
                 stdout=stdout if stdout else "(no output)",

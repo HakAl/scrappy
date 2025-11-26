@@ -1,12 +1,19 @@
-## Issues / Loose Ends
-
----
-Integrate semantic search initial indexing w/status bar.
----
+## Issues 
 
 ---
 Problem:
 /explore freezes app
+
+Solution:
+debug, find root cause
+---
+
+---
+- context summary file always written, doesn't respect user choice
+---
+
+---
+- Auto-explore Stale Context: Uses cached context, not the new project
 ---
 
 ---
@@ -15,110 +22,95 @@ something is creating .lancedb outside of .scrappy directory. dir contains empty
 
 Solution:
 find what's creating .lancedb/ dir at root, and correct path
-
-
 ---
 
-<!-- todo -->
+## Loose Ends
 
+---
+Problem: We have a status bar and semantic search indexing, but haven't integrated to display.
+
+Solution:
+Integrate semantic search initial indexing w/status bar. To show initial indexing progress.
+---
+
+---
 - Semantic LLM classification
 - Add intent clarification mechanism
+---
 
 ---
-  Recommendations
-
   1. Configuration consolidation - Consider a RouterConfig dataclass for all thresholds/settings
   2. Pattern weight configuration - Allow runtime/file-based pattern weight adjustment
   3. Metrics persistence - Add optional persistence for MetricsCollector
+---
 
-  ---
-  3. Fragile Pattern Matching
+---
+Fragile Pattern Matching
 
-  Evidence:
-  - Strategy pattern with pluggable ClassificationStrategy implementations
-  - LLM-augmented classification for disambiguation
-  - Intent clarification for ambiguous cases
-  - Confidence scoring with escalation logic
+Evidence:
+- Strategy pattern with pluggable ClassificationStrategy implementations
+- LLM-augmented classification for disambiguation
+- Intent clarification for ambiguous cases
+- Confidence scoring with escalation logic
 
   Remaining concerns:
-  - Pattern weights still hardcoded in strategy classes
-  - Could benefit from configurable patterns or learned weights
+- Pattern weights still hardcoded in strategy classes
+- Could benefit from configurable patterns or learned weights
 
   Location: classification_strategies/*.py
 
   Remaining concerns:
-  - Some thresholds hardcoded (e.g., 0.7 in pure_functions)
-  - Pattern weights in strategy classes
-  - Consider centralizing to a config object
+- Some thresholds hardcoded (e.g., 0.7 in pure_functions)
+- Pattern weights in strategy classes
+- Consider centralizing to a config object
 ----
 
 
+---
+Problem:
 - help table output is all white -- need ability to customize table display
-
+Solution:
+- If needed add ability to style tables and style it
 ---
 
-## Feature 8: User-Facing Configuration
+---
+Add User-Facing Configuration for semantic search.
 
-### Current State
 Configuration is programmatic via `SemanticIndexConfig`. No user-facing config file support.
-
----
 ---
 
-<!-- todo -->
-
+---
 - Add skip logic in task_executor.py
 eg:   if complexity_score <= 3:
       return [{"step": "execute", "description": task, "provider_type": "fast"}]
 - Update planning prompt to include: "For simple tasks, return 1-2 steps maximum. Minimize unnecessary steps."
-
-<!-- EXISITING ISSUE -->
-- context summary file always written, doesn't respect user choice
-- Auto-explore Stale Context: Uses cached context from llm_team itself, not the new project
-
-CodebaseContext is a 840-line god object with multiple responsibilities that would benefit from decomposition. The
-   tests are better than average but don't fully prove correctness.
+---
 
 
+---
+Problem:
+users can't paste into input, each new line run as individual command. multiline input (copy / paste)
+Solution:
+enable input to take large pastes
+---
 
+---
+Problem:
+Users should be able to use up/down arrows to cycle through command history 
+user choices should be excluded from history (y, Y, n, N, 1, 2, 3, etc)
+---
 
-  Critical Issues Found
-
-  ---
-
-  8. Side Effects Everywhere ⚠️ Present
-
-  Constructor loads cache (context.py:107):
-  def __init__(self, project_path: Optional[str] = None):
-      ...
-      self._load_cache()  # Side effect in constructor
-
-  Hidden explore call (context.py:633-634):
-  def get_project_type(self) -> str:
-      if not self.structure:
-          self.explore()  # Hidden side effect
-
-
-  10. Tight Coupling ⚠️ Present
-
-  Hard dependencies on:
-  - subprocess - git operations
-  - os.walk / pathlib - file system
-  - shutil.which - tool detection
-
-  ---
-
-<!-- todo -- Assess code / tests / maintainability -->
-
-- multiline input (copy / paste)
-- user choices stored in history (y, Y, n, N, 1, 2, 3, etc)
-
-<!-- new features -->
-
+---
 - Diff preview
+---
+
+---
  - Structured output validation - Pydantic schemas for LLM responses
+---
+
+---
  - Streaming responses - Token-by-token generation for better UX
- 
+
 ---
 
 
