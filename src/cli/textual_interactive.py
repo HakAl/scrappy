@@ -119,5 +119,9 @@ class TextualInteractiveMode:
         # Create ScrappyApp with InteractiveMode and output adapter
         app = ScrappyApp(interactive_mode, output_adapter)
 
+        # Phase 3: Inject bridge into UnifiedIO for modal dialogs
+        # This enables prompt() and confirm() to show modals instead of auto-approving
+        self.io.set_bridge(app.bridge)
+
         # Launch the TUI
         app.run()

@@ -1,0 +1,128 @@
+/* Scrappy CLI Textual Theme
+ * Matches original CLI colors for consistent look and feel
+ */
+
+/* Color variables matching original CLI */
+$surface: #1e1e1e;
+$text: #d4d4d4;
+$text-muted: #808080;
+$accent: #00ff00;
+$panel-bg: #2d2d2d;
+
+/* Main screen layout */
+Screen {
+    background: $surface;
+    layout: vertical;
+}
+
+/* Scrollable output container */
+#output_container {
+    height: 1fr;
+    overflow-y: auto;
+}
+
+/* Main scrollable output (includes banner as content) */
+RichLog {
+    background: $surface;
+    color: $text;
+    border: none;
+    padding: 0 1 1 1;
+    height: 100%;
+    scrollbar-size-vertical: 0;
+}
+
+/* Input container at bottom */
+#input_container {
+    layout: horizontal;
+    height: auto;
+    background: $surface;
+    padding: 1;
+}
+
+/* Input prompt character */
+#input_prompt {
+    width: 2;
+    content-align: center middle;
+    color: $accent;
+}
+
+/* User input field */
+Input {
+    width: 1fr;
+    height: 1;
+    border: none;
+    background: transparent;
+}
+
+/* Defensive !important for known Textual specificity issues */
+Input > .input--placeholder {
+    color: $text-muted !important;
+}
+
+Input > .input--cursor {
+    color: $text !important;
+}
+
+/* Status bar - only visible when components active
+   NOTE: Uses height: 0 as fallback for Textual display: none issues */
+#status_bar {
+    height: 0;
+    max-height: 30%;
+    overflow: hidden;
+    background: $panel-bg;
+    border-top: solid $accent;
+    padding: 0;
+    display: none;
+}
+
+#status_bar.show {
+    display: block;
+    height: auto;
+    padding: 1;
+    overflow: visible;
+}
+
+#status_content {
+    width: 100%;
+    height: auto;
+}
+
+/* Progress indicator styling */
+#progress_indicator {
+    width: 100%;
+    height: auto;
+    margin: 0 0 1 0;
+}
+
+#progress_indicator Label {
+    width: 30;
+    content-align: left middle;
+}
+
+#progress_indicator ProgressBar {
+    width: 1fr;
+}
+
+/* Token counter styling */
+#token_counter {
+    width: 100%;
+    content-align: right middle;
+    color: $text-muted;
+}
+
+/* Modal screen overlay */
+PromptScreen, ConfirmScreen {
+    background: rgba(0, 0, 0, 0.7);
+}
+
+/* Modal button styling */
+PromptScreen Button, ConfirmScreen Button {
+    min-width: 10;
+}
+
+/* Modal input styling */
+#modal_input {
+    width: 100%;
+    border: solid #808080;
+    background: #1e1e1e;
+}

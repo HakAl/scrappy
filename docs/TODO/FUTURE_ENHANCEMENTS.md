@@ -94,7 +94,7 @@ def test_agent_refactor_logic():
     assert "def" in result
 ```
 
-### 2. Implementing the "Daily Standup" (Code Snippet)
+### Implementing the "Daily Standup" (Code Snippet)
 Since you liked the standup idea, here is the logic to implement it efficiently. The trick is to not dump the *entire* diff (which might break context limits), but to summarize file-by-file.
 
 **The Logic:**

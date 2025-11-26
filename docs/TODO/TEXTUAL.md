@@ -1,10 +1,11 @@
 [//]: # (GOAL)
- 
-Integrate textual 
+
+Integrate textual
 - create an area at the bottom of terminal below user input to display status
+  - phase 0 -- async audit to identify blocking operations -- COMPLETE
   - phase 1 -- integrate textual and display our existing app (header, static, input, RichLog, etc) -- COMPLETE
-  - phase 2 -- add the footer to serve as our status area.
-  - phase 3 -- integrate status elements eg: progress into status area
+  - phase 2 -- add the footer to serve as our status area -- COMPLETE
+  - phase 3 -- integrate status elements eg: progress into status area -- COMPLETE
 
 [//]: # (START PLAN)
 
@@ -40,67 +41,83 @@ Output via TextualIO.echo/secho → RichLog widget
 
 ---
 
-### Phase 0: Pre-Implementation Async Audit
+### Phase 0: Pre-Implementation Async Audit -- COMPLETE
 
+**Deliverable:** `docs/TODO/done/ASYNC_AUDIT.md`
 
-**0.2 Create Blocking Operations Matrix**
-
-Document findings in a table:
-
-| Operation | Location | Blocks UI? | Phase 1 Strategy | Phase 3 Solution |
-|-----------|----------|------------|------------------|------------------|
-| io.prompt() | interactive_mode.py:123 | YES | Raise NotImplementedError | Modal Screen |
-| io.confirm() | tool_executor.py:45 | YES | Auto-confirm with warning | Modal Dialog |
-| Path.read_text() | file_tools.py:67 | Maybe | Leave as-is (fast) | async file I/O |
-
-**0.3 Enable Disabled Features**
-
-Create list of features that will be temporarily unavailable:
-- Commands requiring user input mid-execution
-- Tools requiring confirmation of destructive operations
-- Any workflow using interactive prompts
-
-**Deliverable:** `docs/TODO/done/ASYNC_AUDIT.md` with complete matrix and disabled features list.
+See the audit document for:
+- Complete blocking operations matrix (87 sites identified)
+- 29 blocking input calls (prompt/confirm/input)
+- ~50 file I/O operations
+- 9 time.sleep() calls (3 critical in UI thread)
+- Disabled features list for Phase 1
+- Security mitigations for auto-confirmed operations
 
 ---
 
-### Phase 2: UI Rendering & Component Architecture
+### Phase 2: UI Rendering & Component Architecture -- COMPLETE
 
 **Objective:** Fix visual corruption, restore original UX, architect for extensible status components.
 
-**2.1 Define Status Component Protocol (textual_app.py)**
+**2.1 Define Status Component Protocol (src/cli/protocols.py)**
+
+NOTE: Protocol goes in `src/cli/protocols.py` per CLAUDE.md guidelines (protocol-first design).
 
 ```python
 from typing import Protocol
 from textual.widgets import Widget
 
 class StatusComponentProtocol(Protocol):
-    """Protocol for status bar components that can be dynamically added/removed"""
+    """Protocol for status bar components that can be dynamically added/removed.
+
+    IMPORTANT: Implementations should cache their widget instance and update it
+    in place rather than creating new widgets on each call. This prevents
+    flickering and improves performance.
+    """
 
     @property
     def component_id(self) -> str:
-        """Unique identifier for this component"""
+        """Unique identifier for this component."""
         ...
 
     @property
     def is_visible(self) -> bool:
-        """Whether this component should be displayed"""
+        """Whether this component should be displayed."""
         ...
 
-    def render_widget(self) -> Widget:
-        """Return the Textual widget to display"""
+    @property
+    def widget(self) -> Widget:
+        """Return the cached widget instance.
+
+        The widget should be created once and reused. Use update_widget()
+        to modify its state rather than recreating it.
+        """
+        ...
+
+    def update_widget(self) -> None:
+        """Update widget state without recreating.
+
+        Called when component data changes. Modify the cached widget's
+        properties directly (e.g., label.update(), progress.progress = X).
+        """
         ...
 ```
 
 **Example implementations:**
 ```python
 class ProgressIndicator:
-    """Shows indexing/processing progress"""
+    """Shows indexing/processing progress.
+
+    Caches widget instance to prevent flickering on updates.
+    """
     def __init__(self):
         self._progress = 0
         self._total = 0
         self._message = ""
         self._active = False
+        self._widget: Optional[Horizontal] = None
+        self._label: Optional[Label] = None
+        self._bar: Optional[ProgressBar] = None
 
     @property
     def component_id(self) -> str:
@@ -110,30 +127,46 @@ class ProgressIndicator:
     def is_visible(self) -> bool:
         return self._active
 
-    def render_widget(self) -> Widget:
-        from textual.widgets import ProgressBar, Label
-        from textual.containers import Horizontal
+    @property
+    def widget(self) -> Widget:
+        """Return cached widget, creating if needed."""
+        if self._widget is None:
+            from textual.widgets import ProgressBar, Label
+            from textual.containers import Horizontal
 
-        bar = ProgressBar(total=self._total, id="progress_bar")
-        bar.progress = self._progress
-        label = Label(self._message)
-        return Horizontal(label, bar, id="progress_indicator")
+            self._label = Label(self._message)
+            self._bar = ProgressBar(total=self._total, id="progress_bar")
+            self._widget = Horizontal(self._label, self._bar, id="progress_indicator")
+        return self._widget
+
+    def update_widget(self) -> None:
+        """Update widget state in place."""
+        if self._label is not None:
+            self._label.update(self._message)
+        if self._bar is not None:
+            self._bar.total = self._total
+            self._bar.progress = self._progress
 
     def update(self, progress: int, total: int, message: str) -> None:
         self._progress = progress
         self._total = total
         self._message = message
         self._active = True
+        self.update_widget()
 
     def complete(self) -> None:
-        """Mark complete - will auto-hide after brief delay"""
+        """Mark complete - will auto-hide after brief delay."""
         self._active = False
 
 class TokenCounter:
-    """Shows token usage for current session"""
+    """Shows token usage for current session.
+
+    Caches widget instance to prevent flickering on updates.
+    """
     def __init__(self):
         self._tokens = 0
         self._visible = False
+        self._widget: Optional[Label] = None
 
     @property
     def component_id(self) -> str:
@@ -143,13 +176,23 @@ class TokenCounter:
     def is_visible(self) -> bool:
         return self._visible and self._tokens > 0
 
-    def render_widget(self) -> Widget:
-        from textual.widgets import Label
-        return Label(f"Tokens: {self._tokens:,}", id="token_counter")
+    @property
+    def widget(self) -> Widget:
+        """Return cached widget, creating if needed."""
+        if self._widget is None:
+            from textual.widgets import Label
+            self._widget = Label(f"Tokens: {self._tokens:,}", id="token_counter")
+        return self._widget
+
+    def update_widget(self) -> None:
+        """Update widget state in place."""
+        if self._widget is not None:
+            self._widget.update(f"Tokens: {self._tokens:,}")
 
     def update(self, tokens: int) -> None:
         self._tokens = tokens
         self._visible = True
+        self.update_widget()
 
     def hide(self) -> None:
         self._visible = False
@@ -157,47 +200,92 @@ class TokenCounter:
 
 **2.2 Implement Dynamic StatusBar Container (textual_app.py)**
 
+NOTE: Follows Single Responsibility - visibility logic, CSS toggling, and mounting are separate methods.
+
 ```python
 from textual.containers import Container, Vertical
 from textual.reactive import reactive
+from typing import Dict, List
 
 class StatusBar(Container):
-    """Dynamic status bar that shows/hides based on active components"""
+    """Dynamic status bar that shows/hides based on active components.
+
+    Single Responsibility: Each method has one job:
+    - _get_visible_components(): Filter logic
+    - _update_visibility(): CSS class toggling
+    - _mount_components(): Widget mounting
+    - refresh_display(): Orchestrates the above
+    """
 
     show_status = reactive(False)
 
     def __init__(self):
         super().__init__(id="status_bar")
         self.components: Dict[str, StatusComponentProtocol] = {}
+        self._mounted_ids: set[str] = set()
 
     def compose(self) -> ComposeResult:
-        """Dynamically compose based on active components"""
+        """Dynamically compose based on active components."""
         yield Vertical(id="status_content")
 
     def register_component(self, component: StatusComponentProtocol) -> None:
-        """Add a status component"""
+        """Add a status component."""
         self.components[component.component_id] = component
         self.refresh_display()
 
     def unregister_component(self, component_id: str) -> None:
-        """Remove a status component"""
+        """Remove a status component."""
         if component_id in self.components:
             del self.components[component_id]
+            self._mounted_ids.discard(component_id)
             self.refresh_display()
 
+    def _get_visible_components(self) -> List[StatusComponentProtocol]:
+        """Return list of components that should be visible."""
+        return [c for c in self.components.values() if c.is_visible]
+
+    def _update_visibility(self, has_visible: bool) -> None:
+        """Toggle CSS class based on whether any components are visible."""
+        self.show_status = has_visible
+        if has_visible:
+            self.add_class("show")
+        else:
+            self.remove_class("show")
+
+    def _mount_components(self, visible: List[StatusComponentProtocol]) -> None:
+        """Mount/unmount components as needed.
+
+        Only mounts components that aren't already mounted.
+        Only unmounts components that are no longer visible.
+        Uses cached widgets from components (no recreation).
+        """
+        content = self.query_one("#status_content", Vertical)
+        visible_ids = {c.component_id for c in visible}
+
+        # Unmount components no longer visible
+        for comp_id in self._mounted_ids - visible_ids:
+            try:
+                widget = content.query_one(f"#{comp_id}")
+                widget.remove()
+            except Exception:
+                pass  # Widget already removed
+
+        # Mount newly visible components (using cached widgets)
+        for component in visible:
+            if component.component_id not in self._mounted_ids:
+                content.mount(component.widget)
+
+        # Update all visible component widgets
+        for component in visible:
+            component.update_widget()
+
+        self._mounted_ids = visible_ids
+
     def refresh_display(self) -> None:
-        """Update visible components"""
-        visible_components = [c for c in self.components.values() if c.is_visible]
-
-        # Hide entire status bar if no visible components
-        self.show_status = len(visible_components) > 0
-
-        # Update content
-        content_container = self.query_one("#status_content", Vertical)
-        content_container.remove_children()
-
-        for component in visible_components:
-            content_container.mount(component.render_widget())
+        """Update visible components - orchestrates visibility and mounting."""
+        visible = self._get_visible_components()
+        self._update_visibility(len(visible) > 0)
+        self._mount_components(visible)
 ```
 
 **2.3 Update App Layout (textual_app.py)**
@@ -270,18 +358,23 @@ Input > .input--cursor {
     color: $text !important;
 }
 
-/* Status bar - only visible when components active */
+/* Status bar - only visible when components active
+   NOTE: Uses height: 0 as fallback for Textual display: none issues */
 #status_bar {
-    height: auto;
+    height: 0;  /* Fallback for display issues */
     max-height: 30%;  /* Don't let status take over screen */
+    overflow: hidden;  /* Hide content when collapsed */
     background: $panel;
     border-top: solid $accent;
-    padding: 1;
-    display: none;  /* Hidden by default */
+    padding: 0;  /* No padding when hidden */
+    display: none;  /* Primary hide mechanism */
 }
 
 #status_bar.show {
     display: block;  /* Show when active components */
+    height: auto;  /* Allow content to determine height */
+    padding: 1;  /* Restore padding when visible */
+    overflow: visible;  /* Show content */
 }
 
 #status_content {
@@ -690,9 +783,16 @@ class ScrappyApp(App):
         )
 
     def on_show_confirm_modal(self, message: ShowConfirmModal) -> None:
-        """Handle confirmation request from worker thread"""
-        def handle_result(result: bool) -> None:
-            self.bridge.provide_result(message.prompt_id, result)
+        """Handle confirmation request from worker thread.
+
+        NOTE: ConfirmScreen dismisses with True/False, but if user presses
+        Escape or closes the modal unexpectedly, result could be None.
+        Treat None as False (cancel = no confirmation).
+        """
+        def handle_result(result: Optional[bool]) -> None:
+            # Treat None (escape/cancel) as False
+            final_result = result if result is not None else False
+            self.bridge.provide_result(message.prompt_id, final_result)
 
         self.push_screen(
             ConfirmScreen(message.question),
@@ -777,5 +877,40 @@ def run(self):
 20. [ ] Launch with --no-textual flag (if exists) - original CLI works
 21. [ ] All interactive prompts work in CLI mode
 22. [ ] Confirmations require user input in CLI mode
+
+---
+
+## Implementation Readiness Summary
+
+### Phase 0: COMPLETE
+- Deliverable: `docs/TODO/done/ASYNC_AUDIT.md`
+- 87 blocking operations identified and categorized
+
+### Phase 1: COMPLETE
+- Thread-safe message queue architecture implemented
+- Strategy pattern for CLI/TUI modes (`unified_io.py`)
+- Worker thread isolation with `@work` decorator
+- Auto-confirm with warnings for blocking operations
+
+### Phase 2: COMPLETE
+Implemented:
+- [x] `StatusComponentProtocol` added to `src/cli/protocols.py`
+- [x] `StatusBar` container in `textual_app.py` with SRP methods
+- [x] `ProgressIndicator` component with cached widget
+- [x] `TokenCounter` component with cached widget
+- [x] `scrappy.tcss` external stylesheet (renamed `$panel` to `$panel-bg` to avoid Textual collision)
+- [x] `ScrappyApp` updated to compose StatusBar and register components
+
+### Phase 3: COMPLETE
+Implemented:
+- [x] `ThreadSafeAsyncBridge` class with deadlock guard in `textual_app.py`
+- [x] `ShowPromptModal` and `ShowConfirmModal` messages for thread-safe communication
+- [x] `PromptScreen` modal with input field, Submit/Cancel buttons, Enter key support
+- [x] `ConfirmScreen` modal with Yes/No buttons
+- [x] Modal message handlers (`on_show_prompt_modal`, `on_show_confirm_modal`) in `ScrappyApp`
+- [x] `OutputSinkAdapter.set_bridge()` method to inject bridge
+- [x] `UnifiedIO.set_bridge()` to forward bridge to strategy
+- [x] `TextualInteractiveMode.run()` updated to inject bridge after app creation
+- [x] CSS styling for modal screens in `scrappy.tcss`
 
 ---

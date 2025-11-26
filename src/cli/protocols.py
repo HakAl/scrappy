@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from ..orchestrator.protocols import Orchestrator
     from rich.console import Console, RenderableType
     from rich.layout import Layout
+    from textual.widget import Widget
 
 
 @runtime_checkable
@@ -812,5 +813,82 @@ class UnifiedIOProtocol(CLIIOProtocol, RichOutputProtocol, Protocol):
 
         Returns:
             Console instance for this IO implementation
+        """
+        ...
+
+
+@runtime_checkable
+class StatusComponentProtocol(Protocol):
+    """Protocol for status bar components that can be dynamically added/removed.
+
+    Status components are displayed in the footer status bar area of the TUI.
+    They provide real-time information like progress indicators, token counters,
+    or other status information.
+
+    IMPORTANT: Implementations should cache their widget instance and update it
+    in place rather than creating new widgets on each call. This prevents
+    flickering and improves performance.
+
+    Example implementation:
+        class ProgressIndicator:
+            def __init__(self):
+                self._active = False
+                self._widget: Optional[Horizontal] = None
+
+            @property
+            def component_id(self) -> str:
+                return "progress"
+
+            @property
+            def is_visible(self) -> bool:
+                return self._active
+
+            @property
+            def widget(self) -> Widget:
+                if self._widget is None:
+                    self._widget = Horizontal(...)
+                return self._widget
+
+            def update_widget(self) -> None:
+                if self._widget is not None:
+                    # Update widget state in place
+                    ...
+    """
+
+    @property
+    def component_id(self) -> str:
+        """Unique identifier for this component.
+
+        Returns:
+            String identifier used for registration and lookup.
+        """
+        ...
+
+    @property
+    def is_visible(self) -> bool:
+        """Whether this component should be displayed.
+
+        Returns:
+            True if component should be shown in status bar.
+        """
+        ...
+
+    @property
+    def widget(self) -> "Widget":
+        """Return the cached widget instance.
+
+        The widget should be created once and reused. Use update_widget()
+        to modify its state rather than recreating it.
+
+        Returns:
+            Textual Widget instance for this component.
+        """
+        ...
+
+    def update_widget(self) -> None:
+        """Update widget state without recreating.
+
+        Called when component data changes. Modify the cached widget's
+        properties directly (e.g., label.update(), progress.progress = X).
         """
         ...

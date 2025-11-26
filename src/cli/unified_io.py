@@ -19,7 +19,7 @@ Usage:
     name = io.prompt("Name?", default="User")  # Auto-approves with warning
 """
 
-from typing import Protocol, Optional, List, Generator
+from typing import Protocol, Optional, List, Generator, Any
 from contextlib import contextmanager
 from rich.console import Console
 from rich.panel import Panel
@@ -546,7 +546,7 @@ class OutputSinkAdapter:
     Textual integration. Some features have different visual representation:
     - Spinners: Log start/end messages instead of animation
     - Progress: Text-based updates instead of live bars
-    - Input: Auto-approve with warnings (Phase 1 limitation)
+    - Input: Uses ThreadSafeAsyncBridge for modal dialogs (Phase 3)
     """
 
     def __init__(self, sink: OutputSink, console: Console):
@@ -558,6 +558,18 @@ class OutputSinkAdapter:
         """
         self._sink = sink
         self._console = console
+        self._bridge: Optional[Any] = None  # Set by TextualInteractiveMode after app creation
+
+    def set_bridge(self, bridge: Any) -> None:
+        """Set the ThreadSafeAsyncBridge for modal dialogs.
+
+        Called by TextualInteractiveMode after ScrappyApp is created,
+        enabling interactive prompts and confirmations.
+
+        Args:
+            bridge: ThreadSafeAsyncBridge instance from ScrappyApp
+        """
+        self._bridge = bridge
 
     def output_plain(self, text: str, nl: bool = True) -> None:
         """Output plain text through sink.
@@ -683,13 +695,25 @@ class OutputSinkAdapter:
         default: str = "",
         show_default: bool = True
     ) -> str:
-        """Auto-approve prompt with warning (Phase 1 limitation)."""
+        """Get user input via modal dialog (Phase 3).
+
+        Uses ThreadSafeAsyncBridge to show modal in main thread
+        while blocking worker thread. Falls back to auto-approve
+        if bridge not available.
+        """
+        if self._bridge is not None:
+            # Phase 3: Use modal dialog via bridge
+            prompt_text = text
+            if show_default and default:
+                prompt_text = f"{text} [{default}]"
+            return self._bridge.blocking_prompt(prompt_text, default)
+
+        # Fallback: Auto-approve with warning (bridge not set)
         warning_panel = Panel(
-            f"[bold yellow]PHASE 1 LIMITATION[/]\n\n"
+            f"[bold yellow]BRIDGE NOT INITIALIZED[/]\n\n"
             f"[white]Attempted to request input:[/]\n"
             f"{text}\n\n"
-            f"[yellow]Interactive prompts return defaults in Textual mode.[/]\n"
-            f"[yellow]Phase 3 will enable modal dialogs for user input.[/]\n\n"
+            f"[yellow]Bridge not available - returning default.[/]\n\n"
             f"[white]Returning default:[/] [cyan]{default or '(empty)'}[/]",
             title="[yellow]Auto-Response[/]",
             border_style="yellow"
@@ -698,7 +722,17 @@ class OutputSinkAdapter:
         return default
 
     def input_confirm(self, text: str, default: bool = False) -> bool:
-        """Auto-approve confirmation with warning (Phase 1 limitation)."""
+        """Get yes/no confirmation via modal dialog (Phase 3).
+
+        Uses ThreadSafeAsyncBridge to show modal in main thread
+        while blocking worker thread. Falls back to auto-approve
+        if bridge not available.
+        """
+        if self._bridge is not None:
+            # Phase 3: Use modal dialog via bridge
+            return self._bridge.blocking_confirm(text)
+
+        # Fallback: Auto-approve with warning (bridge not set)
         # Non-destructive operations (session restore, etc.) - simple message
         is_routine = (
             "restore" in text.lower() and "session" in text.lower()
@@ -714,8 +748,7 @@ class OutputSinkAdapter:
         warning_panel = Panel(
             f"[bold white on red] AUTO-CONFIRMED [/]\n\n"
             f"[white]{text}[/]\n\n"
-            f"[bold yellow]Phase 1 Limitation:[/] [white]Auto-approved.[/]\n"
-            f"[bold yellow]Manual confirmation requires Phase 3.[/]\n\n"
+            f"[bold yellow]Bridge not initialized:[/] [white]Auto-approved.[/]\n\n"
             f"[bold red]Review destructive operations carefully![/]",
             title="[blink bold white on red]SECURITY WARNING: Auto-Confirm[/]",
             border_style="red",
@@ -811,6 +844,19 @@ class UnifiedIO:
             OutputSink instance if in TUI mode, None otherwise.
         """
         return self._output_sink
+
+    def set_bridge(self, bridge: Any) -> None:
+        """Set the ThreadSafeAsyncBridge for modal dialogs (Phase 3).
+
+        Only effective in TUI mode (when OutputSinkAdapter is used).
+        Enables prompt() and confirm() to show modal dialogs instead
+        of auto-approving.
+
+        Args:
+            bridge: ThreadSafeAsyncBridge instance from ScrappyApp
+        """
+        if isinstance(self._strategy, OutputSinkAdapter):
+            self._strategy.set_bridge(bridge)
 
     def echo(self, message: str = "", nl: bool = True) -> None:
         """Output a message to the console."""
