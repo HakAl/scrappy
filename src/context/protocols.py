@@ -526,6 +526,47 @@ class SemanticSearchProtocol(Protocol):
 
 
 @runtime_checkable
+class EmbeddingFunctionProtocol(Protocol):
+    """
+    Protocol for embedding generation.
+
+    Abstracts embedding generation to enable:
+    - Testing without loading real embedding models
+    - Swapping embedding backends (FastEmbed, OpenAI, etc.)
+    - Dependency injection for LanceDBSearchProvider
+
+    Implementations:
+    - EmbedFunction: FastEmbed-based local embeddings
+    - MockEmbeddingFunction: Fixed vectors for testing
+
+    Example:
+        def embed_texts(func: EmbeddingFunctionProtocol, texts: List[str]) -> List[List[float]]:
+            return func.generate_embeddings(texts)
+    """
+
+    def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
+        """
+        Generate embeddings for a list of texts.
+
+        Args:
+            texts: List of text strings to embed
+
+        Returns:
+            List of embedding vectors (each vector is a list of floats)
+        """
+        ...
+
+    def ndims(self) -> int:
+        """
+        Return the dimensionality of the embeddings.
+
+        Returns:
+            Number of dimensions in embedding vectors
+        """
+        ...
+
+
+@runtime_checkable
 class FileCollectorProtocol(Protocol):
     """
     Protocol for collecting files for semantic search indexing.

@@ -7,8 +7,10 @@ and hybrid search (vector + full-text).
 
 import hashlib
 import logging
+import time
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 from contextlib import contextmanager
 
 # Use simple imports to avoid circular dependency messes
@@ -20,18 +22,34 @@ try:
 except ImportError:
     lancedb = None
 
-from ..protocols import CodeChunkerProtocol, SearchResult
+from ..protocols import CodeChunkerProtocol, EmbeddingFunctionProtocol, SearchResult
 from ...infrastructure.protocols import ProgressReporterProtocol
+from .config import SemanticIndexConfig
 
 logger = logging.getLogger(__name__)
 
 # --- Configuration Constants ---
-DB_DIR_NAME = ".lancedb"
 LOCK_FILE_NAME = "update.lock"
 TABLE_NAME = "code_chunks"
 TOKEN_ESTIMATION_CHAR_RATIO = 3.0
-BATCH_SIZE = 64  # Larger batches for efficiency (now thread-safe)
-MIN_CHUNK_SIZE = 20  # Skip very small chunks
+
+
+@dataclass
+class IndexingMetrics:
+    """Metrics from an indexing operation."""
+    files_processed: int = 0
+    chunks_added: int = 0
+    chunks_skipped: int = 0
+    embedding_time_seconds: float = 0.0
+    db_write_time_seconds: float = 0.0
+    total_time_seconds: float = 0.0
+
+    @property
+    def chunks_per_second(self) -> float:
+        """Calculate throughput."""
+        if self.embedding_time_seconds > 0:
+            return self.chunks_added / self.embedding_time_seconds
+        return 0.0
 
 
 class IndexingError(Exception):
@@ -107,8 +125,8 @@ class LanceDBSearchProvider:
         self,
         project_path: Path,
         chunker: CodeChunkerProtocol,
-        db_dir_name: str = DB_DIR_NAME,
-        lock_timeout: int = 300,  # 5 minutes (large repos need time)
+        config: Optional[SemanticIndexConfig] = None,
+        embedding_func: Optional[EmbeddingFunctionProtocol] = None,
         progress_reporter: Optional[ProgressReporterProtocol] = None,
     ):
         """
@@ -117,19 +135,20 @@ class LanceDBSearchProvider:
         Args:
             project_path: Project root path
             chunker: Code chunking strategy (INJECTED)
-            db_dir_name: Database directory name
-            lock_timeout: Lock acquisition timeout in seconds
+            config: Index configuration (INJECTED, defaults provided)
+            embedding_func: Embedding function (INJECTED, lazy-loaded if None)
             progress_reporter: Progress reporter for indexing operations (INJECTED)
         """
         self._project_path = project_path.resolve()
         self._chunker = chunker  # Injected dependency
-        self._db_path = self._project_path / db_dir_name
+        self._config = config or SemanticIndexConfig()
+        self._db_path = self._project_path / self._config.db_dir_name
         self._lock_path = self._db_path / LOCK_FILE_NAME
-        self._lock_timeout = lock_timeout
+        self._lock_timeout = self._config.lock_timeout
 
-        # Lazy initialization
+        # Lazy initialization (embedding_func can be injected for testing)
         self._db = None
-        self._embedding_func = None
+        self._embedding_func = embedding_func  # None means lazy-load default
         self._code_schema = None
 
         # Progress reporter (defaults to NullProgressReporter if not provided)
@@ -157,21 +176,28 @@ class LanceDBSearchProvider:
         """
         Lazy schema initialization (creates embedding func and schema).
 
+        If embedding_func was injected via constructor, uses that.
+        Otherwise lazy-loads the default FastEmbed implementation.
+
         Raises:
             IndexingError: If fastembed is not available or initialization fails
         """
         if self._code_schema is None:
             try:
-                logger.debug("Initializing embedding function (may take 10-30s on first use)...")
-                self._embedding_func = _create_embedding_func()
+                # Only create embedding func if not already injected
+                if self._embedding_func is None:
+                    logger.debug("Initializing embedding function (may take 10-30s on first use)...")
+                    self._embedding_func = _create_embedding_func()
 
-                # Ensure the model is fully loaded by generating a test embedding
-                # This ensures the heavy model loading happens here, not later
-                try:
-                    _ = self._embedding_func.generate_embeddings(["test"])
-                    logger.debug("Embedding model is fully loaded")
-                except Exception as e:
-                    logger.warning(f"Error during test embedding generation: {e}")
+                    # Ensure the model is fully loaded by generating a test embedding
+                    # This ensures the heavy model loading happens here, not later
+                    try:
+                        _ = self._embedding_func.generate_embeddings(["test"])
+                        logger.debug("Embedding model is fully loaded")
+                    except Exception as e:
+                        logger.warning(f"Error during test embedding generation: {e}")
+                else:
+                    logger.debug("Using injected embedding function")
 
                 self._code_schema = _create_code_schema()
                 logger.debug("Embedding function initialized")
@@ -365,17 +391,10 @@ class LanceDBSearchProvider:
 
             # Add new entries
             if files_to_add:
-                self._add_files_in_batches(table, files_to_add)
+                metrics = self._add_files_in_batches(table, files_to_add)
 
-                # Update FTS index (only if table has rows)
-                try:
-                    if table.count_rows() > 0:
-                        logger.debug("Creating FTS index")
-                        table.create_fts_index("content", replace=True)
-                    else:
-                        logger.warning("Table is empty, skipping FTS index creation")
-                except Exception as e:
-                    logger.warning(f"FTS indexing failed (search will still work via vector): {e}")
+                # Conditionally rebuild FTS index
+                self._maybe_rebuild_fts(table, metrics.chunks_added)
 
             table.cleanup_old_versions()
 
@@ -418,27 +437,36 @@ class LanceDBSearchProvider:
         logger.info(f"Creating table and indexing {len(valid_files)} valid files")
         table = self._db.create_table(TABLE_NAME, schema=self._code_schema)
 
-        self._add_files_in_batches(table, valid_files)
+        metrics = self._add_files_in_batches(table, valid_files)
 
-        # Only create FTS if rows exist
-        try:
-            if table.count_rows() > 0:
-                logger.debug("Creating FTS index on new table")
-                table.create_fts_index("content", replace=True)
-            else:
-                logger.warning("No rows added to table")
-        except Exception as e:
-            logger.warning(f"Initial FTS creation failed: {e}")
+        # Always create FTS on new table (no threshold check for initial creation)
+        self._maybe_rebuild_fts(table, metrics.chunks_added, force=True)
 
-    def _add_files_in_batches(self, table, files: Dict[str, str]):
-        """Chunk content and add to DB in batches (memory efficient)."""
-        batch = []
-        total_chunks = 0
-        skipped_small = 0
-        files_processed = 0
+    def _add_files_in_batches(self, table, files: Dict[str, str]) -> IndexingMetrics:
+        """
+        Chunk content and add to DB with super-batch processing.
+
+        Uses super-batch pattern for memory safety:
+        1. Collect chunks up to super_batch_size
+        2. Embed and write to DB
+        3. Clear memory and repeat
+
+        Args:
+            table: LanceDB table to add to
+            files: Dict mapping file paths to content
+
+        Returns:
+            IndexingMetrics with timing and counts
+        """
+        metrics = IndexingMetrics()
+        start_time = time.time()
+        config = self._config
+
+        all_chunks: List[Dict] = []
         total_files = len(files)
 
-        logger.debug(f"Processing {total_files} files for chunking")
+        logger.debug(f"Processing {total_files} files (batch={config.batch_size}, "
+                     f"super_batch={config.super_batch_size}, max_text={config.max_text_length})")
 
         for norm_path, content in files.items():
             try:
@@ -446,7 +474,6 @@ class LanceDBSearchProvider:
                 lines = content.splitlines()
                 file_hash = self._compute_hash(content)
 
-                file_chunk_count = 0
                 for chunk in chunks:
                     # Safety check for line ranges
                     start = max(0, chunk.start_line - 1)
@@ -454,86 +481,140 @@ class LanceDBSearchProvider:
                     chunk_text = '\n'.join(lines[start:end])
 
                     # Skip very small chunks (noise)
-                    if len(chunk_text) < MIN_CHUNK_SIZE:
-                        skipped_small += 1
+                    if len(chunk_text) < config.min_chunk_size:
+                        metrics.chunks_skipped += 1
                         continue
 
-                    batch.append({
+                    all_chunks.append({
                         "id": f"{norm_path}:{chunk.start_line}",
                         "file_path": norm_path,
                         "start_line": chunk.start_line,
                         "end_line": chunk.end_line,
                         "content_hash": file_hash,
-                        "content": chunk_text,
+                        "content": chunk_text[:config.max_text_length],
                     })
-                    file_chunk_count += 1
-                    total_chunks += 1
 
-                    if len(batch) >= BATCH_SIZE:
-                        logger.debug(f"Adding batch of {len(batch)} chunks to table")
-                        try:
-                            import time
-                            # Generate embeddings for the batch (truncate to 2000 chars for speed)
-                            texts = [item["content"][:2000] for item in batch]
-                            logger.debug(f"Generating embeddings for {len(texts)} chunks")
-                            t0 = time.time()
-                            embeddings = list(self._embedding_func.generate_embeddings(texts))
-                            t1 = time.time()
-                            logger.debug(f"Embedding generation took {t1-t0:.2f}s")
+                    # Memory safety: flush when super-batch is full
+                    if len(all_chunks) >= config.super_batch_size:
+                        batch_metrics = self._process_super_batch(table, all_chunks)
+                        metrics.chunks_added += batch_metrics["added"]
+                        metrics.embedding_time_seconds += batch_metrics["embed_time"]
+                        metrics.db_write_time_seconds += batch_metrics["db_time"]
+                        all_chunks = []
 
-                            # Add vectors to batch
-                            for item, embedding in zip(batch, embeddings):
-                                item["vector"] = embedding
-                            t2 = time.time()
-                            logger.debug(f"Adding vectors to dicts took {t2-t1:.2f}s")
+                metrics.files_processed += 1
 
-                            table.add(batch)
-                            t3 = time.time()
-                            logger.debug(f"table.add() took {t3-t2:.2f}s")
-                            logger.debug(f"Successfully added batch of {len(batch)} chunks (total: {t3-t0:.2f}s)")
-                        except Exception as e:
-                            logger.error(f"Failed to add batch to table: {e}")
-                            import traceback
-                            logger.debug(traceback.format_exc())
-                            raise
-                        batch = []
-
-                logger.debug(f"Indexed {norm_path}: {file_chunk_count} chunks")
-                files_processed += 1
+                # Report progress (protocol uses 'description', not 'message')
+                self._progress.update(
+                    current=metrics.files_processed,
+                    description=f"Indexing {norm_path} ({metrics.files_processed}/{total_files})"
+                )
 
             except Exception as e:
                 logger.error(f"Failed to chunk/index file {norm_path}: {e}")
                 import traceback
                 logger.debug(traceback.format_exc())
 
-        if batch:
-            logger.debug(f"Adding final batch of {len(batch)} chunks to table")
+        # Final flush
+        if all_chunks:
+            batch_metrics = self._process_super_batch(table, all_chunks)
+            metrics.chunks_added += batch_metrics["added"]
+            metrics.embedding_time_seconds += batch_metrics["embed_time"]
+            metrics.db_write_time_seconds += batch_metrics["db_time"]
+
+        metrics.total_time_seconds = time.time() - start_time
+
+        logger.info(
+            f"Added {metrics.chunks_added} chunks in {metrics.total_time_seconds:.1f}s "
+            f"(skipped {metrics.chunks_skipped}, {metrics.chunks_per_second:.0f} chunks/s)"
+        )
+
+        return metrics
+
+    def _process_super_batch(self, table, chunks: List[Dict]) -> Dict:
+        """
+        Process a super-batch: embed and insert to DB.
+
+        Args:
+            table: LanceDB table
+            chunks: List of chunk dicts (without vectors)
+
+        Returns:
+            Dict with 'added', 'embed_time', 'db_time'
+        """
+        config = self._config
+        result = {"added": 0, "embed_time": 0.0, "db_time": 0.0}
+
+        if not chunks:
+            return result
+
+        logger.debug(f"Processing super-batch of {len(chunks)} chunks")
+
+        # Generate embeddings for all chunks in batch_size batches
+        texts = [c["content"] for c in chunks]
+
+        t0 = time.time()
+        embeddings = list(self._embedding_func.generate_embeddings(texts))
+        t1 = time.time()
+        result["embed_time"] = t1 - t0
+
+        # Attach vectors to chunks
+        for chunk, embedding in zip(chunks, embeddings):
+            chunk["vector"] = embedding
+
+        # Insert in DB-optimal batches (LanceDB handles larger batches well)
+        DB_BATCH_SIZE = 1000
+        t2 = time.time()
+        for i in range(0, len(chunks), DB_BATCH_SIZE):
+            batch = chunks[i:i + DB_BATCH_SIZE]
             try:
-                import time
-                # Generate embeddings for final batch
-                texts = [item["content"][:2000] for item in batch]
-                logger.debug(f"Generating embeddings for {len(texts)} chunks")
-                t0 = time.time()
-                embeddings = list(self._embedding_func.generate_embeddings(texts))
-                t1 = time.time()
-                logger.debug(f"Embedding generation took {t1-t0:.2f}s")
-
-                # Add vectors to batch
-                for item, embedding in zip(batch, embeddings):
-                    item["vector"] = embedding
-                t2 = time.time()
-
                 table.add(batch)
-                t3 = time.time()
-                logger.debug(f"table.add() took {t3-t2:.2f}s")
-                logger.debug(f"Successfully added final batch of {len(batch)} chunks (total: {t3-t0:.2f}s)")
+                result["added"] += len(batch)
             except Exception as e:
-                logger.error(f"Failed to add final batch to table: {e}")
+                logger.error(f"Failed to add batch to table: {e}")
                 import traceback
                 logger.debug(traceback.format_exc())
                 raise
+        t3 = time.time()
+        result["db_time"] = t3 - t2
 
-        logger.info(f"Added {total_chunks} chunks total (skipped {skipped_small} small chunks)")
+        logger.debug(
+            f"Super-batch complete: {result['added']} chunks, "
+            f"embed={result['embed_time']:.2f}s, db={result['db_time']:.2f}s"
+        )
+
+        return result
+
+    def _maybe_rebuild_fts(self, table, chunks_added: int, force: bool = False) -> None:
+        """
+        Conditionally rebuild FTS index based on chunks added.
+
+        FTS rebuilding is O(N) where N is total rows. For small updates,
+        this overhead isn't worth it. Only rebuild when significant
+        data has been added.
+
+        Args:
+            table: LanceDB table
+            chunks_added: Number of chunks added in this operation
+            force: If True, skip threshold check (for initial creation)
+        """
+        threshold = self._config.fts_rebuild_threshold
+
+        if not force and chunks_added < threshold:
+            logger.debug(
+                f"Skipping FTS rebuild ({chunks_added} chunks < {threshold} threshold)"
+            )
+            return
+
+        try:
+            row_count = table.count_rows()
+            if row_count > 0:
+                logger.debug(f"Rebuilding FTS index ({row_count} rows)")
+                table.create_fts_index("content", replace=True)
+            else:
+                logger.warning("Table is empty, skipping FTS index creation")
+        except Exception as e:
+            logger.warning(f"FTS indexing failed (search will still work via vector): {e}")
 
     # --- Core: Retrieval ---
 

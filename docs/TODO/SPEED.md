@@ -374,8 +374,6 @@ class LanceDBSearchProvider:
 - **Let ONNX handle parallelism**: FastEmbed uses Intel MKL/ONNX optimizations internally
 - **Optimal batch size**: 256-512 is the sweet spot for BGE-small on CPU
 
-
-
 # RESULTS 
 **2.35x speedup** (465s → 198s) - cuts indexing time by more than half!
 

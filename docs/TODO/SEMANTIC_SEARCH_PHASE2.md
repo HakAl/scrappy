@@ -1,8 +1,5 @@
 # New Features and Fixes
 
-
-
-
 ### The Priority Queue (The Logic)
 This is the easiest win. You modify your file collector to sort the list before handing it to the embedder.
 EG:
@@ -157,3 +154,14 @@ table.create_index(
     replace=True
 )
 ```
+
+---
+
+Expose Key User-Facing Settings 
+Add a semantic_search section to CLIConfig with only the settings users might actually want to tune:
+
+  semantic_search:
+    enabled: true                    # Enable/disable semantic search
+    db_dir_name: ".scrappy/lancedb"  # Where to store the index
+    max_text_length: 512             # Max chars per chunk (affects search quality)
+    fts_rebuild_threshold: 100       # When to rebuild full-text index

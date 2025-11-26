@@ -12,6 +12,7 @@ from typing import Optional, Any
 
 from ..protocols import SemanticSearchProtocol
 from ...infrastructure.protocols import BackgroundInitializerProtocol
+from .config import SemanticIndexConfig
 
 logger = logging.getLogger(__name__)
 
@@ -179,10 +180,11 @@ class SemanticSearchInitializer:
             with self._lock:
                 self._status = "Initializing vector database..."
 
+            config = SemanticIndexConfig(db_dir_name=".scrappy/lancedb")
             search_provider = LanceDBSearchProvider(
                 self._project_path,
                 chunker,
-                db_dir_name=".scrappy/lancedb"
+                config=config,
             )
 
             # Trigger model loading in background by ensuring schema is ready

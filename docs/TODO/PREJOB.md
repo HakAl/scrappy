@@ -1,3 +1,21 @@
+problem:
+/cache - command output:
+
+[36m[1m
+ Cache Statistics:[0m
+ [36m--------------------------------------------------[0m
+ Total Entries: 0
+ Exact Cache Hits: 0
+ Intent Cache Hits: 0
+ Cache Misses: 0
+ Cache Saves: 0
+ Exact Hit Rate: [33m0.0%[0m
+ Intent Hit Rate: [33m0.0%[0m
+ Cache File: .scrappy\response_cache.json
+ Caching: [32mEnabled[0m
+
+solution:
+output existing table from Usage Summary (/usage command)
 
 ---
 
