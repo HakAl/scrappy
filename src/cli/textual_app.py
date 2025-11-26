@@ -12,13 +12,13 @@ import uuid
 from queue import Queue, Empty
 from textual.app import App, ComposeResult
 from textual.message import Message
-from textual.screen import ModalScreen
-from textual.widgets import Input, RichLog, Label, ProgressBar, Button
+from textual.widgets import Input, RichLog, Label, ProgressBar
 from textual.containers import Container, Vertical, Horizontal
 from textual.reactive import reactive
 from textual import work
 
 from src.infrastructure.output_mode import OutputModeContext
+from .input_capture import InputCaptureManager, InputRequest
 
 if TYPE_CHECKING:
     from .interactive import InteractiveMode
@@ -61,44 +61,33 @@ class WriteRenderable(Message):
         self.renderable = renderable
 
 
-class ShowPromptModal(Message):
-    """Message to show prompt modal in main thread.
+class RequestInlineInput(Message):
+    """Message to request inline input capture.
 
     Posted from worker thread via ThreadSafeAsyncBridge to request
-    user input through a modal dialog.
+    user input through inline capture (replaces modal dialogs).
     """
 
-    def __init__(self, prompt_id: str, message: str, default: str = "") -> None:
-        """Initialize prompt modal message.
+    def __init__(
+        self,
+        prompt_id: str,
+        message: str,
+        input_type: str,
+        default: str = ""
+    ) -> None:
+        """Initialize inline input request message.
 
         Args:
             prompt_id: Unique ID to correlate request with response
             message: Prompt message to display
-            default: Default value for input
+            input_type: Either "prompt" or "confirm"
+            default: Default value for prompts
         """
         super().__init__()
         self.prompt_id = prompt_id
         self.message = message
+        self.input_type = input_type
         self.default = default
-
-
-class ShowConfirmModal(Message):
-    """Message to show confirmation modal in main thread.
-
-    Posted from worker thread via ThreadSafeAsyncBridge to request
-    yes/no confirmation through a modal dialog.
-    """
-
-    def __init__(self, prompt_id: str, question: str) -> None:
-        """Initialize confirm modal message.
-
-        Args:
-            prompt_id: Unique ID to correlate request with response
-            question: Question to display for confirmation
-        """
-        super().__init__()
-        self.prompt_id = prompt_id
-        self.question = question
 
 
 class ThreadSafeAsyncBridge:
@@ -155,8 +144,8 @@ class ThreadSafeAsyncBridge:
             event = threading.Event()
             self._pending_prompts[prompt_id] = event
 
-        # Post message to main thread to show modal
-        self.app.post_message(ShowPromptModal(prompt_id, message, default))
+        # Post message to main thread for inline input capture
+        self.app.post_message(RequestInlineInput(prompt_id, message, "prompt", default))
 
         # BLOCK this worker thread until result ready
         event.wait()
@@ -194,8 +183,8 @@ class ThreadSafeAsyncBridge:
             event = threading.Event()
             self._pending_prompts[prompt_id] = event
 
-        # Post message to main thread to show modal
-        self.app.post_message(ShowConfirmModal(prompt_id, question))
+        # Post message to main thread for inline input capture
+        self.app.post_message(RequestInlineInput(prompt_id, question, "confirm"))
 
         # BLOCK this worker thread until result ready
         event.wait()
@@ -217,83 +206,6 @@ class ThreadSafeAsyncBridge:
         with self._lock:
             self._prompt_results[prompt_id] = result
             self._pending_prompts[prompt_id].set()  # Unblock worker thread
-
-
-class PromptScreen(ModalScreen[str]):
-    """Modal dialog for user input.
-
-    Displays a prompt message with an input field. User can submit
-    with Enter or the Submit button, or cancel with the Cancel button.
-    """
-
-    def __init__(self, prompt_message: str, default: str = "") -> None:
-        """Initialize prompt screen.
-
-        Args:
-            prompt_message: Message to display to user
-            default: Default input value
-        """
-        super().__init__()
-        self.prompt_message = prompt_message
-        self.default = default
-
-    def compose(self) -> ComposeResult:
-        """Compose the prompt dialog."""
-        with Container():
-            yield Label(self.prompt_message, id="prompt_label")
-            yield Input(value=self.default, id="modal_input")
-            with Horizontal(id="button_row"):
-                yield Button("Submit", variant="primary", id="submit")
-                yield Button("Cancel", variant="default", id="cancel")
-
-    def on_mount(self) -> None:
-        """Focus input on mount."""
-        self.query_one(Input).focus()
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle button press."""
-        if event.button.id == "submit":
-            value = self.query_one(Input).value
-            self.dismiss(value)
-        else:
-            self.dismiss(None)
-
-    def on_input_submitted(self, event: Input.Submitted) -> None:
-        """Allow Enter key to submit."""
-        self.dismiss(event.value)
-
-
-class ConfirmScreen(ModalScreen[bool]):
-    """Modal dialog for confirmation.
-
-    Displays a question with Yes/No buttons. Returns True for Yes,
-    False for No or if dialog is dismissed.
-    """
-
-    def __init__(self, question: str) -> None:
-        """Initialize confirm screen.
-
-        Args:
-            question: Question to display for confirmation
-        """
-        super().__init__()
-        self.question = question
-
-    def compose(self) -> ComposeResult:
-        """Compose the confirm dialog."""
-        with Container():
-            yield Label(self.question, id="question_label")
-            with Horizontal(id="button_row"):
-                yield Button("Yes", variant="success", id="yes")
-                yield Button("No", variant="error", id="no")
-
-    def on_mount(self) -> None:
-        """Focus Yes button on mount."""
-        self.query_one("#yes", Button).focus()
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle button press."""
-        self.dismiss(event.button.id == "yes")
 
 
 class TextualOutputAdapter:
@@ -593,8 +505,11 @@ class ScrappyApp(App):
         self.progress_indicator = ProgressIndicator()
         self.token_counter = TokenCounter()
 
-        # Phase 3: Initialize thread-safe async bridge for modal dialogs
+        # Thread-safe async bridge for prompts/confirms
         self.bridge = ThreadSafeAsyncBridge(self)
+
+        # Input capture manager for inline prompts/confirms (replaces modals)
+        self.capture_manager = InputCaptureManager(self.bridge)
 
     def compose(self) -> ComposeResult:
         """Create child widgets.
@@ -671,15 +586,28 @@ class ScrappyApp(App):
             self.call_after_refresh(clear_selection)
 
     def on_key(self, event) -> None:
-        """Auto-focus input when user starts typing.
+        """Handle key events.
 
-        This allows users to simply start typing from anywhere, and the
-        input will automatically receive focus. Respects focus on other
-        interactive widgets (like scrollable logs).
+        - Escape/Ctrl+C during capture mode cancels and returns default
+        - Up-arrow is blocked during capture mode (no history navigation)
+        - Auto-focus input when user starts typing from anywhere
 
         Args:
             event: The key event
         """
+        # Handle Escape or Ctrl+C in capture mode
+        if self.capture_manager.is_capturing:
+            if event.key == "escape" or event.key == "ctrl+c":
+                self.capture_manager.cancel()
+                self._exit_capture_ui()
+                event.stop()
+                return
+
+            # Block up-arrow history during capture mode
+            if event.key == "up":
+                event.stop()
+                return
+
         # Already focused on input, let it handle naturally
         if self._input.has_focus:
             return
@@ -722,19 +650,52 @@ class ScrappyApp(App):
     def on_input_submitted(self, event: Input.Submitted) -> None:
         """Handle user input submission.
 
+        Handles both normal command input and capture mode input.
+
         Args:
             event: The input submission event containing user text
         """
         user_input = event.value.strip()
 
-        if not user_input:
-            return
-
         # Clear input immediately
         self._input.value = ""
 
+        # Handle capture mode
+        if self.capture_manager.is_capturing:
+            self._handle_captured_input(user_input)
+            return
+
+        # Normal command processing
+        if not user_input:
+            return
+
         # Process in worker thread
         self.process_command(user_input)
+
+    def _handle_captured_input(self, user_input: str) -> None:
+        """Process input captured for prompt/confirm.
+
+        Args:
+            user_input: The user's input string
+        """
+        # Delegate to capture manager
+        self.capture_manager.handle_captured_input(user_input)
+
+        # Exit capture mode and check for queued requests
+        next_request = self.capture_manager.exit_capture_mode()
+
+        if next_request:
+            # Process next queued request
+            self.capture_manager.enter_capture_mode(
+                next_request.prompt_id,
+                next_request.message,
+                next_request.input_type,
+                next_request.default
+            )
+            self._update_capture_ui(next_request)
+        else:
+            # Fully exit capture mode
+            self._exit_capture_ui()
 
     @work(exclusive=True, thread=True)
     def process_command(self, user_input: str) -> None:
@@ -786,39 +747,57 @@ class ScrappyApp(App):
         output = self.query_one("#output", RichLog)
         output.write(message.renderable)
 
-    def on_show_prompt_modal(self, message: ShowPromptModal) -> None:
-        """Handle prompt request from worker thread.
+    def on_request_inline_input(self, message: RequestInlineInput) -> None:
+        """Handle inline input request from worker thread.
 
-        Shows PromptScreen modal and provides result to bridge when dismissed.
-
-        Args:
-            message: The ShowPromptModal message with prompt details
-        """
-        def handle_result(result: Optional[str]) -> None:
-            # Use default if user cancelled (None result)
-            final_result = result if result is not None else message.default
-            self.bridge.provide_result(message.prompt_id, final_result)
-
-        self.push_screen(
-            PromptScreen(message.message, message.default),
-            handle_result
-        )
-
-    def on_show_confirm_modal(self, message: ShowConfirmModal) -> None:
-        """Handle confirmation request from worker thread.
-
-        Shows ConfirmScreen modal and provides result to bridge when dismissed.
-        Treats None (escape/cancel) as False.
+        Enters capture mode and updates UI for inline input collection.
 
         Args:
-            message: The ShowConfirmModal message with confirmation details
+            message: The RequestInlineInput message with input details
         """
-        def handle_result(result: Optional[bool]) -> None:
-            # Treat None (escape/cancel) as False
-            final_result = result if result is not None else False
-            self.bridge.provide_result(message.prompt_id, final_result)
-
-        self.push_screen(
-            ConfirmScreen(message.question),
-            handle_result
+        # Delegate to capture manager (handles queuing if already capturing)
+        self.capture_manager.enter_capture_mode(
+            message.prompt_id,
+            message.message,
+            message.input_type,
+            message.default
         )
+
+        # Only update UI if this is the active capture (not queued)
+        if self.capture_manager.is_capturing:
+            self._update_capture_ui(message)
+
+    def _update_capture_ui(self, request: "RequestInlineInput | InputRequest") -> None:
+        """Update UI for capture mode.
+
+        Args:
+            request: The input request with message and type info
+        """
+        output = self.query_one("#output", RichLog)
+
+        # Display prompt in output area
+        if request.input_type == "confirm":
+            output.write(f"{request.message} [y/n]")
+        else:
+            output.write(request.message)
+
+        # Visual feedback - add capture mode class
+        input_container = self.query_one("#input_container")
+        input_container.add_class("capture-mode")
+
+        # Update placeholder
+        if request.input_type == "confirm":
+            self._input.placeholder = "Type y or n..."
+        else:
+            hint = f" (default: {request.default})" if request.default else ""
+            self._input.placeholder = f"Enter value{hint}..."
+
+        self._input.focus()
+
+    def _exit_capture_ui(self) -> None:
+        """Clean up capture mode UI state."""
+        self._input.placeholder = "Type your message or command..."
+
+        # Remove visual feedback
+        input_container = self.query_one("#input_container")
+        input_container.remove_class("capture-mode")

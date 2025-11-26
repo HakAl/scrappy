@@ -110,47 +110,7 @@ Input > .input--cursor {
     color: $text-muted;
 }
 
-/* Modal screen overlay */
-PromptScreen, ConfirmScreen {
-    align: center middle;
-    background: rgba(0, 0, 0, 0.7);
-}
-
-/* Modal dialog container */
-PromptScreen > Container, ConfirmScreen > Container {
-    width: 60;
-    height: auto;
-    border: thick $accent;
-    background: $panel-bg;
-    padding: 1;
-    layout: vertical;
-}
-
-/* Modal labels */
-PromptScreen Label, ConfirmScreen Label {
-    margin-bottom: 1;
-}
-
-/* Modal input styling */
-PromptScreen Input {
-    margin: 1 0;
-}
-
-#modal_input {
-    width: 100%;
-    border: solid #808080;
-    background: #1e1e1e;
-}
-
-/* Modal button row */
-PromptScreen #button_row, ConfirmScreen #button_row {
-    height: auto;
-    align-horizontal: center;
-    margin-top: 1;
-}
-
-/* Modal button styling */
-PromptScreen Button, ConfirmScreen Button {
-    margin: 0 1;
-    min-width: 10;
+/* Capture mode visual feedback - yellow prompt indicates waiting for response */
+#input_container.capture-mode #input_prompt {
+    color: #ffcc00;
 }

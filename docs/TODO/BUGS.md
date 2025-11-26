@@ -1,5 +1,11 @@
 ## Issues 
 
+---
+Problem: Prompts are not very obvious. Suggestions look like placeholder text and the question isn't near the input:
+
+Solution: move prompt near input, not in the log.
+---
+
 --
 Problem: Users unable to scroll log content.??
 --
