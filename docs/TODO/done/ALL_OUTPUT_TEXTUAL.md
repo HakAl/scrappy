@@ -1,3 +1,5 @@
+FIX PLAN: IMPLEMENTATION_PLAN_TEXTUAL_CLEANUP.md.md
+
 Problem:
 Users unable to interact with /agent (potentially other features)
 existing features may have bugs because they output to console rather than textual in interactive mode.

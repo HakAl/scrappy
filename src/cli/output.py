@@ -23,6 +23,8 @@ Usage:
 from typing import Optional, List, Dict, Any
 from abc import ABC, abstractmethod
 
+from src.infrastructure.output_mode import OutputModeContext
+
 
 # Global configuration
 _config = {
@@ -186,7 +188,15 @@ class FormattedOutputInterface(ABC):
         WARNING: CLI MODE ONLY. This method uses blocking input()
         which will hang in TUI worker threads. In TUI mode, use
         Input widget events or IOBasedInput from task_router.protocols.
+
+        Raises:
+            RuntimeError: If called in TUI mode
         """
+        if OutputModeContext.is_tui_mode():
+            raise RuntimeError(
+                "Output.input_line() called in TUI mode. "
+                "Use Input widget events or IOBasedInput instead."
+            )
         try:
             return input()
         except EOFError:
@@ -310,7 +320,16 @@ class RichOutput(FormattedOutputInterface):
     """
 
     def __init__(self):
-        """Initialize Rich output."""
+        """Initialize Rich output.
+
+        Raises:
+            RuntimeError: If called in TUI mode (must use UnifiedIO)
+        """
+        if OutputModeContext.is_tui_mode():
+            raise RuntimeError(
+                "RichOutput cannot be used in TUI mode. "
+                "Use UnifiedIO with output_sink instead."
+            )
         try:
             from rich.console import Console
             from rich.text import Text

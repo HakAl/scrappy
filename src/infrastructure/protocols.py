@@ -5,8 +5,13 @@ Defines abstract interfaces for external dependencies and infrastructure concern
 These protocols enable dependency injection and testing without real I/O operations.
 """
 
-from typing import Protocol, Dict, Any, Optional, List, BinaryIO
+from typing import TYPE_CHECKING, Protocol, Dict, Any, Optional, List, BinaryIO, Tuple
 from pathlib import Path
+from io import StringIO
+
+if TYPE_CHECKING:
+    from rich.console import Console
+    from src.cli.protocols import OutputSink
 
 
 class FileSystemProtocol(Protocol):
@@ -771,5 +776,77 @@ class ProgressReporterProtocol(Protocol):
 
         Args:
             message: Error message
+        """
+        ...
+
+
+class OutputModeProtocol(Protocol):
+    """Protocol for output mode detection.
+
+    Determines whether the application is running in TUI mode (Textual)
+    or CLI mode (direct console output). Components use this to route
+    output appropriately.
+
+    Why not just check for Textual?
+    - Checking "if textual is running" couples components to Textual
+    - Protocol-based mode context follows Dependency Inversion Principle
+    - Makes testing easier (can set mode without Textual)
+    - Allows future UI frameworks without code changes
+
+    Implementations:
+    - OutputModeContext: Uses contextvars for thread-safe mode tracking
+    - TestOutputMode: Returns preset values for testing
+    """
+
+    def is_tui_mode(self) -> bool:
+        """Check if running in TUI mode.
+
+        Returns:
+            True if TUI mode is active, False for CLI mode
+        """
+        ...
+
+    def get_output_sink(self) -> Optional["OutputSink"]:
+        """Get the current output sink for TUI mode.
+
+        Returns:
+            OutputSink if in TUI mode and sink is set, None otherwise
+        """
+        ...
+
+
+class ConsoleFactoryProtocol(Protocol):
+    """Factory protocol for Console creation.
+
+    Creates Rich Console instances in a mode-aware manner. In TUI mode,
+    returns Console instances that write to StringIO so output can be
+    captured and routed through the Textual output queue.
+
+    This protocol exists to prevent components from directly instantiating
+    Console(), which would bypass TUI routing.
+
+    Implementations:
+    - ConsoleFactory: Returns mode-aware Console instances
+    - TestConsoleFactory: Returns preset Console for testing
+    """
+
+    def get_console(self) -> "Console":
+        """Get appropriate Console for current mode.
+
+        In TUI mode, returns Console writing to StringIO.
+        In CLI mode, returns Console writing to stdout.
+
+        Returns:
+            Console configured for the current output mode
+        """
+        ...
+
+    def create_string_console(self) -> Tuple["Console", StringIO]:
+        """Create Console with StringIO for string rendering.
+
+        Mode-independent method for rendering to string.
+
+        Returns:
+            Tuple of (Console, StringIO buffer)
         """
         ...

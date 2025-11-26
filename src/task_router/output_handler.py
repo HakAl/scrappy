@@ -13,6 +13,8 @@ from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 
+from src.infrastructure.output_mode import OutputModeContext
+
 if TYPE_CHECKING:
     from ..cli.io_interface import CLIIOProtocol
 
@@ -327,10 +329,18 @@ class RichOutputHandler:
         Args:
             console: Rich Console for formatted output
 
+        Raises:
+            RuntimeError: If called in TUI mode (must use CLIIOOutputHandler)
+
         Note:
             For TUI mode, use CLIIOOutputHandler instead which routes
             through the IO abstraction.
         """
+        if OutputModeContext.is_tui_mode():
+            raise RuntimeError(
+                "RichOutputHandler cannot be used in TUI mode. "
+                "Use CLIIOOutputHandler or create_output_handler() factory instead."
+            )
         self._console = console
         self._classification_data: dict = {}
 

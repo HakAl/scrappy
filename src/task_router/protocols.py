@@ -10,6 +10,8 @@ from enum import Enum
 from datetime import datetime
 from dataclasses import dataclass
 
+from src.infrastructure.output_mode import OutputModeContext
+
 if TYPE_CHECKING:
     from ..cli.io_interface import CLIIOProtocol
 
@@ -625,8 +627,28 @@ class DefaultConsoleInput:
     factory function which automatically selects the correct implementation.
     """
 
+    def _check_tui_mode(self, operation: str) -> None:
+        """Raise RuntimeError if called in TUI mode.
+
+        Args:
+            operation: Name of the operation being attempted
+
+        Raises:
+            RuntimeError: If called in TUI mode
+        """
+        if OutputModeContext.is_tui_mode():
+            raise RuntimeError(
+                f"DefaultConsoleInput.{operation}() called in TUI mode. "
+                "Use IOBasedInput or create_task_router_input() factory instead."
+            )
+
     def prompt(self, text: str, default: str = "") -> str:
-        """Get text input from console."""
+        """Get text input from console.
+
+        Raises:
+            RuntimeError: If called in TUI mode
+        """
+        self._check_tui_mode("prompt")
         try:
             result = input(text)
             return result if result else default
@@ -634,7 +656,12 @@ class DefaultConsoleInput:
             return default
 
     def confirm(self, text: str, default: bool = False) -> bool:
-        """Get yes/no confirmation from console."""
+        """Get yes/no confirmation from console.
+
+        Raises:
+            RuntimeError: If called in TUI mode
+        """
+        self._check_tui_mode("confirm")
         try:
             result = input(text).strip().lower()
             return result in ('y', 'yes')
@@ -642,7 +669,12 @@ class DefaultConsoleInput:
             return default
 
     def output(self, message: str) -> None:
-        """Output message to console."""
+        """Output message to console.
+
+        Raises:
+            RuntimeError: If called in TUI mode
+        """
+        self._check_tui_mode("output")
         print(message)
 
 

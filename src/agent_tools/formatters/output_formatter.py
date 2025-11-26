@@ -4,7 +4,7 @@ Output formatting for agent tool results.
 Provides injectable formatters to colorize and style output.
 """
 
-from typing import Protocol, Optional
+from typing import Protocol, Optional, TYPE_CHECKING
 
 # Rich imports only for RichDirectoryFormatter
 try:
@@ -15,6 +15,9 @@ except ImportError:
     HAS_RICH = False
     Console = None
     Text = None
+
+if TYPE_CHECKING:
+    from src.infrastructure.console_factory import ConsoleFactoryProtocol
 
 
 class OutputFormatter(Protocol):
@@ -160,23 +163,39 @@ class RichDirectoryFormatter:
     generates formatted strings, it does not output them.
     """
 
-    def __init__(self, console: Optional[Console] = None):
-        """Initialize with optional Rich console.
+    def __init__(
+        self,
+        console: Optional[Console] = None,
+        console_factory: Optional["ConsoleFactoryProtocol"] = None,
+    ):
+        """Initialize with optional Rich console or factory.
 
         Args:
             console: Optional Rich Console instance for rendering text.
-                    If not provided, a default console will be created.
+                    If not provided, will use console_factory or create default.
                     The console is used only for string rendering via capture(),
                     not for direct output.
+            console_factory: Optional ConsoleFactoryProtocol for creating console.
+                           Used when console is not provided.
         """
         if not HAS_RICH:
             raise ImportError("Rich library is required for RichDirectoryFormatter")
 
-        self._console = console if console is not None else self._create_default_console()
+        if console is not None:
+            self._console = console
+        elif console_factory is not None:
+            self._console, _ = console_factory.create_string_console()
+        else:
+            self._console = self._create_default_console()
 
     def _create_default_console(self) -> Console:
-        """Create default Rich console for rendering."""
-        return Console()
+        """Create default Rich console for string rendering.
+
+        Creates a Console that renders to StringIO buffer for
+        ANSI code generation without writing to stdout.
+        """
+        from io import StringIO
+        return Console(file=StringIO(), force_terminal=True)
 
     def format_directory_name(self, name: str) -> str:
         """Format directory name in cyan with bold.

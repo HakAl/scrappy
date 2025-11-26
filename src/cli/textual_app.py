@@ -18,6 +18,8 @@ from textual.containers import Container, Vertical, Horizontal
 from textual.reactive import reactive
 from textual import work
 
+from src.infrastructure.output_mode import OutputModeContext
+
 if TYPE_CHECKING:
     from .interactive import InteractiveMode
     from .protocols import StatusComponentProtocol
@@ -623,6 +625,9 @@ class ScrappyApp(App):
 
     def on_mount(self) -> None:
         """Called when app starts."""
+        # Set TUI mode context so all components know to route through Textual
+        OutputModeContext.set_tui_mode(True, self.output_adapter)
+
         # Cache input reference and focus immediately
         self._input = self.query_one(Input)
         self._input.focus()
@@ -638,6 +643,12 @@ class ScrappyApp(App):
         # Display welcome banner
         from src.cli.interactive_banner import display_banner
         display_banner(self.interactive_mode.io)
+
+    def on_unmount(self) -> None:
+        """Called when app is about to close."""
+        # Clear TUI mode context
+        OutputModeContext.set_tui_mode(False)
+        self._should_stop_consumer = True
 
     def on_click(self, event) -> None:
         """Refocus input when clicking anywhere that's not the input field.

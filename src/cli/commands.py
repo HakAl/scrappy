@@ -54,6 +54,7 @@ from .exceptions import (
 from .logging import get_logger
 from ..agent import CodeAgent, create_git_checkpoint, rollback_to_checkpoint
 from .config_factory import get_config
+from src.infrastructure.output_mode import OutputModeContext
 
 
 @click.group(invoke_without_command=True)
@@ -525,6 +526,10 @@ def agent(ctx, task, dry_run, no_checkpoint, auto_confirm, max_iterations):
 
 def main():
     """Main entry point."""
+    # Ensure CLI mode is set (default, but explicit for safety)
+    # TUI mode will be set by ScrappyApp.on_mount() when Textual starts
+    OutputModeContext.set_tui_mode(False)
+
     # Load configuration early - this initializes the global config
     # Config is loaded from:
     #   1. Explicit file path (via CLI_CONFIG_PATH env var)

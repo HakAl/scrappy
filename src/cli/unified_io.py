@@ -32,6 +32,7 @@ from rich.status import Status
 from rich.prompt import Confirm
 
 from .protocols import OutputSink
+from src.infrastructure.output_mode import OutputModeContext
 
 
 class ProgressTracker:
@@ -516,7 +517,15 @@ class DirectConsoleOutput:
         WARNING: CLI MODE ONLY. Uses blocking input() that will hang
         in TUI worker threads. In TUI mode, OutputSinkAdapter.input_prompt()
         routes through Textual's modal input system.
+
+        Raises:
+            RuntimeError: If called in TUI mode
         """
+        if OutputModeContext.is_tui_mode():
+            raise RuntimeError(
+                "DirectConsoleOutput.input_prompt() called in TUI mode. "
+                "Use OutputSinkAdapter or UnifiedIO with output_sink instead."
+            )
         prompt_text = text
         if show_default and default:
             prompt_text = f"{text} [{default}]"
@@ -534,7 +543,15 @@ class DirectConsoleOutput:
         WARNING: CLI MODE ONLY. Uses blocking Confirm.ask() that will hang
         in TUI worker threads. In TUI mode, OutputSinkAdapter.input_confirm()
         routes through Textual's modal confirmation system.
+
+        Raises:
+            RuntimeError: If called in TUI mode
         """
+        if OutputModeContext.is_tui_mode():
+            raise RuntimeError(
+                "DirectConsoleOutput.input_confirm() called in TUI mode. "
+                "Use OutputSinkAdapter or UnifiedIO with output_sink instead."
+            )
         try:
             return Confirm.ask(text, default=default, console=self._console)
         except EOFError:
@@ -546,7 +563,15 @@ class DirectConsoleOutput:
         WARNING: CLI MODE ONLY. Uses blocking input() that will hang
         in TUI worker threads. In TUI mode, OutputSinkAdapter.input_line()
         routes through Textual's Input widget.
+
+        Raises:
+            RuntimeError: If called in TUI mode
         """
+        if OutputModeContext.is_tui_mode():
+            raise RuntimeError(
+                "DirectConsoleOutput.input_line() called in TUI mode. "
+                "Use OutputSinkAdapter or UnifiedIO with output_sink instead."
+            )
         try:
             return input()
         except EOFError:

@@ -9,6 +9,8 @@ import logging
 import time
 from typing import Optional, Callable, TYPE_CHECKING
 
+from src.infrastructure.output_mode import OutputModeContext
+
 if TYPE_CHECKING:
     from ..cli.io_interface import CLIIOProtocol
 
@@ -34,10 +36,18 @@ class RichProgressReporter:
     def __init__(self):
         """Initialize Rich progress reporter.
 
+        Raises:
+            RuntimeError: If called in TUI mode (must use UnifiedIOProgressReporter)
+
         Note:
             For TUI mode, use UnifiedIOProgressReporter instead which routes
             through the IO abstraction.
         """
+        if OutputModeContext.is_tui_mode():
+            raise RuntimeError(
+                "RichProgressReporter cannot be used in TUI mode. "
+                "Use UnifiedIOProgressReporter or create_progress_reporter() factory instead."
+            )
         self._status = None
         self._console = None
 
@@ -51,7 +61,6 @@ class RichProgressReporter:
         """
         try:
             from rich.console import Console
-            import sys
 
             # Use stderr to avoid interfering with user input
             self._console = Console(stderr=True)
@@ -121,10 +130,18 @@ class LiveProgressReporter:
     def __init__(self):
         """Initialize Live progress reporter.
 
+        Raises:
+            RuntimeError: If called in TUI mode (must use UnifiedIOProgressReporter)
+
         Note:
             For TUI mode, use UnifiedIOProgressReporter instead which routes
             through the IO abstraction.
         """
+        if OutputModeContext.is_tui_mode():
+            raise RuntimeError(
+                "LiveProgressReporter cannot be used in TUI mode. "
+                "Use UnifiedIOProgressReporter or create_progress_reporter() factory instead."
+            )
         self._live = None
         self._console = None
 

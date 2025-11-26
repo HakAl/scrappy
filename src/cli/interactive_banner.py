@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING
 from rich.panel import Panel
 from rich.text import Text
 
+from src.infrastructure.output_mode import OutputModeContext
+
 if TYPE_CHECKING:
     from src.cli.protocols import UnifiedIOProtocol
 
@@ -64,10 +66,20 @@ def display_banner(io: "UnifiedIOProtocol") -> None:
     )
 
     # Route through appropriate output channel based on mode
-    # Use is_tui_mode property as single source of truth for mode detection
-    if hasattr(io, 'is_tui_mode') and io.is_tui_mode:
+    # Check both io.is_tui_mode and OutputModeContext for consistency
+    is_tui = (hasattr(io, 'is_tui_mode') and io.is_tui_mode) or OutputModeContext.is_tui_mode()
+
+    if is_tui:
         # TUI mode: post renderable through OutputSink for thread-safe display
-        io.output_sink.post_renderable(panel)
+        # Validate that output_sink is available
+        output_sink = getattr(io, 'output_sink', None) or OutputModeContext.get_output_sink()
+        if output_sink is None:
+            raise RuntimeError(
+                "TUI mode detected but no output_sink available. "
+                "Ensure OutputModeContext.set_tui_mode() was called with a valid sink, "
+                "or pass an IO with output_sink property."
+            )
+        output_sink.post_renderable(panel)
     elif hasattr(io, 'console'):
         # CLI mode: print directly to Rich Console
         io.console.print(panel)
