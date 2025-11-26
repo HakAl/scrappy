@@ -1,3 +1,5 @@
+# Agent VS Orchestrator
+
 ### Agent's responsibility:
 
 Decide what to do (reason, plan, execute tools). The agent properly delegates provider selection to the orchestrator, respecting rate limits and enabling smart provider rotation.

@@ -377,3 +377,177 @@ class TestSemanticFileCollector:
 
             # Should get good file, skip bad
             assert 'good.py' in files
+
+
+class TestTestNoiseExclusion:
+    """Test noise exclusion patterns for test data directories and files."""
+
+    def test_default_test_noise_patterns_includes_snapshots(self):
+        """Should include common test noise directories."""
+        config = IndexFilterConfig()
+
+        assert '__snapshots__' in config.test_noise_patterns
+        assert 'snapshots' in config.test_noise_patterns
+        assert 'fixtures' in config.test_noise_patterns
+        assert '__mocks__' in config.test_noise_patterns
+        assert 'testdata' in config.test_noise_patterns
+
+    def test_default_test_noise_extensions_includes_snap(self):
+        """Should include snapshot file extensions."""
+        config = IndexFilterConfig()
+
+        assert '.snap' in config.test_noise_extensions
+        assert '.snapshot' in config.test_noise_extensions
+
+    def test_should_skip_snapshot_directories(self):
+        """Should skip files in __snapshots__ directory."""
+        config = IndexFilterConfig()
+        root = Path('/project')
+
+        # Files in __snapshots__ should be skipped
+        snap_file = Path('/project/tests/__snapshots__/Button.test.js.snap')
+        assert config.should_skip_by_path(snap_file, root) is True
+
+        # But test code should not be skipped
+        test_file = Path('/project/tests/Button.test.js')
+        assert config.should_skip_by_path(test_file, root) is False
+
+    def test_should_skip_fixture_directories(self):
+        """Should skip files in fixtures directory."""
+        config = IndexFilterConfig()
+        root = Path('/project')
+
+        # Files in fixtures should be skipped
+        fixture_file = Path('/project/tests/fixtures/sample_data.json')
+        assert config.should_skip_by_path(fixture_file, root) is True
+
+        # Nested fixtures
+        nested_fixture = Path('/project/tests/unit/fixtures/mock.json')
+        assert config.should_skip_by_path(nested_fixture, root) is True
+
+    def test_should_skip_test_data_directories(self):
+        """Should skip files in test/data and tests/data directories."""
+        config = IndexFilterConfig()
+        root = Path('/project')
+
+        # test/data
+        test_data_file = Path('/project/test/data/sample.json')
+        assert config.should_skip_by_path(test_data_file, root) is True
+
+        # tests/data
+        tests_data_file = Path('/project/tests/data/sample.json')
+        assert config.should_skip_by_path(tests_data_file, root) is True
+
+    def test_should_skip_snap_extension_files(self):
+        """Should skip .snap and .snapshot files."""
+        config = IndexFilterConfig()
+        root = Path('/project')
+
+        # .snap files
+        snap_file = Path('/project/Component.snap')
+        assert config.should_skip_by_path(snap_file, root) is True
+
+        # .snapshot files
+        snapshot_file = Path('/project/test.snapshot')
+        assert config.should_skip_by_path(snapshot_file, root) is True
+
+    def test_should_not_skip_test_code(self):
+        """Should NOT skip test code files."""
+        config = IndexFilterConfig()
+        root = Path('/project')
+
+        # Test files should still be included
+        test_file = Path('/project/tests/test_module.py')
+        assert config.should_skip_by_path(test_file, root) is False
+
+        # Spec files
+        spec_file = Path('/project/spec/my_spec.rb')
+        assert config.should_skip_by_path(spec_file, root) is False
+
+    def test_should_skip_large_json_in_tests(self):
+        """Should skip large JSON files in test directories."""
+        config = IndexFilterConfig(
+            skip_large_json_in_tests=True,
+            large_json_threshold_bytes=100  # Small threshold for testing
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            tests_dir = tmpdir / 'tests'
+            tests_dir.mkdir()
+
+            # Large JSON in tests/ - should be skipped
+            large_json = tests_dir / 'large_fixture.json'
+            large_json.write_text('x' * 200)  # 200 bytes > 100 threshold
+            assert config.should_skip_large_json_in_tests(large_json, tmpdir) is True
+
+            # Small JSON in tests/ - should NOT be skipped
+            small_json = tests_dir / 'small.json'
+            small_json.write_text('{}')
+            assert config.should_skip_large_json_in_tests(small_json, tmpdir) is False
+
+            # Large JSON outside tests/ - should NOT be skipped
+            src_dir = tmpdir / 'src'
+            src_dir.mkdir()
+            src_json = src_dir / 'config.json'
+            src_json.write_text('x' * 200)
+            assert config.should_skip_large_json_in_tests(src_json, tmpdir) is False
+
+    def test_should_skip_large_json_in_spec_directory(self):
+        """Should also skip large JSON in spec/ directory."""
+        config = IndexFilterConfig(
+            skip_large_json_in_tests=True,
+            large_json_threshold_bytes=100
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            spec_dir = tmpdir / 'spec'
+            spec_dir.mkdir()
+
+            large_json = spec_dir / 'fixture.json'
+            large_json.write_text('x' * 200)
+            assert config.should_skip_large_json_in_tests(large_json, tmpdir) is True
+
+    def test_skip_large_json_can_be_disabled(self):
+        """Should respect skip_large_json_in_tests=False."""
+        config = IndexFilterConfig(
+            skip_large_json_in_tests=False,
+            large_json_threshold_bytes=100
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            tests_dir = tmpdir / 'tests'
+            tests_dir.mkdir()
+
+            large_json = tests_dir / 'large.json'
+            large_json.write_text('x' * 200)
+            assert config.should_skip_large_json_in_tests(large_json, tmpdir) is False
+
+    def test_collect_files_skips_test_noise(self, tmp_path):
+        """SemanticFileCollector should skip test noise."""
+        # Create directory structure
+        tests_dir = tmp_path / 'tests'
+        tests_dir.mkdir()
+        (tests_dir / 'test_module.py').write_text('def test_foo(): pass')
+
+        snapshots_dir = tests_dir / '__snapshots__'
+        snapshots_dir.mkdir()
+        (snapshots_dir / 'test_module.snap').write_text('snapshot data')
+
+        fixtures_dir = tests_dir / 'fixtures'
+        fixtures_dir.mkdir()
+        (fixtures_dir / 'data.json').write_text('{"key": "value"}')
+
+        # Collect files
+        collector = SemanticFileCollector(tmp_path)
+        files = collector.collect_files()
+
+        # Test code should be included
+        assert any('test_module.py' in f for f in files)
+
+        # Snapshots and fixtures should NOT be included
+        assert not any('__snapshots__' in f for f in files)
+        assert not any('.snap' in f for f in files)
+        assert not any('fixtures' in f for f in files)

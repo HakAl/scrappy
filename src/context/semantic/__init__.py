@@ -28,6 +28,8 @@ from .embeddings import EmbedFunction
 from .provider import LanceDBSearchProvider
 from .initializer import SemanticSearchInitializer, NullInitializer
 from .file_collector import SemanticFileCollector, IndexFilterConfig
+from .file_prioritizer import DefaultFilePrioritizer, FilePriorityConfig
+from .ranker import DefaultResultRanker, PassthroughRanker
 
 __all__ = [
     "EmbedFunction",
@@ -36,4 +38,8 @@ __all__ = [
     "NullInitializer",
     "SemanticFileCollector",
     "IndexFilterConfig",
+    "DefaultFilePrioritizer",
+    "FilePriorityConfig",
+    "DefaultResultRanker",
+    "PassthroughRanker",
 ]

@@ -7,6 +7,7 @@ and hybrid search (vector + full-text).
 
 import hashlib
 import logging
+import math
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,7 +23,14 @@ try:
 except ImportError:
     lancedb = None
 
-from ..protocols import CodeChunkerProtocol, EmbeddingFunctionProtocol, SearchResult
+from ..protocols import (
+    CodeChunkerProtocol,
+    EmbeddingFunctionProtocol,
+    RankingConfig,
+    ResultRankerProtocol,
+    ScoredChunk,
+    SearchResult,
+)
 from ...infrastructure.protocols import ProgressReporterProtocol
 from .config import SemanticIndexConfig
 
@@ -128,6 +136,7 @@ class LanceDBSearchProvider:
         config: Optional[SemanticIndexConfig] = None,
         embedding_func: Optional[EmbeddingFunctionProtocol] = None,
         progress_reporter: Optional[ProgressReporterProtocol] = None,
+        ranker: Optional[ResultRankerProtocol] = None,
     ):
         """
         Initialize search provider (NO I/O in constructor).
@@ -138,6 +147,7 @@ class LanceDBSearchProvider:
             config: Index configuration (INJECTED, defaults provided)
             embedding_func: Embedding function (INJECTED, lazy-loaded if None)
             progress_reporter: Progress reporter for indexing operations (INJECTED)
+            ranker: Result ranker for re-ranking search results (INJECTED, optional)
         """
         self._project_path = project_path.resolve()
         self._chunker = chunker  # Injected dependency
@@ -156,6 +166,9 @@ class LanceDBSearchProvider:
             from ...infrastructure.progress import NullProgressReporter
             progress_reporter = NullProgressReporter()
         self._progress = progress_reporter
+
+        # Result ranker (optional - if None, results use raw scores from LanceDB)
+        self._ranker = ranker
 
     def set_progress_reporter(self, progress_reporter: ProgressReporterProtocol) -> None:
         """
@@ -587,7 +600,11 @@ class LanceDBSearchProvider:
 
     def _maybe_rebuild_fts(self, table, chunks_added: int, force: bool = False) -> None:
         """
-        Conditionally rebuild FTS index based on chunks added.
+        Conditionally update FTS index based on chunks added.
+
+        Uses incremental FTS indexing (replace=False) when possible to avoid
+        locking readers. Falls back to full rebuild on initial creation or
+        when incremental update fails.
 
         FTS rebuilding is O(N) where N is total rows. For small updates,
         this overhead isn't worth it. Only rebuild when significant
@@ -609,8 +626,22 @@ class LanceDBSearchProvider:
         try:
             row_count = table.count_rows()
             if row_count > 0:
-                logger.debug(f"Rebuilding FTS index ({row_count} rows)")
-                table.create_fts_index("content", replace=True)
+                # Try incremental update first (replace=False)
+                # This is faster and doesn't lock readers
+                try:
+                    logger.debug(f"Updating FTS index incrementally ({row_count} rows)")
+                    table.create_fts_index("content", replace=False)
+                except Exception as e:
+                    # Index may already exist or incremental not supported
+                    # Fall back to full rebuild
+                    error_msg = str(e).lower()
+                    if "already exists" in error_msg or "exist" in error_msg:
+                        # Index exists and is up to date - this is expected
+                        logger.debug("FTS index already exists, skipping update")
+                    else:
+                        # Other error - try full rebuild
+                        logger.debug(f"Incremental FTS update failed ({e}), trying full rebuild")
+                        table.create_fts_index("content", replace=True)
             else:
                 logger.warning("Table is empty, skipping FTS index creation")
         except Exception as e:
@@ -622,7 +653,8 @@ class LanceDBSearchProvider:
         self,
         query: str,
         max_results: int = 25,
-        max_tokens: int = 4000
+        max_tokens: int = 4000,
+        ranking_config: Optional[RankingConfig] = None,
     ) -> SearchResult:
         """
         Search indexed files semantically.
@@ -632,10 +664,14 @@ class LanceDBSearchProvider:
         Uses hybrid search: vector similarity + full-text search.
         Falls back to vector-only if FTS fails.
 
+        If a ranker was provided at construction time, results are re-ranked
+        using the specified ranking configuration.
+
         Args:
             query: Search query
             max_results: Maximum results to return
             max_tokens: Token budget for results
+            ranking_config: Optional ranking configuration for result re-ranking
 
         Returns:
             SearchResult with chunks and metadata
@@ -663,11 +699,114 @@ class LanceDBSearchProvider:
             logger.warning(f"Hybrid search failed ({e}), falling back to vector search")
             results = table.search(query_vector, query_type="vector").limit(max_results).to_list()
 
+        # If ranker is available, convert to ScoredChunk and re-rank
+        if self._ranker is not None:
+            scored_chunks = self._convert_to_scored_chunks(results)
+            ranked_chunks = self._ranker.rank(query, scored_chunks, ranking_config)
+            return self._build_result_from_ranked(ranked_chunks, max_tokens)
+
+        # Otherwise use original behavior (no re-ranking)
+        return self._build_result_from_raw(results, max_tokens)
+
+    def _convert_to_scored_chunks(self, results: List[Dict]) -> List[ScoredChunk]:
+        """
+        Convert raw LanceDB results to ScoredChunk objects.
+
+        Args:
+            results: Raw results from LanceDB search
+
+        Returns:
+            List of ScoredChunk objects with scores extracted
+        """
+        scored_chunks = []
+        seen_chunks = set()
+
+        for row in results:
+            chunk_id = (row['file_path'], row['start_line'])
+            if chunk_id in seen_chunks:
+                continue
+            seen_chunks.add(chunk_id)
+
+            # LanceDB hybrid search provides _score (combined) and _distance (vector)
+            # _distance is L2 distance, lower is better; convert to similarity
+            raw_distance = row.get('_distance', 0.0)
+            # Convert L2 distance to similarity score (0-1, higher is better)
+            # Using simple exponential decay: similarity = exp(-distance)
+            vector_score = math.exp(-raw_distance) if raw_distance >= 0 else 0.0
+
+            # _score from hybrid search (FTS contribution)
+            fts_score = row.get('_score', 0.0)
+
+            scored_chunks.append(ScoredChunk(
+                file_path=row['file_path'],
+                start_line=row['start_line'],
+                end_line=row['end_line'],
+                content=row['content'],
+                vector_score=vector_score,
+                fts_score=fts_score,
+                final_score=0.0,  # Will be set by ranker
+            ))
+
+        return scored_chunks
+
+    def _build_result_from_ranked(
+        self,
+        ranked_chunks: List[ScoredChunk],
+        max_tokens: int,
+    ) -> SearchResult:
+        """
+        Build SearchResult from ranked ScoredChunk list.
+
+        Args:
+            ranked_chunks: Chunks sorted by final_score (highest first)
+            max_tokens: Token budget for results
+
+        Returns:
+            SearchResult with chunks and metadata
+        """
         final_chunks = []
         used_tokens = 0
         limit_hit = None
 
-        # Deduplication: (file_path, start_line)
+        for chunk in ranked_chunks:
+            cost = int(len(chunk.content) / TOKEN_ESTIMATION_CHAR_RATIO)
+
+            if used_tokens + cost > max_tokens:
+                limit_hit = 'token_limit'
+                break
+
+            final_chunks.append({
+                'path': chunk.file_path,
+                'lines': (chunk.start_line, chunk.end_line),
+                'content': chunk.content,
+                'score': chunk.final_score,
+            })
+            used_tokens += cost
+
+        return SearchResult(
+            chunks=final_chunks,
+            tokens_used=used_tokens,
+            limit_hit=limit_hit,
+        )
+
+    def _build_result_from_raw(
+        self,
+        results: List[Dict],
+        max_tokens: int,
+    ) -> SearchResult:
+        """
+        Build SearchResult from raw LanceDB results (no re-ranking).
+
+        Args:
+            results: Raw results from LanceDB search
+            max_tokens: Token budget for results
+
+        Returns:
+            SearchResult with chunks and metadata
+        """
+        final_chunks = []
+        used_tokens = 0
+        limit_hit = None
         seen_chunks = set()
 
         for row in results:
@@ -676,7 +815,6 @@ class LanceDBSearchProvider:
                 continue
 
             content = row['content']
-            # Rough token estimation
             cost = int(len(content) / TOKEN_ESTIMATION_CHAR_RATIO)
 
             if used_tokens + cost > max_tokens:
@@ -687,7 +825,7 @@ class LanceDBSearchProvider:
                 'path': row['file_path'],
                 'lines': (row['start_line'], row['end_line']),
                 'content': content,
-                'score': row.get('_score', 0.0)
+                'score': row.get('_score', 0.0),
             })
             used_tokens += cost
             seen_chunks.add(chunk_id)
@@ -695,7 +833,7 @@ class LanceDBSearchProvider:
         return SearchResult(
             chunks=final_chunks,
             tokens_used=used_tokens,
-            limit_hit=limit_hit
+            limit_hit=limit_hit,
         )
 
     def is_indexed(self) -> bool:
@@ -723,3 +861,70 @@ class LanceDBSearchProvider:
         with self._safe_db_context():
             if TABLE_NAME in self._db.table_names():
                 self._db.drop_table(TABLE_NAME)
+
+    def cleanup_deleted_files(self, current_files: set) -> int:
+        """
+        Remove stale entries for deleted files.
+
+        Implements SemanticSearchProtocol.
+
+        Should be called AFTER batched indexing completes with the full
+        set of currently-existing file paths. This ensures that files
+        deleted from the filesystem are also removed from the index.
+
+        Args:
+            current_files: Set of normalized POSIX paths that currently exist
+
+        Returns:
+            Number of entries removed
+        """
+        if not self.is_indexed():
+            return 0
+
+        self._ensure_db()
+
+        with self._safe_db_context():
+            table = self._db.open_table(TABLE_NAME)
+
+            # Get all indexed file paths (unique)
+            indexed_paths = set()
+            try:
+                for batch in table.search().select(["file_path"]).to_batches():
+                    df = batch.to_pandas()
+                    indexed_paths.update(df["file_path"].tolist())
+            except Exception as e:
+                logger.warning(f"Could not read indexed paths: {e}")
+                return 0
+
+            # Find stale paths (in DB but not in current files)
+            stale_paths = indexed_paths - current_files
+
+            if not stale_paths:
+                logger.debug("No stale entries to clean up")
+                return 0
+
+            logger.info(f"Removing {len(stale_paths)} stale file entries from index")
+
+            # Delete in batches to avoid huge SQL statements
+            BATCH_SIZE = 100
+            removed = 0
+            stale_list = list(stale_paths)
+
+            for i in range(0, len(stale_list), BATCH_SIZE):
+                batch = stale_list[i:i + BATCH_SIZE]
+                # Escape single quotes in paths for SQL safety
+                paths_sql = ", ".join(f"'{p.replace(chr(39), chr(39)+chr(39))}'" for p in batch)
+                try:
+                    table.delete(f"file_path IN ({paths_sql})")
+                    removed += len(batch)
+                except Exception as e:
+                    logger.warning(f"Failed to delete batch of stale entries: {e}")
+
+            # Clean up old versions after deletion
+            try:
+                table.cleanup_old_versions()
+            except Exception as e:
+                logger.debug(f"Cleanup old versions failed: {e}")
+
+            logger.info(f"Cleaned up {removed} stale file entries")
+            return removed

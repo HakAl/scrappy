@@ -12,6 +12,51 @@ from dataclasses import dataclass
 
 
 @runtime_checkable
+class FilePrioritizerProtocol(Protocol):
+    """
+    Protocol for file prioritization during indexing.
+
+    Assigns priority to files to ensure most important files
+    (README, source code) are indexed before less important ones
+    (tests, docs, config).
+
+    Implementations:
+    - DefaultFilePrioritizer: README > Source > Docs > Tests > Other
+    - MockPrioritizer: Fixed priorities for testing
+
+    Example:
+        def index_files(prioritizer: FilePrioritizerProtocol, files: List[Path]) -> None:
+            prioritized = prioritizer.sort_by_priority(files)
+            for file in prioritized:
+                index(file)
+    """
+
+    def get_priority(self, file_path: Path) -> int:
+        """
+        Assign priority to a file (lower = higher priority).
+
+        Args:
+            file_path: Path to the file
+
+        Returns:
+            Priority value (0 = highest priority)
+        """
+        ...
+
+    def sort_by_priority(self, files: List[Path]) -> List[Path]:
+        """
+        Sort files by priority (highest priority first).
+
+        Args:
+            files: List of file paths to sort
+
+        Returns:
+            Sorted list of file paths
+        """
+        ...
+
+
+@runtime_checkable
 class CodebaseContextProtocol(Protocol):
     """
     Protocol for codebase context awareness.
@@ -408,10 +453,21 @@ class GitHistoryProtocol(Protocol):
 
 @dataclass
 class CodeChunk:
-    """Represents a chunk of code with line range."""
+    """
+    Represents a chunk of code with line range.
+
+    Attributes:
+        start_line: 1-indexed start line number
+        end_line: 1-indexed end line number (inclusive)
+        file_path: Path to the source file
+        chunk_type: Type of chunk (e.g., "function", "class", "preamble", "block")
+        name: Qualified name (e.g., "MyClass.my_method", "helper_func")
+    """
     start_line: int
     end_line: int
     file_path: Optional[str] = None
+    chunk_type: Optional[str] = None
+    name: Optional[str] = None
 
 
 @dataclass
@@ -420,6 +476,43 @@ class SearchResult:
     chunks: List[Dict[str, Any]]  # [{path, lines: (start, end), content, score}]
     tokens_used: int
     limit_hit: Optional[str] = None  # 'token_limit' | None
+
+
+@dataclass
+class ScoredChunk:
+    """
+    A code chunk with detailed scoring breakdown.
+
+    Used by ResultRankerProtocol to enable transparent and
+    configurable result ranking.
+    """
+    file_path: str
+    start_line: int
+    end_line: int
+    content: str
+    vector_score: float = 0.0     # Semantic similarity (0-1, higher is better)
+    fts_score: float = 0.0        # Full-text keyword match score (0+)
+    final_score: float = 0.0      # Combined/weighted score
+    match_details: Dict[str, Any] = None  # type: ignore
+
+    def __post_init__(self):
+        if self.match_details is None:
+            self.match_details = {}
+
+
+@dataclass
+class RankingConfig:
+    """
+    Configuration for search result ranking.
+
+    Controls how vector similarity and keyword scores are combined,
+    plus additional boost factors for exact matches and path matches.
+    """
+    vector_weight: float = 0.6       # Weight for semantic similarity
+    fts_weight: float = 0.3          # Weight for keyword matches
+    exact_match_boost: float = 0.5   # Boost for exact query substring in content
+    path_match_boost: float = 0.2    # Boost if query terms appear in file path
+    # Future: recency_weight for recently modified files
 
 
 # --- Semantic Search Protocols ---
@@ -453,6 +546,90 @@ class CodeChunkerProtocol(Protocol):
 
         Returns:
             List of CodeChunk objects with line ranges
+        """
+        ...
+
+
+@runtime_checkable
+class ChunkingStrategyProtocol(Protocol):
+    """
+    Protocol for language-specific chunking strategies.
+
+    Enables AST-aware chunking for supported languages while
+    falling back to line-based chunking for unsupported ones.
+
+    Implementations:
+    - PythonASTChunker: Python AST-based chunking
+    - CompositeCodeChunker: Routes to language-specific strategies
+
+    Example:
+        def chunk_python(strategy: ChunkingStrategyProtocol, code: str) -> List[CodeChunk]:
+            if ".py" in strategy.supported_extensions:
+                return strategy.chunk(code, "example.py")
+    """
+
+    @property
+    def supported_extensions(self) -> Set[str]:
+        """
+        File extensions this strategy handles.
+
+        Returns:
+            Set of extensions (e.g., {".py", ".pyi"})
+        """
+        ...
+
+    def chunk(self, content: str, file_path: str) -> List[CodeChunk]:
+        """
+        Chunk content using language-aware boundaries.
+
+        Args:
+            content: File content to chunk
+            file_path: Path to the file (for context)
+
+        Returns:
+            List of CodeChunk objects with line ranges and metadata
+        """
+        ...
+
+
+@runtime_checkable
+class ResultRankerProtocol(Protocol):
+    """
+    Protocol for ranking search results.
+
+    Enables customizable scoring and ranking of search results
+    based on multiple signals (vector similarity, keyword matches,
+    exact matches, path matches).
+
+    Implementations:
+    - DefaultResultRanker: Weighted combination of signals
+    - MockResultRanker: Returns candidates unchanged for testing
+
+    Example:
+        def rank_results(
+            ranker: ResultRankerProtocol,
+            query: str,
+            candidates: List[ScoredChunk]
+        ) -> List[ScoredChunk]:
+            return ranker.rank(query, candidates)
+    """
+
+    def rank(
+        self,
+        query: str,
+        candidates: List[ScoredChunk],
+        config: Optional[RankingConfig] = None,
+    ) -> List[ScoredChunk]:
+        """
+        Re-rank candidates based on multiple signals.
+
+        Args:
+            query: Original search query
+            candidates: Raw results from search backend
+            config: Optional ranking configuration
+
+        Returns:
+            Re-ranked list of chunks (highest score first)
         """
         ...
 
@@ -522,6 +699,21 @@ class SemanticSearchProtocol(Protocol):
 
     def clear_index(self) -> None:
         """Clear the search index."""
+        ...
+
+    def cleanup_deleted_files(self, current_files: Set[str]) -> int:
+        """
+        Remove index entries for files that no longer exist.
+
+        Should be called AFTER batched indexing completes with the full
+        set of currently-existing file paths.
+
+        Args:
+            current_files: Set of normalized POSIX file paths that currently exist
+
+        Returns:
+            Number of stale entries removed
+        """
         ...
 
 

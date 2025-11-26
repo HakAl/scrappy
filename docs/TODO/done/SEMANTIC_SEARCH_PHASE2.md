@@ -99,34 +99,6 @@ Add these patterns to your ignore list (or check for them):
 ---
 
 --------------------------------------------------------
-Token estimator still drifts on minified / Unicode files
---------------------------------------------------------
-`len(content)/3` is fine for normal source, but collapses on:
-- minified JS (1 char ≈ 1 token)  
-- files with emoji or CJK comments (1 glyph ≈ 2–3 tokens).
-
-Cheap improvement: keep a running **tiktoken** counter once you are within 20 % of the budget:
-
-```python
-import tiktoken
-enc = tiktoken.get_encoding("cl100k_base")
-...
-if used_tokens + cost > max_tokens * 0.8:          # 80 % trigger
-    cost = len(enc.encode(content))
-    if used_tokens + cost > max_tokens:
-        ...
-```
-
-You only pay for the exact count on the last few chunks.
-
----
---------------------------------------------------------
-Hash collision safety
---------------------------------------------------------
-MD5 is fine for change detection, but if you ever expose `content_hash` to the user (e.g. for de-duplication UI) move to Blake3 or SHA-256 to avoid “but MD5 is broken” conversations.  One-line change, zero perf hit for code-base sizes.
-
----
---------------------------------------------------------
 FTS “replace=True” blocks readers
 --------------------------------------------------------
 Re-building the FTS index locks the table for ~100–400 ms per 10 k rows.  
@@ -165,3 +137,11 @@ Add a semantic_search section to CLIConfig with only the settings users might ac
     db_dir_name: ".scrappy/lancedb"  # Where to store the index
     max_text_length: 512             # Max chars per chunk (affects search quality)
     fts_rebuild_threshold: 100       # When to rebuild full-text index
+  
+
+  1. Deleted file cleanup - The current diff logic detects deletions but only in non-batched mode. Stale entries
+  accumulate.
+  2. Search result ranking - Hybrid search exists but the score fusion could be tuned. Currently vector + FTS scores
+   are just combined.
+  3. Chunk boundary intelligence - Line-based chunking (60 lines, 15 overlap) is naive. Function/class-aware
+  chunking would improve retrieval quality significantly.

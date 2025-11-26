@@ -1,4 +1,5 @@
-You are correct that `fastembed` is not currently a built-in key in the default LanceDB registry (unlike `openai` or `sentence-transformers`).
+# Fastembed
+`fastembed` is not currently a built-in key in the default LanceDB registry (unlike `openai` or `sentence-transformers`).
 
 To use FastEmbed with LanceDB. 
 You need to define a custom embedding function and register it yourself. 

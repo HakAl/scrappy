@@ -1,5 +1,7 @@
 # Unicode Emoji Blocks and Detection
 
+[//]: # (#NOEMOJIS!)
+
 Unicode defines specific blocks for emoji characters. This distinction makes it straightforward to detect or filter emojis programmatically by checking code point ranges.
 
 ### Main Emoji Blocks

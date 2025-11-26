@@ -204,7 +204,8 @@ class TestMaybeRebuildFts:
 
         self.provider._maybe_rebuild_fts(mock_table, chunks_added=100)
 
-        mock_table.create_fts_index.assert_called_once_with("content", replace=True)
+        # Now tries incremental first (replace=False)
+        mock_table.create_fts_index.assert_called_once_with("content", replace=False)
 
     def test_rebuilds_above_threshold(self):
         """Should rebuild FTS when chunks_added > threshold."""
@@ -421,3 +422,222 @@ class TestEmbeddingFunctionInjection:
 
         # Our injected func should still be there
         assert provider._embedding_func is mock_embed
+
+
+# --- FTS Incremental Update Tests ---
+
+
+class TestFTSIncrementalUpdate:
+    """Test FTS incremental indexing behavior."""
+
+    def setup_method(self):
+        """Create provider with mock dependencies."""
+        self.chunker = MockChunker()
+        self.config = SemanticIndexConfig(fts_rebuild_threshold=100)
+        self.provider = LanceDBSearchProvider(
+            project_path=Path("."),
+            chunker=self.chunker,
+            config=self.config,
+        )
+
+    def test_tries_incremental_first(self):
+        """Should attempt incremental FTS update (replace=False) first."""
+        mock_table = Mock()
+        mock_table.count_rows.return_value = 1000
+
+        self.provider._maybe_rebuild_fts(mock_table, chunks_added=100)
+
+        # Should have called with replace=False first
+        mock_table.create_fts_index.assert_called_once_with("content", replace=False)
+
+    def test_falls_back_to_replace_on_error(self):
+        """Should fall back to replace=True when incremental fails."""
+        mock_table = Mock()
+        mock_table.count_rows.return_value = 1000
+
+        # First call fails, second succeeds
+        mock_table.create_fts_index.side_effect = [
+            Exception("Incremental not supported"),
+            None
+        ]
+
+        self.provider._maybe_rebuild_fts(mock_table, chunks_added=100)
+
+        # Should have called twice: first with replace=False, then replace=True
+        assert mock_table.create_fts_index.call_count == 2
+        mock_table.create_fts_index.assert_any_call("content", replace=False)
+        mock_table.create_fts_index.assert_any_call("content", replace=True)
+
+    def test_skips_update_when_index_already_exists(self):
+        """Should not fail when index already exists message."""
+        mock_table = Mock()
+        mock_table.count_rows.return_value = 1000
+        mock_table.create_fts_index.side_effect = Exception("Index already exists")
+
+        # Should not raise
+        self.provider._maybe_rebuild_fts(mock_table, chunks_added=100)
+
+        # Should only call once (no fallback needed for "already exists")
+        assert mock_table.create_fts_index.call_count == 1
+
+
+# --- Cleanup Deleted Files Tests ---
+
+
+class TestCleanupDeletedFiles:
+    """Test cleanup_deleted_files method."""
+
+    def setup_method(self):
+        """Create provider with mock dependencies."""
+        self.chunker = MockChunker()
+        self.config = SemanticIndexConfig.for_testing()
+        self.provider = LanceDBSearchProvider(
+            project_path=Path("."),
+            chunker=self.chunker,
+            config=self.config,
+        )
+
+    def test_returns_zero_when_not_indexed(self):
+        """Should return 0 when index doesn't exist."""
+        # Mock is_indexed to return False
+        self.provider.is_indexed = Mock(return_value=False)
+
+        result = self.provider.cleanup_deleted_files({"file1.py", "file2.py"})
+
+        assert result == 0
+
+    def test_returns_zero_when_no_stale_entries(self):
+        """Should return 0 when all indexed files still exist."""
+        # Setup mocks
+        self.provider.is_indexed = Mock(return_value=True)
+        self.provider._ensure_db = Mock()
+
+        mock_table = Mock()
+        mock_batch = Mock()
+        mock_df = Mock()
+        mock_df.__getitem__ = Mock(return_value=Mock(tolist=Mock(return_value=["file1.py", "file2.py"])))
+        mock_batch.to_pandas.return_value = mock_df
+        mock_table.search.return_value.select.return_value.to_batches.return_value = [mock_batch]
+
+        mock_db = Mock()
+        mock_db.open_table.return_value = mock_table
+        self.provider._db = mock_db
+
+        # All indexed files are in current_files
+        result = self.provider.cleanup_deleted_files({"file1.py", "file2.py"})
+
+        assert result == 0
+        mock_table.delete.assert_not_called()
+
+    def test_removes_stale_entries(self):
+        """Should remove entries for deleted files."""
+        # Setup mocks
+        self.provider.is_indexed = Mock(return_value=True)
+        self.provider._ensure_db = Mock()
+
+        mock_table = Mock()
+        mock_batch = Mock()
+        mock_df = Mock()
+        # Index has 3 files, but only 1 exists
+        mock_df.__getitem__ = Mock(return_value=Mock(tolist=Mock(
+            return_value=["file1.py", "deleted1.py", "deleted2.py"]
+        )))
+        mock_batch.to_pandas.return_value = mock_df
+        mock_table.search.return_value.select.return_value.to_batches.return_value = [mock_batch]
+
+        mock_db = Mock()
+        mock_db.open_table.return_value = mock_table
+        self.provider._db = mock_db
+
+        # Only file1.py exists
+        result = self.provider.cleanup_deleted_files({"file1.py"})
+
+        assert result == 2  # 2 deleted files
+        mock_table.delete.assert_called_once()
+        mock_table.cleanup_old_versions.assert_called_once()
+
+    def test_batches_large_deletions(self):
+        """Should batch deletions for large numbers of stale files."""
+        # Setup mocks
+        self.provider.is_indexed = Mock(return_value=True)
+        self.provider._ensure_db = Mock()
+
+        mock_table = Mock()
+        mock_batch = Mock()
+        mock_df = Mock()
+        # Index has 250 files to delete (should be split into 3 batches of 100)
+        stale_files = [f"deleted{i}.py" for i in range(250)]
+        mock_df.__getitem__ = Mock(return_value=Mock(tolist=Mock(
+            return_value=["existing.py"] + stale_files
+        )))
+        mock_batch.to_pandas.return_value = mock_df
+        mock_table.search.return_value.select.return_value.to_batches.return_value = [mock_batch]
+
+        mock_db = Mock()
+        mock_db.open_table.return_value = mock_table
+        self.provider._db = mock_db
+
+        # Only 1 file exists
+        result = self.provider.cleanup_deleted_files({"existing.py"})
+
+        assert result == 250
+        # Should be called 3 times (100 + 100 + 50)
+        assert mock_table.delete.call_count == 3
+
+    def test_handles_sql_injection_in_paths(self):
+        """Should safely escape single quotes in file paths."""
+        # Setup mocks
+        self.provider.is_indexed = Mock(return_value=True)
+        self.provider._ensure_db = Mock()
+
+        mock_table = Mock()
+        mock_batch = Mock()
+        mock_df = Mock()
+        # File path with single quote (SQL injection attempt)
+        mock_df.__getitem__ = Mock(return_value=Mock(tolist=Mock(
+            return_value=["normal.py", "file'with'quotes.py"]
+        )))
+        mock_batch.to_pandas.return_value = mock_df
+        mock_table.search.return_value.select.return_value.to_batches.return_value = [mock_batch]
+
+        mock_db = Mock()
+        mock_db.open_table.return_value = mock_table
+        self.provider._db = mock_db
+
+        # Only normal file exists - file with quotes should be removed
+        result = self.provider.cleanup_deleted_files({"normal.py"})
+
+        assert result == 1
+        # Verify the SQL was properly escaped (single quote doubled)
+        call_args = mock_table.delete.call_args[0][0]
+        assert "''" in call_args  # Single quotes should be escaped
+
+    def test_continues_on_delete_error(self):
+        """Should continue deleting other batches if one batch fails."""
+        # Setup mocks
+        self.provider.is_indexed = Mock(return_value=True)
+        self.provider._ensure_db = Mock()
+
+        mock_table = Mock()
+        mock_batch = Mock()
+        mock_df = Mock()
+        stale_files = [f"deleted{i}.py" for i in range(150)]
+        mock_df.__getitem__ = Mock(return_value=Mock(tolist=Mock(
+            return_value=stale_files
+        )))
+        mock_batch.to_pandas.return_value = mock_df
+        mock_table.search.return_value.select.return_value.to_batches.return_value = [mock_batch]
+
+        # First delete fails, second succeeds
+        mock_table.delete.side_effect = [Exception("Delete failed"), None]
+
+        mock_db = Mock()
+        mock_db.open_table.return_value = mock_table
+        self.provider._db = mock_db
+
+        # No files exist
+        result = self.provider.cleanup_deleted_files(set())
+
+        # Should have tried both batches, only second succeeded
+        assert mock_table.delete.call_count == 2
+        assert result == 50  # Only second batch (50 files) succeeded

@@ -166,14 +166,17 @@ class SemanticSearchInitializer:
             logger.debug("Starting semantic search initialization in background")
 
             # Import heavy dependencies here (in background thread)
-            from ..code_chunker import SemanticCodeChunker
+            from .chunkers import CompositeCodeChunker
             from .provider import LanceDBSearchProvider
 
             with self._lock:
                 self._status = "Loading embedding model..."
 
-            # Create chunker (lightweight)
-            chunker = SemanticCodeChunker(chunk_size=60, overlap=15)
+            # Create chunker (AST-aware for Python, fallback for other languages)
+            chunker = CompositeCodeChunker(
+                fallback_chunk_size=60,
+                fallback_overlap=15,
+            )
 
             # Create LanceDB provider (triggers FastEmbed model download if needed)
             # Store database in .scrappy/lancedb/ instead of .lancedb/ at project root

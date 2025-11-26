@@ -2,53 +2,6 @@
 
 **Enumeration Approach - src\context.py - tests\test_context.py**
 
-## Issues
-
-<!-- EXISITING ISSUE -->
-- context summary file always written, doesn't respect user choice
-- Auto-explore Stale Context: Uses cached context from llm_team itself, not the new project
-
-CodebaseContext is a 840-line god object with multiple responsibilities that would benefit from decomposition. The
-   tests are better than average but don't fully prove correctness.
-
-
-we're working to improve src\context\ the next task is: 
-
-can you research the task and start with tests?
-
-help with a plan to decompose?
-create a plan to fix?
-start with tests?
----
-
-
-  Critical Issues Found
-
-  ---
-
-  8. Side Effects Everywhere ⚠️ Present
-
-  Constructor loads cache (context.py:107):
-  def __init__(self, project_path: Optional[str] = None):
-      ...
-      self._load_cache()  # Side effect in constructor
-
-  Hidden explore call (context.py:633-634):
-  def get_project_type(self) -> str:
-      if not self.structure:
-          self.explore()  # Hidden side effect
-
-
-  10. Tight Coupling ⚠️ Present
-
-  Hard dependencies on:
-  - subprocess - git operations
-  - os.walk / pathlib - file system
-  - shutil.which - tool detection
-
-  ---
-
-
 ## Supported Contexts
 
 ```

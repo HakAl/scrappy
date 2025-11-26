@@ -13,7 +13,10 @@ import re
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Optional, Set
+from typing import Dict, Generator, List, Optional, Set
+
+from src.context.protocols import FilePrioritizerProtocol
+from src.context.semantic.file_prioritizer import DefaultFilePrioritizer
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +29,7 @@ class IndexFilterConfig:
     Uses mixed strategy:
     1. Exact directory/file name matches (safer than regex for names like "build")
     2. Regex for extensions/patterns
+    3. Test noise exclusion patterns
     """
 
     # Exact directory/file names to ignore
@@ -56,6 +60,29 @@ class IndexFilterConfig:
         r'\.min\.js$', r'\.min\.css$',  # Minified files
         r'\.map$',  # Source maps
     ])
+
+    # Test noise exclusion - directories containing test data (not test code)
+    test_noise_patterns: Set[str] = field(default_factory=lambda: {
+        '__snapshots__',
+        'snapshots',
+        'fixtures',
+        'test/data',
+        'tests/data',
+        'test/fixtures',
+        'tests/fixtures',
+        'testdata',
+        '__mocks__',
+    })
+
+    # Test noise file extensions (snapshot files, etc.)
+    test_noise_extensions: Set[str] = field(default_factory=lambda: {
+        '.snap',
+        '.snapshot',
+    })
+
+    # Skip large JSON files in test directories (likely test data fixtures)
+    skip_large_json_in_tests: bool = True
+    large_json_threshold_bytes: int = 50_000  # 50KB
 
     # Git configuration
     respect_gitignore: bool = True
@@ -97,6 +124,59 @@ class IndexFilterConfig:
         filename = path.name
         if any(pattern.search(filename) for pattern in self._compiled_patterns):
             return True
+
+        # Check test noise patterns (directories containing test data)
+        path_str = str(rel_path).lower().replace('\\', '/')
+        if any(pattern in path_str for pattern in self.test_noise_patterns):
+            return True
+
+        # Check test noise file extensions (.snap, .snapshot)
+        if path.suffix.lower() in self.test_noise_extensions:
+            return True
+
+        return False
+
+    def should_skip_large_json_in_tests(self, path: Path, root: Path) -> bool:
+        """
+        Check if file is a large JSON file in a test directory.
+
+        Args:
+            path: Absolute path to file
+            root: Project root path
+
+        Returns:
+            True if file is a large JSON in a test directory and should be skipped
+        """
+        if not self.skip_large_json_in_tests:
+            return False
+
+        if path.suffix.lower() != '.json':
+            return False
+
+        try:
+            rel_path = path.relative_to(root)
+            path_str = str(rel_path).lower().replace('\\', '/')
+
+            # Check if file is in a test directory
+            test_dir_patterns = ('test/', 'tests/', 'spec/', '__tests__/')
+            if not any(pattern in path_str for pattern in test_dir_patterns):
+                return False
+
+            # Check file size
+            try:
+                file_size = path.stat().st_size
+                if file_size > self.large_json_threshold_bytes:
+                    logger.debug(
+                        f"Skipping large test JSON: {path.name} "
+                        f"({file_size / 1024:.1f}KB > "
+                        f"{self.large_json_threshold_bytes / 1024:.1f}KB)"
+                    )
+                    return True
+            except OSError:
+                pass
+
+        except ValueError:
+            pass
 
         return False
 
@@ -167,7 +247,8 @@ class SemanticFileCollector:
     def __init__(
         self,
         project_path: Path,
-        filter_config: Optional[IndexFilterConfig] = None
+        filter_config: Optional[IndexFilterConfig] = None,
+        prioritizer: Optional[FilePrioritizerProtocol] = None,
     ):
         """
         Initialize file collector (NO I/O in constructor).
@@ -175,9 +256,11 @@ class SemanticFileCollector:
         Args:
             project_path: Project root path
             filter_config: Optional filter configuration (uses defaults if None)
+            prioritizer: Optional file prioritizer (uses DefaultFilePrioritizer if None)
         """
         self._project_path = project_path.resolve()
         self._filter_config = filter_config or IndexFilterConfig()
+        self._prioritizer = prioritizer or DefaultFilePrioritizer()
 
     def collect_files(self) -> Dict[str, str]:
         """
@@ -214,16 +297,23 @@ class SemanticFileCollector:
 
         logger.debug(f"Found {len(candidates)} candidate files")
 
+        # Prioritize files for indexing order
+        candidate_paths = [Path(p) for p in candidates]
+        prioritized = self._prioritizer.sort_by_priority(candidate_paths)
+        logger.debug("Files prioritized for indexing")
+
         # Read and filter files
         files = {}
         stats = {
             'skipped_size': 0,
             'skipped_binary': 0,
             'skipped_read_error': 0,
+            'skipped_test_json': 0,
             'collected': 0,
         }
 
-        for file_path in candidates:
+        for path_obj in prioritized:
+            file_path = str(path_obj)
             full_path = self._project_path / file_path
 
             # Skip if file doesn't exist (rare, but possible in git edge cases)
@@ -233,6 +323,11 @@ class SemanticFileCollector:
             # Skip by size
             if self._filter_config.should_skip_by_size(full_path):
                 stats['skipped_size'] += 1
+                continue
+
+            # Skip large JSON files in test directories
+            if self._filter_config.should_skip_large_json_in_tests(full_path, self._project_path):
+                stats['skipped_test_json'] += 1
                 continue
 
             # Skip binary files
@@ -253,6 +348,7 @@ class SemanticFileCollector:
             f"Collected {stats['collected']} files for indexing "
             f"(skipped: {stats['skipped_size']} too large, "
             f"{stats['skipped_binary']} binary, "
+            f"{stats['skipped_test_json']} test JSON, "
             f"{stats['skipped_read_error']} read errors)"
         )
 
@@ -299,17 +395,24 @@ class SemanticFileCollector:
 
         logger.debug(f"Found {len(candidates)} candidate files")
 
+        # Prioritize files for indexing order
+        candidate_paths = [Path(p) for p in candidates]
+        prioritized = self._prioritizer.sort_by_priority(candidate_paths)
+        logger.debug("Files prioritized for indexing")
+
         # Process files in batches
         batch = {}
         stats = {
             'skipped_size': 0,
             'skipped_binary': 0,
             'skipped_read_error': 0,
+            'skipped_test_json': 0,
             'collected': 0,
             'batches': 0,
         }
 
-        for file_path in candidates:
+        for path_obj in prioritized:
+            file_path = str(path_obj)
             full_path = self._project_path / file_path
 
             # Skip if file doesn't exist
@@ -319,6 +422,11 @@ class SemanticFileCollector:
             # Skip by size
             if self._filter_config.should_skip_by_size(full_path):
                 stats['skipped_size'] += 1
+                continue
+
+            # Skip large JSON files in test directories
+            if self._filter_config.should_skip_large_json_in_tests(full_path, self._project_path):
+                stats['skipped_test_json'] += 1
                 continue
 
             # Skip binary files
@@ -353,6 +461,7 @@ class SemanticFileCollector:
             f"Collected {stats['collected']} files in {stats['batches']} batches "
             f"(skipped: {stats['skipped_size']} too large, "
             f"{stats['skipped_binary']} binary, "
+            f"{stats['skipped_test_json']} test JSON, "
             f"{stats['skipped_read_error']} read errors)"
         )
 

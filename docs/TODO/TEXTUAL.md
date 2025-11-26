@@ -2,7 +2,7 @@
  
 Integrate textual 
 - create an area at the bottom of terminal below user input to display status
-  - phase 1 -- integrate textual and display our existing app (header, static, input, RichLog, etc)
+  - phase 1 -- integrate textual and display our existing app (header, static, input, RichLog, etc) -- COMPLETE
   - phase 2 -- add the footer to serve as our status area.
   - phase 3 -- integrate status elements eg: progress into status area
 
@@ -37,76 +37,11 @@ Output via TextualIO.echo/secho → RichLog widget
 - Textual widgets are NOT thread-safe
 - Widget updates from threads are lost → no visible output
 
----
-
-## Current Status: BROKEN
-
-### ISSUES
-
-- can't copy text from textual components
-  - config?
-
-- help table output is all white -- need ability to customize table display
-
-### Current Architecture Flow
-
-```
-User Input
-    ↓
-ScrappyApp.on_input_submitted()
-    ↓
-ScrappyApp.process_command() [@work thread]
-    ↓
-orchestrator.delegate(user_input)
-    ↓
-??? (orchestrator writes to WRONG IO) ???
-    ↓
-Output goes nowhere visible
-```
-
-### Core Problem Analysis
-
-**The Split-Brain Issue:**
-The Textual app bypassed InteractiveMode and called orchestrator.delegate() directly, but the orchestrator was
-injected with a different IO implementation (likely RichIO). This created two parallel output streams - one that
-goes nowhere, one that never receives data.
-
-**The Impedance Mismatch:**
-InteractiveMode was designed for blocking CLI operations. Injecting TextualIO (which is async/event-driven) creates
-an architectural tension at the protocol boundary:
-- InteractiveMode._process_input() runs in a worker thread (blocking)
-- TextualIO operates in an event loop (async)
-- Any code path with blocking I/O calls (prompt(), confirm(), file operations) will freeze the UI
-
-**The Solution Architecture:**
-Restore InteractiveMode as the bridge, but with:
-1. Explicit async safety guards
-2. Visual warnings for auto-confirmed operations (security)
-3. Phased approach that documents limitations upfront
 
 ---
 
 ### Phase 0: Pre-Implementation Async Audit
 
-**Objective:** Identify all blocking operations before they cause UI freezes or security issues.
-
-**0.1 Audit Blocking I/O Calls**
-
-Search the codebase for potentially dangerous operations:
-
-```bash
-# Find all blocking input calls
-grep -r "input(" src/
-grep -r "\.prompt(" src/
-grep -r "\.confirm(" src/
-
-# Find direct file I/O (may block on network filesystems)
-grep -r "open(" src/
-grep -r "Path(" src/ | grep -E "(read_text|write_text)"
-
-# Find synchronous HTTP calls
-grep -r "requests\." src/
-```
 
 **0.2 Create Blocking Operations Matrix**
 
@@ -118,219 +53,14 @@ Document findings in a table:
 | io.confirm() | tool_executor.py:45 | YES | Auto-confirm with warning | Modal Dialog |
 | Path.read_text() | file_tools.py:67 | Maybe | Leave as-is (fast) | async file I/O |
 
-**0.3 Identify Disabled Features**
+**0.3 Enable Disabled Features**
 
 Create list of features that will be temporarily unavailable:
 - Commands requiring user input mid-execution
 - Tools requiring confirmation of destructive operations
 - Any workflow using interactive prompts
 
-**Deliverable:** `docs/TODO/ASYNC_AUDIT.md` with complete matrix and disabled features list.
-
----
-
-### Phase 1A: Core IO Architecture (Backend Plumbing)
-
-**Objective:** Restore proper dependency injection so orchestrator output flows to Textual widgets.
-
-**1A.1 Fix Initialization Order (textual_interactive.py)**
-
-```python
-def run(self):
-    # Break circular dependency
-    output_adapter = TextualOutputAdapter()
-    textual_io = TextualIO(output_adapter)
-
-    # CRITICAL: Inject TextualIO into InteractiveMode
-    interactive_mode = InteractiveMode(
-        io=textual_io,  # This fixes the split-brain issue
-        orchestrator=self.orchestrator,
-        # ... other dependencies
-    )
-
-    app = ScrappyApp(interactive_mode)
-    output_adapter.set_app(app)  # Complete the circuit
-    app.run()
-```
-
-**1A.2 Update TextualOutputAdapter (textual_app.py)**
-
-```python
-class TextualOutputAdapter:
-    def __init__(self):
-        self._app: Optional[ScrappyApp] = None
-        self._startup_buffer: List[Renderable] = []
-
-    def set_app(self, app: ScrappyApp) -> None:
-        self._app = app
-
-    def post_output(self, content: Renderable) -> None:
-        if self._app and self._app.is_running:
-            self._app.post_message(WriteRenderable(content))
-        else:
-            self._startup_buffer.append(content)
-
-    def flush_startup_buffer(self) -> List[Renderable]:
-        buffer, self._startup_buffer = self._startup_buffer, []
-        return buffer
-```
-
-**1A.3 Define Message Types (textual_app.py)**
-
-```python
-from textual.message import Message
-from rich.console import RenderableType
-
-class WriteRenderable(Message):
-    """Message to write renderable content to RichLog"""
-    def __init__(self, renderable: RenderableType) -> None:
-        self.renderable = renderable
-        super().__init__()
-```
-
-**1A.4 Update ScrappyApp (textual_app.py)**
-
-```python
-from rich.text import Text
-
-class ScrappyApp(App):
-    def __init__(self, interactive_mode: InteractiveMode):
-        super().__init__()
-        self.interactive_mode = interactive_mode
-        self.output_adapter = interactive_mode.io.output_adapter
-
-    @work(exclusive=True, thread=True)
-    def process_command(self, user_input: str) -> None:
-        if not user_input.strip():
-            return
-
-        # Echo user input
-        echo_text = Text(f"> {user_input}", style="bold blue")
-        self.output_adapter.post_output(echo_text)
-
-        should_continue = self.interactive_mode._process_input(user_input)
-        if not should_continue:
-            self.exit()
-
-    def on_write_renderable(self, message: WriteRenderable) -> None:
-        """CRITICAL: Handle output from worker thread - without this, output is dropped"""
-        self.query_one(RichLog).write(message.renderable)
-
-    def on_mount(self) -> None:
-        self.query_one(Input).focus()  # Auto-focus fix
-
-        # Display buffered startup output
-        log_widget = self.query_one(RichLog)
-        for item in self.output_adapter.flush_startup_buffer():
-            log_widget.write(item)
-```
-
----
-
-### Phase 1B: Async Safety & Security Guards
-
-**Objective:** Prevent UI freezes and make auto-confirmed operations visually obvious.
-
-**CRITICAL: These are not "edge cases" - they are architectural blockers that will cause:**
-- UI freezes (blocking input trap)
-- Data loss (auto-confirm of destructive operations)
-- User confusion (silent failures)
-
-**1B.1 Implement Safe TextualIO (textual_io.py)**
-
-```python
-from rich.text import Text
-from rich.panel import Panel
-
-class TextualIO:
-    def __init__(self, output_adapter: OutputSink):
-        self.output_adapter = output_adapter
-
-    def echo(self, message: str = "", **kwargs) -> None:
-        """Safe output - never blocks"""
-        if isinstance(message, str):
-            renderable = Text.from_ansi(message) if '\033[' in message else Text(message)
-        else:
-            renderable = message
-        self.output_adapter.post_output(renderable)
-
-    def prompt(self, message: str, default: str = "") -> str:
-        """BLOCKING OPERATION - Phase 1 not yet implemented"""
-        error_panel = Panel(
-            f"[bold red]NOT YET IMPLEMENTED[/]\n\n"
-            f"Attempted to call prompt():\n{message}\n\n"
-            f"Interactive prompts require Phase 3 (ThreadSafeAsyncBridge).\n"
-            f"This feature is planned but not yet available.\n\n"
-            f"Returning default value: {default or '(empty)'}",
-            title="[blink]Phase 1 Limitation[/]",
-            border_style="yellow"
-        )
-        self.output_adapter.post_output(error_panel)
-        return default  # Return default instead of raising
-
-    def confirm(self, question: str, default: bool = False) -> bool:
-        """AUTO-CONFIRMS - Security-critical visual warning"""
-        # CRITICAL: Make this IMPOSSIBLE to miss
-        warning_panel = Panel(
-            f"[blink bold white on red] AUTO-CONFIRMED [/]\n\n"
-            f"{question}\n\n"
-            f"[yellow]Phase 1 Limitation: This operation was automatically approved.[/]\n"
-            f"[yellow]Manual confirmation requires Phase 3 (Modal dialogs).[/]",
-            title="[blink]SECURITY WARNING: Auto-Confirm[/]",
-            border_style="red",
-            expand=False
-        )
-        self.output_adapter.post_output(warning_panel)
-        return True  # TODO: Phase 3 - implement modal confirmation
-
-    def print_panel(self, content, title=None, **kwargs):
-        """Safe rich output"""
-        from rich.panel import Panel
-        self.output_adapter.post_output(Panel(content, title=title, **kwargs))
-
-    # Implement ALL other IOProtocol methods to prevent crashes
-    def secho(self, message: str = "", **kwargs) -> None:
-        """Styled echo - maps to echo with style"""
-        self.echo(message, **kwargs)
-
-    def print_table(self, *args, **kwargs):
-        """Rich table output"""
-        from rich.table import Table
-        # Implementation depends on your IOProtocol signature
-        pass
-
-    # TODO: Complete IOProtocol implementation based on your interface
-```
-
-**1B.2 Add Runtime Guards (interactive_mode.py)**
-
-Add at top of InteractiveMode._process_input():
-
-```python
-def _process_input(self, user_input: str) -> bool:
-    # Document current mode for debugging
-    if isinstance(self.io, TextualIO):
-        # Log that we're in limited mode (optional, for debugging)
-        pass
-
-    # Continue with normal processing
-    # ...existing code...
-```
-
-**1B.3 Display Phase 1 Limitations Banner**
-
-Create visual startup banner warning:
-
-```python
-def _render_phase_1_warning(self) -> Panel:
-    return Panel(
-        "[yellow]Phase 1: Basic functionality active[/]\n\n"
-        "Note: Interactive prompts return defaults, confirmations auto-approve.\n"
-        "Phase 3 will enable modal dialogs for user input.",
-        title="Initialization Status",
-        border_style="yellow"
-    )
-```
+**Deliverable:** `docs/TODO/done/ASYNC_AUDIT.md` with complete matrix and disabled features list.
 
 ---
 
@@ -641,7 +371,9 @@ def index_files(self, files: List[Path]) -> None:
 ### 1. The Deadlock Trap (Phase 3 Critical Safety Patch)
 
 In `ThreadSafeAsyncBridge`, you are blocking the current thread with `event.wait()`.
-*   **The Risk:** If a developer accidentally calls `io.prompt()` from the **Main Thread** (instead of a worker thread), `event.wait()` will pause the Main Thread. The Main Thread is responsible for processing messages. It will never see `ShowPromptModal`. The app will freeze forever (Deadlock).
+*   **The Risk:** If a developer accidentally calls `io.prompt()` from the **Main Thread** (instead of a worker thread),
+* `event.wait()` will pause the Main Thread. The Main Thread is responsible for processing messages. It will never see `ShowPromptModal`.
+* The app will freeze forever (Deadlock).
 *   **The Fix:** Add a runtime guard in the bridge.
 
 **Update `ThreadSafeAsyncBridge` methods:**
