@@ -1,24 +1,3 @@
-<!-- todo  -->
-
-- Parallel tool execution - Run independent tools concurrently
-
----
-
-New Tools to Add (High Impact)
-
-1 - Semantic Code Search Tool
-
-  - Use local embeddings
-  - Find similar code patterns, not just text matches
-  - Would enable: "Find code similar to this error handler"
-
-2 - TODO Tool
-
-3 - Test Runner Tool
-
-  - Execute pytest/jest/etc with structured output parsing
-  - Coverage reporting
-  - Would enable: "Run tests and show me failures"
 
 4 - Database Query Tool
 

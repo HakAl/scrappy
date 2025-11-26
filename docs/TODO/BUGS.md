@@ -1,4 +1,4 @@
-## Issues
+## Issues / Loose Ends
 
 ---
 Integrate semantic search initial indexing w/status bar.
@@ -63,18 +63,6 @@ find what's creating .lancedb/ dir at root, and correct path
 Configuration is programmatic via `SemanticIndexConfig`. No user-facing config file support.
 
 ---
-## Rate Limiting
-
-Orchestrator should be aware of rate limits and delegate accordingly.
-
-
-src\orchestrator\rate_limiter.py
-
-<!-- todo -- define fallback strategies until all providers are exhausted -->
-**Issues**
-- Defined, not enforced
-- warn users of limits when approaching
-
 ---
 
 <!-- todo -->
