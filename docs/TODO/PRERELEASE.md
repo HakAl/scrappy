@@ -76,6 +76,61 @@ You start next week. Don't burn out trying to make it perfect.
 
 Good luck! Shipping a working agent CLI is a massive achievement.
 
+---
+
+## Additional Ideas (Claude's Notes)
+
+### Graceful Degradation
+What happens when the API is down, rate-limited, or returns garbage? Users will blame your tool, not OpenAI.
+- Retry with exponential backoff
+- Clear error messages: "OpenAI returned 429. Waiting 30s..." vs "Error: Unknown"
+- Offline mode for semantic search (local embeddings only)
+
+### Session Persistence
+Users will close the terminal mid-task. Can they resume?
+- Auto-save conversation state to `.scrappy/session.json`
+- `scrappy resume` command
+- Clear "session expired" vs "session resumed" messaging
+
+### Audit Log
+For trust and debugging:
+- Log every file modification with before/after hashes
+- Log every shell command with exit code
+- `scrappy history` to view recent actions
+- This also helps users report bugs with context
+
+### Cost Tracking
+Users will want to know:
+- Token usage per session
+- Estimated cost (even rough)
+- "This session used ~15k tokens (~$0.02)" at exit
+
+### Interrupt Handling
+What happens when users hit Ctrl+C mid-operation?
+- Clean shutdown, not stack trace
+- Save partial state if possible
+- "Operation cancelled. Your work has been saved."
+
+### Version Compatibility Check
+- Check if user's config file schema matches current version
+- Migrate old configs gracefully
+- Warn if using deprecated settings
+
+### Dry Run Mode
+- `--dry-run` flag that shows what would happen without doing it
+- Especially valuable for shell commands and file modifications
+- Builds trust with new users
+
+### Priority Order (If Time-Limited)
+
+1. **Safety rails** (Y/N gate, .git protection) - Required
+2. **Config command** - Required
+3. **Interrupt handling** - Required (users WILL hit Ctrl+C)
+4. **Audit log** - High value for trust/debugging
+5. **Session persistence** - Nice to have
+6. **Cost tracking** - Nice to have
+7. **Dry run** - Nice to have
+
 
 ---
 
