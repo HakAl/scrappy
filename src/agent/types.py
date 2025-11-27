@@ -51,6 +51,13 @@ class EvaluationResult:
 
 
 @dataclass
+class DenialHandlerResult:
+    """Result from handling a user denial."""
+    should_stop: bool
+    message: str
+
+
+@dataclass
 class ConversationState:
     """Encapsulates the conversation state for the agent loop."""
     messages: List[Dict[str, str]] = field(default_factory=list)

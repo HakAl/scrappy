@@ -124,13 +124,6 @@ class TestCommandRouterValidation:
         output = self.io.get_output()
         assert "usage" in output.lower()
 
-    def test_multiline_toggle_works(self):
-        """Multiline mode toggle should work."""
-        initial_mode = self.router.session_context.multiline_mode
-        result = self.router.route("/ml", "")
-        assert result is True
-        assert self.router.session_context.multiline_mode != initial_mode
-
     def test_auto_route_toggle_works(self):
         """Auto-route mode toggle should work."""
         initial_mode = self.router.session_context.auto_route_mode

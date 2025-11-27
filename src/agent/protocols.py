@@ -1009,3 +1009,45 @@ class ProviderSelectionStrategyProtocol(Protocol):
             True if dynamic selection supported, False for static
         """
         ...
+
+
+@runtime_checkable
+class DenialHandlerProtocol(Protocol):
+    """
+    Protocol for handling user denials of actions.
+
+    Abstracts denial handling to enable different strategies:
+    - Ask user if they want to stop entirely
+    - Track denial count and auto-stop
+    - Continue with different approach (default behavior)
+
+    Implementations:
+    - InteractiveDenialHandler: Asks user if they want to stop
+    - AutoStopDenialHandler: Stops after N denials
+    - ContinueDenialHandler: Always continues (default behavior)
+
+    Example:
+        def handle_denial(handler: DenialHandlerProtocol, action: str) -> DenialHandlerResult:
+            result = handler.handle_denial(action, denial_count=1)
+            if result.should_stop:
+                return stop_agent()
+            else:
+                continue_with_message(result.message)
+    """
+
+    def handle_denial(
+        self,
+        action: str,
+        denial_count: int,
+    ) -> Any:  # Returns DenialHandlerResult
+        """
+        Handle a user denial of an action.
+
+        Args:
+            action: The action that was denied
+            denial_count: Number of times similar actions have been denied
+
+        Returns:
+            DenialHandlerResult with should_stop flag and message
+        """
+        ...

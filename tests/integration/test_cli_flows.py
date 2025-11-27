@@ -136,23 +136,22 @@ class TestSessionStartupFlow:
         assert "/agent" in output
 
         # Should show mode statuses
-        assert "Multiline" in output or "multiline" in output
+        assert "Tip" in output or "\\" in output
         assert "Auto-routing" in output or "auto-routing" in output.lower()
 
-    def test_startup_with_multiline_on_shows_status(self):
-        """Should indicate multiline mode is ON at startup."""
+    def test_startup_shows_continuation_tip(self):
+        """Should show tip about line continuation at startup."""
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
         mode = create_test_interactive_mode(io, orchestrator)
-        mode.session_context.multiline_mode = True
 
         with patch('sys.stdin.isatty', return_value=True):
             with patch.object(mode, '_main_loop', return_value=None):
                 mode.run()
 
         output = io.get_output()
-        # Should indicate ON status
-        assert "ON" in output or "enabled" in output.lower()
+        # Should show tip about continuation
+        assert "Tip" in output or "\\" in output
 
     def test_startup_with_auto_route_on_shows_status(self):
         """Should indicate auto-routing mode is ON at startup."""
@@ -433,34 +432,6 @@ class TestModeTogglingFlow:
         """Set up test fixtures."""
         from src.cli.command_router import CommandRouter
         self.CommandRouter = CommandRouter
-
-    def test_toggle_multiline_mode(self):
-        """Should toggle multiline mode and show status."""
-        io = MockIO()
-        orchestrator = ConfigurableTestOrchestrator()
-        router = create_test_command_router(io, orchestrator)
-        initial = router.session_context.multiline_mode
-
-        router.route("/ml", "")
-
-        assert router.session_context.multiline_mode != initial
-
-        output = io.get_output()
-        assert "Multiline" in output or "multiline" in output
-
-    def test_toggle_multiline_shows_instructions(self):
-        """Toggling multiline should show usage instructions."""
-        io = MockIO()
-        orchestrator = ConfigurableTestOrchestrator()
-        router = create_test_command_router(io, orchestrator)
-        router.session_context.multiline_mode = False  # Start OFF
-
-        router.route("/ml", "")
-
-        output = io.get_output()
-        # Should show instructions when turning ON
-        assert "ON" in output
-        assert "\\" in output or "continue" in output.lower()
 
     def test_toggle_auto_route_mode(self):
         """Should toggle auto-routing mode and show status."""
@@ -790,13 +761,8 @@ class TestCompleteUserWorkflows:
         router = create_test_command_router(io, orchestrator)
 
         # Record initial states
-        initial_multiline = router.session_context.multiline_mode
         initial_auto = router.session_context.auto_route_mode
         initial_smart = router.session_context.smart_mode
-
-        # Toggle multiline
-        router.route("/ml", "")
-        assert router.session_context.multiline_mode != initial_multiline
 
         # Toggle auto-route
         router.route("/auto", "")
@@ -807,8 +773,8 @@ class TestCompleteUserWorkflows:
         assert router.session_context.smart_mode != initial_smart
 
         # Toggle back
-        router.route("/ml", "")
-        assert router.session_context.multiline_mode == initial_multiline
+        router.route("/auto", "")
+        assert router.session_context.auto_route_mode == initial_auto
 
 
 

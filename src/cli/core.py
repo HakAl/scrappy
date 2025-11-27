@@ -385,7 +385,7 @@ class CLI:
 
         State Changes:
             - Creates InteractiveMode with shared state_manager
-            - Conversation history, multiline_mode, auto_route_mode, etc.
+            - Conversation history, auto_route_mode, etc.
               are managed by the InteractiveMode instance
 
         Returns:

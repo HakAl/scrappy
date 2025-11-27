@@ -11,14 +11,17 @@ import threading
 import uuid
 from queue import Queue, Empty
 from textual.app import App, ComposeResult
+from textual.binding import Binding
 from textual.message import Message
-from textual.widgets import Input, RichLog, Label, ProgressBar
+from textual.widgets import TextArea, RichLog, Label, ProgressBar
 from textual.containers import Container, Vertical, Horizontal
 from textual.reactive import reactive
 from textual import work
+import pyperclip
 
 from src.infrastructure.output_mode import OutputModeContext
 from .input_capture import InputCaptureManager, InputRequest
+
 
 if TYPE_CHECKING:
     from .interactive import InteractiveMode
@@ -204,6 +207,10 @@ class ThreadSafeAsyncBridge:
             result: The result value (str for prompt, bool for confirm)
         """
         with self._lock:
+            if prompt_id not in self._pending_prompts:
+                # Stale prompt - already cleaned up or never registered
+                logger.warning(f"provide_result: unknown prompt_id {prompt_id}, ignoring")
+                return
             self._prompt_results[prompt_id] = result
             self._pending_prompts[prompt_id].set()  # Unblock worker thread
 
@@ -479,15 +486,17 @@ class ScrappyApp(App):
     - Scrollable output area for conversation history (RichLog)
     - Input field for user messages and commands
     - Dynamic status bar for progress indicators and token counters
-    - Native terminal copy/paste support (mouse disabled)
+    - Right-click paste support via pyperclip
     - Thread-safe message-based output routing via worker thread
     """
 
-    # Disable mouse to restore native terminal copy/paste
-    ENABLE_MOUSE = False
-
     # Use external CSS file for styling
     CSS_PATH = "scrappy.tcss"
+
+    # Priority binding intercepts Enter before TextArea gets it
+    BINDINGS = [
+        Binding("enter", "submit_input", "Submit", priority=True),
+    ]
 
     def __init__(self, interactive_mode: "InteractiveMode", output_adapter: TextualOutputAdapter):
         """Initialize the Textual app with InteractiveMode.
@@ -530,9 +539,11 @@ class ScrappyApp(App):
         # Fixed input area at bottom
         with Container(id="input_container"):
             yield Label(">", id="input_prompt")
-            yield Input(
+            yield TextArea(
                 id="input",
-                placeholder="Type your message or command...",
+                language=None,  # Plain text, no syntax highlighting
+                show_line_numbers=False,
+                soft_wrap=True,
             )
 
         # Dynamic status bar (shows/hides based on active components)
@@ -543,8 +554,8 @@ class ScrappyApp(App):
         # Set TUI mode context so all components know to route through Textual
         OutputModeContext.set_tui_mode(True, self.output_adapter)
 
-        # Cache input reference and focus immediately
-        self._input = self.query_one(Input)
+        # Cache input reference and focus
+        self._input = self.query_one(TextArea)
         self._input.focus()
 
         # Register status components with the status bar
@@ -574,15 +585,33 @@ class ScrappyApp(App):
         Args:
             event: The click event
         """
+        # Right-click (button=3) pastes from clipboard
+        if hasattr(event, 'button') and event.button == 3:
+            try:
+                text = pyperclip.paste()
+                if text:
+                    self._input.replace(
+                        text,
+                        self._input.selection.start,
+                        self._input.selection.end,
+                        maintain_selection_offset=True
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to paste from clipboard: {e}")
+            return
+
         # Get the widget that was clicked
         clicked_widget = event.widget if hasattr(event, 'widget') else None
 
         # Refocus input if clicking anything except the input or log
-        if clicked_widget is not None and not isinstance(clicked_widget, Input):
+        if clicked_widget is not None and not isinstance(clicked_widget, TextArea):
             self._input.focus()
             # Clear selection by setting cursor position after focus completes
             def clear_selection():
-                self._input.cursor_position = len(self._input.value)
+                # TextArea uses (row, col) tuple for cursor_location
+                # Move to end of document
+                end_location = self._input.document.end
+                self._input.cursor_location = end_location
             self.call_after_refresh(clear_selection)
 
     def on_key(self, event) -> None:
@@ -647,18 +676,16 @@ class ScrappyApp(App):
             except Exception as e:
                 logger.exception(f"Error consuming output queue: {e}")
 
-    def on_input_submitted(self, event: Input.Submitted) -> None:
-        """Handle user input submission.
+    def action_submit_input(self) -> None:
+        """Handle Enter to submit input.
 
         Handles both normal command input and capture mode input.
-
-        Args:
-            event: The input submission event containing user text
+        Uses TextArea API (.text and .clear()) instead of Input API.
         """
-        user_input = event.value.strip()
+        user_input = self._input.text.strip()
 
         # Clear input immediately
-        self._input.value = ""
+        self._input.clear()
 
         # Handle capture mode
         if self.capture_manager.is_capturing:

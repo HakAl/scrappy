@@ -228,40 +228,40 @@ class TestInputHandler:
     # Interactive Input Reading Tests
     # =========================================================================
 
-    def test_read_interactive_input_single_line_mode(self):
-        """Should read single line input when multiline disabled."""
+    def test_read_interactive_input_single_line(self):
+        """Should handle single line input (no continuation)."""
         io = MockIO(inputs=["user input"])
         handler = self.InputHandler(io)
 
-        result = handler.read_interactive_input(multiline_mode=False)
+        result = handler.read_interactive_input()
 
         assert result == "user input"
 
-    def test_read_interactive_input_multiline_mode(self):
-        """Should handle multiline input when enabled."""
-        io = MockIO(inputs=["first line", ""])
+    def test_read_interactive_input_continuation(self):
+        """Should continue on backslash."""
+        io = MockIO(inputs=["first\\", "second", ""])
         handler = self.InputHandler(io)
 
-        # In multiline mode, single line without continuation ends immediately
-        result = handler.read_interactive_input(multiline_mode=True)
+        result = handler.read_interactive_input()
 
-        assert "first line" in result
+        assert "first" in result
+        assert "second" in result
 
     def test_read_interactive_input_command_immediate_return(self):
         """Should return immediately if first line is a command."""
         io = MockIO(inputs=["/help"])
         handler = self.InputHandler(io)
 
-        result = handler.read_interactive_input(multiline_mode=True)
+        result = handler.read_interactive_input()
 
         assert result == "/help"
 
-    def test_read_interactive_input_continuation_marker(self):
-        """Should continue reading when line ends with backslash."""
-        io = MockIO(inputs=["first\\", "second", ""])
+    def test_read_interactive_input_blank_line_terminates(self):
+        """Should terminate on blank line after continuation."""
+        io = MockIO(inputs=["first\\", "second\\", ""])
         handler = self.InputHandler(io)
 
-        result = handler.read_interactive_input(multiline_mode=True)
+        result = handler.read_interactive_input()
 
         assert "first" in result
         assert "second" in result
@@ -271,10 +271,53 @@ class TestInputHandler:
         io = MockIO(inputs=["  input with spaces  "])
         handler = self.InputHandler(io)
 
-        result = handler.read_interactive_input(multiline_mode=False)
+        result = handler.read_interactive_input()
 
         # Should be stripped
         assert result.strip() == result or "input with spaces" in result
+
+    def test_read_interactive_input_rejects_too_long(self):
+        """Should reject input exceeding max length."""
+        from src.cli.input_handler import InputTooLongError
+        from src.cli.config.defaults import MAX_INPUT_CHARS
+
+        # Create input just over the limit
+        long_input = "x" * (MAX_INPUT_CHARS + 1)
+        io = MockIO(inputs=[long_input])
+        handler = self.InputHandler(io)
+
+        with pytest.raises(InputTooLongError) as exc_info:
+            handler.read_interactive_input()
+
+        assert exc_info.value.char_count == MAX_INPUT_CHARS + 1
+        assert exc_info.value.max_chars == MAX_INPUT_CHARS
+
+    def test_read_interactive_input_rejects_too_many_lines(self):
+        """Should reject input exceeding max lines."""
+        from src.cli.input_handler import InputTooLongError
+        from src.cli.config.defaults import MAX_INPUT_LINES
+
+        # Create input with too many continuation lines
+        lines = ["line\\"] * (MAX_INPUT_LINES + 1) + [""]
+        io = MockIO(inputs=lines)
+        handler = self.InputHandler(io)
+
+        with pytest.raises(InputTooLongError) as exc_info:
+            handler.read_interactive_input()
+
+        assert exc_info.value.line_count > MAX_INPUT_LINES
+
+    def test_read_interactive_input_accepts_at_limit(self):
+        """Should accept input exactly at max length."""
+        from src.cli.config.defaults import MAX_INPUT_CHARS
+
+        # Create input exactly at the limit
+        at_limit_input = "x" * MAX_INPUT_CHARS
+        io = MockIO(inputs=[at_limit_input])
+        handler = self.InputHandler(io)
+
+        result = handler.read_interactive_input()
+        assert len(result) == MAX_INPUT_CHARS
 
 
 class TestInputHandlerModuleStructure:

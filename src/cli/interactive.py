@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Dict, List, Optional
 from .io_interface import CLIIOProtocol
 from .state_manager import PlanStateManager
 from .session_context import SessionContextProtocol
-from .input_handler import InputHandler
+from .input_handler import InputHandler, InputTooLongError
 from .command_router import CommandRouter
 from .tool_detector import needs_tool_support
 from .display import CLIDisplay
@@ -111,7 +111,7 @@ class InteractiveMode:
         # Show welcome banner with Rich Panel
         # Use UnifiedIO if available, otherwise fall back to basic io
         if isinstance(io, UnifiedIO):
-            render_welcome_banner(io, self.session_context.multiline_mode, self.session_context.auto_route_mode)
+            render_welcome_banner(io, self.session_context.auto_route_mode)
         else:
             # Fallback for non-Rich IO (e.g., testing)
             io.secho("=" * 60, fg="cyan")
@@ -127,10 +127,7 @@ class InteractiveMode:
             io.echo(f"  {io.style('/quit', fg='yellow')}          - Exit the CLI")
             io.secho("=" * 60, fg="cyan")
 
-            if self.session_context.multiline_mode:
-                io.secho("Multiline input: ON", fg="green")
-            else:
-                io.secho("Multiline input: OFF", fg="yellow")
+            io.secho("Tip: End line with \\ to continue", fg="cyan")
 
             if self.session_context.auto_route_mode:
                 io.secho("Auto-routing: ON", fg="green")
@@ -167,14 +164,20 @@ class InteractiveMode:
         while True:
             try:
                 # Read input
-                user_input = self.input_handler.read_interactive_input(
-                    multiline_mode=self.session_context.multiline_mode
-                )
+                user_input = self.input_handler.read_interactive_input()
 
                 # Process input
                 if not self._process_input(user_input):
                     break
 
+            except InputTooLongError as e:
+                self.io.secho(
+                    f"Input too long: {e.char_count:,} characters "
+                    f"(max {e.max_chars:,})",
+                    fg="red"
+                )
+                self.io.echo("Tip: Split your input into smaller chunks or use file input.")
+                continue
             except KeyboardInterrupt:
                 self.io.echo("\n\nInterrupted. Type /quit to exit.")
                 self.logger.info("User interrupted input", extra={"action": "keyboard_interrupt"})

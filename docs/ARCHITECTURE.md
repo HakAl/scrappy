@@ -532,8 +532,9 @@ examples/
 └── context_aware_demo.py    # Context-aware development
 
 llm_team.py                   # CLI entry point
-.llm_team_context.json        # Cached codebase context (auto-generated)
-.agent_audit.json             # Agent action audit log (auto-generated)
+.scrappy/
+.scrappy/.context.json        # Cached codebase context (auto-generated)
+.scrappy/.audit.json             # Agent action audit log (auto-generated)
 ```
 
 ## Context Caching

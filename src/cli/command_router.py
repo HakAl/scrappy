@@ -110,9 +110,6 @@ class CommandRouter:
             # State commands
             "/clear": self._handle_clear,
             "/autoexec": self._handle_autoexec,
-            "/paste": self._handle_multiline,
-            "/ml": self._handle_multiline,
-            "/multiline": self._handle_multiline,
             "/auto": self._handle_auto,
             "/route": self._handle_auto,
             "/autoroute": self._handle_auto,
@@ -287,21 +284,6 @@ class CommandRouter:
             io.echo("  (DIRECT_COMMAND -> immediate, RESEARCH -> fast LLM, CODE_GEN -> agent with approval)")
         else:
             io.echo("  Tasks in plans will wait for manual execution")
-        return True
-
-    def _handle_multiline(self, args: str) -> bool:
-        """Handle multiline commands (/paste, /ml, /multiline)."""
-        io = self.io
-        self.session_context.multiline_mode = not self.session_context.multiline_mode
-        if self.session_context.multiline_mode:
-            io.secho("Multiline input mode: ON", fg="green", bold=True)
-            io.echo("  - End a line with \\ to continue on next line")
-            io.echo("  - Press Enter normally to send (no double-enter needed)")
-            io.echo("  - Commands still work on the first line")
-        else:
-            io.secho("Multiline input mode: OFF", fg="yellow", bold=True)
-            io.echo("  - Single line input (press Enter to send)")
-            io.echo("  - Each line is processed separately")
         return True
 
     def _handle_auto(self, args: str) -> bool:

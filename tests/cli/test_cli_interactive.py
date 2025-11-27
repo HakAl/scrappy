@@ -88,7 +88,6 @@ class TestInteractiveMode:
         io = MockIO()
         mode = create_test_interactive_mode(io, self.orchestrator)
 
-        assert mode.session_context.multiline_mode is True
         assert mode.session_context.auto_route_mode is True
         assert mode.session_context.smart_mode is False
 
@@ -145,8 +144,8 @@ class TestInteractiveMode:
                 mode.run()
 
         output = io.get_output()
-        # Should show multiline and auto-routing status
-        assert "Multiline" in output or "multiline" in output.lower()
+        # Should show tip about backslash continuation and auto-routing status
+        assert "Tip" in output or "\\" in output
 
     # =========================================================================
     # Input Processing Tests

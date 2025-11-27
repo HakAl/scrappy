@@ -16,6 +16,7 @@ from .types import (
     ActionResult,
     EvaluationResult,
     ConversationState,
+    DenialHandlerResult,
 )
 from .protocols import (
     AgentLoopProtocol,
@@ -24,6 +25,7 @@ from .protocols import (
     ResponseParserProtocol,
     ToolRegistryProtocol,
     ProviderSelectionStrategyProtocol,
+    DenialHandlerProtocol,
 )
 
 if TYPE_CHECKING:
@@ -58,6 +60,7 @@ class AgentLoop:
         config: "AgentConfig",
         audit_logger: Any = None,  # AuditLoggerProtocol
         tools: Optional[Dict[str, Any]] = None,
+        denial_handler: Optional[DenialHandlerProtocol] = None,
     ):
         """
         Initialize AgentLoop with injected dependencies.
@@ -72,6 +75,7 @@ class AgentLoop:
             config: AgentConfig with settings
             audit_logger: Optional audit logger
             tools: Optional tools dict for backward compat
+            denial_handler: Optional handler for user denials
         """
         self._orchestrator = orchestrator
         self._action_executor = action_executor
@@ -82,8 +86,11 @@ class AgentLoop:
         self._config = config
         self._audit_logger = audit_logger
         self._tools = tools or {}
+        self._denial_handler = denial_handler
         # Track current dry_run state
         self._dry_run = False
+        # Track denials in current session
+        self._denial_count = 0
 
     def think(self, state: ConversationState) -> AgentThought:
         """
@@ -380,7 +387,7 @@ class AgentLoop:
         thought: AgentThought,
         action: AgentAction,
         result: ActionResult,
-    ) -> None:
+    ) -> Optional[DenialHandlerResult]:
         """
         Update the conversation history based on the action and result.
 
@@ -389,19 +396,28 @@ class AgentLoop:
             thought: The raw thought from LLM
             action: The parsed action
             result: The execution result
+
+        Returns:
+            DenialHandlerResult if action was denied, None otherwise
         """
         if result.executed:
             self._handle_executed_action(state, thought, action, result)
+            return None
         elif not result.approved and action.action in self._tools:
-            self._handle_denied_action(state, thought, result)
+            return self._handle_denied_action(state, thought, result)
         elif result.approved and not result.executed and action.action in self._tools:
             self._handle_blocked_action(state, thought, result)
+            return None
         elif action.action == 'retry_parse':
             self._handle_parse_failure(state, thought, result)
+            return None
         elif action.action not in self._tools and action.action != 'complete' and action.action != 'error':
             self._handle_unknown_action(state, thought, action)
+            return None
         elif action.is_complete and not result.executed:
             self._handle_premature_completion(state, thought)
+            return None
+        return None
 
     def _handle_executed_action(
         self,
@@ -468,19 +484,47 @@ class AgentLoop:
         state: ConversationState,
         thought: AgentThought,
         result: ActionResult,
-    ) -> None:
-        """Handle action denied by user."""
+    ) -> DenialHandlerResult:
+        """
+        Handle action denied by user.
+
+        Args:
+            state: Conversation state to update
+            thought: The raw thought from LLM
+            result: The action result
+
+        Returns:
+            DenialHandlerResult with should_stop flag and message
+        """
+        self._denial_count += 1
+
+        # Use denial handler if available
+        if self._denial_handler:
+            denial_result = self._denial_handler.handle_denial(
+                action=result.action,
+                denial_count=self._denial_count,
+            )
+        else:
+            # Default behavior: continue with message
+            denial_result = DenialHandlerResult(
+                should_stop=False,
+                message=(
+                    f"User denied the {result.action} action. "
+                    "Please try a different approach or explain why this action is necessary."
+                ),
+            )
+
+        # Update conversation with denial message
         state.messages.append({
             'role': 'assistant',
             'content': thought.raw_response,
         })
         state.messages.append({
             'role': 'user',
-            'content': (
-                f"User denied the {result.action} action. "
-                "Please try a different approach or explain why this action is necessary."
-            ),
+            'content': denial_result.message,
         })
+
+        return denial_result
 
     def _handle_blocked_action(
         self,
@@ -637,8 +681,16 @@ class AgentLoop:
             # Stage 4: Evaluate - Check if task is complete
             evaluation = self.evaluate(action, result, state)
 
-            # Update conversation history
-            self.update_conversation(state, thought, action, result)
+            # Update conversation history and check for denial stop
+            denial_result = self.update_conversation(state, thought, action, result)
+
+            # Check if user wants to stop after denial
+            if denial_result and denial_result.should_stop:
+                return {
+                    'success': False,
+                    'result': denial_result.message,
+                    'iterations': state.iteration,
+                }
 
             # Check evaluation result
             if evaluation.is_complete:

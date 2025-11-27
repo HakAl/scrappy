@@ -114,11 +114,11 @@ class TestWelcomeBannerPanel:
         from src.cli.interactive_banner import render_welcome_banner
 
         # Test with different mode configurations
-        render_welcome_banner(io, multiline_mode=True, auto_route_mode=False)
+        render_welcome_banner(io, auto_route_mode=False)
         output = get_captured_output(console)
 
-        # Should show mode information
-        assert 'Multiline' in output or 'multiline' in output
+        # Should show tip about continuation and auto-routing status
+        assert 'Tip' in output or '\\' in output
         assert 'Auto' in output or 'auto' in output or 'routing' in output
 
 

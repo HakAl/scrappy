@@ -3,9 +3,12 @@
 Replaces modal dialogs with inline input capture for a more natural CLI experience.
 """
 
+import logging
 from dataclasses import dataclass
 from queue import Queue, Empty
 from typing import Any, Optional, Protocol, TYPE_CHECKING
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from .textual_app import ThreadSafeAsyncBridge
@@ -131,6 +134,10 @@ class InputCaptureManager:
         Args:
             user_input: The user's input string
         """
+        if self._id is None:
+            logger.warning("handle_captured_input called with no active capture")
+            return
+
         if self._type == "confirm":
             result = user_input.lower() in ('y', 'yes', '1', 'true')
         else:
@@ -140,6 +147,10 @@ class InputCaptureManager:
 
     def cancel(self) -> None:
         """Cancel current capture (escape/ctrl+c)."""
+        if self._id is None:
+            logger.warning("cancel called with no active capture")
+            return
+
         if self._type == "confirm":
             result = False
         else:

@@ -2220,6 +2220,86 @@ class MockTextualProgressReporter:
         return self._status_updates.copy()
 
 
+# =============================================================================
+# Agent UI Test Doubles
+# =============================================================================
+
+class StubAgentUI:
+    """
+    Test double for AgentUIProtocol.
+
+    Implements the minimum interface needed for testing denial handling.
+
+    Example:
+        ui = StubAgentUI(prompt_confirm_responses=[True, False])
+        result1 = ui.prompt_confirm("Stop?")  # Returns True
+        result2 = ui.prompt_confirm("Stop?")  # Returns False
+    """
+
+    def __init__(
+        self,
+        prompt_confirm_responses: Optional[List[bool]] = None,
+    ):
+        """
+        Initialize stub with preset responses.
+
+        Args:
+            prompt_confirm_responses: List of booleans to return from prompt_confirm()
+        """
+        self._prompt_confirm_responses = list(prompt_confirm_responses) if prompt_confirm_responses else []
+        self._prompt_confirm_index = 0
+        self._shown_messages: List[str] = []
+
+    def prompt_confirm(self, message: str = "Allow?", default: bool = False) -> bool:
+        """Return preset confirmation or default."""
+        self._shown_messages.append(message)
+        if self._prompt_confirm_index < len(self._prompt_confirm_responses):
+            result = self._prompt_confirm_responses[self._prompt_confirm_index]
+            self._prompt_confirm_index += 1
+            return result
+        return default
+
+    def show_thinking(self, text: str) -> None:
+        """Record thinking message."""
+        self._shown_messages.append(f"[thinking] {text}")
+
+    def show_tool_request(self, tool_name: str, params: Dict[str, Any]) -> None:
+        """Record tool request."""
+        self._shown_messages.append(f"[tool] {tool_name}")
+
+    def show_command(self, command: str) -> None:
+        """Record command."""
+        self._shown_messages.append(f"[command] {command}")
+
+    def show_error(self, message: str) -> None:
+        """Record error."""
+        self._shown_messages.append(f"[error] {message}")
+
+    def show_result(self, result: str, title: str = "Result", is_error: bool = False) -> None:
+        """Record result."""
+        self._shown_messages.append(f"[result] {result}")
+
+    def show_warning(self, message: str) -> None:
+        """Record warning."""
+        self._shown_messages.append(f"[warning] {message}")
+
+    def show_progress(self, message: str) -> None:
+        """Record progress."""
+        self._shown_messages.append(f"[progress] {message}")
+
+    def show_provider_status(self, provider: str, message: str, color: str = "cyan") -> None:
+        """Record provider status."""
+        self._shown_messages.append(f"[provider:{provider}] {message}")
+
+    def show_rule(self, title: Optional[str] = None) -> None:
+        """Record rule."""
+        self._shown_messages.append(f"[rule] {title or ''}")
+
+    def get_shown_messages(self) -> List[str]:
+        """Get all recorded messages for verification."""
+        return self._shown_messages.copy()
+
+
 class MockIO:
     """
     Mock IO implementation for testing CLI handlers.

@@ -30,16 +30,6 @@ class SessionContextProtocol(Protocol):
         ...
 
     @property
-    def multiline_mode(self) -> bool:
-        """Get multiline input mode."""
-        ...
-
-    @multiline_mode.setter
-    def multiline_mode(self, value: bool) -> None:
-        """Set multiline input mode."""
-        ...
-
-    @property
     def auto_route_mode(self) -> bool:
         """Get auto-routing mode."""
         ...
@@ -82,7 +72,6 @@ class SessionContext:
     def __init__(
         self,
         conversation_history: List[Dict[str, str]] | None = None,
-        multiline_mode: bool = True,
         auto_route_mode: bool = True,
         smart_mode: bool = False,
         auto_save: bool = True
@@ -92,13 +81,11 @@ class SessionContext:
 
         Args:
             conversation_history: Chat history. Defaults to empty list.
-            multiline_mode: Enable multiline input. Defaults to True.
             auto_route_mode: Enable auto-routing. Defaults to True.
             smart_mode: Enable smart query mode. Defaults to False.
             auto_save: Enable auto-save on exit. Defaults to True.
         """
         self._conversation_history = conversation_history or []
-        self._multiline_mode = multiline_mode
         self._auto_route_mode = auto_route_mode
         self._smart_mode = smart_mode
         self._auto_save = auto_save
@@ -112,16 +99,6 @@ class SessionContext:
     def conversation_history(self, value: List[Dict[str, str]]) -> None:
         """Set conversation history."""
         self._conversation_history = value
-
-    @property
-    def multiline_mode(self) -> bool:
-        """Get multiline input mode."""
-        return self._multiline_mode
-
-    @multiline_mode.setter
-    def multiline_mode(self, value: bool) -> None:
-        """Set multiline input mode."""
-        self._multiline_mode = value
 
     @property
     def auto_route_mode(self) -> bool:

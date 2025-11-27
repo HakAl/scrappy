@@ -90,7 +90,6 @@ def display_banner(io: "UnifiedIOProtocol") -> None:
 
 def render_welcome_banner(
     io: "UnifiedIOProtocol",
-    multiline_mode: bool = True,
     auto_route_mode: bool = False
 ) -> None:
     """Render the welcome banner as a Rich Panel.
@@ -99,20 +98,13 @@ def render_welcome_banner(
 
     Args:
         io: UnifiedIO instance for output
-        multiline_mode: Whether multiline input is enabled
         auto_route_mode: Whether auto-routing is enabled
     """
     # Display main banner
     display_banner(io)
 
     # Display mode statuses
-    if multiline_mode:
-        io.secho(
-            "Multiline input: ON (end line with \\ to continue, /ml to toggle)",
-            fg="green"
-        )
-    else:
-        io.secho("Multiline input: OFF (/ml to toggle)", fg="yellow")
+    io.secho("Tip: End line with \\ to continue on next line", fg="cyan")
 
     if auto_route_mode:
         io.secho("Auto-routing: ON (task-aware execution)", fg="green")

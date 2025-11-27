@@ -347,7 +347,7 @@ Audit Log:
   [2025-01-15T10:31:12] write_file - Approved
   [2025-01-15T10:31:45] complete - Approved
 
-Audit log saved to: .agent_audit.json
+Audit log saved to: .scrappy/.audit.json  
 
 To rollback changes: git reset --hard a1b2c3d4
 ```
@@ -921,7 +921,7 @@ Result: Added Pydantic validation with email and password checks
 Iterations: 2
 
 Save audit log to file? [y/N]: y
-Saved to: .agent_audit.json
+Saved to: .scrappy/.audit.json  
 
 Rollback to checkpoint? [y/N]: n
 ```
@@ -981,7 +981,7 @@ python scrappy.py agent "Refactor auth module" --dry-run
 python scrappy.py agent "Add new feature"
 
 # Review audit logs after completion
-cat .agent_audit.json
+cat .scrappy/.audit.json  
 ```
 
 ### 8. Combine Agent with Context

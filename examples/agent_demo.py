@@ -243,7 +243,7 @@ A typical agent workflow:
     print("Key Safety Points:")
     print("  - Every action requires explicit approval")
     print("  - Git checkpoint before any changes")
-    print("  - Full audit trail saved to .agent_audit.json")
+    print("  - Full audit trail saved to .scrappy/.audit.json")
     print("  - Easy rollback with git reset --hard")
 
 
@@ -281,7 +281,7 @@ else:
     print(f"Task failed: {result['result']}")
 
 # Save audit log
-agent.save_audit_log(".agent_audit.json")
+agent.save_audit_log()
 
 # Optionally rollback
 if not result['success']:

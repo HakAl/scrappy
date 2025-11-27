@@ -103,6 +103,38 @@ class TestInputCaptureManager:
         manager.cancel()
         mock_bridge.provide_result.assert_called_once_with("id1", "")
 
+    # --- Defensive Null Check Tests (Bug 3 Fix) ---
+
+    def test_handle_captured_input_with_no_active_capture_is_safe(self, manager, mock_bridge):
+        """handle_captured_input gracefully handles stale/missing capture state."""
+        # Never entered capture mode - _id is None
+        manager.handle_captured_input("some input")
+        # Should not call provide_result
+        mock_bridge.provide_result.assert_not_called()
+
+    def test_cancel_with_no_active_capture_is_safe(self, manager, mock_bridge):
+        """cancel gracefully handles stale/missing capture state."""
+        # Never entered capture mode - _id is None
+        manager.cancel()
+        # Should not call provide_result
+        mock_bridge.provide_result.assert_not_called()
+
+    def test_handle_captured_input_after_exit_is_safe(self, manager, mock_bridge):
+        """handle_captured_input is safe after exit_capture_mode clears state."""
+        manager.enter_capture_mode("id1", "Question?", "confirm")
+        manager.exit_capture_mode()  # Clears _id to None
+        manager.handle_captured_input("y")
+        # Should not call provide_result because _id is None
+        mock_bridge.provide_result.assert_not_called()
+
+    def test_cancel_after_exit_is_safe(self, manager, mock_bridge):
+        """cancel is safe after exit_capture_mode clears state."""
+        manager.enter_capture_mode("id1", "Question?", "confirm")
+        manager.exit_capture_mode()  # Clears _id to None
+        manager.cancel()
+        # Should not call provide_result because _id is None
+        mock_bridge.provide_result.assert_not_called()
+
     # --- Queue Tests (Concurrent Prompts) ---
 
     def test_second_prompt_queued_when_capturing(self, manager):

@@ -46,20 +46,33 @@ RichLog {
     color: $accent;
 }
 
-/* User input field */
-Input {
+/* User input field - TextArea for multiline support */
+TextArea {
     width: 1fr;
-    height: 1;
+    height: auto;
+    min-height: 1;
+    max-height: 5;
     border: none;
-    background: transparent;
+    background: $surface;
 }
 
-/* Defensive !important for known Textual specificity issues */
-Input > .input--placeholder {
+/* TextArea internal gutter (line numbers area) */
+TextArea > .text-area--gutter {
+    background: $surface;
+}
+
+/* TextArea internal cursor line highlight */
+TextArea > .text-area--cursor-line {
+    background: $surface;
+}
+
+/* TextArea placeholder styling */
+TextArea > .text-area--placeholder {
     color: $text-muted !important;
 }
 
-Input > .input--cursor {
+/* TextArea cursor styling */
+TextArea > .text-area--cursor {
     color: $text !important;
 }
 

@@ -761,6 +761,13 @@ class CodeAgent:
         """Get the audit log of all actions."""
         return self.audit_log
 
-    def save_audit_log(self, path: str = ".agent_audit.json"):
-        """Save audit log to file."""
-        return self._audit_logger.save(self.project_root, path)
+    def save_audit_log(self) -> str:
+        """
+        Save audit log to file.
+
+        Uses path_provider to determine correct location (.scrappy/audit.json).
+
+        Returns:
+            Path to the saved audit log file.
+        """
+        return self._audit_logger.save()

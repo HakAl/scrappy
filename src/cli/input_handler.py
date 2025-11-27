@@ -6,6 +6,21 @@ Handles multiline input reading and command parsing.
 
 from typing import Tuple
 from .io_interface import CLIIOProtocol
+from .config.defaults import MAX_INPUT_CHARS, MAX_INPUT_LINES
+
+
+class InputTooLongError(Exception):
+    """Raised when user input exceeds maximum allowed length."""
+
+    def __init__(self, char_count: int, line_count: int, max_chars: int, max_lines: int):
+        self.char_count = char_count
+        self.line_count = line_count
+        self.max_chars = max_chars
+        self.max_lines = max_lines
+        super().__init__(
+            f"Input too long: {char_count:,} chars ({max_chars:,} max) "
+            f"or {line_count} lines ({max_lines} max)"
+        )
 
 
 class InputHandler:
@@ -83,63 +98,73 @@ class InputHandler:
 
         return input_str.startswith("/")
 
-    def read_interactive_input(self, multiline_mode: bool = False) -> str:
+    def read_interactive_input(self) -> str:
         """
         Read input from user in interactive mode.
 
-        Args:
-            multiline_mode: Whether to enable multiline input mode.
+        Always supports multiline via backslash continuation.
 
         Returns:
             The user input string, stripped.
+
+        Raises:
+            InputTooLongError: If input exceeds MAX_INPUT_CHARS or MAX_INPUT_LINES.
         """
-        if multiline_mode:
-            # Multiline input mode - read until blank line or complete input
-            self.io.secho("You> ", fg="green", bold=True, nl=False)
-            lines = []
-            first_line = True
+        self.io.secho("You> ", fg="green", bold=True, nl=False)
+        lines = []
+        first_line = True
 
-            while True:
-                try:
-                    if first_line:
-                        line = self.io.prompt("", default="", show_default=False)
-                        first_line = False
+        while True:
+            try:
+                if first_line:
+                    line = self.io.prompt("", default="", show_default=False)
+                    first_line = False
 
-                        # If first line is a command, process it immediately
-                        if line.strip().startswith("/"):
-                            return line.strip()
+                    # If first line is a command, process it immediately
+                    if line.strip().startswith("/"):
+                        return line.strip()
 
-                        # If line doesn't end with continuation marker (\), treat as complete
-                        if not line.rstrip().endswith("\\"):
-                            lines.append(line)
-                            break
-                        else:
-                            # Remove the continuation marker and continue reading
-                            lines.append(line.rstrip()[:-1])
+                    # If line doesn't end with continuation marker (\), treat as complete
+                    if not line.rstrip().endswith("\\"):
+                        lines.append(line)
+                        break
                     else:
-                        self.io.secho("... ", fg="green", nl=False)
-                        line = self.io.prompt("", default="", show_default=False)
+                        # Remove the continuation marker and continue reading
+                        lines.append(line.rstrip()[:-1])
+                else:
+                    self.io.secho("... ", fg="green", nl=False)
+                    line = self.io.prompt("", default="", show_default=False)
 
-                        # Blank line terminates input
-                        if line.strip() == "":
-                            break
+                    # Blank line terminates input
+                    if line.strip() == "":
+                        break
 
-                        # Check for continuation marker
-                        if line.rstrip().endswith("\\"):
-                            lines.append(line.rstrip()[:-1])
-                        else:
-                            lines.append(line)
-                            break
+                    # Check for continuation marker
+                    if line.rstrip().endswith("\\"):
+                        lines.append(line.rstrip()[:-1])
+                    else:
+                        lines.append(line)
+                        break
 
-                except Exception:
-                    return ""
+            except Exception:
+                return ""
 
-            return "\n".join(lines).strip()
-        else:
-            # Single-line input mode
-            result = self.io.prompt(
-                self.io.style("You", fg="green", bold=True),
-                default="",
-                show_default=False
+        result = "\n".join(lines).strip()
+
+        # Validate length before returning
+        if len(result) > MAX_INPUT_CHARS:
+            raise InputTooLongError(
+                char_count=len(result),
+                line_count=len(lines),
+                max_chars=MAX_INPUT_CHARS,
+                max_lines=MAX_INPUT_LINES
             )
-            return result.strip()
+        if len(lines) > MAX_INPUT_LINES:
+            raise InputTooLongError(
+                char_count=len(result),
+                line_count=len(lines),
+                max_chars=MAX_INPUT_CHARS,
+                max_lines=MAX_INPUT_LINES
+            )
+
+        return result

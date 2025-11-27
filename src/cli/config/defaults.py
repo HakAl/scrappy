@@ -50,6 +50,10 @@ SEPARATOR_WIDTH_WIDE = 60  # Wide separators
 # Command defaults
 MAX_ITERATIONS = 10  # Max iterations for iterative commands
 
+# Input length limits
+MAX_INPUT_CHARS = 50000  # ~50KB, approximately 12,500 tokens
+MAX_INPUT_LINES = 1000   # Sanity limit on line count
+
 # Convenience dictionaries for grouped access
 TEMPERATURES = {
     'low': TEMPERATURE_LOW,
