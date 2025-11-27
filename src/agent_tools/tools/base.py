@@ -12,7 +12,10 @@ Architecture:
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Optional, Protocol, Union, runtime_checkable
+
+from rich.syntax import Syntax
+from rich.text import Text
 
 if TYPE_CHECKING:
     from ...agent_config import AgentConfig
@@ -100,6 +103,38 @@ class ToolResult:
     output: str
     error: Optional[str] = None
     metadata: dict = field(default_factory=dict)
+
+    def __str__(self) -> str:
+        """Return human-readable output for display.
+
+        Returns error message if present, otherwise the output string.
+        This avoids escaped newlines and dataclass repr noise.
+        """
+        if self.error:
+            return f"Error: {self.error}"
+        return self.output
+
+    def __rich__(self) -> Union[Text, Syntax]:
+        """Rich-compatible rendering with syntax highlighting.
+
+        Rich's console automatically calls this when printing.
+        """
+        if self.error:
+            return Text(f"Error: {self.error}", style="bold red")
+
+        # Detect language from metadata
+        language = self.metadata.get("language", "text")
+
+        # Use syntax highlighting for code with multiple lines
+        if language != "text" and "\n" in self.output:
+            return Syntax(
+                self.output,
+                language,
+                theme="monokai",
+                line_numbers=True,
+            )
+
+        return Text(self.output)
 
 
 @runtime_checkable

@@ -309,6 +309,73 @@ class TestRateLimitFormatter:
 class TestCacheFormatter:
     """Tests for cache statistics formatter."""
 
+    def test_get_stats_data_returns_structured_format(self):
+        """get_stats_data returns (headers, rows, title) tuple for io.table()."""
+        formatter = CacheFormatter()
+        stats = {
+            'exact_cache_entries': 10,
+            'intent_cache_entries': 5,
+            'exact_hits': 3,
+            'intent_hits': 2,
+            'exact_misses': 5,
+            'saves': 8,
+            'exact_hit_rate': '37.5%',
+            'intent_hit_rate': '28.6%',
+            'cache_file': '/path/to/cache.json'
+        }
+
+        headers, rows, title = formatter.get_stats_data(stats, enabled=True)
+
+        assert headers == ["Metric", "Value"]
+        assert title == "Cache Statistics"
+        assert len(rows) == 9
+        assert ["Total Entries", "15"] in rows
+        assert ["Status", "Enabled"] in rows
+
+    def test_get_stats_data_disabled_status(self):
+        """get_stats_data shows Disabled when caching is off."""
+        formatter = CacheFormatter()
+        stats = {
+            'exact_cache_entries': 0,
+            'intent_cache_entries': 0,
+            'exact_hits': 0,
+            'intent_hits': 0,
+            'exact_misses': 0,
+            'saves': 0,
+            'exact_hit_rate': '0.0%',
+            'intent_hit_rate': '0.0%',
+            'cache_file': '/path/to/cache.json'
+        }
+
+        headers, rows, title = formatter.get_stats_data(stats, enabled=False)
+
+        assert ["Status", "Disabled"] in rows
+
+    def test_get_stats_data_no_ansi_codes(self):
+        """get_stats_data returns plain text without ANSI codes."""
+        formatter = CacheFormatter()
+        stats = {
+            'exact_cache_entries': 10,
+            'intent_cache_entries': 5,
+            'exact_hits': 8,
+            'intent_hits': 3,
+            'exact_misses': 2,
+            'saves': 15,
+            'exact_hit_rate': '80.0%',
+            'intent_hit_rate': '60.0%',
+            'cache_file': '/path/to/cache.json'
+        }
+
+        headers, rows, title = formatter.get_stats_data(stats, enabled=True)
+
+        # Check no ANSI codes in any data
+        assert "\x1b" not in title
+        for header in headers:
+            assert "\x1b" not in header
+        for row in rows:
+            for cell in row:
+                assert "\x1b" not in cell
+
     def test_format_stats_displays_header(self):
         """Formatter displays cache statistics header."""
         formatter = CacheFormatter()

@@ -21,6 +21,28 @@ Rationale: Start with simpler fixes (2.2, 2.4) to build momentum, then tackle UI
 
 ## Issue 2.1: Prompt/Question Not Near Input
 
+### Pre-Implementation: Visual Validation
+
+Status bar has never been tested by users (visual integration) in TUI as it remains unused.
+
+**Step 0:** Add prompt area to status bar, populate with static data, and visually inspect before building full integration.
+
+**Target Layout:**
+```
++----------------------------------------+
+|        RichLog (SCROLLABLE)            |
+|  - Conversation history                |
++----------------------------------------+
+| > [Input here]                         |
++----------------------------------------+
+| [Status Bar: Question text] [y/n]      |
++----------------------------------------+
+| Progress: 123                          |
++----------------------------------------+
+```
+
+**Key Decision:** Progress is a separate widget below status bar (not sharing space). This follows SRP - status bar handles prompts/status, progress widget handles progress indicators.
+
 ### Problem
 - Question text ("Allow this action?") is written to scrollable RichLog at top
 - Input prompt is fixed at bottom
@@ -277,11 +299,36 @@ Rich's console automatically calls `__rich__()` when printing, providing:
 
 ## Issue 2.3: Command History Navigation
 
+NEEDS WORK
+Did NOT follow the implementation plan. The plan specifies:
+
+  1. Files to Modify:
+    - src/cli/protocols.py - Add InputHistoryProtocol
+    - src/cli/input_history.py - New file: InputHistory implementation
+    - src/cli/input_handler.py - Inject history, use for prompts
+    - src/cli/output.py:456-462 - Update prompt to use prompt_toolkit
+  2. Specific requirements I missed:
+    - Protocol named InputHistoryProtocol (not CommandHistoryProtocol)
+    - File named input_history.py (I created command_history.py)
+    - History file at .scrappy_history (I used ~/.scrappy/command_history)
+    - Filter short responses from history
+    - Update output.py:456-462 to use prompt_toolkit
+    - Navigation methods get_previous(), get_next(), reset_position()
+
+  I completely deviated from the plan. I should:
+  1. Delete my command_history.py
+  2. Create input_history.py following the plan exactly
+  3. Add InputHistoryProtocol to protocols.py
+  4. Update output.py as specified
+  5. Use the correct history file path
+
+  Would you like me to start over and follow the plan correctly?
+
 ### Problem
 - No up/down arrow history navigation
 - Click's `prompt()` uses `input()` with no history support
-- User choices (y, Y, n, N, 1, 2, 3) should be excluded 
-- -- MAYBE CONFIRMATION_RESPONSES ISNT NEEDED - EG: input > MIN_MEANINGFUL_LENGTH (includes the subset)
+- Short responses (y/n, menu numbers) should be excluded from history 
+
 
 ### Current Code
 ```python
@@ -380,7 +427,7 @@ Textual already depends on prompt_toolkit internally. Add explicit dependency fo
            ...
    ```
 
-3. **Create Implementation with Injectable Filter** (src/cli/input_history.py)
+3. **Create Implementation with Simplified Filter** (src/cli/input_history.py)
    ```python
    from pathlib import Path
    from typing import Optional, List, Callable
@@ -389,15 +436,13 @@ Textual already depends on prompt_toolkit internally. Add explicit dependency fo
        """Input history with filtering and persistence.
 
        Uses injectable filter function for testability and extensibility.
-       Default filter excludes:
-       - Confirmation responses (y, n, yes, no)
-       - Numeric menu selections (1, 2, 3, etc.)
-       - Very short inputs (< 3 chars)
+       Default filter:
+       - Always keeps commands (start with "/", length >= 2)
+       - Excludes short inputs (< 4 chars) which covers y/n/yes/no
+       - Excludes pure numeric inputs (menu selections like 1, 2, 10)
        """
 
-       # Named constants instead of magic regex
-       CONFIRMATION_RESPONSES = frozenset({'y', 'n', 'yes', 'no'})
-       MIN_MEANINGFUL_LENGTH = 3
+       MIN_MEANINGFUL_LENGTH = 4
 
        def __init__(
            self,
@@ -412,22 +457,15 @@ Textual already depends on prompt_toolkit internally. Add explicit dependency fo
            self._should_store = filter_func or self._default_filter
 
        def _default_filter(self, entry: str) -> bool:
-           """Returns True if entry should be stored in history.
+           """Returns True if entry should be stored in history."""
+           entry = entry.strip()
 
-           Filters out confirmations, menu selections, and short inputs.
-           """
-           entry = entry.strip().lower()
+           # Always keep commands (but not bare "/")
+           if entry.startswith("/") and len(entry) >= 2:
+               return True
 
-           # Too short to be meaningful
-           if len(entry) < self.MIN_MEANINGFUL_LENGTH:
-               return False
-
-           # Confirmation responses
-           if entry in self.CONFIRMATION_RESPONSES:
-               return False
-
-           # Numeric menu selections
-           if entry.isdigit():
+           # Filter short entries (covers y/n/yes/no) and numeric menu selections
+           if len(entry) < self.MIN_MEANINGFUL_LENGTH or entry.isdigit():
                return False
 
            return True
@@ -507,37 +545,56 @@ Textual already depends on prompt_toolkit internally. Add explicit dependency fo
 
 6. **Tests** (tests/cli/test_input_history.py)
    ```python
-   def test_filters_single_char_responses():
+   def test_filters_short_responses():
+       """Short inputs (< 4 chars) filtered: y, n, yes, no."""
        history = InputHistory()
        history.add("y")
        history.add("n")
-       history.add("Y")
+       history.add("yes")
+       history.add("no")
        assert history.get_previous() is None
 
    def test_filters_numeric_responses():
+       """Pure numeric inputs filtered (menu selections)."""
        history = InputHistory()
        history.add("1")
+       history.add("10")
        history.add("123")
        assert history.get_previous() is None
 
-   def test_stores_real_commands():
+   def test_keeps_short_commands():
+       """Commands kept even if short (e.g., /a, /?)."""
+       history = InputHistory()
+       history.add("/a")
+       history.add("/?")
+       assert history.get_previous() == "/?"
+       assert history.get_previous() == "/a"
+
+   def test_filters_bare_slash():
+       """Bare '/' is not a valid command."""
+       history = InputHistory()
+       history.add("/")
+       assert history.get_previous() is None
+
+   def test_stores_meaningful_input():
+       """Regular text >= 4 chars is stored."""
        history = InputHistory()
        history.add("/help")
        history.add("explain this code")
        assert history.get_previous() == "explain this code"
        assert history.get_previous() == "/help"
 
-   def test_navigation_wraps_correctly():
+   def test_navigation():
        history = InputHistory()
-       history.add("first")
-       history.add("second")
-       assert history.get_previous() == "second"
-       assert history.get_previous() == "first"
+       history.add("first query")
+       history.add("second query")
+       assert history.get_previous() == "second query"
+       assert history.get_previous() == "first query"
        assert history.get_previous() is None  # At start
-       assert history.get_next() == "second"
+       assert history.get_next() == "second query"
 
    def test_custom_filter_function():
-       # Custom filter that only stores commands starting with /
+       """Injectable filter for custom behavior."""
        custom_filter = lambda entry: entry.startswith("/")
        history = InputHistory(filter_func=custom_filter)
 

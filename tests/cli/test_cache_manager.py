@@ -19,10 +19,15 @@ from tests.helpers import MockIO, ConfigurableTestOrchestrator
 
 
 class TestCacheManagerShowStats:
-    """Tests for showing cache statistics (no args)."""
+    """Tests for showing cache statistics (no args).
+
+    Note: The /cache command now uses io.table() for output, which displays
+    data in a table format without ANSI color codes. This avoids the ANSI
+    artifacts that occurred with the old format_stats() approach.
+    """
 
     def test_show_cache_stats_displays_total_entries(self):
-        """Should display total cache entries."""
+        """Should display total cache entries in table format."""
         from src.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
@@ -32,11 +37,11 @@ class TestCacheManagerShowStats:
         manager.manage_cache(args="")
 
         output = io.get_all_output()
-        assert "Cache Statistics:" in output
-        assert "Total Entries:" in output
+        assert "Cache Statistics" in output
+        assert "Total Entries" in output
 
     def test_show_cache_stats_displays_hit_counts(self):
-        """Should display exact and intent cache hit counts."""
+        """Should display exact and intent cache hit counts in table format."""
         from src.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
@@ -46,11 +51,11 @@ class TestCacheManagerShowStats:
         manager.manage_cache(args="")
 
         output = io.get_all_output()
-        assert "Exact Cache Hits:" in output
-        assert "Intent Cache Hits:" in output
+        assert "Exact Cache Hits" in output
+        assert "Intent Cache Hits" in output
 
     def test_show_cache_stats_displays_miss_count(self):
-        """Should display cache miss count."""
+        """Should display cache miss count in table format."""
         from src.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
@@ -60,10 +65,10 @@ class TestCacheManagerShowStats:
         manager.manage_cache(args="")
 
         output = io.get_all_output()
-        assert "Cache Misses:" in output
+        assert "Cache Misses" in output
 
     def test_show_cache_stats_displays_hit_rates(self):
-        """Should display hit rate percentages."""
+        """Should display hit rate percentages in table format."""
         from src.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
@@ -73,10 +78,10 @@ class TestCacheManagerShowStats:
         manager.manage_cache(args="")
 
         output = io.get_all_output()
-        assert "Hit Rate:" in output
+        assert "Hit Rate" in output
 
     def test_show_cache_stats_displays_cache_file_location(self):
-        """Should display cache file path."""
+        """Should display cache file path in table format."""
         from src.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
@@ -86,10 +91,10 @@ class TestCacheManagerShowStats:
         manager.manage_cache(args="")
 
         output = io.get_all_output()
-        assert "Cache File:" in output
+        assert "Cache File" in output
 
     def test_show_cache_stats_displays_caching_enabled_status(self):
-        """Should display whether caching is enabled or disabled."""
+        """Should display whether caching is enabled or disabled in table format."""
         from src.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
@@ -100,10 +105,11 @@ class TestCacheManagerShowStats:
         manager.manage_cache(args="")
 
         output = io.get_all_output()
-        assert "Caching:" in output
+        assert "Status" in output
+        assert "Enabled" in output
 
-    def test_show_cache_stats_colors_good_hit_rate_green(self):
-        """Should style good hit rates (>50%) in green."""
+    def test_show_cache_stats_displays_hit_rate_values(self):
+        """Should display hit rate values in table format (no ANSI codes)."""
         from src.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
@@ -124,13 +130,14 @@ class TestCacheManagerShowStats:
         manager.manage_cache(args="")
 
         output = io.get_all_output()
-        # Check that hit rate > 50% is displayed with green ANSI code
-        # ANSI green code is \x1b[32m
+        # Verify hit rates are displayed without ANSI artifacts
         assert '60.0%' in output
-        assert '\x1b[32m' in output  # Contains green color code
+        assert '50.0%' in output
+        # Verify no raw ANSI codes are present (the fix for Issue 2.4)
+        assert '\x1b[' not in output
 
-    def test_show_cache_stats_colors_poor_hit_rate_yellow(self):
-        """Should style poor hit rates (<=50%) in yellow."""
+    def test_show_cache_stats_no_ansi_artifacts(self):
+        """Should not contain raw ANSI code artifacts in output."""
         from src.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
@@ -151,10 +158,12 @@ class TestCacheManagerShowStats:
         manager.manage_cache(args="")
 
         output = io.get_all_output()
-        # Check that hit rate <= 50% is displayed with yellow ANSI code
-        # ANSI yellow code is \x1b[33m
+        # Verify data is displayed
         assert '20.0%' in output
-        assert '\x1b[33m' in output  # Contains yellow color code
+        # This is the key fix - no ANSI codes should appear as literal text
+        assert '\x1b[' not in output
+        assert '[36m' not in output  # No raw cyan code
+        assert '[0m' not in output   # No raw reset code
 
 
 class TestCacheManagerClear:

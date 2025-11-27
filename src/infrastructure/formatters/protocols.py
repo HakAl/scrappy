@@ -6,7 +6,7 @@ and other display output. Following SOLID principles, each protocol
 has a single, focused responsibility.
 """
 
-from typing import Protocol, Dict, Any, List, Optional
+from typing import Protocol, Dict, Any, List, Optional, Tuple
 
 
 class StatsFormatterProtocol(Protocol):
@@ -156,6 +156,23 @@ class CacheFormatterProtocol(Protocol):
     Implementations format cache statistics including hit rates,
     entry counts, and cache status.
     """
+
+    def get_stats_data(
+        self,
+        stats: Dict[str, Any],
+        enabled: bool
+    ) -> Tuple[List[str], List[List[str]], str]:
+        """Return structured data for table display.
+
+        Args:
+            stats: Cache statistics dict with keys like exact_cache_entries,
+                intent_cache_entries, exact_hits, etc.
+            enabled: Whether caching is currently enabled
+
+        Returns:
+            Tuple of (headers, rows, title) suitable for io.table()
+        """
+        ...
 
     def format_stats(self, stats: Dict[str, Any], enabled: bool) -> str:
         """Format cache statistics for display.

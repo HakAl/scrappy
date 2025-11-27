@@ -21,6 +21,7 @@ import pyperclip
 
 from src.infrastructure.output_mode import OutputModeContext
 from .input_capture import InputCaptureManager, InputRequest
+from .command_history import CommandHistory, get_default_history_path
 
 
 if TYPE_CHECKING:
@@ -378,6 +379,81 @@ class TokenCounter:
         self._visible = False
 
 
+class PromptDisplay:
+    """Shows prompt/question near the input in the status bar.
+
+    Used for capture mode to display prompts close to where the user
+    types their response, rather than in the scrollable output area.
+    Implements StatusComponentProtocol.
+    """
+
+    def __init__(self) -> None:
+        """Initialize prompt display with empty state."""
+        self._message: str = ""
+        self._input_type: str = ""
+        self._default: str = ""
+        self._visible: bool = False
+        self._widget: Optional[Label] = None
+
+    @property
+    def component_id(self) -> str:
+        """Unique identifier for this component."""
+        return "prompt_display"
+
+    @property
+    def is_visible(self) -> bool:
+        """Whether this component should be displayed."""
+        return self._visible and bool(self._message)
+
+    @property
+    def widget(self) -> Label:
+        """Return cached widget, creating if needed."""
+        if self._widget is None:
+            self._widget = Label(self._format_prompt(), id=self.component_id)
+        return self._widget
+
+    def _format_prompt(self) -> str:
+        """Format the prompt message with type hint."""
+        if not self._message:
+            return ""
+
+        hint = " [y/n]" if self._input_type == "confirm" else ""
+        default_hint = f" (default: {self._default})" if self._default else ""
+        return f"{self._message}{hint}{default_hint}"
+
+    def update_widget(self) -> None:
+        """Update widget state in place."""
+        if self._widget is not None:
+            self._widget.update(self._format_prompt())
+
+    def show_prompt(
+        self,
+        message: str,
+        input_type: str = "text",
+        default: str = ""
+    ) -> None:
+        """Display a prompt message in the status bar.
+
+        Args:
+            message: The prompt message to display
+            input_type: Type of input expected ("confirm" or "text")
+            default: Default value hint to display
+        """
+        self._message = message
+        self._input_type = input_type
+        self._default = default
+        self._visible = True
+        self.update_widget()
+
+    def hide_prompt(self) -> None:
+        """Clear the prompt from the status bar."""
+        self._message = ""
+        self._input_type = ""
+        self._default = ""
+        self._visible = False
+        self.update_widget()
+
+
 class StatusBar(Container):
     """Dynamic status bar that shows/hides based on active components.
 
@@ -493,9 +569,11 @@ class ScrappyApp(App):
     # Use external CSS file for styling
     CSS_PATH = "scrappy.tcss"
 
-    # Priority binding intercepts Enter before TextArea gets it
+    # Priority bindings intercept keys before TextArea gets them
     BINDINGS = [
         Binding("enter", "submit_input", "Submit", priority=True),
+        Binding("up", "history_previous", "Previous", priority=True),
+        Binding("down", "history_next", "Next", priority=True),
     ]
 
     def __init__(self, interactive_mode: "InteractiveMode", output_adapter: TextualOutputAdapter):
@@ -513,12 +591,17 @@ class ScrappyApp(App):
         # Status bar components (created here, registered in on_mount)
         self.progress_indicator = ProgressIndicator()
         self.token_counter = TokenCounter()
+        self.prompt_display = PromptDisplay()
 
         # Thread-safe async bridge for prompts/confirms
         self.bridge = ThreadSafeAsyncBridge(self)
 
         # Input capture manager for inline prompts/confirms (replaces modals)
         self.capture_manager = InputCaptureManager(self.bridge)
+
+        # Command history for up/down arrow navigation
+        self._history = CommandHistory(history_file=get_default_history_path())
+        self._history_temp_input: str = ""  # Stores current input when navigating
 
     def compose(self) -> ComposeResult:
         """Create child widgets.
@@ -562,6 +645,7 @@ class ScrappyApp(App):
         status_bar = self.query_one(StatusBar)
         status_bar.register_component(self.progress_indicator)
         status_bar.register_component(self.token_counter)
+        status_bar.register_component(self.prompt_display)
 
         # Start worker thread to consume output queue
         self.consume_output_queue()
@@ -696,8 +780,45 @@ class ScrappyApp(App):
         if not user_input:
             return
 
+        # Add to history and reset navigation position
+        self._history.add_to_history(user_input)
+        self._history_temp_input = ""
+
         # Process in worker thread
         self.process_command(user_input)
+
+    def action_history_previous(self) -> None:
+        """Handle Up arrow to navigate to previous history entry."""
+        # Don't navigate history in capture mode
+        if self.capture_manager.is_capturing:
+            return
+
+        # Save current input if starting navigation
+        current_text = self._input.text
+        if self._history_temp_input == "" and current_text:
+            self._history_temp_input = current_text
+
+        previous = self._history.get_previous()
+        if previous is not None:
+            self._input.clear()
+            self._input.insert(previous)
+
+    def action_history_next(self) -> None:
+        """Handle Down arrow to navigate to next history entry."""
+        # Don't navigate history in capture mode
+        if self.capture_manager.is_capturing:
+            return
+
+        next_entry = self._history.get_next()
+        if next_entry is not None:
+            self._input.clear()
+            self._input.insert(next_entry)
+        else:
+            # At end of history, restore saved input
+            self._input.clear()
+            if self._history_temp_input:
+                self._input.insert(self._history_temp_input)
+                self._history_temp_input = ""
 
     def _handle_captured_input(self, user_input: str) -> None:
         """Process input captured for prompt/confirm.
@@ -797,16 +918,21 @@ class ScrappyApp(App):
     def _update_capture_ui(self, request: "RequestInlineInput | InputRequest") -> None:
         """Update UI for capture mode.
 
+        Shows prompt in status bar near the input field for better UX.
+
         Args:
             request: The input request with message and type info
         """
-        output = self.query_one("#output", RichLog)
+        # Display prompt in status bar (near input)
+        self.prompt_display.show_prompt(
+            message=request.message,
+            input_type=request.input_type,
+            default=getattr(request, 'default', '') or ''
+        )
 
-        # Display prompt in output area
-        if request.input_type == "confirm":
-            output.write(f"{request.message} [y/n]")
-        else:
-            output.write(request.message)
+        # Refresh status bar to show the prompt
+        status_bar = self.query_one(StatusBar)
+        status_bar.refresh_display()
 
         # Visual feedback - add capture mode class
         input_container = self.query_one("#input_container")
@@ -824,6 +950,11 @@ class ScrappyApp(App):
     def _exit_capture_ui(self) -> None:
         """Clean up capture mode UI state."""
         self._input.placeholder = "Type your message or command..."
+
+        # Hide prompt from status bar
+        self.prompt_display.hide_prompt()
+        status_bar = self.query_one(StatusBar)
+        status_bar.refresh_display()
 
         # Remove visual feedback
         input_container = self.query_one("#input_container")

@@ -83,7 +83,6 @@ TextArea > .text-area--cursor {
     max-height: 30%;
     overflow: hidden;
     background: $panel-bg;
-    border-top: solid $accent;
     padding: 0;
     display: none;
 }
@@ -92,7 +91,8 @@ TextArea > .text-area--cursor {
     display: block;
     height: auto;
     padding: 1;
-    overflow: visible;
+    overflow-x: auto;
+    overflow-y: auto;
 }
 
 #status_content {
@@ -126,4 +126,11 @@ TextArea > .text-area--cursor {
 /* Capture mode visual feedback - yellow prompt indicates waiting for response */
 #input_container.capture-mode #input_prompt {
     color: #ffcc00;
+}
+
+/* Prompt display styling - shows prompts/questions near input */
+#prompt_display {
+    width: 100%;
+    color: #ffcc00;
+    padding: 0 1;
 }

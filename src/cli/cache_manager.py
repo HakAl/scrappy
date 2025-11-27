@@ -88,11 +88,11 @@ class CacheManager:
             return
 
         if validation.subcommand == "":
-            # Show cache status using formatter
+            # Show cache status using table display
             stats = self.orchestrator.get_cache_stats()
             enabled = self.orchestrator.caching_enabled
-            formatted_stats = self.formatter.format_stats(stats, enabled)
-            self.io.echo(formatted_stats)
+            headers, rows, title = self.formatter.get_stats_data(stats, enabled)
+            self.io.table(headers, rows, title=title)
 
         elif validation.subcommand == "clear":
             self.orchestrator.clear_cache()

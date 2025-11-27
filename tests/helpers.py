@@ -591,6 +591,25 @@ class MockIO:
         self._input_index = 0
         self._confirm_index = 0
 
+    def table(
+        self,
+        headers: List[str],
+        rows: List[List[str]],
+        title: Optional[str] = None
+    ) -> None:
+        """Capture table output as formatted text."""
+        if title:
+            self._output_buffer.append(title + "\n")
+        # Format as simple table
+        self._output_buffer.append(" | ".join(headers) + "\n")
+        self._output_buffer.append("-" * 40 + "\n")
+        for row in rows:
+            self._output_buffer.append(" | ".join(str(cell) for cell in row) + "\n")
+
+    def supports_color(self) -> bool:
+        """Return True for mock (allows color-based formatting in tests)."""
+        return True
+
 
 # =============================================================================
 # Factory Functions for Common Test Setups
@@ -2440,3 +2459,22 @@ class MockIO:
     def get_output_lines(self) -> List[str]:
         """Get all captured output as list of lines."""
         return self.messages.copy()
+
+    def table(
+        self,
+        headers: List[str],
+        rows: List[List[str]],
+        title: Optional[str] = None
+    ) -> None:
+        """Capture table output as formatted text."""
+        if title:
+            self.messages.append(title)
+        # Format as simple table
+        self.messages.append(" | ".join(headers))
+        self.messages.append("-" * 40)
+        for row in rows:
+            self.messages.append(" | ".join(str(cell) for cell in row))
+
+    def supports_color(self) -> bool:
+        """Return True for mock (allows color-based formatting in tests)."""
+        return True

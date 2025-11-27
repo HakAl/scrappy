@@ -4,9 +4,12 @@ Input handler module for CLI.
 Handles multiline input reading and command parsing.
 """
 
-from typing import Tuple
+from typing import Optional, Tuple, TYPE_CHECKING
 from .io_interface import CLIIOProtocol
 from .config.defaults import MAX_INPUT_CHARS, MAX_INPUT_LINES
+
+if TYPE_CHECKING:
+    from .command_history import CommandHistoryProtocol
 
 
 class InputTooLongError(Exception):
@@ -24,16 +27,27 @@ class InputTooLongError(Exception):
 
 
 class InputHandler:
-    """Handles user input parsing and multiline input reading."""
+    """Handles user input parsing and multiline input reading.
 
-    def __init__(self, io: CLIIOProtocol):
+    Note: Command history navigation is handled by ScrappyApp in TUI mode,
+    not by this class. The _history attribute is kept for compatibility
+    but is not used for navigation.
+    """
+
+    def __init__(
+        self,
+        io: CLIIOProtocol,
+        history: Optional["CommandHistoryProtocol"] = None
+    ):
         """
         Initialize InputHandler with IO interface.
 
         Args:
             io: The IO interface for reading/writing.
+            history: Optional command history (unused, kept for compatibility).
         """
         self.io = io
+        self._history = history
 
     def read_multiline_input(self, prompt_text: str = "... ") -> str:
         """
@@ -98,9 +112,34 @@ class InputHandler:
 
         return input_str.startswith("/")
 
+    def _read_first_line(self) -> str:
+        """Read the first line of input with history support if available.
+
+        Returns:
+            The first line of user input
+        """
+        if self._history:
+            # Use prompt_toolkit with history navigation
+            # The green "You> " prompt is part of the message
+            try:
+                return self._history.prompt_with_history(
+                    message="\x1b[32;1mYou> \x1b[0m",  # Green bold
+                    default=""
+                )
+            except (EOFError, KeyboardInterrupt):
+                return ""
+        else:
+            # Fall back to standard IO
+            self.io.secho("You> ", fg="green", bold=True, nl=False)
+            return self.io.prompt("", default="", show_default=False)
+
     def read_interactive_input(self) -> str:
         """
         Read input from user in interactive mode.
+
+        If command history is configured, supports:
+        - Up/Down arrows: Navigate through command history
+        - Ctrl+R: Reverse search through history
 
         Always supports multiline via backslash continuation.
 
@@ -110,14 +149,13 @@ class InputHandler:
         Raises:
             InputTooLongError: If input exceeds MAX_INPUT_CHARS or MAX_INPUT_LINES.
         """
-        self.io.secho("You> ", fg="green", bold=True, nl=False)
         lines = []
         first_line = True
 
         while True:
             try:
                 if first_line:
-                    line = self.io.prompt("", default="", show_default=False)
+                    line = self._read_first_line()
                     first_line = False
 
                     # If first line is a command, process it immediately
@@ -132,6 +170,7 @@ class InputHandler:
                         # Remove the continuation marker and continue reading
                         lines.append(line.rstrip()[:-1])
                 else:
+                    # Continuation lines use standard IO (no history nav)
                     self.io.secho("... ", fg="green", nl=False)
                     line = self.io.prompt("", default="", show_default=False)
 

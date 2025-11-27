@@ -4,7 +4,7 @@ Cache statistics display formatter.
 Extracts display formatting logic from CLI cache manager handler.
 """
 
-from typing import Dict, Any
+from typing import Dict, Any, List, Tuple
 import click
 
 from .stats_formatter import StatsFormatter
@@ -28,6 +28,39 @@ class CacheFormatter(StatsFormatter):
             use_color: Whether to use ANSI color codes in output.
         """
         super().__init__(use_color=use_color)
+
+    def get_stats_data(
+        self,
+        stats: Dict[str, Any],
+        enabled: bool
+    ) -> Tuple[List[str], List[List[str]], str]:
+        """Return structured data for table display.
+
+        Args:
+            stats: Cache statistics dict with keys like exact_cache_entries,
+                intent_cache_entries, exact_hits, etc.
+            enabled: Whether caching is currently enabled
+
+        Returns:
+            Tuple of (headers, rows, title) suitable for io.table()
+        """
+        headers = ["Metric", "Value"]
+
+        total_entries = stats.get('exact_cache_entries', 0) + stats.get('intent_cache_entries', 0)
+
+        rows = [
+            ["Total Entries", str(total_entries)],
+            ["Exact Cache Hits", str(stats.get('exact_hits', 0))],
+            ["Intent Cache Hits", str(stats.get('intent_hits', 0))],
+            ["Cache Misses", str(stats.get('exact_misses', 0))],
+            ["Cache Saves", str(stats.get('saves', 0))],
+            ["Exact Hit Rate", stats.get('exact_hit_rate', '0.0%')],
+            ["Intent Hit Rate", stats.get('intent_hit_rate', '0.0%')],
+            ["Cache File", str(stats.get('cache_file', 'N/A'))],
+            ["Status", "Enabled" if enabled else "Disabled"],
+        ]
+
+        return headers, rows, "Cache Statistics"
 
     def format_stats(self, stats: Dict[str, Any], enabled: bool) -> str:
         """Format cache statistics for display.

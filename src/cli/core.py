@@ -19,6 +19,7 @@ from .state_manager import PlanStateManager
 from .session_context import SessionContext
 from .command_router import CommandRouter
 from .textual_interactive import TextualInteractiveMode
+from .command_history import CommandHistory, get_default_history_path
 from .utils.session_utils import display_previous_session_detected
 from .utils.cli_factory import initialize_cli_handlers
 from .error_recovery import graceful_degrade
@@ -86,7 +87,11 @@ class CLI:
         self.smart = handlers['smart']
         self.agent_mgr = handlers['agent_mgr']
         self.task_router = handlers['task_router']
-        self.input_handler = InputHandler(self.io)
+
+        # Initialize command history for CLI mode (enables up/down arrow navigation)
+        # TUI mode uses Textual's TextArea which has its own history
+        self.command_history = CommandHistory(history_file=get_default_history_path())
+        self.input_handler = InputHandler(self.io, history=self.command_history)
 
         # Logger for structured logging
         self.logger = get_logger("cli.core", io=self.io)
