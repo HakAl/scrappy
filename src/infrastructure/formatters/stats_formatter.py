@@ -4,10 +4,10 @@ Base stats formatter implementation.
 Provides reusable formatting utilities for statistics displays.
 """
 
-from typing import Any, Optional
-import click
+from typing import TYPE_CHECKING, Any
 
-from src.infrastructure.theme import DEFAULT_THEME, ThemeProtocol
+if TYPE_CHECKING:
+    from src.cli.unified_io import UnifiedIO
 
 
 class StatsFormatter:
@@ -17,25 +17,16 @@ class StatsFormatter:
     percentages, and numbers with color coding.
 
     Args:
-        use_color: Whether to include ANSI color codes in output.
-            Defaults to True. Set to False for terminals that don't
-            support colors to avoid ANSI artifacts.
-        theme: Theme instance for color values. Defaults to DEFAULT_THEME.
+        io: UnifiedIO instance for styled output
     """
 
-    def __init__(
-        self,
-        use_color: bool = True,
-        theme: Optional[ThemeProtocol] = None,
-    ):
-        """Initialize formatter with color preference and theme.
+    def __init__(self, io: "UnifiedIO"):
+        """Initialize formatter with UnifiedIO.
 
         Args:
-            use_color: Whether to use ANSI color codes in output.
-            theme: Theme instance for color values.
+            io: UnifiedIO instance (contains theme and styling methods)
         """
-        self._use_color = use_color
-        self._theme = theme or DEFAULT_THEME
+        self._io = io
 
     def format_header(self, title: str, width: int = 60) -> str:
         """Format a header with title and separator.
@@ -45,14 +36,10 @@ class StatsFormatter:
             width: Total width of the header (default: 60)
 
         Returns:
-            Formatted header string, with ANSI codes if use_color is True
+            Formatted header string with Rich markup
         """
-        if self._use_color:
-            header = click.style(f"\n{title}", fg=self._theme.primary, bold=True)
-            separator = click.style("-" * width, fg=self._theme.primary)
-        else:
-            header = f"\n{title}"
-            separator = "-" * width
+        header = self._io.style(f"\n{title}", fg=self._io.theme.primary, bold=True)
+        separator = self._io.style("-" * width, fg=self._io.theme.primary)
         return f"{header}\n{separator}"
 
     def format_key_value(self, key: str, value: Any, indent: int = 0) -> str:
@@ -102,11 +89,8 @@ class StatsFormatter:
         else:
             text = f"{percentage:.1f}%"
 
-        # Apply color only if enabled
-        if self._use_color:
-            styled_text = click.style(text, fg=color)
-        else:
-            styled_text = text
+        # Apply color styling
+        styled_text = self._io.style(text, fg=color)
 
         # Add label if provided
         if label:
@@ -139,11 +123,11 @@ class StatsFormatter:
             Color from theme: success (< 75%), warning (< 90%), error (>= 90%)
         """
         if percentage < 75:
-            return self._theme.success
+            return self._io.theme.success
         elif percentage < 90:
-            return self._theme.warning
+            return self._io.theme.warning
         else:
-            return self._theme.error
+            return self._io.theme.error
 
     def format_boolean_status(
         self,
@@ -159,11 +143,8 @@ class StatsFormatter:
             false_label: Label for False (default: "Disabled")
 
         Returns:
-            Colored status string (if use_color is True), plain text otherwise
+            Colored status string with Rich markup
         """
         label = true_label if value else false_label
-        if not self._use_color:
-            return label
-
-        color = self._theme.success if value else self._theme.error
-        return click.style(label, fg=color)
+        color = self._io.theme.success if value else self._io.theme.error
+        return self._io.style(label, fg=color)

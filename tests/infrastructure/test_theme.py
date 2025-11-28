@@ -33,14 +33,14 @@ class TestScrappyTheme:
         """ScrappyTheme provides all 8 foreground color properties."""
         theme = ScrappyTheme()
 
-        assert theme.primary == "cyan"
-        assert theme.accent == "yellow"
-        assert theme.success == "green"
-        assert theme.warning == "yellow"
-        assert theme.error == "red"
-        assert theme.info == "blue"
-        assert theme.text == "white"
-        assert theme.text_muted == "bright_black"
+        assert theme.primary == "#00ffff"
+        assert theme.accent == "#ffff00"
+        assert theme.success == "#00ff00"
+        assert theme.warning == "#ffff00"
+        assert theme.error == "#ff0000"
+        assert theme.info == "#0000ff"
+        assert theme.text == "#ffffff"
+        assert theme.text_muted == "#808080"
 
     def test_provides_background_colors(self):
         """ScrappyTheme provides 2 background color properties."""
@@ -80,14 +80,14 @@ class TestLightTheme:
         """LightTheme provides all 8 foreground color properties."""
         theme = LightTheme()
 
-        assert theme.primary == "blue"
-        assert theme.accent == "magenta"
-        assert theme.success == "green"
-        assert theme.warning == "yellow"
-        assert theme.error == "red"
-        assert theme.info == "cyan"
-        assert theme.text == "black"
-        assert theme.text_muted == "bright_black"
+        assert theme.primary == "#0000ff"
+        assert theme.accent == "#ff00ff"
+        assert theme.success == "#00ff00"
+        assert theme.warning == "#ff9900"  # Amber - better contrast on white
+        assert theme.error == "#ff0000"
+        assert theme.info == "#00ffff"
+        assert theme.text == "#000000"
+        assert theme.text_muted == "#808080"
 
     def test_provides_background_colors(self):
         """LightTheme uses light backgrounds."""
@@ -240,7 +240,7 @@ class TestLoadThemeFromConfig:
         theme = load_theme_from_config(config)
 
         assert isinstance(theme, ScrappyTheme)
-        assert theme.primary == "cyan"
+        assert theme.primary == "#00ffff"
 
     def test_missing_theme_section_returns_default(self):
         """Config without 'theme' section returns DEFAULT_THEME."""
@@ -265,7 +265,7 @@ class TestLoadThemeFromConfig:
         theme = load_theme_from_config(config)
 
         assert isinstance(theme, ScrappyTheme)
-        assert theme.primary == "cyan"
+        assert theme.primary == "#00ffff"
 
     def test_light_preset_returns_light_theme(self):
         """preset: light returns LightTheme."""
@@ -274,8 +274,8 @@ class TestLoadThemeFromConfig:
         theme = load_theme_from_config(config)
 
         assert isinstance(theme, LightTheme)
-        assert theme.primary == "blue"
-        assert theme.text == "black"
+        assert theme.primary == "#0000ff"
+        assert theme.text == "#000000"
 
     def test_invalid_preset_falls_back_to_dark(self):
         """Invalid preset falls back to ScrappyTheme (dark)."""
@@ -294,8 +294,8 @@ class TestLoadThemeFromConfig:
         assert isinstance(theme, CustomTheme)
         assert theme.primary == "magenta"
         # Other colors retain defaults
-        assert theme.accent == "yellow"
-        assert theme.success == "green"
+        assert theme.accent == "#ffff00"
+        assert theme.success == "#00ff00"
 
     def test_multiple_color_overrides(self):
         """Multiple color overrides work correctly."""
@@ -314,8 +314,8 @@ class TestLoadThemeFromConfig:
         assert theme.accent == "#e5c07b"
         assert theme.surface == "#282c34"
         # Non-overridden retain defaults
-        assert theme.success == "green"
-        assert theme.error == "red"
+        assert theme.success == "#00ff00"
+        assert theme.error == "#ff0000"
 
     def test_overrides_on_light_preset(self):
         """Color overrides work with light preset base."""
@@ -331,7 +331,7 @@ class TestLoadThemeFromConfig:
         assert isinstance(theme, CustomTheme)
         assert theme.primary == "purple"
         # Other values from light preset
-        assert theme.text == "black"
+        assert theme.text == "#000000"
         assert theme.surface == "#ffffff"
 
     def test_invalid_keys_are_ignored(self):
@@ -362,7 +362,7 @@ class TestLoadThemeFromConfig:
         theme = load_theme_from_config(config)
 
         assert isinstance(theme, CustomTheme)
-        assert theme.primary == "cyan"  # Default, not None
+        assert theme.primary == "#00ffff"  # Default, not None
         assert theme.accent == "orange"
 
     def test_preset_key_itself_is_not_a_color(self):
@@ -434,7 +434,7 @@ class TestCustomTheme:
 
         assert custom.primary == "purple"
         assert custom.accent == "orange"
-        assert custom.success == "green"  # Default retained
+        assert custom.success == "#00ff00"  # Default retained
 
     def test_provides_git_colors(self):
         """CustomTheme includes GitColors."""
@@ -458,7 +458,7 @@ class TestDefaultTheme:
 
     def test_has_expected_primary(self):
         """DEFAULT_THEME has cyan primary color."""
-        assert DEFAULT_THEME.primary == "cyan"
+        assert DEFAULT_THEME.primary == "#00ffff"
 
 
 class TestGlobalColorConstants:

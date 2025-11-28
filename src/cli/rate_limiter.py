@@ -48,7 +48,7 @@ class RateLimiter:
         """
         self.orchestrator = orchestrator
         self.io = io
-        self.formatter = formatter or RateLimitFormatter()
+        self.formatter = formatter or RateLimitFormatter(io=io)
 
     def show_rate_limits(self, args: str = "") -> None:
         """Display and manage rate limit usage data.

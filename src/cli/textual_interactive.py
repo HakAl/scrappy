@@ -10,6 +10,7 @@ from .textual_app import ScrappyApp, TextualOutputAdapter
 from .unified_io import UnifiedIO
 from .interactive import InteractiveMode
 from .output_bridge import OutputBridge
+from .config_factory import get_config
 
 # Re-export for backward compatibility
 OrchestratorOutputAdapter = OutputBridge
@@ -26,6 +27,7 @@ if TYPE_CHECKING:
     from .tasks import CLITaskExecution
     from .logging import CLILogger
     from .core import CLI
+    from .cli_config import CLIConfig
 
 
 class TextualInteractiveMode:
@@ -54,7 +56,8 @@ class TextualInteractiveMode:
         tasks: "CLITaskExecution",
         logger: "CLILogger",
         io: UnifiedIO,
-        cli: "CLI" = None
+        cli: "CLI" = None,
+        config: "CLIConfig" = None
     ):
         """Initialize TextualInteractiveMode with all dependencies.
 
@@ -71,6 +74,7 @@ class TextualInteractiveMode:
             logger: Logger for structured logging
             io: UnifiedIO instance (created before CLI.initialize() ran)
             cli: Optional CLI instance for handler reinitialization with bridge
+            config: Optional CLI config (loads from default locations if not provided)
         """
         self.orchestrator = orchestrator
         self.session_context = session_context
@@ -84,6 +88,8 @@ class TextualInteractiveMode:
         self.logger = logger
         self.io = io
         self._cli = cli
+        # Load config from parameter or default locations
+        self._config = config or get_config()
 
     def run(self) -> None:
         """Launch the Textual TUI application.
@@ -123,8 +129,8 @@ class TextualInteractiveMode:
             logger=self.logger
         )
 
-        # Create ScrappyApp with InteractiveMode and output adapter
-        app = ScrappyApp(interactive_mode, output_adapter)
+        # Create ScrappyApp with InteractiveMode, output adapter, and user theme
+        app = ScrappyApp(interactive_mode, output_adapter, theme=self._config.theme)
 
         # Pass codebase context for semantic search indexing
         # The orchestrator's context_manager holds the CodebaseContext

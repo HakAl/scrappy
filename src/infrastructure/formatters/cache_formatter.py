@@ -4,11 +4,11 @@ Cache statistics display formatter.
 Extracts display formatting logic from CLI cache manager handler.
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
-import click
+if TYPE_CHECKING:
+    from src.cli.unified_io import UnifiedIO
 
-from src.infrastructure.theme import ThemeProtocol
 from .stats_formatter import StatsFormatter
 
 
@@ -19,23 +19,16 @@ class CacheFormatter(StatsFormatter):
     entry counts, and cache status.
 
     Args:
-        use_color: Whether to include ANSI color codes in output.
-            Defaults to True. Inherited from StatsFormatter.
-        theme: Theme instance for color values. Inherited from StatsFormatter.
+        io: UnifiedIO instance for styled output. Inherited from StatsFormatter.
     """
 
-    def __init__(
-        self,
-        use_color: bool = True,
-        theme: Optional[ThemeProtocol] = None,
-    ):
-        """Initialize formatter with color preference and theme.
+    def __init__(self, io: "UnifiedIO"):
+        """Initialize formatter with UnifiedIO.
 
         Args:
-            use_color: Whether to use ANSI color codes in output.
-            theme: Theme instance for color values.
+            io: UnifiedIO instance (contains theme and styling methods)
         """
-        super().__init__(use_color=use_color, theme=theme)
+        super().__init__(io=io)
 
     def get_stats_data(
         self,
@@ -140,9 +133,9 @@ class CacheFormatter(StatsFormatter):
             rate_value = 0.0
 
         # Determine color (success if > 50%, warning otherwise)
-        color = self._theme.success if rate_value > 50 else self._theme.warning
+        color = self._io.theme.success if rate_value > 50 else self._io.theme.warning
 
-        return f"{label}: {click.style(rate_str, fg=color)}"
+        return f"{label}: {self._io.style(rate_str, fg=color)}"
 
     def format_toggle_message(self, new_state: bool) -> str:
         """Format the cache toggle success message.
@@ -156,11 +149,8 @@ class CacheFormatter(StatsFormatter):
         status = "enabled" if new_state else "disabled"
         message = f"Response caching {status}."
 
-        if not self._use_color:
-            return message
-
-        color = self._theme.success if new_state else self._theme.warning
-        return click.style(message, fg=color)
+        color = self._io.theme.success if new_state else self._io.theme.warning
+        return self._io.style(message, fg=color)
 
     def format_clear_message(self) -> str:
         """Format the cache clear success message.
@@ -169,6 +159,4 @@ class CacheFormatter(StatsFormatter):
             Formatted success message (with color if use_color is True)
         """
         message = "Response cache cleared."
-        if not self._use_color:
-            return message
-        return click.style(message, fg=self._theme.success)
+        return self._io.style(message, fg=self._io.theme.success)

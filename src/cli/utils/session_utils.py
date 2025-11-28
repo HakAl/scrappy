@@ -122,7 +122,7 @@ def display_previous_session_detected(io: "CLIIOProtocol", session_info: Dict[st
         io: IO interface for output
         session_info: Session metadata including counts and timestamps
     """
-    io.secho("\nPrevious session detected:", fg="yellow", bold=True)
+    io.secho("\nPrevious session detected:", fg=io.theme.warning, bold=True)
     io.echo(f"  Saved: {session_info.get('saved_at', 'unknown')}")
     io.echo(f"  Files cached: {session_info.get('file_count', 0)}")
     io.echo(f"  Searches: {session_info.get('search_count', 0)}")

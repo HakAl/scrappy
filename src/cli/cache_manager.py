@@ -44,12 +44,11 @@ class CacheManager:
         """
         self.orchestrator = orchestrator
         self.io = io
-        # Create formatter with color support based on IO capabilities
+        # Create formatter with IO for styling
         if formatter is not None:
             self.formatter = formatter
         else:
-            use_color = getattr(io, 'supports_color', lambda: True)()
-            self.formatter = CacheFormatter(use_color=use_color)
+            self.formatter = CacheFormatter(io=io)
 
     def manage_cache(self, args: str = "") -> None:
         """Manage response cache with subcommands.

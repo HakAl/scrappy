@@ -114,11 +114,11 @@ class CLI:
         Returns:
             self (for method chaining)
         """
-        self.io.secho("Initializing Scrappy...", fg="cyan")
+        self.io.secho("Initializing Scrappy...", fg=self.io.theme.primary)
 
         # Show verbose selection info if requested
         if self._verbose_selection:
-            self.io.secho("Verbose provider selection enabled", fg="yellow")
+            self.io.secho("Verbose provider selection enabled", fg=self.io.theme.warning)
 
         # Log initialization (outputs to IO)
         self.logger.info("CLI initialized", extra={
@@ -131,20 +131,20 @@ class CLI:
         if not self._show_provider_status:
             brain_name = self.orchestrator.brain
             if brain_name:
-                self.io.echo(f"Brain: {self.io.style(brain_name, fg='green', bold=True)}")
+                self.io.echo(f"Brain: {self.io.style(brain_name, fg=self.io.theme.success, bold=True)}")
             else:
-                self.io.secho("Brain: None (no providers available)", fg='yellow')
+                self.io.secho("Brain: None (no providers available)", fg=self.io.theme.warning)
             providers_list = ', '.join(self.orchestrator.providers.list_available())
             if providers_list:
-                self.io.echo(f"Available providers: {self.io.style(providers_list, fg='cyan')}")
+                self.io.echo(f"Available providers: {self.io.style(providers_list, fg=self.io.theme.primary)}")
             else:
-                self.io.secho("No providers available - check API keys", fg='yellow')
+                self.io.secho("No providers available - check API keys", fg=self.io.theme.warning)
 
         # Show context status
         if self.orchestrator.context.is_explored():
-            self.io.secho(f"Context: {self.orchestrator.context.project_path.name} (cached)", fg="cyan")
+            self.io.secho(f"Context: {self.orchestrator.context.project_path.name} (cached)", fg=self.io.theme.primary)
         elif self._context_aware:
-            self.io.secho("Context: Not explored (use /context to explore)", fg="yellow")
+            self.io.secho("Context: Not explored (use /context to explore)", fg=self.io.theme.warning)
 
         # Show semantic search initialization progress if in progress
         self._show_semantic_search_progress()
@@ -342,7 +342,7 @@ class CLI:
                 )
 
                 if result.get('status') == 'loaded':
-                    io.secho("Session restored successfully!", fg="green")
+                    io.secho("Session restored successfully!", fg=io.theme.success)
                 else:
                     error_msg = result.get('message', 'unknown error')
                     io.secho(f"Could not restore session: {error_msg}", fg="red")

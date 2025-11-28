@@ -5,20 +5,18 @@ Provides a styled welcome banner using Rich Panel with ASCII art
 and mode status display.
 """
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 from rich.panel import Panel
 from rich.text import Text
 
 from src.infrastructure.output_mode import OutputModeContext
-from src.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
 
 if TYPE_CHECKING:
     from src.cli.protocols import UnifiedIOProtocol
 
 
 def display_banner(
-    io: "UnifiedIOProtocol",
-    theme: Optional[ThemeProtocol] = None
+    io: "UnifiedIOProtocol"
 ) -> None:
     """Display banner using appropriate IO.
 
@@ -26,10 +24,9 @@ def display_banner(
     and posts it via the message queue, ensuring thread-safe display.
 
     Args:
-        io: UnifiedIO instance with console property for Rich renderables
-        theme: Optional theme for styling. Defaults to DEFAULT_THEME.
+        io: UnifiedIO instance with console property and theme
     """
-    theme = theme or DEFAULT_THEME
+    theme = io.theme
 
     # Build banner content
     title_text = Text()
@@ -96,20 +93,16 @@ def display_banner(
 
 
 def render_welcome_banner(
-    io: "UnifiedIOProtocol",
-    theme: Optional[ThemeProtocol] = None
+    io: "UnifiedIOProtocol"
 ) -> None:
     """Render the welcome banner as a Rich Panel.
 
     Args:
-        io: UnifiedIO instance for output
-        theme: Optional theme for styling. Defaults to DEFAULT_THEME.
+        io: UnifiedIO instance with theme for output
     """
-    theme = theme or DEFAULT_THEME
-
     # Display main banner
-    display_banner(io, theme=theme)
+    display_banner(io)
 
     # Display tips
-    io.secho("Tip: End line with \\ to continue on next line", fg=theme.primary)
+    io.secho("Tip: End line with \\ to continue on next line", fg=io.theme.primary)
     io.echo()

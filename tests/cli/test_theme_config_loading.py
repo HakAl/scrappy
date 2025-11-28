@@ -68,8 +68,8 @@ theme:
 
         assert config.theme_config == {"preset": "light"}
         assert isinstance(config.theme, LightTheme)
-        assert config.theme.primary == "blue"
-        assert config.theme.text == "black"
+        assert config.theme.primary == "#0000ff"
+        assert config.theme.text == "#000000"
         assert config.theme.surface == "#ffffff"
 
     def test_load_all_color_overrides_from_yaml(self, test_config_dir: Path):
@@ -120,8 +120,8 @@ theme:
         assert config.theme.primary == "magenta"
         assert config.theme.error == "pink"
         # Defaults from dark preset
-        assert config.theme.accent == "yellow"
-        assert config.theme.success == "green"
+        assert config.theme.accent == "#ffff00"
+        assert config.theme.success == "#00ff00"
         assert config.theme.surface == "#1e1e1e"
 
     def test_load_overrides_on_light_preset_from_yaml(self, test_config_dir: Path):
@@ -138,7 +138,7 @@ theme:
         assert isinstance(config.theme, CustomTheme)
         assert config.theme.primary == "purple"
         # Defaults from light preset
-        assert config.theme.text == "black"
+        assert config.theme.text == "#000000"
         assert config.theme.surface == "#ffffff"
 
 
@@ -282,7 +282,7 @@ dashboard_enabled: false
         # Theme loaded correctly
         assert isinstance(config.theme, CustomTheme)
         assert config.theme.primary == "purple"
-        assert config.theme.text == "black"  # from light preset
+        assert config.theme.text == "#000000"  # from light preset
 
         # Other options loaded correctly
         assert config.temperature_default == 0.9
@@ -338,4 +338,4 @@ theme:
 
         assert isinstance(config.theme, CustomTheme)
         assert config.theme.accent == "orange"
-        assert config.theme.text == "black"  # from light preset
+        assert config.theme.text == "#000000"  # from light preset

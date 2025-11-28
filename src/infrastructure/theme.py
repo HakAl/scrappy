@@ -18,6 +18,12 @@ class ThemeProtocol(Protocol):
     instead of literal colors (cyan, green, red).
     """
 
+    # Theme metadata
+    @property
+    def preset(self) -> str:
+        """Theme preset name ('dark', 'light', or 'custom')."""
+        ...
+
     # Foreground colors
     @property
     def primary(self) -> str:
@@ -97,15 +103,17 @@ class SyntaxColors:
 class ScrappyTheme:
     """Default dark theme."""
 
+    # Metadata
+    preset: str = "dark"
     # Foreground
-    primary: str = "cyan"
-    accent: str = "yellow"
-    success: str = "green"
-    warning: str = "yellow"
-    error: str = "red"
-    info: str = "blue"
-    text: str = "white"
-    text_muted: str = "bright_black"
+    primary: str = "#00ffff"
+    accent: str = "#ffff00"
+    success: str = "#00ff00"
+    warning: str = "#ffff00"
+    error: str = "#ff0000"
+    info: str = "#0000ff"
+    text: str = "#ffffff"
+    text_muted: str = "#808080"
     # Background
     surface: str = "#1e1e1e"
     surface_alt: str = "#2d2d2d"
@@ -118,15 +126,17 @@ class ScrappyTheme:
 class LightTheme:
     """Light mode preset."""
 
+    # Metadata
+    preset: str = "light"
     # Foreground
-    primary: str = "blue"
-    accent: str = "magenta"
-    success: str = "green"
-    warning: str = "yellow"
-    error: str = "red"
-    info: str = "cyan"
-    text: str = "black"
-    text_muted: str = "bright_black"
+    primary: str = "#0000ff"
+    accent: str = "#ff00ff"
+    success: str = "#00ff00"
+    warning: str = "#ff9900"  # Amber - better contrast on white background
+    error: str = "#ff0000"
+    info: str = "#00ffff"
+    text: str = "#000000"
+    text_muted: str = "#808080"
     # Background
     surface: str = "#ffffff"
     surface_alt: str = "#f0f0f0"
@@ -139,6 +149,7 @@ class LightTheme:
 class NoColorTheme:
     """Theme for testing - no colors applied."""
 
+    preset: str = "dark"  # Default to dark for testing
     primary: str = ""
     accent: str = ""
     success: str = ""
@@ -178,14 +189,15 @@ THEME_COLOR_KEYS = {
 class CustomTheme:
     """Theme with user-customized colors."""
 
-    primary: str = "cyan"
-    accent: str = "yellow"
-    success: str = "green"
-    warning: str = "yellow"
-    error: str = "red"
-    info: str = "blue"
-    text: str = "white"
-    text_muted: str = "bright_black"
+    preset: str = "dark"  # Inherited from base theme (dark or light)
+    primary: str = "#00ffff"
+    accent: str = "#ffff00"
+    success: str = "#00ff00"
+    warning: str = "#ffff00"
+    error: str = "#ff0000"
+    info: str = "#0000ff"
+    text: str = "#ffffff"
+    text_muted: str = "#808080"
     surface: str = "#1e1e1e"
     surface_alt: str = "#2d2d2d"
     git: GitColors = field(default_factory=GitColors)
@@ -229,6 +241,7 @@ def load_theme_from_config(config: Dict[str, Any]) -> ThemeProtocol:
 
     # Build kwargs for CustomTheme, starting with base values
     kwargs = {
+        "preset": preset_name,  # Inherit preset from config (dark or light)
         "primary": overrides.get("primary", base.primary),
         "accent": overrides.get("accent", base.accent),
         "success": overrides.get("success", base.success),

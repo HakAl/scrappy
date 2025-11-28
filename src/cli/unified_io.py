@@ -963,20 +963,22 @@ class UnifiedIO:
     ) -> str:
         """Return styled text for inline use.
 
-        Note: Returns Rich markup in TUI mode, ANSI codes in CLI mode.
-        """
-        color_map = {
-            "cyan": "cyan", "yellow": "yellow", "red": "red",
-            "green": "green", "blue": "blue", "magenta": "magenta",
-            "white": "white", "black": "black",
-        }
+        Supports both color names (cyan, red) and hex values (#00ffff, #ff0000).
+        Returns Rich markup that will be rendered by the output strategy.
 
+        Args:
+            text: Text to style
+            fg: Color name or hex value (e.g., "cyan" or "#00ffff")
+            bold: Whether to make text bold
+
+        Returns:
+            Rich markup string
+        """
         if fg or bold:
-            rich_color = color_map.get(fg, fg) if fg else None
-            if rich_color and bold:
-                return f"[bold {rich_color}]{text}[/bold {rich_color}]"
-            elif rich_color:
-                return f"[{rich_color}]{text}[/{rich_color}]"
+            if fg and bold:
+                return f"[bold {fg}]{text}[/bold {fg}]"
+            elif fg:
+                return f"[{fg}]{text}[/{fg}]"
             elif bold:
                 return f"[bold]{text}[/bold]"
 

@@ -14,6 +14,7 @@ from queue import Queue, Empty
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.message import Message
+from textual.theme import Theme
 from textual.widgets import TextArea, RichLog, Label, ProgressBar
 from textual.containers import Container, Vertical, Horizontal
 from textual.reactive import reactive
@@ -693,8 +694,56 @@ class ScrappyApp(App):
         # Dynamic status bar (shows/hides based on active components)
         yield StatusBar()
 
+    def _register_user_theme(self) -> None:
+        """Register theme from ThemeProtocol with Textual.
+
+        Maps our ThemeProtocol colors to Textual's Theme system.
+        Textual expects specific parameter names and hex color values.
+
+        Mapping:
+            ThemeProtocol    → Textual Theme    → CSS Variable
+            ─────────────────────────────────────────────────────
+            surface          → background       → $background
+            surface_alt      → surface          → $surface
+            info             → secondary        → $secondary
+            text             → foreground       → $foreground (auto-generates $text)
+            primary          → primary          → $primary
+            accent           → accent           → $accent
+            success          → success          → $success
+            warning          → warning          → $warning
+            error            → error            → $error
+        """
+        # Debug: Log what theme we're registering
+        logger.info(f"Registering theme - preset={self._theme.preset}, type={type(self._theme).__name__}")
+        logger.info(f"  primary={self._theme.primary}, accent={self._theme.accent}, text={self._theme.text}")
+        logger.info(f"  surface={self._theme.surface}, surface_alt={self._theme.surface_alt}")
+
+        # Set Textual's dark mode based on theme preset
+        self.dark = (self._theme.preset == "dark")
+
+        textual_theme = Theme(
+            name="scrappy_user",
+            primary=self._theme.primary,
+            secondary=self._theme.info,
+            accent=self._theme.accent,
+            foreground=self._theme.text,
+            background=self._theme.surface,
+            surface=self._theme.surface_alt,
+            warning=self._theme.warning,
+            error=self._theme.error,
+            success=self._theme.success,
+        )
+
+        logger.info(f"Textual Theme created with: primary={textual_theme.primary}, background={textual_theme.background}")
+        self.register_theme(textual_theme)
+        self.theme = "scrappy_user"
+        logger.info(f"Theme registered and activated: scrappy_user (dark mode: {self.dark})")
+
     def on_mount(self) -> None:
         """Called when app starts."""
+        # Register dynamic theme from user config
+        self._register_user_theme()
+
         # Set TUI mode context so all components know to route through Textual
         OutputModeContext.set_tui_mode(True, self.output_adapter)
 

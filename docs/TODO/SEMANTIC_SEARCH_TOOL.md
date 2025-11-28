@@ -1,10 +1,14 @@
 # Semantic Search Tool Implementation Plan
 
+# More Scope 
+- Context factory to enable dynamic prompt generation
+- Passive RAG, prompt augmentation
+
 The "Pass-Through" (Augmentation):
 When the user sends a message, perform a quick, low-cost semantic search (Top-k=3) using the user's raw query.
 Append this to the system prompt as "Potential Context." This handles 70% of simple questions instantly.
 
-The "Deep Dive" (Tool):
+The "Deep Dive" (Semantic Search Tool):
 Give the LLM a tool definition (e.g., search_codebase(query: str)).
 Instruct the model: "Use the provided context to answer. If the context is missing, irrelevant, 
 or if you identify dependencies (imports, function calls) that are not defined here, use the search tool to find them."
@@ -47,6 +51,122 @@ You are mapping the tools to the **nature of the query**:
 
 By explicitly telling the LLM that `codebase_search` handles the ambiguous (which is 90% of user queries), 
 you effectively coach it to prefer semantic search without removing the utility of grep for strict refactoring tasks.
+
+---
+
+This is the perfect use case for a **Context Factory** (or a **Runtime Configuration Builder**).
+
+Since your agent's capabilities depend on the system state (Indexing vs. Ready), you shouldn't hardcode your tools 
+or your system prompt. Need a lightweight abstraction that builds the "Agent Configuration" when the user hits Enter.
+
+Here is how to structure this dynamically.
+
+### 1. The Architecture: `AgentContextFactory`
+
+Don't just add a factory for the prompt; add a factory for the entire **execution context**. 
+This ensures your Prompt, Tools, and RAG strategy remain synchronized.
+
+Here is a conceptual implementation:
+
+```python
+class AgentContextFactory:
+    def __init__(self, vector_store, tool_registry):
+        self.vector_store = vector_store
+        self.tool_registry = tool_registry
+
+    def build_context(self):
+        """
+        Returns the correct Prompt + Tools based on system state.
+        """
+        # 1. Check State
+        is_indexed = self.vector_store.is_index_ready()
+        
+        # 2. Define Tools
+        tools = [self.tool_registry.grep, self.tool_registry.read_file]
+        if is_indexed:
+            tools.append(self.tool_registry.semantic_search)
+
+        # 3. Generate Dynamic System Prompt
+        system_prompt = self._generate_prompt(is_indexed)
+
+        return {
+            "system_prompt": system_prompt,
+            "tools": tools,
+            "enable_passive_rag": is_indexed  # Only augment prompt if ready
+        }
+
+    def _generate_prompt(self, is_indexed):
+        base_prompt = "You are an expert coding assistant."
+        
+        if is_indexed:
+            # The "Smart" Prompt from the previous answer
+            search_strategy = """
+            SEARCH STRATEGY:
+            1. Always prioritize `semantic_search` for discovery and logic questions.
+            2. Use `grep` only for exact string matching or refactoring specific tokens.
+            """
+        else:
+            # The "Fallback" Prompt
+            search_strategy = """
+            SEARCH STRATEGY:
+            1. Semantic search is currently UNAVAILABLE (indexing in progress).
+            2. You must rely on `grep` for all code discovery.
+            3. If a user query is too vague for grep (e.g., "how does auth work?"),
+               ask the user for specific keywords or file names to search for.
+            """
+            
+        return f"{base_prompt}\n\n{search_strategy}"
+```
+
+### 2. Handling the "Un-indexed" State Gracefully
+
+When the user is running the app for the first time, you don't want the agent to just appear "dumb."
+You want the agent to be **self-aware** that it is currently limited.
+
+By injecting the state into the prompt (as shown above in the `else` block), you change the agent's behavior:
+
+*   **User:** "Find the login logic."
+*   **Standard Agent:** Tries to call a missing tool -> Error.
+*   **Factory-Aware Agent:** "I am currently indexing the codebase, so I cannot perform a semantic search yet. 
+*                    Do you know a specific function name or variable related to login that I can `grep` for?"
+
+### 3. The "Hybrid" Factory for Passive RAG
+
+Passive RAG (augmenting the prompt). The Factory protects you here, too.
+
+In agent loop:
+
+```python
+# Main CLI Loop
+context = factory.build_context()
+
+user_query = input("> ")
+
+# DYNAMIC PASSIVE RAG
+augmented_query = user_query
+if context["enable_passive_rag"]:
+    # Only try to fetch chunks if the index exists!
+    relevant_chunks = vector_store.query(user_query)
+    augmented_query = f"Context:\n{relevant_chunks}\n\nUser: {user_query}"
+
+# Call LLM
+llm.chat(
+    messages=[
+        {"role": "system", "content": context["system_prompt"]},
+        {"role": "user", "content": augmented_query}
+    ],
+    tools=context["tools"]
+)
+```
+
+### Summary of the Approach
+
+1.  **State Check:** The Factory checks if the vector DB is populated/ready.
+2.  **Tool Filtering:** It physically removes the `semantic_search` function definition from the API call tool list.
+3.  **Prompt Swapping:** It swaps the "Prefer Semantic Search" instruction block for a "Apologize and use Grep" instruction block.
+4.  **RAG Guard:** It prevents your code from trying to query an empty vector DB for passive augmentation.
+
+---
 
 ## Overview
 

@@ -4,11 +4,11 @@ Rate limit display formatter.
 Extracts display formatting logic from CLI rate limiter handler.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List
 
-import click
+if TYPE_CHECKING:
+    from src.cli.unified_io import UnifiedIO
 
-from src.infrastructure.theme import ThemeProtocol
 from .stats_formatter import StatsFormatter
 
 
@@ -74,18 +74,13 @@ class RateLimitFormatter(StatsFormatter):
         theme: Theme instance for color values. Inherited from StatsFormatter.
     """
 
-    def __init__(
-        self,
-        use_color: bool = True,
-        theme: Optional[ThemeProtocol] = None,
-    ):
-        """Initialize formatter with color preference and theme.
+    def __init__(self, io: "UnifiedIO"):
+        """Initialize formatter with UnifiedIO.
 
         Args:
-            use_color: Whether to use ANSI color codes in output.
-            theme: Theme instance for color values.
+            io: UnifiedIO instance (contains theme and styling methods)
         """
-        super().__init__(use_color=use_color, theme=theme)
+        super().__init__(io=io)
 
     def format_status(
         self,
@@ -122,9 +117,9 @@ class RateLimitFormatter(StatsFormatter):
                 providers_to_show = {provider_filter: providers_to_show[provider_filter]}
             else:
                 header = self.format_header('Rate Limit Usage (Persistent)')
-                error_msg = click.style(
+                error_msg = self._io.style(
                     f"Provider '{provider_filter}' not found in tracking data.",
-                    fg=self._theme.warning
+                    fg=self._io.theme.warning
                 )
                 return f"{header}\n{error_msg}"
 
@@ -171,7 +166,7 @@ class RateLimitFormatter(StatsFormatter):
             remaining = limit - used
             quota_text += f" ({remaining:,} remaining)"
 
-        return f"    {label}: {click.style(quota_text, fg=color)}"
+        return f"    {label}: {self._io.style(quota_text, fg=color)}"
 
     def format_provider_section(
         self,
@@ -196,7 +191,7 @@ class RateLimitFormatter(StatsFormatter):
         parts = []
 
         # Provider header
-        parts.append(click.style(f"{provider.upper()}:", fg=self._theme.success, bold=True))
+        parts.append(self._io.style(f"{provider.upper()}:", fg=self._io.theme.success, bold=True))
 
         # Show totals
         parts.append(f"  Today: {data['total_requests_today']} requests, {data['total_tokens_today']:,} tokens")
@@ -207,7 +202,7 @@ class RateLimitFormatter(StatsFormatter):
             limits = data['limits']
             remaining = data.get('remaining', {})
 
-            parts.append(click.style("  Quotas:", bold=True))
+            parts.append(self._io.style("  Quotas:", bold=True))
 
             # Daily requests
             if limits.get('requests_per_day'):
@@ -248,7 +243,7 @@ class RateLimitFormatter(StatsFormatter):
 
         # Show per-model breakdown
         if data.get('by_model'):
-            parts.append(click.style("  By Model:", bold=True))
+            parts.append(self._io.style("  By Model:", bold=True))
             for model, model_data in data['by_model'].items():
                 last_req = model_data.get('last_request', 'never')
                 if last_req and last_req != 'never':
@@ -271,9 +266,9 @@ class RateLimitFormatter(StatsFormatter):
         if not warnings:
             return ""
 
-        parts = [click.style("WARNINGS:", fg=self._theme.error, bold=True)]
+        parts = [self._io.style("WARNINGS:", fg=self._io.theme.error, bold=True)]
         for warning in warnings:
-            parts.append(click.style(f"  {warning}", fg=self._theme.error))
+            parts.append(self._io.style(f"  {warning}", fg=self._io.theme.error))
         parts.append("")  # Empty line after warnings
 
         return "\n".join(parts)
@@ -287,4 +282,4 @@ class RateLimitFormatter(StatsFormatter):
         Returns:
             Formatted file location string using theme primary color
         """
-        return click.style(f"Tracking File: {file_path}", fg=self._theme.primary)
+        return self._io.style(f"Tracking File: {file_path}", fg=self._io.theme.primary)
