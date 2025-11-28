@@ -7,7 +7,6 @@ to prevent UI freezing during startup.
 
 import logging
 import threading
-import warnings
 from pathlib import Path
 from typing import Optional, Any, TYPE_CHECKING
 
@@ -128,39 +127,6 @@ class SemanticSearchInitializer:
                 return False
 
             return True
-
-    def wait_with_callback(self, callback, timeout: Optional[float] = None) -> None:
-        """
-        DEPRECATED: Wait for initialization to complete and call a callback when done.
-
-        This method spawns a thread that runs the callback, which may cause issues
-        if the callback contains code that must run on the main thread (e.g., signal
-        registration, UI updates).
-
-        Use event_queue pattern instead:
-            initializer = SemanticSearchInitializer(path, event_queue=queue)
-            queue.register_handler("semantic_search", handler)
-            initializer.start()
-            # Later in main loop: queue.process_pending()
-
-        Args:
-            callback: Function to call when initialization is complete
-            timeout: Maximum seconds to wait (None = wait forever)
-        """
-        warnings.warn(
-            "wait_with_callback is deprecated. Use event_queue pattern instead. "
-            "Pass event_queue to constructor and call process_pending() on main thread.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-
-        def wait_thread():
-            completed = self.wait_for_completion(timeout=timeout)
-            callback(completed, self.get_result(), self.get_error())
-
-        thread = threading.Thread(target=wait_thread)
-        thread.daemon = True
-        thread.start()
 
     def get_result(self) -> Optional[Any]:
         """
