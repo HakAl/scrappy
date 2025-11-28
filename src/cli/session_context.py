@@ -29,15 +29,6 @@ class SessionContextProtocol(Protocol):
         """Set conversation history."""
         ...
 
-    @property
-    def auto_route_mode(self) -> bool:
-        """Get auto-routing mode."""
-        ...
-
-    @auto_route_mode.setter
-    def auto_route_mode(self, value: bool) -> None:
-        """Set auto-routing mode."""
-        ...
 
     @property
     def smart_mode(self) -> bool:
@@ -59,6 +50,16 @@ class SessionContextProtocol(Protocol):
         """Set auto-save setting."""
         ...
 
+    @property
+    def verbose_mode(self) -> bool:
+        """Get verbose output mode."""
+        ...
+
+    @verbose_mode.setter
+    def verbose_mode(self, value: bool) -> None:
+        """Set verbose output mode."""
+        ...
+
 
 class SessionContext:
     """
@@ -72,23 +73,23 @@ class SessionContext:
     def __init__(
         self,
         conversation_history: List[Dict[str, str]] | None = None,
-        auto_route_mode: bool = True,
         smart_mode: bool = False,
-        auto_save: bool = True
+        auto_save: bool = True,
+        verbose_mode: bool = False
     ) -> None:
         """
         Initialize SessionContext with default settings.
 
         Args:
             conversation_history: Chat history. Defaults to empty list.
-            auto_route_mode: Enable auto-routing. Defaults to True.
             smart_mode: Enable smart query mode. Defaults to False.
             auto_save: Enable auto-save on exit. Defaults to True.
+            verbose_mode: Show detailed metadata (provider, tokens, time). Defaults to False.
         """
         self._conversation_history = conversation_history or []
-        self._auto_route_mode = auto_route_mode
         self._smart_mode = smart_mode
         self._auto_save = auto_save
+        self._verbose_mode = verbose_mode
 
     @property
     def conversation_history(self) -> List[Dict[str, str]]:
@@ -99,16 +100,6 @@ class SessionContext:
     def conversation_history(self, value: List[Dict[str, str]]) -> None:
         """Set conversation history."""
         self._conversation_history = value
-
-    @property
-    def auto_route_mode(self) -> bool:
-        """Get auto-routing mode."""
-        return self._auto_route_mode
-
-    @auto_route_mode.setter
-    def auto_route_mode(self, value: bool) -> None:
-        """Set auto-routing mode."""
-        self._auto_route_mode = value
 
     @property
     def smart_mode(self) -> bool:
@@ -129,3 +120,13 @@ class SessionContext:
     def auto_save(self, value: bool) -> None:
         """Set auto-save setting."""
         self._auto_save = value
+
+    @property
+    def verbose_mode(self) -> bool:
+        """Get verbose output mode."""
+        return self._verbose_mode
+
+    @verbose_mode.setter
+    def verbose_mode(self, value: bool) -> None:
+        """Set verbose output mode."""
+        self._verbose_mode = value

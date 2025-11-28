@@ -80,11 +80,17 @@ class TestValidateCommand:
         assert result.is_valid
         assert result.command == "q"
 
-    def test_valid_auto_command(self):
-        """Should accept /auto command."""
-        result = validate_command("/auto")
+    def test_valid_verbose_command(self):
+        """Should accept /verbose command."""
+        result = validate_command("/verbose")
         assert result.is_valid
-        assert result.command == "auto"
+        assert result.command == "verbose"
+
+    def test_valid_v_command(self):
+        """Should accept /v command (verbose shortcut)."""
+        result = validate_command("/v")
+        assert result.is_valid
+        assert result.command == "v"
 
     def test_valid_ml_command(self):
         """Should accept /ml command."""

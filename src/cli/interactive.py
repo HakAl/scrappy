@@ -1,35 +1,23 @@
 """
 Interactive mode module for CLI.
 
-Handles the main interactive chat loop.
+Handles input processing for the interactive chat.
 """
 
-import sys
-from datetime import datetime
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING
 
 from .io_interface import CLIIOProtocol
 from .state_manager import PlanStateManager
 from .session_context import SessionContextProtocol
-from .input_handler import InputHandler, InputTooLongError
+from .input_handler import InputHandler
 from .command_router import CommandRouter
-from .tool_detector import needs_tool_support
 from .display import CLIDisplay
 from .smart_query import CLISmartQuery
 from .task_router_handler import CLITaskRouterHandler
 from .tasks import CLITaskExecution
-from .utils.session_utils import display_session_save_error
-from .interactive_banner import render_welcome_banner
-from .unified_io import UnifiedIO
-
-from .exceptions import (
-    CLIError,
-    ProviderError,
-    UserInputError,
-    SessionError,
-)
-from .error_recovery import error_recovery_context, graceful_degrade
-from .logging import get_logger, CLILogger
+from .exceptions import CLIError, ProviderError
+from .error_recovery import graceful_degrade
+from .logging import CLILogger
 
 if TYPE_CHECKING:
     from ..orchestrator.protocols import Orchestrator
@@ -79,124 +67,6 @@ class InteractiveMode:
         self.task_router = task_router
         self.tasks = tasks
         self.logger = logger
-
-    def run(self) -> None:
-        """
-        Run the interactive chat loop.
-
-        Displays the welcome banner and mode statuses, then enters the main
-        input loop. Requires a TTY (terminal) environment to operate.
-
-        Side Effects:
-            - Checks if running in TTY mode, exits with error if not
-            - Displays welcome banner with available commands
-            - Shows multiline and auto-routing mode statuses
-            - Enters _main_loop which processes user input until exit
-
-        State Changes:
-            - No direct state changes; delegates to _main_loop
-
-        Returns:
-            None
-        """
-        io = self.io
-
-        # Check if running in interactive environment
-        if not sys.stdin.isatty():
-            io.secho("Error: Interactive mode requires a TTY (terminal).", fg="red", bold=True)
-            io.echo("Cannot run interactive mode without stdin.")
-            io.echo("Use one-shot commands instead (e.g., scrappy query 'your question')")
-            return
-
-        # Show welcome banner with Rich Panel
-        # Use UnifiedIO if available, otherwise fall back to basic io
-        if isinstance(io, UnifiedIO):
-            render_welcome_banner(io, self.session_context.auto_route_mode)
-        else:
-            # Fallback for non-Rich IO (e.g., testing)
-            io.secho("=" * 60, fg="cyan")
-            io.secho("Scrappy - Interactive Mode", fg="cyan", bold=True)
-            io.secho("=" * 60, fg="cyan")
-            io.echo("Commands:")
-            io.echo(f"  {io.style('/help', fg='yellow')}          - Show all commands")
-            io.echo(f"  {io.style('/auto', fg='yellow')}          - Toggle auto-routing")
-            io.echo(f"  {io.style('/plan', fg='yellow')} <task>   - Create a task plan")
-            io.echo(f"  {io.style('/agent', fg='yellow')} <task>  - Run code agent")
-            io.echo(f"  {io.style('/smart', fg='yellow')} <q>     - Research-first query")
-            io.echo(f"  {io.style('/status', fg='yellow')}        - Show system status")
-            io.echo(f"  {io.style('/quit', fg='yellow')}          - Exit the CLI")
-            io.secho("=" * 60, fg="cyan")
-
-            io.secho("Tip: End line with \\ to continue", fg="cyan")
-
-            if self.session_context.auto_route_mode:
-                io.secho("Auto-routing: ON", fg="green")
-            else:
-                io.secho("Auto-routing: OFF", fg="yellow")
-            io.echo()
-
-        # Run main loop
-        self._main_loop()
-
-    def _main_loop(self) -> None:
-        """
-        Run the main input loop.
-
-        Continuously reads user input and processes it until exit is requested.
-        Handles keyboard interrupts and EOF gracefully.
-
-        Side Effects:
-            - Reads input via input_handler.read_interactive_input()
-            - Processes each input through _process_input()
-            - Displays interrupt messages on KeyboardInterrupt
-            - Logs user interrupts and errors
-
-        State Changes:
-            - Delegates state changes to _process_input()
-            - Loop exits when _process_input returns False or EOF received
-
-        Raises:
-            Does not raise; all exceptions are handled internally.
-
-        Returns:
-            None
-        """
-        while True:
-            try:
-                # Read input
-                user_input = self.input_handler.read_interactive_input()
-
-                # Process input
-                if not self._process_input(user_input):
-                    break
-
-            except InputTooLongError as e:
-                self.io.secho(
-                    f"Input too long: {e.char_count:,} characters "
-                    f"(max {e.max_chars:,})",
-                    fg="red"
-                )
-                self.io.echo("Tip: Split your input into smaller chunks or use file input.")
-                continue
-            except KeyboardInterrupt:
-                self.io.echo("\n\nInterrupted. Type /quit to exit.")
-                self.logger.info("User interrupted input", extra={"action": "keyboard_interrupt"})
-                continue
-            except EOFError:
-                self._handle_eof()
-                break
-            except UserInputError as e:
-                if e.interrupted:
-                    self.io.echo("\n\nInterrupted. Type /quit to exit.")
-                elif e.eof:
-                    self._handle_eof()
-                    break
-                else:
-                    self._handle_error(e)
-            except CLIError as e:
-                self._handle_error(e)
-            except Exception as e:
-                self._handle_error(e)
 
     def _process_input(self, user_input: str) -> bool:
         """
@@ -248,68 +118,36 @@ class InteractiveMode:
             "content": user_input
         })
 
-        # Use auto-routing if enabled
-        if self.session_context.auto_route_mode:
-            result = self.task_router.handle_auto_route(user_input)
-            response_content = result.output if result.success else f"Error: {result.error}"
-            response = type('Response', (), {'content': response_content})()
-        # Use smart mode if enabled
-        elif self.session_context.smart_mode:
-            response = self.smart.smart_query(user_input)
-        else:
-            # Check if this looks like a research task that needs tools
-            needs_tools = needs_tool_support(user_input)
+        # Echo user query
+        io.secho(f"> {user_input}", fg="bright_white")
 
-            if needs_tools:
-                # Use task router with tool support
-                io.secho("Using tools for research...", fg="cyan")
-                result = self.task_router.handle_auto_route(user_input)
-                response_content = result.output if result.success else f"Error: {result.error}"
-                response = type('Response', (), {'content': response_content})()
+        # Always use auto-routing (task router handles classification and execution)
+        result = self.task_router.handle_auto_route(user_input)
+        response_content = result.output if result.success else f"Error: {result.error}"
 
-                # Show tool usage info if available
-                if hasattr(result, 'metadata') and result.metadata:
-                    tool_calls = result.metadata.get('tool_calls', [])
-                    if tool_calls:
-                        io.secho(f"  Tools used: {[tc['tool'] for tc in tool_calls]}", fg="cyan")
+        # Display response
+        io.echo()
+        io.echo(f"| {response_content}")
 
-                io.secho("Assistant: ", fg="blue", bold=True)
-                io.echo(response.content)
-
-                # Show execution metadata
-                provider_used = getattr(result, 'provider_used', None) or "unknown"
-                tokens = getattr(result, 'tokens_used', None) or 0
-                exec_time = getattr(result, 'execution_time', None) or 0
-                # Ensure numeric values for formatting
-                try:
-                    tokens = int(tokens)
-                    exec_time_ms = float(exec_time) * 1000
-                except (TypeError, ValueError):
-                    tokens = 0
-                    exec_time_ms = 0
-                io.secho(
-                    f"[{provider_used} | {tokens} tokens | {exec_time_ms:.0f}ms]",
-                    fg="cyan"
-                )
+        # Verbose mode: show metadata
+        if self.session_context.verbose_mode:
+            classification = result.metadata.get('classification', {})
+            provider = classification.get('resolved_provider') or result.provider_used or 'local'
+            model = classification.get('resolved_model', '')
+            tokens = result.tokens_used
+            time_ms = result.execution_time * 1000
+            if model:
+                provider_str = provider + " (" + model + ")"
             else:
-                io.secho("Assistant: ", fg="blue", bold=True, nl=False)
+                provider_str = provider
+            time_str = f"{time_ms:.1f}"
+            io.echo(f"  {provider_str} | {tokens} tokens | {time_str}ms")
 
-                response = self.orchestrator.delegate(
-                    self.orchestrator.brain,
-                    user_input,
-                    system_prompt="You are a helpful AI assistant. Be concise and informative."
-                )
-
-                io.echo(response.content)
-                io.secho(
-                    f"[{response.provider}/{response.model} | {response.tokens_used} tokens | {response.latency_ms:.0f}ms]",
-                    fg="cyan"
-                )
         io.echo()
 
         self.session_context.conversation_history.append({
             "role": "assistant",
-            "content": response.content
+            "content": response_content
         })
 
         # Prompt for task progression if plan is active

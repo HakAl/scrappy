@@ -124,13 +124,6 @@ class TestCommandRouterValidation:
         output = self.io.get_output()
         assert "usage" in output.lower()
 
-    def test_auto_route_toggle_works(self):
-        """Auto-route mode toggle should work."""
-        initial_mode = self.router.session_context.auto_route_mode
-        result = self.router.route("/auto", "")
-        assert result is True
-        assert self.router.session_context.auto_route_mode != initial_mode
-
     def test_clear_command_clears_history(self):
         """Clear command should clear conversation history."""
         self.router.session_context.conversation_history = [{"role": "user", "content": "test"}]

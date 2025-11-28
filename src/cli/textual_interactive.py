@@ -105,6 +105,9 @@ class TextualInteractiveMode:
         orchestrator_output = OutputBridge(output_adapter)
         self.orchestrator.output = orchestrator_output
 
+        # Pass session_context to task_router for verbose_mode access
+        self.task_router.session_context = self.session_context
+
         # Create InteractiveMode with existing Textual IO
         interactive_mode = InteractiveMode(
             io=self.io,  # Use existing Textual IO, not creating new one

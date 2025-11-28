@@ -140,10 +140,10 @@ class CLIAgentManager:
                     approved = io.style("Approved", fg="green") if entry['approved'] else io.style("Denied", fg="red")
                     io.echo(f"  [{entry['timestamp'][:19]}] {entry['action']} - {approved}")
 
-            # Offer to save audit log
-            if self._interaction.confirm("Save audit log to file?", default=False):
-                log_path = agent.save_audit_log()
-                io.secho(f"Saved to: {log_path}", fg="green")
+            # Audit log is auto-saved to .scrappy/audit.json
+            audit_path = agent.project_root / ".scrappy" / "audit.json"
+            if audit_path.exists():
+                io.secho(f"Audit log: {audit_path}", fg="cyan")
 
             # Offer rollback if checkpoint was created
             if checkpoint_hash and not dry_run:

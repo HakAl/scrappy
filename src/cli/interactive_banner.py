@@ -88,27 +88,15 @@ def display_banner(io: "UnifiedIOProtocol") -> None:
         io.echo(str(content))
 
 
-def render_welcome_banner(
-    io: "UnifiedIOProtocol",
-    auto_route_mode: bool = False
-) -> None:
+def render_welcome_banner(io: "UnifiedIOProtocol") -> None:
     """Render the welcome banner as a Rich Panel.
-
-    Legacy function for compatibility. New code should use display_banner().
 
     Args:
         io: UnifiedIO instance for output
-        auto_route_mode: Whether auto-routing is enabled
     """
     # Display main banner
     display_banner(io)
 
-    # Display mode statuses
+    # Display tips
     io.secho("Tip: End line with \\ to continue on next line", fg="cyan")
-
-    if auto_route_mode:
-        io.secho("Auto-routing: ON (task-aware execution)", fg="green")
-    else:
-        io.secho("Auto-routing: OFF (/auto to enable)", fg="yellow")
-
     io.echo()

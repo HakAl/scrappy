@@ -78,7 +78,8 @@ python -m pytest tests/cli/test_textual_app.py -v -k "sanitiz"
 
 **Root Cause Analysis:**
 
-From docs analysis, the audit log system has **auto-save enabled by default** via `enable_auto_save()` in `CodeAgent.run()`. The prompt at `agent_manager.py:144` only controls whether the user sees the "Saved to:" message, not whether saving occurs.
+From docs analysis, the audit log system has **auto-save enabled by default** via `enable_auto_save()` in `CodeAgent.run()`. 
+The prompt at `agent_manager.py:144` only controls whether the user sees the "Saved to:" message, not whether saving occurs.
 
 The auto-save writes to `.scrappy/audit.json` continuously. The manual `save_audit_log()` call is redundant.
 
@@ -222,7 +223,8 @@ Keep the code but mark it as "legacy non-Textual fallback" in case a non-TUI mod
        # ... existing code ...
    ```
 
-**Alternative:** If code cleanup is preferred, these methods can be moved to a separate `LegacyInteractiveMode` class or removed entirely with appropriate test updates.
+**Alternative:** If code cleanup is preferred, these methods can be moved to a separate `LegacyInteractiveMode` class 
+or removed entirely with appropriate test updates.
 
 ---
 

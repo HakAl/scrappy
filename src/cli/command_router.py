@@ -110,9 +110,8 @@ class CommandRouter:
             # State commands
             "/clear": self._handle_clear,
             "/autoexec": self._handle_autoexec,
-            "/auto": self._handle_auto,
-            "/route": self._handle_auto,
-            "/autoroute": self._handle_auto,
+            "/verbose": self._handle_verbose,
+            "/v": self._handle_verbose,
             # Tasks list command
             "/tasks": self._handle_tasks,
         }
@@ -286,32 +285,6 @@ class CommandRouter:
             io.echo("  Tasks in plans will wait for manual execution")
         return True
 
-    def _handle_auto(self, args: str) -> bool:
-        """Handle auto-routing commands (/auto, /route, /autoroute)."""
-        io = self.io
-        if not args:
-            self.session_context.auto_route_mode = not self.session_context.auto_route_mode
-            if self.session_context.auto_route_mode:
-                io.secho("Auto-routing mode: ON", fg="green", bold=True)
-                io.echo("  Tasks are automatically classified and routed:")
-                io.echo("  - Direct commands (pip, git) -> Shell execution")
-                io.echo("  - Code generation -> Full agent loop with planning")
-                io.echo("  - Research queries -> Fast provider (Cerebras)")
-                io.echo("  - Simple chat -> Instant responses")
-            else:
-                io.secho("Auto-routing mode: OFF", fg="yellow", bold=True)
-                io.echo("  All input goes to default chat mode.")
-        elif args.lower() == "status":
-            self.task_router.handle_route_status()
-        elif args.lower() == "history":
-            self.task_router.handle_route_history()
-        else:
-            io.echo("Usage: /auto [status|history]")
-            io.echo("  /auto         - Toggle auto-routing mode")
-            io.echo("  /auto status  - Show routing metrics")
-            io.echo("  /auto history - Show routing history")
-        return True
-
     def _handle_tasks(self, args: str) -> bool:
         """Handle /tasks command."""
         io = self.io
@@ -319,6 +292,18 @@ class CommandRouter:
             io.secho("No active plan. Use /plan <task> to create one.", fg="yellow")
         else:
             self.state_manager.show_all_tasks(io)
+        return True
+
+    def _handle_verbose(self, args: str) -> bool:
+        """Handle /verbose command to toggle verbose output mode."""
+        io = self.io
+        self.session_context.verbose_mode = not self.session_context.verbose_mode
+        if self.session_context.verbose_mode:
+            io.secho("Verbose mode: ON", fg="green", bold=True)
+            io.echo("  Metadata (provider, tokens, time) will be shown for responses.")
+        else:
+            io.secho("Verbose mode: OFF", fg="yellow", bold=True)
+            io.echo("  Clean output without metadata.")
         return True
 
     def route(self, cmd: str, args: str) -> bool:

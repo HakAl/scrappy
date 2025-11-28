@@ -55,7 +55,7 @@ VALID_COMMANDS = {
     # Codebase commands
     "explore",
     # Mode toggles
-    "auto", "route", "autoroute", "ml", "multiline", "paste", "autoexec"
+    "ml", "multiline", "paste", "autoexec", "verbose", "v"
 }
 
 # Limits

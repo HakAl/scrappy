@@ -113,13 +113,11 @@ class TestWelcomeBannerPanel:
 
         from src.cli.interactive_banner import render_welcome_banner
 
-        # Test with different mode configurations
-        render_welcome_banner(io, auto_route_mode=False)
+        render_welcome_banner(io)
         output = get_captured_output(console)
 
-        # Should show tip about continuation and auto-routing status
+        # Should show tip about continuation
         assert 'Tip' in output or '\\' in output
-        assert 'Auto' in output or 'auto' in output or 'routing' in output
 
 
 # =============================================================================

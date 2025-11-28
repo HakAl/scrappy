@@ -4,13 +4,16 @@ CLI handler for task-type aware routing.
 
 import click
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from ..task_router import TaskRouter, ClassifiedTask
 from ..task_router.config import ClarificationConfig
 from ..task_router.protocols import TaskRouterInputProtocol
 from ..orchestrator.protocols import Orchestrator
 from .io_interface import CLIIOProtocol
+
+if TYPE_CHECKING:
+    from .session_context import SessionContextProtocol
 
 
 class CLIIOInputAdapter:
@@ -69,7 +72,8 @@ class CLITaskRouterHandler:
         io: CLIIOProtocol,
         project_root: Optional[Path] = None,
         auto_confirm: bool = False,
-        router: Optional[TaskRouter] = None
+        router: Optional[TaskRouter] = None,
+        session_context: Optional["SessionContextProtocol"] = None
     ) -> None:
         """Initialize CLI task router handler.
 
@@ -81,16 +85,18 @@ class CLITaskRouterHandler:
             auto_confirm: If True, direct commands will execute without user
                 confirmation. Defaults to False for safety.
             router: Optional TaskRouter instance. Created if not provided.
+            session_context: Session context for verbose_mode setting.
 
         State Changes:
             - Sets instance attributes for orchestrator, io, project_root, auto_confirm
-            - Creates a new TaskRouter instance with verbose=True (if not provided)
+            - Creates a new TaskRouter instance with verbose=False (if not provided)
             - Initializes empty history list for tracking routing decisions
         """
         self.orchestrator = orchestrator
         self.io = io
         self.project_root = project_root or self._get_default_project_root()
         self.auto_confirm = auto_confirm
+        self.session_context = session_context
 
         # Inject router or create default
         self.router = router or self._create_default_router()
@@ -120,7 +126,7 @@ class CLITaskRouterHandler:
             orchestrator=self.orchestrator,
             project_root=self.project_root,
             auto_confirm_direct=self.auto_confirm,
-            verbose=True,
+            verbose=False,  # Suppress internal output; handler controls display
             output_handler=CLIIOOutputHandler(self.io),
             input_handler=input_adapter,
             intent_clarifier=InteractiveClarifier(io=input_adapter),
@@ -151,13 +157,14 @@ class CLITaskRouterHandler:
         Side Effects:
             - Executes the task via router.route() which may call external APIs,
               run shell commands, or perform other operations
-            - Displays result to terminal via click
+            - Displays result to terminal in verbose mode only
             - Appends entry to self.history with input, result, and classification
         """
-        result = self.router.route(user_input)
+        # Set router verbose based on session context
+        verbose = self.session_context.verbose_mode if self.session_context else False
+        self.router.verbose = verbose
 
-        # Display result
-        self._display_result(result)
+        result = self.router.route(user_input)
 
         # Track in history
         self.history.append({

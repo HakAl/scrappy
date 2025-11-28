@@ -88,7 +88,6 @@ class TestInteractiveMode:
         io = MockIO()
         mode = create_test_interactive_mode(io, self.orchestrator)
 
-        assert mode.session_context.auto_route_mode is True
         assert mode.session_context.smart_mode is False
 
     def test_initializes_with_empty_conversation(self):
@@ -106,48 +105,6 @@ class TestInteractiveMode:
         assert mode.session_context.auto_save is True
 
     # =========================================================================
-    # Run Loop Tests
-    # =========================================================================
-
-    def test_run_requires_tty(self):
-        """Should error if not running in TTY."""
-        io = MockIO()
-        mode = create_test_interactive_mode(io, self.orchestrator)
-
-        with patch('sys.stdin.isatty', return_value=False):
-            mode.run()
-
-        output = io.get_output()
-        assert "TTY" in output or "terminal" in output.lower()
-
-
-    def test_run_shows_commands_help(self):
-        """Should show available commands on start."""
-        io = MockIO()
-        mode = create_test_interactive_mode(io, self.orchestrator)
-
-        with patch('sys.stdin.isatty', return_value=True):
-            with patch.object(mode, '_main_loop', return_value=None):
-                mode.run()
-
-        output = io.get_output()
-        assert "/help" in output
-        assert "/quit" in output
-
-    def test_run_shows_mode_statuses(self):
-        """Should show current mode statuses on start."""
-        io = MockIO()
-        mode = create_test_interactive_mode(io, self.orchestrator)
-
-        with patch('sys.stdin.isatty', return_value=True):
-            with patch.object(mode, '_main_loop', return_value=None):
-                mode.run()
-
-        output = io.get_output()
-        # Should show tip about backslash continuation and auto-routing status
-        assert "Tip" in output or "\\" in output
-
-    # =========================================================================
     # Input Processing Tests
     # =========================================================================
 
@@ -155,16 +112,11 @@ class TestInteractiveMode:
         """Should add user input to conversation history."""
         io = MockIO()
         mode = create_test_interactive_mode(io, self.orchestrator)
-        mode.session_context.auto_route_mode = False
-        mode.smart_mode = False
 
-        mock_response = MagicMock()
-        mock_response.content = "Hi there"
-        mock_response.provider = "test"
-        mock_response.model = "test"
-        mock_response.tokens_used = 10
-        mock_response.latency_ms = 50
-        self.orchestrator.delegate = MagicMock(return_value=mock_response)
+        mock_result = MagicMock()
+        mock_result.success = True
+        mock_result.output = "Hi there"
+        mode.task_router.handle_auto_route = MagicMock(return_value=mock_result)
 
         mode._process_input("hello")
 
@@ -239,43 +191,41 @@ class TestInteractiveModeDisplayOutput:
         self.orchestrator = ConfigurableTestOrchestrator()
 
     def test_displays_response_with_metadata(self):
-        """Should display response with provider/token info."""
+        """Should display response with provider/token info in verbose mode."""
         io = MockIO()
         mode = create_test_interactive_mode(io, self.orchestrator)
-        mode.session_context.auto_route_mode = False
-        mode.smart_mode = False
+        mode.session_context.verbose_mode = True  # Enable verbose to show metadata
 
-        mock_response = MagicMock()
-        mock_response.content = "Test response"
-        mock_response.provider = "openai"
-        mock_response.model = "gpt-4"
-        mock_response.tokens_used = 150
-        mock_response.latency_ms = 500
-        self.orchestrator.delegate = MagicMock(return_value=mock_response)
+        mock_result = MagicMock()
+        mock_result.success = True
+        mock_result.output = "Test response"
+        mock_result.provider_used = "openai"
+        mock_result.tokens_used = 150
+        mock_result.execution_time = 0.5
+        mode.task_router.handle_auto_route = MagicMock(return_value=mock_result)
 
         mode._process_input("test")
 
         output = io.get_output()
         assert "Test response" in output
-        assert "openai" in output or "gpt-4" in output
+        assert "openai" in output or "150" in output
 
-    def test_displays_tool_usage_info(self):
-        """Should display tool usage information when tools used."""
+    def test_displays_metadata_in_verbose_mode(self):
+        """Should display metadata when verbose mode is enabled."""
         io = MockIO()
         mode = create_test_interactive_mode(io, self.orchestrator)
-        mode.session_context.auto_route_mode = False
-        mode.smart_mode = False
-        mode.task_router = MagicMock()
+        mode.session_context.verbose_mode = True
 
-        result = MagicMock()
-        result.success = True
-        result.output = "Tool result"
-        result.metadata = {'tool_calls': [{'tool': 'web_fetch'}]}
-        mode.task_router.handle_auto_route.return_value = result
+        mock_result = MagicMock()
+        mock_result.success = True
+        mock_result.output = "Tool result"
+        mock_result.provider_used = "cerebras"
+        mock_result.tokens_used = 100
+        mock_result.execution_time = 0.25
+        mode.task_router.handle_auto_route = MagicMock(return_value=mock_result)
 
-        # Input that needs tools
         mode._process_input("fetch https://example.com")
 
         output = io.get_output()
-        # Should indicate tools were used
-        assert "tools" in output.lower() or "Using" in output
+        # Should show metadata in verbose mode
+        assert "cerebras" in output or "100" in output

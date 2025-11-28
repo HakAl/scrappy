@@ -324,7 +324,7 @@ class TestExistingTestsStillWork:
             "context", "cache", "session", "limits",
             "synthesize", "delegate",
             "explore",
-            "auto", "route", "autoroute", "ml", "multiline", "paste", "autoexec"
+            "ml", "multiline", "paste", "autoexec", "verbose", "v"
         }
 
         for cmd in expected_commands:

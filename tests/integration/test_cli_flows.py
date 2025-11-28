@@ -114,60 +114,6 @@ class TestSessionStartupFlow:
         from src.cli.interactive import InteractiveMode
         self.InteractiveMode = InteractiveMode
 
-    def test_complete_startup_displays_all_elements(self):
-        """Startup should display banner, commands, and mode statuses."""
-        io = MockIO()
-        orchestrator = ConfigurableTestOrchestrator()
-        mode = create_test_interactive_mode(io, orchestrator)
-
-        with patch('sys.stdin.isatty', return_value=True):
-            with patch.object(mode, '_main_loop', return_value=None):
-                mode.run()
-
-        output = io.get_output()
-
-        # Should have welcome banner
-        assert "LLM Agent Team" in output or "Interactive Mode" in output
-
-        # Should show command help
-        assert "/help" in output
-        assert "/quit" in output
-        assert "/plan" in output
-        assert "/agent" in output
-
-        # Should show mode statuses
-        assert "Tip" in output or "\\" in output
-        assert "Auto-routing" in output or "auto-routing" in output.lower()
-
-    def test_startup_shows_continuation_tip(self):
-        """Should show tip about line continuation at startup."""
-        io = MockIO()
-        orchestrator = ConfigurableTestOrchestrator()
-        mode = create_test_interactive_mode(io, orchestrator)
-
-        with patch('sys.stdin.isatty', return_value=True):
-            with patch.object(mode, '_main_loop', return_value=None):
-                mode.run()
-
-        output = io.get_output()
-        # Should show tip about continuation
-        assert "Tip" in output or "\\" in output
-
-    def test_startup_with_auto_route_on_shows_status(self):
-        """Should indicate auto-routing mode is ON at startup."""
-        io = MockIO()
-        orchestrator = ConfigurableTestOrchestrator()
-        mode = create_test_interactive_mode(io, orchestrator)
-        mode.session_context.auto_route_mode = True
-
-        with patch('sys.stdin.isatty', return_value=True):
-            with patch.object(mode, '_main_loop', return_value=None):
-                mode.run()
-
-        output = io.get_output()
-        # Auto-routing should be shown as ON
-        assert "Auto-routing" in output or "auto-routing" in output.lower()
-
 
 class TestSessionExitFlow:
     """Tests for complete session exit workflow."""
@@ -433,34 +379,6 @@ class TestModeTogglingFlow:
         from src.cli.command_router import CommandRouter
         self.CommandRouter = CommandRouter
 
-    def test_toggle_auto_route_mode(self):
-        """Should toggle auto-routing mode and show status."""
-        io = MockIO()
-        orchestrator = ConfigurableTestOrchestrator()
-        router = create_test_command_router(io, orchestrator)
-        initial = router.session_context.auto_route_mode
-
-        router.route("/auto", "")
-
-        assert router.session_context.auto_route_mode != initial
-
-        output = io.get_output()
-        assert "Auto-routing" in output or "auto" in output.lower()
-
-    def test_toggle_auto_route_shows_classification_info(self):
-        """Toggling auto-route ON should explain classification behavior."""
-        io = MockIO()
-        orchestrator = ConfigurableTestOrchestrator()
-        router = create_test_command_router(io, orchestrator)
-        router.session_context.auto_route_mode = False  # Start OFF
-
-        router.route("/auto", "")
-
-        output = io.get_output()
-        # Should explain routing behavior
-        assert "ON" in output
-        assert any(word in output.lower() for word in ["route", "classify", "shell", "agent"])
-
     def test_toggle_smart_mode(self):
         """Should toggle smart mode and show status."""
         io = MockIO()
@@ -576,7 +494,6 @@ class TestChatWithAutoRouteFlow:
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
         mode = create_test_interactive_mode(io, orchestrator)
-        mode.session_context.auto_route_mode = True
         mode.task_router = MagicMock()
         mode.task_router.handle_auto_route.return_value = MagicMock(
             success=True,
@@ -755,26 +672,21 @@ class TestCompleteUserWorkflows:
         assert router.state_manager.current_task_index == 3
 
     def test_mode_switch_workflow(self):
-        """Complete workflow: toggle modes and verify state changes."""
+        """Complete workflow: toggle smart mode and verify state changes."""
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
         router = create_test_command_router(io, orchestrator)
 
-        # Record initial states
-        initial_auto = router.session_context.auto_route_mode
+        # Record initial state
         initial_smart = router.session_context.smart_mode
-
-        # Toggle auto-route
-        router.route("/auto", "")
-        assert router.session_context.auto_route_mode != initial_auto
 
         # Toggle smart mode
         router.route("/smart", "toggle")
         assert router.session_context.smart_mode != initial_smart
 
         # Toggle back
-        router.route("/auto", "")
-        assert router.session_context.auto_route_mode == initial_auto
+        router.route("/smart", "toggle")
+        assert router.session_context.smart_mode == initial_smart
 
 
 
