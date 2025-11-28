@@ -865,3 +865,7 @@ Be concise and technical. No fluff."""
 
         self._project_detector.set_file_index(self.file_index)
         return self._project_detector.get_sub_projects()
+
+    def shutdown(self) -> None:
+        """Shutdown background tasks and clean up resources."""
+        self._semantic_manager.shutdown()

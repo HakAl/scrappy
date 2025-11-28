@@ -62,6 +62,15 @@ class SemanticSearchInitializer:
         self._error: Optional[Exception] = None
         self._lock = threading.Lock()
         self._status = "Not started"
+        self._on_ready_callback = None
+
+    def set_on_ready_callback(self, callback) -> None:
+        """Set callback to invoke when model is ready.
+
+        Args:
+            callback: Function taking the search_provider as argument
+        """
+        self._on_ready_callback = callback
 
     def start(self) -> None:
         """
@@ -206,11 +215,21 @@ class SemanticSearchInitializer:
         if stopped:
             logger.debug("Semantic search initializer shutdown complete")
         else:
-            logger.warning(
+            logger.debug(
                 f"Semantic search initializer did not stop within {timeout}s"
             )
 
         return stopped
+
+    def is_shutdown_requested(self) -> bool:
+        """Check if shutdown has been requested.
+
+        Returns:
+            True if shutdown was requested, False otherwise
+        """
+        if self._managed_thread:
+            return self._managed_thread.shutdown_requested
+        return False
 
     def _initialize_worker(self, thread: ManagedThread) -> None:
         """
@@ -316,6 +335,13 @@ class SemanticSearchInitializer:
             # Notify via event queue if configured (main-thread-safe)
             self._emit_completion_event(search_provider)
 
+            # Call on_ready_callback (runs on background thread)
+            if self._on_ready_callback:
+                try:
+                    self._on_ready_callback(search_provider)
+                except Exception as e:
+                    logger.warning(f"Error in on_ready_callback: {e}")
+
         except ImportError as e:
             with self._lock:
                 self._error = e
@@ -406,3 +432,15 @@ class NullInitializer:
     def get_status(self) -> str:
         """Returns not available status."""
         return "Not available"
+
+    def shutdown(self, timeout: float = 5.0) -> bool:
+        """No-op shutdown, always returns True (success)."""
+        return True
+
+    def is_shutdown_requested(self) -> bool:
+        """Always returns False - null initializer is never shutting down."""
+        return False
+
+    def set_on_ready_callback(self, callback) -> None:
+        """No-op - null initializer never becomes ready."""
+        pass

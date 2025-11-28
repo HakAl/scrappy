@@ -55,8 +55,8 @@ class TestManagedThread:
         # After completion
         assert not managed.is_running()
 
-    def test_not_daemon_thread(self):
-        """ManagedThread creates non-daemon threads."""
+    def test_daemon_thread_safety_net(self):
+        """ManagedThread creates daemon threads as safety net for process exit."""
         event = threading.Event()
 
         def worker(thread: ManagedThread) -> None:
@@ -66,8 +66,9 @@ class TestManagedThread:
         managed.start()
 
         # Access the internal thread to check daemon status
+        # daemon=True ensures process can exit even if thread stuck in blocking I/O
         assert managed._thread is not None
-        assert managed._thread.daemon is False
+        assert managed._thread.daemon is True
 
         event.set()
         managed.join(timeout=2.0)

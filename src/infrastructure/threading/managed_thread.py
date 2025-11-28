@@ -98,7 +98,7 @@ class ManagedThread(Generic[T]):
             self._thread = threading.Thread(
                 target=self._run,
                 name=self._name,
-                daemon=False,  # NOT a daemon - we manage lifecycle explicitly
+                daemon=True,  # Safety net: ensures process exits even if thread stuck in blocking I/O
             )
             self._thread.start()
             self._started = True
@@ -136,7 +136,7 @@ class ManagedThread(Generic[T]):
 
         is_alive = self._thread.is_alive()
         if is_alive:
-            logger.warning(
+            logger.debug(
                 f"Thread {self._name} did not stop within {timeout}s timeout"
             )
         else:

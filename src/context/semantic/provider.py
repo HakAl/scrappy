@@ -160,6 +160,7 @@ class LanceDBSearchProvider:
         self._db = None
         self._embedding_func = embedding_func  # None means lazy-load default
         self._code_schema = None
+        self._is_writing = False  # Write protection flag for graceful shutdown
 
         # Progress reporter (defaults to NullProgressReporter if not provided)
         if progress_reporter is None:
@@ -576,12 +577,17 @@ class LanceDBSearchProvider:
             chunk["vector"] = embedding
 
         # Insert in DB-optimal batches (LanceDB handles larger batches well)
+        # CRITICAL SECTION - protect against mid-write termination
         DB_BATCH_SIZE = 1000
         t2 = time.time()
         for i in range(0, len(chunks), DB_BATCH_SIZE):
             batch = chunks[i:i + DB_BATCH_SIZE]
             try:
-                table.add(batch)
+                self._is_writing = True
+                try:
+                    table.add(batch)
+                finally:
+                    self._is_writing = False
                 result["added"] += len(batch)
             except Exception as e:
                 logger.error(f"Failed to add batch to table: {e}")

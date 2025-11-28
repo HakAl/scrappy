@@ -647,6 +647,14 @@ class ScrappyApp(App):
         """
         self._codebase_context = context
 
+        def progress_callback(message: str) -> None:
+            # Guard against post-shutdown race condition
+            # Called from background thread, posts to main thread via message queue
+            if self.is_running and not self._should_stop_consumer:
+                self.post_message(IndexingProgress(message=message))
+
+        context.set_indexing_progress_callback(progress_callback)
+
     def compose(self) -> ComposeResult:
         """Create child widgets.
 
@@ -700,11 +708,15 @@ class ScrappyApp(App):
 
     def on_unmount(self) -> None:
         """Called when app is about to close."""
-        # Signal output consumer to stop
+        # Set flag immediately to stop accepting new messages
         self._should_stop_consumer = True
 
         # Clear TUI mode context
         OutputModeContext.set_tui_mode(False)
+
+        # Trigger shutdown chain for background tasks
+        if self._codebase_context is not None:
+            self._codebase_context.shutdown()
 
     def on_click(self, event) -> None:
         """Refocus input when clicking anywhere that's not the input field.

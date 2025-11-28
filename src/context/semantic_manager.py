@@ -124,7 +124,11 @@ class SemanticSearchManager:
         if self._initializer:
             logger.debug("Starting background semantic search initialization")
 
-            # Register event handler
+            # Set callback for when model is ready (called from background thread)
+            if hasattr(self._initializer, 'set_on_ready_callback'):
+                self._initializer.set_on_ready_callback(self._on_model_ready)
+
+            # Keep event handler registration for backward compatibility
             self._event_queue.register_handler(
                 "semantic_search",
                 self._handle_event,
@@ -179,6 +183,37 @@ class SemanticSearchManager:
         elif event.event_type == EventType.INIT_FAILED:
             logger.warning(f"Semantic search initialization failed: {event.error}")
             self._notify_progress(f"Semantic search initialization failed: {event.error}")
+
+    def _on_model_ready(self, search_provider) -> None:
+        """Called from background thread when model finishes loading.
+
+        Args:
+            search_provider: The initialized SemanticSearchProtocol instance
+        """
+        logger.info("Semantic search model ready (via callback)")
+        self._semantic_search = search_provider
+        self._notify_progress("Semantic search ready")
+
+        # Wire up cancellation before indexing
+        self._set_cancellation_from_initializer()
+
+        # Trigger indexing (runs on background thread)
+        if self._file_collector_callback:
+            self._notify_progress("Starting file indexing...")
+            try:
+                file_collector = self._file_collector_callback()
+                if file_collector:
+                    self.index_files(file_collector)
+                else:
+                    logger.debug("File collector callback returned None")
+            except Exception as e:
+                logger.warning(f"Auto-indexing failed: {e}")
+                self._notify_progress(f"Indexing failed: {e}")
+
+    def _set_cancellation_from_initializer(self) -> None:
+        """Wire up cancellation check to initializer's shutdown state."""
+        if self._initializer and hasattr(self._initializer, 'is_shutdown_requested'):
+            self.set_cancellation_check(self._initializer.is_shutdown_requested)
 
     def is_ready(self) -> bool:
         """
@@ -392,6 +427,17 @@ class SemanticSearchManager:
             except Exception as e:
                 logger.debug(f"Error in progress callback: {e}")
 
+    def shutdown(self) -> None:
+        """Signal background tasks to stop and clean up resources."""
+        # Break reference cycle to allow GC
+        self._progress_callback = None
+        self._file_collector_callback = None
+
+        if self._initializer is not None:
+            stopped = self._initializer.shutdown()
+            if not stopped:
+                logger.info("Indexing interrupted - will resume on next launch")
+
 
 class NullSemanticSearchManager:
     """
@@ -446,4 +492,8 @@ class NullSemanticSearchManager:
 
     def set_cancellation_check(self, check: Optional[Callable[[], bool]]) -> None:
         """No-op."""
+        pass
+
+    def shutdown(self) -> None:
+        """No-op shutdown."""
         pass

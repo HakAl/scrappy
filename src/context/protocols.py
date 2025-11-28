@@ -920,6 +920,10 @@ class SemanticSearchManagerProtocol(Protocol):
         """
         ...
 
+    def shutdown(self) -> None:
+        """Signal background tasks to stop and clean up resources."""
+        ...
+
 
 @runtime_checkable
 class ContextAugmenterProtocol(Protocol):
