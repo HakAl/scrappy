@@ -1,4 +1,6 @@
-  Plan: Dynamic Theme Loading for TUI
+[//]: # (todo finish theme integration )
+
+Plan: Dynamic Theme Loading for TUI
 
   Step 1: Convert theme defaults to hex values
 

@@ -805,16 +805,16 @@ class ToolRunnerProtocol(Protocol):
             return result
     """
 
-    def run_tool(self, tool_name: str, parameters: Dict[str, Any]) -> str:
+    def run_tool(self, tool_name: str, parameters: Dict[str, Any]) -> "ToolResult":
         """
-        Execute a tool and return its output.
+        Execute a tool and return its result.
 
         Args:
             tool_name: Name of tool to execute
             parameters: Tool-specific parameters
 
         Returns:
-            Tool output as string
+            ToolResult with output, success status, and metadata
 
         Raises:
             ValueError: If tool not found

@@ -6,6 +6,7 @@ from .file_tools import ReadFileTool, WriteFileTool, ListFilesTool, ListDirector
 from .git_tools import GitLogTool, GitDiffTool, GitBlameTool, GitShowTool, GitRecentChangesTool, GitStatusTool
 from .search_tools import SearchCodeTool
 from .web_tools import WebFetchTool, WebSearchTool
+from .control_tools import CompleteTool
 
 __all__ = [
     # Protocol (use for type hints)
@@ -34,4 +35,6 @@ __all__ = [
     # Concrete tools - Web
     'WebFetchTool',
     'WebSearchTool',
+    # Concrete tools - Control
+    'CompleteTool',
 ]

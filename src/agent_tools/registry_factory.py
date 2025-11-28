@@ -6,6 +6,8 @@ Extracted from CodeAgent._create_default_registry() for:
 - Dependency injection of different registries
 - Separation of concerns (configuration vs orchestration)
 """
+from typing import Optional, List
+
 from .tools import ToolRegistry
 from .tools.file_tools import (
     ReadFileTool,
@@ -24,9 +26,15 @@ from .tools.git_tools import (
 from .tools.search_tools import SearchCodeTool
 from .tools.web_tools import WebFetchTool, WebSearchTool
 from .tools.python_tools import AnalyzePythonDependenciesTool
+from .tools.command_tool import CommandTool
+from .tools.control_tools import CompleteTool
+from .constants import DEFAULT_COMMAND_TIMEOUT, DEFAULT_MAX_COMMAND_OUTPUT
 
 
 def create_default_registry(
+    command_timeout: int = DEFAULT_COMMAND_TIMEOUT,
+    max_command_output: int = DEFAULT_MAX_COMMAND_OUTPUT,
+    dangerous_commands: Optional[List[str]] = None,
     include_web: bool = True,
     include_git: bool = True
 ) -> ToolRegistry:
@@ -34,6 +42,9 @@ def create_default_registry(
     Create the default tool registry with all standard tools.
 
     Args:
+        command_timeout: Command execution timeout in seconds
+        max_command_output: Maximum command output size in bytes
+        dangerous_commands: List of dangerous command patterns to block
         include_web: Include web fetch/search tools (default True)
         include_git: Include git tools (default True)
 
@@ -67,6 +78,16 @@ def create_default_registry(
 
     # Register Python tools
     registry.register(AnalyzePythonDependenciesTool())
+
+    # Register command execution tool
+    registry.register(CommandTool(
+        timeout=command_timeout,
+        max_output=max_command_output,
+        dangerous_patterns=dangerous_commands or []
+    ))
+
+    # Register control tools
+    registry.register(CompleteTool())
 
     return registry
 

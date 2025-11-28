@@ -213,44 +213,15 @@ Analyze the codebase structure to determine:
 
     def _build_tools_section(self) -> str:
         """Build available tools section."""
-        if self.tool_registry is not None:
-            # Use registry for dynamic tool descriptions
-            # Skip response format when using native tool calling
-            if hasattr(self, '_use_native_tools') and self._use_native_tools:
-                return f"\n## Available Tools\n\n{self.tool_registry.generate_descriptions()}"
-            else:
-                return f"\n## Available Tools\n\n{self.tool_registry.get_full_prompt_section()}"
+        if self.tool_registry is None:
+            raise ValueError("ToolRegistry is required - no fallback supported")
+
+        # Use registry for dynamic tool descriptions
+        # Skip response format when using native tool calling
+        if hasattr(self, '_use_native_tools') and self._use_native_tools:
+            return f"\n## Available Tools\n\n{self.tool_registry.generate_descriptions()}"
         else:
-            # Fallback to static list
-            return """
-## Available Tools
-
-- read_file: Read file contents
-- write_file: Write or create files (prefer over shell redirection)
-- list_files: List directory contents
-- search_code: Search for patterns in codebase
-- run_command: Execute shell commands
-
-IMPORTANT: Prefer write_file over shell commands for creating files.
-This ensures proper encoding and cross-platform compatibility.
-
-## Response Format
-
-Response format (JSON):
-{
-    "thought": "What I'm thinking about the task",
-    "action": "tool_name",
-    "parameters": {"param1": "value1"},
-    "is_complete": false
-}
-
-When task is complete:
-{
-    "thought": "Task completed successfully",
-    "action": "complete",
-    "result": "Summary of what was done",
-    "is_complete": true
-}"""
+            return f"\n## Available Tools\n\n{self.tool_registry.get_full_prompt_section()}"
 
     def _build_strategy_section(self) -> str:
         """Build strategy guidance section."""

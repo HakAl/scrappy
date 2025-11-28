@@ -6,7 +6,7 @@ Pure execution logic for running tools from the registry.
 
 from typing import Dict, Any, Callable
 
-from ..agent_tools.tools import ToolRegistry, ToolContext
+from ..agent_tools.tools import ToolRegistry, ToolContext, ToolResult
 from ..agent_tools.tools.command_tool import ShellCommandExecutor
 from .protocols import ToolRunnerProtocol, ToolRegistryProtocol  # Protocols for type hints (DI)
 
@@ -50,16 +50,16 @@ class ToolRunner:
         # Special handling for run_command
         self.tools['run_command'] = self._run_command_tool
 
-    def run_tool(self, tool_name: str, parameters: Dict[str, Any]) -> str:
+    def run_tool(self, tool_name: str, parameters: Dict[str, Any]) -> ToolResult:
         """
-        Execute a tool and return its output.
+        Execute a tool and return its result.
 
         Args:
             tool_name: Name of tool to execute
             parameters: Tool-specific parameters
 
         Returns:
-            Tool output as string
+            ToolResult with output, success status, and metadata
 
         Raises:
             ValueError: If tool not found
@@ -72,9 +72,13 @@ class ToolRunner:
 
         try:
             result = self.tools[tool_name](**parameters)
-            return str(result)
+            # Tools return ToolResult - pass it through
+            if isinstance(result, ToolResult):
+                return result
+            # Fallback for legacy tools that return strings
+            return ToolResult(success=True, output=str(result))
         except Exception as e:
-            return f"Error executing {tool_name}: {str(e)}"
+            return ToolResult(success=False, output="", error=str(e))
 
     def _run_command_tool(self, command: str, **kwargs) -> str:
         """

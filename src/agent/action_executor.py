@@ -79,17 +79,6 @@ class ActionExecutor:
         if action.action == 'retry_parse':
             return self._handle_parse_failure(action)
 
-        # Handle 'complete' action
-        if action.action == 'complete':
-            return ActionResult(
-                success=True,
-                output=action.result_text or "Task completed",
-                action='complete',
-                parameters=action.parameters,
-                approved=True,
-                executed=True
-            )
-
         # Handle unknown tool
         if action.action not in self.tool_runner.tools:
             return self._handle_unknown_tool(action)
@@ -140,25 +129,20 @@ class ActionExecutor:
                 self.ui.show_command(cmd)
 
         try:
-            output = self.tool_runner.run_tool(action.action, action.parameters)
+            tool_result = self.tool_runner.run_tool(action.action, action.parameters)
 
-            # Check for errors - be careful not to match "error=None" in ToolResult strings
-            output_lower = output.lower()
-            is_error = (
-                ('error:' in output_lower and 'error: none' not in output_lower) or
-                'failed' in output_lower or
-                output_lower.startswith('error')
-            )
-
-            self.ui.show_result(output, is_error=is_error)
+            # Display the result
+            output_str = str(tool_result)
+            self.ui.show_result(output_str, is_error=not tool_result.success)
 
             return ActionResult(
-                success=not is_error,
-                output=output,
+                success=tool_result.success,
+                output=output_str,
                 action=action.action,
                 parameters=action.parameters,
                 approved=True,
-                executed=True
+                executed=True,
+                metadata=tool_result.metadata
             )
 
         except Exception as e:

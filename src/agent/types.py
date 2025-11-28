@@ -5,7 +5,7 @@ Contains all dataclasses used in the agent's operation.
 """
 
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, TYPE_CHECKING
+from typing import Optional, List, Dict, Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..providers.base import LLMResponse
@@ -39,6 +39,7 @@ class ActionResult:
     parameters: Dict[str, object]
     approved: bool
     executed: bool = False
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

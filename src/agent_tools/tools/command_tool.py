@@ -9,12 +9,10 @@ import os
 import subprocess
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 
 from .base import ToolBase, ToolParameter, ToolResult, ToolContext
-
-if TYPE_CHECKING:
-    from ...agent_config import AgentConfig
+from ..constants import DEFAULT_COMMAND_TIMEOUT, DEFAULT_MAX_COMMAND_OUTPUT
 
 # Import platform utilities
 try:
@@ -56,7 +54,11 @@ except ImportError:
 # Removed safe_print() - output should go through injected IO protocol, not print()
 
 
-def create_shell_executor(config: "AgentConfig") -> "ShellCommandExecutor":
+def create_shell_executor(
+    command_timeout: int = DEFAULT_COMMAND_TIMEOUT,
+    max_command_output: int = DEFAULT_MAX_COMMAND_OUTPUT,
+    dangerous_commands: Optional[list[str]] = None
+) -> "ShellCommandExecutor":
     """
     Factory function for creating ShellCommandExecutor with default dependencies.
 
@@ -64,7 +66,9 @@ def create_shell_executor(config: "AgentConfig") -> "ShellCommandExecutor":
     for the current platform.
 
     Args:
-        config: AgentConfig with command settings
+        command_timeout: Timeout for command execution in seconds
+        max_command_output: Maximum output size to capture in bytes
+        dangerous_commands: List of dangerous command patterns to block
 
     Returns:
         Fully configured ShellCommandExecutor instance
@@ -82,7 +86,7 @@ def create_shell_executor(config: "AgentConfig") -> "ShellCommandExecutor":
     sanitizer = WindowsSanitizer() if is_windows() else UnixSanitizer()
 
     # Create security validator with custom patterns if provided
-    security = CommandSecurity(dangerous_patterns=config.dangerous_commands)
+    security = CommandSecurity(dangerous_patterns=dangerous_commands or [])
 
     # Create other components
     advisor = CommandAdvisor()
@@ -91,7 +95,9 @@ def create_shell_executor(config: "AgentConfig") -> "ShellCommandExecutor":
 
     # Wire everything together
     return ShellCommandExecutor(
-        config=config,
+        timeout=command_timeout,
+        max_output=max_command_output,
+        dangerous_patterns=dangerous_commands or [],
         security=security,
         sanitizer=sanitizer,
         advisor=advisor,
@@ -111,7 +117,9 @@ class ShellCommandExecutor:
 
     def __init__(
         self,
-        config: "AgentConfig",
+        timeout: int = 30,
+        max_output: int = 10000,
+        dangerous_patterns: Optional[list[str]] = None,
         security: Optional["CommandSecurityProtocol"] = None,
         sanitizer: Optional["PlatformSanitizerProtocol"] = None,
         advisor: Optional["CommandAdvisorProtocol"] = None,
@@ -123,7 +131,9 @@ class ShellCommandExecutor:
         Initialize executor with configuration and optional dependencies.
 
         Args:
-            config: AgentConfig with command settings
+            timeout: Command execution timeout in seconds
+            max_output: Maximum output size to capture in bytes
+            dangerous_patterns: List of dangerous command patterns to block
             security: Command security validator (default: creates CommandSecurity)
             sanitizer: Platform-specific sanitizer (default: auto-detects platform)
             advisor: Command advisor (default: creates CommandAdvisor)
@@ -147,14 +157,13 @@ class ShellCommandExecutor:
             OutputParser,
         )
 
-        self.config = config
-        self.timeout = config.command_timeout
-        self.max_output = config.max_command_output
+        self.timeout = timeout
+        self.max_output = max_output
         self._io = io
 
         # Inject dependencies with defaults
         self._security = security or CommandSecurity(
-            dangerous_patterns=config.dangerous_commands
+            dangerous_patterns=dangerous_patterns or []
         )
         self._sanitizer = sanitizer or (
             WindowsSanitizer() if is_windows() else UnixSanitizer()
@@ -551,22 +560,32 @@ class CommandTool(ToolBase):
 
     def __init__(
         self,
-        config: "AgentConfig",
+        timeout: int = DEFAULT_COMMAND_TIMEOUT,
+        max_output: int = DEFAULT_MAX_COMMAND_OUTPUT,
+        dangerous_patterns: Optional[list[str]] = None,
         executor: Optional[ShellCommandExecutor] = None
     ):
         """
         Initialize CommandTool with configuration.
 
         Args:
-            config: AgentConfig with command settings
+            timeout: Command execution timeout in seconds
+            max_output: Maximum output size to capture in bytes
+            dangerous_patterns: List of dangerous command patterns to block
             executor: Injectable shell command executor (default: creates new ShellCommandExecutor)
         """
-        self._config = config
+        self._timeout = timeout
+        self._max_output = max_output
+        self._dangerous_patterns = dangerous_patterns or []
         self._executor = executor or self._create_default_executor()
 
     def _create_default_executor(self) -> ShellCommandExecutor:
         """Create default shell command executor using factory function."""
-        return create_shell_executor(self._config)
+        return create_shell_executor(
+            command_timeout=self._timeout,
+            max_command_output=self._max_output,
+            dangerous_commands=self._dangerous_patterns
+        )
 
     @property
     def name(self) -> str:

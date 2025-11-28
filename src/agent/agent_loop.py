@@ -201,53 +201,8 @@ class AgentLoop:
         self, provider: str, prompt: str, system_prompt: str
     ) -> Any:
         """Delegate to orchestrator with native tool calling."""
-        # Get tool schemas in OpenAI format
+        # Get tool schemas from registry (single source of truth)
         tools = self._tool_registry.to_openai_schema()
-
-        # Add run_command tool (not in registry, manual schema)
-        tools.append({
-            "type": "function",
-            "function": {
-                "name": "run_command",
-                "description": (
-                    "Execute a shell command. "
-                    "Use for git operations, builds, tests, etc."
-                ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "command": {
-                            "type": "string",
-                            "description": "The shell command to execute",
-                        },
-                        "explanation": {
-                            "type": "string",
-                            "description": "Brief explanation of what the command does",
-                        },
-                    },
-                    "required": ["command"],
-                },
-            },
-        })
-
-        # Add "complete" tool for task completion
-        tools.append({
-            "type": "function",
-            "function": {
-                "name": "complete",
-                "description": "Mark the task as complete and provide final result",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "result": {
-                            "type": "string",
-                            "description": "Final result or summary of completed task",
-                        },
-                    },
-                    "required": ["result"],
-                },
-            },
-        })
 
         return self._orchestrator.delegate_with_tools(
             provider_name=provider,
@@ -334,8 +289,8 @@ class AgentLoop:
         Returns:
             EvaluationResult indicating whether to continue or complete
         """
-        # Check if task is complete (AFTER executing any actions)
-        if action.is_complete or action.action == 'complete':
+        # Check if task is complete via metadata (from CompleteTool execution)
+        if result.metadata.get("stop_loop", False):
             # Verify that at least one meaningful action was performed
             meaningful_actions = [
                 t for t in state.tools_executed

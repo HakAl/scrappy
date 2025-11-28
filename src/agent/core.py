@@ -308,7 +308,11 @@ class CodeAgent:
 
     def _create_default_tool_registry(self):
         """Create default tool registry."""
-        return create_default_registry()
+        return create_default_registry(
+            command_timeout=self.config.command_timeout,
+            max_command_output=self.config.max_command_output,
+            dangerous_commands=self.config.dangerous_commands
+        )
 
     def _create_default_command_executor(self):
         """Create default shell command executor."""

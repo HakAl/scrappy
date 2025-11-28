@@ -1,6 +1,10 @@
 ## Issues 
 
 ---
+code search tool is completely useless -- we have command tool -- wtf!?
+---
+
+---
 shift selection is messed up, can't 'unselect' once a point is selected.
 ---
 
