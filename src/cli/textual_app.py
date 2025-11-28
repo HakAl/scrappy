@@ -7,6 +7,7 @@ wrapping the existing InteractiveMode with a modern UI.
 
 from typing import TYPE_CHECKING, Any, Optional, Dict, List
 import logging
+import re
 import threading
 import uuid
 from queue import Queue, Empty
@@ -823,8 +824,13 @@ class ScrappyApp(App):
 
         Handles both normal command input and capture mode input.
         Uses TextArea API (.text and .clear()) instead of Input API.
+        Sanitizes newlines to spaces to allow pasting multiline content.
         """
-        user_input = self._input.text.strip()
+        # Sanitize newlines before processing (allows pasting multiline content)
+        raw_input = self._input.text
+        user_input = raw_input.replace('\r\n', ' ').replace('\n', ' ').replace('\r', ' ').strip()
+        # Normalize multiple whitespace to single space
+        user_input = re.sub(r'\s+', ' ', user_input)
 
         # Clear input immediately
         self._input.clear()
