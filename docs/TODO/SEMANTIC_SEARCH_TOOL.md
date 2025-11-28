@@ -1,8 +1,57 @@
 # Semantic Search Tool Implementation Plan
 
+The "Pass-Through" (Augmentation):
+When the user sends a message, perform a quick, low-cost semantic search (Top-k=3) using the user's raw query.
+Append this to the system prompt as "Potential Context." This handles 70% of simple questions instantly.
+
+The "Deep Dive" (Tool):
+Give the LLM a tool definition (e.g., search_codebase(query: str)).
+Instruct the model: "Use the provided context to answer. If the context is missing, irrelevant, 
+or if you identify dependencies (imports, function calls) that are not defined here, use the search tool to find them."
+
+To coach the agent to prefer semantic search, you need to treat this as an **interface design** problem
+(how you define the tools) and a **prompt engineering** problem (how you instruct the model).
+
+LLMs rely heavily on the tool descriptions you provide. If you make Semantic Search sound like the "smart" tool 
+and Grep sound like the "dumb/exact" tool, the agent will naturally bias toward the former.
+
+Here is the 3-step strategy to implement this hierarchy:
+
+### 1. "Bias" the Tool Descriptions
+The most effective way to control tool selection is through the `description` field in your tool definition schema. You want to frame Semantic Search as the default for *discovery* and Grep as a fallback for *exact verification*.
+
+**Do this for Semantic Search:**
+*   **Name:** `codebase_search` (Avoid words like "vector" or "embedding"; keep it functional).
+*   **Description:** "The primary search tool. Searches the codebase using natural language. Use this to find code logic, concepts, functionality, or when you are unsure of the exact file names or variable names. Always use this first for exploration."
+
+**Do this for Grep:**
+*   **Name:** `string_find` (or `exact_match_search`).
+*   **Description:** "A strict, exact-match text search. Only use this when you know the **precise, case-sensitive string** (e.g., a specific error code or variable name) and need to find every occurrence. Do not use this for general questions."
+
+### 2. The "Order of Operations" System Prompt
+In your system prompt, explicitly define a heuristic for the agent to follow. This stops the agent from "guessing" which tool to use.
+
+Add a section like this to your system instructions:
+
+> **Information Retrieval Strategy:**
+> 1.  **Semantic First:** When asked to find, explain, or fix code, ALWAYS start with `codebase_search`. This allows you to find relevant code even if the user uses different terminology than the code itself.
+> 2.  **Grep Second:** Only use `string_find` if:
+>     *   The user provides a specific error ID (e.g., `ERR-402`).
+>     *   You are performing a rename refactor and need to find every single usage of a specific variable.
+>     *   The semantic search returned no results and you want to try a specific keyword as a fallback.
+
+### Summary: Why this works
+You are mapping the tools to the **nature of the query**:
+*   **Ambiguous/Conceptual Query** -> Semantic Search
+*   **Precise/Syntactic Query** -> Grep
+
+By explicitly telling the LLM that `codebase_search` handles the ambiguous (which is 90% of user queries), 
+you effectively coach it to prefer semantic search without removing the utility of grep for strict refactoring tasks.
+
 ## Overview
 
-Expose the existing semantic search infrastructure (`src/context/semantic/`) as an agent tool. The core functionality is complete - this plan covers only the thin tool wrapper and DI wiring.
+Expose the existing semantic search infrastructure (`src/context/semantic/`) as an agent tool.
+The core functionality is complete - this plan covers only the thin tool wrapper and DI wiring.
 
 ---
 
