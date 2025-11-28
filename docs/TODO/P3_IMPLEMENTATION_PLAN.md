@@ -21,12 +21,7 @@ This document outlines the implementation plan for all Priority 3 (Medium Impact
 - No centralized theme system
 
 ### Root Cause Analysis
-1. **Scattered Color Definitions**: Colors defined inline throughout codebase
-   - `interactive_banner.py`: cyan, yellow, white, green
-   - `display_rich.py`: Uses io.table() (no explicit colors)
-   - `cache_formatter.py`: cyan, green, yellow, red via click.style()
-   - `stats_formatter.py`: cyan (headers), green/yellow/red (percentages)
-   - `scrappy.tcss`: $surface, $text, $text-muted, $accent
+1. **Scattered Color Definitions**: Colors defined inline across 17 files
 
 2. **Two Styling Systems**:
    - Rich markup for CLI mode
@@ -34,11 +29,60 @@ This document outlines the implementation plan for all Priority 3 (Medium Impact
 
 3. **No Theme Protocol**: Components directly use color strings instead of theme abstraction
 
+### Complete File Inventory
+
+All files requiring theme integration (17 total):
+
+#### Infrastructure Layer (3 files)
+| File | Current Colors | Usage |
+|------|----------------|-------|
+| `src/infrastructure/formatters/stats_formatter.py` | cyan, green, yellow, red | Headers, percentages, boolean status |
+| `src/infrastructure/formatters/cache_formatter.py` | cyan, green, yellow | Hit rates, toggle messages |
+| `src/infrastructure/formatters/rate_limit_formatter.py` | cyan, green, yellow, red | Provider headers, quotas, warnings |
+
+#### Progress/Status Layer (2 files)
+| File | Current Colors | Usage |
+|------|----------------|-------|
+| `src/infrastructure/progress.py` | cyan, green, red | Status messages, spinner text |
+| `src/infrastructure/textual_progress.py` | cyan, green, red | TUI progress states |
+
+#### CLI Layer (9 files)
+| File | Current Colors | Usage |
+|------|----------------|-------|
+| `src/cli/interactive_banner.py` | cyan, yellow, white | Title, commands, panel border |
+| `src/cli/display_rich.py` | cyan, yellow | Panel borders, status messages |
+| `src/cli/unified_io.py` | full color map, blue borders | Core I/O, panel defaults |
+| `src/cli/output_bridge.py` | yellow, red, green | Warning/error/success messages |
+| `src/cli/rich_dashboard.py` | yellow, green, cyan, blue, white, magenta | State indicators, panel borders |
+| `src/cli/task_router_handler.py` | green, yellow, cyan, blue, white | Task type color mapping |
+| `src/cli/context_commands.py` | bright_white | Path display |
+| `src/cli/interactive.py` | bright_white | User input echo |
+| `src/cli/textual_app.py` | red | Error text |
+
+#### Agent Layer (2 files)
+| File | Current Colors | Usage |
+|------|----------------|-------|
+| `src/agent/ui.py` | blue, cyan, yellow, red, green | Thinking/result/warning panels |
+| `src/agent_tools/formatters/output_formatter.py` | cyan, yellow, green, red, magenta, white, bright_black | Git diffs, file listings |
+
+#### Tools Layer (2 files)
+| File | Current Colors | Usage |
+|------|----------------|-------|
+| `src/agent_tools/tools/base.py` | bold red | Error display |
+| `src/agent_tools/tools/file_tools.py` | bright_black | File sizes |
+
+#### CSS Layer (1 file)
+| File | Current Variables | Usage |
+|------|-------------------|-------|
+| `src/cli/scrappy.tcss` | $surface, $text, $text-muted, $accent (#00ff00), $panel-bg, #ffcc00 | TUI styling |
+
 ### Design Approach
 
 **Protocol-First**: Define `ThemeProtocol` that provides color values for semantic purposes (not literal colors).
 
 **Dependency Injection**: Components receive theme via constructor, enabling testing and customization.
+
+**User-Configurable**: Themes loaded from config file, with presets and custom overrides.
 
 **Single Source of Truth**: One theme definition used by both formatters and CSS generation.
 
@@ -47,19 +91,43 @@ This document outlines the implementation plan for all Priority 3 (Medium Impact
 ```
 ThemeProtocol (Protocol)
     |
-    +-- ScrappyTheme (Default implementation)
+    +-- ScrappyTheme (Default dark theme)
     |
-    +-- TestTheme (For testing)
+    +-- LightTheme (Light mode preset)
+    |
+    +-- SolarizedTheme (Solarized preset)
+    |
+    +-- TestTheme (For testing - no colors)
 
-Theme Colors (Semantic):
-    - primary: Main accent color (cyan)
-    - secondary: Secondary accent (yellow)
-    - success: Positive/enabled states (green)
-    - warning: Caution states (yellow)
-    - error: Error/disabled states (red)
-    - text: Normal text (white/gray)
-    - text_muted: Dimmed text (gray)
-    - border: Panel/table borders (cyan)
+Theme Loading:
+    Config File -> ThemeLoader -> ThemeProtocol instance
+
+Core Theme Colors (Semantic):
+    Foreground:
+    - primary: Borders, headers, labels, info text (cyan)
+    - accent: Commands, keywords, interactive elements (orange/yellow)
+    - success: Enabled states, completions, positive values (green)
+    - warning: Caution states, attention needed (yellow)
+    - error: Errors, disabled, negative states (red)
+    - text: Normal text (white)
+    - text_muted: Dimmed/secondary text (bright_black/gray)
+    - info: Informational panels, thinking states (blue)
+
+    Background:
+    - surface: Main background color (#1e1e1e)
+    - surface_alt: Elevated surfaces, panels, status bar (#2d2d2d)
+
+Git/Diff Colors (Fixed - not theme-customizable):
+    - git_add: Added lines (green)
+    - git_remove: Removed lines (red)
+    - git_header: Diff headers, chunk markers (cyan)
+    - git_commit: Commit hashes (yellow)
+
+Syntax Colors (File type indicators):
+    - syntax_python: Python files (green)
+    - syntax_js: JavaScript/TypeScript files (yellow)
+    - syntax_config: JSON/YAML/TOML files (magenta)
+    - syntax_docs: Markdown/text files (white)
 ```
 
 ### Implementation Steps
@@ -72,10 +140,13 @@ Theme Colors (Semantic):
 Theme system for consistent color styling.
 
 Provides a protocol-based theme system that works across CLI and TUI modes.
+Includes core semantic colors, background colors, git/diff colors, and syntax colors.
+Themes are user-configurable via config file.
 """
 
-from typing import Protocol
-from dataclasses import dataclass
+from typing import Protocol, Optional, Dict, Any
+from dataclasses import dataclass, field
+from pathlib import Path
 
 
 class ThemeProtocol(Protocol):
@@ -86,14 +157,15 @@ class ThemeProtocol(Protocol):
     instead of literal colors (cyan, green, red).
     """
 
+    # Foreground colors
     @property
     def primary(self) -> str:
-        """Primary accent color for headers, borders, highlights."""
+        """Primary color for borders, headers, labels, info text."""
         ...
 
     @property
-    def secondary(self) -> str:
-        """Secondary accent for commands, keywords."""
+    def accent(self) -> str:
+        """Accent color for commands, keywords, interactive elements."""
         ...
 
     @property
@@ -112,6 +184,11 @@ class ThemeProtocol(Protocol):
         ...
 
     @property
+    def info(self) -> str:
+        """Informational panels, thinking states."""
+        ...
+
+    @property
     def text(self) -> str:
         """Normal text color."""
         ...
@@ -121,159 +198,279 @@ class ThemeProtocol(Protocol):
         """Dimmed/secondary text."""
         ...
 
+    # Background colors
+    @property
+    def surface(self) -> str:
+        """Main background color."""
+        ...
+
+    @property
+    def surface_alt(self) -> str:
+        """Elevated surface (panels, status bar)."""
+        ...
+
+
+@dataclass(frozen=True)
+class GitColors:
+    """Fixed colors for git/diff output. Not theme-customizable."""
+    add: str = "green"
+    remove: str = "red"
+    header: str = "cyan"
+    commit: str = "yellow"
+    meta: str = "bright_white"
+
+
+@dataclass(frozen=True)
+class SyntaxColors:
+    """Colors for file type indicators in listings."""
+    python: str = "green"
+    javascript: str = "yellow"
+    config: str = "magenta"
+    docs: str = "white"
+    default: str = "white"
+
 
 @dataclass(frozen=True)
 class ScrappyTheme:
-    """Default Scrappy theme.
-
-    Colors derived from welcome banner and existing CSS.
-    """
+    """Default dark theme."""
+    # Foreground
     primary: str = "cyan"
-    secondary: str = "yellow"
+    accent: str = "yellow"
     success: str = "green"
     warning: str = "yellow"
     error: str = "red"
+    info: str = "blue"
     text: str = "white"
     text_muted: str = "bright_black"
+    # Background
+    surface: str = "#1e1e1e"
+    surface_alt: str = "#2d2d2d"
+    # Fixed
+    git: GitColors = field(default_factory=GitColors)
+    syntax: SyntaxColors = field(default_factory=SyntaxColors)
+
+
+@dataclass(frozen=True)
+class LightTheme:
+    """Light mode preset."""
+    # Foreground
+    primary: str = "blue"
+    accent: str = "magenta"
+    success: str = "green"
+    warning: str = "yellow"
+    error: str = "red"
+    info: str = "cyan"
+    text: str = "black"
+    text_muted: str = "bright_black"
+    # Background
+    surface: str = "#ffffff"
+    surface_alt: str = "#f0f0f0"
+    # Fixed
+    git: GitColors = field(default_factory=GitColors)
+    syntax: SyntaxColors = field(default_factory=SyntaxColors)
 
 
 @dataclass(frozen=True)
 class TestTheme:
-    """Theme for testing - no colors."""
+    """Theme for testing - no colors applied."""
     primary: str = ""
-    secondary: str = ""
+    accent: str = ""
     success: str = ""
     warning: str = ""
     error: str = ""
+    info: str = ""
     text: str = ""
     text_muted: str = ""
+    surface: str = ""
+    surface_alt: str = ""
+    git: GitColors = field(default_factory=GitColors)
+    syntax: SyntaxColors = field(default_factory=SyntaxColors)
+
+
+# Theme presets registry
+THEME_PRESETS: Dict[str, type] = {
+    "dark": ScrappyTheme,
+    "light": LightTheme,
+}
+
+# Valid theme color keys (for validation)
+THEME_COLOR_KEYS = {
+    "primary", "accent", "success", "warning", "error",
+    "info", "text", "text_muted", "surface", "surface_alt"
+}
+
+
+@dataclass(frozen=True)
+class CustomTheme:
+    """Theme with user-customized colors."""
+    primary: str = "cyan"
+    accent: str = "yellow"
+    success: str = "green"
+    warning: str = "yellow"
+    error: str = "red"
+    info: str = "blue"
+    text: str = "white"
+    text_muted: str = "bright_black"
+    surface: str = "#1e1e1e"
+    surface_alt: str = "#2d2d2d"
+    git: GitColors = field(default_factory=GitColors)
+    syntax: SyntaxColors = field(default_factory=SyntaxColors)
+
+
+def load_theme_from_config(config: Dict[str, Any]) -> ThemeProtocol:
+    """Load theme from config dict.
+
+    Config format:
+        theme:
+            preset: dark  # or "light", or omit for default
+            # Override individual colors:
+            primary: cyan
+            accent: orange
+            surface: "#1a1a1a"
+
+    Args:
+        config: Config dict with optional 'theme' section
+
+    Returns:
+        Theme instance (preset, custom, or default)
+    """
+    theme_config = config.get("theme", {})
+
+    if not theme_config:
+        return DEFAULT_THEME
+
+    # Get base preset
+    preset_name = theme_config.get("preset", "dark")
+    base_class = THEME_PRESETS.get(preset_name, ScrappyTheme)
+    base = base_class()
+
+    # Collect overrides (only valid color keys)
+    overrides = {
+        k: v for k, v in theme_config.items()
+        if k in THEME_COLOR_KEYS and v is not None
+    }
+
+    if not overrides:
+        return base
+
+    # Build kwargs for CustomTheme, starting with base values
+    kwargs = {
+        "primary": overrides.get("primary", base.primary),
+        "accent": overrides.get("accent", base.accent),
+        "success": overrides.get("success", base.success),
+        "warning": overrides.get("warning", base.warning),
+        "error": overrides.get("error", base.error),
+        "info": overrides.get("info", base.info),
+        "text": overrides.get("text", base.text),
+        "text_muted": overrides.get("text_muted", base.text_muted),
+        "surface": overrides.get("surface", base.surface),
+        "surface_alt": overrides.get("surface_alt", base.surface_alt),
+    }
+
+    return CustomTheme(**kwargs)
 
 
 # Default theme instance
 DEFAULT_THEME = ScrappyTheme()
+
+# Standalone instances for non-theme-aware code
+GIT_COLORS = GitColors()
+SYNTAX_COLORS = SyntaxColors()
 ```
 
 #### Step 2: Update StatsFormatter Base Class
 **File**: `src/infrastructure/formatters/stats_formatter.py`
 
+Changes:
+- Add `theme` parameter to constructor
+- Replace hardcoded `"cyan"` with `self._theme.primary`
+- Replace hardcoded `"green"/"yellow"/"red"` with theme colors
+
 ```python
-"""
-Base stats formatter implementation with theme support.
-"""
+def __init__(
+    self,
+    use_color: bool = True,
+    theme: Optional[ThemeProtocol] = None
+):
+    self._use_color = use_color
+    self._theme = theme or DEFAULT_THEME
 
-from typing import Any, Optional
-from ..theme import ThemeProtocol, DEFAULT_THEME
+def format_header(self, title: str, width: int = 60) -> str:
+    if self._use_color:
+        header = click.style(f"\n{title}", fg=self._theme.primary, bold=True)
+        separator = click.style("-" * width, fg=self._theme.primary)
+    # ...
 
-
-class StatsFormatter:
-    """Base formatter for statistics displays with theme support."""
-
-    def __init__(
-        self,
-        use_color: bool = True,
-        theme: Optional[ThemeProtocol] = None
-    ):
-        """Initialize formatter.
-
-        Args:
-            use_color: Whether to use ANSI color codes
-            theme: Theme for colors (defaults to ScrappyTheme)
-        """
-        self._use_color = use_color
-        self._theme = theme or DEFAULT_THEME
-
-    def format_header(self, title: str, width: int = 60) -> str:
-        """Format header using theme primary color."""
-        if self._use_color:
-            header = f"[bold {self._theme.primary}]{title}[/bold {self._theme.primary}]"
-            separator = f"[{self._theme.primary}]{'-' * width}[/{self._theme.primary}]"
-        else:
-            header = f"\n{title}"
-            separator = "-" * width
-        return f"{header}\n{separator}"
-
-    def format_boolean_status(
-        self,
-        value: bool,
-        true_label: str = "Enabled",
-        false_label: str = "Disabled"
-    ) -> str:
-        """Format boolean with theme success/error colors."""
-        label = true_label if value else false_label
-        if not self._use_color:
-            return label
-
-        color = self._theme.success if value else self._theme.error
-        return f"[{color}]{label}[/{color}]"
-
-    def _get_percentage_color(self, percentage: float) -> str:
-        """Get theme color based on percentage."""
-        if percentage < 75:
-            return self._theme.success
-        elif percentage < 90:
-            return self._theme.warning
-        else:
-            return self._theme.error
+def _get_percentage_color(self, percentage: float) -> str:
+    if percentage < 75:
+        return self._theme.success
+    elif percentage < 90:
+        return self._theme.warning
+    return self._theme.error
 ```
 
 #### Step 3: Update CacheFormatter
 **File**: `src/infrastructure/formatters/cache_formatter.py`
 
+Changes:
+- Pass theme to parent constructor
+- Use `self._theme.success` / `self._theme.warning` for hit rates
+
 ```python
-"""Cache formatter with theme support."""
+def __init__(
+    self,
+    use_color: bool = True,
+    theme: Optional[ThemeProtocol] = None
+):
+    super().__init__(use_color=use_color, theme=theme)
 
-from typing import Dict, Any, Optional
-from ..theme import ThemeProtocol, DEFAULT_THEME
-from .stats_formatter import StatsFormatter
-
-
-class CacheFormatter(StatsFormatter):
-    """Formatter for cache statistics with theme support."""
-
-    def __init__(
-        self,
-        use_color: bool = True,
-        theme: Optional[ThemeProtocol] = None
-    ):
-        super().__init__(use_color=use_color, theme=theme)
-
-    def format_hit_rate(self, rate_str: str, label: str = "Hit Rate") -> str:
-        """Format hit rate with theme colors."""
-        if not self._use_color:
-            return f"{label}: {rate_str}"
-
-        try:
-            rate_value = float(rate_str.rstrip('%'))
-        except (ValueError, AttributeError):
-            rate_value = 0.0
-
-        color = self._theme.success if rate_value > 50 else self._theme.warning
-        return f"{label}: [{color}]{rate_str}[/{color}]"
+def format_hit_rate(self, rate_str: str, label: str = "Hit Rate") -> str:
+    # ...
+    color = self._theme.success if rate_value > 50 else self._theme.warning
+    return f"{label}: {click.style(rate_str, fg=color)}"
 ```
 
-#### Step 4: Update Help Display with Theme
-**File**: `src/cli/display_rich.py`
+#### Step 4: Update RateLimitFormatter
+**File**: `src/infrastructure/formatters/rate_limit_formatter.py`
+
+Changes:
+- Pass theme to parent constructor
+- Replace `"green"` with `self._theme.success` for provider headers
+- Replace `"red"` with `self._theme.error` for warnings
+- Replace `"cyan"` with `self._theme.primary` for file location
 
 ```python
-"""Rich-enhanced display functions with theme support."""
+def format_provider_section(self, provider: str, data: Dict[str, Any]) -> str:
+    parts = []
+    parts.append(click.style(f"{provider.upper()}:", fg=self._theme.success, bold=True))
+    # ...
 
-from typing import Optional
-from rich.table import Table
-from .unified_io import UnifiedIO
-from src.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
+def format_warnings(self, warnings: List[str]) -> str:
+    parts = [click.style("WARNINGS:", fg=self._theme.error, bold=True)]
+    for warning in warnings:
+        parts.append(click.style(f"  {warning}", fg=self._theme.error))
+    # ...
 
+def format_tracker_file_location(self, file_path: str) -> str:
+    return click.style(f"Tracking File: {file_path}", fg=self._theme.primary)
+```
 
+#### Step 5: Update Help Display with Theme
+**File**: `src/cli/display_rich.py`
+
+Changes:
+- Add theme parameter to display functions
+- Replace `"cyan"` with `theme.primary` for borders/headers
+- Replace `"yellow"` with `theme.accent` for commands
+
+```python
 def show_help_table(
     io: UnifiedIO,
     category: Optional[str] = None,
     theme: Optional[ThemeProtocol] = None
 ) -> None:
-    """Display help with themed styling."""
     theme = theme or DEFAULT_THEME
 
-    # ... existing category definitions ...
-
-    # Build styled table
     table = Table(
         title=f"[bold {theme.primary}]Available Commands[/bold {theme.primary}]",
         title_style=theme.primary,
@@ -281,62 +478,34 @@ def show_help_table(
         border_style=theme.primary
     )
 
-    table.add_column("Command", style=theme.secondary)
+    table.add_column("Command", style=theme.accent)
     table.add_column("Description", style=theme.text)
-
-    for cat_name, commands in categories.items():
-        # Category header row
-        table.add_row(
-            f"[bold {theme.text_muted}]--- {cat_name} ---[/bold {theme.text_muted}]",
-            ""
-        )
-        for cmd, desc in commands:
-            table.add_row(cmd, desc)
-        table.add_row("", "")
-
-    # Output via unified IO
-    if hasattr(io, '_strategy'):
-        io._strategy.output_table(
-            ["Command", "Description"],
-            [[cmd, desc] for _, cmds in categories.items() for cmd, desc in cmds],
-            title="Available Commands"
-        )
-    else:
-        io.console.print(table)
+    # ...
 ```
 
-#### Step 5: Update Banner with Theme
+#### Step 6: Update Banner with Theme
 **File**: `src/cli/interactive_banner.py`
 
+Changes:
+- Add theme parameter
+- Replace `"cyan"` with `theme.primary` for title and borders
+- Replace `"yellow"` with `theme.accent` for commands
+
 ```python
-"""Welcome banner with theme support."""
-
-from typing import TYPE_CHECKING, Optional
-from rich.panel import Panel
-from rich.text import Text
-from src.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
-
-if TYPE_CHECKING:
-    from src.cli.protocols import UnifiedIOProtocol
-
-
 def display_banner(
     io: "UnifiedIOProtocol",
     theme: Optional[ThemeProtocol] = None
 ) -> None:
-    """Display themed banner."""
     theme = theme or DEFAULT_THEME
 
     title_text = Text()
     title_text.append("SCRAPPY", style=f"bold {theme.primary}")
     title_text.append(" - ", style="dim")
-    title_text.append("Interactive Mode", style="bold white")
+    title_text.append("Interactive Mode", style=f"bold {theme.text}")
 
-    commands_text = Text()
-    commands_text.append("\nQuick Commands:\n", style="bold")
-    commands_text.append("  /help", style=theme.secondary)
-    commands_text.append("    - Show all commands\n")
-    # ... rest of commands using theme.secondary ...
+    # Commands use accent color
+    commands_text.append("  /help", style=theme.accent)
+    # ...
 
     panel = Panel(
         content,
@@ -344,76 +513,393 @@ def display_banner(
         border_style=theme.primary,
         padding=(1, 2)
     )
-
-    # ... existing routing logic ...
 ```
 
-#### Step 6: Synchronize Textual CSS with Theme
+#### Step 7: Synchronize Textual CSS with Theme
 **File**: `src/cli/scrappy.tcss`
 
-Ensure CSS variables match theme defaults:
+Update CSS variables to match default dark theme. Note: Textual CSS is static and compiled at app start, so runtime theme switching requires app restart. The CSS defines the dark theme; light theme would need a separate CSS file or Textual's built-in theme system.
 
 ```css
-/* Theme-aligned color variables */
+/* Theme-aligned color variables - must match ScrappyTheme defaults */
 $surface: #1e1e1e;
+$surface-alt: #2d2d2d;
 $text: #d4d4d4;
 $text-muted: #808080;
-$primary: #00ffff;      /* cyan - matches theme.primary */
-$secondary: #ffff00;    /* yellow - matches theme.secondary */
-$success: #00ff00;      /* green - matches theme.success */
-$warning: #ffcc00;      /* yellow - matches theme.warning */
-$error: #ff0000;        /* red - matches theme.error */
-$accent: $primary;      /* Alias for backwards compatibility */
+$primary: #00ffff;      /* cyan - borders, headers, info */
+$accent: #ffcc00;       /* orange/yellow - commands, interactive */
+$success: #00ff00;      /* green - positive states */
+$warning: #ffcc00;      /* yellow - caution */
+$error: #ff0000;        /* red - errors */
+$info: #0080ff;         /* blue - informational */
+
+/* Main screen uses surface background */
+Screen {
+    background: $surface;
+}
+
+/* Status bar uses elevated surface */
+#status_bar {
+    background: $surface-alt;
+}
+
+/* Update input prompt to use primary (cyan) instead of green */
+#input_prompt {
+    color: $primary;
+}
+
+/* Capture mode uses accent (orange) */
+#input_container.capture-mode #input_prompt {
+    color: $accent;
+}
 ```
 
-#### Step 7: Update Cache Manager to Use io.table()
-**File**: `src/cli/cache_manager.py`
+**Limitation**: Full runtime theme switching in TUI mode is out of scope. Users changing themes must restart the app. 
 
-Replace formatter string output with structured table:
+#### Step 8: Update Progress Indicators
+**File**: `src/infrastructure/progress.py`
+
+Changes:
+- Add theme parameter
+- Replace `"cyan"` with `theme.primary` for status
+- Replace `"green"` with `theme.success` for completion
+- Replace `"red"` with `theme.error` for errors
 
 ```python
-def manage_cache(self, args: str = "") -> None:
-    """Manage cache with table output."""
-    # ... validation ...
+class ConsoleProgressReporter:
+    def __init__(self, theme: Optional[ThemeProtocol] = None):
+        self._theme = theme or DEFAULT_THEME
 
-    if validation.subcommand == "":
-        stats = self.orchestrator.get_cache_stats()
-        enabled = self.orchestrator.caching_enabled
+    def update_status(self, message: str) -> None:
+        # Use theme.primary instead of "cyan"
+        styled = f"[{self._theme.primary}]{message}[/{self._theme.primary}]"
+```
 
-        # Use structured table instead of formatted string
-        headers = ["Metric", "Value"]
-        rows = [
-            ["Total Entries", str(
-                stats.get('exact_cache_entries', 0) +
-                stats.get('intent_cache_entries', 0)
-            )],
-            ["Exact Cache Hits", str(stats.get('exact_hits', 0))],
-            ["Intent Cache Hits", str(stats.get('intent_hits', 0))],
-            ["Cache Misses", str(stats.get('exact_misses', 0))],
-            ["Cache Saves", str(stats.get('saves', 0))],
-            ["Exact Hit Rate", stats.get('exact_hit_rate', '0.0%')],
-            ["Intent Hit Rate", stats.get('intent_hit_rate', '0.0%')],
-            ["Cache File", stats.get('cache_file', 'N/A')],
-            ["Status", "Enabled" if enabled else "Disabled"],
-        ]
-        self.io.table(headers, rows, title="Cache Statistics")
+**File**: `src/infrastructure/textual_progress.py`
+
+Same pattern - replace hardcoded colors with theme references.
+
+#### Step 9: Update Agent UI
+**File**: `src/agent/ui.py`
+
+Changes:
+- Add theme parameter to AgentUI class
+- Replace panel border colors with theme colors:
+  - Thinking: `theme.info` (blue)
+  - Success: `theme.success` (green)
+  - Error: `theme.error` (red)
+  - Warning: `theme.warning` (yellow)
+- Replace tool/command colors:
+  - Tool names: `theme.primary` (cyan)
+  - Shell commands: `theme.accent` (yellow)
+
+```python
+class AgentUI:
+    def __init__(self, theme: Optional[ThemeProtocol] = None):
+        self._theme = theme or DEFAULT_THEME
+
+    def show_thinking(self, content: str) -> None:
+        panel = Panel(content, border_style=self._theme.info)
+        # ...
+
+    def show_result(self, content: str, is_error: bool = False) -> None:
+        color = self._theme.error if is_error else self._theme.success
+        panel = Panel(content, border_style=color)
+```
+
+#### Step 10: Update Output Formatter (Git/Syntax Colors)
+**File**: `src/agent_tools/formatters/output_formatter.py`
+
+Changes:
+- Import `GIT_COLORS` and `SYNTAX_COLORS` from theme module
+- Replace hardcoded git colors:
+  - `"green"` -> `GIT_COLORS.add`
+  - `"red"` -> `GIT_COLORS.remove`
+  - `"cyan"` -> `GIT_COLORS.header`
+  - `"yellow"` -> `GIT_COLORS.commit`
+- Replace file type colors with `SYNTAX_COLORS.*`
+
+```python
+from src.infrastructure.theme import GIT_COLORS, SYNTAX_COLORS
+
+def format_diff_line(self, line: str) -> Text:
+    if line.startswith('+'):
+        return Text(line, style=GIT_COLORS.add)
+    elif line.startswith('-'):
+        return Text(line, style=GIT_COLORS.remove)
+    # ...
+
+def get_file_style(self, extension: str) -> str:
+    mapping = {
+        '.py': SYNTAX_COLORS.python,
+        '.js': SYNTAX_COLORS.javascript,
+        '.ts': SYNTAX_COLORS.javascript,
+        '.json': SYNTAX_COLORS.config,
+        '.yaml': SYNTAX_COLORS.config,
+        '.md': SYNTAX_COLORS.docs,
+    }
+    return mapping.get(extension, SYNTAX_COLORS.default)
+```
+
+#### Step 11: Update Rich Dashboard
+**File**: `src/cli/rich_dashboard.py`
+
+Changes:
+- Add theme parameter to `RichDashboard.__init__`
+- Update state color mapping
+- Update panel border colors
+
+```python
+class RichDashboard:
+    def __init__(self, theme: Optional[ThemeProtocol] = None):
+        self._theme = theme or DEFAULT_THEME
+        self._state_styles = {
+            "idle": "dim",
+            "thinking": self._theme.accent,
+            "executing": self._theme.success,
+            "scanning": self._theme.primary,
+        }
+
+    def _create_thought_panel(self, content: str) -> Panel:
+        return Panel(content, border_style=self._theme.info)
+
+    def _create_terminal_panel(self, content: str) -> Panel:
+        return Panel(content, border_style=self._theme.text)
+
+    def _create_context_panel(self, content: str) -> Panel:
+        return Panel(content, border_style=self._theme.accent)
+```
+
+#### Step 12: Update Task Router Handler
+**File**: `src/cli/task_router_handler.py`
+
+Changes:
+- Add theme parameter
+- Update task type color mapping
+
+```python
+class TaskRouterHandler:
+    def __init__(self, theme: Optional[ThemeProtocol] = None):
+        self._theme = theme or DEFAULT_THEME
+        self._task_colors = {
+            "direct_command": self._theme.success,
+            "code_generation": self._theme.accent,
+            "research": self._theme.primary,
+            "conversation": self._theme.info,
+        }
+
+    def _get_task_color(self, task_type: str) -> str:
+        return self._task_colors.get(task_type, self._theme.text)
+```
+
+#### Step 13: Update Output Bridge
+**File**: `src/cli/output_bridge.py`
+
+Changes:
+- Add theme parameter to `OutputBridge.__init__`
+- Update message styling methods
+
+```python
+class OutputBridge:
+    def __init__(self, theme: Optional[ThemeProtocol] = None):
+        self._theme = theme or DEFAULT_THEME
+
+    def warning(self, message: str) -> None:
+        styled = Text(message, style=self._theme.warning)
+        self._console.print(styled)
+
+    def error(self, message: str) -> None:
+        styled = Text(message, style=f"{self._theme.error} bold")
+        self._console.print(styled)
+
+    def success(self, message: str) -> None:
+        styled = Text(message, style=self._theme.success)
+        self._console.print(styled)
+```
+
+#### Step 14: Update Unified IO
+**File**: `src/cli/unified_io.py`
+
+Changes:
+- Add theme parameter to `UnifiedIO.__init__`
+- Update default panel border color
+- Update color map to use theme
+- Keep security warnings as hardcoded red (intentional - safety critical)
+
+```python
+class UnifiedIO:
+    def __init__(self, theme: Optional[ThemeProtocol] = None):
+        self._theme = theme or DEFAULT_THEME
+        self._color_map = {
+            "primary": self._theme.primary,
+            "accent": self._theme.accent,
+            "success": self._theme.success,
+            "warning": self._theme.warning,
+            "error": self._theme.error,
+            "info": self._theme.info,
+        }
+
+    def panel(self, content: str, title: str = "", border_style: str = None) -> None:
+        style = border_style or self._theme.info
+        panel = Panel(content, title=title, border_style=style)
+        self._console.print(panel)
+
+    def security_warning(self, message: str) -> None:
+        # Hardcoded red - intentionally not theme-customizable for safety
+        panel = Panel(
+            message,
+            title="[blink bold white on red]SECURITY WARNING[/]",
+            border_style="red"
+        )
+        self._console.print(panel)
+```
+
+#### Step 15: Update Remaining CLI Files
+
+**File**: `src/cli/context_commands.py`
+
+```python
+class ContextCommands:
+    def __init__(self, theme: Optional[ThemeProtocol] = None):
+        self._theme = theme or DEFAULT_THEME
+
+    def show_project_path(self, path: str) -> None:
+        # Replace "bright_white" with theme.text
+        styled = click.style(path, fg=self._theme.text, bold=True)
+        click.echo(styled)
+```
+
+**File**: `src/cli/interactive.py`
+
+```python
+def echo_user_input(self, text: str) -> None:
+    # Replace "bright_white" with theme.text
+    styled = click.style(text, fg=self._theme.text, bold=True)
+    click.echo(styled)
+```
+
+**File**: `src/cli/textual_app.py`
+
+```python
+def show_error(self, message: str) -> None:
+    # Replace "red" with theme.error
+    self.query_one(RichLog).write(Text(message, style=self._theme.error))
+```
+
+#### Step 16: Update Agent Tools
+
+**File**: `src/agent_tools/tools/base.py`
+
+```python
+class BaseTool:
+    def __init__(self, theme: Optional[ThemeProtocol] = None):
+        self._theme = theme or DEFAULT_THEME
+
+    def display_error(self, message: str) -> None:
+        # Replace "bold red" with theme.error
+        styled = Text(message, style=f"bold {self._theme.error}")
+        console.print(styled)
+```
+
+**File**: `src/agent_tools/tools/file_tools.py`
+
+```python
+def format_file_size(self, size: int) -> Text:
+    # Replace "bright_black" with theme.text_muted
+    return Text(f"{size:,} bytes", style=self._theme.text_muted)
+```
+
+#### Step 17: Integrate Theme Loading at App Startup
+**File**: `src/cli/app.py` (or wherever app initialization occurs)
+
+Changes:
+- Load theme from config during app startup
+- Pass theme to all components that need it
+
+```python
+from src.infrastructure.theme import load_theme_from_config, DEFAULT_THEME
+
+class App:
+    def __init__(self, config: Dict[str, Any]):
+        # Load theme from config
+        self._theme = load_theme_from_config(config)
+
+        # Pass theme to components
+        self._io = UnifiedIO(theme=self._theme)
+        self._output_bridge = OutputBridge(theme=self._theme)
+        self._dashboard = RichDashboard(theme=self._theme)
+        # ... etc
 ```
 
 ### Testing Strategy
 
-1. **Unit Tests**: Test theme protocol implementation
-2. **Integration Tests**: Verify theme colors applied consistently
-3. **Visual Tests**: Manual inspection of CLI and TUI output
-4. **Regression Tests**: Ensure existing formatters still work
+1. **Unit Tests**: Test theme module
+   - Verify `ScrappyTheme` provides all 10 color properties
+   - Verify `LightTheme` provides all 10 color properties
+   - Verify `TestTheme` returns empty strings for all colors
+   - Verify `GitColors` and `SyntaxColors` have correct defaults
+   - Test `load_theme_from_config()`:
+     - Empty config returns `DEFAULT_THEME`
+     - `preset: dark` returns `ScrappyTheme`
+     - `preset: light` returns `LightTheme`
+     - Invalid preset falls back to `ScrappyTheme`
+     - Individual color overrides work correctly
+     - Invalid keys are ignored
+     - Partial overrides inherit from base preset
+
+2. **Integration Tests**: Verify theme injection
+   - Test formatters accept and use theme parameter
+   - Test theme propagates through component constructors
+   - Test color output matches theme values
+
+3. **Visual Tests**: Manual inspection
+   - CLI mode: verify all colors match theme
+   - TUI mode: verify CSS colors match theme defaults
+   - Test both dark and light presets
+   - Test custom color overrides
+
+4. **Regression Tests**: Ensure existing functionality works
+   - All existing tests pass
+   - No broken color output
+   - Components without explicit theme use `DEFAULT_THEME`
 
 ### Files Modified/Created
-- `src/infrastructure/theme.py` (new)
+
+**New Files (1):**
+- `src/infrastructure/theme.py`
+
+**Infrastructure Layer (3):**
 - `src/infrastructure/formatters/stats_formatter.py`
 - `src/infrastructure/formatters/cache_formatter.py`
-- `src/cli/display_rich.py`
+- `src/infrastructure/formatters/rate_limit_formatter.py`
+
+**Progress Layer (2):**
+- `src/infrastructure/progress.py`
+- `src/infrastructure/textual_progress.py`
+
+**CLI Layer (9):**
 - `src/cli/interactive_banner.py`
-- `src/cli/cache_manager.py`
+- `src/cli/display_rich.py`
+- `src/cli/unified_io.py`
+- `src/cli/output_bridge.py`
+- `src/cli/rich_dashboard.py`
+- `src/cli/task_router_handler.py`
+- `src/cli/context_commands.py`
+- `src/cli/interactive.py`
+- `src/cli/textual_app.py`
+
+**Agent Layer (2):**
+- `src/agent/ui.py`
+- `src/agent_tools/formatters/output_formatter.py`
+
+**Tools Layer (2):**
+- `src/agent_tools/tools/base.py`
+- `src/agent_tools/tools/file_tools.py`
+
+**CSS Layer (1):**
 - `src/cli/scrappy.tcss`
+
+**Total: 20 files (1 new, 19 modified)**
 
 ---
 
@@ -421,39 +907,150 @@ def manage_cache(self, args: str = "") -> None:
 
 Recommended order based on dependencies and risk:
 
-### Phase 1: Quick Win (Issue 3.1)
+### Phase 1: Theme Foundation (Step 1)
 - **Effort**: Low
 - **Risk**: Low
-- **Dependencies**: None
-- **Files**: 4
+- **Files**: 1
+- **Steps**: 1
 
-Change default `db_dir_name` - simple, isolated change with clear tests.
+Create `src/infrastructure/theme.py` with:
+- `ThemeProtocol` (10 color properties)
+- `GitColors`, `SyntaxColors` (fixed color sets)
+- `ScrappyTheme` (default dark)
+- `LightTheme` (light preset)
+- `CustomTheme` (for user overrides)
+- `TestTheme` (empty strings for testing)
+- `load_theme_from_config()` function
+- `THEME_PRESETS` registry
 
-### Phase 2: Theme Foundation (Issues 3.2/3.3)
+### Phase 2: Infrastructure Formatters (Steps 2-4)
+- **Effort**: Medium
+- **Risk**: Low
+- **Files**: 3
+- **Steps**: 2, 3, 4
+
+Update formatters to accept theme via constructor:
+- `stats_formatter.py` (Step 2)
+- `cache_formatter.py` (Step 3)
+- `rate_limit_formatter.py` (Step 4)
+
+### Phase 3: Progress Indicators (Step 8)
+- **Effort**: Low
+- **Risk**: Low
+- **Files**: 2
+- **Steps**: 8
+
+Update progress reporters:
+- `progress.py`
+- `textual_progress.py`
+
+### Phase 4: Core CLI Components (Steps 5, 6, 11-14)
 - **Effort**: Medium
 - **Risk**: Medium (visual changes)
-- **Dependencies**: None
-- **Files**: 8
+- **Files**: 6
+- **Steps**: 5, 6, 11, 12, 13, 14
 
-Create theme system and apply to existing formatters. Visual testing required.
+Update CLI components:
+- `display_rich.py` (Step 5)
+- `interactive_banner.py` (Step 6)
+- `rich_dashboard.py` (Step 11)
+- `task_router_handler.py` (Step 12)
+- `output_bridge.py` (Step 13)
+- `unified_io.py` (Step 14)
 
+### Phase 5: Agent Layer (Steps 9, 10)
+- **Effort**: Medium
+- **Risk**: Low
+- **Files**: 2
+- **Steps**: 9, 10
+
+Update agent components:
+- `agent/ui.py` (Step 9)
+- `output_formatter.py` (Step 10) - includes git/syntax colors
+
+### Phase 6: Remaining Files (Steps 15, 16)
+- **Effort**: Low
+- **Risk**: Low
+- **Files**: 5
+- **Steps**: 15, 16
+
+Update remaining files:
+- `context_commands.py` (Step 15)
+- `interactive.py` (Step 15)
+- `textual_app.py` (Step 15)
+- `tools/base.py` (Step 16)
+- `tools/file_tools.py` (Step 16)
+
+### Phase 7: CSS Sync (Step 7)
+- **Effort**: Low
+- **Risk**: Medium (TUI visual change)
+- **Files**: 1
+- **Steps**: 7
+
+Update `scrappy.tcss` to align CSS variables with theme defaults.
+
+**Note**: Runtime theme switching not supported in TUI mode (requires app restart).
+
+### Phase 8: App Integration (Step 17)
+- **Effort**: Low
+- **Risk**: Low
+- **Files**: 1
+- **Steps**: 17
+
+Integrate theme loading at app startup:
+- Load theme from config via `load_theme_from_config()`
+- Pass theme instance to all components
 
 ---
 
 ## Success Criteria
 
-### Issue 3.1
-- [ ] `SemanticIndexConfig()` default is `.scrappy/lancedb`
-- [ ] New projects don't create `.lancedb` at root
-- [ ] All tests pass
+### Theme System (Phase 1)
+- [ ] `ThemeProtocol` defined with 10 semantic colors (8 foreground + 2 background)
+- [ ] `ScrappyTheme` (dark) implements protocol with correct defaults
+- [ ] `LightTheme` preset implements protocol
+- [ ] `CustomTheme` supports user overrides
+- [ ] `TestTheme` provides empty strings for testing
+- [ ] `GitColors` provides fixed diff/commit colors
+- [ ] `SyntaxColors` provides file type indicator colors
+- [ ] `load_theme_from_config()` loads themes from config dict
+- [ ] `THEME_PRESETS` registry contains dark and light
+- [ ] `THEME_COLOR_KEYS` validates config keys
 
-### Issues 3.2/3.3
-- [ ] `ThemeProtocol` defined and implemented
-- [ ] Help table uses theme colors
-- [ ] Cache stats use theme colors
-- [ ] Banner uses theme colors
-- [ ] CSS variables align with theme
-- [ ] Visual consistency across CLI and TUI
+### Config Integration (Phase 8)
+- [ ] Theme section supported in config file
+- [ ] Preset selection works (`preset: dark` or `preset: light`)
+- [ ] Individual color overrides work
+- [ ] Invalid preset falls back to dark theme
+- [ ] Invalid keys are silently ignored
+- [ ] Theme loaded and passed to all components at startup
+
+### Color Consistency (Phases 2-7)
+- [ ] All 19 files updated to use theme
+- [ ] No hardcoded color strings remain (except security warnings)
+- [ ] CSS variables match theme defaults
+- [ ] TUI uses `surface` and `surface_alt` for backgrounds
+- [ ] TUI input prompt uses `primary` (cyan) not green
+
+### Visual Verification
+- [ ] Banner displays with primary borders, accent commands
+- [ ] Help table uses primary headers, accent command names
+- [ ] Cache/rate limit stats use theme colors
+- [ ] Progress indicators use theme colors
+- [ ] Agent panels use theme colors (info thinking, success/error results)
+- [ ] Git diffs use fixed colors (green add, red remove)
+- [ ] File listings use syntax colors
+- [ ] Background colors applied in TUI mode
+- [ ] Light theme preset renders correctly
+
+### Testing
+- [ ] All existing tests pass
+- [ ] Unit tests for all theme classes
+- [ ] Unit tests for `load_theme_from_config()` edge cases
+- [ ] Integration tests for theme injection
+- [ ] Manual visual inspection of dark theme
+- [ ] Manual visual inspection of light theme
+- [ ] Manual visual inspection of custom overrides
 
 ---
 
@@ -462,9 +1059,92 @@ Create theme system and apply to existing formatters. Visual testing required.
 | Risk | Impact | Mitigation |
 |------|--------|------------|
 | Visual regression | Medium | Manual visual testing, screenshot comparison |
-| Theme not applied everywhere | Low | Grep for hardcoded colors, systematic update |
-| Status bar flicker | Low | Threshold for showing, debouncing |
-| Breaking existing tests | Medium | Run full test suite after each change |
+| Theme not applied everywhere | Low | Grep for hardcoded colors after implementation |
+| TUI accent color change (green -> cyan) | Medium | Document as intentional change for consistency |
+| Breaking existing tests | Medium | Run full test suite after each phase |
+| Dependency injection complexity | Low | Use `Optional[ThemeProtocol]` with `DEFAULT_THEME` fallback |
+
+---
+
+## Color Reference Card
+
+### Default Dark Theme
+
+| Semantic | Color | Hex | Usage |
+|----------|-------|-----|-------|
+| `primary` | cyan | #00ffff | Borders, headers, labels, info text |
+| `accent` | yellow | #ffcc00 | Commands, keywords, interactive elements |
+| `success` | green | #00ff00 | Enabled, completed, positive values |
+| `warning` | yellow | #ffcc00 | Caution states |
+| `error` | red | #ff0000 | Errors, disabled, negative states |
+| `info` | blue | #0080ff | Informational panels, thinking state |
+| `text` | white | #ffffff | Normal text |
+| `text_muted` | gray | #808080 | Dimmed, secondary text |
+| `surface` | dark gray | #1e1e1e | Main background |
+| `surface_alt` | lighter gray | #2d2d2d | Panels, status bar |
+
+### Light Theme Preset
+
+| Semantic | Color | Hex | Usage |
+|----------|-------|-----|-------|
+| `primary` | blue | #0000ff | Borders, headers |
+| `accent` | magenta | #ff00ff | Commands, keywords |
+| `text` | black | #000000 | Normal text |
+| `surface` | white | #ffffff | Main background |
+| `surface_alt` | light gray | #f0f0f0 | Panels |
+
+### Git Colors (Fixed)
+
+| Name | Color | Usage |
+|------|-------|-------|
+| `add` | green | Added lines (+) |
+| `remove` | red | Removed lines (-) |
+| `header` | cyan | Diff headers (+++/---) |
+| `commit` | yellow | Commit hashes |
+
+### Syntax Colors (Fixed)
+
+| Name | Color | File Types |
+|------|-------|------------|
+| `python` | green | .py |
+| `javascript` | yellow | .js, .ts, .jsx, .tsx |
+| `config` | magenta | .json, .yaml, .yml, .toml |
+| `docs` | white | .md, .txt, .rst |
+
+---
+
+## Config File Format
+
+Users can customize themes in their config file:
+
+```yaml
+# .scrappy/config.yaml
+
+theme:
+  # Use a preset (dark, light)
+  preset: dark
+
+  # Or override individual colors:
+  # primary: cyan
+  # accent: orange
+  # surface: "#1a1a1a"
+```
+
+**Full custom theme example:**
+
+```yaml
+theme:
+  preset: dark
+  primary: "#61afef"      # One Dark blue
+  accent: "#e5c07b"       # One Dark yellow
+  success: "#98c379"      # One Dark green
+  error: "#e06c75"        # One Dark red
+  info: "#56b6c2"         # One Dark cyan
+  text: "#abb2bf"         # One Dark foreground
+  text_muted: "#5c6370"   # One Dark comment
+  surface: "#282c34"      # One Dark background
+  surface_alt: "#3e4451"  # One Dark gutter
+```
 
 ---
 
