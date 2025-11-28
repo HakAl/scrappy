@@ -11,6 +11,7 @@ from ..task_router.config import ClarificationConfig
 from ..task_router.protocols import TaskRouterInputProtocol
 from ..orchestrator.protocols import Orchestrator
 from .io_interface import CLIIOProtocol
+from src.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
 
 if TYPE_CHECKING:
     from .session_context import SessionContextProtocol
@@ -73,7 +74,8 @@ class CLITaskRouterHandler:
         project_root: Optional[Path] = None,
         auto_confirm: bool = False,
         router: Optional[TaskRouter] = None,
-        session_context: Optional["SessionContextProtocol"] = None
+        session_context: Optional["SessionContextProtocol"] = None,
+        theme: Optional[ThemeProtocol] = None
     ) -> None:
         """Initialize CLI task router handler.
 
@@ -86,6 +88,7 @@ class CLITaskRouterHandler:
                 confirmation. Defaults to False for safety.
             router: Optional TaskRouter instance. Created if not provided.
             session_context: Session context for verbose_mode setting.
+            theme: Optional theme for styling. Defaults to DEFAULT_THEME.
 
         State Changes:
             - Sets instance attributes for orchestrator, io, project_root, auto_confirm
@@ -97,12 +100,21 @@ class CLITaskRouterHandler:
         self.project_root = project_root or self._get_default_project_root()
         self.auto_confirm = auto_confirm
         self.session_context = session_context
+        self._theme = theme or DEFAULT_THEME
 
         # Inject router or create default
         self.router = router or self._create_default_router()
 
         # Track routing history
         self.history: list = []
+
+        # Task type colors using theme
+        self._task_colors = {
+            "direct_command": self._theme.success,
+            "code_generation": self._theme.accent,
+            "research": self._theme.primary,
+            "conversation": self._theme.info,
+        }
 
     def _get_default_project_root(self) -> Path:
         """Get default project root directory."""
@@ -204,7 +216,7 @@ class CLITaskRouterHandler:
             - No state changes or task execution
         """
         io_target = io or self.io
-        io_target.secho("\nTask Classification Preview:", fg="cyan")
+        io_target.secho("\nTask Classification Preview:", fg=self._theme.primary)
 
         classified = self.router.classify_only(user_input)
         self._display_classification(classified, io=io)
@@ -230,7 +242,7 @@ class CLITaskRouterHandler:
         io_target = io or self.io
         metrics = self.router.get_metrics()
 
-        io_target.secho("\nTask Router Metrics:", fg="cyan", bold=True)
+        io_target.secho("\nTask Router Metrics:", fg=self._theme.primary, bold=True)
         io_target.echo(f"  Total tasks: {metrics.total_tasks}")
 
         if metrics.tasks_by_type:
@@ -260,10 +272,10 @@ class CLITaskRouterHandler:
         """
         io_target = io or self.io
         if not self.history:
-            io_target.secho("No routing history yet.", fg="yellow")
+            io_target.secho("No routing history yet.", fg=self._theme.warning)
             return
 
-        io_target.secho("\nRouting History:", fg="cyan", bold=True)
+        io_target.secho("\nRouting History:", fg=self._theme.primary, bold=True)
 
         for i, entry in enumerate(self.history[-10:], 1):  # Last 10 entries
             classification = entry["classification"]
@@ -300,11 +312,11 @@ class CLITaskRouterHandler:
         """
         io_target = io or self.io
         if result.success:
-            io_target.secho("\nExecution successful", fg="green", bold=True)
+            io_target.secho("\nExecution successful", fg=self._theme.success, bold=True)
         else:
-            io_target.secho("\nExecution failed", fg="red", bold=True)
+            io_target.secho("\nExecution failed", fg=self._theme.error, bold=True)
             if result.error:
-                io_target.secho(f"Error: {result.error}", fg="red")
+                io_target.secho(f"Error: {result.error}", fg=self._theme.error)
 
         # Show output
         if result.output:
@@ -318,7 +330,7 @@ class CLITaskRouterHandler:
             io_target.echo("-" * 40)
 
         # Show metadata
-        io_target.secho(f"\nExecution time: {result.execution_time:.2f}s", fg="cyan")
+        io_target.secho(f"\nExecution time: {result.execution_time:.2f}s", fg=self._theme.primary)
         if result.tokens_used:
             io_target.echo(f"Tokens used: {result.tokens_used}")
         if result.provider_used:
@@ -351,14 +363,7 @@ class CLITaskRouterHandler:
             - No state changes
         """
         io_target = io or self.io
-        type_colors = {
-            "direct_command": "green",
-            "code_generation": "yellow",
-            "research": "cyan",
-            "conversation": "blue"
-        }
-
-        color = type_colors.get(classified.task_type.value, "white")
+        color = self._task_colors.get(classified.task_type.value, self._theme.text)
 
         io_target.echo(f"\n  Task Type: {io_target.style(classified.task_type.value, fg=color, bold=True)}")
         io_target.echo(f"  Confidence: {classified.confidence:.2f}")

@@ -91,10 +91,14 @@ def cli(ctx, brain, auto_explore, no_context, resume, no_save, show_providers, v
     ctx.obj['show_providers'] = show_providers
     ctx.obj['verbose_selection'] = verbose_selection
 
+    # Get theme from global config
+    config = get_config()
+    theme = config.theme
+
     # If no subcommand, start interactive mode
     if ctx.invoked_subcommand is None:
-        # Create CLI normally - no special setup needed
-        cli_instance = create_cli_from_context(ctx)
+        # Create CLI with theme from config
+        cli_instance = create_cli_from_context(ctx, theme=theme)
         cli_instance.auto_save = ctx.obj['auto_save']
 
         # Resume previous session if requested
@@ -340,7 +344,11 @@ def usage(ctx):
 @click.pass_context
 def interactive(ctx, resume):
     """Start interactive chat mode."""
-    cli_instance = create_cli_from_context(ctx)
+    # Get theme from global config
+    config = get_config()
+    theme = config.theme
+
+    cli_instance = create_cli_from_context(ctx, theme=theme)
 
     if resume:
         restore_session_to_cli(cli_instance, cli_instance.io)

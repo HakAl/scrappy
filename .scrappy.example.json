@@ -48,5 +48,24 @@
     "_comment": "Controls when user clarification is requested for ambiguous tasks",
     "confidence_threshold": 0.7,
     "high_confidence_bypass": 0.9
+  },
+
+  "theme": {
+    "_comment": "Theme configuration - controls colors for CLI and TUI output",
+    "_presets": "Use 'dark' (default) or 'light'",
+    "preset": "dark",
+    "_colors": [
+      "Override individual colors (optional):",
+      "  primary: Borders, headers, labels, info text",
+      "  accent: Commands, keywords, interactive elements",
+      "  success: Enabled states, completions, positive values",
+      "  warning: Caution states",
+      "  error: Errors, disabled, negative states",
+      "  info: Informational panels, thinking state",
+      "  text: Normal text",
+      "  text_muted: Dimmed/secondary text",
+      "  surface: Main background (TUI only)",
+      "  surface_alt: Panels, status bar (TUI only)"
+    ]
   }
 }

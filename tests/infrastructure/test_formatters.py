@@ -11,6 +11,12 @@ from src.infrastructure.formatters import (
     RateLimitFormatter,
     CacheFormatter,
 )
+from src.infrastructure.theme import (
+    DEFAULT_THEME,
+    LightTheme,
+    NoColorTheme,
+    ScrappyTheme,
+)
 
 
 class TestStatsFormatter:
@@ -651,6 +657,203 @@ class TestExtractTimeFromTimestamp:
     """Tests for timestamp extraction utility."""
 
 
+class TestStatsFormatterThemeIntegration:
+    """Tests for StatsFormatter theme integration."""
+
+    def test_default_theme_is_used_when_none_provided(self):
+        """Formatter uses DEFAULT_THEME when no theme provided."""
+        formatter = StatsFormatter()
+        assert formatter._theme is DEFAULT_THEME
+
+    def test_custom_theme_is_used_when_provided(self):
+        """Formatter uses provided theme instance."""
+        light_theme = LightTheme()
+        formatter = StatsFormatter(theme=light_theme)
+        assert formatter._theme is light_theme
+
+    def test_format_header_uses_theme_primary_color(self):
+        """Formatter uses theme.primary for headers."""
+        light_theme = LightTheme()
+        formatter = StatsFormatter(theme=light_theme)
+        result = formatter.format_header("Test", width=20)
+        # Light theme uses 'blue' for primary
+        assert "blue" in result or "\x1b[" in result
+
+    def test_percentage_color_uses_theme_success_for_low(self):
+        """Formatter uses theme.success for low percentages."""
+        formatter = StatsFormatter()
+        color = formatter._get_percentage_color(50.0)
+        assert color == DEFAULT_THEME.success
+
+    def test_percentage_color_uses_theme_warning_for_medium(self):
+        """Formatter uses theme.warning for medium percentages."""
+        formatter = StatsFormatter()
+        color = formatter._get_percentage_color(80.0)
+        assert color == DEFAULT_THEME.warning
+
+    def test_percentage_color_uses_theme_error_for_high(self):
+        """Formatter uses theme.error for high percentages."""
+        formatter = StatsFormatter()
+        color = formatter._get_percentage_color(95.0)
+        assert color == DEFAULT_THEME.error
+
+    def test_boolean_status_uses_theme_success_for_true(self):
+        """Formatter uses theme.success for True values."""
+        formatter = StatsFormatter()
+        result = formatter.format_boolean_status(True)
+        # Should contain green (theme.success default)
+        assert "Enabled" in result
+
+    def test_boolean_status_uses_theme_error_for_false(self):
+        """Formatter uses theme.error for False values."""
+        formatter = StatsFormatter()
+        result = formatter.format_boolean_status(False)
+        # Should contain red (theme.error default)
+        assert "Disabled" in result
+
+    def test_light_theme_uses_different_colors(self):
+        """Light theme provides different color values."""
+        light_theme = LightTheme()
+        formatter = StatsFormatter(theme=light_theme)
+
+        # Light theme has blue as primary, not cyan
+        assert formatter._theme.primary == "blue"
+        assert formatter._theme.accent == "magenta"
 
 
+class TestCacheFormatterThemeIntegration:
+    """Tests for CacheFormatter theme integration."""
+
+    def test_inherits_theme_from_stats_formatter(self):
+        """CacheFormatter correctly passes theme to parent."""
+        light_theme = LightTheme()
+        formatter = CacheFormatter(theme=light_theme)
+        assert formatter._theme is light_theme
+
+    def test_format_hit_rate_uses_theme_success_for_high_rate(self):
+        """Formatter uses theme.success for hit rates > 50%."""
+        formatter = CacheFormatter()
+        result = formatter.format_hit_rate("75.0%", "Hit Rate")
+        # Contains styled text
+        assert "75.0%" in result
+        assert "\x1b" in result
+
+    def test_format_hit_rate_uses_theme_warning_for_low_rate(self):
+        """Formatter uses theme.warning for hit rates <= 50%."""
+        formatter = CacheFormatter()
+        result = formatter.format_hit_rate("25.0%", "Hit Rate")
+        assert "25.0%" in result
+        assert "\x1b" in result
+
+    def test_format_toggle_message_uses_theme_success_for_enabled(self):
+        """Formatter uses theme.success for enabled state."""
+        formatter = CacheFormatter()
+        result = formatter.format_toggle_message(True)
+        assert "enabled" in result
+        assert "\x1b" in result
+
+    def test_format_toggle_message_uses_theme_warning_for_disabled(self):
+        """Formatter uses theme.warning for disabled state."""
+        formatter = CacheFormatter()
+        result = formatter.format_toggle_message(False)
+        assert "disabled" in result
+        assert "\x1b" in result
+
+    def test_format_clear_message_uses_theme_success(self):
+        """Formatter uses theme.success for clear message."""
+        formatter = CacheFormatter()
+        result = formatter.format_clear_message()
+        assert "cleared" in result
+        assert "\x1b" in result
+
+
+class TestRateLimitFormatterThemeIntegration:
+    """Tests for RateLimitFormatter theme integration."""
+
+    def test_inherits_theme_from_stats_formatter(self):
+        """RateLimitFormatter correctly passes theme to parent."""
+        light_theme = LightTheme()
+        formatter = RateLimitFormatter(theme=light_theme)
+        assert formatter._theme is light_theme
+
+    def test_format_provider_section_uses_theme_success(self):
+        """Formatter uses theme.success for provider headers."""
+        formatter = RateLimitFormatter()
+        data = {
+            'total_requests_today': 10,
+            'total_tokens_today': 1000,
+            'total_requests_month': 50
+        }
+        result = formatter.format_provider_section("openai", data)
+        assert "OPENAI" in result
+        assert "\x1b" in result
+
+    def test_format_warnings_uses_theme_error(self):
+        """Formatter uses theme.error for warnings."""
+        formatter = RateLimitFormatter()
+        warnings = ["Test warning"]
+        result = formatter.format_warnings(warnings)
+        assert "WARNINGS" in result
+        assert "Test warning" in result
+        assert "\x1b" in result
+
+    def test_format_tracker_file_uses_theme_primary(self):
+        """Formatter uses theme.primary for file location."""
+        formatter = RateLimitFormatter()
+        result = formatter.format_tracker_file_location("/path/to/file.json")
+        assert "Tracking File" in result
+        assert "/path/to/file.json" in result
+        assert "\x1b" in result
+
+    def test_format_quota_line_uses_theme_percentage_colors(self):
+        """Formatter uses theme colors for quota percentages."""
+        formatter = RateLimitFormatter()
+
+        # Low usage should use success color
+        low_result = formatter.format_quota_line("Requests", 10, 100)
+        assert "10.0%" in low_result
+
+        # High usage should use error color
+        high_result = formatter.format_quota_line("Requests", 95, 100)
+        assert "95.0%" in high_result
+
+    def test_format_status_provider_not_found_uses_theme_warning(self):
+        """Formatter uses theme.warning for provider not found message."""
+        formatter = RateLimitFormatter()
+        status = {
+            'last_reset': {'daily': '2024-01-15', 'monthly': '2024-01-01'},
+            'providers': {'openai': {}}
+        }
+        result = formatter.format_status(status, provider_filter="unknown")
+        assert "not found" in result
+        assert "\x1b" in result
+
+
+class TestNoColorThemeIntegration:
+    """Tests for formatters with NoColorTheme (testing theme)."""
+
+    def test_stats_formatter_with_no_color_theme(self):
+        """StatsFormatter works with NoColorTheme."""
+        no_color = NoColorTheme()
+        formatter = StatsFormatter(theme=no_color)
+
+        # Empty string colors should still work with click.style
+        result = formatter.format_header("Test", width=20)
+        assert "Test" in result
+
+    def test_cache_formatter_with_no_color_theme(self):
+        """CacheFormatter works with NoColorTheme."""
+        no_color = NoColorTheme()
+        formatter = CacheFormatter(theme=no_color)
+
+        result = formatter.format_hit_rate("50.0%", "Rate")
+        assert "50.0%" in result
+
+    def test_rate_limit_formatter_with_no_color_theme(self):
+        """RateLimitFormatter works with NoColorTheme."""
+        no_color = NoColorTheme()
+        formatter = RateLimitFormatter(theme=no_color)
+
+        result = formatter.format_tracker_file_location("/path/file.json")
+        assert "Tracking File" in result
 

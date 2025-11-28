@@ -24,6 +24,7 @@ from ..rate_limiter import RateLimiter
 from ..persistence import SessionPersistence
 from ..user_interaction import get_user_interaction
 from ..protocols import UserInteractionProtocol
+from src.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
 
 if TYPE_CHECKING:
     from ..core import CLI
@@ -33,7 +34,8 @@ if TYPE_CHECKING:
 
 def get_io_interface(
     io: Optional[CLIIOProtocol] = None,
-    test_mode: bool = False
+    test_mode: bool = False,
+    theme: Optional[ThemeProtocol] = None
 ) -> CLIIOProtocol:
     """
     Get or create appropriate IO interface for CLI (interactive mode).
@@ -43,6 +45,7 @@ def get_io_interface(
     Args:
         io: Existing IO interface to use (takes precedence)
         test_mode: If True and no io provided, create TestIO
+        theme: Optional theme for styling. Defaults to DEFAULT_THEME.
 
     Returns:
         CLIIOProtocol compatible interface with Textual OutputSink
@@ -56,7 +59,7 @@ def get_io_interface(
     # Create UnifiedIO with OutputSink for Textual routing
     from ..textual_app import TextualOutputAdapter
     output_adapter = TextualOutputAdapter()
-    return UnifiedIO(output_sink=output_adapter)
+    return UnifiedIO(output_sink=output_adapter, theme=theme or DEFAULT_THEME)
 
 
 def create_context_state(ctx: Any) -> Dict[str, Any]:
@@ -112,6 +115,7 @@ def initialize_cli_handlers(
     session_start: datetime,
     io: CLIIOProtocol,
     bridge: Optional["ThreadSafeAsyncBridge"] = None,
+    theme: Optional[ThemeProtocol] = None,
 ) -> Dict[str, Any]:
     """
     Create and return all CLI component handlers.
@@ -121,12 +125,15 @@ def initialize_cli_handlers(
         session_start: Session start datetime for display handler
         io: I/O interface for output
         bridge: Optional ThreadSafeAsyncBridge for TUI mode modal dialogs
+        theme: Optional theme for styling. Defaults to DEFAULT_THEME.
 
     Returns:
         Dict with all 8 standard handlers
     """
+    theme = theme or DEFAULT_THEME
+
     # Create session manager dependencies first (all need io)
-    context_manager = CLIContextCommands(orchestrator, io)
+    context_manager = CLIContextCommands(orchestrator, io, theme=theme)
     cache_manager = CacheManager(orchestrator, io)
     rate_limiter = RateLimiter(orchestrator, io)
     session_persistence = SessionPersistence(orchestrator, io)
@@ -151,17 +158,22 @@ def initialize_cli_handlers(
         'multiprovider': CLIMultiProvider(orchestrator, io, interaction),
         'smart': CLISmartQuery(orchestrator, io),
         'agent_mgr': CLIAgentManager(orchestrator, io, interaction),
-        'task_router': CLITaskRouterHandler(orchestrator, io),
+        'task_router': CLITaskRouterHandler(orchestrator, io, theme=theme),
     }
 
 
-def create_cli_from_context(ctx: Any, io: Optional[CLIIOProtocol] = None) -> "CLI":
+def create_cli_from_context(
+    ctx: Any,
+    io: Optional[CLIIOProtocol] = None,
+    theme: Optional[ThemeProtocol] = None
+) -> "CLI":
     """
     Create CLI instance from Click context object.
 
     Args:
         ctx: Click context object with configuration in ctx.obj
         io: IO interface
+        theme: Optional theme for styling. Defaults to DEFAULT_THEME.
 
     Returns:
         CLI instance configured from context
@@ -169,6 +181,7 @@ def create_cli_from_context(ctx: Any, io: Optional[CLIIOProtocol] = None) -> "CL
     from ..core import CLI
 
     options = extract_context_options(ctx)
+    theme = theme or DEFAULT_THEME
 
     cli = CLI(
         brain=options['brain'],
@@ -176,13 +189,18 @@ def create_cli_from_context(ctx: Any, io: Optional[CLIIOProtocol] = None) -> "CL
         context_aware=options['context_aware'],
         verbose_selection=options['verbose_selection'],
         show_provider_status=options['show_provider_status'],
-        io=io
+        io=io,
+        theme=theme
     )
     cli.initialize()
     return cli
 
 
-def create_cli(config: Dict[str, Any], io: Optional[CLIIOProtocol] = None) -> "CLI":
+def create_cli(
+    config: Dict[str, Any],
+    io: Optional[CLIIOProtocol] = None,
+    theme: Optional[ThemeProtocol] = None
+) -> "CLI":
     """
     Create CLI instance from a simple dictionary configuration.
 
@@ -197,6 +215,7 @@ def create_cli(config: Dict[str, Any], io: Optional[CLIIOProtocol] = None) -> "C
             - verbose_selection: Show verbose provider selection (default False)
             - show_provider_status: Show provider status on startup (default False)
         io: IO interface (creates if not provided)
+        theme: Optional theme for styling. Defaults to DEFAULT_THEME.
 
     Returns:
         CLI instance configured from dict
@@ -206,13 +225,16 @@ def create_cli(config: Dict[str, Any], io: Optional[CLIIOProtocol] = None) -> "C
     """
     from ..core import CLI
 
+    theme = theme or DEFAULT_THEME
+
     cli = CLI(
         brain=config.get('brain'),
         auto_explore=config.get('auto_explore', False),
         context_aware=config.get('context_aware', True),
         verbose_selection=config.get('verbose_selection', False),
         show_provider_status=config.get('show_provider_status', False),
-        io=io
+        io=io,
+        theme=theme
     )
     cli.initialize()
     return cli

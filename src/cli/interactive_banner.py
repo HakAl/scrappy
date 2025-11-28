@@ -5,17 +5,21 @@ Provides a styled welcome banner using Rich Panel with ASCII art
 and mode status display.
 """
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 from rich.panel import Panel
 from rich.text import Text
 
 from src.infrastructure.output_mode import OutputModeContext
+from src.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
 
 if TYPE_CHECKING:
     from src.cli.protocols import UnifiedIOProtocol
 
 
-def display_banner(io: "UnifiedIOProtocol") -> None:
+def display_banner(
+    io: "UnifiedIOProtocol",
+    theme: Optional[ThemeProtocol] = None
+) -> None:
     """Display banner using appropriate IO.
 
     The TextualConsole automatically detects Panel as a renderable
@@ -23,32 +27,35 @@ def display_banner(io: "UnifiedIOProtocol") -> None:
 
     Args:
         io: UnifiedIO instance with console property for Rich renderables
+        theme: Optional theme for styling. Defaults to DEFAULT_THEME.
     """
+    theme = theme or DEFAULT_THEME
+
     # Build banner content
     title_text = Text()
-    title_text.append("SCRAPPY", style="bold cyan")
+    title_text.append("SCRAPPY", style=f"bold {theme.primary}")
     title_text.append(" - ", style="dim")
-    title_text.append("Interactive Mode", style="bold white")
+    title_text.append("Interactive Mode", style=f"bold {theme.text}")
 
     # Quick commands section
     commands_text = Text()
     commands_text.append("\nQuick Commands:\n", style="bold")
-    commands_text.append("  /help", style="yellow")
+    commands_text.append("  /help", style=theme.accent)
     commands_text.append("    - Show all commands\n")
-    commands_text.append("  /auto", style="yellow")
+    commands_text.append("  /auto", style=theme.accent)
     commands_text.append("    - Toggle auto-routing\n")
-    commands_text.append("  /plan", style="yellow")
+    commands_text.append("  /plan", style=theme.accent)
     commands_text.append(" <task> - Create a task plan\n")
-    commands_text.append("  /agent", style="yellow")
+    commands_text.append("  /agent", style=theme.accent)
     commands_text.append(" <task> - Run code agent\n")
-    commands_text.append("  /smart", style="yellow")
+    commands_text.append("  /smart", style=theme.accent)
     commands_text.append(" <q>   - Research-first query\n")
-    commands_text.append("  /status", style="yellow")
+    commands_text.append("  /status", style=theme.accent)
     commands_text.append("  - Show system status\n")
-    commands_text.append("  /quit", style="yellow")
+    commands_text.append("  /quit", style=theme.accent)
     commands_text.append("    - Exit the CLI\n")
     commands_text.append("\n  ", style="")
-    commands_text.append("(any text)", style="bright_white")
+    commands_text.append("(any text)", style=theme.text)
     commands_text.append(" - Chat with current brain")
 
     # Combine content
@@ -60,8 +67,8 @@ def display_banner(io: "UnifiedIOProtocol") -> None:
     # Create and display panel
     panel = Panel(
         content,
-        title="[bold cyan]Welcome[/bold cyan]",
-        border_style="cyan",
+        title=f"[bold {theme.primary}]Welcome[/bold {theme.primary}]",
+        border_style=theme.primary,
         padding=(1, 2)
     )
 
@@ -88,15 +95,21 @@ def display_banner(io: "UnifiedIOProtocol") -> None:
         io.echo(str(content))
 
 
-def render_welcome_banner(io: "UnifiedIOProtocol") -> None:
+def render_welcome_banner(
+    io: "UnifiedIOProtocol",
+    theme: Optional[ThemeProtocol] = None
+) -> None:
     """Render the welcome banner as a Rich Panel.
 
     Args:
         io: UnifiedIO instance for output
+        theme: Optional theme for styling. Defaults to DEFAULT_THEME.
     """
+    theme = theme or DEFAULT_THEME
+
     # Display main banner
-    display_banner(io)
+    display_banner(io, theme=theme)
 
     # Display tips
-    io.secho("Tip: End line with \\ to continue on next line", fg="cyan")
+    io.secho("Tip: End line with \\ to continue on next line", fg=theme.primary)
     io.echo()

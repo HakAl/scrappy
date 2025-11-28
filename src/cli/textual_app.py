@@ -21,6 +21,7 @@ from textual import work
 import pyperclip
 
 from src.infrastructure.output_mode import OutputModeContext
+from src.infrastructure.theme import DEFAULT_THEME, ThemeProtocol
 from .input_capture import InputCaptureManager, InputRequest
 from .command_history import CommandHistory, get_default_history_path
 
@@ -607,16 +608,23 @@ class ScrappyApp(App):
         Binding("down", "history_next", "Next", priority=True),
     ]
 
-    def __init__(self, interactive_mode: "InteractiveMode", output_adapter: TextualOutputAdapter):
+    def __init__(
+        self,
+        interactive_mode: "InteractiveMode",
+        output_adapter: TextualOutputAdapter,
+        theme: Optional[ThemeProtocol] = None,
+    ):
         """Initialize the Textual app with InteractiveMode.
 
         Args:
             interactive_mode: The InteractiveMode instance with UnifiedIO
             output_adapter: The TextualOutputAdapter to consume messages from
+            theme: Optional theme for consistent styling
         """
         super().__init__()
         self.interactive_mode = interactive_mode
         self.output_adapter = output_adapter
+        self._theme = theme or DEFAULT_THEME
         self._should_stop_consumer = False
 
         # Status bar components (created here, registered in on_mount)
@@ -931,7 +939,7 @@ class ScrappyApp(App):
         except Exception as e:
             # Post error (thread-safe via message)
             from rich.text import Text
-            error_text = Text(f"Error: {str(e)}", style="red")
+            error_text = Text(f"Error: {str(e)}", style=self._theme.error)
             self.output_adapter.post_renderable(error_text)
             logger.exception("Error processing command")
 

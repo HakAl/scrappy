@@ -2,9 +2,10 @@
 
 ## Overview
 
-This document outlines the implementation plan for correcting all Priority 5 issues identified in `ISSUES_PRIORITIZED.md`. These issues were previously unconfirmed but have now been investigated and require attention.
+This document outlines the implementation plan for correcting all Priority 5 issues identified in `ISSUES_PRIORITIZED.md`.
+These issues have been investigated and require attention.
 
-P5 issues are lower-severity optimizations and confirmed bugs that impact efficiency and edge-case behavior but are not blocking.
+P5 issues are confirmed bugs that impact efficiency and edge-case behavior but are not blocking.
 
 ---
 
@@ -35,7 +36,7 @@ explore_codebase()
 
 ### Desired Behavior
 
-Summary should only be generated when the user requests it (lazy generation), or the API call should be deferred until the user confirms they want the summary.
+Summary should only be generated when the user requests it (lazy generation).
 
 ### Design
 
@@ -219,7 +220,6 @@ class TestLazySummaryGenerator:
 ### Risk Assessment
 
 - **Low risk**: Changes are isolated to exploration flow
-- **Backward compatible**: Default behavior can remain if user always confirms
 - **Testable**: Easy to mock LLM function for testing
 
 ---
@@ -228,7 +228,8 @@ class TestLazySummaryGenerator:
 
 ### Problem Statement
 
-Auto-explore skips re-indexing if context is cached, even when files have been added/modified since the last exploration. This causes semantic search to miss content in new/modified files.
+Auto-explore skips re-indexing if context is cached, even when files have been added/modified since the last exploration.
+This causes semantic search to miss content in new/modified files.
 
 ### Current Behavior
 
@@ -573,7 +574,6 @@ class TestStalenessChecker:
 
 - **Medium risk**: Changes affect auto-explore flow
 - **Performance consideration**: Fingerprinting adds I/O, but is fast (stat only, no content read)
-- **Backward compatible**: Staleness checking can be opt-in via constructor parameter
 
 ---
 
@@ -581,7 +581,8 @@ class TestStalenessChecker:
 
 ### Problem Statement
 
-The agent may declare task completion prematurely, especially in dry-run mode where the meaningful actions guard is bypassed. Complex tasks may overwhelm the agent, causing it to give up early.
+The agent may declare task completion prematurely, especially in dry-run mode where the meaningful actions guard is bypassed. 
+Complex tasks may overwhelm the agent, causing it to give up early.
 
 ### Current Behavior
 
@@ -789,7 +790,7 @@ if not validation.allow_completion:
     )
 ```
 
-#### Step 3: Add task complexity estimation (optional enhancement)
+#### Step 3: Add task complexity estimation
 
 **File:** `src/agent/complexity.py` (new)
 
@@ -948,7 +949,7 @@ class TestCompletionValidator:
 ### Files to Modify
 
 1. `src/agent/completion_validator.py` - NEW: CompletionValidator class
-2. `src/agent/complexity.py` - NEW: TaskComplexityEstimator (optional)
+2. `src/agent/complexity.py` - NEW: TaskComplexityEstimator
 3. `src/agent/protocols.py` - Add CompletionValidatorProtocol
 4. `src/agent/agent_loop.py:338-346` - Remove dry-run bypass, use validator
 5. `src/agent/agent_loop.py:536-564` - Improve premature completion handling
@@ -985,7 +986,6 @@ Recommended order based on dependencies and risk:
 3. **Issue 5.4** - Completion validation
    - Affects core agent loop
    - Should be tested thoroughly
-   - May require config options for backward compatibility
 
 ---
 
@@ -1017,9 +1017,8 @@ Ensure existing behavior is not broken:
 ## Rollback Plan
 
 Each change should be:
-1. Behind a feature flag if risky
-2. Reversible via git revert
-3. Isolated enough to not affect other components
+- Reversible via git revert
+- Isolated enough to not affect other components
 
 Example feature flag:
 ```python

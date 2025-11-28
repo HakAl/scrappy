@@ -1,0 +1,6 @@
+# Theme configuration
+# Controls colors for CLI and TUI output
+theme:
+  # Use a preset theme: "dark" (default) or "light"
+  preset: light
+

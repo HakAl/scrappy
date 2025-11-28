@@ -4,8 +4,10 @@ Base stats formatter implementation.
 Provides reusable formatting utilities for statistics displays.
 """
 
-from typing import Any
+from typing import Any, Optional
 import click
+
+from src.infrastructure.theme import DEFAULT_THEME, ThemeProtocol
 
 
 class StatsFormatter:
@@ -18,15 +20,22 @@ class StatsFormatter:
         use_color: Whether to include ANSI color codes in output.
             Defaults to True. Set to False for terminals that don't
             support colors to avoid ANSI artifacts.
+        theme: Theme instance for color values. Defaults to DEFAULT_THEME.
     """
 
-    def __init__(self, use_color: bool = True):
-        """Initialize formatter with color preference.
+    def __init__(
+        self,
+        use_color: bool = True,
+        theme: Optional[ThemeProtocol] = None,
+    ):
+        """Initialize formatter with color preference and theme.
 
         Args:
             use_color: Whether to use ANSI color codes in output.
+            theme: Theme instance for color values.
         """
         self._use_color = use_color
+        self._theme = theme or DEFAULT_THEME
 
     def format_header(self, title: str, width: int = 60) -> str:
         """Format a header with title and separator.
@@ -39,8 +48,8 @@ class StatsFormatter:
             Formatted header string, with ANSI codes if use_color is True
         """
         if self._use_color:
-            header = click.style(f"\n{title}", fg="cyan", bold=True)
-            separator = click.style("-" * width, fg="cyan")
+            header = click.style(f"\n{title}", fg=self._theme.primary, bold=True)
+            separator = click.style("-" * width, fg=self._theme.primary)
         else:
             header = f"\n{title}"
             separator = "-" * width
@@ -127,14 +136,14 @@ class StatsFormatter:
             percentage: The percentage value (0-100)
 
         Returns:
-            Color name: 'green', 'yellow', or 'red'
+            Color from theme: success (< 75%), warning (< 90%), error (>= 90%)
         """
         if percentage < 75:
-            return "green"
+            return self._theme.success
         elif percentage < 90:
-            return "yellow"
+            return self._theme.warning
         else:
-            return "red"
+            return self._theme.error
 
     def format_boolean_status(
         self,
@@ -156,5 +165,5 @@ class StatsFormatter:
         if not self._use_color:
             return label
 
-        color = "green" if value else "red"
+        color = self._theme.success if value else self._theme.error
         return click.style(label, fg=color)

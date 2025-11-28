@@ -6,10 +6,11 @@ into a single, cohesive configuration class that extends BaseConfig.
 """
 
 from dataclasses import dataclass, field
-from typing import List, Set, Dict
+from typing import Any, Dict, List, Optional, Set
 import re
 
 from src.infrastructure.config import BaseConfig
+from src.infrastructure.theme import ThemeProtocol, load_theme_from_config, DEFAULT_THEME
 
 # Import from existing config modules
 from src.cli.config.extensions import (
@@ -136,6 +137,34 @@ class CLIConfig(BaseConfig):
     package_keywords: List[str] = field(default_factory=lambda: PACKAGE_KEYWORDS.copy())
     action_keywords: List[str] = field(default_factory=lambda: ACTION_KEYWORDS.copy())
 
+    # Theme configuration (stored as dict, converted to ThemeProtocol on access)
+    # Example config:
+    #   theme:
+    #     preset: dark  # or "light"
+    #     primary: cyan  # optional override
+    #     accent: orange  # optional override
+    theme_config: Dict[str, Any] = field(default_factory=dict)
+
+    # Cached theme instance (not serialized, computed from theme_config)
+    _theme: Optional[ThemeProtocol] = field(default=None, repr=False, compare=False)
+
+    @property
+    def theme(self) -> ThemeProtocol:
+        """Get the theme instance.
+
+        Lazily loads theme from theme_config on first access.
+
+        Returns:
+            ThemeProtocol instance
+        """
+        if self._theme is None:
+            # Use object.__setattr__ to bypass frozen dataclass if needed
+            object.__setattr__(
+                self, '_theme',
+                load_theme_from_config({"theme": self.theme_config})
+            )
+        return self._theme
+
     def validate(self) -> None:
         """
         Validate CLIConfig values.
@@ -261,3 +290,95 @@ class CLIConfig(BaseConfig):
             'standard': self.separator_width_standard,
             'wide': self.separator_width_wide,
         }
+
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        Convert configuration to dictionary.
+
+        Excludes the cached _theme field since it's computed.
+        Maps theme_config back to 'theme' for config file compatibility.
+
+        Returns:
+            Dictionary representation of configuration
+        """
+        from dataclasses import asdict
+        result = asdict(self)
+        # Remove cached theme - it's computed from theme_config
+        result.pop('_theme', None)
+        # Map theme_config to 'theme' for config file compatibility
+        if 'theme_config' in result:
+            result['theme'] = result.pop('theme_config')
+        return result
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "CLIConfig":
+        """
+        Create CLIConfig from dictionary.
+
+        Handles mapping 'theme' key to 'theme_config' field.
+
+        Args:
+            data: Configuration dictionary
+
+        Returns:
+            CLIConfig instance
+        """
+        # Map 'theme' key to 'theme_config' field for config file compatibility
+        mapped_data = data.copy()
+        if 'theme' in mapped_data and 'theme_config' not in mapped_data:
+            mapped_data['theme_config'] = mapped_data.pop('theme')
+
+        # Use parent class from_dict
+        from dataclasses import fields as dc_fields
+
+        # Get valid field names
+        valid_keys = {f.name for f in dc_fields(cls)}
+
+        # Filter to only valid keys
+        filtered_data = {
+            key: value
+            for key, value in mapped_data.items()
+            if key in valid_keys
+        }
+
+        # Create instance
+        instance = cls(**filtered_data)
+
+        # Validate
+        instance.validate()
+
+        return instance
+
+    def merge(self, other: "CLIConfig") -> "CLIConfig":
+        """
+        Merge this config with another config.
+
+        Other config values override this config's values.
+        Only non-None and non-empty values from other config are used.
+
+        Uses from_dict to properly handle theme_config mapping.
+
+        Args:
+            other: Configuration to merge
+
+        Returns:
+            New configuration with merged values
+        """
+        from copy import deepcopy
+
+        # Get dicts (to_dict maps theme_config -> theme)
+        merged_dict = deepcopy(self.to_dict())
+        other_dict = other.to_dict()
+
+        # Merge: other overrides this (but only non-None and non-empty values)
+        for key, value in other_dict.items():
+            # Skip None values
+            if value is None:
+                continue
+            # Skip empty dicts/lists (they represent "no value set")
+            if isinstance(value, (dict, list)) and len(value) == 0:
+                continue
+            merged_dict[key] = value
+
+        # Use from_dict to properly map theme -> theme_config
+        return CLIConfig.from_dict(merged_dict)

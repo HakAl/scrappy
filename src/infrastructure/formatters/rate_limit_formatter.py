@@ -4,9 +4,11 @@ Rate limit display formatter.
 Extracts display formatting logic from CLI rate limiter handler.
 """
 
-from typing import Dict, Any, List
+from typing import Any, Dict, List, Optional
+
 import click
 
+from src.infrastructure.theme import ThemeProtocol
 from .stats_formatter import StatsFormatter
 
 
@@ -65,7 +67,25 @@ class RateLimitFormatter(StatsFormatter):
 
     Provides formatting for rate limit status including quotas,
     usage percentages, warnings, and per-model breakdowns.
+
+    Args:
+        use_color: Whether to include ANSI color codes in output.
+            Defaults to True. Inherited from StatsFormatter.
+        theme: Theme instance for color values. Inherited from StatsFormatter.
     """
+
+    def __init__(
+        self,
+        use_color: bool = True,
+        theme: Optional[ThemeProtocol] = None,
+    ):
+        """Initialize formatter with color preference and theme.
+
+        Args:
+            use_color: Whether to use ANSI color codes in output.
+            theme: Theme instance for color values.
+        """
+        super().__init__(use_color=use_color, theme=theme)
 
     def format_status(
         self,
@@ -102,7 +122,10 @@ class RateLimitFormatter(StatsFormatter):
                 providers_to_show = {provider_filter: providers_to_show[provider_filter]}
             else:
                 header = self.format_header('Rate Limit Usage (Persistent)')
-                error_msg = click.style(f"Provider '{provider_filter}' not found in tracking data.", fg='yellow')
+                error_msg = click.style(
+                    f"Provider '{provider_filter}' not found in tracking data.",
+                    fg=self._theme.warning
+                )
                 return f"{header}\n{error_msg}"
 
         # Check if any data
@@ -173,7 +196,7 @@ class RateLimitFormatter(StatsFormatter):
         parts = []
 
         # Provider header
-        parts.append(click.style(f"{provider.upper()}:", fg="green", bold=True))
+        parts.append(click.style(f"{provider.upper()}:", fg=self._theme.success, bold=True))
 
         # Show totals
         parts.append(f"  Today: {data['total_requests_today']} requests, {data['total_tokens_today']:,} tokens")
@@ -243,14 +266,14 @@ class RateLimitFormatter(StatsFormatter):
             warnings: List of warning messages
 
         Returns:
-            Formatted warnings section in red
+            Formatted warnings section using theme error color
         """
         if not warnings:
             return ""
 
-        parts = [click.style("WARNINGS:", fg="red", bold=True)]
+        parts = [click.style("WARNINGS:", fg=self._theme.error, bold=True)]
         for warning in warnings:
-            parts.append(click.style(f"  {warning}", fg="red"))
+            parts.append(click.style(f"  {warning}", fg=self._theme.error))
         parts.append("")  # Empty line after warnings
 
         return "\n".join(parts)
@@ -262,6 +285,6 @@ class RateLimitFormatter(StatsFormatter):
             file_path: Path to the tracker file
 
         Returns:
-            Formatted file location string
+            Formatted file location string using theme primary color
         """
-        return click.style(f"Tracking File: {file_path}", fg="cyan")
+        return click.style(f"Tracking File: {file_path}", fg=self._theme.primary)

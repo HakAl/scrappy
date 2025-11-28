@@ -19,6 +19,8 @@ except ImportError:
 if TYPE_CHECKING:
     from src.infrastructure.console_factory import ConsoleFactoryProtocol
 
+from src.infrastructure.theme import GIT_COLORS, SYNTAX_COLORS
+
 
 class OutputFormatter(Protocol):
     """Protocol for output formatters."""
@@ -93,8 +95,8 @@ class GitOutputFormatter:
         if line and len(line) > 7 and line[:7].replace(' ', '').isalnum():
             parts = line.split(' ', 1)
             if len(parts) >= 1:
-                # Commit hash in yellow
-                colored = self._output.style(parts[0], color='yellow')
+                # Commit hash in commit color
+                colored = self._output.style(parts[0], color=GIT_COLORS.commit)
                 if len(parts) > 1:
                     colored += ' ' + parts[1]
                 return colored
@@ -103,15 +105,15 @@ class GitOutputFormatter:
     def _colorize_diff_line(self, line: str) -> str:
         """Colorize git diff output."""
         if line.startswith('+++') or line.startswith('---'):
-            return self._output.style(line, color='cyan', bold=True)
+            return self._output.style(line, color=GIT_COLORS.header, bold=True)
         elif line.startswith('+'):
-            return self._output.style(line, color='green')
+            return self._output.style(line, color=GIT_COLORS.add)
         elif line.startswith('-'):
-            return self._output.style(line, color='red')
+            return self._output.style(line, color=GIT_COLORS.remove)
         elif line.startswith('@@'):
-            return self._output.style(line, color='cyan')
+            return self._output.style(line, color=GIT_COLORS.header)
         elif line.startswith('diff --git'):
-            return self._output.style(line, color='bright_white', bold=True)
+            return self._output.style(line, color=GIT_COLORS.meta, bold=True)
         return line
 
     def _colorize_blame_line(self, line: str) -> str:
@@ -119,7 +121,7 @@ class GitOutputFormatter:
         if line and '^' in line or (len(line) > 8 and line[:8].replace(' ', '').isalnum()):
             parts = line.split(' ', 1)
             if len(parts) >= 1:
-                colored = self._output.style(parts[0], color='yellow')
+                colored = self._output.style(parts[0], color=GIT_COLORS.commit)
                 if len(parts) > 1:
                     colored += ' ' + parts[1]
                 return colored
@@ -128,22 +130,22 @@ class GitOutputFormatter:
     def _colorize_show_line(self, line: str) -> str:
         """Colorize git show output."""
         if line.startswith('commit '):
-            return self._output.style(line, color='yellow', bold=True)
+            return self._output.style(line, color=GIT_COLORS.commit, bold=True)
         elif line.startswith('Author:'):
-            return self._output.style(line, color='cyan')
+            return self._output.style(line, color=GIT_COLORS.header)
         elif line.startswith('Date:'):
-            return self._output.style(line, color='cyan')
+            return self._output.style(line, color=GIT_COLORS.header)
         elif line.startswith('=== COMMIT'):
-            return self._output.style(line, color='yellow', bold=True)
+            return self._output.style(line, color=GIT_COLORS.commit, bold=True)
         elif line.startswith('Message:'):
-            return self._output.style(line, color='bright_white', bold=True)
+            return self._output.style(line, color=GIT_COLORS.meta, bold=True)
         elif '|' in line and ('+' in line or '-' in line):
             # File stat lines
-            return self._output.style(line, color='cyan')
+            return self._output.style(line, color=GIT_COLORS.header)
         elif line.startswith('+'):
-            return self._output.style(line, color='green')
+            return self._output.style(line, color=GIT_COLORS.add)
         elif line.startswith('-'):
-            return self._output.style(line, color='red')
+            return self._output.style(line, color=GIT_COLORS.remove)
         return line
 
 
@@ -198,7 +200,7 @@ class RichDirectoryFormatter:
         return Console(file=StringIO(), force_terminal=True)
 
     def format_directory_name(self, name: str) -> str:
-        """Format directory name in cyan with bold.
+        """Format directory name in primary color (cyan) with bold.
 
         Args:
             name: Directory name (e.g., "src/")
@@ -206,6 +208,9 @@ class RichDirectoryFormatter:
         Returns:
             Formatted string with ANSI codes
         """
+        # Directories use bold primary color (cyan in default theme)
+        # Note: This is hardcoded as "bold cyan" since RichDirectoryFormatter
+        # generates static strings and theme integration would require refactoring
         text = Text(name, style="bold cyan")
         return self._render_text(text)
 
@@ -219,15 +224,15 @@ class RichDirectoryFormatter:
         Returns:
             Formatted string with ANSI codes
         """
-        # Color mapping by extension
+        # Color mapping by extension using SYNTAX_COLORS
         if extension in ['.py']:
-            style = "green"
+            style = SYNTAX_COLORS.python
         elif extension in ['.js', '.ts', '.jsx', '.tsx']:
-            style = "yellow"
+            style = SYNTAX_COLORS.javascript
         elif extension in ['.md', '.txt', '.rst']:
-            style = "white"
+            style = SYNTAX_COLORS.docs
         elif extension in ['.json', '.yaml', '.yml', '.toml']:
-            style = "magenta"
+            style = SYNTAX_COLORS.config
         else:
             # No special color for other files
             return name

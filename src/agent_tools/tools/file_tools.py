@@ -7,6 +7,8 @@ Provides read, write, list, and directory tree operations.
 from pathlib import Path
 from typing import Any, Optional
 
+from src.infrastructure.theme import DEFAULT_THEME, SYNTAX_COLORS
+
 from .base import ToolBase, ToolParameter, ToolResult, ToolContext
 
 
@@ -332,9 +334,9 @@ class ListDirectoryTool(ToolBase):
                     connector = "`-- " if is_last else "|-- "
 
                     if item.is_dir():
-                        # Directory - show in cyan with bold
+                        # Directory - show in primary color with bold
                         if self._output:
-                            dir_name = self._output.style(f"{item.name}/", color='cyan', bold=True)
+                            dir_name = self._output.style(f"{item.name}/", color=DEFAULT_THEME.primary, bold=True)
                         else:
                             dir_name = f"{item.name}/"
                         lines.append(f"{prefix}{connector}{dir_name}")
@@ -356,19 +358,19 @@ class ListDirectoryTool(ToolBase):
                         except:
                             size_str = "?"
 
-                        # Color by file type
+                        # Color by file type using SYNTAX_COLORS
                         if self._output:
                             if item.suffix in ['.py']:
-                                file_name = self._output.style(item.name, color='green')
+                                file_name = self._output.style(item.name, color=SYNTAX_COLORS.python)
                             elif item.suffix in ['.js', '.ts', '.jsx', '.tsx']:
-                                file_name = self._output.style(item.name, color='yellow')
+                                file_name = self._output.style(item.name, color=SYNTAX_COLORS.javascript)
                             elif item.suffix in ['.md', '.txt', '.rst']:
-                                file_name = self._output.style(item.name, color='white')
+                                file_name = self._output.style(item.name, color=SYNTAX_COLORS.docs)
                             elif item.suffix in ['.json', '.yaml', '.yml', '.toml']:
-                                file_name = self._output.style(item.name, color='magenta')
+                                file_name = self._output.style(item.name, color=SYNTAX_COLORS.config)
                             else:
                                 file_name = item.name
-                            size_display = self._output.style(f"({size_str})", color='bright_black')
+                            size_display = self._output.style(f"({size_str})", color=DEFAULT_THEME.text_muted)
                         else:
                             file_name = item.name
                             size_display = f"({size_str})"
@@ -377,7 +379,7 @@ class ListDirectoryTool(ToolBase):
 
             # Start with the directory name
             if self._output:
-                root_name = self._output.style(str(target.relative_to(context.project_root)), color='cyan', bold=True)
+                root_name = self._output.style(str(target.relative_to(context.project_root)), color=DEFAULT_THEME.primary, bold=True)
                 lines.append(f"{root_name}/")
             else:
                 root_name = str(target.relative_to(context.project_root))

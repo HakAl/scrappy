@@ -2,8 +2,8 @@ import sys
 import pytest
 from unittest.mock import MagicMock, patch, ANY
 
-# Adjust import based on your actual file structure
 from src.infrastructure.textual_progress import TextualProgressReporter
+from src.infrastructure.theme import DEFAULT_THEME, LightTheme, NoColorTheme
 
 
 @pytest.fixture
@@ -48,8 +48,9 @@ class TestTextualProgressReporter:
 
         # Verify it queried for the #status widget
         mock_app.query_one.assert_called_with("#status", ANY)
-        # Verify the update string format
-        mock_widget.update.assert_called_with("[cyan]Loading...[/cyan]")
+        # Verify the update string format uses theme.primary
+        expected = f"[{DEFAULT_THEME.primary}]Loading...[/{DEFAULT_THEME.primary}]"
+        mock_widget.update.assert_called_with(expected)
 
         # Verify internal state
         assert reporter._total is None
@@ -61,7 +62,8 @@ class TestTextualProgressReporter:
 
         reporter.start("Downloading", total=100)
 
-        mock_widget.update.assert_called_with("[cyan]Downloading (0/100)[/cyan]")
+        expected = f"[{DEFAULT_THEME.primary}]Downloading (0/100)[/{DEFAULT_THEME.primary}]"
+        mock_widget.update.assert_called_with(expected)
         assert reporter._total == 100
 
     def test_update_increment(self, reporter_setup):
@@ -71,7 +73,8 @@ class TestTextualProgressReporter:
         reporter.start("Processing", total=50)
         reporter.update(current=10)
 
-        mock_widget.update.assert_called_with("[cyan]Processing (10/50)[/cyan]")
+        expected = f"[{DEFAULT_THEME.primary}]Processing (10/50)[/{DEFAULT_THEME.primary}]"
+        mock_widget.update.assert_called_with(expected)
 
     def test_update_description(self, reporter_setup):
         """Test updating only the description."""
@@ -81,7 +84,8 @@ class TestTextualProgressReporter:
         reporter.update(description="Phase 2")
 
         # Should keep the previous current count (0)
-        mock_widget.update.assert_called_with("[cyan]Phase 2 (0/50)[/cyan]")
+        expected = f"[{DEFAULT_THEME.primary}]Phase 2 (0/50)[/{DEFAULT_THEME.primary}]"
+        mock_widget.update.assert_called_with(expected)
 
     def test_update_indeterminate_logic(self, reporter_setup):
         """Test update logic when total is None."""
@@ -91,7 +95,8 @@ class TestTextualProgressReporter:
         reporter.update(current=5)  # Current implies nothing without total in this logic
 
         # If total is None, it defaults to formatted description regardless of 'current'
-        mock_widget.update.assert_called_with("[cyan]Thinking...[/cyan]")
+        expected = f"[{DEFAULT_THEME.primary}]Thinking...[/{DEFAULT_THEME.primary}]"
+        mock_widget.update.assert_called_with(expected)
 
     def test_update_fallback_message(self, reporter_setup):
         """Test the fallback message when no description exists."""
@@ -103,7 +108,8 @@ class TestTextualProgressReporter:
 
         reporter.update(current=1)
 
-        mock_widget.update.assert_called_with("[cyan]Processing...[/cyan]")
+        expected = f"[{DEFAULT_THEME.primary}]Processing...[/{DEFAULT_THEME.primary}]"
+        mock_widget.update.assert_called_with(expected)
 
     def test_complete(self, reporter_setup):
         """Test completion message and state reset."""
@@ -112,8 +118,9 @@ class TestTextualProgressReporter:
         reporter.start("Working", total=10)
         reporter.complete("Done!")
 
-        # Verify green styling
-        mock_widget.update.assert_called_with("[green]Done![/green]")
+        # Verify theme.success styling
+        expected = f"[{DEFAULT_THEME.success}]Done![/{DEFAULT_THEME.success}]"
+        mock_widget.update.assert_called_with(expected)
 
         # Verify state reset
         assert reporter._total is None
@@ -127,8 +134,9 @@ class TestTextualProgressReporter:
         reporter.start("Working", total=10)
         reporter.error("Connection Failed")
 
-        # Verify red styling
-        mock_widget.update.assert_called_with("[red]Error: Connection Failed[/red]")
+        # Verify theme.error styling
+        expected = f"[{DEFAULT_THEME.error}]Error: Connection Failed[/{DEFAULT_THEME.error}]"
+        mock_widget.update.assert_called_with(expected)
 
         # Verify state reset
         assert reporter._total is None
@@ -149,22 +157,64 @@ class TestTextualProgressReporter:
         except Exception as e:
             pytest.fail(f"Reporter raised exception despite try/except block: {e}")
 
-# todo
-    # def test_import_handling(self):
-    #     """
-    #     Test specifically what happens if textual cannot be imported at all.
-    #     The _update_status method calls 'from textual...'.
-    #     """
-    #     # We assume the app is passed, but the import inside _update_status fails
-    #     mock_app = MagicMock()
-    #     reporter = TextualProgressReporter(mock_app)
-    #
-    #     # Simulate ImportError when importing textual.widgets
-    #     with patch.dict(sys.modules, {'textual.widgets': None}):
-    #         # We rely on the implementation detail that it tries to import inside the method
-    #         with patch('builtins.__import__', side_effect=ImportError):
-    #             # Should catch the ImportError via the broad Exception clause in _update_status
-    #             reporter.start("Test")
-    #
-    #     # Verification: execution continued without crashing
-    #     assert reporter._current_description == "Test"
+class TestTextualProgressReporterTheme:
+    """Tests for theme injection in TextualProgressReporter."""
+
+    @pytest.fixture
+    def themed_reporter_setup(self, mock_textual_env):
+        """Creates a reporter with custom theme."""
+        mock_app = MagicMock()
+        mock_widget = MagicMock()
+        mock_app.query_one.return_value = mock_widget
+
+        light_theme = LightTheme()
+        reporter = TextualProgressReporter(mock_app, theme=light_theme)
+
+        return reporter, mock_app, mock_widget, light_theme
+
+    def test_uses_custom_theme_for_start(self, themed_reporter_setup):
+        """Test that custom theme colors are used for start."""
+        reporter, _, mock_widget, light_theme = themed_reporter_setup
+        reporter.start("Loading")
+
+        expected = f"[{light_theme.primary}]Loading...[/{light_theme.primary}]"
+        mock_widget.update.assert_called_with(expected)
+
+    def test_uses_custom_theme_for_update(self, themed_reporter_setup):
+        """Test that custom theme colors are used for update."""
+        reporter, _, mock_widget, light_theme = themed_reporter_setup
+        reporter.start("Phase 1", total=10)
+        reporter.update(current=5)
+
+        expected = f"[{light_theme.primary}]Phase 1 (5/10)[/{light_theme.primary}]"
+        mock_widget.update.assert_called_with(expected)
+
+    def test_uses_custom_theme_for_complete(self, themed_reporter_setup):
+        """Test that custom theme colors are used for complete."""
+        reporter, _, mock_widget, light_theme = themed_reporter_setup
+        reporter.complete("Done!")
+
+        expected = f"[{light_theme.success}]Done![/{light_theme.success}]"
+        mock_widget.update.assert_called_with(expected)
+
+    def test_uses_custom_theme_for_error(self, themed_reporter_setup):
+        """Test that custom theme colors are used for error."""
+        reporter, _, mock_widget, light_theme = themed_reporter_setup
+        reporter.error("Failed!")
+
+        expected = f"[{light_theme.error}]Error: Failed![/{light_theme.error}]"
+        mock_widget.update.assert_called_with(expected)
+
+    def test_no_color_theme(self, mock_textual_env):
+        """Test NoColorTheme produces empty strings for colors."""
+        mock_app = MagicMock()
+        mock_widget = MagicMock()
+        mock_app.query_one.return_value = mock_widget
+
+        no_color = NoColorTheme()
+        reporter = TextualProgressReporter(mock_app, theme=no_color)
+        reporter.start("Test")
+
+        # Empty strings for color tags
+        expected = f"[{no_color.primary}]Test...[/{no_color.primary}]"
+        mock_widget.update.assert_called_with(expected)

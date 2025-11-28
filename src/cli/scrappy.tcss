@@ -1,13 +1,23 @@
 /* Scrappy CLI Textual Theme
- * Matches original CLI colors for consistent look and feel
+ * Theme-aligned color variables - must match ScrappyTheme defaults
+ * See src/infrastructure/theme.py for the authoritative theme definitions
  */
 
-/* Color variables matching original CLI */
+/* Background colors */
 $surface: #1e1e1e;
+$surface-alt: #2d2d2d;
+
+/* Text colors */
 $text: #d4d4d4;
 $text-muted: #808080;
-$accent: #00ff00;
-$panel-bg: #2d2d2d;
+
+/* Semantic foreground colors - aligned with ScrappyTheme */
+$primary: #00ffff;    /* cyan - borders, headers, info text, input prompt */
+$accent: #ffcc00;     /* yellow/orange - commands, interactive elements, capture mode */
+$success: #00ff00;    /* green - positive states */
+$warning: #ffcc00;    /* yellow - caution states */
+$error: #ff0000;      /* red - errors */
+$info: #0080ff;       /* blue - informational panels, thinking state */
 
 /* Main screen layout */
 Screen {
@@ -39,11 +49,11 @@ RichLog {
     padding: 1;
 }
 
-/* Input prompt character */
+/* Input prompt character - uses primary (cyan) for normal mode */
 #input_prompt {
     width: 2;
     content-align: center middle;
-    color: $accent;
+    color: $primary;
 }
 
 /* User input field - TextArea for multiline support */
@@ -82,7 +92,7 @@ TextArea > .text-area--cursor {
     height: 0;
     max-height: 30%;
     overflow: hidden;
-    background: $panel-bg;
+    background: $surface-alt;
     padding: 0;
     display: none;
 }
@@ -123,14 +133,14 @@ TextArea > .text-area--cursor {
     color: $text-muted;
 }
 
-/* Capture mode visual feedback - yellow prompt indicates waiting for response */
+/* Capture mode visual feedback - accent (yellow/orange) prompt indicates waiting for response */
 #input_container.capture-mode #input_prompt {
-    color: #ffcc00;
+    color: $accent;
 }
 
 /* Prompt display styling - shows prompts/questions near input */
 #prompt_display {
     width: 100%;
-    color: #ffcc00;
+    color: $accent;
     padding: 0 1;
 }

@@ -57,6 +57,37 @@ clarification:
   confidence_threshold: 0.7      # Below this, always clarify
   high_confidence_bypass: 0.9    # Above this, skip conflicting signal checks
 
+# Theme configuration
+# Controls colors for CLI and TUI output
+theme:
+  # Use a preset theme: "dark" (default) or "light"
+  preset: dark
+
+  # Override individual colors (optional):
+  # primary: cyan          # Borders, headers, labels, info text
+  # accent: yellow         # Commands, keywords, interactive elements
+  # success: green         # Enabled states, completions, positive values
+  # warning: yellow        # Caution states
+  # error: red             # Errors, disabled, negative states
+  # info: blue             # Informational panels, thinking state
+  # text: white            # Normal text
+  # text_muted: bright_black  # Dimmed/secondary text
+  # surface: "#1e1e1e"     # Main background (TUI only)
+  # surface_alt: "#2d2d2d" # Panels, status bar (TUI only)
+
+# Example: One Dark theme
+# theme:
+#   preset: dark
+#   primary: "#61afef"
+#   accent: "#e5c07b"
+#   success: "#98c379"
+#   error: "#e06c75"
+#   info: "#56b6c2"
+#   text: "#abb2bf"
+#   text_muted: "#5c6370"
+#   surface: "#282c34"
+#   surface_alt: "#3e4451"
+
 # You can also specify environment-specific configs:
 # development:
 #   temperature_default: 0.9

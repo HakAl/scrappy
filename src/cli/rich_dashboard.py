@@ -16,6 +16,8 @@ from rich.panel import Panel
 from rich.text import Text
 from io import StringIO
 
+from src.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
+
 
 class RichDashboard:
     """Live dashboard for displaying agent activity.
@@ -32,13 +34,19 @@ class RichDashboard:
     VALID_STATES = {"idle", "thinking", "executing", "scanning"}
     MAX_TERMINAL_LINES = 100
 
-    def __init__(self, console: Optional[Console] = None):
-        """Initialize dashboard with optional custom console.
+    def __init__(
+        self,
+        console: Optional[Console] = None,
+        theme: Optional[ThemeProtocol] = None
+    ):
+        """Initialize dashboard with optional custom console and theme.
 
         Args:
             console: Rich Console instance. Creates default if not provided.
+            theme: Optional theme for styling. Defaults to DEFAULT_THEME.
         """
         self.console = console if console is not None else Console()
+        self._theme = theme or DEFAULT_THEME
         self._state = "idle"
         self._state_message = ""
 
@@ -57,12 +65,12 @@ class RichDashboard:
             "context": "Context",
         }
 
-        # Panel styles based on state
+        # Panel styles based on state (use theme colors)
         self._state_styles = {
             "idle": "dim",
-            "thinking": "yellow",
-            "executing": "green",
-            "scanning": "cyan",
+            "thinking": self._theme.accent,
+            "executing": self._theme.success,
+            "scanning": self._theme.primary,
         }
 
         # Create the layout
@@ -266,7 +274,7 @@ class RichDashboard:
             Panel(
                 self._thought_process_content or "",
                 title=self._panel_titles["thought_process"],
-                border_style="blue",
+                border_style=self._theme.info,
             )
         )
 
@@ -274,7 +282,7 @@ class RichDashboard:
             Panel(
                 self._terminal_content or "",
                 title=self._panel_titles["terminal"],
-                border_style="white",
+                border_style=self._theme.text,
             )
         )
 
@@ -282,7 +290,7 @@ class RichDashboard:
             Panel(
                 self._format_context_content(),
                 title=self._panel_titles["context"],
-                border_style="magenta",
+                border_style=self._theme.accent,
             )
         )
 

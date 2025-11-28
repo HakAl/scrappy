@@ -10,6 +10,7 @@ import time
 from typing import Optional, Callable, TYPE_CHECKING
 
 from src.infrastructure.output_mode import OutputModeContext
+from src.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
 
 if TYPE_CHECKING:
     from ..cli.io_interface import CLIIOProtocol
@@ -33,8 +34,11 @@ class RichProgressReporter:
     the correct reporter.
     """
 
-    def __init__(self):
+    def __init__(self, theme: Optional[ThemeProtocol] = None):
         """Initialize Rich progress reporter.
+
+        Args:
+            theme: Optional theme for color styling. Uses DEFAULT_THEME if not provided.
 
         Raises:
             RuntimeError: If called in TUI mode (must use UnifiedIOProgressReporter)
@@ -48,6 +52,7 @@ class RichProgressReporter:
                 "RichProgressReporter cannot be used in TUI mode. "
                 "Use UnifiedIOProgressReporter or create_progress_reporter() factory instead."
             )
+        self._theme = theme or DEFAULT_THEME
         self._status = None
         self._console = None
 
@@ -64,7 +69,7 @@ class RichProgressReporter:
 
             # Use stderr to avoid interfering with user input
             self._console = Console(stderr=True)
-            self._status = self._console.status(f"[cyan]{description}[/cyan]")
+            self._status = self._console.status(f"[{self._theme.primary}]{description}[/{self._theme.primary}]")
             self._status.start()
 
         except ImportError:
@@ -80,7 +85,7 @@ class RichProgressReporter:
             description: Updated description (None to keep existing)
         """
         if self._status and description is not None:
-            self._status.update(f"[cyan]{description}[/cyan]")
+            self._status.update(f"[{self._theme.primary}]{description}[/{self._theme.primary}]")
 
     def complete(self, message: str = "Complete") -> None:
         """
@@ -94,7 +99,7 @@ class RichProgressReporter:
             self._status = None
             # Print completion message that stays visible
             if self._console:
-                self._console.print(f"[green]{message}[/green]")
+                self._console.print(f"[{self._theme.success}]{message}[/{self._theme.success}]")
 
     def error(self, message: str) -> None:
         """
@@ -108,7 +113,7 @@ class RichProgressReporter:
             self._status = None
             # Print error message that stays visible
             if self._console:
-                self._console.print(f"[red]Error: {message}[/red]")
+                self._console.print(f"[{self._theme.error}]Error: {message}[/{self._theme.error}]")
 
 
 class LiveProgressReporter:
@@ -127,8 +132,11 @@ class LiveProgressReporter:
     the correct reporter.
     """
 
-    def __init__(self):
+    def __init__(self, theme: Optional[ThemeProtocol] = None):
         """Initialize Live progress reporter.
+
+        Args:
+            theme: Optional theme for color styling. Uses DEFAULT_THEME if not provided.
 
         Raises:
             RuntimeError: If called in TUI mode (must use UnifiedIOProgressReporter)
@@ -142,6 +150,7 @@ class LiveProgressReporter:
                 "LiveProgressReporter cannot be used in TUI mode. "
                 "Use UnifiedIOProgressReporter or create_progress_reporter() factory instead."
             )
+        self._theme = theme or DEFAULT_THEME
         self._live = None
         self._console = None
 
@@ -160,7 +169,7 @@ class LiveProgressReporter:
             from rich.text import Text
 
             self._console = Console(stderr=True)
-            renderable = Spinner("dots", text=Text(description, style="cyan"))
+            renderable = Spinner("dots", text=Text(description, style=self._theme.primary))
 
             # Live display updates in-place, doesn't scroll
             # transient=True makes it disappear when stopped
@@ -191,7 +200,7 @@ class LiveProgressReporter:
             from rich.spinner import Spinner
             from rich.text import Text
 
-            renderable = Spinner("dots", text=Text(description, style="cyan"))
+            renderable = Spinner("dots", text=Text(description, style=self._theme.primary))
             self._live.update(renderable)
 
     def complete(self, message: str = "Complete") -> None:
@@ -205,7 +214,7 @@ class LiveProgressReporter:
             from rich.text import Text
 
             # Show completion briefly
-            self._live.update(Text(f"[OK] {message}", style="green"))
+            self._live.update(Text(f"[OK] {message}", style=self._theme.success))
             time.sleep(0.5)
             # Then disappear (transient=True)
             self._live.stop()
@@ -222,7 +231,7 @@ class LiveProgressReporter:
             from rich.text import Text
 
             # Show error longer
-            self._live.update(Text(f"[ERROR] {message}", style="red"))
+            self._live.update(Text(f"[ERROR] {message}", style=self._theme.error))
             time.sleep(1.0)
             # Then disappear
             self._live.stop()
@@ -400,14 +409,16 @@ class UnifiedIOProgressReporter:
     Implements ProgressReporterProtocol.
     """
 
-    def __init__(self, io: "CLIIOProtocol"):
+    def __init__(self, io: "CLIIOProtocol", theme: Optional[ThemeProtocol] = None):
         """
         Initialize progress reporter with IO interface.
 
         Args:
             io: CLIIOProtocol instance for output
+            theme: Optional theme for color styling. Uses DEFAULT_THEME if not provided.
         """
         self._io = io
+        self._theme = theme or DEFAULT_THEME
         self._description: Optional[str] = None
 
     def start(self, description: str, total: Optional[int] = None) -> None:
@@ -420,9 +431,9 @@ class UnifiedIOProgressReporter:
         """
         self._description = description
         if total is not None:
-            self._io.secho(f"{description} (0/{total})", fg="cyan")
+            self._io.secho(f"{description} (0/{total})", fg=self._theme.primary)
         else:
-            self._io.secho(f"{description}...", fg="cyan")
+            self._io.secho(f"{description}...", fg=self._theme.primary)
 
     def update(self, current: Optional[int] = None, description: Optional[str] = None) -> None:
         """
@@ -434,7 +445,7 @@ class UnifiedIOProgressReporter:
         """
         if description:
             self._description = description
-            self._io.secho(f"  {description}", fg="cyan")
+            self._io.secho(f"  {description}", fg=self._theme.primary)
 
     def complete(self, message: str = "Complete") -> None:
         """
@@ -443,7 +454,7 @@ class UnifiedIOProgressReporter:
         Args:
             message: Completion message
         """
-        self._io.secho(f"{message}", fg="green")
+        self._io.secho(f"{message}", fg=self._theme.success)
 
     def error(self, message: str) -> None:
         """
@@ -452,13 +463,14 @@ class UnifiedIOProgressReporter:
         Args:
             message: Error message
         """
-        self._io.secho(f"Error: {message}", fg="red")
+        self._io.secho(f"Error: {message}", fg=self._theme.error)
 
 
 def create_progress_reporter(
     io: Optional["CLIIOProtocol"] = None,
     use_live: bool = False,
     use_spinner: bool = True,
+    theme: Optional[ThemeProtocol] = None,
 ):
     """
     Factory function to create the appropriate progress reporter based on mode.
@@ -474,6 +486,7 @@ def create_progress_reporter(
         io: Optional CLIIOProtocol instance
         use_live: Use Rich Live display (CLI mode only)
         use_spinner: Use Rich Status spinner (CLI mode only)
+        theme: Optional theme for color styling. Uses DEFAULT_THEME if not provided.
 
     Returns:
         Progress reporter appropriate for the current mode
@@ -496,13 +509,13 @@ def create_progress_reporter(
 
     if is_tui_mode(io):
         # TUI mode: always use IO-based reporter
-        return UnifiedIOProgressReporter(io)
+        return UnifiedIOProgressReporter(io, theme=theme)
 
     # CLI mode: select based on options
     if use_live:
-        return LiveProgressReporter()
+        return LiveProgressReporter(theme=theme)
     if use_spinner:
-        return RichProgressReporter()
+        return RichProgressReporter(theme=theme)
 
     # Default: use IO-based reporter (works in both modes)
-    return UnifiedIOProgressReporter(io)
+    return UnifiedIOProgressReporter(io, theme=theme)

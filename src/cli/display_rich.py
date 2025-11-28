@@ -15,19 +15,26 @@ from rich.tree import Tree
 from rich.text import Text
 
 from .unified_io import UnifiedIO
+from src.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
 
 
 # =============================================================================
 # Help Display
 # =============================================================================
 
-def show_help_table(io: UnifiedIO, category: Optional[str] = None) -> None:
+def show_help_table(
+    io: UnifiedIO,
+    category: Optional[str] = None,
+    theme: Optional[ThemeProtocol] = None
+) -> None:
     """Display help information as a Rich Table.
 
     Args:
         io: UnifiedIO instance for output
         category: Optional category filter (e.g., 'provider', 'task')
+        theme: Optional theme for styling. Defaults to DEFAULT_THEME.
     """
+    theme = theme or DEFAULT_THEME
     # Define command categories
     categories = {
         'Chat & Conversation': [
@@ -103,7 +110,8 @@ def show_help_table(io: UnifiedIO, category: Optional[str] = None) -> None:
 def show_status_rich(
     io: UnifiedIO,
     orchestrator,
-    session_start: datetime
+    session_start: datetime,
+    theme: Optional[ThemeProtocol] = None
 ) -> None:
     """Display system status using Rich components.
 
@@ -111,7 +119,9 @@ def show_status_rich(
         io: RichIO instance for output
         orchestrator: The orchestrator instance
         session_start: Session start time
+        theme: Optional theme for styling. Defaults to DEFAULT_THEME.
     """
+    theme = theme or DEFAULT_THEME
     status = orchestrator.status()
 
     # Build status content
@@ -126,24 +136,30 @@ Available: {', '.join(providers)}
 Tasks Completed: {tasks}
 Session Duration: {str(duration).split('.')[0]}"""
 
-    io.panel(content, title="System Status", border_style="cyan")
+    io.panel(content, title="System Status", border_style=theme.primary)
 
 
 # =============================================================================
 # Rate Limits Display
 # =============================================================================
 
-def show_rate_limits_rich(io: UnifiedIO, rate_data: Dict[str, Any]) -> None:
+def show_rate_limits_rich(
+    io: UnifiedIO,
+    rate_data: Dict[str, Any],
+    theme: Optional[ThemeProtocol] = None
+) -> None:
     """Display rate limits with progress bars.
 
     Args:
         io: RichIO instance for output
         rate_data: Rate limit data with provider information
+        theme: Optional theme for styling. Defaults to DEFAULT_THEME.
     """
+    theme = theme or DEFAULT_THEME
     providers = rate_data.get('providers', {})
 
     if not providers:
-        io.secho("No rate limit data available.", fg="yellow")
+        io.secho("No rate limit data available.", fg=theme.warning)
         return
 
     # Build table data
@@ -236,22 +252,28 @@ def show_usage_rich(io: UnifiedIO, report: Dict[str, Any]) -> None:
 # Plan/Task Tree Display
 # =============================================================================
 
-def show_plan_tree(io: UnifiedIO, plan: Dict[str, Any]) -> None:
+def show_plan_tree(
+    io: UnifiedIO,
+    plan: Dict[str, Any],
+    theme: Optional[ThemeProtocol] = None
+) -> None:
     """Display plan and tasks as a Rich Tree structure.
 
     Args:
         io: RichIO instance for output
         plan: Plan dictionary with goal and tasks
+        theme: Optional theme for styling. Defaults to DEFAULT_THEME.
     """
+    theme = theme or DEFAULT_THEME
     goal = plan.get('goal', '')
     tasks = plan.get('tasks', [])
 
     if not goal and not tasks:
-        io.secho("No active plan.", fg="yellow")
+        io.secho("No active plan.", fg=theme.warning)
         return
 
     # Create tree
-    tree_title = f"[bold cyan]{goal or 'Plan'}[/bold cyan]"
+    tree_title = f"[bold {theme.primary}]{goal or 'Plan'}[/bold {theme.primary}]"
     tree = Tree(tree_title)
 
     # Add tasks as branches

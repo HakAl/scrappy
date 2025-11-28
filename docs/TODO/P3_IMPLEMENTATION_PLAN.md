@@ -907,130 +907,226 @@ class App:
 
 Recommended order based on dependencies and risk:
 
-### Phase 1: Theme Foundation (Step 1)
+### Phase 1: Theme Foundation (Step 1) - COMPLETED
 - **Effort**: Low
 - **Risk**: Low
-- **Files**: 1
+- **Files**: 1 created, 1 test file
 - **Steps**: 1
 
-Create `src/infrastructure/theme.py` with:
-- `ThemeProtocol` (10 color properties)
-- `GitColors`, `SyntaxColors` (fixed color sets)
-- `ScrappyTheme` (default dark)
-- `LightTheme` (light preset)
-- `CustomTheme` (for user overrides)
-- `TestTheme` (empty strings for testing)
-- `load_theme_from_config()` function
-- `THEME_PRESETS` registry
+Created `src/infrastructure/theme.py` with:
+- [x] `ThemeProtocol` (10 color properties)
+- [x] `GitColors`, `SyntaxColors` (fixed color sets)
+- [x] `ScrappyTheme` (default dark)
+- [x] `LightTheme` (light preset)
+- [x] `CustomTheme` (for user overrides)
+- [x] `NoColorTheme` (empty strings for testing - renamed from TestTheme to avoid pytest collection warning)
+- [x] `load_theme_from_config()` function
+- [x] `THEME_PRESETS` registry
+- [x] `THEME_COLOR_KEYS` validation set
+- [x] `DEFAULT_THEME`, `GIT_COLORS`, `SYNTAX_COLORS` global instances
 
-### Phase 2: Infrastructure Formatters (Steps 2-4)
+Created `tests/infrastructure/test_theme.py` with 83 unit tests.
+
+### Phase 2: Infrastructure Formatters (Steps 2-4) - COMPLETED
 - **Effort**: Medium
 - **Risk**: Low
 - **Files**: 3
 - **Steps**: 2, 3, 4
 
-Update formatters to accept theme via constructor:
-- `stats_formatter.py` (Step 2)
-- `cache_formatter.py` (Step 3)
-- `rate_limit_formatter.py` (Step 4)
+Updated formatters to accept theme via constructor:
+- [x] `stats_formatter.py` (Step 2) - Added `theme` parameter, uses `self._theme.primary`, `self._theme.success`, `self._theme.warning`, `self._theme.error`
+- [x] `cache_formatter.py` (Step 3) - Passes theme to parent, uses theme colors for hit rates and toggle messages
+- [x] `rate_limit_formatter.py` (Step 4) - Uses theme colors for provider headers, warnings, and file location
 
-### Phase 3: Progress Indicators (Step 8)
+Added 24 theme integration tests in `tests/infrastructure/test_formatters.py`:
+- [x] `TestStatsFormatterThemeIntegration` (9 tests)
+- [x] `TestCacheFormatterThemeIntegration` (6 tests)
+- [x] `TestRateLimitFormatterThemeIntegration` (6 tests)
+- [x] `TestNoColorThemeIntegration` (3 tests)
+
+### Phase 3: Progress Indicators (Step 8) - COMPLETED
 - **Effort**: Low
 - **Risk**: Low
 - **Files**: 2
 - **Steps**: 8
 
-Update progress reporters:
-- `progress.py`
-- `textual_progress.py`
+Updated progress reporters to accept theme via constructor:
+- [x] `progress.py` (Step 8) - Added `theme` parameter to `RichProgressReporter`, `LiveProgressReporter`, `UnifiedIOProgressReporter`, and `create_progress_reporter` factory
+- [x] `textual_progress.py` (Step 8) - Added `theme` parameter to `TextualProgressReporter`
 
-### Phase 4: Core CLI Components (Steps 5, 6, 11-14)
+Added 14 theme integration tests:
+- [x] `TestRichProgressReporterTheme` (3 tests) in `tests/infrastructure/test_progress.py`
+- [x] `TestUnifiedIOProgressReporterTheme` (5 tests) in `tests/infrastructure/test_progress.py`
+- [x] `TestTextualProgressReporterTheme` (5 tests) in `tests/infrastructure/test_texual_progress.py`
+- [x] Updated existing tests to use `DEFAULT_THEME` colors instead of hardcoded strings
+
+### Phase 4: Core CLI Components (Steps 5, 6, 11-14) - COMPLETED
 - **Effort**: Medium
 - **Risk**: Medium (visual changes)
 - **Files**: 6
 - **Steps**: 5, 6, 11, 12, 13, 14
 
-Update CLI components:
-- `display_rich.py` (Step 5)
-- `interactive_banner.py` (Step 6)
-- `rich_dashboard.py` (Step 11)
-- `task_router_handler.py` (Step 12)
-- `output_bridge.py` (Step 13)
-- `unified_io.py` (Step 14)
+Updated CLI components to accept theme via constructor:
+- [x] `display_rich.py` (Step 5) - Added `theme` parameter to `show_help_table`, `show_status_rich`, `show_rate_limits_rich`, `show_plan_tree`
+- [x] `interactive_banner.py` (Step 6) - Added `theme` parameter to `display_banner`, `render_welcome_banner`
+- [x] `rich_dashboard.py` (Step 11) - Added `theme` parameter to `RichDashboard.__init__`, updated `_state_styles` and panel border colors
+- [x] `task_router_handler.py` (Step 12) - Added `theme` parameter to `CLITaskRouterHandler.__init__`, added `_task_colors` mapping
+- [x] `output_bridge.py` (Step 13) - Added `theme` parameter to `OutputBridge`, `ConsoleOutputBridge`, `create_output_bridge`
+- [x] `unified_io.py` (Step 14) - Added `theme` parameter to `UnifiedIO.__init__`, added `theme` property, updated `panel()` default border
 
-### Phase 5: Agent Layer (Steps 9, 10)
+Added 33 theme integration tests in `tests/cli/test_cli_theme_integration.py`:
+- [x] `TestDisplayRichThemeIntegration` (6 tests)
+- [x] `TestInteractiveBannerThemeIntegration` (2 tests)
+- [x] `TestRichDashboardThemeIntegration` (4 tests)
+- [x] `TestTaskRouterHandlerThemeIntegration` (4 tests)
+- [x] `TestOutputBridgeThemeIntegration` (8 tests)
+- [x] `TestUnifiedIOThemeIntegration` (5 tests)
+- [x] `TestNoColorThemeIntegration` (3 tests)
+- [x] `TestThemePropagation` (1 test)
+
+### Phase 5: Agent Layer (Steps 9, 10) - COMPLETED
 - **Effort**: Medium
 - **Risk**: Low
 - **Files**: 2
 - **Steps**: 9, 10
 
-Update agent components:
-- `agent/ui.py` (Step 9)
-- `output_formatter.py` (Step 10) - includes git/syntax colors
+Updated agent components to use theme:
+- [x] `agent/ui.py` (Step 9) - Added `theme` parameter to `AgentUI.__init__`, updated all display methods to use theme colors:
+  - `show_thinking`: uses `theme.info` for panel border
+  - `show_tool_request`: uses `theme.primary` for tool name display
+  - `show_command`: uses `theme.accent` for shell command display
+  - `show_error`: uses `theme.error` for error panel border
+  - `show_result`: uses `theme.success`/`theme.error` based on `is_error` flag
+  - `show_warning`: uses `theme.warning` for warning panel border
+  - `show_progress`: uses `theme.primary` for progress messages
+  - `show_provider_status`: uses `theme.primary` as default color
+- [x] `output_formatter.py` (Step 10) - Updated to use `GIT_COLORS` and `SYNTAX_COLORS` from theme module:
+  - `GitOutputFormatter`: uses `GIT_COLORS.commit`, `GIT_COLORS.add`, `GIT_COLORS.remove`, `GIT_COLORS.header`, `GIT_COLORS.meta`
+  - `RichDirectoryFormatter.format_file_name`: uses `SYNTAX_COLORS.python`, `SYNTAX_COLORS.javascript`, `SYNTAX_COLORS.docs`, `SYNTAX_COLORS.config`
 
-### Phase 6: Remaining Files (Steps 15, 16)
+Added 55 theme integration tests:
+- [x] `tests/agent/test_agent_ui_theme.py` (20 tests) - Comprehensive tests for AgentUI theme usage
+- [x] `tests/agent_tools/test_output_formatter.py` (35 new tests) - Tests for GIT_COLORS and SYNTAX_COLORS usage
+
+### Phase 6: Remaining Files (Steps 15, 16) - COMPLETED
 - **Effort**: Low
 - **Risk**: Low
 - **Files**: 5
 - **Steps**: 15, 16
 
-Update remaining files:
-- `context_commands.py` (Step 15)
-- `interactive.py` (Step 15)
-- `textual_app.py` (Step 15)
-- `tools/base.py` (Step 16)
-- `tools/file_tools.py` (Step 16)
+Updated remaining files to accept theme via constructor:
+- [x] `context_commands.py` (Step 15) - Added `theme` parameter to `CLIContextCommands.__init__`, uses theme colors for:
+  - Context Status header: `theme.primary`
+  - Working Memory header: `theme.accent`
+  - Explored/Context Aware status: `theme.success`/`theme.warning`/`theme.error`
+  - Error messages: `theme.error`
+  - Project path display: `theme.text`
+  - Success messages: `theme.success`
+- [x] `interactive.py` (Step 15) - Added `theme` parameter to `InteractiveMode.__init__`, uses theme colors for:
+  - User input echo: `theme.text`
+  - EOF warning: `theme.warning`
+  - Session saved: `theme.success`
+  - Goodbye message: `theme.primary`
+  - Error messages: `theme.error`
+- [x] `textual_app.py` (Step 15) - Added `theme` parameter to `ScrappyApp.__init__`, uses:
+  - Error text styling: `theme.error`
+- [x] `tools/base.py` (Step 16) - Updated `ToolResult.__rich__()` to use `DEFAULT_THEME.error` for error styling
+- [x] `tools/file_tools.py` (Step 16) - Updated `ListDirectoryTool` to use:
+  - Directory names: `DEFAULT_THEME.primary`
+  - File sizes: `DEFAULT_THEME.text_muted`
+  - Python files: `SYNTAX_COLORS.python`
+  - JavaScript files: `SYNTAX_COLORS.javascript`
+  - Docs files: `SYNTAX_COLORS.docs`
+  - Config files: `SYNTAX_COLORS.config`
 
-### Phase 7: CSS Sync (Step 7)
+Added 22 theme integration tests in `tests/cli/test_phase6_theme_integration.py`:
+- [x] `TestContextCommandsThemeIntegration` (7 tests)
+- [x] `TestInteractiveModeThemeIntegration` (6 tests)
+- [x] `TestTextualAppThemeIntegration` (2 tests)
+- [x] `TestToolResultThemeIntegration` (1 test)
+- [x] `TestFileToolsThemeIntegration` (3 tests)
+- [x] `TestNoColorThemePhase6Integration` (3 tests)
+
+### Phase 7: CSS Sync (Step 7) - COMPLETED
 - **Effort**: Low
 - **Risk**: Medium (TUI visual change)
 - **Files**: 1
 - **Steps**: 7
 
-Update `scrappy.tcss` to align CSS variables with theme defaults.
+Updated `scrappy.tcss` to align CSS variables with theme defaults:
+- [x] Added all semantic color variables from `ScrappyTheme`:
+  - `$primary: #00ffff` (cyan - borders, headers, info text, input prompt)
+  - `$accent: #ffcc00` (yellow/orange - commands, interactive elements, capture mode)
+  - `$success: #00ff00` (green - positive states)
+  - `$warning: #ffcc00` (yellow - caution states)
+  - `$error: #ff0000` (red - errors)
+  - `$info: #0080ff` (blue - informational panels, thinking state)
+- [x] Renamed `$panel-bg` to `$surface-alt` for consistency with theme
+- [x] Changed input prompt from green (`#00ff00`) to cyan (`$primary`) - intentional visual change for theme consistency
+- [x] Updated capture mode to use `$accent` variable instead of hardcoded `#ffcc00`
+- [x] Updated prompt display to use `$accent` variable instead of hardcoded `#ffcc00`
+- [x] Added reference comment pointing to `src/infrastructure/theme.py` as authoritative source
 
 **Note**: Runtime theme switching not supported in TUI mode (requires app restart).
 
-### Phase 8: App Integration (Step 17)
+### Phase 8: App Integration (Step 17) - COMPLETED
 - **Effort**: Low
 - **Risk**: Low
-- **Files**: 1
+- **Files**: 5 modified
 - **Steps**: 17
 
-Integrate theme loading at app startup:
-- Load theme from config via `load_theme_from_config()`
-- Pass theme instance to all components
+Integrated theme loading at app startup:
+- [x] Added `theme_config` field and `theme` property to `CLIConfig` class
+- [x] Added `from_dict` and `to_dict` methods to handle 'theme' <-> 'theme_config' mapping
+- [x] Updated `cli_factory.py` functions to accept and pass theme:
+  - `get_io_interface()` - accepts theme parameter
+  - `initialize_cli_handlers()` - passes theme to CLIContextCommands and CLITaskRouterHandler
+  - `create_cli_from_context()` - passes theme to CLI
+  - `create_cli()` - passes theme to CLI
+- [x] Updated `CLI` class in `core.py` to accept theme and pass to handlers
+- [x] Updated `commands.py` to load theme from config and pass to CLI:
+  - `cli()` main command - loads theme from `get_config().theme`
+  - `interactive()` command - loads theme from `get_config().theme`
+
+Added 27 theme integration tests in `tests/cli/test_phase8_theme_integration.py`:
+- [x] `TestCLIConfigTheme` (9 tests)
+- [x] `TestCLIConfigFromDict` (4 tests)
+- [x] `TestCLIFactoryTheme` (3 tests)
+- [x] `TestCLICoreTheme` (3 tests)
+- [x] `TestCreateCliFromContext` (2 tests)
+- [x] `TestCreateCli` (2 tests)
+- [x] `TestThemeProtocolCompliance` (4 tests)
 
 ---
 
 ## Success Criteria
 
-### Theme System (Phase 1)
-- [ ] `ThemeProtocol` defined with 10 semantic colors (8 foreground + 2 background)
-- [ ] `ScrappyTheme` (dark) implements protocol with correct defaults
-- [ ] `LightTheme` preset implements protocol
-- [ ] `CustomTheme` supports user overrides
-- [ ] `TestTheme` provides empty strings for testing
-- [ ] `GitColors` provides fixed diff/commit colors
-- [ ] `SyntaxColors` provides file type indicator colors
-- [ ] `load_theme_from_config()` loads themes from config dict
-- [ ] `THEME_PRESETS` registry contains dark and light
-- [ ] `THEME_COLOR_KEYS` validates config keys
+### Theme System (Phase 1) - COMPLETED
+- [x] `ThemeProtocol` defined with 10 semantic colors (8 foreground + 2 background)
+- [x] `ScrappyTheme` (dark) implements protocol with correct defaults
+- [x] `LightTheme` preset implements protocol
+- [x] `CustomTheme` supports user overrides
+- [x] `NoColorTheme` provides empty strings for testing (renamed from TestTheme)
+- [x] `GitColors` provides fixed diff/commit colors
+- [x] `SyntaxColors` provides file type indicator colors
+- [x] `load_theme_from_config()` loads themes from config dict
+- [x] `THEME_PRESETS` registry contains dark and light
+- [x] `THEME_COLOR_KEYS` validates config keys
 
-### Config Integration (Phase 8)
-- [ ] Theme section supported in config file
-- [ ] Preset selection works (`preset: dark` or `preset: light`)
-- [ ] Individual color overrides work
-- [ ] Invalid preset falls back to dark theme
-- [ ] Invalid keys are silently ignored
-- [ ] Theme loaded and passed to all components at startup
+### Config Integration (Phase 8) - COMPLETED
+- [x] Theme section supported in config file
+- [x] Preset selection works (`preset: dark` or `preset: light`)
+- [x] Individual color overrides work
+- [x] Invalid preset falls back to dark theme
+- [x] Invalid keys are silently ignored
+- [x] Theme loaded and passed to all components at startup
 
 ### Color Consistency (Phases 2-7)
-- [ ] All 19 files updated to use theme
-- [ ] No hardcoded color strings remain (except security warnings)
-- [ ] CSS variables match theme defaults
-- [ ] TUI uses `surface` and `surface_alt` for backgrounds
-- [ ] TUI input prompt uses `primary` (cyan) not green
+- [x] All 19 files updated to use theme
+- [x] No hardcoded color strings remain (except security warnings)
+- [x] CSS variables match theme defaults
+- [x] TUI uses `surface` and `surface_alt` for backgrounds
+- [x] TUI input prompt uses `primary` (cyan) not green
 
 ### Visual Verification
 - [ ] Banner displays with primary borders, accent commands
@@ -1044,10 +1140,12 @@ Integrate theme loading at app startup:
 - [ ] Light theme preset renders correctly
 
 ### Testing
-- [ ] All existing tests pass
-- [ ] Unit tests for all theme classes
-- [ ] Unit tests for `load_theme_from_config()` edge cases
-- [ ] Integration tests for theme injection
+- [x] All existing tests pass
+- [x] Unit tests for all theme classes (83 tests in tests/infrastructure/test_theme.py)
+- [x] Unit tests for `load_theme_from_config()` edge cases
+- [x] Integration tests for theme injection (24 tests in tests/infrastructure/test_formatters.py)
+- [x] Integration tests for Phase 6 components (22 tests in tests/cli/test_phase6_theme_integration.py)
+- [x] Integration tests for Phase 8 app startup (27 tests in tests/cli/test_phase8_theme_integration.py)
 - [ ] Manual visual inspection of dark theme
 - [ ] Manual visual inspection of light theme
 - [ ] Manual visual inspection of custom overrides

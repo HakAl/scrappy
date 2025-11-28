@@ -4,7 +4,7 @@ Interactive mode module for CLI.
 Handles input processing for the interactive chat.
 """
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from .io_interface import CLIIOProtocol
 from .state_manager import PlanStateManager
@@ -21,6 +21,7 @@ from .logging import CLILogger
 
 if TYPE_CHECKING:
     from ..orchestrator.protocols import Orchestrator
+    from src.infrastructure.theme import ThemeProtocol
 
 
 class InteractiveMode:
@@ -38,7 +39,8 @@ class InteractiveMode:
         smart: CLISmartQuery,
         task_router: CLITaskRouterHandler,
         tasks: CLITaskExecution,
-        logger: CLILogger
+        logger: CLILogger,
+        theme: Optional["ThemeProtocol"] = None,
     ) -> None:
         """
         Initialize InteractiveMode.
@@ -55,7 +57,10 @@ class InteractiveMode:
             task_router: Task router handler for auto-routing.
             tasks: Task execution handler.
             logger: Logger for structured logging.
+            theme: Optional theme for consistent styling.
         """
+        from src.infrastructure.theme import DEFAULT_THEME
+
         self.io = io
         self.orchestrator = orchestrator
         self.session_context = session_context
@@ -67,6 +72,7 @@ class InteractiveMode:
         self.task_router = task_router
         self.tasks = tasks
         self.logger = logger
+        self._theme = theme or DEFAULT_THEME
 
     def _process_input(self, user_input: str) -> bool:
         """
@@ -119,7 +125,7 @@ class InteractiveMode:
         })
 
         # Echo user query
-        io.secho(f"> {user_input}", fg="bright_white")
+        io.secho(f"> {user_input}", fg=self._theme.text)
 
         # Always use auto-routing (task router handles classification and execution)
         result = self.task_router.handle_auto_route(user_input)
@@ -180,7 +186,7 @@ class InteractiveMode:
         io = self.io
 
         io.echo("\n")
-        io.secho("EOF received. Exiting...", fg="yellow")
+        io.secho("EOF received. Exiting...", fg=self._theme.warning)
         self.logger.info("EOF received, exiting interactive mode")
 
         # Auto-save session on exit if enabled
@@ -196,13 +202,13 @@ class InteractiveMode:
             )
 
             if result:
-                io.secho(f"Session saved to: {result}", fg="green")
+                io.secho(f"Session saved to: {result}", fg=self._theme.success)
                 self.logger.info("Session saved", extra={"session_file": str(result)})
             else:
                 self.logger.warning("Session save failed during exit")
 
         self.display.show_usage()
-        io.secho("Goodbye!", fg="cyan", bold=True)
+        io.secho("Goodbye!", fg=self._theme.primary, bold=True)
 
     def _handle_error(self, exception: Exception) -> None:
         """
@@ -231,9 +237,9 @@ class InteractiveMode:
         if isinstance(exception, CLIError):
             # Use severity-appropriate styling
             if exception.severity.value >= 4:  # CRITICAL
-                io.secho(f"\nError: {exception}", fg="red", bold=True)
+                io.secho(f"\nError: {exception}", fg=self._theme.error, bold=True)
             else:
-                io.secho(f"\nError: {exception}", fg="red")
+                io.secho(f"\nError: {exception}", fg=self._theme.error)
 
             # Show suggestion if available
             if exception.suggestion:
@@ -245,7 +251,7 @@ class InteractiveMode:
                 extra=exception.logging_extra()
             )
         elif isinstance(exception, ProviderError):
-            io.secho(f"\nProvider error: {exception}", fg="red")
+            io.secho(f"\nProvider error: {exception}", fg=self._theme.error)
             if exception.suggestion:
                 io.echo(f"Suggestion: {exception.suggestion}")
             self.logger.error(
@@ -257,7 +263,7 @@ class InteractiveMode:
                 }
             )
         else:
-            io.secho(f"\nError: {exception}", fg="red")
+            io.secho(f"\nError: {exception}", fg=self._theme.error)
             self.logger.exception("Unhandled exception in interactive mode")
 
         io.echo("Type /help for available commands.\n")

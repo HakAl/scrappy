@@ -17,6 +17,8 @@ from typing import TYPE_CHECKING, Optional, Protocol, Union, runtime_checkable
 from rich.syntax import Syntax
 from rich.text import Text
 
+from src.infrastructure.theme import DEFAULT_THEME
+
 if TYPE_CHECKING:
     from ...agent_config import AgentConfig
 
@@ -120,7 +122,7 @@ class ToolResult:
         Rich's console automatically calls this when printing.
         """
         if self.error:
-            return Text(f"Error: {self.error}", style="bold red")
+            return Text(f"Error: {self.error}", style=f"bold {DEFAULT_THEME.error}")
 
         # Detect language from metadata
         language = self.metadata.get("language", "text")

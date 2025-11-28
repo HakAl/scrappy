@@ -7,6 +7,8 @@ the status bar widget directly.
 
 from typing import Optional, TYPE_CHECKING
 
+from src.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
+
 if TYPE_CHECKING:
     from src.cli.textual_app import ScrappyApp
 
@@ -18,18 +20,20 @@ class TextualProgressReporter:
     directly instead of using Rich's Live() context manager.
 
     The status bar shows progress updates with appropriate styling:
-    - In-progress: cyan color
-    - Complete: green color
-    - Error: red color
+    - In-progress: theme.primary color
+    - Complete: theme.success color
+    - Error: theme.error color
     """
 
-    def __init__(self, app: "ScrappyApp"):
+    def __init__(self, app: "ScrappyApp", theme: Optional[ThemeProtocol] = None):
         """Initialize the progress reporter.
 
         Args:
             app: The ScrappyApp instance to update
+            theme: Optional theme for color styling. Uses DEFAULT_THEME if not provided.
         """
         self._app = app
+        self._theme = theme or DEFAULT_THEME
         self._current_description: Optional[str] = None
         self._total: Optional[int] = None
         self._current: Optional[int] = None
@@ -46,9 +50,9 @@ class TextualProgressReporter:
         self._current = 0
 
         if total is not None:
-            status_text = f"[cyan]{description} (0/{total})[/cyan]"
+            status_text = f"[{self._theme.primary}]{description} (0/{total})[/{self._theme.primary}]"
         else:
-            status_text = f"[cyan]{description}...[/cyan]"
+            status_text = f"[{self._theme.primary}]{description}...[/{self._theme.primary}]"
 
         self._update_status(status_text)
 
@@ -67,11 +71,11 @@ class TextualProgressReporter:
 
         # Build status text
         if self._total is not None and self._current is not None:
-            status_text = f"[cyan]{self._current_description} ({self._current}/{self._total})[/cyan]"
+            status_text = f"[{self._theme.primary}]{self._current_description} ({self._current}/{self._total})[/{self._theme.primary}]"
         elif self._current_description:
-            status_text = f"[cyan]{self._current_description}...[/cyan]"
+            status_text = f"[{self._theme.primary}]{self._current_description}...[/{self._theme.primary}]"
         else:
-            status_text = "[cyan]Processing...[/cyan]"
+            status_text = f"[{self._theme.primary}]Processing...[/{self._theme.primary}]"
 
         self._update_status(status_text)
 
@@ -81,7 +85,7 @@ class TextualProgressReporter:
         Args:
             message: Completion message
         """
-        status_text = f"[green]{message}[/green]"
+        status_text = f"[{self._theme.success}]{message}[/{self._theme.success}]"
         self._update_status(status_text)
 
         # Reset state
@@ -95,7 +99,7 @@ class TextualProgressReporter:
         Args:
             message: Error message
         """
-        status_text = f"[red]Error: {message}[/red]"
+        status_text = f"[{self._theme.error}]Error: {message}[/{self._theme.error}]"
         self._update_status(status_text)
 
         # Reset state

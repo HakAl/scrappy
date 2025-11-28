@@ -24,6 +24,7 @@ from .utils.session_utils import display_previous_session_detected
 from .utils.cli_factory import initialize_cli_handlers
 from .error_recovery import graceful_degrade
 from .logging import get_logger
+from src.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
 
 
 class CLI:
@@ -38,7 +39,8 @@ class CLI:
         show_provider_status: bool = False,
         io: Optional[CLIIOProtocol] = None,
         orchestrator: Optional[AgentOrchestrator] = None,
-        state_manager: Optional[PlanStateManager] = None
+        state_manager: Optional[PlanStateManager] = None,
+        theme: Optional[ThemeProtocol] = None
     ):
         """
         Initialize CLI with orchestrator and component handlers (dependencies only - NO side effects).
@@ -58,6 +60,7 @@ class CLI:
             io: IO interface for input/output operations. Defaults to RichIO.
             orchestrator: Injectable orchestrator instance (default: creates new AgentOrchestrator)
             state_manager: Injectable state manager (default: creates new PlanStateManager)
+            theme: Theme for styling. Defaults to DEFAULT_THEME.
         """
         # Store config for factory methods and initialization
         self._brain = brain
@@ -65,6 +68,7 @@ class CLI:
         self._context_aware = context_aware
         self._verbose_selection = verbose_selection
         self._show_provider_status = show_provider_status
+        self._theme = theme or DEFAULT_THEME
 
         # Initialize dependencies using factory methods
         self.io = io or self._create_default_io()
@@ -77,8 +81,10 @@ class CLI:
         # Create session context for shared state management
         self.session_context = SessionContext()
 
-        # Initialize component handlers using factory
-        handlers = initialize_cli_handlers(self.orchestrator, self.session_start, self.io)
+        # Initialize component handlers using factory (pass theme)
+        handlers = initialize_cli_handlers(
+            self.orchestrator, self.session_start, self.io, theme=self._theme
+        )
         self.display = handlers['display']
         self.session_mgr = handlers['session_mgr']
         self.codebase = handlers['codebase']
@@ -161,10 +167,11 @@ class CLI:
         """Create default IO interface for CLI (Textual).
 
         CLI always uses Textual, so this creates UnifiedIO with OutputSink.
+        Uses the configured theme for styling.
         """
         from .textual_app import TextualOutputAdapter
         output_adapter = TextualOutputAdapter()
-        return UnifiedIO(output_sink=output_adapter)
+        return UnifiedIO(output_sink=output_adapter, theme=self._theme)
 
     def _create_default_orchestrator(self) -> AgentOrchestrator:
         """Create default orchestrator."""

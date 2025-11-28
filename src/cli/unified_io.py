@@ -33,6 +33,7 @@ from rich.prompt import Confirm
 
 from .protocols import OutputSink
 from src.infrastructure.output_mode import OutputModeContext
+from src.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
 
 
 class ProgressTracker:
@@ -851,14 +852,16 @@ class UnifiedIO:
     def __init__(
         self,
         output_sink: Optional[OutputSink] = None,
-        console: Optional[Console] = None
+        console: Optional[Console] = None,
+        theme: Optional[ThemeProtocol] = None
     ):
-        """Initialize with optional output sink and console.
+        """Initialize with optional output sink, console, and theme.
 
         Args:
             output_sink: Optional OutputSink for routing (Textual mode).
                         If None, uses direct console output (CLI mode).
             console: Optional Rich Console. Defaults to Console().
+            theme: Optional theme for styling. Defaults to DEFAULT_THEME.
 
         Design:
         - If output_sink provided: Routes all output through OutputSink (TUI mode)
@@ -866,6 +869,7 @@ class UnifiedIO:
         """
         self._output_sink = output_sink
         self._console = console or Console()
+        self._theme = theme or DEFAULT_THEME
 
         if output_sink:
             self._strategy: OutputStrategyProtocol = OutputSinkAdapter(output_sink, self._console)
@@ -904,6 +908,15 @@ class UnifiedIO:
             OutputSink instance if in TUI mode, None otherwise.
         """
         return self._output_sink
+
+    @property
+    def theme(self) -> ThemeProtocol:
+        """Get the current theme.
+
+        Returns:
+            Theme instance for styling.
+        """
+        return self._theme
 
     def set_bridge(self, bridge: Any) -> None:
         """Set the ThreadSafeAsyncBridge for modal dialogs (Phase 3).
@@ -1009,10 +1022,17 @@ class UnifiedIO:
         self,
         content: str,
         title: Optional[str] = None,
-        border_style: str = "blue"
+        border_style: Optional[str] = None
     ) -> None:
-        """Display content in a panel with optional title."""
-        self._strategy.output_panel(content, title, border_style)
+        """Display content in a panel with optional title.
+
+        Args:
+            content: Panel content
+            title: Optional title
+            border_style: Border color/style. Defaults to theme.info.
+        """
+        style = border_style or self._theme.info
+        self._strategy.output_panel(content, title, style)
 
     def table(
         self,

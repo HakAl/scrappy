@@ -10,8 +10,10 @@ import json
 
 if TYPE_CHECKING:
     from ..cli.io_interface import CLIIOProtocol
+    from ..infrastructure.theme import ThemeProtocol
 
 from .protocols import AgentUIProtocol
+from ..infrastructure.theme import DEFAULT_THEME
 
 
 class AgentUI:
@@ -22,17 +24,23 @@ class AgentUI:
     agent-specific formatting and Rich enhancements.
 
     Single Responsibility: Agent-specific UI operations
-    Dependencies: CLIIOProtocol (injected)
+    Dependencies: CLIIOProtocol (injected), ThemeProtocol (optional)
     """
 
-    def __init__(self, io: "CLIIOProtocol"):
+    def __init__(
+        self,
+        io: "CLIIOProtocol",
+        theme: Optional["ThemeProtocol"] = None,
+    ):
         """
         Initialize agent UI.
 
         Args:
             io: CLI I/O interface (CLIIOProtocol)
+            theme: Optional theme for color styling. Defaults to DEFAULT_THEME.
         """
         self.io = io
+        self._theme = theme or DEFAULT_THEME
 
     def show_thinking(self, text: str) -> None:
         """Display agent thinking/reasoning."""
@@ -41,9 +49,9 @@ class AgentUI:
 
         # Use Rich panel if available
         if hasattr(self.io, 'panel'):
-            self.io.panel(text, title="Thinking", border_style="blue")
+            self.io.panel(text, title="Thinking", border_style=self._theme.info)
         else:
-            self.io.secho(f"\n[Thinking] {text}", fg="blue")
+            self.io.secho(f"\n[Thinking] {text}", fg=self._theme.info)
 
     def show_tool_request(self, tool_name: str, params: Dict[str, Any]) -> None:
         """Display tool invocation request."""
@@ -58,7 +66,7 @@ class AgentUI:
                 rows.append([key, str_value])
             self.io.table(headers, rows, title="Tool Request")
         else:
-            self.io.secho(f"\nTool: {tool_name}", fg="cyan", bold=True)
+            self.io.secho(f"\nTool: {tool_name}", fg=self._theme.primary, bold=True)
             self.io.echo(f"Parameters: {json.dumps(params, indent=2)}")
 
     def show_command(self, command: str) -> None:
@@ -67,14 +75,14 @@ class AgentUI:
         if hasattr(self.io, 'syntax'):
             self.io.syntax(command, language="shell")
         else:
-            self.io.secho(f"$ {command}", fg="yellow")
+            self.io.secho(f"$ {command}", fg=self._theme.accent)
 
     def show_error(self, message: str) -> None:
         """Display error message."""
         if hasattr(self.io, 'panel'):
-            self.io.panel(message, title="Error", border_style="red")
+            self.io.panel(message, title="Error", border_style=self._theme.error)
         else:
-            self.io.secho(f"\nError: {message}", fg="red")
+            self.io.secho(f"\nError: {message}", fg=self._theme.error)
 
     def show_result(
         self,
@@ -86,7 +94,7 @@ class AgentUI:
         # Truncate very long output for display
         display_result = result[:2000] + "... [truncated]" if len(result) > 2000 else result
 
-        color = "red" if is_error else "green"
+        color = self._theme.error if is_error else self._theme.success
 
         if hasattr(self.io, 'panel'):
             self.io.panel(display_result, title=title, border_style=color)
@@ -96,22 +104,23 @@ class AgentUI:
     def show_warning(self, message: str) -> None:
         """Display warning message."""
         if hasattr(self.io, 'panel'):
-            self.io.panel(message, title="Warning", border_style="yellow")
+            self.io.panel(message, title="Warning", border_style=self._theme.warning)
         else:
-            self.io.secho(f"\nWarning: {message}", fg="yellow")
+            self.io.secho(f"\nWarning: {message}", fg=self._theme.warning)
 
     def show_progress(self, message: str) -> None:
         """Display progress/status message."""
-        self.io.secho(message, fg="cyan")
+        self.io.secho(message, fg=self._theme.primary)
 
     def show_provider_status(
         self,
         provider: str,
         message: str,
-        color: str = "cyan"
+        color: Optional[str] = None
     ) -> None:
         """Display provider-specific status."""
-        self.io.secho(f"[{provider}] {message}", fg=color)
+        fg_color = color if color else self._theme.primary
+        self.io.secho(f"[{provider}] {message}", fg=fg_color)
 
     def show_rule(self, title: Optional[str] = None) -> None:
         """Display horizontal rule separator."""

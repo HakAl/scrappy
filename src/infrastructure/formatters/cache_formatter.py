@@ -4,9 +4,11 @@ Cache statistics display formatter.
 Extracts display formatting logic from CLI cache manager handler.
 """
 
-from typing import Dict, Any, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+
 import click
 
+from src.infrastructure.theme import ThemeProtocol
 from .stats_formatter import StatsFormatter
 
 
@@ -19,15 +21,21 @@ class CacheFormatter(StatsFormatter):
     Args:
         use_color: Whether to include ANSI color codes in output.
             Defaults to True. Inherited from StatsFormatter.
+        theme: Theme instance for color values. Inherited from StatsFormatter.
     """
 
-    def __init__(self, use_color: bool = True):
-        """Initialize formatter with color preference.
+    def __init__(
+        self,
+        use_color: bool = True,
+        theme: Optional[ThemeProtocol] = None,
+    ):
+        """Initialize formatter with color preference and theme.
 
         Args:
             use_color: Whether to use ANSI color codes in output.
+            theme: Theme instance for color values.
         """
-        super().__init__(use_color=use_color)
+        super().__init__(use_color=use_color, theme=theme)
 
     def get_stats_data(
         self,
@@ -120,7 +128,7 @@ class CacheFormatter(StatsFormatter):
             label: Label for the rate (default: "Hit Rate")
 
         Returns:
-            Formatted line with color (green > 50%, yellow <= 50%) if use_color is True
+            Formatted line with color (success > 50%, warning <= 50%) if use_color is True
         """
         if not self._use_color:
             return f"{label}: {rate_str}"
@@ -131,8 +139,8 @@ class CacheFormatter(StatsFormatter):
         except (ValueError, AttributeError):
             rate_value = 0.0
 
-        # Determine color (green if > 50%, yellow otherwise)
-        color = "green" if rate_value > 50 else "yellow"
+        # Determine color (success if > 50%, warning otherwise)
+        color = self._theme.success if rate_value > 50 else self._theme.warning
 
         return f"{label}: {click.style(rate_str, fg=color)}"
 
@@ -151,7 +159,7 @@ class CacheFormatter(StatsFormatter):
         if not self._use_color:
             return message
 
-        color = "green" if new_state else "yellow"
+        color = self._theme.success if new_state else self._theme.warning
         return click.style(message, fg=color)
 
     def format_clear_message(self) -> str:
@@ -163,4 +171,4 @@ class CacheFormatter(StatsFormatter):
         message = "Response cache cleared."
         if not self._use_color:
             return message
-        return click.style(message, fg="green")
+        return click.style(message, fg=self._theme.success)
