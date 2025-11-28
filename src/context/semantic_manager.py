@@ -78,6 +78,8 @@ class SemanticSearchManager:
         self._initializer = initializer
         self._progress_callback: Optional[Callable[[str], None]] = None
         self._is_indexed = False
+        self._file_collector_callback: Optional[Callable[[], Optional['FileCollectorProtocol']]] = None
+        self._cancellation_check: Optional[Callable[[], bool]] = None
 
     @property
     def event_queue(self) -> EventQueueProtocol:
@@ -92,6 +94,22 @@ class SemanticSearchManager:
             initializer: Background initializer to use
         """
         self._initializer = initializer
+
+    def set_file_collector_callback(
+        self,
+        callback: Optional[Callable[[], Optional['FileCollectorProtocol']]]
+    ) -> None:
+        """
+        Set callback to get file collector for auto-indexing.
+
+        When INIT_COMPLETE event is received, this callback will be invoked
+        to get a file collector. If the collector is available, auto-indexing
+        will be triggered.
+
+        Args:
+            callback: Function returning FileCollectorProtocol or None
+        """
+        self._file_collector_callback = callback
 
     def start_background_init(self) -> None:
         """
@@ -143,6 +161,20 @@ class SemanticSearchManager:
 
             # Cache the result
             self._semantic_search = event.data
+
+            # Trigger auto-indexing if file collector callback is set
+            if self._file_collector_callback:
+                logger.info("Triggering auto-indexing...")
+                self._notify_progress("Starting file indexing...")
+                try:
+                    file_collector = self._file_collector_callback()
+                    if file_collector:
+                        self.index_files(file_collector)
+                    else:
+                        logger.debug("File collector callback returned None, skipping auto-indexing")
+                except Exception as e:
+                    logger.warning(f"Auto-indexing failed: {e}")
+                    self._notify_progress(f"Auto-indexing failed: {e}")
 
         elif event.event_type == EventType.INIT_FAILED:
             logger.warning(f"Semantic search initialization failed: {event.error}")
@@ -260,6 +292,12 @@ class SemanticSearchManager:
 
             logger.info("Starting batch collection...")
             for batch in file_collector.collect_files_batched(batch_size=20):
+                # Check for cancellation between batches
+                if self._is_cancelled():
+                    logger.info("Indexing cancelled by user")
+                    self._notify_progress("Indexing cancelled")
+                    return
+
                 batch_count += 1
                 batch_size = len(batch)
                 total_indexed += batch_size
@@ -325,6 +363,27 @@ class SemanticSearchManager:
         """
         self._progress_callback = callback
 
+    def set_cancellation_check(self, check: Optional[Callable[[], bool]]) -> None:
+        """
+        Set callback to check if indexing should be cancelled.
+
+        The callback should return True if indexing should stop.
+        Called between batch operations for cooperative cancellation.
+
+        Args:
+            check: Function returning True if cancelled (or None to clear)
+        """
+        self._cancellation_check = check
+
+    def _is_cancelled(self) -> bool:
+        """Check if indexing has been cancelled."""
+        if self._cancellation_check:
+            try:
+                return self._cancellation_check()
+            except Exception:
+                return False
+        return False
+
     def _notify_progress(self, message: str) -> None:
         """Notify registered callback of progress."""
         if self._progress_callback:
@@ -345,6 +404,13 @@ class NullSemanticSearchManager:
     def event_queue(self) -> EventQueueProtocol:
         """Get a null event queue."""
         return ThreadSafeEventQueue()
+
+    def set_file_collector_callback(
+        self,
+        callback: Optional[Callable[[], Optional['FileCollectorProtocol']]]
+    ) -> None:
+        """No-op."""
+        pass
 
     def start_background_init(self) -> None:
         """No-op."""
@@ -375,5 +441,9 @@ class NullSemanticSearchManager:
         return 0
 
     def set_progress_callback(self, callback: Optional[Callable[[str], None]]) -> None:
+        """No-op."""
+        pass
+
+    def set_cancellation_check(self, check: Optional[Callable[[], bool]]) -> None:
         """No-op."""
         pass

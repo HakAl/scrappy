@@ -4,6 +4,21 @@
 
 ---
 
+## PROJECT STATUS: PRERELEASE
+
+This is a local development project in active prerelease development. There are no external users or published APIs.
+
+**Therefore:**
+- **NO deprecation warnings** - Just remove or change code directly
+- **NO backward compatibility shims** - Delete old code, don't wrap it
+- **NO fallback code paths** - If something is replaced, remove the old version
+- **NO legacy support** - No need to maintain old interfaces
+- **NO migration code** - Just make the change
+
+When refactoring or fixing bugs: delete the old code, write the new code. Done.
+
+---
+
 ## ARCHITECTURAL PRINCIPLES (READ THIS FIRST)
 
 ### You Are an Architect, Not a Code Monkey

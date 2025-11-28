@@ -344,6 +344,116 @@ class TestSemanticSearchManagerCallbacks:
         # Callback is stored (no public way to verify except through behavior)
 
 
+class TestSemanticSearchManagerAutoIndexing:
+    """Tests for auto-indexing flow triggered by INIT_COMPLETE event."""
+
+    @pytest.mark.unit
+    def test_init_complete_triggers_indexing_when_callback_set(self, test_path):
+        """INIT_COMPLETE should trigger indexing if file collector callback exists."""
+        queue = ThreadSafeEventQueue()
+        initializer = MockInitializer()
+
+        manager = SemanticSearchManager(
+            project_path=test_path,
+            initializer=initializer,
+            event_queue=queue,
+        )
+
+        # Set up file collector callback
+        mock_collector = MockFileCollector({"test.py": "print('hello')"})
+        manager.set_file_collector_callback(lambda: mock_collector)
+
+        manager.start_background_init()
+
+        # Simulate INIT_COMPLETE event with a provider
+        provider = MockSearchProvider(indexed=False)
+        event = BackgroundEvent(
+            event_type=EventType.INIT_COMPLETE,
+            source="semantic_search",
+            data=provider,
+        )
+        queue.put(event)
+
+        # Process the event
+        manager.process_events()
+
+        # Verify indexing was triggered - provider should now be indexed
+        assert provider._indexed
+        assert "test.py" in provider._files_indexed
+
+    @pytest.mark.unit
+    def test_init_complete_skips_indexing_when_no_callback(self, test_path):
+        """INIT_COMPLETE should not fail if no file collector callback."""
+        queue = ThreadSafeEventQueue()
+        initializer = MockInitializer()
+
+        manager = SemanticSearchManager(
+            project_path=test_path,
+            initializer=initializer,
+            event_queue=queue,
+        )
+
+        # No file collector callback set
+        manager.start_background_init()
+
+        # Simulate INIT_COMPLETE event
+        provider = MockSearchProvider()
+        event = BackgroundEvent(
+            event_type=EventType.INIT_COMPLETE,
+            source="semantic_search",
+            data=provider,
+        )
+        queue.put(event)
+
+        # Should not raise
+        manager.process_events()
+
+        # Provider should be cached but not indexed (no callback)
+        assert manager.get_search_provider() is provider
+        assert not provider._indexed
+
+    @pytest.mark.unit
+    def test_init_complete_handles_callback_returning_none(self, test_path):
+        """INIT_COMPLETE should handle callback returning None gracefully."""
+        queue = ThreadSafeEventQueue()
+        initializer = MockInitializer()
+
+        manager = SemanticSearchManager(
+            project_path=test_path,
+            initializer=initializer,
+            event_queue=queue,
+        )
+
+        # Set callback that returns None
+        manager.set_file_collector_callback(lambda: None)
+
+        manager.start_background_init()
+
+        # Simulate INIT_COMPLETE event
+        provider = MockSearchProvider()
+        event = BackgroundEvent(
+            event_type=EventType.INIT_COMPLETE,
+            source="semantic_search",
+            data=provider,
+        )
+        queue.put(event)
+
+        # Should not raise
+        manager.process_events()
+
+        # Provider should be cached but not indexed
+        assert manager.get_search_provider() is provider
+        assert not provider._indexed
+
+    @pytest.mark.unit
+    def test_set_file_collector_callback(self, test_path):
+        """Test that file collector callback can be set."""
+        manager = SemanticSearchManager(project_path=test_path)
+        callback = Mock(return_value=MockFileCollector())
+        manager.set_file_collector_callback(callback)
+        # Callback is stored (verified through behavior in other tests)
+
+
 class TestNullSemanticSearchManager:
     """Tests for NullSemanticSearchManager."""
 
@@ -376,3 +486,9 @@ class TestNullSemanticSearchManager:
         """Test that process_events returns 0."""
         manager = NullSemanticSearchManager()
         assert manager.process_events() == 0
+
+    @pytest.mark.unit
+    def test_set_file_collector_callback_is_noop(self):
+        """Test that set_file_collector_callback is a no-op."""
+        manager = NullSemanticSearchManager()
+        manager.set_file_collector_callback(lambda: None)  # Should not raise

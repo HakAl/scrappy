@@ -41,7 +41,7 @@ class SemanticIndexConfig:
     fts_rebuild_threshold: int = 100
 
     # Database settings
-    db_dir_name: str = ".lancedb"
+    db_dir_name: str = ".scrappy/lancedb"
     lock_timeout: int = 300
 
     @classmethod

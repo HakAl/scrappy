@@ -41,9 +41,9 @@ class TestSemanticIndexConfigDefaults:
         assert config.fts_rebuild_threshold == 100
 
     def test_default_db_dir_name(self):
-        """Default db dir name should be .lancedb."""
+        """Default db dir name should be .scrappy/lancedb."""
         config = SemanticIndexConfig()
-        assert config.db_dir_name == ".lancedb"
+        assert config.db_dir_name == ".scrappy/lancedb"
 
     def test_default_lock_timeout(self):
         """Default lock timeout should be 300 seconds."""

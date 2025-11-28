@@ -123,6 +123,13 @@ class TextualInteractiveMode:
         # Create ScrappyApp with InteractiveMode and output adapter
         app = ScrappyApp(interactive_mode, output_adapter)
 
+        # Pass codebase context for semantic search indexing
+        # The orchestrator's context_manager holds the CodebaseContext
+        if hasattr(self.orchestrator, 'context_manager'):
+            context_manager = self.orchestrator.context_manager
+            if hasattr(context_manager, 'context'):
+                app.set_codebase_context(context_manager.context)
+
         # Phase 3: Inject bridge into UnifiedIO for modal dialogs
         # This enables prompt() and confirm() to show modals instead of auto-approving
         self.io.set_bridge(app.bridge)

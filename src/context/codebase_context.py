@@ -22,8 +22,6 @@ from ..infrastructure.paths import ScrappyPathProvider
 from ..infrastructure.threading import (
     EventQueueProtocol,
     ThreadSafeEventQueue,
-    BackgroundEvent,
-    EventType,
 )
 from .semantic_manager import SemanticSearchManager
 from .augmenter import ContextAugmenter
@@ -287,6 +285,12 @@ class CodebaseContext:
         Use process_background_events() periodically from the main thread to
         process completion events.
         """
+        # Set up file collector callback for auto-indexing
+        # This allows SemanticSearchManager to trigger indexing when model is ready
+        self._semantic_manager.set_file_collector_callback(
+            lambda: self._file_collector or self._create_default_file_collector()
+        )
+
         # Delegate to semantic manager
         self._semantic_manager.start_background_init()
 
@@ -306,32 +310,6 @@ class CodebaseContext:
         """
         # Delegate to semantic manager (which owns the event queue)
         return self._semantic_manager.process_events()
-
-    def _handle_semantic_event(self, event: BackgroundEvent) -> None:
-        """
-        Handle semantic search events (runs on main thread via event queue).
-
-        This replaces the old _on_semantic_search_ready callback that was
-        called from a worker thread.
-
-        Args:
-            event: Background event from semantic search initialization
-        """
-        if event.event_type == EventType.INIT_COMPLETE:
-            logger.info("Semantic search model ready (via event), starting auto-indexing...")
-            self._notify_indexing_progress("Semantic search ready, starting indexing...")
-
-            # Cache the result for use
-            self._semantic_search = event.data
-
-            # Trigger auto-indexing
-            logger.info("Calling _index_for_semantic_search()...")
-            self._index_for_semantic_search()
-            logger.info("_index_for_semantic_search() completed")
-
-        elif event.event_type == EventType.INIT_FAILED:
-            logger.warning(f"Semantic search initialization failed: {event.error}")
-            self._notify_indexing_progress(f"Semantic search initialization failed: {event.error}")
 
     def get_semantic_initialization_status(self) -> Optional[str]:
         """
@@ -614,44 +592,6 @@ Be concise and technical. No fluff."""
     def _get_git_history(self) -> dict:
         """Get git history information."""
         return self._git_history_reader.get_history(self.project_path)
-
-    def _on_semantic_search_ready(self, success: bool, result, error) -> None:
-        """
-        DEPRECATED: Callback when semantic search initialization completes.
-
-        This method was called from a worker thread by wait_with_callback().
-        It has been replaced by _handle_semantic_event() which is called
-        on the main thread via the event queue.
-
-        Kept for backwards compatibility but logs a deprecation warning.
-
-        Args:
-            success: True if initialization succeeded
-            result: The initialized semantic search provider (or None)
-            error: Exception if initialization failed (or None)
-        """
-        import warnings
-        warnings.warn(
-            "_on_semantic_search_ready is deprecated. Use event queue pattern instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-
-        logger.info(f"Callback triggered: success={success}, result={result}, error={error}")
-        if success and result:
-            logger.info("Semantic search model ready, starting auto-indexing...")
-            self._notify_indexing_progress("Semantic search ready, starting indexing...")
-
-            # Cache the result for use
-            self._semantic_search = result
-
-            # Trigger auto-indexing
-            logger.info("Calling _index_for_semantic_search()...")
-            self._index_for_semantic_search()
-            logger.info("_index_for_semantic_search() completed")
-        elif error:
-            logger.warning(f"Semantic search initialization failed: {error}")
-            self._notify_indexing_progress(f"Semantic search initialization failed: {error}")
 
     def _index_for_semantic_search(self):
         """

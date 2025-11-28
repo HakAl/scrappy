@@ -905,6 +905,21 @@ class SemanticSearchManagerProtocol(Protocol):
         """
         ...
 
+    def set_file_collector_callback(
+        self,
+        callback  # Optional[Callable[[], Optional['FileCollectorProtocol']]]
+    ) -> None:
+        """
+        Set callback for getting file collector during auto-indexing.
+
+        When INIT_COMPLETE event is received, this callback will be invoked
+        to get a file collector for auto-indexing.
+
+        Args:
+            callback: Function returning FileCollectorProtocol or None
+        """
+        ...
+
 
 @runtime_checkable
 class ContextAugmenterProtocol(Protocol):

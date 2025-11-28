@@ -14,7 +14,7 @@ This document outlines the implementation plan for all Priority 3 (Medium Impact
 
 ---
 
-## Issue 3.1: .lancedb Directory at Project Root
+## Issue 3.1: .lancedb Directory at Project Root -- RESOLVED
 
 ### Problem Summary
 Default `db_dir_name = ".lancedb"` creates database directory at project root instead of `.scrappy/lancedb/`. This causes clutter and inconsistency with other Scrappy data files.
@@ -32,7 +32,7 @@ Default `db_dir_name = ".lancedb"` creates database directory at project root in
 
 **Backward Compatibility**: Existing code that explicitly sets `db_dir_name` will continue to work.
 
-### Implementation Steps
+### Implementation Steps -- COMPLETED -- SEE: docs/TODO/BUGS_IMPLEMENTATION_PLAN.md
 
 #### Step 1: Update Default Configuration
 **File**: `src/context/semantic/config.py`

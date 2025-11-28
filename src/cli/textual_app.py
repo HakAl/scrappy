@@ -27,6 +27,7 @@ from .command_history import CommandHistory, get_default_history_path
 if TYPE_CHECKING:
     from .interactive import InteractiveMode
     from .protocols import StatusComponentProtocol
+    from ..context.codebase_context import CodebaseContext
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +93,35 @@ class RequestInlineInput(Message):
         self.message = message
         self.input_type = input_type
         self.default = default
+
+
+class IndexingProgress(Message):
+    """Message for semantic search indexing progress updates.
+
+    Posted from indexing worker thread to update status bar.
+    Thread-safe via Textual's message queue.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        progress: int = 0,
+        total: int = 0,
+        complete: bool = False
+    ) -> None:
+        """Initialize indexing progress message.
+
+        Args:
+            message: Status message to display
+            progress: Current progress value
+            total: Total items being processed
+            complete: Whether indexing is complete
+        """
+        super().__init__()
+        self.message = message
+        self.progress = progress
+        self.total = total
+        self.complete = complete
 
 
 class ThreadSafeAsyncBridge:
@@ -603,6 +633,20 @@ class ScrappyApp(App):
         self._history = CommandHistory(history_file=get_default_history_path())
         self._history_temp_input: str = ""  # Stores current input when navigating
 
+        # Codebase context for semantic search indexing (set via set_codebase_context)
+        self._codebase_context: Optional["CodebaseContext"] = None
+
+    def set_codebase_context(self, context: "CodebaseContext") -> None:
+        """Set codebase context for semantic search indexing.
+
+        Called by TextualInteractiveMode to wire up the context.
+        Registers a thread-safe progress callback that posts messages to the UI.
+
+        Args:
+            context: The CodebaseContext instance with semantic search manager
+        """
+        self._codebase_context = context
+
     def compose(self) -> ComposeResult:
         """Create child widgets.
 
@@ -656,9 +700,11 @@ class ScrappyApp(App):
 
     def on_unmount(self) -> None:
         """Called when app is about to close."""
+        # Signal output consumer to stop
+        self._should_stop_consumer = True
+
         # Clear TUI mode context
         OutputModeContext.set_tui_mode(False)
-        self._should_stop_consumer = True
 
     def on_click(self, event) -> None:
         """Refocus input when clicking anywhere that's not the input field.
@@ -914,6 +960,27 @@ class ScrappyApp(App):
         # Only update UI if this is the active capture (not queued)
         if self.capture_manager.is_capturing:
             self._update_capture_ui(message)
+
+    def on_indexing_progress(self, message: IndexingProgress) -> None:
+        """Handle indexing progress update from worker thread.
+
+        Runs on main thread - safe to update widgets.
+
+        Args:
+            message: The IndexingProgress message with status info
+        """
+        if message.complete:
+            self.progress_indicator.complete()
+        else:
+            self.progress_indicator.update(
+                progress=message.progress,
+                total=message.total,
+                message=message.message
+            )
+
+        # Refresh status bar to show/hide progress
+        status_bar = self.query_one(StatusBar)
+        status_bar.refresh_display()
 
     def _update_capture_ui(self, request: "RequestInlineInput | InputRequest") -> None:
         """Update UI for capture mode.
