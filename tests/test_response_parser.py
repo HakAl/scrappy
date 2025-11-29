@@ -454,6 +454,37 @@ class TestJSONResponseParserEdgeCases:
         # Should indicate error or default
         assert result.action in ["error", "retry_parse", ""] or result.error
 
+    @pytest.mark.unit
+    def test_parse_accepts_tool_key_as_action(self, parser):
+        """Parser accepts 'tool' key as alternative to 'action' for robustness."""
+        response = '''{
+            "thought": "I am thinking",
+            "tool": "read_file",
+            "parameters": {"path": "test.txt"},
+            "is_complete": false
+        }'''
+
+        result = parser.parse(response)
+
+        assert result.action == "read_file"
+        assert result.thought == "I am thinking"
+        assert result.parameters == {"path": "test.txt"}
+
+    @pytest.mark.unit
+    def test_parse_prefers_action_over_tool(self, parser):
+        """Parser prefers 'action' key when both 'action' and 'tool' are present."""
+        response = '''{
+            "thought": "I am thinking",
+            "action": "write_file",
+            "tool": "read_file",
+            "parameters": {"path": "test.txt"},
+            "is_complete": false
+        }'''
+
+        result = parser.parse(response)
+
+        assert result.action == "write_file"
+
 
 class TestResponseParserInterface:
     """Tests for the parser abstraction interface."""

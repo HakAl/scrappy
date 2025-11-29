@@ -111,7 +111,7 @@ class ScrappyTheme:
     success: str = "#00ff00"
     warning: str = "#ffff00"
     error: str = "#ff0000"
-    info: str = "#0000ff"
+    info: str = "#0077ff"
     text: str = "#ffffff"
     text_muted: str = "#808080"
     # Background
@@ -195,7 +195,7 @@ class CustomTheme:
     success: str = "#00ff00"
     warning: str = "#ffff00"
     error: str = "#ff0000"
-    info: str = "#0000ff"
+    info: str = "#0077ff"
     text: str = "#ffffff"
     text_muted: str = "#808080"
     surface: str = "#1e1e1e"

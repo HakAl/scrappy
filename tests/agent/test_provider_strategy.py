@@ -13,6 +13,7 @@ from src.agent.provider_strategy import (
     create_provider_strategy,
 )
 from src.agent_config import AgentConfig
+from src.orchestrator.model_selection import ModelSelectionType
 
 
 class TestDynamicProviderStrategy:
@@ -27,7 +28,7 @@ class TestDynamicProviderStrategy:
         result = strategy.get_planner()
 
         assert result == "openai"
-        mock_orchestrator.get_recommended_provider.assert_called_once_with('planning')
+        mock_orchestrator.get_recommended_provider.assert_called_once_with(ModelSelectionType.INSTRUCT)
 
     def test_get_executor_delegates_to_orchestrator(self):
         """get_executor should delegate to orchestrator.get_recommended_provider."""
@@ -38,7 +39,33 @@ class TestDynamicProviderStrategy:
         result = strategy.get_executor()
 
         assert result == "anthropic"
-        mock_orchestrator.get_recommended_provider.assert_called_once_with('execution')
+        mock_orchestrator.get_recommended_provider.assert_called_once_with(ModelSelectionType.INSTRUCT)
+
+    def test_get_planner_passes_enum_not_string(self):
+        """REGRESSION: get_planner must pass ModelSelectionType enum, not string."""
+        mock_orchestrator = Mock()
+        mock_orchestrator.get_recommended_provider.return_value = "openai"
+
+        strategy = DynamicProviderStrategy(mock_orchestrator)
+        strategy.get_planner()
+
+        # Verify enum was passed, not string
+        call_args = mock_orchestrator.get_recommended_provider.call_args
+        arg = call_args[0][0]  # First positional argument
+        assert isinstance(arg, ModelSelectionType), f"Expected ModelSelectionType enum, got {type(arg).__name__}: {arg!r}"
+
+    def test_get_executor_passes_enum_not_string(self):
+        """REGRESSION: get_executor must pass ModelSelectionType enum, not string."""
+        mock_orchestrator = Mock()
+        mock_orchestrator.get_recommended_provider.return_value = "anthropic"
+
+        strategy = DynamicProviderStrategy(mock_orchestrator)
+        strategy.get_executor()
+
+        # Verify enum was passed, not string
+        call_args = mock_orchestrator.get_recommended_provider.call_args
+        arg = call_args[0][0]  # First positional argument
+        assert isinstance(arg, ModelSelectionType), f"Expected ModelSelectionType enum, got {type(arg).__name__}: {arg!r}"
 
     def test_supports_dynamic_selection_returns_true(self):
         """DynamicProviderStrategy always supports dynamic selection."""

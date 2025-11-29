@@ -157,7 +157,7 @@ When task is complete:
 {
     "thought": "Task completed successfully",
     "action": "complete",
-    "result": "Summary of what was done",
+    "parameters": {"result": "Summary of what was done"},
     "is_complete": true
 }"""
 

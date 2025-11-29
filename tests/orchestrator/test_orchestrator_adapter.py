@@ -11,7 +11,7 @@ from src.orchestrator_adapter import (
     LLMResponse,
     NullContext,
     ContextProvider,
-    OrchestratorAdapter
+    AgentOrchestratorAdapter
 )
 
 
@@ -126,3 +126,69 @@ class TestNullContext:
         """Test that NullContext returns empty summary."""
         context = NullContext()
         assert context.get_summary() == ""
+
+
+class TestAgentOrchestratorAdapterSelectionType:
+    """Tests for AgentOrchestratorAdapter selection_type handling."""
+
+    @pytest.mark.unit
+    def test_adapter_does_not_pass_none_selection_type(self):
+        """Adapter should not pass selection_type=None, letting orchestrator use its default."""
+        # Create mock orchestrator that tracks calls
+        mock_orch = Mock()
+        mock_response = Mock()
+        mock_response.content = "test response"
+        mock_response.model = "test-model"
+        mock_response.provider = "test-provider"
+        mock_response.tokens_used = 10
+        mock_response.tool_calls = None
+        mock_orch.delegate.return_value = mock_response
+
+        # Create adapter with mock orchestrator
+        adapter = AgentOrchestratorAdapter(mock_orch)
+
+        # Call delegate WITHOUT selection_type (defaults to None)
+        adapter.delegate(prompt="test prompt")
+
+        # Verify orchestrator.delegate was called
+        assert mock_orch.delegate.called
+
+        # Get the kwargs that were passed to orchestrator
+        call_kwargs = mock_orch.delegate.call_args[1]
+
+        # selection_type should NOT be in kwargs (so orchestrator can use its default)
+        assert 'selection_type' not in call_kwargs, (
+            "Adapter should not pass selection_type=None, "
+            "this overrides orchestrator's default value"
+        )
+
+    @pytest.mark.unit
+    def test_adapter_passes_explicit_selection_type(self):
+        """Adapter should pass selection_type when explicitly provided."""
+        from src.orchestrator.model_selection import ModelSelectionType
+
+        # Create mock orchestrator
+        mock_orch = Mock()
+        mock_response = Mock()
+        mock_response.content = "test response"
+        mock_response.model = "test-model"
+        mock_response.provider = "test-provider"
+        mock_response.tokens_used = 10
+        mock_response.tool_calls = None
+        mock_orch.delegate.return_value = mock_response
+
+        # Create adapter
+        adapter = AgentOrchestratorAdapter(mock_orch)
+
+        # Call delegate WITH explicit selection_type
+        adapter.delegate(
+            prompt="test prompt",
+            selection_type=ModelSelectionType.QUALITY
+        )
+
+        # Get the kwargs that were passed to orchestrator
+        call_kwargs = mock_orch.delegate.call_args[1]
+
+        # selection_type SHOULD be in kwargs when explicitly provided
+        assert 'selection_type' in call_kwargs
+        assert call_kwargs['selection_type'] == ModelSelectionType.QUALITY

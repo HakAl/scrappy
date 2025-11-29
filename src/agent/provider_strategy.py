@@ -10,6 +10,7 @@ Single Responsibility: Select LLM providers for agent tasks.
 from typing import Optional, List, TYPE_CHECKING
 
 from ..agent_config import AgentConfig
+from ..orchestrator.model_selection import ModelSelectionType
 from .protocols import ProviderSelectionStrategyProtocol
 
 if TYPE_CHECKING:
@@ -43,7 +44,7 @@ class DynamicProviderStrategy:
     def get_planner(self) -> Optional[str]:
         """Get recommended provider for planning/reasoning tasks."""
         if hasattr(self._orchestrator, 'get_recommended_provider'):
-            provider = self._orchestrator.get_recommended_provider('planning')
+            provider = self._orchestrator.get_recommended_provider(ModelSelectionType.INSTRUCT)
             self._cached_planner = provider
             return provider
         return self._cached_planner
@@ -51,7 +52,7 @@ class DynamicProviderStrategy:
     def get_executor(self) -> Optional[str]:
         """Get recommended provider for execution tasks."""
         if hasattr(self._orchestrator, 'get_recommended_provider'):
-            provider = self._orchestrator.get_recommended_provider('execution')
+            provider = self._orchestrator.get_recommended_provider(ModelSelectionType.INSTRUCT)
             self._cached_executor = provider
             return provider
         return self._cached_executor

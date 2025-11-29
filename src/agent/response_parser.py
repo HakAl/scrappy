@@ -167,9 +167,14 @@ class JSONResponseParser:
         return None
 
     def _try_regex_extraction(self, text: str) -> Optional[ParseResult]:
-        """Extract fields using regex as last resort."""
+        """Extract fields using regex as last resort.
+
+        Accepts both "action" and "tool" keys for robustness.
+        """
         thought_match = re.search(r'"thought"\s*:\s*"([^"]+)"', text)
         action_match = re.search(r'"action"\s*:\s*"([^"]+)"', text)
+        if not action_match:
+            action_match = re.search(r'"tool"\s*:\s*"([^"]+)"', text)
 
         if thought_match and action_match:
             result = ParseResult(
@@ -197,10 +202,14 @@ class JSONResponseParser:
         return None
 
     def _dict_to_result(self, data: dict) -> ParseResult:
-        """Convert parsed dictionary to ParseResult."""
+        """Convert parsed dictionary to ParseResult.
+
+        Accepts both "action" and "tool" keys for robustness since LLMs
+        may use either format regardless of prompt instructions.
+        """
         return ParseResult(
             thought=data.get("thought", "No thought provided"),
-            action=data.get("action", "error"),
+            action=data.get("action") or data.get("tool", "error"),
             parameters=data.get("parameters", {}),
             is_complete=data.get("is_complete", False),
             result_text=data.get("result", "")

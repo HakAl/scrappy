@@ -38,7 +38,7 @@ class TestScrappyTheme:
         assert theme.success == "#00ff00"
         assert theme.warning == "#ffff00"
         assert theme.error == "#ff0000"
-        assert theme.info == "#0000ff"
+        assert theme.info == "#0077ff"
         assert theme.text == "#ffffff"
         assert theme.text_muted == "#808080"
 

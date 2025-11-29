@@ -1,27 +1,4 @@
-## Issues 
-
----
-DO WE NEED THIS FEATURE?
-
-smart query feature error
-eg:
- [Smart Query] Analyzing intent...
-   Primary intent: general (confidence: 0.50)
-
- [Smart Query] Researching...
- Preparing agent tools...
- Selecting AI providers...
- Error: 'str' object has no attribute 'value'
----
-
----
-ENUMS broke /agent + smart -- what else?
- Code Agent - Task: can we update the user dashboard to have all user data?
- ------------------------------------------------------------
- Preparing agent tools...
- Selecting AI providers...
- Error: 'str' object has no attribute 'value'
----
+## Issues
 
 ---
 src/agent/core.py -- _format_codebase_structure -- does this belong here?

@@ -16,6 +16,14 @@ from typing import Protocol, Optional, Any
 from dataclasses import dataclass
 
 
+# Internal kwargs that should NOT be passed to provider APIs
+# These are orchestration metadata, not provider parameters
+INTERNAL_KWARGS = frozenset({
+    'task_type',  # Internal hint for orchestration (e.g., 'planning', 'execution')
+    # Add future internal kwargs here
+})
+
+
 @dataclass(frozen=True)
 class LLMRequest:
     """
@@ -36,9 +44,17 @@ class LLMRequest:
     kwargs: dict = None
 
     def __post_init__(self):
-        """Validate request parameters."""
+        """Validate request parameters and filter internal kwargs."""
         if self.kwargs is None:
             object.__setattr__(self, 'kwargs', {})
+        else:
+            # Filter out internal kwargs that should NOT be passed to provider API
+            filtered_kwargs = {
+                k: v for k, v in self.kwargs.items()
+                if k not in INTERNAL_KWARGS
+            }
+            object.__setattr__(self, 'kwargs', filtered_kwargs)
+
         if not self.prompt or not self.prompt.strip():
             raise ValueError("prompt cannot be empty")
         if not 0.0 <= self.temperature <= 2.0:

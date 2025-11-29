@@ -105,12 +105,23 @@ def tool_format_section(use_json: bool = True) -> str:
     if not use_json:
         return ""
 
-    return """## Tool Format
+    return """## Response Format
 
-To use a tool, respond with:
-```json
-{"tool": "tool_name", "parameters": {"param": "value"}}
-```
+Respond with valid JSON only:
+{
+    "thought": "Your reasoning about the task",
+    "action": "tool_name",
+    "parameters": {"param1": "value1"},
+    "is_complete": false
+}
+
+When task is complete, use the complete tool:
+{
+    "thought": "Task completed successfully",
+    "action": "complete",
+    "parameters": {"result": "Summary of what was done"},
+    "is_complete": true
+}
 
 Use lowercase true/false for booleans (not Python True/False)."""
 

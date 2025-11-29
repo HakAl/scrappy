@@ -106,17 +106,22 @@ class AgentOrchestratorAdapter:
         # Support both 'provider' and 'provider_name' for compatibility
         actual_provider = provider_name if provider_name is not None else provider
 
-        # Pass to orchestrator with new signature
-        response = self._orch.delegate(
-            provider_name=actual_provider,
-            prompt=prompt,
-            system_prompt=system_prompt,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            use_context=use_context,
-            selection_type=selection_type,
+        # Build kwargs for orchestrator - only pass selection_type if not None
+        # This allows orchestrator to use its default value
+        orch_kwargs = {
+            'provider_name': actual_provider,
+            'prompt': prompt,
+            'system_prompt': system_prompt,
+            'max_tokens': max_tokens,
+            'temperature': temperature,
+            'use_context': use_context,
             **kwargs
-        )
+        }
+        if selection_type is not None:
+            orch_kwargs['selection_type'] = selection_type
+
+        # Pass to orchestrator with new signature
+        response = self._orch.delegate(**orch_kwargs)
 
         # Wrap in our LLMResponse if needed
         if isinstance(response, LLMResponse):

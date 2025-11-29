@@ -458,7 +458,7 @@ class AgentOrchestrator:
         if provider_name is None:
             provider_name = self.get_recommended_provider(selection_type)
             if provider_name is None:
-                available = list(self.providers.list_providers())
+                available = list(self.providers.list_available())
                 raise ProviderNotFoundError(
                     provider_name="<auto-select>",
                     available_providers=available
