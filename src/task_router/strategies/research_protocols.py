@@ -12,39 +12,6 @@ from ..classifier import ClassifiedTask
 from .research_subtype import ResearchSubtype
 
 
-class PromptBuilderProtocol(Protocol):
-    """Defines the contract for building prompts for research tasks."""
-
-    def build_system_prompt(self, has_tools: bool) -> str:
-        """
-        Build the system prompt for the research assistant.
-
-        Args:
-            has_tools: Whether tools are available to the assistant
-
-        Returns:
-            System prompt string
-        """
-        ...
-
-    def build_research_prompt(
-        self,
-        task: ClassifiedTask,
-        context_summary: Optional[str] = None
-    ) -> str:
-        """
-        Build the user-facing research prompt.
-
-        Args:
-            task: The classified task to build prompt for
-            context_summary: Optional project context summary
-
-        Returns:
-            Research prompt string
-        """
-        ...
-
-
 class ToolBundleProtocol(Protocol):
     """Defines the contract for tool management and execution."""
 

@@ -165,6 +165,66 @@ class TestResearchSubclassifierContext:
         assert result == ResearchSubtype.GENERAL
 
 
+class TestResearchSubclassifierReportedBugs:
+    """Tests for specific bug reports from PROMPT_REFINEMENT.md."""
+
+    def test_add_rag_to_this_codebase_is_codebase(self):
+        """
+        Regression test for reported bug: 'this codebase' should route to CODEBASE.
+
+        Query: "how would we add rag to this codebase?"
+        Expected: CODEBASE (contains 'this codebase')
+        Reported: Was hitting GENERAL flow
+        """
+        classifier = ResearchSubclassifier()
+        result = classifier.classify("how would we add rag to this codebase?")
+        assert result == ResearchSubtype.CODEBASE
+
+    def test_add_feature_to_this_codebase_variations(self):
+        """Test various 'add X to this codebase' patterns."""
+        classifier = ResearchSubclassifier()
+
+        queries = [
+            "how would we add rag to this codebase?",
+            "how can we add authentication to this codebase?",
+            "how do I add logging to this codebase?",
+            "what's the best way to add caching to this codebase?",
+        ]
+
+        for query in queries:
+            result = classifier.classify(query)
+            assert result == ResearchSubtype.CODEBASE, f"Failed for: {query}"
+
+    def test_this_codebase_pattern_matches(self):
+        """Verify 'this codebase' pattern matches correctly."""
+        classifier = ResearchSubclassifier()
+
+        # Direct pattern test - these all contain 'this codebase'
+        queries = [
+            "explain this codebase",
+            "what does this codebase do?",
+            "how is this codebase structured?",
+            "analyze this codebase",
+        ]
+
+        for query in queries:
+            result = classifier.classify(query)
+            assert result == ResearchSubtype.CODEBASE, f"Failed for: {query}"
+
+    def test_scores_for_reported_bug_query(self):
+        """Verify scores are computed correctly for the reported bug query."""
+        classifier = ResearchSubclassifier()
+        query = "how would we add rag to this codebase?"
+
+        codebase_score = classifier._score_codebase_indicators(query)
+        general_score = classifier._score_general_indicators(query)
+
+        # 'this codebase' should match pattern 0
+        assert codebase_score >= 1, f"Expected codebase_score >= 1, got {codebase_score}"
+        # No general patterns should match
+        assert general_score == 0, f"Expected general_score == 0, got {general_score}"
+
+
 class TestResearchSubclassifierEdgeCases:
     """Tests for edge cases and ambiguous queries."""
 

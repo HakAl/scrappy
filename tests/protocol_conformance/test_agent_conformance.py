@@ -3,7 +3,6 @@
 Tests that agent component implementations correctly conform to their protocols:
 - ResponseParserProtocol
 - ToolRegistryProtocol
-- PromptBuilderProtocol
 """
 
 import pytest
@@ -16,7 +15,6 @@ from tests.protocol_conformance.conftest import (
 from src.agent.protocols import (
     ResponseParserProtocol,
     ToolRegistryProtocol,
-    PromptBuilderProtocol,
 )
 
 
@@ -275,17 +273,3 @@ class TestToolRegistryBehavior:
         assert registry.get("unregister_test") is None
 
 
-class TestPromptBuilderConformance:
-    """Tests for PromptBuilder implementations."""
-
-    def test_protocol_has_build(self):
-        """PromptBuilderProtocol should define build method."""
-        assert_has_method(PromptBuilderProtocol, 'build')
-
-    def test_protocol_has_add_context(self):
-        """PromptBuilderProtocol should define add_context method."""
-        assert_has_method(PromptBuilderProtocol, 'add_context')
-
-    def test_protocol_has_clear_context(self):
-        """PromptBuilderProtocol should define clear_context method."""
-        assert_has_method(PromptBuilderProtocol, 'clear_context')

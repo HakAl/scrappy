@@ -1,6 +1,8 @@
 # Contributing to LLM Team
 
-First off, thank you for considering contributing! We're excited to have you. This project is built by the community, and we welcome contributions of all sizes, from fixing typos to implementing major new features.
+First off, thank you for considering contributing! We're excited to have you. 
+This project is built by the community, and we welcome contributions of all sizes. 
+From creating issues, to fixing typos, to implementing major new features.
 
 This document provides a set of guidelines to help you contribute effectively.
 
@@ -25,9 +27,12 @@ This document provides a set of guidelines to help you contribute effectively.
   - [Writing Tests](#writing-tests)
   - [Test Commands](#test-commands)
   - [A Note on Coverage](#a-note-on-coverage)
-- [Code of Conduct](#code-of-conduct)
 
 ## How to Contribute
+
+### TODOs
+
+I've been deving Scrappy locally, so there aren't Github Issues, there are TODOs. We should use Github issues now that the project is public.
 
 ### Reporting Bugs
 
@@ -36,6 +41,7 @@ If you find a bug, please open an issue on our GitHub repository. A great bug re
 - A step-by-step description of how to reproduce the bug.
 - The expected behavior and what happened instead.
 - Your operating system, Python version, and any other relevant environment details.
+- Images may help for UX issues.
 
 ### Suggesting Enhancements
 

@@ -18,7 +18,6 @@ from .response_parser import JSONResponseParser, ParseResult
 from .protocols import (
     AuditLoggerProtocol,
     ResponseParserProtocol,
-    PromptBuilderProtocol,
     ToolRegistryProtocol,
     ToolContextProtocol,
     CheckpointManagerProtocol,
@@ -48,7 +47,6 @@ __all__ = [
     # Protocols
     'AuditLoggerProtocol',
     'ResponseParserProtocol',
-    'PromptBuilderProtocol',
     'ToolRegistryProtocol',
     'ToolContextProtocol',
     'CheckpointManagerProtocol',

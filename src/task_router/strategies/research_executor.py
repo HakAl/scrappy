@@ -10,19 +10,23 @@ from ..classifier import ClassifiedTask, TaskType
 from .base import ExecutionResult, ProviderAwareStrategy, OrchestratorLike
 from .research_protocols import (
     PathResolverProtocol,
-    PromptBuilderProtocol,
     ToolBundleProtocol,
     ResponseCleanerProtocol,
     ResearchLoopProtocol,
     ResearchSubclassifierProtocol
 )
 from .path_resolver import PathResolver
-from .prompt_builder import PromptBuilder
 from .tool_bundle import ToolBundle
 from .response_cleaner import ResponseCleaner
 from .research_loop import ResearchLoop
 from .research_subclassifier import ResearchSubclassifier
 from .research_subtype import ResearchSubtype
+from src.prompts import (
+    PromptFactory,
+    PromptFactoryProtocol,
+    ResearchPromptConfig,
+    ResearchSubtype as PromptResearchSubtype
+)
 
 
 class ResearchExecutor(ProviderAwareStrategy):
@@ -53,7 +57,7 @@ class ResearchExecutor(ProviderAwareStrategy):
         project_root: Optional[Path] = None,
         max_tool_iterations: int = 3,
         path_resolver: Optional[PathResolverProtocol] = None,
-        prompt_builder: Optional[PromptBuilderProtocol] = None,
+        prompt_factory: Optional[PromptFactoryProtocol] = None,
         tool_bundle: Optional[ToolBundleProtocol] = None,
         response_cleaner: Optional[ResponseCleanerProtocol] = None,
         research_loop: Optional[ResearchLoopProtocol] = None,
@@ -71,7 +75,7 @@ class ResearchExecutor(ProviderAwareStrategy):
             project_root: Project root directory
             max_tool_iterations: Maximum tool calling iterations
             path_resolver: File path resolver
-            prompt_builder: Prompt builder
+            prompt_factory: Stateless prompt factory
             tool_bundle: Tool bundle for execution
             response_cleaner: Response cleaner
             research_loop: Research iteration loop
@@ -85,7 +89,7 @@ class ResearchExecutor(ProviderAwareStrategy):
         # Inject dependencies or create defaults
         self._path_resolver = path_resolver or self._create_default_path_resolver()
         self._tool_bundle = tool_bundle or self._create_default_tool_bundle()
-        self._prompt_builder = prompt_builder or self._create_default_prompt_builder()
+        self._prompt_factory = prompt_factory or PromptFactory()
         self._response_cleaner = response_cleaner or self._create_default_response_cleaner()
         self._research_loop = research_loop or self._create_default_research_loop()
         self._subclassifier = subclassifier or self._create_default_subclassifier()
@@ -99,13 +103,6 @@ class ResearchExecutor(ProviderAwareStrategy):
         return ToolBundle.create_with_orchestrator(
             orchestrator=self.orchestrator,
             project_root=self.project_root
-        )
-
-    def _create_default_prompt_builder(self) -> PromptBuilderProtocol:
-        """Create default prompt builder."""
-        # Provide tool descriptions from tool bundle
-        return PromptBuilder(
-            tool_descriptions_provider=lambda: self._tool_bundle.get_tool_descriptions()
         )
 
     def _create_default_response_cleaner(self) -> ResponseCleanerProtocol:
@@ -176,14 +173,21 @@ class ResearchExecutor(ProviderAwareStrategy):
         """
         provider_to_use = self._resolve_and_validate_provider(self.preferred_provider)
 
-        # Build system prompt - only mention web tools if available
+        # Build config and prompts - only mention web tools if available
         if self._tool_bundle.has_web_tools():
-            system_prompt = self._build_general_research_system_prompt()
+            config = ResearchPromptConfig(
+                subtype=PromptResearchSubtype.GENERAL,
+                tool_descriptions=self._tool_bundle.get_web_tool_descriptions(),
+                context_summary=context_summary
+            )
+            system_prompt = self._prompt_factory.create_research_system_prompt(config)
+            initial_prompt = self._prompt_factory.create_research_user_prompt(task.original_input, config)
+
             # Run with web tools only via research loop
             # The loop will reject non-web tool calls
             final_response, tool_calls_made, total_tokens = self._research_loop.run(
                 provider=provider_to_use,
-                initial_prompt=self._build_general_research_prompt(task),
+                initial_prompt=initial_prompt,
                 system_prompt=system_prompt,
                 task=task,
                 max_iterations=self.max_tool_iterations,
@@ -191,11 +195,16 @@ class ResearchExecutor(ProviderAwareStrategy):
             )
         else:
             # No tools - direct LLM call
-            # Note: pass provider as positional to match OrchestratorLike protocol
+            config = ResearchPromptConfig(
+                subtype=PromptResearchSubtype.GENERAL,
+                tool_descriptions=None
+            )
+            system_prompt = self._prompt_factory.create_research_system_prompt(config)
+
             response = self.orchestrator.delegate(
                 provider_to_use,
                 task.original_input,
-                system_prompt="You are a helpful assistant. Answer the question directly and concisely."
+                system_prompt=system_prompt
             )
             final_response = response.content if hasattr(response, 'content') else str(response)
             tool_calls_made = []
@@ -235,14 +244,16 @@ class ResearchExecutor(ProviderAwareStrategy):
         # Step 2: Select provider
         provider_to_use = self._resolve_and_validate_provider(self.preferred_provider)
 
-        # Step 3: Build prompts
-        system_prompt = self._prompt_builder.build_system_prompt(
-            has_tools=self._tool_bundle.has_tools()
+        # Step 3: Build config and prompts
+        config = ResearchPromptConfig(
+            subtype=PromptResearchSubtype.CODEBASE,
+            tool_descriptions=self._tool_bundle.get_tool_descriptions() if self._tool_bundle.has_tools() else None,
+            context_summary=context_summary,
+            extracted_files=tuple(task.extracted_files or []),
+            extracted_directories=tuple(task.extracted_directories or [])
         )
-        initial_prompt = self._prompt_builder.build_research_prompt(
-            task=task,
-            context_summary=context_summary
-        )
+        system_prompt = self._prompt_factory.create_research_system_prompt(config)
+        initial_prompt = self._prompt_factory.create_research_user_prompt(task.original_input, config)
 
         # Step 4: Run research loop
         final_response, tool_calls_made, total_tokens = self._research_loop.run(
@@ -270,35 +281,6 @@ class ResearchExecutor(ProviderAwareStrategy):
                 "iterations": len(tool_calls_made) + 1
             }
         )
-
-    def _build_general_research_system_prompt(self) -> str:
-        """Build system prompt for general knowledge research."""
-        web_tool_desc = self._tool_bundle.get_web_tool_descriptions()
-        if web_tool_desc:
-            return f"""You are a helpful research assistant answering general knowledge questions.
-
-You have access to web tools for fetching information:
-{web_tool_desc}
-
-HOW TO USE TOOLS:
-If you need to look up current information, respond with:
-```json
-{{"tool": "tool_name", "parameters": {{"param1": "value1"}}}}
-```
-
-IMPORTANT:
-- Only use web_fetch or web_search tools - no codebase tools are available
-- If the question can be answered from your knowledge, answer directly
-- Use tools only when current/specific information is needed"""
-        else:
-            return "You are a helpful assistant. Answer the question directly and concisely."
-
-    def _build_general_research_prompt(self, task: ClassifiedTask) -> str:
-        """Build prompt for general knowledge research."""
-        return f"""User Question:
-{task.original_input}
-
-Answer the question directly. Use web tools only if you need current information."""
 
     def _get_context_summary(self) -> Optional[str]:
         """Get project context summary if available."""

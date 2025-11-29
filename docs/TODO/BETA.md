@@ -1,6 +1,6 @@
 ## Release Bare Minimum (beta v.1)
 
-## BUGS - docs/TODO/MODEL_SELECTION_REFACTOR.md, docs/TODO/PROMPT_REFINEMENT.md, docs/TODO/NO_OUTPUT.md
+## BUGS - docs/TODO/PROMPT_REFINEMENT.md, docs/TODO/NO_OUTPUT.md
 
 ### Update Docs
 Update all top level docs/ to have current information
@@ -21,7 +21,7 @@ EG: rate-limited, or returns garbage? Users will blame your tool, not OpenAI.
 - Clear error messages: "OpenAI returned 429. Waiting 30s..." vs "Error: Unknown"
 - Offline mode for semantic search (local embeddings only)
 
-### Session Persistence -- works, but one shot commands help screen doesn't match feature set
+### Session Persistence -- works, but one shot commands help text doesn't match feature set
 Users will close the terminal mid-task. Can they resume? 
 Ensure resume feature works well -- what context is restored?
 - Auto-save conversation state to `.scrappy/session.json`

@@ -49,6 +49,9 @@ from .action_executor import ActionExecutor
 from .agent_loop import AgentLoop
 from .provider_strategy import create_provider_strategy
 
+# Import prompt factory
+from src.prompts import PromptFactory, AgentPromptConfig, Platform
+
 # Import protocols
 from .protocols import (
     AgentUIProtocol,
@@ -99,6 +102,7 @@ class CodeAgent:
         # Phase 1 refactoring: extracted components
         provider_strategy: Optional[ProviderSelectionStrategyProtocol] = None,
         agent_loop: Optional[AgentLoopProtocol] = None,
+        prompt_factory: Optional[Any] = None,  # PromptFactoryProtocol
     ):
         """
         Initialize the code agent with dependency injection.
@@ -264,6 +268,9 @@ class CodeAgent:
             tools=self.tools,
         )
 
+        # Prompt factory for stateless prompt generation
+        self._prompt_factory = prompt_factory or PromptFactory()
+
     # Factory methods for default dependencies
 
     def _create_default_io(self):
@@ -321,6 +328,44 @@ class CodeAgent:
             max_output=self.config.max_command_output,
             dangerous_patterns=self.config.dangerous_commands
         )
+
+    def _format_codebase_structure(self) -> Optional[str]:
+        """Format codebase structure for prompt inclusion."""
+        file_index = self.orch.context.file_index
+        if not file_index:
+            return None
+
+        # Extract unique directories for each file type
+        dir_map = {}
+        for lang, files in file_index.items():
+            if not files or lang in ('config', 'docs', 'other', 'web'):
+                continue
+
+            dirs = set()
+            for file_path in files:
+                normalized = file_path.replace('\\', '/')
+                if '/' in normalized:
+                    dir_path = '/'.join(normalized.split('/')[:-1])
+                    dirs.add(dir_path)
+                else:
+                    dirs.add('.')
+
+            if dirs:
+                dir_map[lang] = dirs
+
+        if not dir_map:
+            return None
+
+        # Build concise structure description
+        lines = []
+        for lang, dirs in sorted(dir_map.items()):
+            file_count = len(file_index.get(lang, []))
+            dir_list = ', '.join(sorted(dirs)[:5])
+            if len(dirs) > 5:
+                dir_list += f' (+{len(dirs) - 5} more)'
+            lines.append(f"- {lang}: {dir_list} ({file_count} files)")
+
+        return '\n'.join(lines)
 
     def __getattr__(self, name: str):
         """Dynamic attribute resolution for _tool_* methods.
@@ -702,15 +747,12 @@ class CodeAgent:
         # Build initial context
         self.ui.show_progress("Building context...")
 
-        # System prompt for agent - use SystemPromptBuilder for context-aware construction
+        # System prompt for agent - use PromptFactory for stateless prompt generation
         self.ui.show_progress("Preparing system prompt...")
-        from src.agent.system_prompt_builder import SystemPromptBuilder
 
-        # Create SystemPromptBuilder with tool registry for unified prompt generation
-        prompt_builder = SystemPromptBuilder(
-            context=self.orch.context,
-            tool_registry=self.tool_registry
-        )
+        # Ensure context is explored
+        if not self.orch.context.is_explored():
+            self.orch.context.explore()
 
         # Check if we should use native tool calling
         # Determine this early so we can build the appropriate system prompt
@@ -721,8 +763,18 @@ class CodeAgent:
             if provider_obj and hasattr(provider_obj, 'supports_tool_calling'):
                 use_native_tools = provider_obj.supports_tool_calling and hasattr(self.orch, 'delegate_with_tools')
 
+        # Build config for prompt generation
+        platform = Platform.WINDOWS if self.orch.context.get_platform() == "windows" else Platform.UNIX
+        config = AgentPromptConfig(
+            platform=platform,
+            tool_descriptions=self.tool_registry.generate_descriptions(),
+            use_native_tools=use_native_tools,
+            project_type=self.orch.context.get_project_type(),
+            codebase_structure=self._format_codebase_structure()
+        )
+
         # Build the complete system prompt with task context
-        system_prompt = prompt_builder.build(task=task, use_native_tools=use_native_tools)
+        system_prompt = self._prompt_factory.create_agent_system_prompt(config)
 
         # Initialize conversation state
         state = ConversationState(

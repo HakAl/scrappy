@@ -1,6 +1,6 @@
 # Scrappy: The Free AI Coding Assistant
 
-A powerful, context-aware coding assistant for everyone—students, learners, and developers who can't afford paid AI subscriptions.
+A powerful, context-aware coding assistant for everyone—students, learners, anyone who doesn't want to pay for subscriptions.
 
 > "For Users Without Claude Subscription: Yes, Useful"
 
@@ -8,10 +8,10 @@ This tool combines the power of multiple free-tier LLM APIs to give you **23,000
 
 ### The Mission: AI for Everyone
 
-Paid AI tools like ChatGPT Plus ($20/month) and Claude Pro ($20/month) are fantastic, but their cost creates a barrier for:
-*   **Students** learning to code.
+Paid AI tools like ChatGPT Plus ($20/month) and Claude Pro ($20+/month) are fantastic, but their cost creates a barrier for:
+*   **Students** learning to code. I wish this existed when I was in university, I would have had a lot more free time!
 *   **Developers** in regions where $20 is significant or payments are blocked.
-*   **Anyone** on a tight budget who wants to build and learn.
+*   **Anyone** frugal folk who don't like subscriptions, but like to build and learn.
 
 Scrappy exists to make powerful AI coding assistance accessible to anyone, anywhere.
 
@@ -19,7 +19,7 @@ Scrappy exists to make powerful AI coding assistance accessible to anyone, anywh
 
 ## Quick Start (5 Minutes)
 
-Get up and running with AI-powered coding assistance in your own terminal.
+Get up and running with scrappy in your terminal.
 
 **1. Install the Tool**
 Clone the repository and install the command-line tool.
@@ -69,7 +69,7 @@ You can now ask questions, plan features, or even have the AI write code for you
 **Example 1: Understand Existing Code**
 Ask a question about your project, and get an answer based on your actual code.
 ```
-You: Explain how authentication works in this app.
+> Explain how authentication works in this app.
 
 AI: [Reads your codebase automatically]
 Your app uses JWT tokens stored in localStorage. The main logic is in `src/auth/jwt.js`, where the `createToken` function is called after a successful login in the `src/controllers/userController.js` file...
