@@ -15,11 +15,10 @@ from unittest.mock import MagicMock, patch
 from pathlib import Path
 
 from src.agent import CodeAgent
-from src.platform_utils import (
+from src.platform import (
     normalize_command_paths,
     validate_command_for_platform,
     get_python_fallback,
-    normalize_path_for_shell
 )
 from src.agent_tools.tools.file_tools import WriteFileTool
 from src.agent_tools.tools.base import ToolContext
@@ -190,7 +189,7 @@ class TestCrossPlatformConsistency:
     @pytest.mark.unit
     def test_path_separator_detection(self):
         """Path separator should be detected correctly."""
-        from src.platform_utils import is_windows
+        from src.platform import is_windows
         import os
 
         # Should match the actual platform

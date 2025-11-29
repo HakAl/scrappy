@@ -25,9 +25,9 @@ Detected via marker files in the project directory:
 
 | Platform | Detection | PromptBuilder Support |
 |----------|-----------|----------------------|
-| Windows | `sys.platform == 'win32'` | cmd.exe commands, PowerShell warnings |
-| macOS | `sys.platform == 'darwin'` | Unix commands |
-| Linux/Unix | Other | Unix commands |
+| Windows | `from src.platform import create_platform_detector; detector.is_windows()` | cmd.exe commands, PowerShell warnings |
+| macOS | `detector.is_macos()` | Unix commands |
+| Linux/Unix | `detector.is_unix()` | Unix commands |
 
 ### File Type Categories
 
@@ -107,14 +107,19 @@ prompt = builder.build(task="fix the bug")
 # Includes platform-specific and project-specific guidance
 ```
 
-### Platform Utils
+### Platform Detection and Translation
 
 ```python
-from src.platform.platform_utils import translate_command
+from src.platform import create_platform_detector, create_command_translator
 
-# Translates commands based on platform context
-cmd = translate_command("ls -la", context)
-# On Windows: "dir"
+detector = create_platform_detector()
+translator = create_command_translator()
+
+# Check platform
+if detector.is_windows():
+    # Translate Unix commands to Windows equivalents
+    cmd, was_translated = translator.translate_command("ls -la")
+    # Returns: ("dir", True)
 ```
 
 ### Command Tool

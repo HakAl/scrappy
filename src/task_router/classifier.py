@@ -8,7 +8,8 @@ import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Set, Tuple
 
-from ..platform_utils import is_windows, validate_command_for_platform
+from src.platform.protocols.detection import PlatformDetectorProtocol
+from src.platform import create_platform_detector, create_command_validator
 from .classification_strategy import TaskType
 from .classification_strategies import (
     DirectCommandStrategy,
@@ -50,13 +51,18 @@ class TaskClassifier:
     4. CONVERSATION - Simple Q&A
     """
 
-    def __init__(self, strategies: Optional[List] = None):
+    def __init__(
+        self,
+        strategies: Optional[List] = None,
+        platform_detector: Optional[PlatformDetectorProtocol] = None
+    ):
         """
         Initialize classifier with strategies.
 
         Args:
             strategies: Optional list of custom strategies to use.
                        If None, uses default strategies.
+            platform_detector: Platform detector for OS-specific behavior (optional)
         """
         if strategies is None:
             self.strategies = [
@@ -67,6 +73,10 @@ class TaskClassifier:
             ]
         else:
             self.strategies = strategies
+
+        # Inject platform detector with default if not provided
+        self._platform_detector = platform_detector or create_platform_detector()
+        self._command_validator = create_command_validator()
 
         # Keep backward compatibility by initializing pattern lists
         self._init_patterns()
@@ -328,7 +338,7 @@ class TaskClassifier:
         Blocks potentially dangerous commands and validates platform compatibility.
         """
         # First check platform compatibility
-        is_valid, warning = validate_command_for_platform(command)
+        is_valid, warning = self._command_validator.validate_command_for_platform(command)
         if not is_valid:
             # Command is not valid for this platform
             return False
@@ -348,7 +358,7 @@ class TaskClassifier:
         ]
 
         # Add Windows-specific dangerous patterns
-        if is_windows():
+        if self._platform_detector.is_windows():
             dangerous_patterns.extend([
                 r'\bdel\s+/[fqs].*[/\\]\*',  # del /f /s with wildcards
                 r'\brmdir\s+/s\s+/q\s+[a-zA-Z]:\\',  # rmdir /s /q on drive root

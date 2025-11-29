@@ -8,7 +8,7 @@ All defaults come from agent_tools.constants for consistency.
 from dataclasses import dataclass, field
 from typing import List, Set
 
-from .platform_utils import get_dangerous_commands, get_interactive_commands
+from src.platform import get_dangerous_commands, get_interactive_commands
 from .infrastructure.config import BaseConfig
 from .agent_tools.constants import (
     DEFAULT_MAX_FILE_READ_SIZE,

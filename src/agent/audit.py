@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 
 from ..infrastructure.protocols import PathProviderProtocol
 from ..infrastructure.paths import ScrappyPathProvider
+from src.platform.protocols.detection import PlatformDetectorProtocol
+from src.platform import create_platform_detector
 
 
 class AuditLogger:
@@ -26,7 +28,8 @@ class AuditLogger:
     def __init__(
         self,
         max_result_length: int = 1000,
-        path_provider: Optional[PathProviderProtocol] = None
+        path_provider: Optional[PathProviderProtocol] = None,
+        platform_detector: Optional[PlatformDetectorProtocol] = None
     ):
         """
         Initialize the audit logger.
@@ -34,10 +37,12 @@ class AuditLogger:
         Args:
             max_result_length: Maximum length for result truncation in logs
             path_provider: Path provider for file locations (optional)
+            platform_detector: Platform detector for OS-specific behavior (optional)
         """
         self.log: List[dict] = []
         self.max_result_length = max_result_length
         self._path_provider = path_provider
+        self._platform_detector = platform_detector or create_platform_detector()
         self._save_path: Optional[Path] = None
         self._auto_save: bool = False
         self._crash_handlers_registered: bool = False
@@ -97,8 +102,8 @@ class AuditLogger:
         # Register atexit handler for normal exit
         atexit.register(self._on_exit)
 
-        # Register signal handlers for crashes (only on non-Windows or with care)
-        if sys.platform != 'win32':
+        # Register signal handlers for crashes (platform-specific)
+        if self._platform_detector.is_unix():
             # Unix-specific signals
             signal.signal(signal.SIGTERM, self._signal_handler)
             signal.signal(signal.SIGHUP, self._signal_handler)
@@ -114,7 +119,7 @@ class AuditLogger:
         self._on_exit()
         # Re-raise the signal for proper cleanup
         signal.signal(signum, signal.SIG_DFL)
-        if sys.platform == 'win32':
+        if self._platform_detector.is_windows():
             sys.exit(1)
         else:
             import os

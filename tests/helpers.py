@@ -7,6 +7,7 @@ Provides mock adapters and utilities for testing the orchestrator and agent.
 from typing import List, Optional, Dict, Any
 from unittest.mock import Mock
 from pathlib import Path
+import tempfile
 
 from src.providers.base import LLMResponse
 from src.orchestrator_adapter import NullContext, ContextProvider
@@ -29,7 +30,7 @@ class TestPathProvider:
         Args:
             base_dir: Base directory for all paths (defaults to in-memory)
         """
-        self._base_dir = base_dir or Path("/tmp/test")
+        self._base_dir = base_dir or Path(tempfile.gettempdir()) / "test"
         self._data_dir = self._base_dir / ".scrappy"
 
     def data_dir(self) -> Path:

@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from typing import Optional, List
 
 from .base import CONTROL_CHARS_PATTERN, NEWLINE_PATTERN
+from src.platform.protocols.detection import PlatformDetectorProtocol
+from src.platform import create_platform_detector
 
 
 @dataclass
@@ -51,7 +53,8 @@ def validate_path(
     path_input: str,
     check_exists: bool = False,
     must_be_dir: bool = False,
-    must_be_file: bool = False
+    must_be_file: bool = False,
+    platform_detector: Optional[PlatformDetectorProtocol] = None
 ) -> PathValidationResult:
     """Validate a file or directory path and normalize it.
 
@@ -96,6 +99,10 @@ def validate_path(
         >>> result = validate_path("/tmp/mydir", must_be_dir=True)
         >>> result.is_valid  # True if /tmp/mydir exists and is a directory
     """
+    # Initialize platform detector with default if not provided
+    if platform_detector is None:
+        platform_detector = create_platform_detector()
+
     # Check for conflicting options
     if must_be_dir and must_be_file:
         raise ValueError("Path cannot be both a directory and a file")
@@ -184,7 +191,7 @@ def validate_path(
         normalized = normalized.replace('//', '/')
 
     # Convert back to OS-appropriate separators
-    if os.name == 'nt':
+    if platform_detector.is_windows():
         # Keep original Windows paths but normalize doubles
         final_path = path
         while '\\\\' in final_path:

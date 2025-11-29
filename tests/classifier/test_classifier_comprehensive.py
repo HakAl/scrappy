@@ -547,11 +547,15 @@ class TestCommandSafety:
 
     @pytest.fixture(autouse=True)
     def reset_platform_orchestrator(self):
-        """Reset platform orchestrator before and after each test to ensure mocks work."""
-        from src.platform_utils import _reset_orchestrator
-        _reset_orchestrator()
+        """Reset platform caches before and after each test to ensure mocks work."""
+        from src.platform import _cached_validator, _cached_translator
+        # Clear cached instances
+        import src.platform
+        src.platform._cached_validator = None
+        src.platform._cached_translator = None
         yield
-        _reset_orchestrator()
+        src.platform._cached_validator = None
+        src.platform._cached_translator = None
 
     @pytest.mark.unit
     @patch('platform.system', return_value='Linux')

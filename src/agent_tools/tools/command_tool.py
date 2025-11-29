@@ -15,40 +15,15 @@ from .base import ToolBase, ToolParameter, ToolResult, ToolContext
 from ..constants import DEFAULT_COMMAND_TIMEOUT, DEFAULT_MAX_COMMAND_OUTPUT
 
 # Import platform utilities
-try:
-    from ...platform_utils import (
-        is_windows,
-        normalize_command_paths,
-        normalize_npm_command_for_windows,
-        intercept_spring_initializr_download,
-        fix_spring_initializr_command,
-        validate_command_for_platform,
-        get_python_fallback,
-    )
-    HAS_PLATFORM_UTILS = True
-except ImportError:
-    HAS_PLATFORM_UTILS = False
-
-    def is_windows():
-        return os.name == 'nt'
-
-    def normalize_command_paths(cmd):
-        return cmd, False, ""
-
-    def normalize_npm_command_for_windows(cmd):
-        return cmd, False, ""
-
-    def intercept_spring_initializr_download(cmd, root):
-        return None
-
-    def fix_spring_initializr_command(cmd):
-        return cmd, False, ""
-
-    def validate_command_for_platform(cmd):
-        return True, ""
-
-    def get_python_fallback(cmd, root):
-        return None
+from src.platform import (
+    is_windows,
+    normalize_command_paths,
+    normalize_npm_command_for_windows,
+    intercept_spring_initializr_download,
+    fix_spring_initializr_command,
+    validate_command_for_platform,
+    get_python_fallback,
+)
 
 
 # Removed safe_print() - output should go through injected IO protocol, not print()
@@ -75,15 +50,10 @@ def create_shell_executor(
     """
     from ..components import (
         CommandSecurity,
-        WindowsSanitizer,
-        UnixSanitizer,
         CommandAdvisor,
         SubprocessRunner,
         OutputParser,
     )
-
-    # Detect platform and create appropriate sanitizer
-    sanitizer = WindowsSanitizer() if is_windows() else UnixSanitizer()
 
     # Create security validator with custom patterns if provided (None = use defaults)
     security = CommandSecurity(dangerous_patterns=dangerous_commands)
@@ -99,7 +69,6 @@ def create_shell_executor(
         max_output=max_command_output,
         dangerous_patterns=dangerous_commands,
         security=security,
-        sanitizer=sanitizer,
         advisor=advisor,
         runner=runner,
         parser=parser,
@@ -121,7 +90,6 @@ class ShellCommandExecutor:
         max_output: int = 10000,
         dangerous_patterns: Optional[list[str]] = None,
         security: Optional["CommandSecurityProtocol"] = None,
-        sanitizer: Optional["PlatformSanitizerProtocol"] = None,
         advisor: Optional["CommandAdvisorProtocol"] = None,
         runner: Optional["SubprocessRunnerProtocol"] = None,
         parser: Optional["OutputParserProtocol"] = None,
@@ -135,7 +103,6 @@ class ShellCommandExecutor:
             max_output: Maximum output size to capture in bytes
             dangerous_patterns: List of dangerous command patterns to block
             security: Command security validator (default: creates CommandSecurity)
-            sanitizer: Platform-specific sanitizer (default: auto-detects platform)
             advisor: Command advisor (default: creates CommandAdvisor)
             runner: Subprocess runner (default: creates SubprocessRunner)
             parser: Output parser (default: creates OutputParser)
@@ -143,15 +110,12 @@ class ShellCommandExecutor:
         """
         from ..protocols import (
             CommandSecurityProtocol,
-            PlatformSanitizerProtocol,
             CommandAdvisorProtocol,
             SubprocessRunnerProtocol,
             OutputParserProtocol,
         )
         from ..components import (
             CommandSecurity,
-            WindowsSanitizer,
-            UnixSanitizer,
             CommandAdvisor,
             SubprocessRunner,
             OutputParser,
@@ -164,9 +128,6 @@ class ShellCommandExecutor:
         # Inject dependencies with defaults
         self._security = security or CommandSecurity(
             dangerous_patterns=dangerous_patterns or []
-        )
-        self._sanitizer = sanitizer or (
-            WindowsSanitizer() if is_windows() else UnixSanitizer()
         )
         self._advisor = advisor or CommandAdvisor()
         self._runner = runner or SubprocessRunner(io=io)
@@ -215,8 +176,10 @@ class ShellCommandExecutor:
                     f"3) application.properties"
                 )
 
-        # 3. Platform sanitization
-        command = self._sanitizer.sanitize(command)
+        # 3. Platform sanitization (using platform_utils functions directly)
+        command, _, _ = fix_spring_initializr_command(command)
+        command, _, _ = normalize_npm_command_for_windows(command)
+        command, _, _ = normalize_command_paths(command)
 
         # 4. Platform validation
         is_valid, warning = validate_command_for_platform(command)

@@ -9,14 +9,11 @@ src.agent_tools.protocols.
 from .command_security import CommandSecurity
 from .output_parser import OutputParser
 from .command_advisor import CommandAdvisor
-from .platform_sanitizer import WindowsSanitizer, UnixSanitizer
 from .subprocess_runner import SubprocessRunner
 
 __all__ = [
     'CommandSecurity',
     'OutputParser',
     'CommandAdvisor',
-    'WindowsSanitizer',
-    'UnixSanitizer',
     'SubprocessRunner',
 ]

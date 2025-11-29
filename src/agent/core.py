@@ -87,7 +87,6 @@ class CodeAgent:
         tool_registry: Optional[ToolRegistryProtocol] = None,
         io: Optional[Any] = None,  # CLIIOProtocol - Any to avoid circular import
         file_system: Optional[Any] = None,  # FileSystemProtocol
-        platform_utils: Optional[Any] = None,  # PlatformUtilsProtocol
         audit_logger: Optional[Any] = None,  # AuditLoggerProtocol
         response_parser: Optional[Any] = None,  # ResponseParserProtocol
         tool_context: Optional[Any] = None,  # ToolContextProtocol
@@ -115,7 +114,6 @@ class CodeAgent:
             tool_registry: ToolRegistry instance (creates default if not provided)
             io: IO interface for output (defaults to RichIO)
             file_system: FileSystemProtocol implementation (defaults to RealFileSystem)
-            platform_utils: PlatformUtilsProtocol implementation (defaults to RealPlatformUtils)
             audit_logger: AuditLoggerProtocol implementation (defaults to AuditLogger)
             response_parser: ResponseParserProtocol implementation (defaults to UnifiedResponseParser)
             tool_context: ToolContextProtocol implementation (created if not provided)
@@ -135,9 +133,6 @@ class CodeAgent:
 
         # File system
         self._file_system = file_system or self._create_default_file_system()
-
-        # Platform utilities
-        self._platform_utils = platform_utils or self._create_default_platform_utils()
 
         # Path provider (store for use in audit logger)
         self._path_provider = path_provider
@@ -287,11 +282,6 @@ class CodeAgent:
         """Create default file system."""
         from ..infrastructure.file_system import RealFileSystem
         return RealFileSystem()
-
-    def _create_default_platform_utils(self):
-        """Create default platform utilities."""
-        from .platform_adapter import RealPlatformUtils
-        return RealPlatformUtils()
 
     def _create_default_audit_logger(self):
         """Create default audit logger."""
