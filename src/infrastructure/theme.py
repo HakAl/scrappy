@@ -107,7 +107,7 @@ class ScrappyTheme:
     preset: str = "dark"
     # Foreground
     primary: str = "#00ffff"
-    accent: str = "#ffff00"
+    accent: str = "#ff9900"
     success: str = "#00ff00"
     warning: str = "#ffff00"
     error: str = "#ff0000"
