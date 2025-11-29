@@ -75,7 +75,7 @@ class TestToolResultRich:
         rich_output = result.__rich__()
         assert isinstance(rich_output, Text)
         # Check that the error text is styled with bold red
-        assert "bold red" in str(rich_output.style)
+        assert "bold #ff0000" in str(rich_output.style)
 
     def test_rich_error_message_format(self):
         """__rich__() error text contains proper message."""

@@ -55,7 +55,7 @@ from .protocols import (
     ContextProvider,
 )
 from ..infrastructure.protocols import PathProviderProtocol
-from ..infrastructure.paths import ScrappyPathProvider, migrate_legacy_files
+from ..infrastructure.paths import ScrappyPathProvider
 
 
 class OrchestratorComponents:
@@ -129,8 +129,6 @@ class OrchestratorFactory:
         if path_provider is None:
             project_root = Path(project_path) if project_path else Path(".")
             path_provider = ScrappyPathProvider(project_root)
-            # Auto-migrate old .llm_* files on first run
-            migrate_legacy_files(project_root, path_provider, verbose=False)
         self._path_provider = path_provider
 
     def create_all_components(
@@ -227,16 +225,21 @@ class OrchestratorFactory:
         """Create default codebase context."""
         context = CodebaseContext(self.project_path)
 
-        # Only initialize semantic search if explicitly enabled
-        if self.enable_semantic_search:
-            try:
-                from ..context.semantic.initializer import SemanticSearchInitializer
-                initializer = SemanticSearchInitializer(context.project_path)
-                context._semantic_initializer = initializer
-                context.start_background_initialization()
-            except ImportError:
-                # Semantic search dependencies not available
-                pass
+        # TODO: Only initialize semantic search if explicitly enabled
+        # TODO: Only initialize semantic search if explicitly enabled
+        # TODO: Only initialize semantic search if explicitly enabled
+        # if self.enable_semantic_search:
+        #     try:
+        #         from ..context.semantic.initializer import SemanticSearchInitializer
+        #         initializer = SemanticSearchInitializer(context.project_path)
+        #         context._semantic_initializer = initializer
+        #         context.start_background_initialization()
+        #     except ImportError:
+        #         # Semantic search dependencies not available
+        #         pass
+        # TODO: Only initialize semantic search if explicitly enabled
+        # TODO: Only initialize semantic search if explicitly enabled
+        # TODO: Only initialize semantic search if explicitly enabled
 
         return context
 

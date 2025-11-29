@@ -85,8 +85,8 @@ def create_shell_executor(
     # Detect platform and create appropriate sanitizer
     sanitizer = WindowsSanitizer() if is_windows() else UnixSanitizer()
 
-    # Create security validator with custom patterns if provided
-    security = CommandSecurity(dangerous_patterns=dangerous_commands or [])
+    # Create security validator with custom patterns if provided (None = use defaults)
+    security = CommandSecurity(dangerous_patterns=dangerous_commands)
 
     # Create other components
     advisor = CommandAdvisor()
@@ -97,7 +97,7 @@ def create_shell_executor(
     return ShellCommandExecutor(
         timeout=command_timeout,
         max_output=max_command_output,
-        dangerous_patterns=dangerous_commands or [],
+        dangerous_patterns=dangerous_commands,
         security=security,
         sanitizer=sanitizer,
         advisor=advisor,
@@ -271,7 +271,7 @@ class ShellCommandExecutor:
             True if long-running
         """
         cmd_lower = command.lower()
-        long_running_patterns = getattr(self.config, 'long_running_commands', [
+        long_running_patterns = [
             'npm install',
             'docker build',
             'pip install',
@@ -279,7 +279,7 @@ class ShellCommandExecutor:
             'cargo build',
             'mvn package',
             'gradle build',
-        ])
+        ]
 
         for pattern in long_running_patterns:
             if pattern in cmd_lower:
@@ -576,7 +576,7 @@ class CommandTool(ToolBase):
         """
         self._timeout = timeout
         self._max_output = max_output
-        self._dangerous_patterns = dangerous_patterns or []
+        self._dangerous_patterns = dangerous_patterns  # Keep None to let CommandSecurity use defaults
         self._executor = executor or self._create_default_executor()
 
     def _create_default_executor(self) -> ShellCommandExecutor:
@@ -584,7 +584,7 @@ class CommandTool(ToolBase):
         return create_shell_executor(
             command_timeout=self._timeout,
             max_command_output=self._max_output,
-            dangerous_commands=self._dangerous_patterns
+            dangerous_commands=self._dangerous_patterns  # Pass None to use CommandSecurity defaults
         )
 
     @property

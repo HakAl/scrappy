@@ -123,7 +123,7 @@ class CacheFormatter(StatsFormatter):
         Returns:
             Formatted line with color (success > 50%, warning <= 50%) if use_color is True
         """
-        if not self._use_color:
+        if not self._io.use_color:
             return f"{label}: {rate_str}"
 
         # Extract numeric value from string

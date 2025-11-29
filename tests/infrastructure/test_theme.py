@@ -34,7 +34,7 @@ class TestScrappyTheme:
         theme = ScrappyTheme()
 
         assert theme.primary == "#00ffff"
-        assert theme.accent == "#ffff00"
+        assert theme.accent == "#ff9900"
         assert theme.success == "#00ff00"
         assert theme.warning == "#ffff00"
         assert theme.error == "#ff0000"
@@ -293,8 +293,8 @@ class TestLoadThemeFromConfig:
 
         assert isinstance(theme, CustomTheme)
         assert theme.primary == "magenta"
-        # Other colors retain defaults
-        assert theme.accent == "#ffff00"
+        # Other colors inherit from base (ScrappyTheme)
+        assert theme.accent == "#ff9900"
         assert theme.success == "#00ff00"
 
     def test_multiple_color_overrides(self):

@@ -53,7 +53,7 @@ Before you can contribute, you need to set up the project on your local machine.
 2.  **Clone your fork** to your local machine:
     ```bash
     git clone https://github.com/HakAl/scrappy.git
-    cd llm-agent-team
+    cd scrappy
     ```
 3.  **Create a virtual environment**. This isolates the project's dependencies.
     ```bash

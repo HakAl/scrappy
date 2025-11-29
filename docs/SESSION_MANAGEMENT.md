@@ -76,7 +76,7 @@ Shows current session state and saved session info:
 ```
 Session Management:
 --------------------------------------------------
-Session File: /path/to/project/.llm_team_session.json
+Session File: /path/to/project/.scrappy/session.json
 Session Exists: Yes
 Last Saved: 2025-11-15T10:30:00
 Files Cached: 5
@@ -210,11 +210,11 @@ Discoveries: 3
 
 ### Session File
 
-Sessions are stored in `.llm_team_session.json` in your project root.
+Sessions are stored in `.scrappy/session.json` in your project root.
 
 **Add to .gitignore:**
 ```
-.llm_team_session.json
+.scrappy/
 ```
 
 This file contains:

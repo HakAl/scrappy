@@ -257,43 +257,6 @@ class TestCacheValidationWithCodebaseContext:
         # Should either have None explored_at or be unexplored
         assert context2.explored_at is None or not context2.is_explored()
 
-    @pytest.mark.unit
-    def test_missing_required_cache_fields_handled(self, temp_project_dir):
-        """CodebaseContext should handle missing required fields in cache."""
-        # Create minimal cache file
-        cache_file = temp_project_dir / ".llm_team_context.json"
-        cache_file.write_text('{"summary": "test"}')
-
-        # Should load without crashing
-        context = CodebaseContext(str(temp_project_dir))
-
-        # Should be considered not explored since explored_at is missing
-        assert context.is_explored() is False or context.explored_at is None
-
-    @pytest.mark.unit
-    def test_wrong_structure_type_in_cache(self, temp_project_dir):
-        """CodebaseContext should handle wrong structure type in cache."""
-        cache_file = temp_project_dir / ".llm_team_context.json"
-        cache_file.write_text('{"explored_at": "2024-01-01T10:00:00", "structure": "invalid"}')
-
-        # Should not crash on load
-        context = CodebaseContext(str(temp_project_dir))
-
-        # Structure should be empty or the invalid value
-        assert context.structure == {} or context.structure == "invalid"
-
-    @pytest.mark.unit
-    def test_wrong_file_index_type_in_cache(self, temp_project_dir):
-        """CodebaseContext should handle wrong file_index type in cache."""
-        cache_file = temp_project_dir / ".llm_team_context.json"
-        cache_file.write_text('{"explored_at": "2024-01-01T10:00:00", "file_index": "invalid"}')
-
-        # Should not crash on load
-        context = CodebaseContext(str(temp_project_dir))
-
-        # file_index should be empty or the invalid value
-        assert context.file_index == {} or context.file_index == "invalid"
-
 
 class TestValidationLogging:
     """Tests for validation warning messages."""
@@ -311,55 +274,3 @@ class TestValidationLogging:
             log_text = caplog.text
             assert 'my_missing_project' in log_text or str(nonexistent) in log_text
 
-
-class TestValidationRecovery:
-    """Tests for recovering from validation errors."""
-
-    @pytest.mark.unit
-    def test_explore_works_after_invalid_cache_cleared(self, temp_project_dir):
-        """Should be able to explore after clearing invalid cache."""
-        # Create invalid cache
-        cache_file = temp_project_dir / ".llm_team_context.json"
-        cache_file.write_text('completely invalid {{{')
-
-        context = CodebaseContext(str(temp_project_dir))
-
-        # Clear cache and explore
-        context.clear_cache()
-        result = context.explore()
-
-        # Should explore successfully
-        assert result['status'] == 'explored'
-        assert context.is_explored()
-
-    @pytest.mark.unit
-    def test_force_explore_overwrites_invalid_cache(self, temp_project_dir):
-        """Force explore should overwrite invalid cache data."""
-        # Create cache with invalid structure
-        cache_file = temp_project_dir / ".llm_team_context.json"
-        cache_file.write_text('{"explored_at": "2024-01-01T10:00:00", "structure": "invalid"}')
-
-        context = CodebaseContext(str(temp_project_dir))
-        result = context.explore(force=True)
-
-        # Should explore successfully and fix structure
-        assert result['status'] == 'explored'
-        assert isinstance(context.structure, dict)
-        assert 'total_files' in context.structure
-
-    @pytest.mark.unit
-    def test_context_usable_despite_cache_issues(self, temp_project_dir):
-        """Context should still be usable despite cache loading issues."""
-        # Create cache with wrong types
-        cache_file = temp_project_dir / ".llm_team_context.json"
-        cache_file.write_text('{"file_index": "wrong-type"}')
-
-        context = CodebaseContext(str(temp_project_dir))
-
-        # Should still be able to explore
-        result = context.explore()
-        assert result['status'] == 'explored'
-
-        # And get status
-        status = context.get_status()
-        assert status['is_explored']

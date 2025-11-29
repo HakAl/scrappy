@@ -259,7 +259,7 @@ class TestPersistenceSave:
         )
 
         styled = io.get_styled_outputs()
-        green_saves = [s for s in styled if s['fg'] == 'green' and 'saved' in s['text'].lower()]
+        green_saves = [s for s in styled if s['fg'] == '#00ff00' and 'saved' in s['text'].lower()]
         assert len(green_saves) > 0
 
 

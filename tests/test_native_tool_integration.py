@@ -26,13 +26,13 @@ from tests.helpers import make_response, ConfigurableTestOrchestrator
 @pytest.fixture
 def minimal_config():
     """Create minimal config for testing."""
-    return AgentConfig(
-        dangerous_commands=["rm -rf /"],
-        interactive_commands=["npx create"],
-        long_running_commands=["npm install"],
-        command_timeout=10,
-        max_command_output=1000,
-    )
+    config = AgentConfig()
+    config.dangerous_commands = ["rm -rf /"]
+    config.interactive_commands = ["npx create"]
+    config.long_running_commands = ["npm install"]
+    config.command_timeout = 10
+    config.max_command_output = 1000
+    return config
 
 
 def make_tool_call(
@@ -92,11 +92,11 @@ def mock_orchestrator_with_native_support():
 
 
 @pytest.fixture
-def agent_with_native_orchestrator(mock_orchestrator_with_native_support, minimal_config):
+def agent_with_native_orchestrator(mock_orchestrator_with_native_support, minimal_config, tmp_path):
     """Create agent with native tool support enabled."""
     return CodeAgent(
         orchestrator=mock_orchestrator_with_native_support,
-        project_path=".",
+        project_path=str(tmp_path),
         config=minimal_config
     )
 
@@ -197,7 +197,8 @@ class TestThinkMethodNativeToolDetection:
     @pytest.mark.unit
     def test_think_falls_back_to_delegate_for_json_provider(
         self,
-        minimal_config
+        minimal_config,
+        tmp_path
     ):
         """_think() should use regular delegate() for providers without native tool support."""
         # Create orchestrator with JSON-only provider
@@ -214,7 +215,7 @@ class TestThinkMethodNativeToolDetection:
 
         agent = CodeAgent(
             orchestrator=orch,
-            project_path=".",
+            project_path=str(tmp_path),
             config=minimal_config
         )
 

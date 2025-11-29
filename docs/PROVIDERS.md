@@ -1,14 +1,5 @@
 # LLM Providers
 
-## Issues
-
-<!-- todo  -->
- 
- - still an issue? Inconsistent API: ProviderRegistry.providers vs ._providers
- - local embeddings
- - integrate cloudflare
-
-
  ## Provider Configuration 
  **- src/providers/base.py**
 

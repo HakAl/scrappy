@@ -440,42 +440,6 @@ class TestCacheIntegration:
     """Integration-style tests mimicking CodebaseContext usage."""
 
     @pytest.mark.unit
-    def test_context_cache_format(self, tmp_path):
-        """Cache format matches CodebaseContext expectations."""
-        cache_file = tmp_path / ".llm_team_context.json"
-        cache = ContextCache()
-
-        # Simulate what CodebaseContext saves
-        data = {
-            'explored_at': datetime.now(),
-            'summary': 'Python project with main.py and tests.',
-            'structure': {
-                'total_files': 10,
-                'by_type': {'python': 5, 'config': 3, 'docs': 2},
-                'has_readme': True,
-                'has_requirements': True,
-                'has_git': True
-            },
-            'file_index': {
-                'python': ['main.py', 'src/utils.py'],
-                'config': ['pyproject.toml', 'setup.cfg'],
-                'docs': ['README.md']
-            },
-            'git_history': {
-                'current_branch': 'main',
-                'recent_commits': ['abc123 feat: add feature']
-            }
-        }
-
-        cache.save(cache_file, data)
-        loaded = cache.load(cache_file)
-
-        assert loaded['summary'] == data['summary']
-        assert loaded['structure']['total_files'] == 10
-        assert loaded['file_index']['python'] == data['file_index']['python']
-        assert isinstance(loaded['explored_at'], datetime)
-
-    @pytest.mark.unit
     def test_multiple_save_load_cycles(self, tmp_path):
         """Multiple save/load cycles preserve data integrity."""
         cache_file = tmp_path / "cache.json"

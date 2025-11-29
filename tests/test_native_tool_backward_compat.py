@@ -15,13 +15,13 @@ from src.agent.response_parser import UnifiedResponseParser
 @pytest.fixture
 def json_only_config():
     """Minimal config for testing."""
-    return AgentConfig(
-        dangerous_commands=[],
-        interactive_commands=[],
-        long_running_commands=[],
-        command_timeout=10,
-        max_command_output=1000,
-    )
+    config = AgentConfig()
+    config.dangerous_commands = []
+    config.interactive_commands = []
+    config.long_running_commands = []
+    config.command_timeout = 10
+    config.max_command_output = 1000
+    return config
 
 
 
@@ -98,7 +98,7 @@ def test_agent_switches_between_json_and_native_tool_providers():
 
 
 @pytest.mark.unit
-def test_existing_code_still_works_after_integration(json_only_config):
+def test_existing_code_still_works_after_integration(json_only_config, tmp_path):
     """Existing code that uses JSON format should continue to work unchanged."""
     # This simulates existing code that passes JSON strings
 
@@ -109,7 +109,7 @@ def test_existing_code_still_works_after_integration(json_only_config):
 
     agent = CodeAgent(
         orchestrator=orch,
-        project_path='.',
+        project_path=str(tmp_path),
         config=json_only_config
     )
 

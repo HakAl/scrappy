@@ -110,17 +110,17 @@ theme:
         config_file.write_text("""
 theme:
   preset: dark
-  primary: magenta
-  error: pink
+  primary: "#ff00ff"
+  error: "#ffc0cb"
 """)
         factory = CLIConfigFactory()
         config = factory.create_from_file(str(config_file))
 
         assert isinstance(config.theme, CustomTheme)
-        assert config.theme.primary == "magenta"
-        assert config.theme.error == "pink"
+        assert config.theme.primary == "#ff00ff"
+        assert config.theme.error == "#ffc0cb"
         # Defaults from dark preset
-        assert config.theme.accent == "#ffff00"
+        assert config.theme.accent == "#ff9900"
         assert config.theme.success == "#00ff00"
         assert config.theme.surface == "#1e1e1e"
 

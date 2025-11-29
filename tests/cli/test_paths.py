@@ -129,19 +129,6 @@ class TestSkipDirsProperties:
             assert '\\' not in dir_name, f"Entry {dir_name} contains \\"
 
 
-
-class TestHiddenFiles:
-    """Tests for hidden file patterns."""
-
-
-    def test_hidden_files_session_files(self):
-        """HIDDEN_FILES should include session tracking files."""
-        from src.cli.config.paths import HIDDEN_FILES
-        session_files = {'.llm_team_session.json', '.llm_rate_limits.json'}
-        for sf in session_files:
-            assert sf in HIDDEN_FILES, f"Missing {sf}"
-
-
 class TestCacheDirectories:
     """Tests for cache directory patterns."""
 

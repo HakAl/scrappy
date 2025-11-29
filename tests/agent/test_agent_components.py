@@ -5,6 +5,7 @@ Uses test doubles to verify behavior without concrete dependencies.
 """
 import pytest
 from src.agent.types import AgentAction, ActionResult, ConversationState
+from src.agent_tools.tools.base import ToolResult
 
 
 # =============================================================================
@@ -100,19 +101,20 @@ class AlwaysDuplicateDetector:
 class MockToolRunner:
     """Test double - returns preset results."""
 
-    def __init__(self, default_result: str = "Success"):
+    def __init__(self, default_result: str = "Success", default_success: bool = True):
         self.default_result = default_result
+        self.default_success = default_success
         self.calls = []
         self.results = {}
-        self.tools = {"read_file": lambda **kw: self.default_result}  # Mock tools dict
+        self.tools = {"read_file": lambda **kw: ToolResult(success=True, output=self.default_result)}  # Mock tools dict
 
-    def set_result(self, tool_name: str, result: str) -> None:
+    def set_result(self, tool_name: str, result: str, success: bool = True) -> None:
         """Configure result for specific tool."""
-        self.results[tool_name] = result
+        self.results[tool_name] = ToolResult(success=success, output=result)
 
-    def run_tool(self, tool_name: str, parameters: dict) -> str:
+    def run_tool(self, tool_name: str, parameters: dict) -> ToolResult:
         self.calls.append((tool_name, parameters))
-        return self.results.get(tool_name, self.default_result)
+        return self.results.get(tool_name, ToolResult(success=self.default_success, output=self.default_result))
 
 
 # =============================================================================

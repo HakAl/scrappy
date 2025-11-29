@@ -34,7 +34,7 @@ class TestCommandToolInterface:
         """CommandTool must have name, description, and parameters."""
         from src.agent_tools.tools.command_tool import CommandTool
 
-        tool = CommandTool(self.config)
+        tool = CommandTool()
 
         assert tool.name == "run_command"
         assert "shell" in tool.description.lower() or "command" in tool.description.lower()
@@ -48,7 +48,7 @@ class TestCommandToolInterface:
         """Execute must return a ToolResult object."""
         from src.agent_tools.tools.command_tool import CommandTool
 
-        tool = CommandTool(self.config)
+        tool = CommandTool()
 
         with patch('subprocess.Popen') as mock_popen:
             mock_process = MagicMock()
@@ -65,7 +65,7 @@ class TestCommandToolInterface:
         """Dry run mode should not execute commands."""
         from src.agent_tools.tools.command_tool import CommandTool
 
-        tool = CommandTool(self.config)
+        tool = CommandTool()
         dry_run_context = ToolContext(
             project_root=self.project_root,
             dry_run=True,
@@ -82,7 +82,7 @@ class TestCommandToolInterface:
         """Missing required command parameter should fail validation."""
         from src.agent_tools.tools.command_tool import CommandTool
 
-        tool = CommandTool(self.config)
+        tool = CommandTool()
 
         is_valid, error = tool.validate()
 
@@ -108,9 +108,8 @@ class TestCommandSecurityValidation:
         from src.agent_tools.tools.command_tool import CommandTool
 
         # Explicitly configure dangerous patterns to include rm -rf
-        config = AgentConfig()
-        config.dangerous_commands = [r'rm\s+-rf\s+/', r'format\s+[A-Za-z]:']
-        tool = CommandTool(config)
+        dangerous_patterns = [r'rm\s+-rf\s+/', r'format\s+[A-Za-z]:']
+        tool = CommandTool(dangerous_patterns=dangerous_patterns)
 
         result = tool.execute(self.context, command="rm -rf /")
 
@@ -121,7 +120,7 @@ class TestCommandSecurityValidation:
         """Should block format/disk destruction commands."""
         from src.agent_tools.tools.command_tool import CommandTool
 
-        tool = CommandTool(self.config)
+        tool = CommandTool()
 
         result = tool.execute(self.context, command="format C:")
 
@@ -132,9 +131,8 @@ class TestCommandSecurityValidation:
         """Should block commands matching configured dangerous patterns."""
         from src.agent_tools.tools.command_tool import CommandTool
 
-        config = AgentConfig()
-        config.dangerous_commands = [r"sudo\s+rm", r":\(\)\s*\{.*\}"]
-        tool = CommandTool(config)
+        dangerous_patterns = [r"sudo\s+rm", r":\(\)\s*\{.*\}"]
+        tool = CommandTool(dangerous_patterns=dangerous_patterns)
 
         result = tool.execute(self.context, command="sudo rm -rf /var")
 
@@ -145,7 +143,7 @@ class TestCommandSecurityValidation:
         """Should allow safe commands like echo."""
         from src.agent_tools.tools.command_tool import CommandTool
 
-        tool = CommandTool(self.config)
+        tool = CommandTool()
 
         with patch('subprocess.Popen') as mock_popen:
             mock_process = MagicMock()
@@ -177,7 +175,7 @@ class TestPlatformSpecificFixes:
         """Should block Spring Initializr downloads on Windows."""
         from src.agent_tools.tools.command_tool import CommandTool
 
-        tool = CommandTool(self.config)
+        tool = CommandTool()
 
         result = tool.execute(
             self.context,
@@ -206,7 +204,7 @@ class TestErrorHandling:
         """Should handle exceptions gracefully."""
         from src.agent_tools.tools.command_tool import CommandTool
 
-        tool = CommandTool(self.config)
+        tool = CommandTool()
 
         # Mock subprocess to raise an exception
         with patch('subprocess.Popen', side_effect=OSError("Permission denied")):
@@ -219,7 +217,7 @@ class TestErrorHandling:
         """Should return failure when command output starts with Error."""
         from src.agent_tools.tools.command_tool import CommandTool
 
-        tool = CommandTool(self.config)
+        tool = CommandTool()
 
         with patch('subprocess.Popen') as mock_popen:
             mock_process = MagicMock()

@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
 High-volume test-quality auditor.
-Drop-in replacement for the original script;  adds heuristics that push
-“bad” count from ~ 5 % to 40-60 % on typical agent-generated codebases.
+Adds heuristics that push “bad” count from ~ 5 % to 40-60 % on typical agent-generated codebases.
 """
 import ast
 import sys

@@ -23,7 +23,7 @@ class TestDuplicateActionDetection:
     """Test that agent detects when repeating same action with same parameters."""
 
     @pytest.mark.unit
-    def test_allow_different_write_file_actions(self):
+    def test_allow_different_write_file_actions(self, tmp_path):
         """Agent should allow write_file with different parameters (not a duplicate)."""
         # Setup mock orchestrator
         mock_orch = Mock(spec=OrchestratorAdapter)
@@ -32,7 +32,7 @@ class TestDuplicateActionDetection:
 
         # Create agent
         config = AgentConfig()
-        agent = CodeAgent(mock_orch, project_path=".", config=config)
+        agent = CodeAgent(mock_orch, project_path=str(tmp_path), config=config)
 
         # Create conversation state
         state = ConversationState(
@@ -80,7 +80,7 @@ class TestPostWriteVerification:
     """Test that agent is encouraged to verify files after writing."""
 
     @pytest.mark.unit
-    def test_conversation_suggests_verification_after_write(self):
+    def test_conversation_suggests_verification_after_write(self, tmp_path):
         """
         After write_file, conversation update should encourage verification.
 
@@ -93,7 +93,7 @@ class TestPostWriteVerification:
 
         # Create agent
         config = AgentConfig()
-        agent = CodeAgent(mock_orch, project_path=".", config=config)
+        agent = CodeAgent(mock_orch, project_path=str(tmp_path), config=config)
 
         # Create successful write action
         action = AgentAction(
@@ -144,7 +144,7 @@ class TestPostWriteVerification:
             "After write_file, agent should be encouraged to verify the file"
 
     @pytest.mark.unit
-    def test_no_verification_prompt_for_read_operations(self):
+    def test_no_verification_prompt_for_read_operations(self, tmp_path):
         """Read operations shouldn't trigger verification prompts."""
         # Setup mock orchestrator
         mock_orch = Mock(spec=OrchestratorAdapter)
@@ -153,7 +153,7 @@ class TestPostWriteVerification:
 
         # Create agent
         config = AgentConfig()
-        agent = CodeAgent(mock_orch, project_path=".", config=config)
+        agent = CodeAgent(mock_orch, project_path=str(tmp_path), config=config)
 
         # Create read action
         action = AgentAction(

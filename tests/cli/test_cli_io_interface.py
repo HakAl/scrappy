@@ -249,13 +249,15 @@ class TestMockIO:
 
     @pytest.mark.unit
     def test_mockio_style_returns_text(self):
-        """Test that style returns text without modification."""
+        """Test that style returns text with ANSI codes when use_color is True."""
         from tests.helpers import MockIO
         io = MockIO()
 
-        result = io.style("styled", fg="red", bold=True)
+        result = io.style("styled", fg="#ff0000", bold=True)
 
-        assert result == "styled"
+        # MockIO returns text with ANSI codes when use_color=True
+        assert "styled" in result
+        assert "\x1b[" in result  # Contains ANSI codes
 
 
 class TestIOProtocolUsage:

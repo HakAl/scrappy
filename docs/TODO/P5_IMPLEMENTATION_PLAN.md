@@ -2,7 +2,6 @@
 
 ## Overview
 
-This document outlines the implementation plan for correcting all Priority 5 issues identified in `ISSUES_PRIORITIZED.md`.
 These issues have been investigated and require attention.
 
 P5 issues are confirmed bugs that impact efficiency and edge-case behavior but are not blocking.
@@ -13,107 +12,10 @@ P5 issues are confirmed bugs that impact efficiency and edge-case behavior but a
 
 | Issue | Status | Impact | Effort |
 |-------|--------|--------|--------|
-| 5.2 Context Summary Always Written | PARTIALLY CONFIRMED | Low | Low |
 | 5.3 Auto-explore Stale Context | CONFIRMED BUG | Medium | Medium |
 | 5.4 Premature Task Completion | PARTIALLY CONFIRMED | Medium | Medium |
 
 ---
-
-## Issue 5.2: Context Summary Always Written
-
-### Problem Statement
-
-Context summary generation (LLM API call) happens unconditionally during exploration, even when the user may decline to save the summary. This wastes API tokens.
-
-### Current Behavior
-
-```
-explore_codebase()
-  -> context.generate_summary(llm_summary)  # LLM API call - UNCONDITIONAL
-  -> io.confirm("Save summary?")            # User prompt
-  -> summary_file.write_text(summary)       # Conditional on user choice
-```
-
-### Desired Behavior
-
-Summary should only be generated when the user requests it (lazy generation).
-
-### Design
-
-**Approach: Lazy Summary Generation**
-
-1. Define a `LazySummaryProtocol` that defers LLM calls until explicitly requested
-2. Modify `explore_codebase()` to only generate summary when user confirms save
-3. Cache the prompt/context so regeneration is fast if user changes mind
-
-**Protocol Definition:**
-
-```python
-@runtime_checkable
-class LazySummaryProtocol(Protocol):
-    """Protocol for deferred summary generation."""
-
-    def has_summary(self) -> bool:
-        """Check if summary is already cached."""
-        ...
-
-    def generate_if_needed(self, llm_func: Callable[[str], str]) -> str:
-        """Generate summary only if not cached."""
-        ...
-
-    def invalidate(self) -> None:
-        """Invalidate cached summary."""
-        ...
-```
-
-### Implementation Steps
-
-#### Step 1: Create LazySummaryGenerator class
-
-**File:** `src/context/lazy_summary.py` (new)
-
-```python
-"""Lazy summary generation to avoid unnecessary LLM API calls."""
-
-from typing import Optional, Callable
-from dataclasses import dataclass
-
-
-@dataclass
-class LazySummaryGenerator:
-    """
-    Defers summary generation until explicitly requested.
-
-    Stores the context/prompt needed to generate a summary but only
-    makes the LLM API call when generate() is called.
-    """
-    _prompt: Optional[str] = None
-    _cached_summary: Optional[str] = None
-
-    def set_context(self, prompt: str) -> None:
-        """Store context for later generation."""
-        self._prompt = prompt
-        self._cached_summary = None  # Invalidate cache when context changes
-
-    def has_summary(self) -> bool:
-        """Check if summary is cached."""
-        return self._cached_summary is not None
-
-    def generate(self, llm_func: Callable[[str], str]) -> str:
-        """Generate summary using provided LLM function."""
-        if self._cached_summary is not None:
-            return self._cached_summary
-
-        if self._prompt is None:
-            raise ValueError("No context set for summary generation")
-
-        self._cached_summary = llm_func(self._prompt)
-        return self._cached_summary
-
-    def invalidate(self) -> None:
-        """Clear cached summary."""
-        self._cached_summary = None
-```
 
 #### Step 2: Modify explore_codebase() flow
 

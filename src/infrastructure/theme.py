@@ -191,7 +191,7 @@ class CustomTheme:
 
     preset: str = "dark"  # Inherited from base theme (dark or light)
     primary: str = "#00ffff"
-    accent: str = "#ffff00"
+    accent: str = "#ff9900"
     success: str = "#00ff00"
     warning: str = "#ffff00"
     error: str = "#ff0000"

@@ -45,17 +45,17 @@ class TestStateManagement:
 
         dashboard = RichDashboard()
 
-        # Set to thinking state
+        # Set to thinking state - uses theme.accent (orange)
         dashboard.set_state("thinking")
-        assert dashboard.get_panel_style("agent_state") == "yellow"
+        assert dashboard.get_panel_style("agent_state") == "#ff9900"
 
-        # Change to executing state
+        # Change to executing state - uses theme.success (green)
         dashboard.set_state("executing")
-        assert dashboard.get_panel_style("agent_state") == "green"
+        assert dashboard.get_panel_style("agent_state") == "#00ff00"
 
-        # Change to scanning state
+        # Change to scanning state - uses theme.primary (cyan)
         dashboard.set_state("scanning")
-        assert dashboard.get_panel_style("agent_state") == "cyan"
+        assert dashboard.get_panel_style("agent_state") == "#00ffff"
 
     @pytest.mark.unit
     def test_set_state_raises_error_for_invalid_state(self):

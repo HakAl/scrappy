@@ -17,46 +17,53 @@ from src.infrastructure.theme import (
     NoColorTheme,
     ScrappyTheme,
 )
+from tests.helpers import MockIO
+
+
+@pytest.fixture
+def mock_io():
+    """Create a MockIO instance for testing formatters."""
+    return MockIO()
 
 
 class TestStatsFormatter:
     """Tests for base stats formatter."""
 
-    def test_format_header_creates_colored_header(self):
+    def test_format_header_creates_colored_header(self, mock_io):
         """Formatter creates header with title and separator."""
-        formatter = StatsFormatter()
+        formatter = StatsFormatter(mock_io)
         result = formatter.format_header("Test Header", width=30)
 
         assert "Test Header" in result
         assert "-" in result  # Contains separator
 
-    def test_format_key_value_creates_pair(self):
+    def test_format_key_value_creates_pair(self, mock_io):
         """Formatter creates key-value pair display."""
-        formatter = StatsFormatter()
+        formatter = StatsFormatter(mock_io)
         result = formatter.format_key_value("Key", "Value")
 
         assert "Key: Value" in result
 
-    def test_format_key_value_respects_indent(self):
+    def test_format_key_value_respects_indent(self, mock_io):
         """Formatter indents key-value pairs correctly."""
-        formatter = StatsFormatter()
+        formatter = StatsFormatter(mock_io)
         result = formatter.format_key_value("Key", "Value", indent=4)
 
         assert result.startswith("    ")  # 4 spaces
         assert "Key: Value" in result
 
-    def test_format_percentage_shows_numbers(self):
+    def test_format_percentage_shows_numbers(self, mock_io):
         """Formatter displays percentage with numbers."""
-        formatter = StatsFormatter()
+        formatter = StatsFormatter(mock_io)
         result = formatter.format_percentage(25, 100, show_numbers=True)
 
         assert "25" in result
         assert "100" in result
         assert "25.0%" in result
 
-    def test_format_percentage_without_numbers(self):
+    def test_format_percentage_without_numbers(self, mock_io):
         """Formatter displays percentage without numbers."""
-        formatter = StatsFormatter()
+        formatter = StatsFormatter(mock_io)
         result = formatter.format_percentage(25, 100, show_numbers=False)
 
         # Should only show percentage
@@ -64,16 +71,16 @@ class TestStatsFormatter:
         # Should not show fraction in plain text (may have ANSI codes)
         assert "25/100" not in result.replace("\x1b", "")  # Remove ANSI
 
-    def test_format_percentage_handles_zero_total(self):
+    def test_format_percentage_handles_zero_total(self, mock_io):
         """Formatter handles zero total gracefully."""
-        formatter = StatsFormatter()
+        formatter = StatsFormatter(mock_io)
         result = formatter.format_percentage(10, 0)
 
         assert "0.0%" in result  # Should show 0% not error
 
-    def test_format_percentage_colors_by_threshold(self):
+    def test_format_percentage_colors_by_threshold(self, mock_io):
         """Formatter applies different colors based on percentage."""
-        formatter = StatsFormatter()
+        formatter = StatsFormatter(mock_io)
 
         # Low usage should be green (< 75%)
         low_result = formatter.format_percentage(50, 100)
@@ -87,39 +94,39 @@ class TestStatsFormatter:
         high_result = formatter.format_percentage(95, 100)
         assert "\x1b" in high_result
 
-    def test_format_number_adds_commas(self):
+    def test_format_number_adds_commas(self, mock_io):
         """Formatter adds thousand separators to numbers."""
-        formatter = StatsFormatter()
+        formatter = StatsFormatter(mock_io)
         result = formatter.format_number(1234567, with_commas=True)
 
         assert result == "1,234,567"
 
-    def test_format_number_without_commas(self):
+    def test_format_number_without_commas(self, mock_io):
         """Formatter displays numbers without separators."""
-        formatter = StatsFormatter()
+        formatter = StatsFormatter(mock_io)
         result = formatter.format_number(1234567, with_commas=False)
 
         assert result == "1234567"
 
-    def test_format_boolean_status_true(self):
+    def test_format_boolean_status_true(self, mock_io):
         """Formatter displays enabled status in green."""
-        formatter = StatsFormatter()
+        formatter = StatsFormatter(mock_io)
         result = formatter.format_boolean_status(True)
 
         assert "Enabled" in result
         assert "\x1b" in result  # Has color codes
 
-    def test_format_boolean_status_false(self):
+    def test_format_boolean_status_false(self, mock_io):
         """Formatter displays disabled status in red."""
-        formatter = StatsFormatter()
+        formatter = StatsFormatter(mock_io)
         result = formatter.format_boolean_status(False)
 
         assert "Disabled" in result
         assert "\x1b" in result  # Has color codes
 
-    def test_format_boolean_status_custom_labels(self):
+    def test_format_boolean_status_custom_labels(self, mock_io):
         """Formatter uses custom labels for boolean status."""
-        formatter = StatsFormatter()
+        formatter = StatsFormatter(mock_io)
         result = formatter.format_boolean_status(True, "Active", "Inactive")
 
         assert "Active" in result
@@ -128,9 +135,9 @@ class TestStatsFormatter:
 class TestRateLimitFormatter:
     """Tests for rate limit formatter."""
 
-    def test_format_status_displays_header(self):
+    def test_format_status_displays_header(self, mock_io):
         """Formatter displays rate limit header."""
-        formatter = RateLimitFormatter()
+        formatter = RateLimitFormatter(mock_io)
         status = {
             'last_reset': {'daily': '2024-01-15', 'monthly': '2024-01-01'},
             'providers': {}
@@ -140,9 +147,9 @@ class TestRateLimitFormatter:
 
         assert "Rate Limit Usage" in result
 
-    def test_format_status_shows_reset_times(self):
+    def test_format_status_shows_reset_times(self, mock_io):
         """Formatter displays last reset timestamps."""
-        formatter = RateLimitFormatter()
+        formatter = RateLimitFormatter(mock_io)
         status = {
             'last_reset': {'daily': '2024-01-15T10:30:00', 'monthly': '2024-01-01T00:00:00'},
             'providers': {}
@@ -155,9 +162,9 @@ class TestRateLimitFormatter:
         assert "2024-01-15T10:30:00" in result
         assert "2024-01-01T00:00:00" in result
 
-    def test_format_status_handles_no_data(self):
+    def test_format_status_handles_no_data(self, mock_io):
         """Formatter displays helpful message when no data."""
-        formatter = RateLimitFormatter()
+        formatter = RateLimitFormatter(mock_io)
         status = {
             'last_reset': {'daily': 'N/A', 'monthly': 'N/A'},
             'providers': {}
@@ -168,9 +175,9 @@ class TestRateLimitFormatter:
         assert "No usage data" in result
         assert "tracked as you make API calls" in result
 
-    def test_format_status_filters_provider(self):
+    def test_format_status_filters_provider(self, mock_io):
         """Formatter filters to specific provider when requested."""
-        formatter = RateLimitFormatter()
+        formatter = RateLimitFormatter(mock_io)
         status = {
             'last_reset': {'daily': '2024-01-15', 'monthly': '2024-01-01'},
             'providers': {
@@ -184,9 +191,9 @@ class TestRateLimitFormatter:
         assert "OPENAI" in result
         assert "ANTHROPIC" not in result
 
-    def test_format_status_shows_provider_not_found(self):
+    def test_format_status_shows_provider_not_found(self, mock_io):
         """Formatter displays error for unknown provider."""
-        formatter = RateLimitFormatter()
+        formatter = RateLimitFormatter(mock_io)
         status = {
             'last_reset': {'daily': '2024-01-15', 'monthly': '2024-01-01'},
             'providers': {'openai': {}}
@@ -196,9 +203,9 @@ class TestRateLimitFormatter:
 
         assert "not found" in result
 
-    def test_format_quota_line_shows_usage(self):
+    def test_format_quota_line_shows_usage(self, mock_io):
         """Formatter displays quota usage with percentage."""
-        formatter = RateLimitFormatter()
+        formatter = RateLimitFormatter(mock_io)
         result = formatter.format_quota_line("Daily Requests", 50, 100)
 
         assert "Daily Requests" in result
@@ -206,16 +213,16 @@ class TestRateLimitFormatter:
         assert "100" in result
         assert "50.0%" in result
 
-    def test_format_quota_line_handles_zero_limit(self):
+    def test_format_quota_line_handles_zero_limit(self, mock_io):
         """Formatter handles zero limit gracefully."""
-        formatter = RateLimitFormatter()
+        formatter = RateLimitFormatter(mock_io)
         result = formatter.format_quota_line("Daily Requests", 10, 0)
 
         assert "0.0%" in result  # Should not error
 
-    def test_format_provider_section_displays_totals(self):
+    def test_format_provider_section_displays_totals(self, mock_io):
         """Formatter displays provider totals correctly."""
-        formatter = RateLimitFormatter()
+        formatter = RateLimitFormatter(mock_io)
         data = {
             'total_requests_today': 42,
             'total_tokens_today': 12345,
@@ -229,9 +236,9 @@ class TestRateLimitFormatter:
         assert "12,345" in result  # With comma separator
         assert "200" in result
 
-    def test_format_provider_section_shows_quotas(self):
+    def test_format_provider_section_shows_quotas(self, mock_io):
         """Formatter displays quota information when available."""
-        formatter = RateLimitFormatter()
+        formatter = RateLimitFormatter(mock_io)
         data = {
             'total_requests_today': 50,
             'total_tokens_today': 10000,
@@ -252,9 +259,9 @@ class TestRateLimitFormatter:
         assert "Daily Requests" in result
         assert "Daily Tokens" in result
 
-    def test_format_provider_section_shows_model_breakdown(self):
+    def test_format_provider_section_shows_model_breakdown(self, mock_io):
         """Formatter displays per-model usage breakdown."""
-        formatter = RateLimitFormatter()
+        formatter = RateLimitFormatter(mock_io)
         data = {
             'total_requests_today': 30,
             'total_tokens_today': 5000,
@@ -281,9 +288,9 @@ class TestRateLimitFormatter:
         assert "20" in result  # gpt-4 requests
         assert "10" in result  # gpt-3.5 requests
 
-    def test_format_warnings_displays_list(self):
+    def test_format_warnings_displays_list(self, mock_io):
         """Formatter displays warnings in red."""
-        formatter = RateLimitFormatter()
+        formatter = RateLimitFormatter(mock_io)
         warnings = [
             "OpenAI approaching daily limit (90%)",
             "Anthropic tokens high usage"
@@ -296,16 +303,16 @@ class TestRateLimitFormatter:
         assert "Anthropic tokens high usage" in result
         assert "\x1b" in result  # Has color codes
 
-    def test_format_warnings_handles_empty_list(self):
+    def test_format_warnings_handles_empty_list(self, mock_io):
         """Formatter returns empty string for no warnings."""
-        formatter = RateLimitFormatter()
+        formatter = RateLimitFormatter(mock_io)
         result = formatter.format_warnings([])
 
         assert result == ""
 
-    def test_format_tracker_file_location(self):
+    def test_format_tracker_file_location(self, mock_io):
         """Formatter displays tracker file path."""
-        formatter = RateLimitFormatter()
+        formatter = RateLimitFormatter(mock_io)
         result = formatter.format_tracker_file_location("/path/to/.llm_rate_limits.json")
 
         assert "Tracking File" in result
@@ -315,9 +322,9 @@ class TestRateLimitFormatter:
 class TestCacheFormatter:
     """Tests for cache statistics formatter."""
 
-    def test_get_stats_data_returns_structured_format(self):
+    def test_get_stats_data_returns_structured_format(self, mock_io):
         """get_stats_data returns (headers, rows, title) tuple for io.table()."""
-        formatter = CacheFormatter()
+        formatter = CacheFormatter(mock_io)
         stats = {
             'exact_cache_entries': 10,
             'intent_cache_entries': 5,
@@ -338,9 +345,9 @@ class TestCacheFormatter:
         assert ["Total Entries", "15"] in rows
         assert ["Status", "Enabled"] in rows
 
-    def test_get_stats_data_disabled_status(self):
+    def test_get_stats_data_disabled_status(self, mock_io):
         """get_stats_data shows Disabled when caching is off."""
-        formatter = CacheFormatter()
+        formatter = CacheFormatter(mock_io)
         stats = {
             'exact_cache_entries': 0,
             'intent_cache_entries': 0,
@@ -357,9 +364,9 @@ class TestCacheFormatter:
 
         assert ["Status", "Disabled"] in rows
 
-    def test_get_stats_data_no_ansi_codes(self):
+    def test_get_stats_data_no_ansi_codes(self, mock_io):
         """get_stats_data returns plain text without ANSI codes."""
-        formatter = CacheFormatter()
+        formatter = CacheFormatter(mock_io)
         stats = {
             'exact_cache_entries': 10,
             'intent_cache_entries': 5,
@@ -382,9 +389,9 @@ class TestCacheFormatter:
             for cell in row:
                 assert "\x1b" not in cell
 
-    def test_format_stats_displays_header(self):
+    def test_format_stats_displays_header(self, mock_io):
         """Formatter displays cache statistics header."""
-        formatter = CacheFormatter()
+        formatter = CacheFormatter(mock_io)
         stats = {
             'exact_cache_entries': 10,
             'intent_cache_entries': 5,
@@ -401,9 +408,9 @@ class TestCacheFormatter:
 
         assert "Cache Statistics" in result
 
-    def test_format_stats_shows_entry_counts(self):
+    def test_format_stats_shows_entry_counts(self, mock_io):
         """Formatter displays cache entry counts."""
-        formatter = CacheFormatter()
+        formatter = CacheFormatter(mock_io)
         stats = {
             'exact_cache_entries': 12,
             'intent_cache_entries': 8,
@@ -424,9 +431,9 @@ class TestCacheFormatter:
         assert "Cache Misses: 5" in result
         assert "Cache Saves: 20" in result
 
-    def test_format_stats_shows_hit_rates(self):
+    def test_format_stats_shows_hit_rates(self, mock_io):
         """Formatter displays hit rates with colors."""
-        formatter = CacheFormatter()
+        formatter = CacheFormatter(mock_io)
         stats = {
             'exact_cache_entries': 10,
             'intent_cache_entries': 5,
@@ -447,9 +454,9 @@ class TestCacheFormatter:
         assert "60.0%" in result
         assert "\x1b" in result  # Has color codes
 
-    def test_format_stats_shows_cache_file(self):
+    def test_format_stats_shows_cache_file(self, mock_io):
         """Formatter displays cache file location."""
-        formatter = CacheFormatter()
+        formatter = CacheFormatter(mock_io)
         stats = {
             'exact_cache_entries': 0,
             'intent_cache_entries': 0,
@@ -467,9 +474,9 @@ class TestCacheFormatter:
         assert "Cache File" in result
         assert "/path/to/.llm_cache.json" in result
 
-    def test_format_stats_shows_enabled_status(self):
+    def test_format_stats_shows_enabled_status(self, mock_io):
         """Formatter displays cache enabled status in green."""
-        formatter = CacheFormatter()
+        formatter = CacheFormatter(mock_io)
         stats = {
             'exact_cache_entries': 0,
             'intent_cache_entries': 0,
@@ -488,9 +495,9 @@ class TestCacheFormatter:
         assert "Enabled" in result
         assert "\x1b" in result  # Has color codes
 
-    def test_format_stats_shows_disabled_status(self):
+    def test_format_stats_shows_disabled_status(self, mock_io):
         """Formatter displays cache disabled status in red."""
-        formatter = CacheFormatter()
+        formatter = CacheFormatter(mock_io)
         stats = {
             'exact_cache_entries': 0,
             'intent_cache_entries': 0,
@@ -509,9 +516,9 @@ class TestCacheFormatter:
         assert "Disabled" in result
         assert "\x1b" in result  # Has color codes
 
-    def test_format_hit_rate_colors_by_value(self):
+    def test_format_hit_rate_colors_by_value(self, mock_io):
         """Formatter colors hit rate based on percentage."""
-        formatter = CacheFormatter()
+        formatter = CacheFormatter(mock_io)
 
         # High hit rate (> 50%) should be green
         high_rate = formatter.format_hit_rate("75.0%", "Hit Rate")
@@ -523,34 +530,34 @@ class TestCacheFormatter:
         assert "25.0%" in low_rate
         assert "\x1b" in low_rate
 
-    def test_format_hit_rate_handles_invalid_value(self):
+    def test_format_hit_rate_handles_invalid_value(self, mock_io):
         """Formatter handles invalid hit rate strings gracefully."""
-        formatter = CacheFormatter()
+        formatter = CacheFormatter(mock_io)
         result = formatter.format_hit_rate("N/A", "Hit Rate")
 
         assert "Hit Rate" in result
         assert "N/A" in result
         # Should not crash
 
-    def test_format_toggle_message_enabled(self):
+    def test_format_toggle_message_enabled(self, mock_io):
         """Formatter displays cache enabled message in green."""
-        formatter = CacheFormatter()
+        formatter = CacheFormatter(mock_io)
         result = formatter.format_toggle_message(True)
 
         assert "enabled" in result
         assert "\x1b" in result  # Has color codes
 
-    def test_format_toggle_message_disabled(self):
+    def test_format_toggle_message_disabled(self, mock_io):
         """Formatter displays cache disabled message in yellow."""
-        formatter = CacheFormatter()
+        formatter = CacheFormatter(mock_io)
         result = formatter.format_toggle_message(False)
 
         assert "disabled" in result
         assert "\x1b" in result  # Has color codes
 
-    def test_format_clear_message(self):
+    def test_format_clear_message(self, mock_io):
         """Formatter displays cache cleared message."""
-        formatter = CacheFormatter()
+        formatter = CacheFormatter(mock_io)
         result = formatter.format_clear_message()
 
         assert "cleared" in result
@@ -562,7 +569,9 @@ class TestStatsFormatterColorDisabled:
 
     def test_format_header_without_color(self):
         """Formatter creates header without ANSI codes when use_color=False."""
-        formatter = StatsFormatter(use_color=False)
+        io = MockIO()
+        io.use_color = False
+        formatter = StatsFormatter(io)
         result = formatter.format_header("Test Header", width=30)
 
         assert "Test Header" in result
@@ -571,7 +580,9 @@ class TestStatsFormatterColorDisabled:
 
     def test_format_percentage_without_color(self):
         """Formatter displays percentage without ANSI codes when use_color=False."""
-        formatter = StatsFormatter(use_color=False)
+        io = MockIO()
+        io.use_color = False
+        formatter = StatsFormatter(io)
         result = formatter.format_percentage(50, 100)
 
         assert "50.0%" in result
@@ -579,7 +590,9 @@ class TestStatsFormatterColorDisabled:
 
     def test_format_percentage_with_label_without_color(self):
         """Formatter displays labeled percentage without ANSI codes."""
-        formatter = StatsFormatter(use_color=False)
+        io = MockIO()
+        io.use_color = False
+        formatter = StatsFormatter(io)
         result = formatter.format_percentage(75, 100, label="Usage")
 
         assert "Usage:" in result
@@ -588,7 +601,9 @@ class TestStatsFormatterColorDisabled:
 
     def test_format_boolean_status_without_color(self):
         """Formatter displays boolean status without ANSI codes when use_color=False."""
-        formatter = StatsFormatter(use_color=False)
+        io = MockIO()
+        io.use_color = False
+        formatter = StatsFormatter(io)
 
         enabled_result = formatter.format_boolean_status(True)
         assert enabled_result == "Enabled"
@@ -604,7 +619,9 @@ class TestCacheFormatterColorDisabled:
 
     def test_format_hit_rate_without_color(self):
         """Formatter displays hit rate without ANSI codes when use_color=False."""
-        formatter = CacheFormatter(use_color=False)
+        io = MockIO()
+        io.use_color = False
+        formatter = CacheFormatter(io)
         result = formatter.format_hit_rate("75.0%", "Hit Rate")
 
         assert "Hit Rate: 75.0%" in result
@@ -612,7 +629,9 @@ class TestCacheFormatterColorDisabled:
 
     def test_format_toggle_message_without_color(self):
         """Formatter displays toggle message without ANSI codes when use_color=False."""
-        formatter = CacheFormatter(use_color=False)
+        io = MockIO()
+        io.use_color = False
+        formatter = CacheFormatter(io)
 
         enabled_result = formatter.format_toggle_message(True)
         assert "enabled" in enabled_result
@@ -624,7 +643,9 @@ class TestCacheFormatterColorDisabled:
 
     def test_format_clear_message_without_color(self):
         """Formatter displays clear message without ANSI codes when use_color=False."""
-        formatter = CacheFormatter(use_color=False)
+        io = MockIO()
+        io.use_color = False
+        formatter = CacheFormatter(io)
         result = formatter.format_clear_message()
 
         assert "cleared" in result
@@ -632,7 +653,9 @@ class TestCacheFormatterColorDisabled:
 
     def test_format_stats_without_color(self):
         """Formatter displays full stats without ANSI codes when use_color=False."""
-        formatter = CacheFormatter(use_color=False)
+        io = MockIO()
+        io.use_color = False
+        formatter = CacheFormatter(io)
         stats = {
             'exact_cache_entries': 10,
             'intent_cache_entries': 5,
@@ -660,53 +683,57 @@ class TestExtractTimeFromTimestamp:
 class TestStatsFormatterThemeIntegration:
     """Tests for StatsFormatter theme integration."""
 
-    def test_default_theme_is_used_when_none_provided(self):
+    def test_default_theme_is_used_when_none_provided(self, mock_io):
         """Formatter uses DEFAULT_THEME when no theme provided."""
-        formatter = StatsFormatter()
-        assert formatter._theme is DEFAULT_THEME
+        formatter = StatsFormatter(mock_io)
+        assert formatter._io.theme is not None  # Has theme from MockIO
 
     def test_custom_theme_is_used_when_provided(self):
         """Formatter uses provided theme instance."""
         light_theme = LightTheme()
-        formatter = StatsFormatter(theme=light_theme)
-        assert formatter._theme is light_theme
+        io = MockIO()
+        io.theme = light_theme
+        formatter = StatsFormatter(io)
+        assert formatter._io.theme is light_theme
 
     def test_format_header_uses_theme_primary_color(self):
         """Formatter uses theme.primary for headers."""
         light_theme = LightTheme()
-        formatter = StatsFormatter(theme=light_theme)
+        io = MockIO()
+        io.theme = light_theme
+        formatter = StatsFormatter(io)
         result = formatter.format_header("Test", width=20)
         # Light theme uses 'blue' for primary
         assert "blue" in result or "\x1b[" in result
 
-    def test_percentage_color_uses_theme_success_for_low(self):
+    def test_percentage_color_uses_theme_success_for_low(self, mock_io):
         """Formatter uses theme.success for low percentages."""
-        formatter = StatsFormatter()
+        formatter = StatsFormatter(mock_io)
         color = formatter._get_percentage_color(50.0)
         assert color == DEFAULT_THEME.success
 
-    def test_percentage_color_uses_theme_warning_for_medium(self):
+    def test_percentage_color_uses_theme_warning_for_medium(self, mock_io):
         """Formatter uses theme.warning for medium percentages."""
-        formatter = StatsFormatter()
+        formatter = StatsFormatter(mock_io)
         color = formatter._get_percentage_color(80.0)
         assert color == DEFAULT_THEME.warning
 
-    def test_percentage_color_uses_theme_error_for_high(self):
+    def test_percentage_color_uses_theme_error_for_high(self, mock_io):
         """Formatter uses theme.error for high percentages."""
-        formatter = StatsFormatter()
+        formatter = StatsFormatter(mock_io)
         color = formatter._get_percentage_color(95.0)
         assert color == DEFAULT_THEME.error
 
-    def test_boolean_status_uses_theme_success_for_true(self):
+    def test_boolean_status_uses_theme_success_for_true(self, mock_io):
         """Formatter uses theme.success for True values."""
-        formatter = StatsFormatter()
+        formatter = StatsFormatter(mock_io)
         result = formatter.format_boolean_status(True)
         # Should contain green (theme.success default)
         assert "Enabled" in result
 
-    def test_boolean_status_uses_theme_error_for_false(self):
+    def test_boolean_status_uses_theme_error_for_false(self, mock_io):
         """Formatter uses theme.error for False values."""
-        formatter = StatsFormatter()
+        formatter = StatsFormatter(mock_io)
         result = formatter.format_boolean_status(False)
         # Should contain red (theme.error default)
         assert "Disabled" in result
@@ -714,11 +741,13 @@ class TestStatsFormatterThemeIntegration:
     def test_light_theme_uses_different_colors(self):
         """Light theme provides different color values."""
         light_theme = LightTheme()
-        formatter = StatsFormatter(theme=light_theme)
+        io = MockIO()
+        io.theme = light_theme
+        formatter = StatsFormatter(io)
 
-        # Light theme has blue as primary, not cyan
-        assert formatter._theme.primary == "blue"
-        assert formatter._theme.accent == "magenta"
+        # Light theme has blue (#0000ff) as primary, not cyan
+        assert formatter._io.theme.primary == "#0000ff"
+        assert formatter._io.theme.accent == "#ff00ff"
 
 
 class TestCacheFormatterThemeIntegration:
@@ -727,41 +756,43 @@ class TestCacheFormatterThemeIntegration:
     def test_inherits_theme_from_stats_formatter(self):
         """CacheFormatter correctly passes theme to parent."""
         light_theme = LightTheme()
-        formatter = CacheFormatter(theme=light_theme)
-        assert formatter._theme is light_theme
+        io = MockIO()
+        io.theme = light_theme
+        formatter = CacheFormatter(io)
+        assert formatter._io.theme is light_theme
 
-    def test_format_hit_rate_uses_theme_success_for_high_rate(self):
+    def test_format_hit_rate_uses_theme_success_for_high_rate(self, mock_io):
         """Formatter uses theme.success for hit rates > 50%."""
-        formatter = CacheFormatter()
+        formatter = CacheFormatter(mock_io)
         result = formatter.format_hit_rate("75.0%", "Hit Rate")
         # Contains styled text
         assert "75.0%" in result
         assert "\x1b" in result
 
-    def test_format_hit_rate_uses_theme_warning_for_low_rate(self):
+    def test_format_hit_rate_uses_theme_warning_for_low_rate(self, mock_io):
         """Formatter uses theme.warning for hit rates <= 50%."""
-        formatter = CacheFormatter()
+        formatter = CacheFormatter(mock_io)
         result = formatter.format_hit_rate("25.0%", "Hit Rate")
         assert "25.0%" in result
         assert "\x1b" in result
 
-    def test_format_toggle_message_uses_theme_success_for_enabled(self):
+    def test_format_toggle_message_uses_theme_success_for_enabled(self, mock_io):
         """Formatter uses theme.success for enabled state."""
-        formatter = CacheFormatter()
+        formatter = CacheFormatter(mock_io)
         result = formatter.format_toggle_message(True)
         assert "enabled" in result
         assert "\x1b" in result
 
-    def test_format_toggle_message_uses_theme_warning_for_disabled(self):
+    def test_format_toggle_message_uses_theme_warning_for_disabled(self, mock_io):
         """Formatter uses theme.warning for disabled state."""
-        formatter = CacheFormatter()
+        formatter = CacheFormatter(mock_io)
         result = formatter.format_toggle_message(False)
         assert "disabled" in result
         assert "\x1b" in result
 
-    def test_format_clear_message_uses_theme_success(self):
+    def test_format_clear_message_uses_theme_success(self, mock_io):
         """Formatter uses theme.success for clear message."""
-        formatter = CacheFormatter()
+        formatter = CacheFormatter(mock_io)
         result = formatter.format_clear_message()
         assert "cleared" in result
         assert "\x1b" in result
@@ -773,12 +804,14 @@ class TestRateLimitFormatterThemeIntegration:
     def test_inherits_theme_from_stats_formatter(self):
         """RateLimitFormatter correctly passes theme to parent."""
         light_theme = LightTheme()
-        formatter = RateLimitFormatter(theme=light_theme)
-        assert formatter._theme is light_theme
+        io = MockIO()
+        io.theme = light_theme
+        formatter = RateLimitFormatter(io)
+        assert formatter._io.theme is light_theme
 
-    def test_format_provider_section_uses_theme_success(self):
+    def test_format_provider_section_uses_theme_success(self, mock_io):
         """Formatter uses theme.success for provider headers."""
-        formatter = RateLimitFormatter()
+        formatter = RateLimitFormatter(mock_io)
         data = {
             'total_requests_today': 10,
             'total_tokens_today': 1000,
@@ -788,26 +821,26 @@ class TestRateLimitFormatterThemeIntegration:
         assert "OPENAI" in result
         assert "\x1b" in result
 
-    def test_format_warnings_uses_theme_error(self):
+    def test_format_warnings_uses_theme_error(self, mock_io):
         """Formatter uses theme.error for warnings."""
-        formatter = RateLimitFormatter()
+        formatter = RateLimitFormatter(mock_io)
         warnings = ["Test warning"]
         result = formatter.format_warnings(warnings)
         assert "WARNINGS" in result
         assert "Test warning" in result
         assert "\x1b" in result
 
-    def test_format_tracker_file_uses_theme_primary(self):
+    def test_format_tracker_file_uses_theme_primary(self, mock_io):
         """Formatter uses theme.primary for file location."""
-        formatter = RateLimitFormatter()
+        formatter = RateLimitFormatter(mock_io)
         result = formatter.format_tracker_file_location("/path/to/file.json")
         assert "Tracking File" in result
         assert "/path/to/file.json" in result
         assert "\x1b" in result
 
-    def test_format_quota_line_uses_theme_percentage_colors(self):
+    def test_format_quota_line_uses_theme_percentage_colors(self, mock_io):
         """Formatter uses theme colors for quota percentages."""
-        formatter = RateLimitFormatter()
+        formatter = RateLimitFormatter(mock_io)
 
         # Low usage should use success color
         low_result = formatter.format_quota_line("Requests", 10, 100)
@@ -817,9 +850,9 @@ class TestRateLimitFormatterThemeIntegration:
         high_result = formatter.format_quota_line("Requests", 95, 100)
         assert "95.0%" in high_result
 
-    def test_format_status_provider_not_found_uses_theme_warning(self):
+    def test_format_status_provider_not_found_uses_theme_warning(self, mock_io):
         """Formatter uses theme.warning for provider not found message."""
-        formatter = RateLimitFormatter()
+        formatter = RateLimitFormatter(mock_io)
         status = {
             'last_reset': {'daily': '2024-01-15', 'monthly': '2024-01-01'},
             'providers': {'openai': {}}
@@ -835,7 +868,9 @@ class TestNoColorThemeIntegration:
     def test_stats_formatter_with_no_color_theme(self):
         """StatsFormatter works with NoColorTheme."""
         no_color = NoColorTheme()
-        formatter = StatsFormatter(theme=no_color)
+        io = MockIO()
+        io.theme = no_color
+        formatter = StatsFormatter(io)
 
         # Empty string colors should still work with click.style
         result = formatter.format_header("Test", width=20)
@@ -844,7 +879,9 @@ class TestNoColorThemeIntegration:
     def test_cache_formatter_with_no_color_theme(self):
         """CacheFormatter works with NoColorTheme."""
         no_color = NoColorTheme()
-        formatter = CacheFormatter(theme=no_color)
+        io = MockIO()
+        io.theme = no_color
+        formatter = CacheFormatter(io)
 
         result = formatter.format_hit_rate("50.0%", "Rate")
         assert "50.0%" in result
@@ -852,7 +889,9 @@ class TestNoColorThemeIntegration:
     def test_rate_limit_formatter_with_no_color_theme(self):
         """RateLimitFormatter works with NoColorTheme."""
         no_color = NoColorTheme()
-        formatter = RateLimitFormatter(theme=no_color)
+        io = MockIO()
+        io.theme = no_color
+        formatter = RateLimitFormatter(io)
 
         result = formatter.format_tracker_file_location("/path/file.json")
         assert "Tracking File" in result

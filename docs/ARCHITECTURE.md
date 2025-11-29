@@ -1,4 +1,4 @@
-# Multi-Provider LLM Agent Team Architecture
+# Multi-Provider Architecture
 
 ## Overview
 
@@ -154,7 +154,7 @@ Automatic project understanding with **built-in semantic search**:
 - Analyzes dependencies and configuration
 - **Indexes code for semantic search** (automatic, built-in)
 - Generates LLM summaries of the codebase
-- Caches results to `.llm_team_context.json`
+- Caches results to `.scrappy/context.json`
 - Augments prompts with relevant context
 
 #### Semantic Search Architecture
@@ -264,7 +264,7 @@ result = orch.delegate(
 # - Dependencies available
 ```
 
-### Pattern 2: Autonomous Operation (No Claude Code)
+### Pattern 2: Autonomous Operation
 
 ```python
 from src.orchestrator import AgentOrchestrator
@@ -363,7 +363,7 @@ else:
 **CLI Usage:**
 ```bash
 # One-shot
-python llm_team.py agent "Add feature X"
+python scrappy.py agent "Add feature X"
 
 # Interactive
 You: /agent Add input validation
@@ -460,21 +460,6 @@ The system handles:
 - Model unavailability (checked at runtime)
 - JSON parsing failures (fallback to raw response)
 
-## Future Enhancements
-
-1. **Response caching** - Store responses to avoid duplicate calls
-2. **Async/parallel execution** - Speed up multi-agent workflows
-3. **Persistent rate limit tracking** - Survive session restarts
-4. **Cost estimation** - Even for free tiers, track usage
-5. **Retry logic** - Automatic retry on transient failures
-6. **Provider health checks** - Monitor availability
-7. ~~**Embedding-based context**~~ - ✅ **IMPLEMENTED** (semantic search with LanceDB)
-8. **Conversation memory** - Persist chat history across sessions
-9. ~~**Smart context selection**~~ - ✅ **IMPLEMENTED** (semantic search finds relevant code)
-10. **Agent memory** - Learn from previous successful actions
-11. **Agent tool expansion** - Add git, testing, debugging tools
-12. **Multi-file agent operations** - Coordinate changes across multiple files
-13. **Agent rollback improvements** - Granular undo for specific actions
 
 ## Testing
 
@@ -485,14 +470,6 @@ python test_orchestrator.py
 # Test basic usage patterns
 python examples/basic_usage.py
 ```
-
-## Current Limitations
-
-1. **Synchronous only** - No async/parallel execution yet
-2. **Session-based rate tracking** - Rate limits reset on restart (context is cached)
-3. **No response caching** - Every call hits the API
-4. **Limited error recovery** - Basic error handling only
-5. ~~**Full context injection**~~ - ✅ **RESOLVED** (semantic search filters by relevance)
 
 ## Project Structure
 
@@ -531,7 +508,7 @@ examples/
 ├── agent_demo.py            # Code agent safety features
 └── context_aware_demo.py    # Context-aware development
 
-llm_team.py                   # CLI entry point
+scrappy.py                   # CLI entry point
 .scrappy/
 .scrappy/.context.json        # Cached codebase context (auto-generated)
 .scrappy/.audit.json             # Agent action audit log (auto-generated)
@@ -539,7 +516,7 @@ llm_team.py                   # CLI entry point
 
 ## Context Caching
 
-The system maintains a cache file (`.llm_team_context.json`) that stores:
+The system maintains a cache file (`.scrappy/context.json`) that stores:
 
 ```json
 {

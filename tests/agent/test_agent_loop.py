@@ -253,6 +253,7 @@ class TestAgentLoopEvaluate:
             parameters={},
             approved=True,
             executed=True,
+            metadata={"stop_loop": True},
         )
         state = ConversationState(
             tools_executed=["write_file"],  # Meaningful action performed
@@ -407,16 +408,28 @@ class TestAgentLoopRun:
         response.tool_calls = None  # Must be None, not Mock
         mock_orchestrator.delegate.return_value = response
 
-        # Create action executor that returns write_file action
+        # Create action executor that returns appropriate results
         mock_action_executor = Mock()
-        mock_action_executor.execute.return_value = ActionResult(
-            success=True,
-            output="File written",
-            action="write_file",
-            parameters={"path": "test.py", "content": "test"},
-            approved=True,
-            executed=True,
-        )
+        def execute_side_effect(action, state, dry_run=False):
+            if action.action == "complete":
+                return ActionResult(
+                    success=True,
+                    output="Task completed",
+                    action="complete",
+                    parameters={},
+                    approved=True,
+                    executed=True,
+                    metadata={"stop_loop": True},
+                )
+            return ActionResult(
+                success=True,
+                output="File written",
+                action="write_file",
+                parameters={"path": "test.py", "content": "test"},
+                approved=True,
+                executed=True,
+            )
+        mock_action_executor.execute.side_effect = execute_side_effect
 
         # Setup parser to return complete on second iteration
         call_count = [0]

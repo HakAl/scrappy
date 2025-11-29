@@ -3,11 +3,20 @@ Pytest configuration and shared fixtures.
 """
 import pytest
 import sys
+import os
+import tempfile
 from pathlib import Path
 from unittest.mock import Mock, MagicMock, patch
 from dataclasses import dataclass
 
 from src.task_router.config import ClarificationConfig
+
+
+def pytest_configure(config):
+    """Configure pytest to use system temp directory instead of project root."""
+    # Use system temp directory to avoid permission issues and keep project clean
+    if not config.option.basetemp:
+        config.option.basetemp = Path(tempfile.gettempdir()) / "pytest-scrappy"
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -171,3 +180,27 @@ def mock_codebase_context(temp_project_dir, mock_semantic_initializer):
         semantic_initializer=mock_semantic_initializer
     )
     return context
+
+
+@pytest.fixture
+def mock_tool_registry():
+    """
+    Create a mock ToolRegistry for testing.
+
+    Returns a mock registry that implements the required methods
+    without registering real tools.
+    """
+    mock = Mock()
+    mock.generate_descriptions.return_value = "Mock tool descriptions"
+    # Mock should include common tool names that tests expect to find
+    mock.get_full_prompt_section.return_value = (
+        "Available tools:\n"
+        "- read_file: Read file contents\n"
+        "- write_file: Write content to file\n"
+        "- run_command: Execute shell command\n"
+        "- list_files: List files in directory\n"
+        "- search_code: Search for code patterns\n"
+        "\n"
+        "Response format: {\"thought\": \"...\", \"action\": \"...\", \"parameters\": {...}, \"is_complete\": true/false}"
+    )
+    return mock

@@ -115,4 +115,4 @@ scrappy agent "Add input validation"
 → Run `pip install -e .` from the scrappy directory.
 
 **Command not found: scrappy**
-→ Run `pip install -e .` again, or use `python llm_team.py` instead.
+→ Run `pip install -e .` again, or use `python scrappy.py` to debug.

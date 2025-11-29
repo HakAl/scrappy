@@ -187,7 +187,7 @@ class TestToolRegistryFactoryIntegration:
     """Tests for factory integration with CodeAgent."""
 
     @pytest.mark.unit
-    def test_code_agent_can_use_factory_registry(self, mock_orchestrator_adapter):
+    def test_code_agent_can_use_factory_registry(self, mock_orchestrator_adapter, tmp_path):
         """CodeAgent should accept registry from factory."""
         from src.agent.core import CodeAgent
         from src.agent_config import AgentConfig
@@ -195,10 +195,10 @@ class TestToolRegistryFactoryIntegration:
         # Create registry using factory
         registry = create_default_registry()
 
-        # Inject into CodeAgent (using current directory as project path for testing)
+        # Inject into CodeAgent
         agent = CodeAgent(
             orchestrator=mock_orchestrator_adapter,
-            project_path=".",
+            project_path=str(tmp_path),
             config=AgentConfig(),
             tool_registry=registry
         )
@@ -207,7 +207,7 @@ class TestToolRegistryFactoryIntegration:
         assert agent.tool_registry is registry
 
     @pytest.mark.unit
-    def test_code_agent_tools_match_registry(self, mock_orchestrator_adapter):
+    def test_code_agent_tools_match_registry(self, mock_orchestrator_adapter, tmp_path):
         """CodeAgent.tools dict should include all registry tools."""
         from src.agent.core import CodeAgent
         from src.agent_config import AgentConfig
@@ -216,7 +216,7 @@ class TestToolRegistryFactoryIntegration:
 
         agent = CodeAgent(
             orchestrator=mock_orchestrator_adapter,
-            project_path=".",
+            project_path=str(tmp_path),
             config=AgentConfig(),
             tool_registry=registry
         )
@@ -226,7 +226,7 @@ class TestToolRegistryFactoryIntegration:
             assert tool.name in agent.tools, f"Registry tool {tool.name} not in agent.tools"
 
     @pytest.mark.unit
-    def test_agent_with_minimal_registry(self, mock_orchestrator_adapter):
+    def test_agent_with_minimal_registry(self, mock_orchestrator_adapter, tmp_path):
         """CodeAgent should work with minimal registry."""
         from src.agent.core import CodeAgent
         from src.agent_config import AgentConfig
@@ -236,7 +236,7 @@ class TestToolRegistryFactoryIntegration:
 
         agent = CodeAgent(
             orchestrator=mock_orchestrator_adapter,
-            project_path=".",
+            project_path=str(tmp_path),
             config=AgentConfig(),
             tool_registry=registry
         )

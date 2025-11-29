@@ -966,12 +966,12 @@ class TestAgentIOIntegration:
         agent.dry_run = True
         agent.run("Test task")
 
-        # Should have thinking panel with blue border
+        # Should have thinking panel
         panels = io.get_panels()
         thinking_panels = [p for p in panels if p.get('title') == 'Thinking']
 
         assert thinking_panels, f"No thinking panels found. Panels: {panels}"
-        assert thinking_panels[0]['border_style'] == 'blue'
+        # Color is determined by theme - tested in theme tests
 
 
 
@@ -1004,7 +1004,7 @@ class TestAgentOutputHelpers:
         panels = io.get_panels()
         assert len(panels) == 1
         assert panels[0]['title'] == 'Thinking'
-        assert panels[0]['border_style'] == 'blue'
+        # Color is determined by theme - tested in theme tests
 
     def test_agent_has_show_tool_request_method(self):
         """Agent should have _show_tool_request helper method."""
@@ -1043,7 +1043,7 @@ class TestAgentOutputHelpers:
         panels = io.get_panels()
         assert len(panels) == 1
         assert panels[0]['title'] == 'Error'
-        assert panels[0]['border_style'] == 'red'
+        # Color is determined by theme - tested in theme tests
 
     def test_agent_has_show_result_method(self):
         """Agent should have _show_result helper method."""
@@ -1062,7 +1062,7 @@ class TestAgentOutputHelpers:
 
         panels = io.get_panels()
         assert len(panels) == 1
-        assert panels[0]['border_style'] == 'green'
+        # Color is determined by theme - tested in theme tests
 
     def test_agent_has_show_command_method(self):
         """Agent should have _show_command helper method."""

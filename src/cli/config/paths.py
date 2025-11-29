@@ -15,13 +15,6 @@ RESPONSE_CACHE_FILE = '.scrappy/response_cache.json'
 CONTEXT_FILE = '.scrappy/context.json'
 AUDIT_FILE = '.scrappy/audit.json'
 
-# Legacy file names (for migration)
-LEGACY_SESSION_FILE = '.llm_team_session.json'
-LEGACY_RATE_LIMITS_FILE = '.llm_rate_limits.json'
-LEGACY_RESPONSE_CACHE_FILE = '.llm_response_cache.json'
-LEGACY_CONTEXT_FILE = '.llm_team_context.json'
-LEGACY_AUDIT_FILE = '.llm_agent_audit.json'
-
 # Hidden files and directories (should not be shown in file listings)
 HIDDEN_FILES: List[str] = [
     SESSION_FILE,
@@ -29,12 +22,6 @@ HIDDEN_FILES: List[str] = [
     RESPONSE_CACHE_FILE,
     CONTEXT_FILE,
     AUDIT_FILE,
-    # Legacy files
-    LEGACY_SESSION_FILE,
-    LEGACY_RATE_LIMITS_FILE,
-    LEGACY_RESPONSE_CACHE_FILE,
-    LEGACY_CONTEXT_FILE,
-    LEGACY_AUDIT_FILE,
 ]
 
 # Hidden directories

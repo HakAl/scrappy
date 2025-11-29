@@ -19,17 +19,17 @@ class TestSystemPromptBuilderUsesCodebaseContext:
     """SystemPromptBuilder should leverage CodebaseContext for project detection."""
 
     @pytest.mark.unit
-    def test_accepts_codebase_context_instance(self, temp_project_dir):
+    def test_accepts_codebase_context_instance(self, temp_project_dir, mock_tool_registry):
         """SystemPromptBuilder should accept a CodebaseContext instance."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
         context = CodebaseContext(str(temp_project_dir))
-        builder = SystemPromptBuilder(context=context)
+        builder = SystemPromptBuilder(context=context, tool_registry=mock_tool_registry)
 
         assert builder.context is context
 
     @pytest.mark.unit
-    def test_uses_context_structure_for_project_type(self, temp_project_dir):
+    def test_uses_context_structure_for_project_type(self, temp_project_dir, mock_tool_registry):
         """SystemPromptBuilder should use context.structure for project type detection."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
@@ -39,7 +39,7 @@ class TestSystemPromptBuilderUsesCodebaseContext:
         context = CodebaseContext(str(temp_project_dir))
         context.explore()
 
-        builder = SystemPromptBuilder(context=context)
+        builder = SystemPromptBuilder(context=context, tool_registry=mock_tool_registry)
 
         # Should use context's detection
         assert context.structure.get('has_requirements') is True
@@ -52,11 +52,11 @@ class TestPromptBuilderPlatformAwareness:
 
     @pytest.mark.unit
     @patch.object(CodebaseContext, 'get_platform', return_value='windows')
-    def test_windows_prompt_includes_cmd_commands(self, mock_platform, temp_project_dir):
+    def test_windows_prompt_includes_cmd_commands(self, mock_platform, temp_project_dir, mock_tool_registry):
         """Windows prompt should include cmd.exe commands, not Unix."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
-        builder = SystemPromptBuilder(project_root=temp_project_dir)
+        builder = SystemPromptBuilder(project_root=temp_project_dir, tool_registry=mock_tool_registry)
         prompt = builder.build()
 
         # Should include Windows commands
@@ -69,11 +69,11 @@ class TestPromptBuilderPlatformAwareness:
 
     @pytest.mark.unit
     @patch.object(CodebaseContext, 'get_platform', return_value='unix')
-    def test_unix_prompt_includes_unix_commands(self, mock_platform, temp_project_dir):
+    def test_unix_prompt_includes_unix_commands(self, mock_platform, temp_project_dir, mock_tool_registry):
         """Unix prompt should include Unix commands, not Windows."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
-        builder = SystemPromptBuilder(project_root=temp_project_dir)
+        builder = SystemPromptBuilder(project_root=temp_project_dir, tool_registry=mock_tool_registry)
         prompt = builder.build()
 
         # Should include Unix commands
@@ -86,11 +86,11 @@ class TestPromptBuilderPlatformAwareness:
 
     @pytest.mark.unit
     @patch.object(CodebaseContext, 'get_platform', return_value='windows')
-    def test_windows_prompt_warns_about_powershell(self, mock_platform, temp_project_dir):
+    def test_windows_prompt_warns_about_powershell(self, mock_platform, temp_project_dir, mock_tool_registry):
         """Windows prompt should warn against PowerShell cmdlets."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
-        builder = SystemPromptBuilder(project_root=temp_project_dir)
+        builder = SystemPromptBuilder(project_root=temp_project_dir, tool_registry=mock_tool_registry)
         prompt = builder.build()
 
         # Should explicitly warn about PowerShell
@@ -98,12 +98,12 @@ class TestPromptBuilderPlatformAwareness:
         assert 'New-Item' in prompt or 'cmdlet' in prompt
 
     @pytest.mark.unit
-    def test_platform_auto_detected(self, temp_project_dir):
+    def test_platform_auto_detected(self, temp_project_dir, mock_tool_registry):
         """Platform should be auto-detected from system."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
         import sys
 
-        builder = SystemPromptBuilder(project_root=temp_project_dir)
+        builder = SystemPromptBuilder(project_root=temp_project_dir, tool_registry=mock_tool_registry)
 
         # Should detect current platform
         if sys.platform == 'win32':
@@ -116,7 +116,7 @@ class TestPromptBuilderProjectTypeAwareness:
     """SystemPromptBuilder should tailor guidance to project type from context."""
 
     @pytest.mark.unit
-    def test_python_project_gets_python_guidance(self, temp_project_dir):
+    def test_python_project_gets_python_guidance(self, temp_project_dir, mock_tool_registry):
         """Python projects should get Python-specific guidance."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
@@ -126,7 +126,7 @@ class TestPromptBuilderProjectTypeAwareness:
         context = CodebaseContext(str(temp_project_dir))
         context.explore()
 
-        builder = SystemPromptBuilder(context=context)
+        builder = SystemPromptBuilder(context=context, tool_registry=mock_tool_registry)
         prompt = builder.build()
 
         # Should include Python guidance
@@ -138,7 +138,7 @@ class TestPromptBuilderProjectTypeAwareness:
         assert 'package.json' not in prompt or 'Node' not in prompt
 
     @pytest.mark.unit
-    def test_java_project_gets_java_guidance(self, tmp_path):
+    def test_java_project_gets_java_guidance(self, tmp_path, mock_tool_registry):
         """Java/Maven projects should get Java-specific guidance."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
@@ -148,7 +148,7 @@ class TestPromptBuilderProjectTypeAwareness:
         context = CodebaseContext(str(tmp_path))
         context.explore()
 
-        builder = SystemPromptBuilder(context=context)
+        builder = SystemPromptBuilder(context=context, tool_registry=mock_tool_registry)
         prompt = builder.build()
 
         # Should include Java guidance
@@ -159,7 +159,7 @@ class TestPromptBuilderProjectTypeAwareness:
         assert 'package.json' not in prompt or 'npm' not in prompt
 
     @pytest.mark.unit
-    def test_nodejs_project_gets_node_guidance(self, tmp_path):
+    def test_nodejs_project_gets_node_guidance(self, tmp_path, mock_tool_registry):
         """Node.js projects should get Node-specific guidance."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
@@ -169,7 +169,7 @@ class TestPromptBuilderProjectTypeAwareness:
         context = CodebaseContext(str(tmp_path))
         context.explore()
 
-        builder = SystemPromptBuilder(context=context)
+        builder = SystemPromptBuilder(context=context, tool_registry=mock_tool_registry)
         prompt = builder.build()
 
         # Should include Node guidance
@@ -180,14 +180,14 @@ class TestPromptBuilderProjectTypeAwareness:
         assert 'requirements.txt' not in prompt
 
     @pytest.mark.unit
-    def test_unknown_project_gets_generic_guidance(self, temp_project_dir):
+    def test_unknown_project_gets_generic_guidance(self, temp_project_dir, mock_tool_registry):
         """Projects without markers should get generic guidance."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
         context = CodebaseContext(str(temp_project_dir))
         context.explore()
 
-        builder = SystemPromptBuilder(context=context)
+        builder = SystemPromptBuilder(context=context, tool_registry=mock_tool_registry)
         prompt = builder.build()
 
         # Should have basic guidance but not framework-specific
@@ -203,11 +203,11 @@ class TestPromptBuilderSuccinctness:
 
     @pytest.mark.unit
     @patch.object(CodebaseContext, 'get_platform', return_value='windows')
-    def test_prompt_does_not_include_all_platform_examples(self, mock_platform, temp_project_dir):
+    def test_prompt_does_not_include_all_platform_examples(self, mock_platform, temp_project_dir, mock_tool_registry):
         """Prompt should not include examples for ALL platforms."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
-        builder = SystemPromptBuilder(project_root=temp_project_dir)
+        builder = SystemPromptBuilder(project_root=temp_project_dir, tool_registry=mock_tool_registry)
         prompt = builder.build()
 
         # Should not have Unix examples on Windows
@@ -215,7 +215,7 @@ class TestPromptBuilderSuccinctness:
         assert 'brew install' not in prompt
 
     @pytest.mark.unit
-    def test_prompt_does_not_include_all_framework_examples(self, temp_project_dir):
+    def test_prompt_does_not_include_all_framework_examples(self, temp_project_dir, mock_tool_registry):
         """Prompt should not include examples for ALL frameworks."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
@@ -225,7 +225,7 @@ class TestPromptBuilderSuccinctness:
         context = CodebaseContext(str(temp_project_dir))
         context.explore()
 
-        builder = SystemPromptBuilder(context=context)
+        builder = SystemPromptBuilder(context=context, tool_registry=mock_tool_registry)
         prompt = builder.build()
 
         # Count framework mentions - should be focused
@@ -239,11 +239,11 @@ class TestPromptBuilderSuccinctness:
         assert vite_count == 0
 
     @pytest.mark.unit
-    def test_prompt_length_is_reasonable(self, temp_project_dir):
+    def test_prompt_length_is_reasonable(self, temp_project_dir, mock_tool_registry):
         """Prompt should not be excessively long."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
-        builder = SystemPromptBuilder(project_root=temp_project_dir)
+        builder = SystemPromptBuilder(project_root=temp_project_dir, tool_registry=mock_tool_registry)
         prompt = builder.build()
 
         # Current prompt is ~2000 characters. New one should be similar or smaller
@@ -258,12 +258,12 @@ class TestPromptBuilderContextCaching:
     """SystemPromptBuilder should leverage context's caching."""
 
     @pytest.mark.unit
-    def test_multiple_builds_use_same_context(self, temp_project_dir):
+    def test_multiple_builds_use_same_context(self, temp_project_dir, mock_tool_registry):
         """Multiple build() calls should reuse the same context."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
         context = CodebaseContext(str(temp_project_dir))
-        builder = SystemPromptBuilder(context=context)
+        builder = SystemPromptBuilder(context=context, tool_registry=mock_tool_registry)
 
         prompt1 = builder.build()
         prompt2 = builder.build()
@@ -272,12 +272,12 @@ class TestPromptBuilderContextCaching:
         assert prompt1 == prompt2
 
     @pytest.mark.unit
-    def test_context_explored_once_on_first_build(self, temp_project_dir):
+    def test_context_explored_once_on_first_build(self, temp_project_dir, mock_tool_registry):
         """Context should be explored once when first needed."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
         context = CodebaseContext(str(temp_project_dir))
-        builder = SystemPromptBuilder(context=context)
+        builder = SystemPromptBuilder(context=context, tool_registry=mock_tool_registry)
 
         # Context not explored yet
         assert not context.is_explored()
@@ -297,11 +297,11 @@ class TestPromptBuilderAccuracy:
 
     @pytest.mark.unit
     @patch.object(CodebaseContext, 'get_platform', return_value='windows')
-    def test_windows_provides_correct_mkdir_syntax(self, mock_platform, temp_project_dir):
+    def test_windows_provides_correct_mkdir_syntax(self, mock_platform, temp_project_dir, mock_tool_registry):
         """Windows prompt should show correct mkdir syntax."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
-        builder = SystemPromptBuilder(project_root=temp_project_dir)
+        builder = SystemPromptBuilder(project_root=temp_project_dir, tool_registry=mock_tool_registry)
         prompt = builder.build()
 
         # Should provide correct Windows syntax
@@ -311,11 +311,11 @@ class TestPromptBuilderAccuracy:
             assert 'mkdir -p' not in prompt
 
     @pytest.mark.unit
-    def test_prompt_includes_tool_names(self, temp_project_dir):
+    def test_prompt_includes_tool_names(self, temp_project_dir, mock_tool_registry):
         """Prompt should reference actual available tools."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
-        builder = SystemPromptBuilder(project_root=temp_project_dir)
+        builder = SystemPromptBuilder(project_root=temp_project_dir, tool_registry=mock_tool_registry)
         prompt = builder.build()
 
         # Should mention real tool names
@@ -326,11 +326,11 @@ class TestPromptBuilderAccuracy:
         assert tools_mentioned >= 3, f"Only {tools_mentioned} core tools mentioned in prompt"
 
     @pytest.mark.unit
-    def test_prompt_includes_json_format_requirement(self, temp_project_dir):
+    def test_prompt_includes_json_format_requirement(self, temp_project_dir, mock_tool_registry):
         """Prompt should specify JSON response format."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
-        builder = SystemPromptBuilder(project_root=temp_project_dir)
+        builder = SystemPromptBuilder(project_root=temp_project_dir, tool_registry=mock_tool_registry)
         prompt = builder.build()
 
         # Must specify JSON format (critical for parsing)
@@ -343,33 +343,33 @@ class TestPromptBuilderComposability:
     """PromptBuilder sections should be composable."""
 
     @pytest.mark.unit
-    def test_can_add_custom_section(self, temp_project_dir):
+    def test_can_add_custom_section(self, temp_project_dir, mock_tool_registry):
         """Should be able to add custom guidance sections."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
-        builder = SystemPromptBuilder(project_root=temp_project_dir)
+        builder = SystemPromptBuilder(project_root=temp_project_dir, tool_registry=mock_tool_registry)
         builder.add_section('security', 'Never commit secrets to version control.')
 
         prompt = builder.build()
         assert 'Never commit secrets' in prompt
 
     @pytest.mark.unit
-    def test_can_override_section(self, temp_project_dir):
+    def test_can_override_section(self, temp_project_dir, mock_tool_registry):
         """Should be able to override default sections."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
-        builder = SystemPromptBuilder(project_root=temp_project_dir)
+        builder = SystemPromptBuilder(project_root=temp_project_dir, tool_registry=mock_tool_registry)
         builder.set_section('platform', 'Custom platform guidance here.')
 
         prompt = builder.build()
         assert 'Custom platform guidance' in prompt
 
     @pytest.mark.unit
-    def test_task_context_included(self, temp_project_dir):
+    def test_task_context_included(self, temp_project_dir, mock_tool_registry):
         """Task description should be included in prompt."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
-        builder = SystemPromptBuilder(project_root=temp_project_dir)
+        builder = SystemPromptBuilder(project_root=temp_project_dir, tool_registry=mock_tool_registry)
         prompt = builder.build(task="Fix the authentication bug in login.py")
 
         assert 'Fix the authentication bug' in prompt or 'login.py' in prompt
@@ -416,7 +416,7 @@ class TestPromptBuilderToolRegistryIntegration:
         assert builder.tool_registry is registry
 
     @pytest.mark.unit
-    def test_uses_registry_descriptions_in_prompt(self, temp_project_dir):
+    def test_uses_registry_descriptions_in_prompt(self, temp_project_dir, mock_tool_registry):
         """Tool descriptions should come from registry, not hardcoded."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
         from src.agent_tools.tools import ToolRegistry, ReadFileTool
@@ -433,7 +433,7 @@ class TestPromptBuilderToolRegistryIntegration:
         assert 'path' in prompt
 
     @pytest.mark.unit
-    def test_uses_registry_response_format(self, temp_project_dir):
+    def test_uses_registry_response_format(self, temp_project_dir, mock_tool_registry):
         """Response format should come from registry, not generic builder."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
         from src.agent_tools.tools import ToolRegistry
@@ -452,7 +452,7 @@ class TestPromptBuilderToolRegistryIntegration:
         assert '"reasoning"' not in prompt
 
     @pytest.mark.unit
-    def test_includes_complete_action_example(self, temp_project_dir):
+    def test_includes_complete_action_example(self, temp_project_dir, mock_tool_registry):
         """Should show how to mark task as complete."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
         from src.agent_tools.tools import ToolRegistry
@@ -466,7 +466,7 @@ class TestPromptBuilderToolRegistryIntegration:
         assert 'is_complete": true' in prompt or 'is_complete.*true' in prompt
 
     @pytest.mark.unit
-    def test_tool_registry_overrides_default_tools_section(self, temp_project_dir):
+    def test_tool_registry_overrides_default_tools_section(self, temp_project_dir, mock_tool_registry):
         """When registry provided, it should replace default tools section entirely."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
         from src.agent_tools.tools import ToolRegistry, GitLogTool
@@ -491,11 +491,11 @@ class TestPromptBuilderStrategyGuidance:
 
 
     @pytest.mark.unit
-    def test_strategy_section_prefers_write_file(self, temp_project_dir):
+    def test_strategy_section_prefers_write_file(self, temp_project_dir, mock_tool_registry):
         """Strategy section should recommend write_file over scaffolding."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
-        builder = SystemPromptBuilder(project_root=temp_project_dir)
+        builder = SystemPromptBuilder(project_root=temp_project_dir, tool_registry=mock_tool_registry)
         section = builder._build_strategy_section()
 
         # Should recommend write_file
@@ -504,11 +504,11 @@ class TestPromptBuilderStrategyGuidance:
         assert 'scaffold' in section.lower() or 'curl' in section.lower()
 
     @pytest.mark.unit
-    def test_strategy_section_included_in_build(self, temp_project_dir):
+    def test_strategy_section_included_in_build(self, temp_project_dir, mock_tool_registry):
         """Strategy guidance should be in the final prompt."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
-        builder = SystemPromptBuilder(project_root=temp_project_dir)
+        builder = SystemPromptBuilder(project_root=temp_project_dir, tool_registry=mock_tool_registry)
         prompt = builder.build()
 
         # Should have strategy guidance integrated
@@ -522,11 +522,11 @@ class TestPromptBuilderEfficiencyRules:
 
 
     @pytest.mark.unit
-    def test_efficiency_section_mentions_skip_redundant(self, temp_project_dir):
+    def test_efficiency_section_mentions_skip_redundant(self, temp_project_dir, mock_tool_registry):
         """Efficiency section should mention skipping redundant operations."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
-        builder = SystemPromptBuilder(project_root=temp_project_dir)
+        builder = SystemPromptBuilder(project_root=temp_project_dir, tool_registry=mock_tool_registry)
         section = builder._build_efficiency_section()
 
         # Should mention avoiding redundant operations
@@ -535,11 +535,11 @@ class TestPromptBuilderEfficiencyRules:
         assert 'reuse' in section.lower() or 'already' in section.lower()
 
     @pytest.mark.unit
-    def test_efficiency_section_mentions_no_repeat_reads(self, temp_project_dir):
+    def test_efficiency_section_mentions_no_repeat_reads(self, temp_project_dir, mock_tool_registry):
         """Efficiency section should warn against re-reading files."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
-        builder = SystemPromptBuilder(project_root=temp_project_dir)
+        builder = SystemPromptBuilder(project_root=temp_project_dir, tool_registry=mock_tool_registry)
         section = builder._build_efficiency_section()
 
         # Should mention not re-reading files
@@ -548,11 +548,11 @@ class TestPromptBuilderEfficiencyRules:
         assert 'previous' in section.lower() or 'already' in section.lower()
 
     @pytest.mark.unit
-    def test_efficiency_rules_in_final_prompt(self, temp_project_dir):
+    def test_efficiency_rules_in_final_prompt(self, temp_project_dir, mock_tool_registry):
         """Efficiency rules should appear in the final prompt."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
-        builder = SystemPromptBuilder(project_root=temp_project_dir)
+        builder = SystemPromptBuilder(project_root=temp_project_dir, tool_registry=mock_tool_registry)
         prompt = builder.build()
 
         # Should have efficiency guidance
@@ -564,11 +564,11 @@ class TestPromptBuilderCompletionSemantics:
 
 
     @pytest.mark.unit
-    def test_completion_section_defines_when_done(self, temp_project_dir):
+    def test_completion_section_defines_when_done(self, temp_project_dir, mock_tool_registry):
         """Completion section should define when to mark task complete."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
-        builder = SystemPromptBuilder(project_root=temp_project_dir)
+        builder = SystemPromptBuilder(project_root=temp_project_dir, tool_registry=mock_tool_registry)
         section = builder._build_completion_section()
 
         # Should mention when to complete
@@ -577,22 +577,22 @@ class TestPromptBuilderCompletionSemantics:
         assert 'primary' in section.lower() or 'goal' in section.lower() or 'done' in section.lower()
 
     @pytest.mark.unit
-    def test_completion_section_warns_against_extras(self, temp_project_dir):
+    def test_completion_section_warns_against_extras(self, temp_project_dir, mock_tool_registry):
         """Completion section should warn against adding unrequested extras."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
-        builder = SystemPromptBuilder(project_root=temp_project_dir)
+        builder = SystemPromptBuilder(project_root=temp_project_dir, tool_registry=mock_tool_registry)
         section = builder._build_completion_section()
 
         # Should mention not adding extras
         assert 'optional' in section.lower() or 'extra' in section.lower() or 'unless' in section.lower()
 
     @pytest.mark.unit
-    def test_completion_semantics_in_final_prompt(self, temp_project_dir):
+    def test_completion_semantics_in_final_prompt(self, temp_project_dir, mock_tool_registry):
         """Completion semantics should appear in the final prompt."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
-        builder = SystemPromptBuilder(project_root=temp_project_dir)
+        builder = SystemPromptBuilder(project_root=temp_project_dir, tool_registry=mock_tool_registry)
         prompt = builder.build()
 
         # Should have completion guidance
@@ -604,11 +604,11 @@ class TestPromptBuilderSafetyRules:
 
 
     @pytest.mark.unit
-    def test_safety_section_warns_empty_files(self, temp_project_dir):
+    def test_safety_section_warns_empty_files(self, temp_project_dir, mock_tool_registry):
         """Safety section should warn against empty file writes."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
-        builder = SystemPromptBuilder(project_root=temp_project_dir)
+        builder = SystemPromptBuilder(project_root=temp_project_dir, tool_registry=mock_tool_registry)
         section = builder._build_safety_section()
 
         # Should warn about empty files
@@ -616,11 +616,11 @@ class TestPromptBuilderSafetyRules:
         assert 'write' in section.lower() or 'content' in section.lower()
 
     @pytest.mark.unit
-    def test_safety_section_enforces_json_format(self, temp_project_dir):
+    def test_safety_section_enforces_json_format(self, temp_project_dir, mock_tool_registry):
         """Safety section should enforce JSON format rules."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
-        builder = SystemPromptBuilder(project_root=temp_project_dir)
+        builder = SystemPromptBuilder(project_root=temp_project_dir, tool_registry=mock_tool_registry)
         section = builder._build_safety_section()
 
         # Should mention JSON format
@@ -629,22 +629,22 @@ class TestPromptBuilderSafetyRules:
         assert 'true' in section.lower() and 'false' in section.lower()
 
     @pytest.mark.unit
-    def test_safety_section_mentions_incremental_changes(self, temp_project_dir):
+    def test_safety_section_mentions_incremental_changes(self, temp_project_dir, mock_tool_registry):
         """Safety section should recommend incremental changes."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
-        builder = SystemPromptBuilder(project_root=temp_project_dir)
+        builder = SystemPromptBuilder(project_root=temp_project_dir, tool_registry=mock_tool_registry)
         section = builder._build_safety_section()
 
         # Should mention incremental or careful changes
         assert 'incremental' in section.lower() or 'careful' in section.lower() or 'small' in section.lower()
 
     @pytest.mark.unit
-    def test_safety_rules_in_final_prompt(self, temp_project_dir):
+    def test_safety_rules_in_final_prompt(self, temp_project_dir, mock_tool_registry):
         """Safety rules should appear in the final prompt."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
-        builder = SystemPromptBuilder(project_root=temp_project_dir)
+        builder = SystemPromptBuilder(project_root=temp_project_dir, tool_registry=mock_tool_registry)
         prompt = builder.build()
 
         # Should have safety guidance about JSON
@@ -655,7 +655,7 @@ class TestPromptBuilderCodeAgentIntegration:
     """SystemPromptBuilder should integrate cleanly with CodeAgent."""
 
     @pytest.mark.unit
-    def test_code_agent_uses_prompt_builder_registry(self, temp_project_dir):
+    def test_code_agent_uses_prompt_builder_registry(self, temp_project_dir, mock_tool_registry):
         """CodeAgent should pass its tool registry to PromptBuilder."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
         from src.agent_tools.tools import ToolRegistry
@@ -675,7 +675,7 @@ class TestPromptBuilderCodeAgentIntegration:
             assert tool_name in prompt, f"Tool {tool_name} not in prompt"
 
     @pytest.mark.unit
-    def test_prompt_builder_produces_complete_agent_prompt(self, temp_project_dir):
+    def test_prompt_builder_produces_complete_agent_prompt(self, temp_project_dir, mock_tool_registry):
         """PromptBuilder.build() should produce a complete prompt without needing add_section."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
         from src.agent_tools.tools import ToolRegistry
@@ -703,7 +703,7 @@ class TestPromptBuilderCodeAgentIntegration:
             assert content in prompt, f"Missing '{content}' in prompt"
 
     @pytest.mark.unit
-    def test_no_duplicate_json_format_instructions(self, temp_project_dir):
+    def test_no_duplicate_json_format_instructions(self, temp_project_dir, mock_tool_registry):
         """Prompt should not have duplicate JSON format instructions."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
         from src.agent_tools.tools import ToolRegistry
@@ -755,7 +755,7 @@ class TestPromptBuilderNoOperationalGuidanceBlob:
     """SystemPromptBuilder should NOT require a huge operational guidance blob."""
 
     @pytest.mark.unit
-    def test_build_does_not_need_custom_operational_section(self, temp_project_dir):
+    def test_build_does_not_need_custom_operational_section(self, temp_project_dir, mock_tool_registry):
         """PromptBuilder.build() should include operational concerns without add_section."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
         from src.agent_tools.tools import ToolRegistry
@@ -796,11 +796,11 @@ class TestPromptBuilderNoOperationalGuidanceBlob:
         assert len(prompt) > 1000, f"Prompt too short: {len(prompt)} chars"
 
     @pytest.mark.unit
-    def test_each_section_is_focused(self, temp_project_dir):
+    def test_each_section_is_focused(self, temp_project_dir, mock_tool_registry):
         """Each section method should return focused, concise content."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
-        builder = SystemPromptBuilder(project_root=temp_project_dir)
+        builder = SystemPromptBuilder(project_root=temp_project_dir, tool_registry=mock_tool_registry)
 
         # Each section should be reasonable size
         sections_to_check = [
@@ -821,7 +821,7 @@ class TestSystemPromptBuilderCodebaseStructure:
     """SystemPromptBuilder should include actual file locations from context."""
 
     @pytest.mark.unit
-    def test_includes_javascript_file_locations(self, temp_project_dir):
+    def test_includes_javascript_file_locations(self, temp_project_dir, mock_tool_registry):
         """Should show where JavaScript files are located."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
@@ -836,7 +836,7 @@ class TestSystemPromptBuilderCodebaseStructure:
         context = CodebaseContext(str(temp_project_dir))
         context.explore()
 
-        builder = SystemPromptBuilder(context=context)
+        builder = SystemPromptBuilder(context=context, tool_registry=mock_tool_registry)
         prompt = builder.build()
 
         # Should include the actual paths
@@ -845,7 +845,7 @@ class TestSystemPromptBuilderCodebaseStructure:
         assert 'javascript' in prompt.lower() or 'js' in prompt.lower()
 
     @pytest.mark.unit
-    def test_includes_python_file_locations(self, temp_project_dir):
+    def test_includes_python_file_locations(self, temp_project_dir, mock_tool_registry):
         """Should show where Python files are located."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
@@ -858,7 +858,7 @@ class TestSystemPromptBuilderCodebaseStructure:
         context = CodebaseContext(str(temp_project_dir))
         context.explore()
 
-        builder = SystemPromptBuilder(context=context)
+        builder = SystemPromptBuilder(context=context, tool_registry=mock_tool_registry)
         prompt = builder.build()
 
         # Should include the actual paths
@@ -867,7 +867,7 @@ class TestSystemPromptBuilderCodebaseStructure:
         assert 'python' in prompt.lower() or '.py' in prompt
 
     @pytest.mark.unit
-    def test_shows_sub_project_locations(self, temp_project_dir):
+    def test_shows_sub_project_locations(self, temp_project_dir, mock_tool_registry):
         """Should show where different sub-projects are located."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
@@ -886,14 +886,14 @@ class TestSystemPromptBuilderCodebaseStructure:
         context = CodebaseContext(str(temp_project_dir))
         context.explore()
 
-        builder = SystemPromptBuilder(context=context)
+        builder = SystemPromptBuilder(context=context, tool_registry=mock_tool_registry)
         prompt = builder.build()
 
         # Should indicate frontend is a sub-project
         assert 'frontend' in prompt.lower()
 
     @pytest.mark.unit
-    def test_agent_knows_js_not_in_root(self, temp_project_dir):
+    def test_agent_knows_js_not_in_root(self, temp_project_dir, mock_tool_registry):
         """Agent should know JavaScript files are NOT in root directory."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
@@ -905,7 +905,7 @@ class TestSystemPromptBuilderCodebaseStructure:
         context = CodebaseContext(str(temp_project_dir))
         context.explore()
 
-        builder = SystemPromptBuilder(context=context)
+        builder = SystemPromptBuilder(context=context, tool_registry=mock_tool_registry)
         section = builder._build_codebase_structure_section()
 
         # Should indicate JS files are in frontend/src, not root
@@ -913,21 +913,21 @@ class TestSystemPromptBuilderCodebaseStructure:
         assert 'frontend' in section
 
     @pytest.mark.unit
-    def test_empty_codebase_returns_minimal_section(self, temp_project_dir):
+    def test_empty_codebase_returns_minimal_section(self, temp_project_dir, mock_tool_registry):
         """Empty codebase should return minimal/empty structure section."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
         context = CodebaseContext(str(temp_project_dir))
         context.explore()
 
-        builder = SystemPromptBuilder(context=context)
+        builder = SystemPromptBuilder(context=context, tool_registry=mock_tool_registry)
         section = builder._build_codebase_structure_section()
 
         # Should be empty or minimal when no code files
         assert len(section) < 200 or section == ""
 
     @pytest.mark.unit
-    def test_structure_section_included_in_build(self, temp_project_dir):
+    def test_structure_section_included_in_build(self, temp_project_dir, mock_tool_registry):
         """Codebase structure should be included in final prompt."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
@@ -938,7 +938,7 @@ class TestSystemPromptBuilderCodebaseStructure:
         context = CodebaseContext(str(temp_project_dir))
         context.explore()
 
-        builder = SystemPromptBuilder(context=context)
+        builder = SystemPromptBuilder(context=context, tool_registry=mock_tool_registry)
         prompt = builder.build()
 
         # Should have codebase structure in the final prompt
@@ -946,7 +946,7 @@ class TestSystemPromptBuilderCodebaseStructure:
         assert 'src' in prompt
 
     @pytest.mark.unit
-    def test_structure_section_concise(self, temp_project_dir):
+    def test_structure_section_concise(self, temp_project_dir, mock_tool_registry):
         """Structure section should be concise, not dump entire file list."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
@@ -959,7 +959,7 @@ class TestSystemPromptBuilderCodebaseStructure:
         context = CodebaseContext(str(temp_project_dir))
         context.explore()
 
-        builder = SystemPromptBuilder(context=context)
+        builder = SystemPromptBuilder(context=context, tool_registry=mock_tool_registry)
         section = builder._build_codebase_structure_section()
 
         # Should summarize, not list all 50 files
@@ -969,7 +969,7 @@ class TestSystemPromptBuilderCodebaseStructure:
         assert 'src' in section or 'python' in section.lower()
 
     @pytest.mark.unit
-    def test_shows_directory_not_file_list(self, temp_project_dir):
+    def test_shows_directory_not_file_list(self, temp_project_dir, mock_tool_registry):
         """Should show directories containing files, not individual file names."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
 
@@ -983,7 +983,7 @@ class TestSystemPromptBuilderCodebaseStructure:
         context = CodebaseContext(str(temp_project_dir))
         context.explore()
 
-        builder = SystemPromptBuilder(context=context)
+        builder = SystemPromptBuilder(context=context, tool_registry=mock_tool_registry)
         section = builder._build_codebase_structure_section()
 
         # Should show directory path
@@ -992,7 +992,7 @@ class TestSystemPromptBuilderCodebaseStructure:
         assert section.count('.js') <= 3  # Maybe a couple examples, not all
 
     @pytest.mark.unit
-    def test_prompt_length_reasonable_with_structure(self, temp_project_dir):
+    def test_prompt_length_reasonable_with_structure(self, temp_project_dir, mock_tool_registry):
         """Prompt should remain reasonable length even with structure section."""
         from src.agent.system_prompt_builder import SystemPromptBuilder
         from src.agent_tools.tools import ToolRegistry

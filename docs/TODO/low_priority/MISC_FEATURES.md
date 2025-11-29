@@ -68,7 +68,7 @@ def get_standup():
     ).decode("utf-8")
     
     if not diff:
-        return "No work done yesterday! 🏖️"
+        return "No work done yesterday!"
 
     # 2. Prompt the "Cheap" Model (Groq/Cerebras)
     prompt = f"""

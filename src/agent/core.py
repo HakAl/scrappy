@@ -316,7 +316,11 @@ class CodeAgent:
 
     def _create_default_command_executor(self):
         """Create default shell command executor."""
-        return ShellCommandExecutor(self.config)
+        return ShellCommandExecutor(
+            timeout=self.config.command_timeout,
+            max_output=self.config.max_command_output,
+            dangerous_patterns=self.config.dangerous_commands
+        )
 
     def __getattr__(self, name: str):
         """Dynamic attribute resolution for _tool_* methods.

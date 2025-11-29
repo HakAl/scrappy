@@ -19,7 +19,7 @@ class SessionPersistence:
     file caches, search results, git operations, discoveries, and conversation
     history.
 
-    The session file is stored at .llm_team_session.json in the project directory.
+    The session file is stored at .session.json in the project directory.
 
     Attributes:
         orchestrator: The AgentOrchestrator instance that provides session
@@ -78,13 +78,13 @@ class SessionPersistence:
             - When args is "": Reads session file and memory stats, displays
               formatted output via self.io (no state changes)
             - When args is "save": Calls orchestrator.save_session() which writes
-              session data to .llm_team_session.json including file caches,
+              session data to .session.json including file caches,
               search results, git operations, discoveries, and conversation history
             - When args is "load": Calls orchestrator.load_session() which reads
-              .llm_team_session.json and restores working memory state in the
+              .session.json and restores working memory state in the
               orchestrator. Updates returned conversation_history.
             - When args is "clear": Calls orchestrator.clear_session() which
-              deletes .llm_team_session.json from disk
+              deletes .session.json from disk
             - When args is "toggle": Returns opposite auto_save value (no disk I/O)
 
         Example:

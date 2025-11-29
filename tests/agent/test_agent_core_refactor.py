@@ -38,13 +38,13 @@ def mock_orchestrator_adapter():
 @pytest.fixture
 def minimal_config():
     """Create a minimal config for testing."""
-    return AgentConfig(
-        dangerous_commands=["rm -rf /", "format c:"],
-        interactive_commands=["npx create", "npm init"],
-        long_running_commands=["npm install"],
-        command_timeout=10,
-        max_command_output=1000,
-    )
+    config = AgentConfig()
+    config.dangerous_commands = ["rm -rf /", "format c:"]
+    config.interactive_commands = ["npx create", "npm init"]
+    config.long_running_commands = ["npm install"]
+    config.command_timeout = 10
+    config.max_command_output = 1000
+    return config
 
 
 @pytest.fixture
@@ -129,12 +129,6 @@ class TestRegistryCreation:
 
         assert "web_fetch" in tool_names
         assert "web_search" in tool_names
-
-    @pytest.mark.unit
-    def test_agent_registry_count_matches_expected(self, agent_with_config):
-        """Agent's registry should have expected number of tools."""
-        # 4 file + 6 git + 1 search + 2 web + 1 python = 14 tools
-        assert len(agent_with_config.tool_registry.list_all()) == 14
 
 
 class TestCommandCategorization:

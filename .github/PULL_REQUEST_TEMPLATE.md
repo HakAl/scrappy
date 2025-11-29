@@ -24,7 +24,7 @@ Brief description of the changes in this PR.
 - [ ] I have commented my code, particularly in hard-to-understand areas
 - [ ] I have made corresponding changes to the documentation
 - [ ] My changes generate no new warnings
-- [ ] I have run `python -m pytest tests/` and all tests pass
+- [ ] I have run `pytest tests/` and all tests pass
 
 ## Coverage
 

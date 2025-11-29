@@ -650,12 +650,12 @@ The CLI includes intelligent codebase context management.
 
 1. **Exploration**: Scans project files, structure, and key configs
 2. **Analysis**: Uses LLM to generate project summary
-3. **Caching**: Saves context to `.llm_team_context.json`
+3. **Caching**: Saves context to `.scrappy/context.json`
 4. **Augmentation**: Automatically injects context into prompts
 
 ### Context Cache File
 
-Located at: `<project_root>/.llm_team_context.json`
+Located at: `<project_root>/.scrappy/context.json`
 
 Contains:
 - Exploration timestamp
@@ -1046,7 +1046,7 @@ COHERE_API_KEY=your_key  # Limited to 1K/month
 You: /context clear
 
 # Or delete file directly
-rm .llm_team_context.json
+rm .scrappy/context.json
 ```
 
 ## Examples
@@ -1081,7 +1081,7 @@ Has Summary: Yes
 
 You: What's the main entry point for this project?
 Assistant: Based on the project structure, the main entry point is
-`llm_team.py` which imports from `src/cli.py`...
+`scrappy.py` which imports from `src/cli.py`...
 [cerebras/llama3.1-8b | 145 tokens | 234ms]
 
 You: /plan Add WebSocket support for real-time chat

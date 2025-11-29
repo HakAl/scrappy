@@ -433,14 +433,17 @@ class MockIO:
         self._input_index = 0
         self._confirm_index = 0
 
-        # Add theme mock for color theming support
+        # Add theme mock for color theming support (match ScrappyTheme defaults)
         self.theme = Mock()
-        self.theme.primary = "cyan"
-        self.theme.success = "green"
-        self.theme.warning = "yellow"
-        self.theme.error = "red"
-        self.theme.info = "blue"
-        self.theme.accent = "magenta"
+        self.theme.primary = "#00ffff"
+        self.theme.success = "#00ff00"
+        self.theme.warning = "#ffff00"
+        self.theme.error = "#ff0000"
+        self.theme.info = "#0000ff"
+        self.theme.accent = "#ff9900"
+
+        # Enable color by default
+        self.use_color = True
 
     def echo(self, message: str = "", nl: bool = True) -> None:
         """Capture output to internal buffer."""
@@ -485,7 +488,12 @@ class MockIO:
         fg: Optional[str] = None,
         bold: bool = False
     ) -> str:
-        """Return text unchanged (no actual styling in tests)."""
+        """Return text unchanged (no actual styling in tests) or with ANSI codes if use_color=True."""
+        if not self.use_color:
+            return text
+        # Add ANSI codes when color is enabled to simulate styled output
+        if fg or bold:
+            return f"\x1b[1m{text}\x1b[0m" if bold else f"\x1b[32m{text}\x1b[0m"
         return text
 
     def prompt(
@@ -2349,14 +2357,17 @@ class MockIO:
         self._input_index = 0
         self._confirm_index = 0
 
-        # Add theme mock for color theming support
+        # Add theme mock for color theming support (match ScrappyTheme defaults)
         self.theme = Mock()
-        self.theme.primary = "cyan"
-        self.theme.success = "green"
-        self.theme.warning = "yellow"
-        self.theme.error = "red"
-        self.theme.info = "blue"
-        self.theme.accent = "magenta"
+        self.theme.primary = "#00ffff"
+        self.theme.success = "#00ff00"
+        self.theme.warning = "#ffff00"
+        self.theme.error = "#ff0000"
+        self.theme.info = "#0000ff"
+        self.theme.accent = "#ff9900"
+
+        # Enable color by default
+        self.use_color = True
 
     def echo(self, message: str = "", nl: bool = True) -> None:
         """Capture plain echo message."""
@@ -2433,7 +2444,12 @@ class MockIO:
 
     def style(self, text: str, fg: Optional[str] = None, bg: Optional[str] = None,
               bold: bool = False, dim: bool = False) -> str:
-        """Mock style - just returns the text unchanged."""
+        """Mock style - returns text with ANSI codes if use_color=True."""
+        if not self.use_color:
+            return text
+        # Add ANSI codes when color is enabled to simulate styled output
+        if fg or bold or bg or dim:
+            return f"\x1b[1m{text}\x1b[0m" if bold else f"\x1b[32m{text}\x1b[0m"
         return text
 
     def progress(self, total: int, description: str = "Progress"):
