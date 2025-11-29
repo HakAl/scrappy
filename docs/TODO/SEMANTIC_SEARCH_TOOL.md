@@ -1,170 +1,824 @@
 # Semantic Search Tool Implementation Plan
 
-# More Scope 
-- Context factory to enable dynamic prompt generation
-- Passive RAG, prompt augmentation
+# PLAN REVIEW
 
-The "Pass-Through" (Augmentation):
-When the user sends a message, perform a quick, low-cost semantic search (Top-k=3) using the user's raw query.
-Append this to the system prompt as "Potential Context." This handles 70% of simple questions instantly.
+**Three critical architectural risks** and **two simplifications** that will save you lines of code and debugging time.
 
-The "Deep Dive" (Semantic Search Tool):
-Give the LLM a tool definition (e.g., search_codebase(query: str)).
-Instruct the model: "Use the provided context to answer. If the context is missing, irrelevant, 
-or if you identify dependencies (imports, function calls) that are not defined here, use the search tool to find them."
+### 1. Critical Architecture Fixes
 
-To coach the agent to prefer semantic search, you need to treat this as an **interface design** problem
-(how you define the tools) and a **prompt engineering** problem (how you instruct the model).
+#### A. The `AgentLoop` State Problem
+**The Issue:** Your plan has `AgentContextFactory` deciding the strategy per query, but `AgentLoop` seems to be designed as a persistent object.
+In your plan:
+1. `CodeAgent` calls `factory.build_context()`.
+2. `CodeAgent` calls `loop.think()`.
+3. But `loop.think()` in your snippet relies on `self._passive_rag_enabled` (internal state).
 
-LLMs rely heavily on the tool descriptions you provide. If you make Semantic Search sound like the "smart" tool 
-and Grep sound like the "dumb/exact" tool, the agent will naturally bias toward the former.
+**The Fix:** Don't set state on the loop. Pass the **Context** into `think()`.
+Make `AgentLoop.think` stateless regarding configuration.
 
-Here is the 3-step strategy to implement this hierarchy:
+```python
+# In AgentLoop
+def think(self, state: ConversationState, context: AgentContext) -> AgentThought:
+    # Use context.system_prompt
+    # Use context.tools
+    # Use context.enable_passive_rag
+```
 
-### 1. "Bias" the Tool Descriptions
-The most effective way to control tool selection is through the `description` field in your tool definition schema. You want to frame Semantic Search as the default for *discovery* and Grep as a fallback for *exact verification*.
+This ensures that if the index finishes processing *during* a conversation, the very next turn picks it up automatically without you having to call `loop.set_passive_rag()`.
 
-**Do this for Semantic Search:**
-*   **Name:** `codebase_search` (Avoid words like "vector" or "embedding"; keep it functional).
-*   **Description:** "The primary search tool. Searches the codebase using natural language. Use this to find code logic, concepts, functionality, or when you are unsure of the exact file names or variable names. Always use this first for exploration."
+#### B. The "Mode" Parameter Over-Engineering
+**The Issue:** You added a `mode` parameter (`auto`, `semantic`, `keyword`) and a regex-based `_detect_mode` method in the tool.
+**The Reality:** LLMs are terrible at selecting abstract "modes". Furthermore, unless your `LanceDBSearchProvider` explicitly supports switching between sparse (BM25) and dense (Vector) retrieval based on a flag, this is a "placebo button."
 
-**Do this for Grep:**
-*   **Name:** `string_find` (or `exact_match_search`).
-*   **Description:** "A strict, exact-match text search. Only use this when you know the **precise, case-sensitive string** (e.g., a specific error code or variable name) and need to find every occurrence. Do not use this for general questions."
+**The Fix:** **Delete the `mode` parameter.**
+Modern vector stores (and LanceDB specifically) handle Hybrid Search internally.
+*   If the query is "auth_token_provider", the sparse (keyword) score will naturally dominate.
+*   If the query is "how does auth work", the dense (vector) score will dominate.
+*   *Result:* You save ~30 lines of regex logic and prompt token space.
 
-### 2. The "Order of Operations" System Prompt
-In your system prompt, explicitly define a heuristic for the agent to follow. This stops the agent from "guessing" which tool to use.
+#### C. The Dependency Injection (DI) Cycle
+**The Issue:**
+`AgentContextFactory` needs `ToolRegistry`.
+`ToolRegistry` imports `SemanticSearchTool`.
+`SemanticSearchTool` needs `ToolContext`.
+`CodeAgent` initializes all of them.
 
-Add a section like this to your system instructions:
-
-> **Information Retrieval Strategy:**
-> 1.  **Semantic First:** When asked to find, explain, or fix code, ALWAYS start with `codebase_search`. This allows you to find relevant code even if the user uses different terminology than the code itself.
-> 2.  **Grep Second:** Only use `string_find` if:
->     *   The user provides a specific error ID (e.g., `ERR-402`).
->     *   You are performing a rename refactor and need to find every single usage of a specific variable.
->     *   The semantic search returned no results and you want to try a specific keyword as a fallback.
-
-### Summary: Why this works
-You are mapping the tools to the **nature of the query**:
-*   **Ambiguous/Conceptual Query** -> Semantic Search
-*   **Precise/Syntactic Query** -> Grep
-
-By explicitly telling the LLM that `codebase_search` handles the ambiguous (which is 90% of user queries), 
-you effectively coach it to prefer semantic search without removing the utility of grep for strict refactoring tasks.
+**The Fix:** Ensure `AgentContextFactory` receives the **Tool Instances**, not the Registry, or allow the Registry to return a subset.
+In your `AgentContextFactory.build_context`:
+```python
+# Don't list_all() every time.
+# The tools should be constant, but the LIST passed to the LLM changes.
+all_tools = self._tool_registry.list_all()
+if not is_semantic_ready:
+    # Filter out the semantic tool by name
+    tools = [t for t in all_tools if t.name != "codebase_search"]
+```
 
 ---
 
-This is the perfect use case for a **Context Factory** (or a **Runtime Configuration Builder**).
+### 2. Code Review & Refinements
 
-Since your agent's capabilities depend on the system state (Indexing vs. Ready), you shouldn't hardcode your tools 
-or your system prompt. Need a lightweight abstraction that builds the "Agent Configuration" when the user hits Enter.
+#### Refinement 1: `AgentContextFactory` Budget Logic
+Your heuristic for `_estimate_context_budget` is good, but `query.split() < 10` is risky for code.
+*   *Query:* `Fix bug in UserFactory.java null pointer` (7 words) -> Requires LOTS of context.
+*   *Fix:* Checks for code extension or CamelCase words in the query. If the user mentions a specific filename, boost the budget.
 
-Here is how to structure this dynamically.
+#### Refinement 2: The `SemanticSearchTool` Error Handling
+In `src/agent_tools/tools/semantic_search_tool.py`:
+You return a `ToolResult(success=False)` if the index isn't ready.
+**Change this to `success=True`**.
 
-### 1. The Architecture: `AgentContextFactory`
+*   *Why?* If you return `success=False`, many LLMs treat this as a "system error" and panic or retry the exact same loop.
+*   *Better Output:*
+    ```text
+    (Success=True)
+    OUTPUT: [System Notification] Semantic search is currently initializing (45%).
+    Please use 'find_exact_text' (grep) for now, or use 'list_files' to explore.
+    ```
+    This allows the LLM to gracefully pivot ("Oh, I see, I will use grep instead") rather than thinking the tool is broken.
 
-Don't just add a factory for the prompt; add a factory for the entire **execution context**. 
-This ensures your Prompt, Tools, and RAG strategy remain synchronized.
+---
 
-Here is a conceptual implementation:
+### 3. Revised Modifications
 
+
+#### 1. Core Tool (No `mode`, simpler error handling)
+**`src/agent_tools/tools/semantic_search_tool.py`**
 ```python
-class AgentContextFactory:
-    def __init__(self, vector_store, tool_registry):
-        self.vector_store = vector_store
-        self.tool_registry = tool_registry
+class SemanticSearchTool(ToolBase):
+    @property
+    def name(self) -> str: return "codebase_search"
+    # ... description ...
+    @property
+    def parameters(self):
+        # REMOVED: "mode" parameter
+        return [
+            ToolParameter("query", str, "Natural language query...", required=True),
+            ToolParameter("max_results", int, default=10)
+        ]
 
-    def build_context(self):
-        """
-        Returns the correct Prompt + Tools based on system state.
-        """
-        # 1. Check State
-        is_indexed = self.vector_store.is_index_ready()
+    def execute(self, context, **kwargs):
+        if not context.semantic_search or not context.semantic_search.is_indexed():
+            # Return SUCCESS so the agent can read the message and pivot
+            return ToolResult(success=True, output="Index not ready. Use find_exact_text.")
         
-        # 2. Define Tools
-        tools = [self.tool_registry.grep, self.tool_registry.read_file]
-        if is_indexed:
-            tools.append(self.tool_registry.semantic_search)
-
-        # 3. Generate Dynamic System Prompt
-        system_prompt = self._generate_prompt(is_indexed)
-
-        return {
-            "system_prompt": system_prompt,
-            "tools": tools,
-            "enable_passive_rag": is_indexed  # Only augment prompt if ready
-        }
-
-    def _generate_prompt(self, is_indexed):
-        base_prompt = "You are an expert coding assistant."
-        
-        if is_indexed:
-            # The "Smart" Prompt from the previous answer
-            search_strategy = """
-            SEARCH STRATEGY:
-            1. Always prioritize `semantic_search` for discovery and logic questions.
-            2. Use `grep` only for exact string matching or refactoring specific tokens.
-            """
-        else:
-            # The "Fallback" Prompt
-            search_strategy = """
-            SEARCH STRATEGY:
-            1. Semantic search is currently UNAVAILABLE (indexing in progress).
-            2. You must rely on `grep` for all code discovery.
-            3. If a user query is too vague for grep (e.g., "how does auth work?"),
-               ask the user for specific keywords or file names to search for.
-            """
-            
-        return f"{base_prompt}\n\n{search_strategy}"
+        # ... standard search ...
 ```
 
-### 2. Handling the "Un-indexed" State Gracefully
-
-When the user is running the app for the first time, you don't want the agent to just appear "dumb."
-You want the agent to be **self-aware** that it is currently limited.
-
-By injecting the state into the prompt (as shown above in the `else` block), you change the agent's behavior:
-
-*   **User:** "Find the login logic."
-*   **Standard Agent:** Tries to call a missing tool -> Error.
-*   **Factory-Aware Agent:** "I am currently indexing the codebase, so I cannot perform a semantic search yet. 
-*                    Do you know a specific function name or variable related to login that I can `grep` for?"
-
-### 3. The "Hybrid" Factory for Passive RAG
-
-Passive RAG (augmenting the prompt). The Factory protects you here, too.
-
-In agent loop:
-
+#### 2. Agent Context (Stateless)
+**`src/agent/context_factory.py`**
 ```python
-# Main CLI Loop
-context = factory.build_context()
+@dataclass
+class AgentContext:
+    system_prompt: str
+    active_tools: list[ToolBase] # Tools enabled for THIS turn
+    passive_rag_context: Optional[str] # The actual string to inject, not just the boolean
+```
 
-user_query = input("> ")
+#### 3. Integration Point
+```python
+# Inside the main loop
+user_input = input("> ")
 
-# DYNAMIC PASSIVE RAG
-augmented_query = user_query
-if context["enable_passive_rag"]:
-    # Only try to fetch chunks if the index exists!
-    relevant_chunks = vector_store.query(user_query)
-    augmented_query = f"Context:\n{relevant_chunks}\n\nUser: {user_query}"
+# 1. Build Context
+ctx = self.context_factory.build_context(user_input)
 
-# Call LLM
-llm.chat(
-    messages=[
-        {"role": "system", "content": context["system_prompt"]},
-        {"role": "user", "content": augmented_query}
-    ],
-    tools=context["tools"]
+# 2. Augment Query (Passive RAG)
+actual_input = user_input
+if ctx.passive_rag_context:
+    actual_input = f"{ctx.passive_rag_context}\n\nUser: {user_input}"
+
+# 3. Think (Pass tools explicitly)
+thought = self.agent_loop.think(
+    state=self.state,
+    input=actual_input,
+    tools=ctx.active_tools,         # Dynamic tool list
+    system_prompt=ctx.system_prompt # Dynamic prompt
 )
 ```
 
-### Summary of the Approach
+### Summary
+1.  **Drop the `mode` parameter** (it's fake complexity).
+2.  **Make `think()` stateless** (pass the context in).
+3.  **Return `success=True` on index-not-ready** (so the agent can recover).
 
-1.  **State Check:** The Factory checks if the vector DB is populated/ready.
-2.  **Tool Filtering:** It physically removes the `semantic_search` function definition from the API call tool list.
-3.  **Prompt Swapping:** It swaps the "Prefer Semantic Search" instruction block for a "Apologize and use Grep" instruction block.
-4.  **RAG Guard:** It prevents your code from trying to query an empty vector DB for passive augmentation.
+# END PLAN REVIEW
+
+# Extended Scope: Supporting Features
+
+This section defines the supporting infrastructure needed to make semantic search effective.
+The semantic search tool alone is not enough - we need prompt engineering, tool biasing,
+and automatic context injection to guide the LLM toward effective usage.
+
+---
+
+## Design Decisions (Locked In)
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Passive RAG token budget | Global default + query heuristics | System adjusts based on file refs, identifiers, query complexity |
+| Indexing trigger | Autonomous only | Tool reports status, doesn't trigger indexing |
+| Hybrid search params | No `mode` param - LanceDB handles internally | Sparse/dense scoring auto-balances based on query type |
+| RAG caching | No caching | Fresh search each turn; avoids stale/wrong context |
+| AgentLoop state | Stateless - pass AgentContext into think() | Enables mid-conversation index readiness changes |
+| Tool unavailable behavior | Return success=True with guidance | LLMs panic on success=False; graceful pivot instead |
+
+---
+
+## Feature 1: AgentContextFactory
+
+**Purpose:** Coordinate prompt, tools, and RAG strategy based on semantic search availability.
+
+**File:** `src/agent/context_factory.py` (NEW)
+
+### Protocol
+
+```python
+@dataclass
+class AgentContext:
+    """Runtime context for agent execution - passed into think()."""
+    system_prompt: str
+    active_tools: list[ToolBase]          # Tools enabled for THIS turn
+    passive_rag_context: Optional[str]    # Pre-computed context string to inject
+
+
+class AgentContextFactoryProtocol(Protocol):
+    """Builds agent context based on system state."""
+
+    def build_context(self, query: str) -> AgentContext:
+        """Build context for a specific query."""
+        ...
+```
+
+### Implementation
+
+```python
+import re
+from typing import Optional
+from dataclasses import dataclass
+
+
+class AgentContextFactory:
+    """
+    Builds agent execution context based on semantic search availability.
+
+    Coordinates:
+    - System prompt (with appropriate search strategy section)
+    - Tool list (filters out codebase_search when not ready)
+    - Passive RAG (pre-computes context string)
+    """
+
+    def __init__(
+        self,
+        semantic_manager: Optional[SemanticSearchManager],
+        context_augmenter: Optional[ContextAugmenter],
+        prompt_builder: SystemPromptBuilder,
+        tool_registry: ToolRegistry,
+        config: AgentConfig,
+    ):
+        self._semantic_manager = semantic_manager
+        self._context_augmenter = context_augmenter
+        self._prompt_builder = prompt_builder
+        self._tool_registry = tool_registry
+        self._config = config
+
+    def build_context(self, query: str) -> AgentContext:
+        """Build context for a specific query."""
+        is_semantic_ready = self._is_semantic_ready()
+
+        # Build prompt with appropriate search strategy
+        self._prompt_builder.set_section(
+            "search_strategy",
+            self._build_search_strategy_section(is_semantic_ready)
+        )
+        system_prompt = self._prompt_builder.build()
+
+        # Filter tools based on semantic availability
+        all_tools = self._tool_registry.list_all()
+        if is_semantic_ready:
+            active_tools = all_tools
+        else:
+            # Remove semantic search tool when not ready
+            active_tools = [t for t in all_tools if t.name != "codebase_search"]
+
+        # Compute passive RAG context (the actual string, not just a flag)
+        passive_rag_context = None
+        if is_semantic_ready and self._config.passive_rag_enabled and self._context_augmenter:
+            budget = self._estimate_context_budget(query)
+            passive_rag_context = self._context_augmenter.get_relevant_context(
+                query=query,
+                max_tokens=budget,
+            )
+            # Don't inject empty context
+            if not passive_rag_context or not passive_rag_context.strip():
+                passive_rag_context = None
+
+        return AgentContext(
+            system_prompt=system_prompt,
+            active_tools=active_tools,
+            passive_rag_context=passive_rag_context,
+        )
+
+    def _is_semantic_ready(self) -> bool:
+        """Check if semantic search is available."""
+        if not self._semantic_manager:
+            return False
+        return self._semantic_manager.is_ready()
+
+    def _estimate_context_budget(self, query: str) -> int:
+        """
+        Adjust passive RAG budget based on query characteristics.
+
+        Smarter than word count - checks for file references and identifiers.
+        """
+        base_budget = self._config.passive_rag_max_tokens
+
+        # File reference (e.g., "UserFactory.java", "auth.py") = needs more context
+        if re.search(r'\.\w{2,4}\b', query):
+            return int(base_budget * 1.5)
+
+        # Identifier pattern (CamelCase or snake_case) = needs more context
+        if re.search(r'[A-Z][a-z]+[A-Z]|_\w+_', query):
+            return int(base_budget * 1.5)
+
+        # Refactoring/architecture queries = needs more context
+        if any(word in query.lower() for word in ['refactor', 'architecture', 'all', 'every']):
+            return int(base_budget * 1.5)
+
+        # Short natural language without code patterns = less context
+        words = query.split()
+        has_code_patterns = re.search(r'[A-Z]{2,}|_|\.|::', query)
+        if len(words) < 8 and not has_code_patterns:
+            return base_budget // 2
+
+        return base_budget
+
+    def _build_search_strategy_section(self, semantic_available: bool) -> str:
+        """Build search strategy instructions based on availability."""
+        if semantic_available:
+            return """
+## Information Retrieval Strategy
+
+1. **Semantic First:** When asked to find, explain, or fix code, ALWAYS start
+   with `codebase_search`. This finds relevant code even when terminology differs.
+
+2. **Exact Match Second:** Only use `find_exact_text` if:
+   - User provides a specific error ID (e.g., `ERR-402`)
+   - Performing rename refactor needing every usage
+   - Semantic search returned no results
+
+3. **Read Files:** After finding relevant code, use `read_file` to examine
+   full context before making changes.
+"""
+        else:
+            return """
+## Information Retrieval Strategy
+
+NOTE: Semantic search is currently UNAVAILABLE (index not ready).
+
+1. Use `find_exact_text` for code discovery with specific keywords.
+2. If query is vague (e.g., "how does auth work?"), ask user for
+   specific keywords or file names to search.
+3. Use `list_files` and `list_directory` to explore codebase structure.
+"""
+```
+
+### Integration Point
+
+In `CodeAgent.__init__` or agent setup:
+
+```python
+self._context_factory = AgentContextFactory(
+    semantic_manager=self._semantic_manager,
+    context_augmenter=self._context_augmenter,
+    prompt_builder=self._prompt_builder,
+    tool_registry=self._tool_registry,
+    config=self._config,
+)
+```
+
+In the main loop (query handling):
+
+```python
+# 1. Build context for this query
+ctx = self._context_factory.build_context(user_query)
+
+# 2. Augment query with passive RAG context if available
+actual_input = user_query
+if ctx.passive_rag_context:
+    actual_input = f"[Relevant Code Context]\n{ctx.passive_rag_context}\n\n[User Query]\n{user_query}"
+
+# 3. Call think() with context (stateless)
+thought = self._agent_loop.think(
+    state=self._state,
+    user_input=actual_input,
+    context=ctx,  # Pass context explicitly
+)
+```
+
+---
+
+## Feature 2: Stateless AgentLoop
+
+**Purpose:** Make AgentLoop stateless regarding configuration - receive context per-call.
+
+**File:** Modify `src/agent/agent_loop.py`
+
+### Key Principle
+
+AgentLoop should NOT hold RAG/tool configuration state. Each call to `think()` receives
+its configuration explicitly via `AgentContext`. This ensures:
+- Mid-conversation index readiness changes take effect immediately
+- No temporal coupling between factory and loop
+- Easier testing (no hidden state)
+
+### Changes to AgentLoop
+
+```python
+class AgentLoop:
+    def __init__(
+        self,
+        orchestrator: "OrchestratorAdapter",
+        action_executor: ActionExecutorProtocol,
+        response_parser: ResponseParserProtocol,
+        ui: AgentUIProtocol,
+        config: "AgentConfig",
+        # ... other existing params ...
+        # REMOVED: context_augmenter (now handled by factory)
+        # REMOVED: _passive_rag_enabled state
+        # REMOVED: _passive_rag_budget state
+    ):
+        # ... existing init, no RAG state ...
+
+    def think(
+        self,
+        state: ConversationState,
+        context: AgentContext,  # NEW: explicit context per call
+    ) -> AgentThought:
+        """
+        Generate the next thought/action from the LLM.
+
+        Args:
+            state: Current conversation state
+            context: AgentContext with system_prompt, tools, etc.
+        """
+        # Use context.system_prompt instead of state.system_prompt
+        # Use context.active_tools for tool schemas
+
+        current_provider = self._provider_strategy.get_planner()
+
+        # ... existing provider selection ...
+
+        # Build user prompt from conversation history
+        if len(state.messages) == 2:
+            user_prompt = state.messages[-1]['content']
+        else:
+            # ... existing history building ...
+
+        # NOTE: Passive RAG injection happens BEFORE this method is called
+        # The caller (CodeAgent) pre-augments the user message with context
+        # This keeps AgentLoop stateless and focused on the think-plan-execute cycle
+
+        # Get tool schemas from context (dynamic per-call)
+        tools = [t.to_openai_schema() for t in context.active_tools]
+
+        response = self._orchestrator.delegate_with_tools(
+            provider_name=current_provider,
+            prompt=user_prompt,
+            tools=tools,
+            system_prompt=context.system_prompt,  # From context, not state
+            # ...
+        )
+
+        # ... rest of think() ...
+```
+
+### Where RAG Injection Happens
+
+RAG injection is done by the **caller** (CodeAgent), NOT inside AgentLoop:
+
+```python
+# In CodeAgent or main loop
+ctx = self._context_factory.build_context(user_query)
+
+# Augment BEFORE calling think()
+actual_input = user_query
+if ctx.passive_rag_context:
+    actual_input = f"[Relevant Code Context]\n{ctx.passive_rag_context}\n\n[User Query]\n{user_query}"
+
+# Update conversation state with augmented input
+state.messages.append({"role": "user", "content": actual_input})
+
+# Call think() - it just uses what it's given
+thought = self._agent_loop.think(state=state, context=ctx)
+```
+
+### Config Additions
+
+In `src/agent_config.py`:
+
+```python
+@dataclass
+class AgentConfig:
+    # ... existing fields ...
+
+    # Passive RAG settings (used by AgentContextFactory)
+    passive_rag_enabled: bool = True
+    passive_rag_max_tokens: int = 2000
+```
+
+---
+
+## Feature 3: Tool Description Biasing
+
+**Purpose:** Make LLM prefer semantic search for discovery, grep for exact matches.
+
+### A. Rename SearchCodeTool
+
+**File:** `src/agent_tools/tools/search_tools.py`
+
+```python
+class FindExactTextTool(ToolBase):
+    """Exact text/pattern search - use for precise string matching."""
+
+    @property
+    def name(self) -> str:
+        return "find_exact_text"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Strict exact-match text search. Only use when you know the precise, "
+            "case-sensitive string (e.g., a specific error code, variable name, or "
+            "function signature) and need to find every occurrence. "
+            "Do NOT use for general conceptual questions."
+        )
+
+    # ... rest unchanged ...
+```
+
+### B. Update SemanticSearchTool
+
+**File:** `src/agent_tools/tools/semantic_search_tool.py`
+
+**Key changes:**
+1. Name: `codebase_search`
+2. NO `mode` parameter (LanceDB hybrid search handles this internally)
+3. Return `success=True` when unavailable (so LLM can pivot gracefully)
+
+```python
+class SemanticSearchTool(ToolBase):
+    """Primary search tool for codebase exploration."""
+
+    @property
+    def name(self) -> str:
+        return "codebase_search"
+
+    @property
+    def description(self) -> str:
+        return (
+            "The PRIMARY search tool. Searches codebase using natural language. "
+            "Use this to find code logic, concepts, functionality, or when unsure "
+            "of exact names. ALWAYS use this first for exploration and discovery."
+        )
+
+    @property
+    def parameters(self) -> list[ToolParameter]:
+        # SIMPLIFIED: No mode parameter - LanceDB handles hybrid search internally
+        return [
+            ToolParameter(
+                "query",
+                str,
+                "Natural language search query (e.g., 'authentication logic', 'error handling')",
+                required=True,
+            ),
+            ToolParameter(
+                "max_results",
+                int,
+                "Maximum number of results to return",
+                required=False,
+                default=10,
+            ),
+        ]
+
+    def execute(self, context: ToolContext, **kwargs) -> ToolResult:
+        query = kwargs["query"]
+        max_results = kwargs.get("max_results", 10)
+
+        # CRITICAL: Return success=True so LLM can read message and pivot
+        # Returning success=False causes LLMs to panic/retry
+        if context.semantic_search is None:
+            return ToolResult(
+                success=True,  # NOT False!
+                output=(
+                    "[Notice] Semantic search is not available. "
+                    "The index may still be initializing.\n"
+                    "Please use `find_exact_text` for keyword search, "
+                    "or `list_files` to explore the codebase structure."
+                ),
+                metadata={"unavailable": True},
+            )
+
+        if not context.semantic_search.is_indexed():
+            return ToolResult(
+                success=True,  # NOT False!
+                output=(
+                    "[Notice] Semantic search index is not ready yet.\n"
+                    "Please use `find_exact_text` for keyword search, "
+                    "or `list_files` to explore the codebase structure."
+                ),
+                metadata={"unavailable": True, "reason": "not_indexed"},
+            )
+
+        try:
+            result = context.semantic_search.search(
+                query=query,
+                max_results=max_results,
+            )
+
+            if not result.chunks:
+                return ToolResult(
+                    success=True,
+                    output=f"No results found for: {query}",
+                    metadata={"matches": 0, "query": query},
+                )
+
+            output = self._format_results(result)
+            return ToolResult(
+                success=True,
+                output=output,
+                metadata={
+                    "matches": len(result.chunks),
+                    "query": query,
+                    "tokens_used": result.tokens_used,
+                },
+            )
+
+        except Exception as e:
+            # Even errors return success=True with explanation
+            return ToolResult(
+                success=True,
+                output=f"[Error] Semantic search failed: {str(e)}\nTry `find_exact_text` instead.",
+                metadata={"error": str(e)},
+            )
+```
+
+### Why No Mode Parameter?
+
+LanceDB's hybrid search automatically balances sparse (BM25) and dense (vector) scoring:
+- Query `"auth_token_provider"` -> BM25 naturally dominates (exact identifier)
+- Query `"how does authentication work"` -> Vector naturally dominates (conceptual)
+
+Adding a `mode` parameter would be a "placebo button" - it looks like control but
+provides no value. The ~30 lines of regex detection logic were deleted.
+
+---
+
+## Feature 4: System Prompt Strategy Section
+
+**Purpose:** Explicitly instruct LLM on search tool selection order.
+
+**File:** `src/agent/system_prompt_builder.py`
+
+Already covered in Feature 1 (AgentContextFactory._build_search_strategy_section).
+
+The section is injected via:
+```python
+self._prompt_builder.set_section("search_strategy", strategy_text)
+```
+
+---
+
+## Files to Create/Modify
+
+| File | Action | Description |
+|------|--------|-------------|
+| `src/agent/context_factory.py` | NEW | AgentContextFactory + AgentContext dataclass |
+| `src/agent/protocols.py` | MODIFY | Add AgentContextFactoryProtocol |
+| `src/agent/agent_loop.py` | MODIFY | Accept AgentContext in think(), remove RAG state |
+| `src/agent/core.py` | MODIFY | Wire factory, handle RAG injection before think() |
+| `src/agent/system_prompt_builder.py` | MODIFY | Support set_section() for search_strategy |
+| `src/agent_tools/tools/search_tools.py` | MODIFY | Rename to FindExactTextTool, update description |
+| `src/agent_tools/tools/semantic_search_tool.py` | NEW | codebase_search tool (no mode param, success=True on unavailable) |
+| `src/agent_tools/tools/base.py` | MODIFY | Add semantic_search to ToolContext |
+| `src/agent_config.py` | MODIFY | Add passive_rag_enabled, passive_rag_max_tokens |
+| `tests/agent/test_context_factory.py` | NEW | Unit tests for factory |
+| `tests/agent/test_agent_loop_stateless.py` | NEW | Tests for stateless think() |
+
+---
+
+## Implementation Order
+
+1. **Phase 1: Semantic Search Tool**
+   - Create `codebase_search` tool with success=True error handling
+   - Extend ToolContext with semantic_search field
+   - Register in ToolRegistry
+
+2. **Phase 2: Tool Description Biasing**
+   - Rename search_code -> find_exact_text
+   - Update descriptions to bias LLM toward semantic search
+
+3. **Phase 3: AgentContextFactory**
+   - Create factory with AgentContext dataclass
+   - Implement tool filtering, budget heuristics, RAG context computation
+   - Add search strategy section builder
+
+4. **Phase 4: Stateless AgentLoop**
+   - Modify think() to accept AgentContext parameter
+   - Remove internal RAG state
+   - Update CodeAgent to handle RAG injection before think()
+
+5. **Phase 5: Config + Wiring**
+   - Add passive_rag_* to AgentConfig
+   - Wire factory into CodeAgent
+   - Integration testing
+
+---
+
+## Testing Strategy
+
+### Context Factory Tests
+
+```python
+class TestAgentContextFactory:
+    def test_semantic_ready_returns_rag_context(self):
+        """When semantic ready, factory returns pre-computed RAG context."""
+        manager = Mock()
+        manager.is_ready.return_value = True
+
+        augmenter = Mock()
+        augmenter.get_relevant_context.return_value = "def authenticate(): ..."
+
+        factory = AgentContextFactory(
+            semantic_manager=manager,
+            context_augmenter=augmenter,
+            ...
+        )
+        context = factory.build_context("find auth logic")
+
+        assert context.passive_rag_context == "def authenticate(): ..."
+        assert "codebase_search" not in context.system_prompt  # Strategy section, not tool list
+
+    def test_semantic_not_ready_filters_tool_and_no_rag(self):
+        """When semantic not ready, tool filtered out and no RAG context."""
+        manager = Mock()
+        manager.is_ready.return_value = False
+
+        factory = AgentContextFactory(semantic_manager=manager, ...)
+        context = factory.build_context("find auth logic")
+
+        # No RAG context
+        assert context.passive_rag_context is None
+
+        # Tool filtered out
+        tool_names = [t.name for t in context.active_tools]
+        assert "codebase_search" not in tool_names
+        assert "find_exact_text" in tool_names
+
+        # Fallback prompt
+        assert "UNAVAILABLE" in context.system_prompt
+
+    def test_file_reference_boosts_budget(self):
+        """Queries with file references get higher budget."""
+        augmenter = Mock()
+        augmenter.get_relevant_context.return_value = "code..."
+
+        factory = AgentContextFactory(...)
+
+        # Call with file reference
+        factory.build_context("fix bug in UserFactory.java")
+
+        # Verify augmenter called with boosted budget
+        call_args = augmenter.get_relevant_context.call_args
+        assert call_args[1]['max_tokens'] > factory._config.passive_rag_max_tokens
+
+    def test_identifier_pattern_boosts_budget(self):
+        """Queries with CamelCase/snake_case get higher budget."""
+        augmenter = Mock()
+        augmenter.get_relevant_context.return_value = "code..."
+
+        factory = AgentContextFactory(...)
+        factory.build_context("fix AuthTokenProvider null check")
+
+        call_args = augmenter.get_relevant_context.call_args
+        assert call_args[1]['max_tokens'] > factory._config.passive_rag_max_tokens
+```
+
+### Stateless AgentLoop Tests
+
+```python
+class TestStatelessAgentLoop:
+    def test_think_uses_context_system_prompt(self):
+        """think() uses system_prompt from AgentContext, not ConversationState."""
+        loop = AgentLoop(...)
+
+        context = AgentContext(
+            system_prompt="Custom prompt from factory",
+            active_tools=[...],
+            passive_rag_context=None,
+        )
+        state = ConversationState(...)
+
+        # Call think with explicit context
+        thought = loop.think(state=state, context=context)
+
+        # Verify orchestrator received context.system_prompt
+        call_args = loop._orchestrator.delegate_with_tools.call_args
+        assert call_args[1]['system_prompt'] == "Custom prompt from factory"
+
+    def test_think_uses_context_tools(self):
+        """think() uses active_tools from AgentContext."""
+        loop = AgentLoop(...)
+
+        # Context with filtered tools (no semantic search)
+        context = AgentContext(
+            system_prompt="...",
+            active_tools=[find_exact_text_tool, read_file_tool],
+            passive_rag_context=None,
+        )
+
+        thought = loop.think(state=state, context=context)
+
+        # Verify only context tools passed to orchestrator
+        call_args = loop._orchestrator.delegate_with_tools.call_args
+        tool_names = [t['function']['name'] for t in call_args[1]['tools']]
+        assert "codebase_search" not in tool_names
+        assert "find_exact_text" in tool_names
+```
+
+### Semantic Search Tool Tests
+
+```python
+class TestSemanticSearchTool:
+    def test_unavailable_returns_success_true(self):
+        """When unavailable, returns success=True so LLM can pivot."""
+        tool = SemanticSearchTool()
+        context = ToolContext(project_root=Path("/tmp"), semantic_search=None)
+
+        result = tool.execute(context, query="find auth")
+
+        assert result.success is True  # NOT False!
+        assert "find_exact_text" in result.output
+        assert result.metadata.get("unavailable") is True
+
+    def test_not_indexed_returns_success_true(self):
+        """When not indexed, returns success=True with guidance."""
+        mock_provider = Mock()
+        mock_provider.is_indexed.return_value = False
+
+        tool = SemanticSearchTool()
+        context = ToolContext(
+            project_root=Path("/tmp"),
+            semantic_search=mock_provider,
+        )
+
+        result = tool.execute(context, query="find auth")
+
+        assert result.success is True
+        assert "not ready" in result.output.lower()
+```
+
+# END Extended Scope 
 
 ---
 
