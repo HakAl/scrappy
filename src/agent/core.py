@@ -764,7 +764,7 @@ class CodeAgent:
                 use_native_tools = provider_obj.supports_tool_calling and hasattr(self.orch, 'delegate_with_tools')
 
         # Build config for prompt generation
-        platform = Platform.WINDOWS if self.orch.context.get_platform() == "windows" else Platform.UNIX
+        platform = Platform.WINDOWS if self.orch.context.platform.is_windows() else Platform.UNIX
         config = AgentPromptConfig(
             platform=platform,
             tool_descriptions=self.tool_registry.generate_descriptions(),

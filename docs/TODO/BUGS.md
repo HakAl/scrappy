@@ -5,14 +5,6 @@ src/agent/core.py -- _format_codebase_structure -- does this belong here?
 ---
 
 ---
-remove duplicate platform detection logic from src/context/ -- platform.py protocols.py tests?
----
-
----
-hard coded platform strings don't use enum -- everywhere
----
-
----
 Problem: Provider output is truncated.
 EG:  Available Providers:
  --------------------------------------------------

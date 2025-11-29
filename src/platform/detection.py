@@ -1,15 +1,14 @@
 """
 Platform detection implementation.
 
-Provides concrete implementation of PlatformDetectorProtocol that wraps
-the existing PlatformDetector and adds shell detection capabilities.
+Provides concrete implementation of PlatformDetectorProtocol with
+platform detection, shell detection, and tool availability checking.
 """
 
 import platform
 import shutil
 from typing import Dict, Optional
 
-from src.context.platform import PlatformDetector as CorePlatformDetector
 from src.platform.protocols.detection import PlatformDetectorProtocol, PlatformType
 
 
@@ -17,27 +16,20 @@ class SystemPlatformDetector:
     """
     Concrete implementation of platform detection protocol.
 
-    Wraps the existing CorePlatformDetector and adds shell information
-    capabilities following dependency injection principles.
+    Provides platform detection, shell information, and tool availability
+    checking with caching for performance.
 
     All dependencies are injected via constructor to enable testing.
     """
 
-    def __init__(
-        self,
-        core_detector: Optional[CorePlatformDetector] = None
-    ):
+    def __init__(self):
         """
         Initialize the system platform detector.
 
-        Args:
-            core_detector: Core platform detector implementation.
-                         Defaults to CorePlatformDetector if not provided.
-
-        Note: Uses factory method for default to maintain testability.
+        Note: No side effects in constructor - only initializes cache storage.
         """
-        self._core = core_detector or self._create_default_core_detector()
         self._shell_info_cache: Optional[Dict[str, Optional[str]]] = None
+        self._tool_cache: Dict[str, bool] = {}
 
     def is_windows(self) -> bool:
         """Check if running on Windows."""
@@ -121,7 +113,7 @@ class SystemPlatformDetector:
         """
         Check if a command-line tool is available.
 
-        Delegates to the core platform detector which caches results.
+        Results are cached since tool availability doesn't change during session.
 
         Args:
             tool_name: Name of the tool/command to check
@@ -129,14 +121,10 @@ class SystemPlatformDetector:
         Returns:
             True if tool is available, False otherwise
         """
-        return self._core.has_tool(tool_name)
+        if not tool_name or ' ' in tool_name:
+            return False
 
-    @staticmethod
-    def _create_default_core_detector() -> CorePlatformDetector:
-        """
-        Factory method to create default core platform detector.
+        if tool_name not in self._tool_cache:
+            self._tool_cache[tool_name] = shutil.which(tool_name) is not None
 
-        Returns:
-            New CorePlatformDetector instance.
-        """
-        return CorePlatformDetector()
+        return self._tool_cache[tool_name]

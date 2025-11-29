@@ -13,8 +13,9 @@ from .file_scanner import FileScanner
 
 logger = logging.getLogger(__name__)
 from .cache import ContextCache
-from .platform import PlatformDetector
 from .git_history import GitHistoryReader
+from ..platform.detection import SystemPlatformDetector
+from ..platform.protocols.detection import PlatformDetectorProtocol
 from .project_detector import ProjectDetector
 from .config_loader import get_truncation_defaults, get_extensions_config, get_paths_config
 from ..infrastructure.protocols import PathProviderProtocol, BackgroundInitializerProtocol
@@ -47,7 +48,7 @@ class CodebaseContext:
         project_path: Optional[str] = None,
         file_scanner: Optional[FileScanner] = None,
         cache: Optional[ContextCache] = None,
-        platform_detector: Optional[PlatformDetector] = None,
+        platform_detector: Optional[PlatformDetectorProtocol] = None,
         git_history_reader: Optional[GitHistoryReader] = None,
         project_detector: Optional[ProjectDetector] = None,
         auto_load_cache: bool = False,
@@ -68,7 +69,7 @@ class CodebaseContext:
             project_path: Path to project root. Defaults to current directory.
             file_scanner: Injectable file scanner (default: creates new FileScanner)
             cache: Injectable context cache (default: creates new ContextCache)
-            platform_detector: Injectable platform detector (default: creates new PlatformDetector)
+            platform_detector: Injectable platform detector (default: creates new SystemPlatformDetector)
             git_history_reader: Injectable git history reader (default: creates new GitHistoryReader)
             project_detector: Injectable project detector (default: creates from project_path)
             auto_load_cache: If True, automatically load cache in constructor (for backwards compatibility)
@@ -161,6 +162,16 @@ class CodebaseContext:
         """
         return self._event_queue
 
+    @property
+    def platform(self) -> PlatformDetectorProtocol:
+        """
+        Get the platform detector.
+
+        Returns:
+            Platform detector for checking OS type and tool availability
+        """
+        return self._platform_detector
+
     def _get_or_create_augmenter(self) -> ContextAugmenter:
         """
         Get or create the context augmenter with proper data providers.
@@ -201,9 +212,9 @@ class CodebaseContext:
         """Create default context cache."""
         return ContextCache()
 
-    def _create_default_platform_detector(self) -> PlatformDetector:
+    def _create_default_platform_detector(self) -> PlatformDetectorProtocol:
         """Create default platform detector."""
-        return PlatformDetector()
+        return SystemPlatformDetector()
 
     def _create_default_git_history_reader(self) -> GitHistoryReader:
         """Create default git history reader."""
@@ -767,26 +778,6 @@ Be concise and technical. No fluff."""
         self._project_detector.set_file_index(self.file_index)
         return self._project_detector.get_project_type()
 
-    def get_platform(self) -> str:
-        """
-        Get the current platform (cached).
-
-        Returns:
-            Platform identifier: 'windows', 'darwin', 'linux', or 'unix'
-        """
-        return self._platform_detector.get_platform()
-
-    def has_tool(self, tool_name: str) -> bool:
-        """
-        Check if a command-line tool is available (cached).
-
-        Args:
-            tool_name: Name of the tool/command to check
-
-        Returns:
-            True if tool is available, False otherwise
-        """
-        return self._platform_detector.has_tool(tool_name)
 
     def get_languages(self) -> list:
         """

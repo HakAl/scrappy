@@ -75,8 +75,15 @@ from src.context import CodebaseContext
 
 context = CodebaseContext(project_path)
 
-# Platform detection
-platform = context.get_platform()  # 'windows', 'darwin', 'linux'
+# Platform detection (via platform property)
+is_windows = context.platform.is_windows()
+is_unix = context.platform.is_unix()
+is_macos = context.platform.is_macos()
+platform_name = context.platform.get_platform_name()  # 'Windows', 'macOS', 'Linux'
+
+# Shell information
+shell_info = context.platform.get_shell_info()
+has_git_bash = context.platform.has_git_bash()
 
 # Project type detection
 project_type = context.get_project_type()  # 'python', 'nodejs', etc.
@@ -85,7 +92,7 @@ project_type = context.get_project_type()  # 'python', 'nodejs', etc.
 python_files = context.file_index['python']
 
 # Tool detection
-has_git = context.has_tool('git')
+has_git = context.platform.has_tool('git')
 ```
 
 ## Usage in Components

@@ -75,7 +75,7 @@ def test_cli_output_contains_no_emojis(capsys):
 
 ### Testing Strings Directly
 
-You can also test specific string lists to catch attempts to add emojis like "Success! 🎉" or "Error ❌".
+You can also test specific string lists to catch attempts to add emojis.
 
 ```python
 def test_no_emojis_in_messages():

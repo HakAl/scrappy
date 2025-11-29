@@ -8,7 +8,6 @@ not just that code runs. Focus on behavior, edge cases, and error conditions.
 import pytest
 from unittest.mock import Mock, patch
 from src.platform.detection import SystemPlatformDetector
-from src.context.platform import PlatformDetector as CorePlatformDetector
 
 
 class TestSystemPlatformDetector:
@@ -193,41 +192,48 @@ class TestSystemPlatformDetector:
 
             assert not detector.has_git_bash()
 
-    def test_has_tool_delegates_to_core_detector(self):
-        """Test that has_tool delegates to the core platform detector."""
-        mock_core = Mock(spec=CorePlatformDetector)
-        mock_core.has_tool.return_value = True
+    def test_has_tool_returns_true_when_tool_available(self):
+        """Test that has_tool returns True when tool is available."""
+        with patch('shutil.which', return_value='/usr/bin/git'):
+            detector = SystemPlatformDetector()
 
-        detector = SystemPlatformDetector(core_detector=mock_core)
-
-        assert detector.has_tool('git')
-        mock_core.has_tool.assert_called_once_with('git')
+            assert detector.has_tool('git')
 
     def test_has_tool_returns_false_when_tool_not_available(self):
         """Test that has_tool returns False when tool is not available."""
-        mock_core = Mock(spec=CorePlatformDetector)
-        mock_core.has_tool.return_value = False
+        with patch('shutil.which', return_value=None):
+            detector = SystemPlatformDetector()
 
-        detector = SystemPlatformDetector(core_detector=mock_core)
+            assert not detector.has_tool('nonexistent-tool')
 
-        assert not detector.has_tool('nonexistent-tool')
+    def test_has_tool_caching(self):
+        """Test that has_tool results are cached."""
+        with patch('shutil.which', return_value='/usr/bin/git') as mock_which:
+            detector = SystemPlatformDetector()
 
-    def test_dependency_injection_with_custom_core_detector(self):
-        """Test that custom core detector can be injected."""
-        mock_core = Mock(spec=CorePlatformDetector)
-        mock_core.has_tool.return_value = True
+            # First call
+            result1 = detector.has_tool('git')
+            first_call_count = mock_which.call_count
 
-        detector = SystemPlatformDetector(core_detector=mock_core)
+            # Second call should use cache
+            result2 = detector.has_tool('git')
+            second_call_count = mock_which.call_count
 
-        assert detector.has_tool('test')
-        assert detector._core is mock_core
+            assert result1 == result2 == True
+            assert first_call_count == second_call_count
 
-    def test_default_core_detector_created_when_none_provided(self):
-        """Test that default core detector is created when none is provided."""
+    def test_has_tool_rejects_empty_tool_name(self):
+        """Test that has_tool returns False for empty tool name."""
         detector = SystemPlatformDetector()
 
-        assert detector._core is not None
-        assert isinstance(detector._core, CorePlatformDetector)
+        assert not detector.has_tool('')
+
+    def test_has_tool_rejects_tool_name_with_spaces(self):
+        """Test that has_tool returns False for tool names with spaces."""
+        detector = SystemPlatformDetector()
+
+        assert not detector.has_tool('git status')
+        assert not detector.has_tool('npm install')
 
 
 class TestPlatformDetectorEdgeCases:
