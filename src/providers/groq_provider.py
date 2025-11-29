@@ -12,7 +12,7 @@ import time
 import json
 from typing import Optional
 
-from .base import LLMProviderBase, LLMResponse, ProviderLimits, ModelInfo, ToolCall
+from .base import LLMProviderBase, LLMResponse, ProviderLimits, ModelInfo, ToolCall, SpeedRank, QualityRank
 from ..utils.imports import safe_import
 from ..utils.errors import raise_package_not_installed, raise_env_var_not_found, raise_model_not_supported
 
@@ -39,29 +39,29 @@ class GroqProvider(LLMProviderBase):
     MODELS = {
         'llama-3.1-8b-instant': {
             'rpm': 30, 'rpd': 7000, 'tpm': 20000, 'tpd': 200000,
-            'context': 131072, 'speed': 'very_fast', 'quality': 'good'
+            'context': 131072, 'speed': SpeedRank.VERY_FAST, 'quality': QualityRank.GOOD
         },
         'llama-3.3-70b-versatile': {
             'rpm': 30, 'rpd': 1000, 'tpm': 12000, 'tpd': 100000,
-            'context': 32768, 'speed': 'fast', 'quality': 'excellent'
+            'context': 32768, 'speed': SpeedRank.FAST, 'quality': QualityRank.EXCELLENT
         },
         'llama-3.1-70b-versatile': {
             'rpm': 30, 'rpd': 1000, 'tpm': 12000, 'tpd': 100000,
-            'context': 32768, 'speed': 'fast', 'quality': 'excellent'
+            'context': 32768, 'speed': SpeedRank.FAST, 'quality': QualityRank.EXCELLENT
         },
         'mixtral-8x7b-32768': {
             'rpm': 30, 'rpd': 14400, 'tpm': 5000, 'tpd': None,
-            'context': 32768, 'speed': 'fast', 'quality': 'very_good'
+            'context': 32768, 'speed': SpeedRank.FAST, 'quality': QualityRank.VERY_GOOD
         },
         # gemma2-9b-it removed - decommissioned by Groq as of 2025-11
         # New instruction-tuned models (added 2025-11)
         'meta-llama/llama-4-scout-17b-16e-instruct': {
             'rpm': 30, 'rpd': 7000, 'tpm': 20000, 'tpd': 200000,
-            'context': 16384, 'speed': 'ultra_fast', 'quality': 'excellent'
+            'context': 16384, 'speed': SpeedRank.ULTRA_FAST, 'quality': QualityRank.EXCELLENT
         },
         'moonshotai/kimi-k2-instruct': {
             'rpm': 30, 'rpd': 7000, 'tpm': 20000, 'tpd': 200000,
-            'context': 131072, 'speed': 'ultra_fast', 'quality': 'excellent'
+            'context': 131072, 'speed': SpeedRank.ULTRA_FAST, 'quality': QualityRank.EXCELLENT
         },
     }
 
@@ -258,26 +258,6 @@ class GroqProvider(LLMProviderBase):
             tokens_per_minute=model_limits.get('tpm'),
             tokens_per_day=model_limits.get('tpd'),
         )
-
-    def get_model_for_task(self, task_type: str) -> str:
-        """
-        Recommend a model based on task type.
-
-        Args:
-            task_type: 'fast' for quick responses, 'quality' for best results,
-                      'high_volume' for many requests
-
-        Returns:
-            Recommended model name
-        """
-        if task_type == 'fast':
-            return 'llama-3.1-8b-instant'
-        elif task_type == 'quality':
-            return 'llama-3.3-70b-versatile'
-        elif task_type == 'high_volume':
-            return 'mixtral-8x7b-32768'  # Highest RPD
-        else:
-            return self.default_model
 
     async def chat_async(
         self,

@@ -1,6 +1,6 @@
 ## Release Bare Minimum (beta v.1)
 
-## BUGS
+## BUGS - docs/TODO/MODEL_SELECTION_REFACTOR.md, docs/TODO/PROMPT_REFINEMENT.md, docs/TODO/NO_OUTPUT.md
 
 ### Update Docs
 Update all top level docs/ to have current information
@@ -8,7 +8,7 @@ Update all top level docs/ to have current information
 
 ### TODO Tool: docs/TODO/TODO_TOOL.md
 
-### Rate Limit Enforcement: 
+### Rate Limit Enforcement: docs/TODO/RATE_LIMITING.md
 
 ### P5_IMPLEMENTATION_PLAN.md
 
@@ -21,11 +21,11 @@ EG: rate-limited, or returns garbage? Users will blame your tool, not OpenAI.
 - Clear error messages: "OpenAI returned 429. Waiting 30s..." vs "Error: Unknown"
 - Offline mode for semantic search (local embeddings only)
 
-### Session Persistence
+### Session Persistence -- works, but one shot commands help screen doesn't match feature set
 Users will close the terminal mid-task. Can they resume? 
 Ensure resume feature works well -- what context is restored?
 - Auto-save conversation state to `.scrappy/session.json`
-- `scrappy resume` command
+- `scrappy --resume` command
 - Clear "session expired" vs "session resumed" messaging
 
 ### Audit Log

@@ -12,7 +12,7 @@ import os
 import time
 from typing import Optional
 
-from .base import LLMProviderBase, LLMResponse, ProviderLimits
+from .base import LLMProviderBase, LLMResponse, ProviderLimits, SpeedRank, QualityRank
 from ..utils.imports import safe_import
 from ..utils.errors import raise_package_not_installed, raise_env_var_not_found, raise_model_not_supported
 
@@ -41,40 +41,40 @@ class GitHubModelsProvider(LLMProviderBase):
     MODELS = {
         'gpt-4o': {
             'rpd': 10000, 'tpd': 10000000,
-            'context': 128000, 'speed': 'moderate', 'quality': 'excellent'
+            'context': 128000, 'speed': SpeedRank.MODERATE, 'quality': QualityRank.EXCELLENT
         },
         'gpt-4o-mini': {
             'rpd': 20000, 'tpd': 2000000,
-            'context': 128000, 'speed': 'fast', 'quality': 'very_good'
+            'context': 128000, 'speed': SpeedRank.FAST, 'quality': QualityRank.VERY_GOOD
         },
         'deepseek-r1': {
             'rpd': None, 'tpd': None,  # Unknown - no headers returned
-            'context': 64000, 'speed': 'moderate', 'quality': 'excellent',
+            'context': 64000, 'speed': SpeedRank.MODERATE, 'quality': QualityRank.EXCELLENT,
             'reasoning': True
         },
         'grok-3-mini': {
             'rpd': None, 'tpd': None,
-            'context': 131072, 'speed': 'fast', 'quality': 'very_good'
+            'context': 131072, 'speed': SpeedRank.FAST, 'quality': QualityRank.VERY_GOOD
         },
         'meta-llama-3.1-8b-instruct': {
             'rpd': None, 'tpd': None,
-            'context': 128000, 'speed': 'very_fast', 'quality': 'good'
+            'context': 128000, 'speed': SpeedRank.VERY_FAST, 'quality': QualityRank.GOOD
         },
         'llama-4-scout-17b-16e-instruct': {
             'rpd': None, 'tpd': None,
-            'context': 10000000, 'speed': 'fast', 'quality': 'very_good'
+            'context': 10000000, 'speed': SpeedRank.FAST, 'quality': QualityRank.VERY_GOOD
         },
         'phi-4': {
             'rpd': None, 'tpd': None,
-            'context': 16384, 'speed': 'very_fast', 'quality': 'good'
+            'context': 16384, 'speed': SpeedRank.VERY_FAST, 'quality': QualityRank.GOOD
         },
         'mistral-small-2503': {
             'rpd': None, 'tpd': None,
-            'context': 32768, 'speed': 'fast', 'quality': 'good'
+            'context': 32768, 'speed': SpeedRank.FAST, 'quality': QualityRank.GOOD
         },
         'cohere-command-a': {
             'rpd': None, 'tpd': None,
-            'context': 256000, 'speed': 'moderate', 'quality': 'very_good'
+            'context': 256000, 'speed': SpeedRank.MODERATE, 'quality': QualityRank.VERY_GOOD
         },
     }
 
@@ -223,25 +223,6 @@ class GitHubModelsProvider(LLMProviderBase):
             requests_per_day=model_limits.get('rpd'),
             tokens_per_day=model_limits.get('tpd'),
         )
-
-    def get_model_for_task(self, task_type: str) -> str:
-        """
-        Recommend a model based on task type.
-
-        Args:
-            task_type: 'fast', 'quality', 'reasoning', 'high_volume'
-
-        Returns:
-            Recommended model name
-        """
-        if task_type == 'fast' or task_type == 'high_volume':
-            return 'gpt-4o-mini'
-        elif task_type == 'quality' or task_type == 'orchestration':
-            return 'gpt-4o'
-        elif task_type == 'reasoning':
-            return 'deepseek-r1'
-        else:
-            return self.default_model
 
     async def chat_async(
         self,

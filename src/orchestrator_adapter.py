@@ -86,7 +86,7 @@ class AgentOrchestratorAdapter:
         max_tokens: int = 1500,
         temperature: float = 0.3,
         use_context: bool = False,
-        task_type: str = 'general',
+        selection_type: Optional["ModelSelectionType"] = None,
         provider_name: Optional[str] = None,  # Alias for provider
         **kwargs
     ) -> LLMResponse:
@@ -99,7 +99,7 @@ class AgentOrchestratorAdapter:
             max_tokens: Maximum tokens in response
             temperature: Sampling temperature
             use_context: Whether to use context augmentation
-            task_type: Type of task for provider selection
+            selection_type: What kind of model to use for auto-selection
             provider_name: Alias for provider (keyword-only)
             **kwargs: Additional arguments passed to orchestrator
         """
@@ -114,7 +114,7 @@ class AgentOrchestratorAdapter:
             max_tokens=max_tokens,
             temperature=temperature,
             use_context=use_context,
-            task_type=task_type,
+            selection_type=selection_type,
             **kwargs
         )
 

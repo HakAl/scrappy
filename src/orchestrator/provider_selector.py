@@ -8,14 +8,15 @@ from typing import Optional, List, Tuple
 
 try:
     from ..providers import ProviderRegistry
-    from ..providers.base import ModelType
+    from ..providers.base import ModelType, SpeedRank, QualityRank
 except ImportError:
     from providers import ProviderRegistry
-    from providers.base import ModelType
+    from providers.base import ModelType, SpeedRank, QualityRank
 
 from .output import OperationalOutputProtocol, ConsoleOutput
 from .config import OrchestratorConfig
 from .protocols import ProviderRegistryProtocol  # For type hints (Dependency Inversion)
+from .model_selection import ModelSelectionType
 
 
 class ProviderSelector:
@@ -65,74 +66,6 @@ class ProviderSelector:
     def clear_selection_log(self):
         """Clear the selection log."""
         self._selection_log.clear()
-
-    def select_for_task(self, task_type: str = 'general') -> tuple[str, Optional[str]]:
-        """
-        Select the best provider and model for a task type.
-
-        Args:
-            task_type: Type of task
-                - 'fast': Quick response needed
-                - 'quality': Best quality needed
-                - 'high_volume': Many requests expected
-                - 'embed': Embedding task
-                - 'general': General task
-
-        Returns:
-            Tuple of (provider_name, model_name or None for default)
-
-        Raises:
-            RuntimeError: If no providers available
-        """
-        self._log(f"Selecting provider for task type: {task_type}")
-        available = self.registry.list_available()
-
-        if not available:
-            self._log("No providers available!", "ERROR")
-            raise RuntimeError("No providers available!")
-
-        self._log(f"Available providers: {', '.join(available)}")
-
-        if task_type == 'planning':
-            # Planning tasks need instruction-tuned models for JSON compliance
-            return self.select_for_planning()
-
-        if task_type in ['fast', 'high_volume', 'general']:
-            # Prefer Cerebras (14,400 RPD), then Groq (7,000 RPD)
-            if 'cerebras' in available:
-                provider = self.registry.get('cerebras')
-                model = provider.get_model_for_task(task_type)
-                self._log(f"Selected cerebras (14,400 RPD) - highest quota for {task_type}", "SELECTED")
-                return ('cerebras', model)
-            elif 'groq' in available:
-                provider = self.registry.get('groq')
-                model = provider.get_model_for_task(task_type)
-                self._log(f"Selected groq (7,000 RPD) - cerebras unavailable", "SELECTED")
-                return ('groq', model)
-            elif 'gemini' in available:
-                self._log("Selected gemini - cerebras/groq unavailable", "SELECTED")
-                return ('gemini', None)
-
-        elif task_type == 'quality':
-            # Use best available large model
-            if 'cerebras' in available:
-                self._log("Selected cerebras with llama-3.3-70b for quality", "SELECTED")
-                return ('cerebras', 'llama-3.3-70b')
-            elif 'groq' in available:
-                self._log("Selected groq with llama-3.3-70b-versatile for quality", "SELECTED")
-                return ('groq', 'llama-3.3-70b-versatile')
-            elif 'gemini' in available:
-                self._log("Selected gemini for quality", "SELECTED")
-                return ('gemini', None)
-
-        elif task_type == 'embed' and 'cohere' in available:
-            self._log("Selected cohere for embeddings (1,000/month limit!)", "WARN")
-            self.output.warn("Using Cohere. This counts toward 1,000/month limit!")
-            return ('cohere', None)
-
-        # Fallback: use first available provider
-        self._log(f"Fallback: using {available[0]} (first available)", "SELECTED")
-        return (available[0], None)
 
     def recommend(self, requirements: dict) -> str:
         """
@@ -412,3 +345,120 @@ class ProviderSelector:
                     result.append((provider_name, model_id))
 
         return result
+
+    def get_model(self, selection_type: ModelSelectionType) -> tuple[str, str]:
+        """
+        Select provider and model based on selection type.
+
+        Args:
+            selection_type: What kind of model is needed
+
+        Returns:
+            Tuple of (provider_name, model_id)
+
+        Raises:
+            RuntimeError: If no providers available
+        """
+        self._log(f"Selecting model for: {selection_type.value}")
+        available = self.registry.list_available()
+
+        if not available:
+            self._log("No providers available!", "ERROR")
+            raise RuntimeError("No providers available!")
+
+        self._log(f"Available providers: {', '.join(available)}")
+
+        if selection_type == ModelSelectionType.FAST:
+            return self._select_by_speed(available)
+        elif selection_type == ModelSelectionType.QUALITY:
+            return self._select_by_quality(available)
+        elif selection_type == ModelSelectionType.INSTRUCT:
+            return self._select_by_instruct(available)
+        elif selection_type == ModelSelectionType.EMBED:
+            return self._select_for_embed(available)
+
+        # Fallback
+        self._log(f"Unknown selection type, using first available", "WARN")
+        return (available[0], None)
+
+    def _select_by_speed(self, available: list[str]) -> tuple[str, str]:
+        """Select fastest model with good quota."""
+        candidates = []
+        for provider_name in available:
+            provider = self.registry.get(provider_name)
+            for model_id in provider.available_models:
+                info = provider.get_model_info(model_id)
+                candidates.append((provider_name, model_id, info))
+
+        speed_rank = {
+            SpeedRank.ULTRA_FAST: 0,
+            SpeedRank.VERY_FAST: 1,
+            SpeedRank.FAST: 2,
+            SpeedRank.MODERATE: 3,
+            SpeedRank.SLOW: 4
+        }
+        candidates.sort(key=lambda x: (speed_rank.get(x[2].speed, 5), -(x[2].rpd or 0)))
+
+        if candidates:
+            best = candidates[0]
+            self._log(f"Selected {best[0]}/{best[1]} (speed: {best[2].speed.value})", "SELECTED")
+            return (best[0], best[1])
+
+        self._log(f"No candidates, using {available[0]}", "WARN")
+        return (available[0], None)
+
+    def _select_by_quality(self, available: list[str]) -> tuple[str, str]:
+        """Select highest quality model."""
+        candidates = []
+        for provider_name in available:
+            provider = self.registry.get(provider_name)
+            for model_id in provider.available_models:
+                info = provider.get_model_info(model_id)
+                candidates.append((provider_name, model_id, info))
+
+        quality_rank = {
+            QualityRank.EXCELLENT: 0,
+            QualityRank.VERY_GOOD: 1,
+            QualityRank.GOOD: 2,
+            QualityRank.MODERATE: 3
+        }
+        candidates.sort(key=lambda x: (quality_rank.get(x[2].quality, 4), -(x[2].rpd or 0)))
+
+        if candidates:
+            best = candidates[0]
+            self._log(f"Selected {best[0]}/{best[1]} (quality: {best[2].quality.value})", "SELECTED")
+            return (best[0], best[1])
+
+        self._log(f"No candidates, using {available[0]}", "WARN")
+        return (available[0], None)
+
+    def _select_by_instruct(self, available: list[str]) -> tuple[str, str]:
+        """Select best instruction-tuned model."""
+        candidates = []
+        for provider_name in available:
+            provider = self.registry.get(provider_name)
+            for model_id in provider.available_models:
+                info = provider.get_model_info(model_id)
+                if info.is_instruction_tuned:
+                    candidates.append((provider_name, model_id, info))
+
+        # Sort by RPD (prefer high quota)
+        candidates.sort(key=lambda x: -(x[2].rpd or 0))
+
+        if candidates:
+            best = candidates[0]
+            self._log(f"Selected {best[0]}/{best[1]} (instruct, {best[2].rpd} RPD)", "SELECTED")
+            return (best[0], best[1])
+
+        # Fallback to quality if no instruct models
+        self._log("No instruction-tuned models, falling back to quality", "WARN")
+        return self._select_by_quality(available)
+
+    def _select_for_embed(self, available: list[str]) -> tuple[str, str]:
+        """Select embedding model."""
+        if 'cohere' in available:
+            self._log("Selected cohere for embeddings", "SELECTED")
+            return ('cohere', None)
+
+        self._log(f"No embedding provider, using {available[0]}", "WARN")
+        return (available[0], None)

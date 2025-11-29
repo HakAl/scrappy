@@ -113,6 +113,7 @@ class TestGitHubModelsProvider:
 
     def test_model_configurations(self, provider_with_mock_client):
         """Test that model configurations are properly defined."""
+        from src.providers.base import SpeedRank, QualityRank
         configs = provider_with_mock_client.MODELS
 
         # Test GPT-4o configuration
@@ -120,14 +121,14 @@ class TestGitHubModelsProvider:
         assert gpt4o_config['rpd'] == 10000
         assert gpt4o_config['tpd'] == 10000000
         assert gpt4o_config['context'] == 128000
-        assert gpt4o_config['speed'] == 'moderate'
-        assert gpt4o_config['quality'] == 'excellent'
+        assert gpt4o_config['speed'] == SpeedRank.MODERATE
+        assert gpt4o_config['quality'] == QualityRank.EXCELLENT
 
         # Test DeepSeek R1 configuration
         deepseek_config = configs['deepseek-r1']
         assert deepseek_config['context'] == 64000
-        assert deepseek_config['speed'] == 'moderate'
-        assert deepseek_config['quality'] == 'excellent'
+        assert deepseek_config['speed'] == SpeedRank.MODERATE
+        assert deepseek_config['quality'] == QualityRank.EXCELLENT
         assert deepseek_config['reasoning'] is True
 
     def test_chat_basic(self, provider_with_mock_client):
@@ -215,18 +216,6 @@ class TestGitHubModelsProvider:
         assert limits.remaining_requests is None
         assert limits.remaining_tokens is None
 
-    @pytest.mark.parametrize("task_type,expected_model", [
-        ("fast", "gpt-4o-mini"),
-        ("high_volume", "gpt-4o-mini"),
-        ("quality", "gpt-4o"),
-        ("orchestration", "gpt-4o"),
-        ("reasoning", "deepseek-r1"),
-        ("unknown", "gpt-4o"),
-    ])
-    def test_get_model_for_task(self, provider_with_mock_client, task_type, expected_model):
-        """Test model recommendation for different task types."""
-        recommended_model = provider_with_mock_client.get_model_for_task(task_type)
-        assert recommended_model == expected_model
 
     @pytest.mark.asyncio
     async def test_chat_async_basic(self, provider_with_mock_client, mock_httpx_response):

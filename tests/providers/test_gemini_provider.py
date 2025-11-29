@@ -225,16 +225,6 @@ async def test_chat_async_fallback(provider):
 
 # --- Utility Tests ---
 
-def test_get_model_for_task(provider):
-    """Should route tasks to appropriate models."""
-    assert provider.get_model_for_task("fast") == "gemini-2.0-flash-lite"
-    assert provider.get_model_for_task("quality") == "gemini-2.5-flash"
-    assert provider.get_model_for_task("high_volume") == "gemini-2.5-flash-lite"
-
-    # Unknown task type returns default
-    assert provider.get_model_for_task("unknown") == provider.default_model
-
-
 def test_limits_tracking(provider):
     """Should track and reset limited models."""
     provider._limited_models.add("gemini-2.0-flash")

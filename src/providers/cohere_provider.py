@@ -20,7 +20,7 @@ import os
 import time
 from typing import Optional
 
-from .base import LLMProviderBase, LLMResponse, ProviderLimits
+from .base import LLMProviderBase, LLMResponse, ProviderLimits, SpeedRank, QualityRank
 from ..utils.imports import safe_import
 from ..utils.errors import raise_package_not_installed, raise_env_var_not_found, raise_model_not_supported
 
@@ -45,27 +45,27 @@ class CohereProvider(LLMProviderBase):
     # Model configurations
     MODELS = {
         'command-r-08-2024': {
-            'type': 'chat', 'quality': 'good', 'speed': 'fast',
+            'type': 'chat', 'quality': QualityRank.GOOD, 'speed': SpeedRank.FAST,
             'context': 128000, 'description': 'Balanced performance'
         },
         'command-r7b-12-2024': {
-            'type': 'chat', 'quality': 'moderate', 'speed': 'very_fast',
+            'type': 'chat', 'quality': QualityRank.MODERATE, 'speed': SpeedRank.VERY_FAST,
             'context': 128000, 'description': 'Smaller, faster model'
         },
         'command-a-03-2025': {
-            'type': 'chat', 'quality': 'excellent', 'speed': 'moderate',
+            'type': 'chat', 'quality': QualityRank.EXCELLENT, 'speed': SpeedRank.MODERATE,
             'context': 256000, 'description': 'Newest command model'
         },
         'command-a-reasoning-08-2025': {
-            'type': 'reasoning', 'quality': 'excellent', 'speed': 'slow',
+            'type': 'reasoning', 'quality': QualityRank.EXCELLENT, 'speed': SpeedRank.SLOW,
             'context': 256000, 'description': 'Specialized reasoning model'
         },
         'c4ai-aya-expanse-8b': {
-            'type': 'chat', 'quality': 'good', 'speed': 'fast',
+            'type': 'chat', 'quality': QualityRank.GOOD, 'speed': SpeedRank.FAST,
             'context': 8192, 'description': 'Multilingual model'
         },
         'c4ai-aya-expanse-32b': {
-            'type': 'chat', 'quality': 'very_good', 'speed': 'moderate',
+            'type': 'chat', 'quality': QualityRank.VERY_GOOD, 'speed': SpeedRank.MODERATE,
             'context': 8192, 'description': 'Larger multilingual model'
         },
     }
@@ -178,27 +178,6 @@ class CohereProvider(LLMProviderBase):
             requests_per_minute=20,  # Chat endpoint
             requests_per_month=1000,  # CRITICAL LIMIT
         )
-
-    def get_model_for_task(self, task_type: str) -> str:
-        """
-        Recommend a model based on task type.
-
-        Args:
-            task_type: 'fast', 'quality', 'reasoning', 'multilingual'
-
-        Returns:
-            Recommended model name
-        """
-        if task_type == 'fast':
-            return 'command-r7b-12-2024'
-        elif task_type == 'quality':
-            return 'command-a-03-2025'
-        elif task_type == 'reasoning':
-            return 'command-a-reasoning-08-2025'
-        elif task_type == 'multilingual':
-            return 'c4ai-aya-expanse-32b'
-        else:
-            return self.default_model
 
     def embed(self, texts: list[str], model: str = 'embed-english-v3.0') -> list[list[float]]:
         """

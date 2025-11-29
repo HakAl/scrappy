@@ -1,23 +1,52 @@
 ## Issues 
 
+
 ---
-Problem: No output from chat. Output is literally: "|"
-EG:
- Verbose mode: ON
-   Metadata (provider, tokens, time) will be shown for responses.
+Problem: Provider output is truncated.
+EG:  Available Providers:
+ --------------------------------------------------
 
- > how would we add rag to this codebase?
+ GITHUB
+ (Active)
+   Default Model: gpt-4o
+   Daily Quota: 10,000 requests
+   Daily Tokens: 10,000,000 TPD
+   Models: gpt-4o, gpt-4o-mini, deepseek-r1
+            ... and 6 more
 
- Task Classification:
-   Type: research
-   Confidence: 1.00
-   Complexity: 2/10
-   Reasoning: Information gathering task: question, question_mark
-   Provider: cerebras (llama3.1-8b) (hint: fast)
-   Executing with: ResearchExecutor
+ CEREBRAS
+ (Active)
+   Default Model: qwen-3-235b-a22b-instruct-2507
+   Daily Quota: 14,400 requests
+   Token Limit: 60,000 TPM
+   Models: llama3.1-8b, llama-3.3-70b, qwen-3-32b
+            ... and 1 more
 
- |
-   cerebras (llama3.1-8b) | 641 tokens | 0.7ms
+ GROQ
+ (Active)
+   Default Model: llama-3.1-8b-instant
+   Daily Quota: 7,000 requests
+   Token Limit: 20,000 TPM
+   Daily Tokens: 200,000 TPD
+   Models: llama-3.1-8b-instant, llama-3.3-70b-versatile, llama-3.1-70b-versatile
+            ... and 3 more
+
+ GEMINI
+ (Active)
+   Default Model: gemini-2.5-flash-lite
+   Daily Quota: 1,000 requests
+   Daily Tokens: 250,000 TPD
+   Models: gemini-2.5-flash-lite, gemini-2.0-flash-lite, gemini-2.0-flash
+            ... and 2 more
+
+ COHERE
+ (Active)
+   Default Model: command-r7b-12-2024
+   Models: command-r-08-2024, command-r7b-12-2024, command-a-03-2025
+            ... and 3 more
+
+
+
 ---
 
 ---
@@ -73,11 +102,12 @@ src/task_router/protocols.py
 ---
 
 ---
-code search tool is completely useless -- maybe it's fine as a hybrid with grep/rg + semantic search
+shift selection is messed up, can't 'unselect' once a point is selected.
+can't use mouse scroll during selection.  shift + scrolling
 ---
 
 ---
-shift selection is messed up, can't 'unselect' once a point is selected.
+code search tool is completely useless (command tool has grep)-- more logical as a hybrid with grep/rg + semantic search?
 ---
 
 ===

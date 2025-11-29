@@ -245,26 +245,26 @@ class TestProviderSelectorInstructModels:
 class TestProviderSelectorPlanningIntegration:
     """Integration tests for planning model selection."""
 
-    def test_existing_select_for_task_still_works(self):
-        """Existing select_for_task should not be broken."""
+    def test_get_model_fast_still_works(self):
+        """get_model with FAST should work correctly."""
         registry = ProviderRegistry()
 
         provider = MagicMock()
         provider.name = "cerebras"
         provider.is_available.return_value = True
         type(provider).available_models = PropertyMock(return_value=["llama3.1-8b"])
-        provider.get_model_for_task.return_value = "llama3.1-8b"
 
         registry.register(provider)
 
         selector = ProviderSelector(registry)
-        provider_name, model = selector.select_for_task("fast")
+        from src.orchestrator.model_selection import ModelSelectionType
+        provider_name, model = selector.get_model(ModelSelectionType.FAST)
 
         assert provider_name == "cerebras"
         assert model == "llama3.1-8b"
 
-    def test_select_for_task_planning_uses_new_logic(self):
-        """select_for_task('planning') should use instruction-tuned selection."""
+    def test_get_model_instruct_uses_instruction_tuned(self):
+        """get_model with INSTRUCT should use instruction-tuned selection."""
         registry = ProviderRegistry()
 
         provider = MagicMock()
@@ -285,14 +285,14 @@ class TestProviderSelectorPlanningIntegration:
             return ["gemma2-9b-it"]
 
         provider.get_instruction_tuned_models = get_instruction_tuned
-        provider.get_model_for_task.return_value = "llama-3.3-70b-versatile"  # Default behavior
 
         registry.register(provider)
 
         selector = ProviderSelector(registry)
 
-        # Planning task should prefer instruction-tuned
-        provider_name, model = selector.select_for_task("planning")
+        # INSTRUCT type should prefer instruction-tuned
+        from src.orchestrator.model_selection import ModelSelectionType
+        provider_name, model = selector.get_model(ModelSelectionType.INSTRUCT)
 
         assert provider_name == "groq"
-        assert model == "gemma2-9b-it"  # Should pick instruction-tuned, not default
+        assert model == "gemma2-9b-it"  # Should pick instruction-tuned

@@ -27,6 +27,23 @@ class ModelType(Enum):
     UNKNOWN = "unknown"     # Type not determined
 
 
+class SpeedRank(Enum):
+    """Model speed/latency rankings."""
+    ULTRA_FAST = "ultra_fast"
+    VERY_FAST = "very_fast"
+    FAST = "fast"
+    MODERATE = "moderate"
+    SLOW = "slow"
+
+
+class QualityRank(Enum):
+    """Model output quality rankings."""
+    EXCELLENT = "excellent"
+    VERY_GOOD = "very_good"
+    GOOD = "good"
+    MODERATE = "moderate"
+
+
 def detect_model_type(model_id: str) -> ModelType:
     """
     Auto-detect model type from model ID/name.
@@ -86,8 +103,8 @@ class ModelInfo:
     context_length: int
     rpd: Optional[int] = None  # Requests per day
     tpm: Optional[int] = None  # Tokens per minute
-    quality: str = "good"      # good, very_good, excellent
-    speed: str = "fast"        # fast, very_fast, moderate, slow
+    quality: QualityRank = QualityRank.GOOD
+    speed: SpeedRank = SpeedRank.FAST
 
     @property
     def is_instruction_tuned(self) -> bool:
@@ -115,14 +132,36 @@ class ModelInfo:
         # Extract context length (may be 'context' or 'context_length')
         context_length = config.get("context", config.get("context_length", 4096))
 
+        # Handle quality - accept enum or string
+        quality_val = config.get("quality", QualityRank.GOOD)
+        if isinstance(quality_val, str):
+            # Convert string to enum for backward compatibility
+            try:
+                quality = QualityRank(quality_val)
+            except ValueError:
+                quality = QualityRank.GOOD
+        else:
+            quality = quality_val
+
+        # Handle speed - accept enum or string
+        speed_val = config.get("speed", SpeedRank.FAST)
+        if isinstance(speed_val, str):
+            # Convert string to enum for backward compatibility
+            try:
+                speed = SpeedRank(speed_val)
+            except ValueError:
+                speed = SpeedRank.FAST
+        else:
+            speed = speed_val
+
         return cls(
             id=model_id,
             model_type=model_type,
             context_length=context_length,
             rpd=config.get("rpd"),
             tpm=config.get("tpm"),
-            quality=config.get("quality", "good"),
-            speed=config.get("speed", "fast")
+            quality=quality,
+            speed=speed
         )
 
 

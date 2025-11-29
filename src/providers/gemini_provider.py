@@ -16,7 +16,7 @@ import os
 import time
 from typing import Optional
 
-from .base import LLMProviderBase, LLMResponse, ProviderLimits, ModelInfo
+from .base import LLMProviderBase, LLMResponse, ProviderLimits, ModelInfo, SpeedRank, QualityRank
 from ..utils.imports import safe_import
 
 logger = logging.getLogger(__name__)
@@ -52,23 +52,23 @@ class GeminiProvider(LLMProviderBase):
     MODELS = {
         'gemini-2.5-flash-lite': {
             'rpm': 15, 'rpd': 1000, 'tpd': 250000,
-            'quality': 'good', 'speed': 'fast', 'priority': 1
+            'quality': QualityRank.GOOD, 'speed': SpeedRank.FAST, 'priority': 1
         },
         'gemini-2.0-flash-lite': {
             'rpm': 30, 'rpd': 200, 'tpd': 1000000,
-            'quality': 'moderate', 'speed': 'very_fast', 'priority': 2
+            'quality': QualityRank.MODERATE, 'speed': SpeedRank.VERY_FAST, 'priority': 2
         },
         'gemini-2.0-flash': {
             'rpm': 15, 'rpd': 200, 'tpd': 1000000,
-            'quality': 'good', 'speed': 'fast', 'priority': 3
+            'quality': QualityRank.GOOD, 'speed': SpeedRank.FAST, 'priority': 3
         },
         'gemini-2.5-flash': {
             'rpm': 10, 'rpd': 250, 'tpd': 250000,
-            'quality': 'very_good', 'speed': 'moderate', 'priority': 4
+            'quality': QualityRank.VERY_GOOD, 'speed': SpeedRank.MODERATE, 'priority': 4
         },
         'gemini-2.0-flash-exp': {
             'rpm': 10, 'rpd': 50, 'tpd': None,
-            'quality': 'experimental', 'speed': 'fast', 'priority': 5
+            'quality': 'experimental', 'speed': SpeedRank.FAST, 'priority': 5
         },
     }
 
@@ -312,27 +312,6 @@ class GeminiProvider(LLMProviderBase):
             requests_per_day=model_limits.get('rpd'),
             tokens_per_day=model_limits.get('tpd'),
         )
-
-    def get_model_for_task(self, task_type: str) -> str:
-        """
-        Recommend a model based on task type.
-
-        Args:
-            task_type: 'fast', 'quality', 'high_volume', 'balanced'
-
-        Returns:
-            Recommended model name
-        """
-        if task_type == 'fast':
-            return 'gemini-2.0-flash-lite'
-        elif task_type == 'quality':
-            return 'gemini-2.5-flash'
-        elif task_type == 'high_volume':
-            return 'gemini-2.5-flash-lite'  # 1000 RPD!
-        elif task_type == 'balanced':
-            return 'gemini-2.0-flash'
-        else:
-            return self.default_model
 
     def is_available(self) -> bool:
         """Check if Gemini is properly configured."""

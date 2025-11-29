@@ -100,27 +100,28 @@ class TestCohereProvider:
 
     def test_model_configurations(self, provider_with_mock_clients):
         """Test that model configurations are properly defined."""
+        from src.providers.base import ModelType, SpeedRank, QualityRank
         configs = provider_with_mock_clients.MODELS
 
         # Test Command R7B configuration (default)
         r7b_config = configs['command-r7b-12-2024']
-        assert r7b_config['type'] == 'chat'
-        assert r7b_config['quality'] == 'moderate'
-        assert r7b_config['speed'] == 'very_fast'
+        assert r7b_config['type'] == ModelType.CHAT or r7b_config['type'] == 'chat'
+        assert r7b_config['quality'] == QualityRank.MODERATE or r7b_config['quality'] == 'moderate'
+        assert r7b_config['speed'] == SpeedRank.VERY_FAST or r7b_config['speed'] == 'very_fast'
         assert r7b_config['context'] == 128000
 
         # Test Command A configuration
         command_a_config = configs['command-a-03-2025']
-        assert command_a_config['type'] == 'chat'
-        assert command_a_config['quality'] == 'excellent'
-        assert command_a_config['speed'] == 'moderate'
+        assert command_a_config['type'] == ModelType.CHAT or command_a_config['type'] == 'chat'
+        assert command_a_config['quality'] == QualityRank.EXCELLENT or command_a_config['quality'] == 'excellent'
+        assert command_a_config['speed'] == SpeedRank.MODERATE or command_a_config['speed'] == 'moderate'
         assert command_a_config['context'] == 256000
 
         # Test reasoning model
         reasoning_config = configs['command-a-reasoning-08-2025']
-        assert reasoning_config['type'] == 'reasoning'
-        assert reasoning_config['quality'] == 'excellent'
-        assert reasoning_config['speed'] == 'slow'
+        assert reasoning_config['type'] == ModelType.REASONING or reasoning_config['type'] == 'reasoning'
+        assert reasoning_config['quality'] == QualityRank.EXCELLENT or reasoning_config['quality'] == 'excellent'
+        assert reasoning_config['speed'] == SpeedRank.SLOW or reasoning_config['speed'] == 'slow'
 
     def test_chat_basic(self, provider_with_mock_clients):
         """Test basic chat functionality."""
@@ -227,17 +228,6 @@ class TestCohereProvider:
         assert limits.requests_per_minute == 20
         assert limits.requests_per_month == 1000
 
-    @pytest.mark.parametrize("task_type,expected_model", [
-        ("fast", "command-r7b-12-2024"),
-        ("quality", "command-a-03-2025"),
-        ("reasoning", "command-a-reasoning-08-2025"),
-        ("multilingual", "c4ai-aya-expanse-32b"),
-        ("unknown", "command-r7b-12-2024"),
-    ])
-    def test_get_model_for_task(self, provider_with_mock_clients, task_type, expected_model):
-        """Test model recommendation for different task types."""
-        recommended_model = provider_with_mock_clients.get_model_for_task(task_type)
-        assert recommended_model == expected_model
 
 
     def test_embed_custom_model(self, mock_cohere_client_v2, mock_cohere_client_v1):
@@ -357,17 +347,18 @@ class TestCohereProvider:
 
     def test_model_config_variations(self, provider_with_mock_clients):
         """Test that different models have correct configurations."""
+        from src.providers.base import ModelType, SpeedRank
         configs = provider_with_mock_clients.MODELS
 
         # Test multilingual models
-        assert configs['c4ai-aya-expanse-8b']['type'] == 'chat'
-        assert configs['c4ai-aya-expanse-32b']['type'] == 'chat'
+        assert configs['c4ai-aya-expanse-8b']['type'] == ModelType.CHAT or configs['c4ai-aya-expanse-8b']['type'] == 'chat'
+        assert configs['c4ai-aya-expanse-32b']['type'] == ModelType.CHAT or configs['c4ai-aya-expanse-32b']['type'] == 'chat'
         assert configs['c4ai-aya-expanse-8b']['context'] == 8192
         assert configs['c4ai-aya-expanse-32b']['context'] == 8192
 
         # Test reasoning model
-        assert configs['command-a-reasoning-08-2025']['type'] == 'reasoning'
-        assert configs['command-a-reasoning-08-2025']['speed'] == 'slow'
+        assert configs['command-a-reasoning-08-2025']['type'] == ModelType.REASONING or configs['command-a-reasoning-08-2025']['type'] == 'reasoning'
+        assert configs['command-a-reasoning-08-2025']['speed'] == SpeedRank.SLOW or configs['command-a-reasoning-08-2025']['speed'] == 'slow'
 
 
 class TestCohereProviderIntegration:

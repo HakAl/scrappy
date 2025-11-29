@@ -286,17 +286,9 @@ def test_get_limits(provider):
     assert limits.tokens_per_minute == 60000
 
 
-def test_get_model_for_task(provider):
-    """Verify model selection logic."""
-    assert provider.get_model_for_task("fast") == "llama3.1-8b"
-    assert provider.get_model_for_task("high_volume") == "llama3.1-8b"
-    assert provider.get_model_for_task("quality") == "llama-3.3-70b"
-    # Unknown tasks use the default model (qwen instruct for better tool-calling)
-    assert provider.get_model_for_task("unknown_task") == "qwen-3-235b-a22b-instruct-2507"
-
 def test_get_model_info(provider):
     """Verify detailed model info retrieval."""
-    from src.providers.base import ModelInfo
+    from src.providers.base import ModelInfo, SpeedRank, QualityRank
 
     # Known model
     info = provider.get_model_info("llama3.1-8b")
@@ -305,8 +297,8 @@ def test_get_model_info(provider):
     assert info.context_length == 8192
     assert info.rpd == 14400
     assert info.tpm == 60000
-    assert info.quality == "good"
-    assert info.speed == "ultra_fast"
+    assert info.quality == QualityRank.GOOD
+    assert info.speed == SpeedRank.ULTRA_FAST
 
     # Unknown model (should fall back to generic via parent class)
     info_generic = provider.get_model_info("unknown-model")

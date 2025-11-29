@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, PropertyMock
 
 from src.orchestrator.provider_selector import ProviderSelector
 from src.orchestrator.rate_limiter import RateLimitTracker
+from src.orchestrator.model_selection import ModelSelectionType
 from src.providers.base import ProviderRegistry
 from tests.helpers import create_test_rate_limit_tracker
 
@@ -319,19 +320,41 @@ class TestProviderInfoRegression:
 
 
 class TestSelectForTaskRegression:
-    """Regression tests for select_for_task behavior."""
+    """Regression tests for get_model behavior."""
 
     def _create_mock_registry(self, available_providers: list[str]) -> ProviderRegistry:
         """Create a mock registry with specified providers."""
+        from src.providers.base import ModelInfo, ModelType, SpeedRank, QualityRank
         registry = ProviderRegistry()
 
         for provider_name in available_providers:
             provider = MagicMock()
             provider.name = provider_name
             provider.is_available.return_value = True
-            type(provider).available_models = PropertyMock(return_value=["test-model"])
-            type(provider).default_model = PropertyMock(return_value="test-model")
-            provider.get_model_for_task.return_value = "test-model"
+
+            # Create proper model info objects
+            if provider_name == 'cerebras':
+                models = ["llama3.1-8b", "llama-3.3-70b"]
+                type(provider).available_models = PropertyMock(return_value=models)
+                type(provider).default_model = PropertyMock(return_value="llama3.1-8b")
+
+                def get_model_info(model_id):
+                    if model_id == "llama3.1-8b":
+                        return ModelInfo("llama3.1-8b", ModelType.UNKNOWN, 8192, rpd=14400, speed=SpeedRank.ULTRA_FAST, quality=QualityRank.GOOD)
+                    elif model_id == "llama-3.3-70b":
+                        return ModelInfo("llama-3.3-70b", ModelType.CHAT, 8192, rpd=14400, speed=SpeedRank.FAST, quality=QualityRank.VERY_GOOD)
+                    return ModelInfo(model_id, ModelType.UNKNOWN, 4096)
+                provider.get_model_info = get_model_info
+            elif provider_name == 'cohere':
+                models = ["command-r7b-12-2024"]
+                type(provider).available_models = PropertyMock(return_value=models)
+                type(provider).default_model = PropertyMock(return_value="command-r7b-12-2024")
+                provider.get_model_info = lambda model_id: ModelInfo("command-r7b-12-2024", ModelType.CHAT, 128000, speed=SpeedRank.VERY_FAST, quality=QualityRank.MODERATE)
+            else:
+                type(provider).available_models = PropertyMock(return_value=["test-model"])
+                type(provider).default_model = PropertyMock(return_value="test-model")
+                provider.get_model_info = lambda model_id: ModelInfo(model_id, ModelType.UNKNOWN, 4096, speed=SpeedRank.FAST, quality=QualityRank.GOOD)
+
             registry.register(provider)
 
         return registry
@@ -341,7 +364,7 @@ class TestSelectForTaskRegression:
         registry = self._create_mock_registry(['cerebras', 'groq', 'gemini'])
         selector = ProviderSelector(registry)
 
-        name, model = selector.select_for_task('fast')
+        name, model = selector.get_model(ModelSelectionType.FAST)
 
         assert name == 'cerebras'
 
@@ -350,7 +373,7 @@ class TestSelectForTaskRegression:
         registry = self._create_mock_registry(['cerebras', 'groq', 'gemini'])
         selector = ProviderSelector(registry)
 
-        name, model = selector.select_for_task('high_volume')
+        name, model = selector.get_model(ModelSelectionType.FAST)
 
         assert name == 'cerebras'
 
@@ -359,7 +382,7 @@ class TestSelectForTaskRegression:
         registry = self._create_mock_registry(['cerebras', 'groq', 'gemini'])
         selector = ProviderSelector(registry)
 
-        name, model = selector.select_for_task('general')
+        name, model = selector.get_model(ModelSelectionType.FAST)
 
         assert name == 'cerebras'
 
@@ -368,7 +391,7 @@ class TestSelectForTaskRegression:
         registry = self._create_mock_registry(['cerebras', 'groq'])
         selector = ProviderSelector(registry)
 
-        name, model = selector.select_for_task('quality')
+        name, model = selector.get_model(ModelSelectionType.QUALITY)
 
         assert name == 'cerebras'
         # Should use the large model
@@ -379,7 +402,7 @@ class TestSelectForTaskRegression:
         registry = self._create_mock_registry(['cerebras', 'cohere'])
         selector = ProviderSelector(registry)
 
-        name, model = selector.select_for_task('embed')
+        name, model = selector.get_model(ModelSelectionType.EMBED)
 
         assert name == 'cohere'
 
@@ -388,7 +411,7 @@ class TestSelectForTaskRegression:
         registry = self._create_mock_registry(['github_models'])
         selector = ProviderSelector(registry)
 
-        name, model = selector.select_for_task('fast')
+        name, model = selector.get_model(ModelSelectionType.FAST)
 
         assert name == 'github_models'
 

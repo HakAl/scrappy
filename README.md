@@ -235,4 +235,4 @@ For more information, please see the detailed documentation:
 ## License
 This project is licensed under the **MIT License**. Use it, modify it, and share it to help others access modern AI tools.
 
-If this project helps you, please give it a ⭐ on GitHub so others can discover it
+If this project helps you, please give it a star on GitHub so others can discover it

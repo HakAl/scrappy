@@ -36,6 +36,7 @@ from .registration import ProviderRegistrar
 from .status_reporter import ProviderStatusReporter
 from .usage_reporter import UsageReporter
 from .context_coordinator import ContextCoordinator
+from .model_selection import ModelSelectionType
 from .manager_protocols import (
     ContextManagerProtocol,
     BackgroundTaskManagerProtocol,
@@ -378,17 +379,24 @@ class AgentOrchestrator:
 
     # Provider Selection
 
-    def get_recommended_provider(self, task_type: str = 'general') -> Optional[str]:
+    def get_recommended_provider(
+        self,
+        selection_type: ModelSelectionType = ModelSelectionType.FAST
+    ) -> Optional[str]:
         """
-        Get recommended provider based on task type and current rate limit status.
+        Get recommended provider for a selection type.
 
         Args:
-            task_type: Type of task ('planning', 'execution', 'quick', 'general')
+            selection_type: What kind of model is needed
 
         Returns:
-            Provider name or None if no providers available
+            Provider name or None
         """
-        return self.rate_tracker.get_recommended_provider(task_type, self.registry)
+        try:
+            provider_name, _ = self.provider_selector.get_model(selection_type)
+            return provider_name
+        except RuntimeError:
+            return None
 
     def is_rate_limited(self, provider_name: str) -> bool:
         """
@@ -417,7 +425,7 @@ class AgentOrchestrator:
         intent_classification: Optional[dict] = None,
         auto_fallback: bool = True,
         max_retries: int = 3,
-        task_type: str = 'general',
+        selection_type: ModelSelectionType = ModelSelectionType.FAST,
         **kwargs
     ) -> LLMResponse:
         """
@@ -435,7 +443,7 @@ class AgentOrchestrator:
             intent_classification: Intent data for semantic caching
             auto_fallback: Automatically try other providers on rate limit (default True)
             max_retries: Maximum retry attempts per provider (default 3)
-            task_type: Type of task for auto provider selection ('planning', 'execution', 'general')
+            selection_type: What kind of model to use for auto-selection
             **kwargs: Additional provider-specific arguments
 
         Returns:
@@ -448,7 +456,7 @@ class AgentOrchestrator:
         """
         # Auto-select provider if not specified
         if provider_name is None:
-            provider_name = self.get_recommended_provider(task_type)
+            provider_name = self.get_recommended_provider(selection_type)
             if provider_name is None:
                 available = list(self.providers.list_providers())
                 raise ProviderNotFoundError(
@@ -520,28 +528,24 @@ class AgentOrchestrator:
             **kwargs
         )
 
-    def delegate_smart(self, prompt: str, task_type: str = 'general', **kwargs) -> LLMResponse:
-        """Automatically select best provider for task type."""
-        if task_type == 'reasoning':
-            reasoning_result = self.reason(prompt)
-            if isinstance(reasoning_result, dict):
-                content = f"Analysis: {reasoning_result.get('analysis', '')}\n\nConclusion: {reasoning_result.get('conclusion', '')}"
-            else:
-                content = str(reasoning_result)
-            return LLMResponse(
-                content=content,
-                model=self.brain_provider.default_model,
-                provider=self._brain_name,
-                tokens_used=0,
-                input_tokens=0,
-                output_tokens=0,
-                latency_ms=0.0,
-                raw_response=reasoning_result,
-                metadata={'task_type': 'reasoning', 'via': 'orchestrator_brain'},
-                timestamp=datetime.now()
-            )
+    def delegate_smart(
+        self,
+        prompt: str,
+        selection_type: ModelSelectionType = ModelSelectionType.FAST,
+        **kwargs
+    ) -> LLMResponse:
+        """
+        Delegate with automatic provider/model selection.
 
-        provider_name, model = self.provider_selector.select_for_task(task_type)
+        Args:
+            prompt: The prompt to send
+            selection_type: What kind of model to use
+            **kwargs: Additional arguments for delegate()
+
+        Returns:
+            LLMResponse from selected provider
+        """
+        provider_name, model = self.provider_selector.get_model(selection_type)
         return self.delegate(provider_name, prompt, model=model, **kwargs)
 
     def batch_delegate(self, tasks: list[dict], provider_name: str = 'groq') -> list[LLMResponse]:

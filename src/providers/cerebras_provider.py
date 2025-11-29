@@ -13,7 +13,7 @@ import time
 import json
 from typing import Optional
 
-from .base import LLMProviderBase, LLMResponse, ProviderLimits, ModelInfo, ToolCall
+from .base import LLMProviderBase, LLMResponse, ProviderLimits, ModelInfo, ToolCall, SpeedRank, QualityRank
 from ..utils.imports import safe_import
 from ..utils.errors import raise_package_not_installed, raise_env_var_not_found, raise_model_not_supported
 
@@ -42,20 +42,20 @@ class CerebrasProvider(LLMProviderBase):
     MODELS = {
         'llama3.1-8b': {
             'rpd': 14400, 'tpm': 60000,
-            'context': 8192, 'speed': 'ultra_fast', 'quality': 'good'
+            'context': 8192, 'speed': SpeedRank.ULTRA_FAST, 'quality': QualityRank.GOOD
         },
         'llama-3.3-70b': {
             'rpd': 14400, 'tpm': 60000,
-            'context': 8192, 'speed': 'very_fast', 'quality': 'excellent'
+            'context': 8192, 'speed': SpeedRank.VERY_FAST, 'quality': QualityRank.EXCELLENT
         },
         'qwen-3-32b': {
             'rpd': 14400, 'tpm': 60000,
-            'context': 8192, 'speed': 'very_fast', 'quality': 'very_good'
+            'context': 8192, 'speed': SpeedRank.VERY_FAST, 'quality': QualityRank.VERY_GOOD
         },
         # New instruction-tuned model (added 2025-11) - excellent JSON compliance
         'qwen-3-235b-a22b-instruct-2507': {
             'rpd': 14400, 'tpm': 60000,
-            'context': 8192, 'speed': 'fast', 'quality': 'excellent'
+            'context': 8192, 'speed': SpeedRank.FAST, 'quality': QualityRank.EXCELLENT
         },
     }
 
@@ -273,23 +273,6 @@ class CerebrasProvider(LLMProviderBase):
             requests_per_day=model_limits.get('rpd'),
             tokens_per_minute=model_limits.get('tpm'),
         )
-
-    def get_model_for_task(self, task_type: str) -> str:
-        """
-        Recommend a model based on task type.
-
-        Args:
-            task_type: 'fast' for quick responses, 'quality' for best results
-
-        Returns:
-            Recommended model name
-        """
-        if task_type == 'fast' or task_type == 'high_volume':
-            return 'llama3.1-8b'
-        elif task_type == 'quality':
-            return 'llama-3.3-70b'
-        else:
-            return self.default_model
 
     async def chat_async(
         self,

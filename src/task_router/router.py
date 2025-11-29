@@ -29,6 +29,7 @@ from .output_handler import (
 )
 from .protocols import OutputHandlerProtocol
 from .provider_resolver import ProviderResolver
+from ..orchestrator.model_selection import ModelSelectionType
 from .pure_functions import (
     build_classification_metadata,
     create_escalated_task,
@@ -367,7 +368,37 @@ What is the user's PRIMARY intent? Respond with JSON only."""
         Returns:
             Tuple of (provider_name, model_name) or (None, None) if no resolution needed
         """
-        return self.provider_resolver.resolve(hint)
+        if hint is None:
+            return (None, None)
+
+        # Convert string hint to ModelSelectionType
+        selection_type = self._hint_to_selection_type(hint)
+        return self.provider_resolver.resolve(selection_type)
+
+    def _hint_to_selection_type(self, hint: str) -> Optional[ModelSelectionType]:
+        """
+        Convert string hint to ModelSelectionType enum.
+
+        Args:
+            hint: String hint like "fast", "quality", "planning"
+
+        Returns:
+            ModelSelectionType or None if unknown
+        """
+        hint_lower = hint.lower()
+
+        # Map legacy hints to new enum values
+        if hint_lower in ['fast', 'high_volume', 'general']:
+            return ModelSelectionType.FAST
+        elif hint_lower == 'quality':
+            return ModelSelectionType.QUALITY
+        elif hint_lower == 'planning':
+            return ModelSelectionType.INSTRUCT
+        elif hint_lower == 'embed':
+            return ModelSelectionType.EMBED
+
+        # Unknown hint - default to FAST
+        return ModelSelectionType.FAST
 
     def route(self, user_input: str, *, provider: Optional[str] = None) -> ExecutionResult:
         """

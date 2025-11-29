@@ -1,4 +1,101 @@
 # (Features for v1.0 Release)
+```
+  PRERELEASE.md vs Actual State
+
+  The "Holy Trinity"
+
+  | Feature           | Status          | Details
+                                                 |
+  |-------------------|-----------------|---------------------------------------------------------------------------
+  -----------------------------------------------|
+  | Plan (Todo Tool)  | NOT IMPLEMENTED | No add_task, list_tasks, update_task tools exist. No .scrappy/.todo.md
+  persistence.                                      |
+  | Search (Semantic) | IMPLEMENTED     | LanceDB + fastembed, incremental indexing, hybrid search - all working
+                                                 |
+  | Test Runner       | PARTIAL         | command_tool.py can run shell commands (including pytest), but no
+  dedicated test_runner tool with verification semantics |
+
+  Onboarding Experience
+
+  | Feature                        | Status          | Details                                               |
+  |--------------------------------|-----------------|-------------------------------------------------------|
+  | Config command (scrappy init)  | NOT IMPLEMENTED | No init or configure command in commands.py           |
+  | Dependency check (git, pytest) | NOT IMPLEMENTED | App starts without checking                           |
+  | Fast startup / lazy imports    | PARTIALLY       | .env loads early, but no explicit "setup wizard" flow |
+
+  Safety Rails
+
+  | Feature                    | Status          | Details
+           |
+  |----------------------------|-----------------|------------------------------------------------------------------
+  ---------|
+  | Y/N confirmation gate      | IMPLEMENTED     | SafetyChecker + ActionExecutor - unsafe actions require
+  confirmation      |
+  | .git protection            | PARTIAL         | CommandSecurity blocks rm -rf / patterns, but no explicit .git/
+  blocklist |
+  | Dangerous command patterns | IMPLEMENTED     | Fork bombs, sudo rm, format C:, etc. blocked
+           |
+  | Disclaimers                | NOT IMPLEMENTED | No visible disclaimers
+           |
+
+  Help & Status
+
+  | Feature                           | Status          | Details                                     |
+  |-----------------------------------|-----------------|---------------------------------------------|
+  | /help command                     | IMPLEMENTED     | Full help with all commands                 |
+  | /clear command                    | IMPLEMENTED     | Clears conversation history                 |
+  | /quit, /exit                      | IMPLEMENTED     | Clean exit with session save                |
+  | /plan, /agent                     | IMPLEMENTED     | Both work                                   |
+  | Visual mode indicator (Plan: 2/5) | NOT IMPLEMENTED | No progress indicator in prompt             |
+  | Ctrl+C handling                   | IMPLEMENTED     | KeyboardInterrupt caught in commands.py:513 |
+  | Ctrl+Q                            | UNCLEAR         | Not seeing explicit binding in Textual app  |
+
+  Agent Tools Available
+
+  File:     ReadFileTool, WriteFileTool, ListFilesTool, ListDirectoryTool
+  Git:      GitLogTool, GitDiffTool, GitBlameTool, GitShowTool, GitStatusTool, GitRecentChangesTool
+  Search:   SearchCodeTool
+  Web:      WebFetchTool, WebSearchTool
+  Control:  CompleteTool
+  Shell:    ShellCommandExecutor (run_command)
+  Python:   AnalyzePythonDependenciesTool
+
+  No: AddTaskTool, ListTasksTool, UpdateTaskTool, TestRunnerTool
+```
+
+  ---
+  Realistic Assessment for v1.0
+
+  Already Done (just verify):
+
+  - Semantic search
+  - Safety confirmation gates
+  - Dangerous command blocking
+  - /help, /clear, /quit, /plan, /agent
+  - Ctrl+C handling
+  - Session save/restore
+
+  Quick Wins (hours, not days):
+
+  1. Add .git/ to blocked paths - 5 lines in CommandSecurity
+  2. Add disclaimer - Banner text in interactive_banner.py
+  3. Verify Ctrl+Q works or add binding
+
+  Medium Effort (1 day each):
+
+  1. Todo Tool - 3 new tools + file persistence + prompt injection
+  2. Test Runner Tool - Shell wrapper with stdout capture + "Definition of Done" logic
+  3. Config command (scrappy init) - Setup wizard flow
+
+  The "Definition of Done" Pattern
+
+  This is the clever part from PRERELEASE.md - forcing verification before completion. Would require:
+  - Tracking test_runner in conversation history
+  - Intercepting complete action if no tests ran
+  - Prompt injection for "every plan ends with verification"
+
+  ---
+
 
 Ship **Todo (Planning)**, **Semantic Search (Context)**, and the **Test Runner (Verification)**, you have a complete "Agentic Loop."
 

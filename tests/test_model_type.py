@@ -56,23 +56,25 @@ class TestModelInfo:
 
     def test_model_info_creation_full(self):
         """ModelInfo should accept all optional fields."""
+        from src.providers.base import QualityRank, SpeedRank
         info = ModelInfo(
             id="gemma2-9b-it",
             model_type=ModelType.INSTRUCT,
             context_length=8192,
             rpd=14400,
             tpm=15000,
-            quality="good",
-            speed="very_fast"
+            quality=QualityRank.GOOD,
+            speed=SpeedRank.VERY_FAST
         )
         assert info.id == "gemma2-9b-it"
         assert info.rpd == 14400
         assert info.tpm == 15000
-        assert info.quality == "good"
-        assert info.speed == "very_fast"
+        assert info.quality == QualityRank.GOOD
+        assert info.speed == SpeedRank.VERY_FAST
 
     def test_model_info_defaults(self):
         """ModelInfo should have sensible defaults."""
+        from src.providers.base import QualityRank, SpeedRank
         info = ModelInfo(
             id="test",
             model_type=ModelType.CHAT,
@@ -80,8 +82,8 @@ class TestModelInfo:
         )
         assert info.rpd is None
         assert info.tpm is None
-        assert info.quality == "good"
-        assert info.speed == "fast"
+        assert info.quality == QualityRank.GOOD
+        assert info.speed == SpeedRank.FAST
 
     def test_is_instruction_tuned_true(self):
         """is_instruction_tuned should return True for INSTRUCT type."""
@@ -140,6 +142,7 @@ class TestModelInfoFromDict:
 
     def test_model_info_from_dict(self):
         """Should be able to create ModelInfo from provider config dict."""
+        from src.providers.base import QualityRank, SpeedRank
         config = {
             'type': ModelType.INSTRUCT,
             'rpm': 30,
@@ -147,8 +150,8 @@ class TestModelInfoFromDict:
             'tpm': 15000,
             'tpd': None,
             'context': 8192,
-            'speed': 'very_fast',
-            'quality': 'good'
+            'speed': SpeedRank.VERY_FAST,
+            'quality': QualityRank.GOOD
         }
 
         info = ModelInfo.from_config('gemma2-9b-it', config)
@@ -158,18 +161,19 @@ class TestModelInfoFromDict:
         assert info.context_length == 8192
         assert info.rpd == 14400
         assert info.tpm == 15000
-        assert info.speed == 'very_fast'
-        assert info.quality == 'good'
+        assert info.speed == SpeedRank.VERY_FAST
+        assert info.quality == QualityRank.GOOD
 
     def test_model_info_from_dict_without_type(self):
         """Should auto-detect type if not provided in config."""
+        from src.providers.base import QualityRank, SpeedRank
         config = {
             'rpm': 30,
             'rpd': 14400,
             'tpm': 15000,
             'context': 8192,
-            'speed': 'very_fast',
-            'quality': 'good'
+            'speed': SpeedRank.VERY_FAST,
+            'quality': QualityRank.GOOD
         }
 
         # Should detect from model name
@@ -178,10 +182,11 @@ class TestModelInfoFromDict:
 
     def test_model_info_from_dict_legacy_format(self):
         """Should handle legacy config format without 'type' field."""
+        from src.providers.base import QualityRank, SpeedRank
         # Current provider configs don't have 'type'
         config = {
             'rpm': 30, 'rpd': 7000, 'tpm': 20000, 'tpd': 200000,
-            'context': 131072, 'speed': 'very_fast', 'quality': 'good'
+            'context': 131072, 'speed': SpeedRank.VERY_FAST, 'quality': QualityRank.GOOD
         }
 
         info = ModelInfo.from_config('llama-3.1-8b-instant', config)
