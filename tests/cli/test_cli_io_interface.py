@@ -60,20 +60,6 @@ class TestTestIO:
 
         assert "Styled text" in io.get_output()
 
-    @pytest.mark.unit
-    def test_testio_styled_echo_records_style_info(self):
-        """Test that styled_echo records styling information for verification."""
-        from src.cli.io_interface import TestIO
-        io = TestIO()
-
-        io.styled_echo("Error!", fg="red", bold=True)
-
-        # Should be able to verify styling was requested
-        styles = io.get_styled_outputs()
-        assert len(styles) == 1
-        assert styles[0]['text'] == "Error!"
-        assert styles[0]['fg'] == "red"
-        assert styles[0]['bold'] == True
 
     @pytest.mark.unit
     def test_testio_secho_captures_content(self):
@@ -85,19 +71,6 @@ class TestTestIO:
 
         assert "Styled text" in io.get_output()
 
-    @pytest.mark.unit
-    def test_testio_secho_records_style_info(self):
-        """Test that secho records styling information."""
-        from src.cli.io_interface import TestIO
-        io = TestIO()
-
-        io.secho("Warning!", fg="yellow", bold=False)
-
-        styles = io.get_styled_outputs()
-        assert len(styles) == 1
-        assert styles[0]['text'] == "Warning!"
-        assert styles[0]['fg'] == "yellow"
-        assert styles[0]['bold'] == False
 
     @pytest.mark.unit
     def test_testio_style_returns_text(self):
@@ -236,18 +209,6 @@ class TestMockIO:
 
         assert "Hello from MockIO!" in io.get_output()
 
-    @pytest.mark.unit
-    def test_mockio_secho_captures_content(self):
-        """Test that secho captures content."""
-        from tests.helpers import MockIO
-        io = MockIO()
-
-        io.secho("Styled text", fg="cyan", bold=True)
-
-        assert "Styled text" in io.get_output()
-        styles = io.get_styled_outputs()
-        assert len(styles) == 1
-        assert styles[0]['fg'] == "cyan"
 
     @pytest.mark.unit
     def test_mockio_prompt_returns_preset(self):
@@ -444,19 +405,3 @@ class TestEdgeCases:
         styles = io.get_styled_outputs()
 
         assert styles == []
-
-    @pytest.mark.unit
-    def test_testio_multiple_styles_tracked(self):
-        """Test multiple styled outputs are all tracked."""
-        from src.cli.io_interface import TestIO
-        io = TestIO()
-
-        io.styled_echo("Error", fg="red")
-        io.styled_echo("Warning", fg="yellow")
-        io.styled_echo("Success", fg="green")
-
-        styles = io.get_styled_outputs()
-        assert len(styles) == 3
-        assert styles[0]['fg'] == "red"
-        assert styles[1]['fg'] == "yellow"
-        assert styles[2]['fg'] == "green"

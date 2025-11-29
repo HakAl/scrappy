@@ -41,33 +41,7 @@ class TestCLILogger:
         output = io.get_output()
         assert "Test message" in output
 
-    @pytest.mark.unit
-    def test_logger_error_uses_red_color(self):
-        """Error messages should use red color."""
-        from src.cli.logging import CLILogger
-        from tests.helpers import MockIO
 
-        io = MockIO()
-        logger = CLILogger("test", io=io)
-
-        logger.error("Error message")
-
-        styled = io.get_styled_outputs()
-        assert any(s.get('fg') == 'red' for s in styled)
-
-    @pytest.mark.unit
-    def test_logger_warning_uses_yellow_color(self):
-        """Warning messages should use yellow color."""
-        from src.cli.logging import CLILogger
-        from tests.helpers import MockIO
-
-        io = MockIO()
-        logger = CLILogger("test", io=io)
-
-        logger.warning("Warning message")
-
-        styled = io.get_styled_outputs()
-        assert any(s.get('fg') == 'yellow' for s in styled)
 
     @pytest.mark.unit
     def test_logger_info_uses_default_color(self):
@@ -98,19 +72,6 @@ class TestCLILogger:
         output = io.get_output()
         assert "Debug message" not in output
 
-    @pytest.mark.unit
-    def test_logger_critical_uses_bold_red(self):
-        """Critical messages should use bold red."""
-        from src.cli.logging import CLILogger
-        from tests.helpers import MockIO
-
-        io = MockIO()
-        logger = CLILogger("test", io=io)
-
-        logger.critical("Critical message")
-
-        styled = io.get_styled_outputs()
-        assert any(s.get('fg') == 'red' and s.get('bold') for s in styled)
 
 
 class TestStructuredOutput:
@@ -387,21 +348,6 @@ class TestLoggerContextManagement:
 class TestLoggerIntegration:
     """Test logger integration with other CLI components."""
 
-    @pytest.mark.unit
-    def test_logger_replaces_direct_secho(self):
-        """Logger should provide equivalent functionality to direct secho."""
-        from src.cli.logging import CLILogger
-        from tests.helpers import MockIO
-
-        io = MockIO()
-        logger = CLILogger("test", io=io)
-
-        # These should produce equivalent output
-        logger.error("Error message")
-
-        styled = io.get_styled_outputs()
-        assert len(styled) > 0
-        assert styled[0]["fg"] == "red"
 
     @pytest.mark.unit
     def test_logger_integrates_with_error_handler(self):

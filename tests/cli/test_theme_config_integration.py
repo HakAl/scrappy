@@ -78,8 +78,8 @@ theme:
         assert config.theme.accent == "#e5c07b"
         assert config.theme.success == "#98c379"
 
-        # Verify defaults from dark preset
-        assert config.theme.text == "white"
+        # Verify defaults from dark preset (hex codes)
+        assert config.theme.text == "#ffffff"
         assert config.theme.surface == "#1e1e1e"
 
     def test_json_config_to_theme_protocol(self, test_config_dir: Path, monkeypatch):
@@ -99,7 +99,7 @@ theme:
         assert isinstance(config.theme, CustomTheme)
         assert config.theme.primary == "#0000ff"
         assert config.theme.error == "#ff0000"
-        assert config.theme.text == "black"  # from light preset
+        assert config.theme.text == "#000000"  # from light preset (hex code)
 
     def test_no_config_file_uses_default_theme(self, test_config_dir: Path, monkeypatch):
         """When no config file exists, uses DEFAULT_THEME."""
@@ -317,7 +317,7 @@ dashboard_enabled: false
         # Theme loaded correctly
         assert isinstance(config.theme, CustomTheme)
         assert config.theme.primary == "purple"
-        assert config.theme.text == "black"  # from light preset
+        assert config.theme.text == "#000000"  # from light preset (hex code)
 
         # Other config loaded correctly
         assert config.temperature_default == 0.9
@@ -405,9 +405,9 @@ theme:
 
         # Only accent overridden
         assert config.theme.accent == "#ff00ff"
-        # Rest are defaults
-        assert config.theme.primary == "cyan"
-        assert config.theme.success == "green"
+        # Rest are defaults (hex codes from ScrappyTheme)
+        assert config.theme.primary == "#00ffff"
+        assert config.theme.success == "#00ff00"
         assert config.theme.surface == "#1e1e1e"
 
     def test_switch_to_light_theme(self, test_config_dir: Path, monkeypatch):
@@ -421,9 +421,9 @@ theme:
 
         config = get_config()
 
-        # Light theme loaded
+        # Light theme loaded (hex codes)
         assert isinstance(config.theme, LightTheme)
-        assert config.theme.text == "black"
+        assert config.theme.text == "#000000"
         assert config.theme.surface == "#ffffff"
         assert config.theme.surface_alt == "#f0f0f0"
 
@@ -439,8 +439,8 @@ theme:
 
         config = get_config()
 
-        # Light theme with override
+        # Light theme with override (hex codes)
         assert isinstance(config.theme, CustomTheme)
         assert config.theme.accent == "#ff6600"
-        assert config.theme.text == "black"  # from light preset
+        assert config.theme.text == "#000000"  # from light preset
         assert config.theme.surface == "#ffffff"  # from light preset

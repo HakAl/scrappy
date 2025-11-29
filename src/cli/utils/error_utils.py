@@ -47,9 +47,9 @@ def handle_command_error(io: Any, error: Exception, exit_code: int = 1) -> int:
     if isinstance(error, CLIError):
         # Use severity-appropriate styling
         if error.severity.value >= 4:  # CRITICAL
-            io.secho(f"Error: {error_message}", fg="red", bold=True)
+            io.secho(f"Error: {error_message}", fg=io.theme.error, bold=True)
         else:
-            io.secho(f"Error: {error_message}", fg="red")
+            io.secho(f"Error: {error_message}", fg=io.theme.error)
 
         # Show suggestion if available
         if error.suggestion:
@@ -59,7 +59,7 @@ def handle_command_error(io: Any, error: Exception, exit_code: int = 1) -> int:
         logger = get_logger("cli.error", io=io)
         logger.error(error_message, extra=error.logging_extra())
     else:
-        io.secho(f"Error: {error_message}", fg="red")
+        io.secho(f"Error: {error_message}", fg=io.theme.error)
 
     return exit_code
 
@@ -98,11 +98,11 @@ def run_with_error_handling(
             return retry_operation(func, max_retries=max_retries)
         return func()
     except KeyboardInterrupt:
-        io.secho("\nOperation interrupted by user.", fg="yellow")
+        io.secho("\nOperation interrupted by user.", fg=io.theme.warning)
         sys.exit(exit_code)
     except UserInputError as e:
         if e.interrupted:
-            io.secho("\nOperation interrupted by user.", fg="yellow")
+            io.secho("\nOperation interrupted by user.", fg=io.theme.warning)
         else:
             handle_command_error(io, e, exit_code)
         sys.exit(exit_code)

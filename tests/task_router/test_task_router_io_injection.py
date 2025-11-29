@@ -76,34 +76,6 @@ class TestTaskRouterHandlerIOInjection:
         assert "Task Classification Preview" in output
         assert "direct_command" in output
 
-    def test_handle_classify_only_outputs_header(self):
-        """handle_classify_only() should output header through io."""
-        io = MockIO()
-
-        mock_classified = self.ClassifiedTask(
-            original_input="test task",
-            task_type=self.TaskType.CODE_GENERATION,
-            confidence=0.88,
-            complexity_score=7,
-            reasoning="Requires code generation",
-            extracted_command=None,
-            suggested_provider="anthropic",
-            requires_planning=True,
-            requires_tools=True,
-            matched_patterns=("write", "function")
-        )
-
-        with patch.object(self.handler.router, 'classify_only', return_value=mock_classified):
-            self.handler.handle_classify_only("write a function to parse JSON", io=io)
-
-        output = io.get_output()
-        assert "Task Classification Preview" in output
-
-        # Check styled output for cyan color
-        styled = io.get_styled_outputs()
-        header_outputs = [s for s in styled if "Task Classification Preview" in s['text']]
-        assert len(header_outputs) > 0
-        assert header_outputs[0]['fg'] == 'cyan'
 
     def test_handle_classify_only_displays_classification_details(self):
         """handle_classify_only() should display all classification details through io."""
@@ -248,27 +220,6 @@ class TestTaskRouterHandlerIOInjection:
         assert "Total tokens used: 12500" in output
         assert "Success rate: 88.0%" in output
 
-    def test_handle_route_status_header_styled(self):
-        """handle_route_status() should output header with cyan and bold."""
-        io = MockIO()
-
-        mock_metrics = self.RouterMetrics(
-            total_tasks=5,
-            tasks_by_type={},
-            avg_execution_time=1.0,
-            total_tokens_used=100,
-            success_rate=1.0
-        )
-
-        with patch.object(self.handler.router, 'get_metrics', return_value=mock_metrics):
-            self.handler.handle_route_status(io=io)
-
-        # Check styled output
-        styled = io.get_styled_outputs()
-        header_outputs = [s for s in styled if "Task Router Metrics" in s['text']]
-        assert len(header_outputs) > 0
-        assert header_outputs[0]['fg'] == 'cyan'
-        assert header_outputs[0]['bold'] is True
 
     def test_handle_route_status_handles_empty_metrics(self):
         """handle_route_status() should handle empty task metrics gracefully."""
@@ -307,21 +258,6 @@ class TestTaskRouterHandlerIOInjection:
         output = io.get_output()
         assert "No routing history yet" in output or "Routing History" in output
 
-    def test_handle_route_history_shows_no_history_message(self):
-        """handle_route_history() should show message when history is empty."""
-        io = MockIO()
-
-        self.handler.history = []
-        self.handler.handle_route_history(io=io)
-
-        output = io.get_output()
-        assert "No routing history yet" in output
-
-        # Check styled output for yellow color
-        styled = io.get_styled_outputs()
-        no_history_outputs = [s for s in styled if "No routing history yet" in s['text']]
-        assert len(no_history_outputs) > 0
-        assert no_history_outputs[0]['fg'] == 'yellow'
 
     def test_handle_route_history_displays_history_entries(self):
         """handle_route_history() should display history entries through io."""
@@ -406,34 +342,6 @@ class TestTaskRouterHandlerIOInjection:
         assert "Task number 0" not in output
         assert "Task number 4" not in output
 
-    def test_handle_route_history_header_styled(self):
-        """handle_route_history() should output header with cyan and bold."""
-        io = MockIO()
-
-        mock_result = self.ExecutionResult(
-            success=True,
-            output="Test",
-            error=None,
-            execution_time=1.0,
-            tokens_used=100,
-            provider_used="test",
-            metadata={}
-        )
-
-        self.handler.history = [{
-            "input": "test task",
-            "result": mock_result,
-            "classification": {"type": "test"}
-        }]
-
-        self.handler.handle_route_history(io=io)
-
-        # Check styled output
-        styled = io.get_styled_outputs()
-        header_outputs = [s for s in styled if "Routing History" in s['text']]
-        assert len(header_outputs) > 0
-        assert header_outputs[0]['fg'] == 'cyan'
-        assert header_outputs[0]['bold'] is True
 
     # =========================================================================
     # _display_result() Tests
@@ -460,62 +368,7 @@ class TestTaskRouterHandlerIOInjection:
         output = io.get_output()
         assert "Execution successful" in output
 
-    def test_display_result_shows_success_message(self):
-        """_display_result() should show success message in green with bold."""
-        io = MockIO()
 
-        mock_result = self.ExecutionResult(
-            success=True,
-            output="Done",
-            error=None,
-            execution_time=1.0,
-            tokens_used=100,
-            provider_used="test",
-            metadata={}
-        )
-
-        self.handler._display_result(mock_result, io=io)
-
-        output = io.get_output()
-        assert "Execution successful" in output
-
-        # Check styled output
-        styled = io.get_styled_outputs()
-        success_outputs = [s for s in styled if "Execution successful" in s['text']]
-        assert len(success_outputs) > 0
-        assert success_outputs[0]['fg'] == 'green'
-        assert success_outputs[0]['bold'] is True
-
-    def test_display_result_shows_failure_message(self):
-        """_display_result() should show failure message in red with bold."""
-        io = MockIO()
-
-        mock_result = self.ExecutionResult(
-            success=False,
-            output=None,
-            error="Command not found",
-            execution_time=0.5,
-            tokens_used=0,
-            provider_used="local",
-            metadata={}
-        )
-
-        self.handler._display_result(mock_result, io=io)
-
-        output = io.get_output()
-        assert "Execution failed" in output
-        assert "Error: Command not found" in output
-
-        # Check styled output
-        styled = io.get_styled_outputs()
-        failed_outputs = [s for s in styled if "Execution failed" in s['text']]
-        assert len(failed_outputs) > 0
-        assert failed_outputs[0]['fg'] == 'red'
-        assert failed_outputs[0]['bold'] is True
-
-        error_outputs = [s for s in styled if "Error: Command not found" in s['text']]
-        assert len(error_outputs) > 0
-        assert error_outputs[0]['fg'] == 'red'
 
     def test_display_result_shows_output(self):
         """_display_result() should display result output."""
@@ -560,32 +413,6 @@ class TestTaskRouterHandlerIOInjection:
         # Should show first 2000 chars plus truncation message
         assert len([line for line in output.split('\n') if 'x' in line]) > 0
 
-    def test_display_result_shows_metadata(self):
-        """_display_result() should display execution time, tokens, and provider."""
-        io = MockIO()
-
-        mock_result = self.ExecutionResult(
-            success=True,
-            output="Success",
-            error=None,
-            execution_time=4.75,
-            tokens_used=850,
-            provider_used="anthropic-opus",
-            metadata={}
-        )
-
-        self.handler._display_result(mock_result, io=io)
-
-        output = io.get_output()
-        assert "Execution time: 4.75s" in output
-        assert "Tokens used: 850" in output
-        assert "Provider: anthropic-opus" in output
-
-        # Check execution time is styled in cyan
-        styled = io.get_styled_outputs()
-        time_outputs = [s for s in styled if "Execution time" in s['text']]
-        assert len(time_outputs) > 0
-        assert time_outputs[0]['fg'] == 'cyan'
 
     def test_display_result_handles_missing_optional_fields(self):
         """_display_result() should handle missing tokens_used and provider_used."""

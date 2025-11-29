@@ -133,7 +133,7 @@ class CommandRouter:
             display_session_not_saved_warning(io)
 
         self.display.show_usage()
-        io.secho("\nGoodbye!", fg="cyan", bold=True)
+        io.secho("\nGoodbye!", fg=io.theme.primary, bold=True)
         return False
 
     def _handle_help(self, args: str) -> bool:
@@ -238,13 +238,13 @@ class CommandRouter:
         """Handle /smart command."""
         io = self.io
         if not args:
-            status = io.style("ON", fg="green") if self.session_context.smart_mode else io.style("OFF", fg="yellow")
+            status = io.style("ON", fg=io.theme.success) if self.session_context.smart_mode else io.style("OFF", fg=io.theme.warning)
             io.echo(f"Smart query mode: {status}")
             io.echo("Usage: /smart <query> or /smart toggle")
         elif args.lower() == "toggle":
             self.session_context.smart_mode = not self.session_context.smart_mode
             status = "enabled" if self.session_context.smart_mode else "disabled"
-            io.secho(f"Smart query mode {status}.", fg="green" if self.session_context.smart_mode else "yellow")
+            io.secho(f"Smart query mode {status}.", fg=io.theme.success if self.session_context.smart_mode else io.theme.warning)
             if self.session_context.smart_mode:
                 io.echo("All queries will now use tools for research (higher quota usage).")
         else:
@@ -269,14 +269,14 @@ class CommandRouter:
     def _handle_clear(self, args: str) -> bool:
         """Handle /clear command."""
         self.session_context.conversation_history.clear()
-        self.io.secho("Conversation history cleared.", fg="green")
+        self.io.secho("Conversation history cleared.", fg=self.io.theme.success)
         return True
 
     def _handle_autoexec(self, args: str) -> bool:
         """Handle /autoexec command."""
         io = self.io
         self.state_manager.auto_execute_tasks = not self.state_manager.auto_execute_tasks
-        status = io.style("ENABLED", fg="green") if self.state_manager.auto_execute_tasks else io.style("DISABLED", fg="red")
+        status = io.style("ENABLED", fg=io.theme.success) if self.state_manager.auto_execute_tasks else io.style("DISABLED", fg=io.theme.error)
         io.echo(f"Auto-execute tasks: {status}")
         if self.state_manager.auto_execute_tasks:
             io.echo("  Tasks in plans will be automatically executed using intelligent routing")
@@ -289,7 +289,7 @@ class CommandRouter:
         """Handle /tasks command."""
         io = self.io
         if not self.state_manager.plan_active or not self.state_manager.active_plan:
-            io.secho("No active plan. Use /plan <task> to create one.", fg="yellow")
+            io.secho("No active plan. Use /plan <task> to create one.", fg=io.theme.warning)
         else:
             self.state_manager.show_all_tasks(io)
         return True
@@ -299,10 +299,10 @@ class CommandRouter:
         io = self.io
         self.session_context.verbose_mode = not self.session_context.verbose_mode
         if self.session_context.verbose_mode:
-            io.secho("Verbose mode: ON", fg="green", bold=True)
+            io.secho("Verbose mode: ON", fg=io.theme.success, bold=True)
             io.echo("  Metadata (provider, tokens, time) will be shown for responses.")
         else:
-            io.secho("Verbose mode: OFF", fg="yellow", bold=True)
+            io.secho("Verbose mode: OFF", fg=io.theme.warning, bold=True)
             io.echo("  Clean output without metadata.")
         return True
 
@@ -328,7 +328,7 @@ class CommandRouter:
         validation_result = validate_command(full_command)
 
         if not validation_result.is_valid:
-            io.secho(f"Invalid command: {validation_result.error}", fg="red")
+            io.secho(f"Invalid command: {validation_result.error}", fg=io.theme.error)
             io.echo("Type /help for available commands.")
             io.echo()
             return True
@@ -347,7 +347,7 @@ class CommandRouter:
 
         # Unknown command
         logger.debug(f"[route] Unknown command: '{cmd}'")
-        io.secho(f"Unknown command: {cmd}", fg="yellow")
+        io.secho(f"Unknown command: {cmd}", fg=io.theme.warning)
         io.echo("Type /help for available commands.")
         io.echo()
         return True

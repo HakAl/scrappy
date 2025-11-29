@@ -71,7 +71,7 @@ class CLITaskExecution:
                     dashboard.set_state("idle", "Plan generated")
             except Exception as e:
                 progress.advance(1)
-                io.secho(f"Error during planning: {e}", fg="red")
+                io.secho(f"Error during planning: {e}", fg=io.theme.error)
 
                 if dashboard:
                     dashboard.set_state("idle", "Planning failed")
@@ -87,7 +87,7 @@ class CLITaskExecution:
                     io.secho(f"{i}. {step.get('step', 'Step')}", bold=True)
                     io.echo(f"   {step.get('description', '')}")
                     if 'provider_type' in step:
-                        io.secho(f"   [Recommended: {step['provider_type']}]", fg="cyan")
+                        io.secho(f"   [Recommended: {step['provider_type']}]", fg=io.theme.primary)
                     plan_summary += f"{i}. {step.get('step', 'Step')}\n"
                 else:
                     io.echo(f"{i}. {step}")
@@ -158,7 +158,7 @@ class CLITaskExecution:
                     dashboard.set_state("idle", "Analysis complete")
             except Exception as e:
                 progress.advance(1)
-                io.secho(f"Error during reasoning: {e}", fg="red")
+                io.secho(f"Error during reasoning: {e}", fg=io.theme.error)
 
                 if dashboard:
                     dashboard.set_state("idle", "Reasoning failed")

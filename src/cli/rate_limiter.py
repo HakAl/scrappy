@@ -94,7 +94,7 @@ class RateLimiter:
         # Validate subcommand
         validation = validate_subcommand("limits", args)
         if not validation.is_valid:
-            self.io.secho(validation.error, fg="red")
+            self.io.secho(validation.error, fg=self.io.theme.error)
             self.io.echo("Usage: /limits [reset [provider]|<provider>]")
             self.io.echo("  (no args)     - Show all providers' usage")
             self.io.echo("  reset         - Reset all tracking data")
@@ -109,12 +109,12 @@ class RateLimiter:
                 provider_name = validation.args
                 if self.io.confirm(f"Reset rate limit tracking for {provider_name}?", default=False):
                     self.orchestrator.reset_rate_tracking(provider_name)
-                    self.io.secho(f"Rate limit tracking for {provider_name} reset.", fg="green")
+                    self.io.secho(f"Rate limit tracking for {provider_name} reset.", fg=self.io.theme.success)
             else:
                 # Reset all
                 if self.io.confirm("Reset all rate limit tracking data?", default=False):
                     self.orchestrator.reset_rate_tracking()
-                    self.io.secho("Rate limit tracking data reset.", fg="green")
+                    self.io.secho("Rate limit tracking data reset.", fg=self.io.theme.success)
             return
 
         # Get rate limit status

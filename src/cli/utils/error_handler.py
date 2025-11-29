@@ -223,7 +223,7 @@ def file_operation_error(
         message = f"File operation failed on {path_str}: {error}"
         suggestion = None
 
-    io.secho(message, fg="red")
+    io.secho(message, fg=io.theme.error)
     if suggestion:
         io.echo(f"Suggestion: {suggestion}")
 
@@ -250,7 +250,7 @@ def api_delegation_error(
     else:
         message = f"Error from {provider}: {error}"
 
-    io.secho(message, fg="red")
+    io.secho(message, fg=io.theme.error)
 
 
 def task_execution_error(
@@ -267,7 +267,7 @@ def task_execution_error(
         task_name: Name of the task that failed
     """
     message = f"Error during {task_name}: {error}"
-    io.secho(message, fg="red")
+    io.secho(message, fg=io.theme.error)
 
 
 def session_error(
@@ -284,7 +284,7 @@ def session_error(
         operation: The session operation (save/load)
     """
     message = f"Session {operation} failed: {error}"
-    io.secho(message, fg="red")
+    io.secho(message, fg=io.theme.error)
 
 
 def parse_error(
@@ -303,7 +303,7 @@ def parse_error(
         content_preview: Optional preview of the content
     """
     message = f"Failed to parse {filename}: {error}"
-    io.secho(message, fg="red")
+    io.secho(message, fg=io.theme.error)
 
     if content_preview:
         io.echo(f"Content preview: {content_preview}")
@@ -329,7 +329,7 @@ def validation_error(
     else:
         output = f"Validation error: {message}"
 
-    io.secho(output, fg="red")
+    io.secho(output, fg=io.theme.error)
 
     if value is not None:
         io.echo(f"Invalid value: {value}")

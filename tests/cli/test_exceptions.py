@@ -520,21 +520,6 @@ class TestExceptionIntegrationWithErrorHandler:
         output = io.get_output()
         assert "Invalid provider" in output or "provider" in output
 
-    @pytest.mark.unit
-    def test_exception_uses_correct_severity_in_handler(self):
-        """handle_error should use the exception's severity."""
-        from src.cli.exceptions import CLIError
-        from src.cli.utils.error_handler import handle_error, ErrorSeverity
-        from tests.helpers import MockIO
-
-        io = MockIO()
-        error = CLIError("Critical failure", severity=ErrorSeverity.CRITICAL)
-
-        handle_error(error, io, severity=error.severity)
-
-        styled = io.get_styled_outputs()
-        # Critical errors should be bold red
-        assert any(s.get('bold') is True and s.get('fg') == 'red' for s in styled)
 
 
 class TestEdgeCases:

@@ -96,9 +96,9 @@ class CLIAgentManager:
             io.echo("Creating git checkpoint...")
             checkpoint_hash = create_git_checkpoint(str(self.orchestrator.context.project_path))
             if checkpoint_hash:
-                io.secho(f"Checkpoint created: {checkpoint_hash[:8]}", fg="green")
+                io.secho(f"Checkpoint created: {checkpoint_hash[:8]}", fg=io.theme.success)
             else:
-                io.secho("Could not create checkpoint (not a git repo?)", fg="yellow")
+                io.secho("Could not create checkpoint (not a git repo?)", fg=io.theme.warning)
 
         # Create agent with bridged io instance
         agent = CodeAgent(self.orchestrator, io=io)
@@ -110,7 +110,7 @@ class CLIAgentManager:
         io.echo(f"  Executor (fast tasks): {agent.executor}")
         io.echo(f"  Project root: {agent.project_root}")
         if dry_run:
-            io.secho("  Mode: DRY RUN (no actual changes)", fg="yellow")
+            io.secho("  Mode: DRY RUN (no actual changes)", fg=io.theme.warning)
         io.echo()
 
         # Run agent
@@ -126,9 +126,9 @@ class CLIAgentManager:
 
             io.echo("\n" + "=" * 60)
             if result['success']:
-                io.secho("Task Completed Successfully!", fg="green", bold=True)
+                io.secho("Task Completed Successfully!", fg=io.theme.success, bold=True)
             else:
-                io.secho("Task Did Not Complete", fg="yellow", bold=True)
+                io.secho("Task Did Not Complete", fg=io.theme.warning, bold=True)
 
             io.echo(f"Result: {result['result']}")
             io.echo(f"Iterations: {result['iterations']}")
@@ -137,21 +137,21 @@ class CLIAgentManager:
             if result['audit_log']:
                 io.secho("\nAudit Log:", bold=True)
                 for entry in result['audit_log']:
-                    approved = io.style("Approved", fg="green") if entry['approved'] else io.style("Denied", fg="red")
+                    approved = io.style("Approved", fg=io.theme.success) if entry['approved'] else io.style("Denied", fg=io.theme.error)
                     io.echo(f"  [{entry['timestamp'][:19]}] {entry['action']} - {approved}")
 
             # Audit log is auto-saved to .scrappy/audit.json
             audit_path = agent.project_root / ".scrappy" / "audit.json"
             if audit_path.exists():
-                io.secho(f"Audit log: {audit_path}", fg="cyan")
+                io.secho(f"Audit log: {audit_path}", fg=io.theme.primary)
 
             # Offer rollback if checkpoint was created
             if checkpoint_hash and not dry_run:
                 if self._interaction.confirm("Rollback to checkpoint?", default=False):
                     if rollback_to_checkpoint(checkpoint_hash, str(agent.project_root)):
-                        io.secho(f"Rolled back to {checkpoint_hash[:8]}", fg="green")
+                        io.secho(f"Rolled back to {checkpoint_hash[:8]}", fg=io.theme.success)
                     else:
-                        io.secho("Rollback failed", fg="red")
+                        io.secho("Rollback failed", fg=io.theme.error)
 
             # Save agent task result to working memory
             self.orchestrator.working_memory.add_discovery(
@@ -166,7 +166,7 @@ class CLIAgentManager:
                 "agent_task"
             )
         except Exception as e:
-            io.secho(f"\nAgent error: {e}", fg="red")
+            io.secho(f"\nAgent error: {e}", fg=io.theme.error)
             self.orchestrator.working_memory.add_discovery(
                 f"Agent task '{task[:50]}...' failed: {str(e)[:50]}",
                 "agent_task"

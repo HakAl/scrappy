@@ -114,8 +114,8 @@ def graceful_degrade(
         result = on_error(e)
 
         if io and degraded_message:
-            io.secho(degraded_message, fg="yellow")
+            io.secho(degraded_message, fg=io.theme.warning)
         elif io:
-            io.secho("Operating in degraded mode due to error.", fg="yellow")
+            io.secho("Operating in degraded mode due to error.", fg=io.theme.warning)
 
         return result

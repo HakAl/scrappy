@@ -433,6 +433,15 @@ class MockIO:
         self._input_index = 0
         self._confirm_index = 0
 
+        # Add theme mock for color theming support
+        self.theme = Mock()
+        self.theme.primary = "cyan"
+        self.theme.success = "green"
+        self.theme.warning = "yellow"
+        self.theme.error = "red"
+        self.theme.info = "blue"
+        self.theme.accent = "magenta"
+
     def echo(self, message: str = "", nl: bool = True) -> None:
         """Capture output to internal buffer."""
         if nl:
@@ -2339,6 +2348,15 @@ class MockIO:
         self._confirmations: List[bool] = list(confirmations) if confirmations else []
         self._input_index = 0
         self._confirm_index = 0
+
+        # Add theme mock for color theming support
+        self.theme = Mock()
+        self.theme.primary = "cyan"
+        self.theme.success = "green"
+        self.theme.warning = "yellow"
+        self.theme.error = "red"
+        self.theme.info = "blue"
+        self.theme.accent = "magenta"
 
     def echo(self, message: str = "", nl: bool = True) -> None:
         """Capture plain echo message."""

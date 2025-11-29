@@ -65,11 +65,11 @@ class CLICodebaseAnalysis:
 
         path = Path(path).resolve()
         if not path.exists():
-            self.io.secho(f"Path does not exist: {path}", fg="red")
+            self.io.secho(f"Path does not exist: {path}", fg=self.io.theme.error)
             return
 
         if not path.is_dir():
-            self.io.secho(f"Not a directory: {path}", fg="red")
+            self.io.secho(f"Not a directory: {path}", fg=self.io.theme.error)
             return
 
         self.io.secho(f"\nExploring: {path}", bold=True)
@@ -130,7 +130,7 @@ class CLICodebaseAnalysis:
         self.io.echo(summary)
 
         if is_current_project:
-            self.io.secho("\nContext saved! Use /context to view status.", fg="green")
+            self.io.secho("\nContext saved! Use /context to view status.", fg=self.io.theme.success)
 
         # Offer to save summary
         if self.io.confirm("\nSave summary to file?", default=False):
@@ -139,7 +139,7 @@ class CLICodebaseAnalysis:
                 f.write(f"# Codebase Summary\n\n")
                 f.write(f"Generated: {datetime.now().isoformat()}\n\n")
                 f.write(summary)
-            self.io.secho(f"Saved to: {summary_file}", fg="green")
+            self.io.secho(f"Saved to: {summary_file}", fg=self.io.theme.success)
 
     def _find_source_files(self, path: Path) -> dict:
         """Find all source files organized by type/category.

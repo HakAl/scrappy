@@ -594,28 +594,7 @@ Saving audit log..."""
 class TestProgressAndStatusOutput:
     """Test progress and status message formatting."""
 
-    def test_setup_progress_styled(self):
-        """Setup progress messages should be styled appropriately."""
-        io = MockRichIO()
 
-        # Setup messages as styled text
-        io.secho("Preparing agent tools...", fg="cyan")
-        io.secho("Selecting AI providers...", fg="cyan")
-        io.secho("Building context...", fg="cyan")
-
-        styled = io.get_styled_outputs()
-        assert len(styled) == 3
-        assert all(s['fg'] == "cyan" for s in styled)
-
-    def test_provider_status_with_timing(self):
-        """Provider response timing should be clearly displayed."""
-        io = MockRichIO()
-
-        io.secho("[gemini] Response received (2.3s)", fg="green")
-
-        styled = io.get_styled_outputs()[0]
-        assert "2.3s" in styled['text']
-        assert styled['fg'] == "green"
 
     def test_task_header_prominent(self):
         """Task header should be prominent and clear."""

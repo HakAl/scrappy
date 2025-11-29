@@ -44,24 +44,24 @@ class CLIDisplay:
             show_help_table(self.io)
         else:
             # Fallback to basic text display
-            self.io.secho("\nAvailable Commands:", fg="cyan", bold=True)
-            self.io.secho("-" * 50, fg="cyan")
+            self.io.secho("\nAvailable Commands:", fg=self.io.theme.primary, bold=True)
+            self.io.secho("-" * 50, fg=self.io.theme.primary)
             self.io.secho("Chat & Conversation:", bold=True)
-            self.io.echo(f"  {self.io.style('(text)', fg='yellow')}           - Send message to current brain")
-            self.io.echo(f"  {self.io.style('/ml', fg='yellow')}              - Toggle multiline input mode")
-            self.io.echo(f"  {self.io.style('/clear', fg='yellow')}           - Clear conversation history")
+            self.io.echo(f"  {self.io.style('(text)', fg=self.io.theme.warning)}           - Send message to current brain")
+            self.io.echo(f"  {self.io.style('/ml', fg=self.io.theme.warning)}              - Toggle multiline input mode")
+            self.io.echo(f"  {self.io.style('/clear', fg=self.io.theme.warning)}           - Clear conversation history")
             self.io.echo()
             self.io.secho("Task Operations:", bold=True)
-            self.io.echo(f"  {self.io.style('/plan', fg='yellow')} <task>     - Break down task into steps")
-            self.io.echo(f"  {self.io.style('/tasks', fg='yellow')}           - View current plan progress")
-            self.io.echo(f"  {self.io.style('/agent', fg='yellow')} <task>    - Run code agent")
-            self.io.echo(f"  {self.io.style('/smart', fg='yellow')} <query>   - Research-first query")
+            self.io.echo(f"  {self.io.style('/plan', fg=self.io.theme.warning)} <task>     - Break down task into steps")
+            self.io.echo(f"  {self.io.style('/tasks', fg=self.io.theme.warning)}           - View current plan progress")
+            self.io.echo(f"  {self.io.style('/agent', fg=self.io.theme.warning)} <task>    - Run code agent")
+            self.io.echo(f"  {self.io.style('/smart', fg=self.io.theme.warning)} <query>   - Research-first query")
             self.io.echo()
             self.io.secho("Provider Management:", bold=True)
-            self.io.echo(f"  {self.io.style('/providers', fg='yellow')}       - List all providers")
-            self.io.echo(f"  {self.io.style('/brain', fg='yellow')} <name>    - Switch brain")
-            self.io.echo(f"  {self.io.style('/status', fg='yellow')}          - Show status")
-            self.io.echo(f"  {self.io.style('/usage', fg='yellow')}           - Show usage")
+            self.io.echo(f"  {self.io.style('/providers', fg=self.io.theme.warning)}       - List all providers")
+            self.io.echo(f"  {self.io.style('/brain', fg=self.io.theme.warning)} <name>    - Switch brain")
+            self.io.echo(f"  {self.io.style('/status', fg=self.io.theme.warning)}          - Show status")
+            self.io.echo(f"  {self.io.style('/usage', fg=self.io.theme.warning)}           - Show usage")
             self.io.echo()
             self.io.secho("System:", bold=True)
             self.io.echo("  /help            - Show this help")
@@ -89,12 +89,12 @@ class CLIDisplay:
             # Fallback to basic text display
             status = self.orchestrator.status()
 
-            self.io.secho("\nSystem Status:", fg="cyan", bold=True)
-            self.io.secho("-" * 50, fg="cyan")
+            self.io.secho("\nSystem Status:", fg=self.io.theme.primary, bold=True)
+            self.io.secho("-" * 50, fg=self.io.theme.primary)
             brain = status.get('orchestrator_brain', status.get('brain', 'unknown'))
-            self.io.echo(f"Current Brain: {self.io.style(brain, fg='green', bold=True)}")
+            self.io.echo(f"Current Brain: {self.io.style(brain, fg=self.io.theme.success, bold=True)}")
             self.io.echo(f"Total Providers: {len(status.get('available_providers', []))}")
-            self.io.echo(f"Available: {self.io.style(', '.join(status['available_providers']), fg='cyan')}")
+            self.io.echo(f"Available: {self.io.style(', '.join(status['available_providers']), fg=self.io.theme.primary)}")
             self.io.echo(f"Tasks Completed: {status.get('tasks_executed', 0)}")
             self.io.echo(f"Session Duration: {datetime.now() - self.session_start}")
 
@@ -110,16 +110,16 @@ class CLIDisplay:
         Returns:
             None
         """
-        self.io.secho("\nAvailable Providers:", fg="cyan", bold=True)
-        self.io.secho("-" * 50, fg="cyan")
+        self.io.secho("\nAvailable Providers:", fg=self.io.theme.primary, bold=True)
+        self.io.secho("-" * 50, fg=self.io.theme.primary)
 
         info = self.orchestrator.providers.get_provider_info()
 
         for name, details in info.items():
             if details['available']:
                 limits = details['limits']
-                self.io.secho(f"\n{name.upper()} ", fg="green", bold=True, nl=False)
-                self.io.secho("(Active)", fg="green")
+                self.io.secho(f"\n{name.upper()} ", fg=self.io.theme.success, bold=True, nl=False)
+                self.io.secho("(Active)", fg=self.io.theme.success)
                 self.io.echo(f"  Default Model: {details['default_model']}")
                 if limits.requests_per_day:
                     self.io.echo(f"  Daily Quota: {limits.requests_per_day:,} requests")
@@ -131,8 +131,8 @@ class CLIDisplay:
                 if len(details['models']) > 3:
                     self.io.echo(f"           ... and {len(details['models']) - 3} more")
             else:
-                self.io.secho(f"\n{name.upper()} ", fg="red", bold=True, nl=False)
-                self.io.secho("(Not Configured)", fg="red")
+                self.io.secho(f"\n{name.upper()} ", fg=self.io.theme.error, bold=True, nl=False)
+                self.io.secho("(Not Configured)", fg=self.io.theme.error)
 
     def switch_brain(self, provider_name: str):
         """Switch the orchestrator's primary brain to a different provider.
@@ -151,7 +151,7 @@ class CLIDisplay:
             None
         """
         if not provider_name:
-            self.io.echo(f"Current brain: {self.io.style(self.orchestrator.brain, fg='green', bold=True)}")
+            self.io.echo(f"Current brain: {self.io.style(self.orchestrator.brain, fg=self.io.theme.success, bold=True)}")
             self.io.echo(f"Available: {', '.join(self.orchestrator.providers.list_available())}")
             self.io.echo("Usage: /brain <provider_name>")
             return
@@ -161,12 +161,12 @@ class CLIDisplay:
         validation = validate_provider(provider_name, available_providers=available)
 
         if not validation.is_valid:
-            self.io.secho(f"{validation.error}", fg="red")
+            self.io.secho(f"{validation.error}", fg=self.io.theme.error)
             return
 
         old_brain = self.orchestrator.brain
         self.orchestrator.brain = validation.provider
-        self.io.secho(f"Brain switched: {old_brain} -> {validation.provider}", fg="green")
+        self.io.secho(f"Brain switched: {old_brain} -> {validation.provider}", fg=self.io.theme.success)
 
     def show_usage(self):
         """Display usage statistics for the current session.
@@ -191,21 +191,21 @@ class CLIDisplay:
             show_usage_rich(self.io, report)
         else:
             # Fallback to basic text display
-            self.io.secho("\nUsage Statistics:", fg="cyan", bold=True)
-            self.io.secho("-" * 50, fg="cyan")
-            self.io.echo(f"Total Tasks: {self.io.style(str(report.get('total_tasks', 0)), fg='green', bold=True)}")
+            self.io.secho("\nUsage Statistics:", fg=self.io.theme.primary, bold=True)
+            self.io.secho("-" * 50, fg=self.io.theme.primary)
+            self.io.echo(f"Total Tasks: {self.io.style(str(report.get('total_tasks', 0)), fg=self.io.theme.success, bold=True)}")
             if 'cached_hits' in report:
-                self.io.echo(f"Cache Hits: {self.io.style(str(report['cached_hits']), fg='green')}")
+                self.io.echo(f"Cache Hits: {self.io.style(str(report['cached_hits']), fg=self.io.theme.success)}")
                 self.io.echo(f"API Calls: {report['api_calls']}")
             self.io.echo(f"Session Duration: {report.get('session_duration', 'N/A')}")
 
             if report.get('by_provider'):
                 self.io.secho("\nBy Provider:", bold=True)
                 for provider, stats in report['by_provider'].items():
-                    self.io.secho(f"  {provider}:", fg="cyan", bold=True)
+                    self.io.secho(f"  {provider}:", fg=self.io.theme.primary, bold=True)
                     self.io.echo(f"    Requests: {stats['count']}")
                     if stats.get('cached_hits', 0) > 0:
-                        self.io.echo(f"    Cached Hits: {self.io.style(str(stats['cached_hits']), fg='green')}")
+                        self.io.echo(f"    Cached Hits: {self.io.style(str(stats['cached_hits']), fg=self.io.theme.success)}")
                     self.io.echo(f"    Total Tokens: {stats['total_tokens']:,}")
                     self.io.echo(f"    Avg Tokens/Request: {stats['avg_tokens']:.1f}")
                     self.io.echo(f"    Total Latency: {stats['total_latency_ms']:.0f}ms")
@@ -237,7 +237,7 @@ class CLIDisplay:
             validation = validate_provider(provider_name, available_providers=available)
 
             if not validation.is_valid:
-                self.io.secho(f"{validation.error}", fg="red")
+                self.io.secho(f"{validation.error}", fg=self.io.theme.error)
                 return
 
             provider = self.orchestrator.providers.get(validation.provider)
@@ -246,7 +246,7 @@ class CLIDisplay:
             for model in provider.available_models:
                 if model == provider.default_model:
                     self.io.echo(f"  - {model} ", nl=False)
-                    self.io.secho("(default)", fg="green")
+                    self.io.secho("(default)", fg=self.io.theme.success)
                 else:
                     self.io.echo(f"  - {model}")
         else:
@@ -259,6 +259,6 @@ class CLIDisplay:
                 for model in provider.available_models:
                     if model == provider.default_model:
                         self.io.echo(f"  - {model} ", nl=False)
-                        self.io.secho("(default)", fg="green")
+                        self.io.secho("(default)", fg=self.io.theme.success)
                     else:
                         self.io.echo(f"  - {model}")

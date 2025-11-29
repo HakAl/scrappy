@@ -91,7 +91,7 @@ class CLISmartQuery:
         io = self.display.get_io()
         dashboard = self.display.get_dashboard()
 
-        io.secho("\n[Smart Query] Analyzing intent...", fg="cyan", bold=True)
+        io.secho("\n[Smart Query] Analyzing intent...", fg=io.theme.primary, bold=True)
 
         # Update dashboard if enabled
         if dashboard:
@@ -117,7 +117,7 @@ class CLISmartQuery:
             dashboard.append_thought(f"\nPrimary intent: {intent_result.intent.value}")
             dashboard.set_state("scanning", "Researching codebase...")
 
-        io.secho("\n[Smart Query] Researching...", fg="cyan", bold=True)
+        io.secho("\n[Smart Query] Researching...", fg=io.theme.primary, bold=True)
 
         # Create a research agent (read-only)
         agent = CodeAgent(self.orchestrator, io=io)
@@ -156,7 +156,7 @@ class CLISmartQuery:
         )
 
         # Get response from LLM
-        io.secho("\nAssistant: ", fg="blue", bold=True, nl=False)
+        io.secho("\nAssistant: ", fg=io.theme.info, bold=True, nl=False)
         response = self.orchestrator.delegate(
             self.orchestrator.brain,
             prompt,
@@ -166,7 +166,7 @@ class CLISmartQuery:
         io.echo(response.content)
         io.secho(
             f"[{response.provider}/{response.model} | {response.tokens_used} tokens | {response.latency_ms:.0f}ms | {tools_used} tools used]",
-            fg="cyan"
+            fg=io.theme.primary
         )
 
         if dashboard:

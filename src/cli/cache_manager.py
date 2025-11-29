@@ -79,7 +79,7 @@ class CacheManager:
         # Validate subcommand
         validation = validate_subcommand("cache", args)
         if not validation.is_valid:
-            self.io.secho(validation.error, fg="red")
+            self.io.secho(validation.error, fg=self.io.theme.error)
             self.io.echo("Usage: /cache [clear|toggle]")
             self.io.echo("  (no args)  - Show cache statistics")
             self.io.echo("  clear      - Clear all cached responses")

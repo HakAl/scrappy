@@ -49,7 +49,7 @@ def display_session_restored(io: "CLIIOProtocol", result: Dict[str, Any]) -> Opt
         The conversation history list if present, else None
     """
     saved_at = result.get('saved_at', 'unknown')
-    io.secho(f"\nResumed session from {saved_at}", fg="green", bold=True)
+    io.secho(f"\nResumed session from {saved_at}", fg=io.theme.success, bold=True)
     io.echo(f"  Files restored: {result.get('files_restored', 0)}")
     io.echo(f"  Searches restored: {result.get('searches_restored', 0)}")
     io.echo(f"  Git ops restored: {result.get('git_ops_restored', 0)}")
@@ -75,10 +75,10 @@ def display_session_load_error(io: "CLIIOProtocol", result: Dict[str, Any]) -> N
     status = result.get('status', 'error')
 
     if status == 'no_session':
-        io.secho("No previous session found. Starting fresh.", fg="yellow")
+        io.secho("No previous session found. Starting fresh.", fg=io.theme.warning)
     else:
         message = result.get('message', 'unknown')
-        io.secho(f"Error loading session: {message}", fg="red")
+        io.secho(f"Error loading session: {message}", fg=io.theme.error)
 
 
 def display_session_saved(
@@ -96,7 +96,7 @@ def display_session_saved(
         conversation_count: Number of conversation messages saved
         with_help: Whether to show resume help text
     """
-    io.secho(f"\nSession saved to: {session_file}", fg="green")
+    io.secho(f"\nSession saved to: {session_file}", fg=io.theme.success)
     io.echo(f"  Conversation: {conversation_count} messages")
 
     if with_help:
@@ -111,7 +111,7 @@ def display_session_save_error(io: "CLIIOProtocol", error: Exception) -> None:
         io: IO interface for output
         error: The exception that occurred
     """
-    io.secho(f"Warning: Could not save session: {error}", fg="yellow")
+    io.secho(f"Warning: Could not save session: {error}", fg=io.theme.warning)
 
 
 def display_previous_session_detected(io: "CLIIOProtocol", session_info: Dict[str, Any]) -> None:
@@ -151,7 +151,7 @@ def display_last_conversation_messages(
     if not conversation:
         return
 
-    io.secho("\nLast conversation:", fg="cyan")
+    io.secho("\nLast conversation:", fg=io.theme.primary)
 
     # Get last N messages
     messages_to_show = conversation[-max_messages:] if len(conversation) > max_messages else conversation
@@ -176,5 +176,5 @@ def display_session_not_saved_warning(io: "CLIIOProtocol") -> None:
     Args:
         io: IO interface for output
     """
-    io.secho("\nSession not saved (auto-save disabled).", fg="yellow")
+    io.secho("\nSession not saved (auto-save disabled).", fg=io.theme.warning)
     io.echo("Use '/session save' to manually save before quitting.")

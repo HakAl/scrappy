@@ -76,7 +76,7 @@ class CLIMultiProvider:
             providers_to_use = [p for p in providers_to_use if p in available]
 
         if len(providers_to_use) < 2:
-            self.io.secho("Need at least 2 providers for synthesis.", fg="yellow")
+            self.io.secho("Need at least 2 providers for synthesis.", fg=self.io.theme.warning)
             return
 
         self.io.echo(f"\nQuerying: {', '.join(providers_to_use)}")
@@ -87,12 +87,12 @@ class CLIMultiProvider:
             try:
                 response = self.orchestrator.delegate(provider, prompt)
                 results.append(response)  # Append LLMResponse object, not .content
-                self.io.secho(f" Done ({response.tokens_used} tokens)", fg="green")
+                self.io.secho(f" Done ({response.tokens_used} tokens)", fg=self.io.theme.success)
             except Exception as e:
-                self.io.secho(f" Error: {e}", fg="red")
+                self.io.secho(f" Error: {e}", fg=self.io.theme.error)
 
         if len(results) < 2:
-            self.io.secho("Not enough responses for synthesis.", fg="yellow")
+            self.io.secho("Not enough responses for synthesis.", fg=self.io.theme.warning)
             return
 
         self.io.echo("\nSynthesizing responses...")
@@ -148,7 +148,7 @@ class CLIMultiProvider:
             provider, prompt = parts
 
         if is_empty_or_whitespace(provider) or is_empty_or_whitespace(prompt):
-            self.io.secho("Both provider and prompt are required.", fg="yellow")
+            self.io.secho("Both provider and prompt are required.", fg=self.io.theme.warning)
             return
 
         # Validate provider with availability check
@@ -156,7 +156,7 @@ class CLIMultiProvider:
         validation = validate_provider(provider, available_providers=available)
 
         if not validation.is_valid:
-            self.io.secho(f"{validation.error}", fg="red")
+            self.io.secho(f"{validation.error}", fg=self.io.theme.error)
             return
 
         self.io.echo(f"\nDelegating to {validation.provider}...")
@@ -168,7 +168,7 @@ class CLIMultiProvider:
             self.io.echo(response.content)
             self.io.secho(
                 f"\n[{response.model} | {response.tokens_used} tokens | {response.latency_ms:.0f}ms]",
-                fg="cyan"
+                fg=self.io.theme.primary
             )
 
             # Save delegation result to working memory
@@ -177,4 +177,4 @@ class CLIMultiProvider:
                 "delegation"
             )
         except Exception as e:
-            self.io.secho(f"Error: {e}", fg="red")
+            self.io.secho(f"Error: {e}", fg=self.io.theme.error)

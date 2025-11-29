@@ -8,11 +8,11 @@
 All display output should use `io.theme` properties instead of hardcoded color strings:
 
 ```python
-# ❌ BAD - Hardcoded colors
+#  BAD - Hardcoded colors
 io.secho("Success!", fg="green")
 io.style(text, fg="cyan")
 
-# ✅ GOOD - Theme colors
+#  GOOD - Theme colors
 io.secho("Success!", fg=io.theme.success)
 io.style(text, fg=io.theme.primary)
 ```
@@ -28,7 +28,7 @@ io.style(text, fg=io.theme.primary)
 | `"magenta"`    | `#ff00ff` (magenta) | `#ff00ff` (magenta) | `io.theme.accent`   |
 | `"blue"`       | `#0000ff` (blue) | `#0000ff` (blue) | `io.theme.info`     |
 
-## Completed ✅
+## Completed 
 
 ### Core Initialization (src/cli/core.py)
 - [x] "Initializing Scrappy..." - now uses `io.theme.primary`
@@ -52,7 +52,7 @@ io.style(text, fg=io.theme.primary)
 ### Banner (src/cli/interactive_banner.py)
 - [x] Updated to use `io.theme` from UnifiedIO
 
-## Remaining Work 🚧
+## Remaining Work 
 
 ### High Priority (User-Facing Output)
 
@@ -204,7 +204,7 @@ return Text(f"Error: {self.error}", style=f"bold {DEFAULT_THEME.error}")
 
 ## Implementation Strategy
 
-### Phase 1: Core User Experience (Completed ✅)
+### Phase 1: Core User Experience (Completed )
 - [x] Initialization flow (core.py)
 - [x] Session restore (session_utils.py)
 - [x] Welcome banner (interactive_banner.py)

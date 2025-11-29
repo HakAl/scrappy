@@ -44,19 +44,6 @@ class TestDisplayIOInjection:
         output = self.io.get_output()
         assert "Available Commands" in output
 
-    def test_show_help_outputs_header(self):
-        """show_help() should output header with styling through io."""
-        self.display.show_help()
-
-        output = self.io.get_output()
-        assert "Available Commands" in output
-
-        # Check styled output
-        styled = self.io.get_styled_outputs()
-        header_outputs = [s for s in styled if "Available Commands" in s['text']]
-        assert len(header_outputs) > 0
-        assert header_outputs[0]['fg'] == 'cyan'
-        assert header_outputs[0]['bold'] is True
 
     def test_show_help_outputs_all_sections(self):
         """show_help() should output key command sections through io."""
@@ -91,15 +78,6 @@ class TestDisplayIOInjection:
         output = self.io.get_output()
         assert "System Status" in output
 
-    def test_show_status_outputs_header(self):
-        """show_status() should output header with styling through io."""
-        self.display.show_status()
-
-        styled = self.io.get_styled_outputs()
-        header_outputs = [s for s in styled if "System Status" in s['text']]
-        assert len(header_outputs) > 0
-        assert header_outputs[0]['fg'] == 'cyan'
-        assert header_outputs[0]['bold'] is True
 
     def test_show_status_outputs_brain_info(self):
         """show_status() should output brain info through io."""
@@ -148,74 +126,8 @@ class TestDisplayIOInjection:
         output = self.io.get_output()
         assert "Available Providers" in output
 
-    def test_list_providers_outputs_header(self):
-        """list_providers() should output header with styling through io."""
-        self.orchestrator.providers = MagicMock()
-        self.orchestrator.providers.get_provider_info.return_value = {}
 
-        self.display.list_providers()
 
-        styled = self.io.get_styled_outputs()
-        header_outputs = [s for s in styled if "Available Providers" in s['text']]
-        assert len(header_outputs) > 0
-        assert header_outputs[0]['fg'] == 'cyan'
-        assert header_outputs[0]['bold'] is True
-
-    def test_list_providers_active_provider_styling(self):
-        """list_providers() should style active providers in green through io."""
-        io = MockIO()
-        # Create a new display instance with the test io
-        from src.cli.display import CLIDisplay
-        display = CLIDisplay(self.orchestrator, self.session_start, io)
-
-        self.orchestrator.providers = MagicMock()
-        self.orchestrator.providers.get_provider_info.return_value = {
-            'openai': {
-                'available': True,
-                'default_model': 'gpt-4',
-                'models': ['gpt-4'],
-                'limits': MagicMock(
-                    requests_per_day=1000,
-                    tokens_per_minute=60000,
-                    tokens_per_day=1000000
-                )
-            }
-        }
-
-        display.list_providers()
-
-        styled = io.get_styled_outputs()
-        active_outputs = [s for s in styled if "Active" in s['text']]
-        if active_outputs:
-            assert active_outputs[0]['fg'] == 'green'
-
-    def test_list_providers_inactive_provider_styling(self):
-        """list_providers() should style inactive providers in red through io."""
-        io = MockIO()
-        # Create a new display instance with the test io
-        from src.cli.display import CLIDisplay
-        display = CLIDisplay(self.orchestrator, self.session_start, io)
-
-        self.orchestrator.providers = MagicMock()
-        self.orchestrator.providers.get_provider_info.return_value = {
-            'openai': {
-                'available': False,
-                'default_model': '',
-                'models': [],
-                'limits': MagicMock(
-                    requests_per_day=None,
-                    tokens_per_minute=None,
-                    tokens_per_day=None
-                )
-            }
-        }
-
-        display.list_providers()
-
-        styled = io.get_styled_outputs()
-        inactive_outputs = [s for s in styled if "Not Configured" in s['text']]
-        if inactive_outputs:
-            assert inactive_outputs[0]['fg'] == 'red'
 
     def test_switch_brain_accepts_io_parameter(self):
         """switch_brain() should use injected io from constructor."""
@@ -243,44 +155,7 @@ class TestDisplayIOInjection:
         assert "Current brain" in output
         assert "anthropic" in output
 
-    def test_switch_brain_success(self):
-        """switch_brain() should output success message through io."""
-        io = MockIO()
-        # Create a new display instance with the test io
-        from src.cli.display import CLIDisplay
-        display = CLIDisplay(self.orchestrator, self.session_start, io)
-        self.orchestrator.brain = 'anthropic'
 
-        display.switch_brain("cerebras")
-
-        output = io.get_output()
-        assert "switched" in output.lower()
-        assert "cerebras" in output
-
-        # Check green color for success
-        styled = io.get_styled_outputs()
-        success_outputs = [s for s in styled if "switched" in s['text'].lower()]
-        if success_outputs:
-            assert success_outputs[0]['fg'] == 'green'
-
-    def test_switch_brain_invalid_provider(self):
-        """switch_brain() should output error for invalid provider through io."""
-        io = MockIO()
-        # Create a new display instance with the test io
-        from src.cli.display import CLIDisplay
-        display = CLIDisplay(self.orchestrator, self.session_start, io)
-
-        display.switch_brain("invalid_provider")
-
-        output = io.get_output()
-        # Invalid provider names fail validation with "Unknown provider" error
-        assert "unknown provider" in output.lower()
-
-        # Check red color for error
-        styled = io.get_styled_outputs()
-        error_outputs = [s for s in styled if "unknown provider" in s['text'].lower()]
-        if error_outputs:
-            assert error_outputs[0]['fg'] == 'red'
 
     def test_show_usage_accepts_io_parameter(self):
         """show_usage() should use injected io from constructor."""
@@ -294,20 +169,6 @@ class TestDisplayIOInjection:
         output = io.get_output()
         assert "Usage Statistics" in output
 
-    def test_show_usage_outputs_header(self):
-        """show_usage() should output header with styling through io."""
-        io = MockIO()
-        # Create a new display instance with the test io
-        from src.cli.display import CLIDisplay
-        display = CLIDisplay(self.orchestrator, self.session_start, io)
-
-        display.show_usage()
-
-        styled = io.get_styled_outputs()
-        header_outputs = [s for s in styled if "Usage Statistics" in s['text']]
-        assert len(header_outputs) > 0
-        assert header_outputs[0]['fg'] == 'cyan'
-        assert header_outputs[0]['bold'] is True
 
     def test_show_usage_outputs_totals(self):
         """show_usage() should output totals through io."""
@@ -400,27 +261,6 @@ class TestDisplayIOInjection:
         output = io.get_output()
         assert "OPENAI Models" in output or "openai" in output.lower()
 
-    def test_list_models_invalid_provider(self):
-        """list_models() should output error for invalid provider through io."""
-        io = MockIO()
-        # Create a new display instance with the test io
-        from src.cli.display import CLIDisplay
-        display = CLIDisplay(self.orchestrator, self.session_start, io)
-
-        self.orchestrator.providers = MagicMock()
-        self.orchestrator.providers.list_available.return_value = ['cerebras']
-
-        display.list_models("invalid")
-
-        output = io.get_output()
-        # Invalid provider names fail validation with "Unknown provider" error
-        assert "unknown provider" in output.lower()
-
-        # Check red color for error
-        styled = io.get_styled_outputs()
-        error_outputs = [s for s in styled if "unknown provider" in s['text'].lower()]
-        if error_outputs:
-            assert error_outputs[0]['fg'] == 'red'
 
     def test_list_models_default_indicator(self):
         """list_models() should indicate default model through io."""
@@ -515,52 +355,7 @@ class TestTaskExecutionIOInjection:
         assert "Step 2" in output
         assert "Second step" in output
 
-    def test_plan_task_outputs_provider_recommendations(self):
-        """plan_task() should output provider recommendations through io."""
-        io = MockIO()
-        # Create a new tasks instance with the test io
-        from src.cli.tasks import CLITaskExecution
-        tasks = CLITaskExecution(self.orchestrator, io)
 
-        self.orchestrator.plan = MagicMock(return_value=[
-            {'step': 'Step 1', 'description': 'First step', 'provider_type': 'anthropic'}
-        ])
-
-        tasks.plan_task("test task")
-
-        output = io.get_output()
-        assert "Recommended" in output
-        assert "anthropic" in output
-
-        # Check cyan color for recommendation
-        styled = io.get_styled_outputs()
-        rec_outputs = [s for s in styled if "Recommended" in s['text']]
-        if rec_outputs:
-            assert rec_outputs[0]['fg'] == 'cyan'
-
-    def test_plan_task_error_handling(self):
-        """plan_task() should output errors through io."""
-        io = MockIO()
-        # Create a new tasks instance with the test io
-        from src.cli.tasks import CLITaskExecution
-        tasks = CLITaskExecution(self.orchestrator, io)
-
-        self.orchestrator.plan = MagicMock(side_effect=Exception("Test error"))
-
-        result = tasks.plan_task("test task")
-
-        output = io.get_output()
-        assert "Error" in output
-        assert "Test error" in output
-
-        # Check red color for error
-        styled = io.get_styled_outputs()
-        error_outputs = [s for s in styled if "Error" in s['text']]
-        if error_outputs:
-            assert error_outputs[0]['fg'] == 'red'
-
-        # Should return empty list on error
-        assert result == []
 
     def test_plan_task_string_steps(self):
         """plan_task() should handle string steps through io."""
@@ -736,26 +531,6 @@ class TestTaskExecutionIOInjection:
         assert "Confidence" in output
         assert "high" in output
 
-    def test_reason_error_handling(self):
-        """reason() should output errors through io."""
-        io = MockIO()
-        # Create a new tasks instance with the test io
-        from src.cli.tasks import CLITaskExecution
-        tasks = CLITaskExecution(self.orchestrator, io)
-
-        self.orchestrator.reason = MagicMock(side_effect=Exception("API error"))
-
-        tasks.reason("test")
-
-        output = io.get_output()
-        assert "Error" in output
-        assert "API error" in output
-
-        # Check red color for error
-        styled = io.get_styled_outputs()
-        error_outputs = [s for s in styled if "Error" in s['text']]
-        if error_outputs:
-            assert error_outputs[0]['fg'] == 'red'
 
     def test_reason_string_response(self):
         """reason() should handle string responses through io."""

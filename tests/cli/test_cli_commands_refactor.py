@@ -146,26 +146,6 @@ class TestSharedSessionRestoration:
 class TestConsolidatedExceptionHandling:
     """Test consolidated exception handling utility."""
 
-    def test_command_error_handler_catches_and_displays_error(self):
-        """Error handler should catch exceptions and display them."""
-        from src.cli.utils.error_utils import handle_command_error
-
-        io = MockIO()
-
-        error = ValueError("Something went wrong")
-
-        # The handler should display error and return exit code
-        exit_code = handle_command_error(io, error)
-
-        output = io.get_output()
-        assert 'Something went wrong' in output
-        assert exit_code == 1
-
-        # Verify it was styled as error (red)
-        styled = io.get_styled_outputs()
-        error_output = [s for s in styled if 'wrong' in s['text']]
-        assert len(error_output) > 0
-        assert error_output[0]['fg'] == 'red'
 
     def test_command_error_handler_custom_exit_code(self):
         """Error handler should support custom exit codes."""

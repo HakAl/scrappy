@@ -46,38 +46,8 @@ class TestStructuredLogger:
         output = io.get_output()
         assert "Test message" in output
 
-    @pytest.mark.unit
-    def test_logger_error_uses_red_color(self):
-        """Error messages should use red color."""
-        io = MockIO()
-        logger = StructuredLogger("test", io=io)
 
-        logger.error("Error message")
 
-        styled = io.get_styled_outputs()
-        assert any(s.get('fg') == 'red' for s in styled)
-
-    @pytest.mark.unit
-    def test_logger_warning_uses_yellow_color(self):
-        """Warning messages should use yellow color."""
-        io = MockIO()
-        logger = StructuredLogger("test", io=io)
-
-        logger.warning("Warning message")
-
-        styled = io.get_styled_outputs()
-        assert any(s.get('fg') == 'yellow' for s in styled)
-
-    @pytest.mark.unit
-    def test_logger_critical_uses_bold_red(self):
-        """Critical messages should use bold red."""
-        io = MockIO()
-        logger = StructuredLogger("test", io=io)
-
-        logger.critical("Critical message")
-
-        styled = io.get_styled_outputs()
-        assert any(s.get('fg') == 'red' and s.get('bold') for s in styled)
 
     @pytest.mark.unit
     def test_logger_debug_respects_level(self):

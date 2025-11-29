@@ -59,7 +59,7 @@ class InputHandler:
         Returns:
             The complete multiline string, or empty string on exception.
         """
-        self.io.secho("Enter your multiline input (blank line or 'END' to finish):", fg="cyan")
+        self.io.secho("Enter your multiline input (blank line or 'END' to finish):", fg=self.io.theme.primary)
         lines = []
 
         while True:
@@ -130,7 +130,7 @@ class InputHandler:
                 return ""
         else:
             # Fall back to standard IO
-            self.io.secho("You> ", fg="green", bold=True, nl=False)
+            self.io.secho("You> ", fg=self.io.theme.accent, bold=True, nl=False)
             return self.io.prompt("", default="", show_default=False)
 
     def read_interactive_input(self) -> str:
@@ -171,7 +171,7 @@ class InputHandler:
                         lines.append(line.rstrip()[:-1])
                 else:
                     # Continuation lines use standard IO (no history nav)
-                    self.io.secho("... ", fg="green", nl=False)
+                    self.io.secho("... ", fg=self.io.theme.accent, nl=False)
                     line = self.io.prompt("", default="", show_default=False)
 
                     # Blank line terminates input

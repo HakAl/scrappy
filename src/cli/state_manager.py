@@ -123,8 +123,8 @@ class PlanStateManager:
         total = len(self.active_plan)
         current = self.current_task_index + 1
 
-        io.secho("=" * 60, fg="cyan")
-        io.secho(f"[{current}/{total}] ", fg="cyan", bold=True, nl=False)
+        io.secho("=" * 60, fg=io.theme.primary)
+        io.secho(f"[{current}/{total}] ", fg=io.theme.primary, bold=True, nl=False)
 
         task = self.active_plan[self.current_task_index]
         if isinstance(task, dict):
@@ -134,7 +134,7 @@ class PlanStateManager:
         else:
             io.secho(str(task), bold=True)
 
-        io.secho("=" * 60, fg="cyan")
+        io.secho("=" * 60, fg=io.theme.primary)
         io.echo()
 
     def show_plan_summary(self, io: CLIIOProtocol) -> None:
@@ -151,7 +151,7 @@ class PlanStateManager:
         completed = self.current_task_index
 
         io.echo()
-        io.secho("Plan Summary:", fg="cyan", bold=True)
+        io.secho("Plan Summary:", fg=io.theme.primary, bold=True)
         io.echo(f"  Completed: {completed}/{total} tasks")
 
         # Progress bar
@@ -171,16 +171,16 @@ class PlanStateManager:
         if not self.active_plan:
             return
 
-        io.secho("\nCurrent Plan:", fg="cyan", bold=True)
-        io.secho("-" * 50, fg="cyan")
+        io.secho("\nCurrent Plan:", fg=io.theme.primary, bold=True)
+        io.secho("-" * 50, fg=io.theme.primary)
 
         for i, task in enumerate(self.active_plan):
             if i < self.current_task_index:
                 # Completed
-                status = io.style("[x]", fg="green")
+                status = io.style("[x]", fg=io.theme.success)
             elif i == self.current_task_index:
                 # Current
-                status = io.style("->", fg="yellow", bold=True)
+                status = io.style("->", fg=io.theme.warning, bold=True)
             else:
                 # Pending
                 status = io.style("o", fg="white")
@@ -210,12 +210,12 @@ class PlanStateManager:
 
         # Skip prompts if not in interactive mode
         if not sys.stdin.isatty():
-            io.secho("Non-interactive mode: ending plan execution.", fg="yellow")
+            io.secho("Non-interactive mode: ending plan execution.", fg=io.theme.warning)
             self.plan_active = False
             return True
 
         io.echo()
-        io.secho("What next?", fg="cyan", bold=True)
+        io.secho("What next?", fg=io.theme.primary, bold=True)
         io.echo("  1. Mark complete & continue")
         io.echo("  2. Stay on this task")
         io.echo("  3. Skip this task")
@@ -226,18 +226,18 @@ class PlanStateManager:
             choice = io.prompt("Choice", default="1", show_default=True).strip()
         except (EOFError, Exception):
             # Non-interactive or cancelled - end plan
-            io.secho("\nEnding planning session...", fg="yellow")
+            io.secho("\nEnding planning session...", fg=io.theme.warning)
             self.plan_active = False
             return True
 
         if choice == "1":
             # Mark complete and advance
-            io.secho(f"[DONE] Task {self.current_task_index + 1} complete", fg="green", bold=True)
+            io.secho(f"[DONE] Task {self.current_task_index + 1} complete", fg=io.theme.success, bold=True)
             io.echo()
 
             self.current_task_index += 1
             if self.current_task_index >= len(self.active_plan):
-                io.secho("All tasks complete!", fg="green", bold=True)
+                io.secho("All tasks complete!", fg=io.theme.success, bold=True)
                 self.show_plan_summary(io)
                 self.plan_active = False
                 return True
@@ -246,17 +246,17 @@ class PlanStateManager:
 
         elif choice == "2":
             # Stay on current task
-            io.secho("Continuing with current task...", fg="yellow")
+            io.secho("Continuing with current task...", fg=io.theme.warning)
             io.echo()
 
         elif choice == "3":
             # Skip task
-            io.secho(f"Skipped task {self.current_task_index + 1}", fg="yellow")
+            io.secho(f"Skipped task {self.current_task_index + 1}", fg=io.theme.warning)
             io.echo()
 
             self.current_task_index += 1
             if self.current_task_index >= len(self.active_plan):
-                io.secho("Plan complete (some tasks skipped)", fg="yellow", bold=True)
+                io.secho("Plan complete (some tasks skipped)", fg=io.theme.warning, bold=True)
                 self.show_plan_summary(io)
                 self.plan_active = False
                 return True
@@ -265,7 +265,7 @@ class PlanStateManager:
 
         elif choice == "4":
             # End planning session
-            io.secho("Ending planning session...", fg="yellow")
+            io.secho("Ending planning session...", fg=io.theme.warning)
             self.show_plan_summary(io)
             self.plan_active = False
 

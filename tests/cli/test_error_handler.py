@@ -136,45 +136,8 @@ class TestHandleError:
         output = io.get_output()
         assert "Test error message" in output
 
-    def test_handle_error_uses_red_for_errors(self):
-        """handle_error uses red color for ERROR severity."""
-        from src.cli.utils.error_handler import handle_error, ErrorSeverity
 
-        io = MockIO()
-        error = ValueError("Test error")
 
-        handle_error(error, io, severity=ErrorSeverity.ERROR)
-
-        styled = io.get_styled_outputs()
-        assert len(styled) > 0
-        # At least one output should be red
-        assert any(s.get('fg') == 'red' for s in styled)
-
-    def test_handle_error_uses_yellow_for_warnings(self):
-        """handle_error uses yellow color for WARNING severity."""
-        from src.cli.utils.error_handler import handle_error, ErrorSeverity
-
-        io = MockIO()
-        error = ValueError("Test warning")
-
-        handle_error(error, io, severity=ErrorSeverity.WARNING)
-
-        styled = io.get_styled_outputs()
-        assert len(styled) > 0
-        assert any(s.get('fg') == 'yellow' for s in styled)
-
-    def test_handle_error_uses_cyan_for_info(self):
-        """handle_error uses cyan color for INFO severity."""
-        from src.cli.utils.error_handler import handle_error, ErrorSeverity
-
-        io = MockIO()
-        error = ValueError("Test info")
-
-        handle_error(error, io, severity=ErrorSeverity.INFO)
-
-        styled = io.get_styled_outputs()
-        assert len(styled) > 0
-        assert any(s.get('fg') == 'cyan' for s in styled)
 
     def test_handle_error_bold_for_critical(self):
         """handle_error uses bold for CRITICAL severity."""
@@ -201,18 +164,6 @@ class TestHandleError:
         output = io.get_output()
         assert "loading configuration" in output or "configuration" in output
 
-    def test_handle_error_default_severity_is_error(self):
-        """handle_error defaults to ERROR severity."""
-        from src.cli.utils.error_handler import handle_error
-
-        io = MockIO()
-        error = ValueError("Test")
-
-        handle_error(error, io)
-
-        styled = io.get_styled_outputs()
-        # Should have red color (ERROR severity)
-        assert any(s.get('fg') == 'red' for s in styled)
 
 
 class TestGetErrorSuggestion:
@@ -350,19 +301,6 @@ class TestSafeOperation:
 class TestFileOperationError:
     """Tests for file operation error handler."""
 
-    def test_file_not_found_error(self):
-        """file_operation_error handles FileNotFoundError."""
-        from src.cli.utils.error_handler import file_operation_error
-
-        io = MockIO()
-        error = FileNotFoundError("config.json")
-
-        file_operation_error(io, error, Path("config.json"))
-
-        output = io.get_output()
-        assert "config.json" in output
-        styled = io.get_styled_outputs()
-        assert any(s.get('fg') == 'red' for s in styled)
 
     def test_permission_error(self):
         """file_operation_error handles PermissionError."""

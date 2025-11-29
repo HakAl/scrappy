@@ -101,21 +101,21 @@ class SessionPersistence:
         # Validate subcommand
         validation = validate_subcommand("session", args)
         if not validation.is_valid:
-            self.io.secho(validation.error, fg="red")
+            self.io.secho(validation.error, fg=self.io.theme.error)
             self.io.echo("Usage: /session [save|load|clear|toggle]")
             self.io.echo("  (no args)  - Show session info")
             self.io.echo("  save       - Save current session to disk")
             self.io.echo("  load       - Load saved session")
             self.io.echo("  clear      - Delete saved session file")
             self.io.echo("  toggle     - Toggle auto-save on/off")
-            self.io.echo(f"\nAuto-save: {self.io.style('ON' if auto_save else 'OFF', fg='green' if auto_save else 'yellow')}")
+            self.io.echo(f"\nAuto-save: {self.io.style('ON' if auto_save else 'OFF', fg=self.io.theme.success if auto_save else self.io.theme.warning)}")
             return result
 
         if validation.subcommand == "":
             # Show session info
             session_file = self.orchestrator.session_manager.session_file
-            self.io.secho("\nSession Management:", fg="magenta", bold=True)
-            self.io.secho("-" * 50, fg="magenta")
+            self.io.secho("\nSession Management:", fg=self.io.theme.accent, bold=True)
+            self.io.secho("-" * 50, fg=self.io.theme.accent)
             self.io.echo(f"Session File: {session_file}")
             self.io.echo(f"Session Exists: {'Yes' if session_file.exists() else 'No'}")
 
@@ -140,20 +140,20 @@ class SessionPersistence:
             self.io.echo(f"  Git ops: {mem['git_operations']}")
             self.io.echo(f"  Discoveries: {mem['discoveries']}")
             self.io.echo(f"  Conversation: {len(conversation_history or [])} messages")
-            self.io.echo(f"  Auto-save: {self.io.style('ON' if auto_save else 'OFF', fg='green' if auto_save else 'yellow')}")
+            self.io.echo(f"  Auto-save: {self.io.style('ON' if auto_save else 'OFF', fg=self.io.theme.success if auto_save else self.io.theme.warning)}")
 
         elif validation.subcommand == "save":
             try:
                 session_file = self.orchestrator.save_session(conversation_history or [])
-                self.io.secho(f"Session saved to: {session_file}", fg="green")
+                self.io.secho(f"Session saved to: {session_file}", fg=self.io.theme.success)
                 self.io.echo(f"  Conversation: {len(conversation_history or [])} messages")
             except Exception as e:
-                self.io.secho(f"Error saving session: {e}", fg="red")
+                self.io.secho(f"Error saving session: {e}", fg=self.io.theme.error)
 
         elif validation.subcommand == "load":
             load_result = self.orchestrator.load_session()
             if load_result['status'] == 'loaded':
-                self.io.secho(f"Session loaded from {load_result['saved_at']}", fg="green")
+                self.io.secho(f"Session loaded from {load_result['saved_at']}", fg=self.io.theme.success)
                 self.io.echo(f"  Files: {load_result['files_restored']}")
                 self.io.echo(f"  Searches: {load_result['searches_restored']}")
                 self.io.echo(f"  Git ops: {load_result['git_ops_restored']}")
@@ -169,11 +169,11 @@ class SessionPersistence:
 
         elif validation.subcommand == "clear":
             self.orchestrator.clear_session()
-            self.io.secho("Saved session cleared.", fg="green")
+            self.io.secho("Saved session cleared.", fg=self.io.theme.success)
 
         elif validation.subcommand == "toggle":
             result['auto_save'] = not auto_save
-            status = self.io.style("ON", fg="green") if result['auto_save'] else self.io.style("OFF", fg="yellow")
+            status = self.io.style("ON", fg=self.io.theme.success) if result['auto_save'] else self.io.style("OFF", fg=self.io.theme.warning)
             self.io.echo(f"Auto-save on exit: {status}")
             if result['auto_save']:
                 self.io.echo("Session will be saved automatically on /quit")

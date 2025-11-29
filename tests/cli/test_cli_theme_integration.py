@@ -45,10 +45,11 @@ class TestDisplayRichThemeIntegration:
         self.io.panel = Mock()
         self.theme = ScrappyTheme()
         self.light_theme = LightTheme()
+        self.io.theme = self.theme  # Functions access theme via io.theme
 
     def test_show_help_table_accepts_theme(self):
-        """show_help_table accepts theme parameter."""
-        show_help_table(self.io, theme=self.theme)
+        """show_help_table uses theme from io.theme."""
+        show_help_table(self.io)
         self.io.table.assert_called_once()
 
     def test_show_help_table_uses_default_theme(self):
@@ -66,7 +67,7 @@ class TestDisplayRichThemeIntegration:
         }
         from datetime import datetime
 
-        show_status_rich(self.io, orchestrator, datetime.now(), theme=self.theme)
+        show_status_rich(self.io, orchestrator, datetime.now())
         self.io.panel.assert_called_once()
         _, kwargs = self.io.panel.call_args
         assert kwargs["border_style"] == self.theme.primary
@@ -81,20 +82,21 @@ class TestDisplayRichThemeIntegration:
         }
         from datetime import datetime
 
-        show_status_rich(self.io, orchestrator, datetime.now(), theme=self.light_theme)
+        self.io.theme = self.light_theme  # Switch to light theme
+        show_status_rich(self.io, orchestrator, datetime.now())
         _, kwargs = self.io.panel.call_args
         assert kwargs["border_style"] == self.light_theme.primary
 
     def test_show_rate_limits_rich_uses_theme_warning(self):
         """show_rate_limits_rich uses theme.warning for empty data message."""
-        show_rate_limits_rich(self.io, {}, theme=self.theme)
+        show_rate_limits_rich(self.io, {})
         self.io.secho.assert_called_once()
         _, kwargs = self.io.secho.call_args
         assert kwargs["fg"] == self.theme.warning
 
     def test_show_plan_tree_uses_theme_warning_for_empty(self):
         """show_plan_tree uses theme.warning when no plan exists."""
-        show_plan_tree(self.io, {}, theme=self.theme)
+        show_plan_tree(self.io, {})
         self.io.secho.assert_called_once()
         _, kwargs = self.io.secho.call_args
         assert kwargs["fg"] == self.theme.warning
@@ -111,23 +113,25 @@ class TestInteractiveBannerThemeIntegration:
         self.theme = ScrappyTheme()
 
     def test_display_banner_accepts_theme(self):
-        """display_banner accepts theme parameter without error."""
+        """display_banner uses theme from io.theme."""
         io = Mock()
         io.is_tui_mode = False
         io.console = Console(file=StringIO(), force_terminal=True)
+        io.theme = self.theme
 
-        display_banner(io, theme=self.theme)
+        display_banner(io)
         # Should not raise
 
     def test_render_welcome_banner_accepts_theme(self):
-        """render_welcome_banner accepts theme parameter."""
+        """render_welcome_banner uses theme from io.theme."""
         io = Mock()
         io.is_tui_mode = False
         io.console = Console(file=StringIO(), force_terminal=True)
         io.secho = Mock()
         io.echo = Mock()
+        io.theme = self.theme
 
-        render_welcome_banner(io, theme=self.theme)
+        render_welcome_banner(io)
         io.secho.assert_called()
 
 
@@ -388,8 +392,8 @@ class TestThemePropagation:
             theme=theme,
         )
 
-        # Verify task colors match light theme
-        assert handler._task_colors["direct_command"] == "green"  # theme.success
-        assert handler._task_colors["code_generation"] == "magenta"  # theme.accent
-        assert handler._task_colors["research"] == "blue"  # theme.primary
-        assert handler._task_colors["conversation"] == "cyan"  # theme.info
+        # Verify task colors match light theme (hex codes)
+        assert handler._task_colors["direct_command"] == "#00ff00"  # theme.success
+        assert handler._task_colors["code_generation"] == "#ff00ff"  # theme.accent
+        assert handler._task_colors["research"] == "#0000ff"  # theme.primary
+        assert handler._task_colors["conversation"] == "#00ffff"  # theme.info

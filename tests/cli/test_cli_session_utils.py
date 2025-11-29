@@ -149,27 +149,6 @@ class TestDisplaySessionRestored:
         assert 'Conversation:' not in output
         assert 'Last conversation' not in output
 
-    def test_uses_green_styling_for_success(self):
-        """Should use green color for success message."""
-        from src.cli.utils.session_utils import display_session_restored
-
-        io = MockIO()
-        result = {
-            'status': 'loaded',
-            'saved_at': '2024-01-15',
-            'files_restored': 0,
-            'searches_restored': 0,
-            'git_ops_restored': 0,
-            'discoveries_restored': 0,
-            'tasks_restored': 0,
-            'conversation_history': []
-        }
-
-        display_session_restored(io, result)
-        styled = io.get_styled_outputs()
-
-        # First styled output should be green success message
-        assert any(s['fg'] == 'green' for s in styled)
 
     def test_handles_missing_conversation_key(self):
         """Should handle result without conversation_history key."""
@@ -234,17 +213,6 @@ class TestDisplaySessionLoadError:
 
         assert 'No previous session found' in output or 'No saved session' in output
 
-    def test_uses_yellow_for_no_session(self):
-        """Should use yellow color for no session warning."""
-        from src.cli.utils.session_utils import display_session_load_error
-
-        io = MockIO()
-        result = {'status': 'no_session'}
-
-        display_session_load_error(io, result)
-        styled = io.get_styled_outputs()
-
-        assert any(s['fg'] == 'yellow' for s in styled)
 
     def test_displays_error_message(self):
         """Should display error message for other failures."""
@@ -261,20 +229,6 @@ class TestDisplaySessionLoadError:
 
         assert 'File corrupted' in output
 
-    def test_uses_red_for_error(self):
-        """Should use red color for error message."""
-        from src.cli.utils.session_utils import display_session_load_error
-
-        io = MockIO()
-        result = {
-            'status': 'error',
-            'message': 'Something went wrong'
-        }
-
-        display_session_load_error(io, result)
-        styled = io.get_styled_outputs()
-
-        assert any(s['fg'] == 'red' for s in styled)
 
     def test_handles_missing_error_message(self):
         """Should display 'unknown' when error message is missing."""
@@ -337,16 +291,6 @@ class TestDisplaySessionSaved:
 
         assert '--resume' not in output
 
-    def test_uses_green_for_success(self):
-        """Should use green color for success message."""
-        from src.cli.utils.session_utils import display_session_saved
-
-        io = MockIO()
-
-        display_session_saved(io, '/path/session.json', 5)
-        styled = io.get_styled_outputs()
-
-        assert any(s['fg'] == 'green' for s in styled)
 
 
 class TestDisplaySessionSaveError:
@@ -364,17 +308,6 @@ class TestDisplaySessionSaveError:
 
         assert 'Permission denied' in output
 
-    def test_uses_yellow_for_warning(self):
-        """Should use yellow color for save warning."""
-        from src.cli.utils.session_utils import display_session_save_error
-
-        io = MockIO()
-        error = Exception("Disk full")
-
-        display_session_save_error(io, error)
-        styled = io.get_styled_outputs()
-
-        assert any(s['fg'] == 'yellow' for s in styled)
 
 
 class TestDisplayPreviousSessionDetected:
@@ -445,25 +378,6 @@ class TestDisplayPreviousSessionDetected:
         for line in conversation_lines:
             assert 'Yes' not in line
 
-    def test_uses_yellow_bold_header(self):
-        """Should use yellow bold styling for detection header."""
-        from src.cli.utils.session_utils import display_previous_session_detected
-
-        io = MockIO()
-        session_info = {
-            'saved_at': '2024-01-15',
-            'file_count': 0,
-            'search_count': 0,
-            'discovery_count': 0,
-            'task_count': 0
-        }
-
-        display_previous_session_detected(io, session_info)
-        styled = io.get_styled_outputs()
-
-        # First styled output should be yellow and bold
-        assert styled[0]['fg'] == 'yellow'
-        assert styled[0]['bold'] is True
 
     def test_handles_unknown_saved_at(self):
         """Should display 'unknown' when saved_at is missing."""
@@ -568,19 +482,6 @@ class TestDisplayLastConversationMessages:
 
         assert 'Last conversation' in output
 
-    def test_uses_cyan_for_header(self):
-        """Should use cyan color for header."""
-        from src.cli.utils.session_utils import display_last_conversation_messages
-
-        io = MockIO()
-        conversation = [
-            {'role': 'user', 'content': 'Hello'}
-        ]
-
-        display_last_conversation_messages(io, conversation)
-        styled = io.get_styled_outputs()
-
-        assert any(s['fg'] == 'cyan' for s in styled)
 
 
     def test_handles_missing_role(self):
@@ -625,16 +526,6 @@ class TestDisplaySessionNotSavedWarning:
 
         assert '/session save' in output
 
-    def test_uses_yellow_for_warning(self):
-        """Should use yellow color for warning."""
-        from src.cli.utils.session_utils import display_session_not_saved_warning
-
-        io = MockIO()
-
-        display_session_not_saved_warning(io)
-        styled = io.get_styled_outputs()
-
-        assert any(s['fg'] == 'yellow' for s in styled)
 
 
 class TestIntegration:

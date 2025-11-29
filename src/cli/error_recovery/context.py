@@ -104,7 +104,7 @@ class _RetryContextManager:
             self.had_error = True
             self.error = exc_val
             if self.io:
-                self.io.secho(f"Error after {self._attempts} attempts: {exc_val}", fg="red")
+                self.io.secho(f"Error after {self._attempts} attempts: {exc_val}", fg=self.io.theme.error)
             if self.fallback:
                 self.result = self.fallback()
             return True  # Suppress after max retries
@@ -291,7 +291,7 @@ class _RetryableErrorContext:
         self.had_error = True
         self.error = exc_val
         if self.io:
-            self.io.secho(f"Error: {exc_val}", fg="red")
+            self.io.secho(f"Error: {exc_val}", fg=self.io.theme.error)
         if self.fallback:
             self.result = self.fallback()
         return True  # Suppress the exception
@@ -381,7 +381,7 @@ class _SimpleErrorContext:
         self.had_error = True
         self.error = exc_val
         if self.io:
-            self.io.secho(f"Error: {exc_val}", fg="red")
+            self.io.secho(f"Error: {exc_val}", fg=self.io.theme.error)
         if self.fallback:
             self.result = self.fallback()
         return True  # Suppress the exception
