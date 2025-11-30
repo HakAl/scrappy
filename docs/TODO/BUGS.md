@@ -1,6 +1,31 @@
 ## Issues
 
 ---
+ That makes sense. So the fix is narrower: GitHub Models should be blocked specifically from agent/planner roles,
+  not removed entirely.
+
+  A few options:
+
+  1. Block at agent level - CodeAgent refuses to use GitHub Models as planner, falls back to next available
+  2. Block at CLI level - /agent command rejects --brain github with clear error message
+  3. Add to provider metadata - Mark GitHub Models as supports_agent=False and have provider selector respect it
+
+  Option 3 is cleanest architecturally - the provider self-describes its limitations, and the system respects them.
+  Keeps the logic where it belongs.
+
+  Want me to implement that guard?
+---
+
+---
+src/agent.py
+src/orchestrator.py
+---
+
+---
+automatically explore?
+---
+
+---
 src/agent/core.py -- _format_codebase_structure -- does this belong here?
 ---
 

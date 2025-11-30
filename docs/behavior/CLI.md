@@ -67,14 +67,19 @@ Start with `scrappy` (no arguments) or `scrappy interactive`.
 - `/plan` - Create a task plan
 - `/reason` - Reason with evidence
 - `/agent` - Run the code agent
-- `/task` - Execute a task
-- `/batch` - Batch operations
+- `/classify` - Preview task classification
+- `/autoexec` - Toggle auto-execute for plan tasks
+- `/tasks` - Show background tasks status
 
 **Query Commands**
-- `/smart` - Research-first query
-- `/research` - Deep research query
-- `/stream` - Streaming response
-- `/chat` - Chat mode
+- `/smart` - Research-first query (uses tools to gather context)
+- `/synthesize` - Query multiple providers and synthesize
+- `/delegate` - Direct query to specific provider
+- `/explore` - Explore a codebase
+
+**State Commands**
+- `/clear` - Clear conversation history
+- `/verbose`, `/v` - Toggle verbose output mode
 
 ## Architecture
 

@@ -82,13 +82,14 @@ def _suggest_provider(task_type, complexity):
 
 ### Provider Resolution
 
-The router resolves hints to actual providers:
+The router resolves hints to actual providers via the orchestrator's `provider_selector`:
 
-| Hint | Priority Order | Model |
-|------|----------------|-------|
-| `"fast"` | Cerebras > Groq > Gemini | 8B models |
-| `"quality"` | Cerebras > Groq > Gemini | 70B models |
-| `"high_volume"` | Cerebras (14,400 RPD) | Default |
+| Hint | Selection Type | Model Category |
+|------|----------------|----------------|
+| `"fast"` | ModelSelectionType.FAST | 8B models |
+| `"quality"` | ModelSelectionType.QUALITY | 70B models |
+
+Note: The actual provider selection is handled by the orchestrator's provider selector, which considers availability and rate limits.
 
 ```python
 def _resolve_provider(hint):
@@ -240,7 +241,7 @@ result = executor.execute(ClassifiedTask(
 
 ### Pattern Matching
 
-The classifier uses regex patterns to identify task types:
+The classifier uses regex patterns to identify task types. When pattern-based classification has low confidence, the system falls back to LLM-based semantic classification (see below).
 
 **DIRECT_COMMAND patterns**:
 ```python
@@ -277,8 +278,8 @@ Scores from 1-10 based on:
 1. **Base complexity by type**:
    - DIRECT_COMMAND: 1
    - CONVERSATION: 1
-   - RESEARCH: 3
-   - CODE_GENERATION: 5
+   - RESEARCH: 2
+   - CODE_GENERATION: 3
 
 2. **Modifiers**:
    - Multiple files mentioned: +2
@@ -292,11 +293,33 @@ Scores from 1-10 based on:
 **Example**:
 ```python
 "implement user authentication with JWT and session management"
-# Base: 5 (CODE_GENERATION)
+# Base: 3 (CODE_GENERATION)
 # + 2 (security: authentication)
+# + 2 (multi-step: "with...and")
 # + 1 (action: implement)
 # = 8/10 → "quality" provider
 ```
+
+### LLM Semantic Classification Fallback
+
+When pattern-based classification has low confidence (< 0.7), the router can optionally use LLM-based semantic classification for more accurate results:
+
+**How it works:**
+1. Router detects low confidence from pattern matching
+2. Sends query to fast provider (cerebras, groq, or gemini) with low temperature (0.1)
+3. LLM returns structured classification with task type and confidence
+4. If LLM confidence >= 0.7, uses LLM classification
+5. Otherwise, falls back to pattern-based result
+
+**Confidence Escalation:**
+The router also performs automatic confidence escalation:
+- If classified as RESEARCH with low confidence AND query contains action words (implement, create, build, etc.)
+- Automatically upgrades to CODE_GENERATION with adjusted confidence
+
+This prevents misclassification of code tasks as research when the query is ambiguous.
+
+**Intent Clarification:**
+For truly ambiguous queries, the router can prompt the user to clarify intent before proceeding. This is configurable via `ClarificationConfig`.
 
 ## CLI Integration
 

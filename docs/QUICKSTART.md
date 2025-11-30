@@ -10,6 +10,7 @@ Before you start, make sure you have Python and pip installed and are comfortabl
 Pick at least one:
 - **Cerebras** (recommended): https://cloud.cerebras.ai → 14,400 requests/day
 - **Groq**: https://console.groq.com → 7,000 requests/day
+- **Gemini**: https://aistudio.google.com → 1,000 requests/day
 
 ## 2. Install (1 min)
 
@@ -24,12 +25,14 @@ pip install -e .
 ```powershell
 $env:CEREBRAS_API_KEY = "your-key-here"
 $env:GROQ_API_KEY = "your-key-here"
+$env:GEMINI_API_KEY = "your-key-here"
 ```
 
 **Mac/Linux:**
 ```bash
 export CEREBRAS_API_KEY="your-key-here"
 export GROQ_API_KEY="your-key-here"
+export GEMINI_API_KEY="your-key-here"
 ```
 
 ## 4. Use It (30 sec)
@@ -38,7 +41,7 @@ export GROQ_API_KEY="your-key-here"
 # Go to any project
 cd ~/my-project
 
-# Start (learns your codebase automatically)
+# Start
 scrappy --auto-explore
 ```
 
@@ -50,23 +53,23 @@ That's it. You're in.
 
 **Ask anything:**
 ```
-You: How does the auth system work?
-You: What's the best way to add caching here?
+> How does the auth system work?
+> What's the best way to add caching here?
 ```
 
 **Plan a task:**
 ```
-You: /plan Add user authentication
+> /plan Add user authentication
 ```
 
 **Let AI write code (with your approval):**
 ```
-You: /agent Fix the login bug
+> /agent Fix the login bug
 ```
 
 **Exit:**
 ```
-You: /quit
+> /quit
 ```
 
 ---
@@ -101,6 +104,7 @@ scrappy agent "Add input validation"
 ## Next Steps
 
 - Type `/help` to see all commands
+- Type `/limits` to check your API quota usage
 - Read [CLI.md](CLI.md) for full documentation
 - Check [ARCHITECTURE.md](ARCHITECTURE.md) to understand the system
 

@@ -46,6 +46,10 @@ You can set them as environment variables or place them in a `.env` file in the 
 export CEREBRAS_API_KEY=your_key_here
 export GROQ_API_KEY=your_key_here
 export GEMINI_API_KEY=your_key_here
+# Windows PowerShell
+$env:CEREBRAS_API_KEY="your_key_here"
+$env:GROQ_API_KEY="your_key_here"
+$env:GEMINI_API_KEY="your_key_here"
 
 # Option B: Create a .env file in the scrappy directory
 # CEREBRAS_API_KEY=your_key_here
@@ -57,7 +61,13 @@ Navigate to any of your coding projects and run the assistant. It will automatic
 
 ```bash
 cd ~/path/to/your-project
+
+# Option A: Explore from command line
 scrappy --auto-explore
+
+# Option B: Explore from interactive mode
+scrappy
+> /explore
 ```
 
 You can now ask questions, plan features, or even have the AI write code for you.
@@ -71,7 +81,6 @@ Ask a question about your project, and get an answer based on your actual code.
 ```
 > Explain how authentication works in this app.
 
-AI: [Reads your codebase automatically]
 Your app uses JWT tokens stored in localStorage. The main logic is in `src/auth/jwt.js`, where the `createToken` function is called after a successful login in the `src/controllers/userController.js` file...
 ```
 
@@ -103,7 +112,7 @@ Task completed in 3 iterations!
 This isn't just a simple wrapper around APIs. It's a smart, resilient system.
 
 *   **23,000+ Free Requests/Day**: Combines multiple providers for a massive daily quota.
-*   **Automatic Codebase Context**: Automatically explores your project to provide context-aware answers.
+*   **Codebase Context**: Explores your project to provide context-aware answers.
 *   **Task-Aware Routing**: Intelligently routes simple tasks to fast models (Cerebras) and complex tasks to quality models (Gemini, Llama-3 70B).
 *   **Code Agent**: AI writes and modifies code with a human-in-the-loop for approval, ensuring safety.
 *   **Safety First**: Features Git checkpoints for easy rollbacks, sandboxing, audit logs, and a dry-run mode.
@@ -112,41 +121,21 @@ This isn't just a simple wrapper around APIs. It's a smart, resilient system.
 *   **Response Caching**: Saves your quota and provides instant responses for repeated queries.
 *   **Session Persistence**: Resume your conversations and context exactly where you left off.
 
+### Planned Features
+
+* Semantic search for prompt augmentation / better code base understanding
+* TDD Loop `Write Test (Fail) -> Implement (Pass) -> Refactor`
+
 ---
-
-## Smart Codebase Understanding
-
-Scrappy automatically understands your codebase through **semantic search**. When you ask a question, it finds the most relevant code to answer you - no configuration needed.
-
-### How It Works
-
-1. **First Run**: Scrappy scans and indexes your project (30-60 seconds for large codebases)
-2. **Subsequent Runs**: Only changed files are re-indexed (fast)
-3. **Query Time**: AI-powered vector search finds relevant code chunks
-
-### Features
-
-- **Semantic search**: Finds code by meaning, not just keywords
-- **Hybrid search**: Combines vector similarity with keyword matching
-- **Incremental updates**: Only re-indexes changed files
-- **Fully automatic**: Works out of the box, no extra steps
-
-### What Gets Indexed?
-
-- All source code files in your project
-- Configuration files (package.json, requirements.txt, etc.)
-- Documentation files (README, etc.)
-
-The index is stored locally in `.lancedb/` and never leaves your machine.
 
 ## Who Is This For?
 
-| ✅ Perfect for:                                                               | ⚠️ Maybe not for:                                                     |
-| :---                                                                          | :---                                                                      |
-| **Students** learning to code without expensive subscriptions.                | **Large enterprises** needing paid SLAs and guaranteed 24/7 uptime.         |
-| **International developers** in regions with payment restrictions.            | **Users who already pay for** and are happy with Claude Pro / GPT-4.    |
-| **Beginners** who want clear explanations and working code examples.          | **Production-critical applications** where free-tier reliability is a concern. |
-| **Hobbyists & tinkerers** building projects without API costs.                |                                                                           |
+| Perfect for:                                                                | Maybe not for:                                                                |
+|:-----------------------------------------------------------------------------|:-------------------------------------------------------------------------------|
+| **Students** learning to code without expensive subscriptions.               | **Large enterprises** needing paid SLAs and guaranteed 24/7 uptime.            |
+| **International developers** in regions with payment restrictions.           | **Users who already pay for** and are happy with Claude Pro / GPT-4.           |
+| **Beginners** who want clear explanations and working code examples.         | **Production-critical applications** where free-tier reliability is a concern. |
+| **Hobbyists & tinkerers** building projects without API costs.               |                                                                                |
 
 ---
 
@@ -157,10 +146,10 @@ You can use `scrappy` for quick, one-shot commands or in a persistent, interacti
 #### **Starting an Interactive Session**
 ```bash
 # Start and auto-explore the current directory
-scrappy --auto-explore
+scrappy explore
 
 # Resume your last session (history and context are saved)
-scrappy --resume
+scrappy --resume or scrappy -r
 
 # Start with a specific provider as the main "brain"
 scrappy --brain groq
@@ -225,8 +214,8 @@ This ensures that simple tasks are instant and free, while complex tasks use the
 
 For more information, please see the detailed documentation:
 *   [Architecture Deep Dive](docs/ARCHITECTURE.md)
-*   [Task Routing Logic](docs/task_routing.md)
-*   [Rate Limit Strategy](docs/RATE_LIMIT.md)
+*   [Task Routing Logic](docs/TASK_ROUTING.md)
+*   [Rate Limit Strategy](docs/RATE_LIMITS.md)
 
 </details>
 

@@ -204,9 +204,26 @@ CodebaseContext.get_relevant_context(query)
 3. **Deduplication**: Prevents duplicate chunks in results
 4. **Fallback**: If hybrid search fails, falls back to vector-only search
 
-### 4. Code Agent (`src/agent.py`)
+### 4. Code Agent (`src/agent/`)
 
-AI-powered code writing with safety:
+AI-powered code writing with safety, modularized into a package:
+
+**Core Components:**
+- `core.py` - Main CodeAgent class
+- `agent_loop.py` - Agent reasoning/execution loop
+- `action_executor.py` - Action execution coordination
+- `tool_runner.py` - Tool execution
+- `response_parser.py` - LLM response parsing
+- `provider_strategy.py` - Provider selection strategy
+
+**Safety Components:**
+- `safety_checker.py` - Safety validation
+- `checkpoint.py` - Git checkpoint operations
+- `audit.py` - Audit logging
+- `duplicate_detector.py` - Duplicate action detection
+- `denial_handler.py` - Denial handling
+
+**Features:**
 - **Hybrid model approach**: Gemini for planning/reasoning, Cerebras for fast operations
 - **Tool-based execution**: read_file, write_file, list_files, run_command, search_code, git_log, git_diff, git_blame, git_show
 - **Git history awareness**: Agent can check commits, diffs, and blame to understand code evolution
@@ -219,9 +236,33 @@ AI-powered code writing with safety:
   - Dry-run mode for previewing
 - **Context-aware**: Uses project exploration for informed decisions
 
-### 5. Orchestrator (`src/orchestrator.py`)
+Note: `src/agent.py` exists as a backward-compatibility wrapper.
 
-Central coordinator that:
+### 5. Orchestrator (`src/orchestrator/`)
+
+Central coordinator, modularized into a package:
+
+**Core Components:**
+- `core.py` - Main AgentOrchestrator class
+- `factory.py` - Factory methods for creation
+- `delegation.py` - Delegation logic
+- `provider_selector.py` - Smart provider selection
+- `context_coordinator.py` - Context coordination
+- `prompt_augmenter.py` - Prompt augmentation with context
+
+**Resource Management:**
+- `rate_limiter.py` - Rate limiting facade
+- `rate_limiting/` - Rate limiting subsystem (storage, policy, calculator)
+- `cache.py` - Response caching
+- `batch_scheduler.py` - Batch operations
+- `retry_orchestrator.py` - Retry strategies
+
+**State Management:**
+- `session.py` - Session persistence
+- `memory.py` - Working memory
+- `usage_reporter.py` - Usage tracking
+
+**Features:**
 - Registers available providers automatically
 - Sets up swappable brain (default: Cerebras)
 - **Manages codebase context** (auto-explore, caching)
@@ -230,7 +271,9 @@ Central coordinator that:
 - **Augments prompts with context** when enabled
 - Tracks usage across all providers (including context usage)
 
-### 6. CLI Interface (`src/cli.py`)
+Note: `src/orchestrator.py` exists as a backward-compatibility wrapper.
+
+### 6. CLI Interface (`src/cli/`)
 
 Full-featured command-line interface:
 - Interactive chat mode with slash commands
@@ -240,6 +283,52 @@ Full-featured command-line interface:
 - Context management (explore, refresh, clear, toggle)
 - Usage monitoring and status display
 - Built with Click for excellent UX
+
+### 7. Platform Abstraction (`src/platform/`)
+
+Cross-platform support layer:
+- `detection.py` - Detects OS, shell type, capabilities
+- `translation.py` - Translates commands between platforms (e.g., `ls` vs `dir`)
+- `validation.py` - Validates commands for current platform
+- `executors.py` - Platform-specific command execution strategies
+- `factory.py` - Factory for platform-aware components
+
+**Why it exists:** Scrappy runs on Windows, macOS, and Linux. Commands like `ls`, `cat`, and path separators differ. This layer abstracts those differences so the agent and CLI work consistently across platforms.
+
+### 8. Infrastructure Layer (`src/infrastructure/`)
+
+Cross-cutting concerns and abstractions:
+
+**Configuration (`config/`):**
+- Protocol-based configuration framework
+- Environment-specific config (dev/test/prod)
+- Validation with clear error messages
+- See [CONFIGURATION.md](CONFIGURATION.md)
+
+**Persistence (`persistence/`):**
+- `protocols.py` - Storage abstraction protocol
+- `json_persistence.py` - JSON file-based persistence
+- Enables swapping storage backends (file, database, etc.)
+
+**Logging (`logging/`):**
+- `protocols.py` - Logging abstraction
+- `logger.py` - Logger implementation
+- `formatters.py` - Output formatters
+- `registry.py` - Logger registry for component-specific loggers
+
+**File System (`file_system.py`):**
+- Abstraction over file operations
+- Enables testing without touching real filesystem
+- Path normalization and security checks
+
+### 9. Prompt System (`src/prompts/`)
+
+Structured prompt generation:
+- `factory.py` - Creates prompts for different contexts
+- `builders/` - Prompt builders for specific use cases
+- `templates/` - Reusable prompt templates
+
+**Why it exists:** Different tasks require different prompt structures. The prompt system ensures consistent, well-structured prompts for planning, reasoning, tool use, and code generation.
 
 ## Usage Patterns
 
@@ -476,26 +565,80 @@ python examples/basic_usage.py
 ```
 src/
 ├── __init__.py
-├── orchestrator.py           # Main orchestrator with swappable brain
-├── agent.py                  # Code agent with human-in-the-loop
-├── cli.py                    # Click-based CLI interface
-├── context/
-│   ├── __init__.py
-│   ├── protocols.py          # Context layer protocols
+├── orchestrator.py           # Backward-compat wrapper -> orchestrator/
+├── agent.py                  # Backward-compat wrapper -> agent/
+├── agent_config.py           # Agent configuration (extends BaseConfig)
+├── orchestrator_adapter.py   # Orchestrator adapter for agents
+├── orchestrator/             # Modularized orchestrator package
+│   ├── core.py               # Main AgentOrchestrator class
+│   ├── factory.py            # Factory methods
+│   ├── delegation.py         # Delegation logic
+│   ├── provider_selector.py  # Smart provider selection
+│   ├── rate_limiter.py       # Rate limiting facade
+│   ├── rate_limiting/        # Rate limit subsystem
+│   ├── cache.py              # Response caching
+│   ├── session.py            # Session persistence
+│   ├── memory.py             # Working memory
+│   └── ...                   # 25+ files total
+├── agent/                    # Modularized agent package
+│   ├── core.py               # Main CodeAgent class
+│   ├── agent_loop.py         # Agent reasoning loop
+│   ├── action_executor.py    # Action execution
+│   ├── safety_checker.py     # Safety validation
+│   ├── checkpoint.py         # Git checkpoints
+│   ├── audit.py              # Audit logging
+│   └── ...                   # 13+ files total
+├── agent_tools/              # Agent tool implementations
+│   ├── tools/                # Individual tools
+│   │   ├── file_tools.py     # read_file, write_file, list_files
+│   │   ├── git_tools.py      # git_log, git_diff, git_blame, git_show
+│   │   ├── command_tool.py   # run_command
+│   │   ├── search_tools.py   # search_code
+│   │   └── ...
+│   └── components/           # Tool components
+├── context/                  # Context management
 │   ├── codebase_context.py   # Main context manager
-│   ├── code_chunker.py       # Semantic code chunking
-│   ├── lancedb_search_provider.py  # Vector search (optional)
+│   ├── protocols.py          # Context protocols
+│   ├── semantic_manager.py   # Semantic search coordination
+│   ├── semantic/             # Semantic search subsystem
+│   │   ├── provider.py       # LanceDB vector search
+│   │   ├── embeddings.py     # FastEmbed integration
+│   │   ├── ranker.py         # Result ranking
+│   │   └── chunkers/         # Code chunking strategies
 │   ├── file_scanner.py       # File system scanning
 │   ├── project_detector.py   # Project type detection
 │   ├── git_history.py        # Git operations
 │   └── cache.py              # Context caching
-└── providers/
-    ├── __init__.py           # Provider exports
-    ├── base.py               # Abstract base class
-    ├── cerebras_provider.py  # Cerebras (primary)
-    ├── groq_provider.py      # Groq (secondary)
-    ├── gemini_provider.py    # Gemini (auto-fallback)
-    └── cohere_provider.py    # Cohere (embeddings)
+├── providers/                # LLM providers
+│   ├── base.py               # Abstract base class & protocols
+│   ├── cerebras_provider.py  # Cerebras (primary)
+│   ├── groq_provider.py      # Groq (secondary)
+│   ├── gemini_provider.py    # Gemini (auto-fallback)
+│   ├── cohere_provider.py    # Cohere (embeddings)
+│   └── github_models_provider.py  # GitHub Models
+├── task_router/              # Task routing system
+│   ├── classifier.py         # Task classification
+│   ├── router.py             # Task routing
+│   ├── strategies/           # Execution strategies
+│   └── classification_strategies/
+├── cli/                      # CLI implementation
+│   ├── commands.py           # Click commands
+│   ├── command_router.py     # Slash command routing
+│   ├── core.py               # Main CLI class
+│   └── ...
+├── infrastructure/           # Infrastructure layer
+│   ├── config/               # Configuration framework
+│   ├── persistence/          # Persistence abstractions
+│   ├── logging/              # Logging system
+│   └── file_system.py        # File system abstraction
+├── platform/                 # Platform abstraction
+│   ├── detection.py          # Platform detection
+│   ├── translation.py        # Command translation
+│   └── executors.py          # Platform-specific execution
+└── prompts/                  # Prompt system
+    ├── factory.py            # Prompt factory
+    ├── builders/             # Prompt builders
+    └── templates/            # Prompt templates
 
 docs/
 ├── CLI.md                    # CLI reference guide

@@ -220,6 +220,13 @@ validator.validate_one_of(
     allowed_values=["development", "test", "production"],
     field_name="environment"
 )
+
+# Additional validation methods
+validator.validate_positive(value=10, field_name="count")
+validator.validate_non_negative(value=0, field_name="offset")
+validator.validate_non_empty(value="hello", field_name="name")
+validator.validate_path_exists(value="/path/to/file", field_name="config_path")
+validator.validate_url(value="https://api.example.com", field_name="endpoint", require_https=True)
 ```
 
 ## Migrated Configurations
@@ -367,20 +374,7 @@ Potential improvements:
 - Add config schema validation with JSON Schema
 - Add config hot-reloading
 - Add config versioning and migration
-### Medium Term (Future Work)
-- [ ] Update external code that imports legacy constants
-- [ ] Add config file loading (JSON/YAML/TOML)
-- [ ] Add environment-based config (dev/test/prod)
-- [ ] Create config migration guide for users
-
-### Long Term (Future Work)
-- [ ] Remove legacy constants (breaking change)
-- [ ] Add config versioning
-- [ ] Add config hot-reloading
-- [ ] Add config encryption for sensitive values
 
 ## References
 
 - [CLAUDE.md](../CLAUDE.md) - Architectural guidelines
-- [CODE_DUPLICATION.md](TODO/CODE_DUPLICATION.md) - Refactoring roadmap
-- [Phase 5 Tasks](TODO/CODE_DUPLICATION.md#phase-5-configuration-infrastructure-week-6)

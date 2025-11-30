@@ -1,16 +1,18 @@
 # Session Management
 
-Sessions persist conversation history, context, and state between CLI invocations.
+Sessions persist conversation history, working memory, and state between CLI invocations.
 
 ## Architecture
 
 ```
 src/orchestrator/
   session.py    # SessionManager implementation
+  memory.py     # WorkingMemory (file reads, searches, git ops, discoveries)
   protocols.py  # SessionProtocol definition
 
 src/cli/
   session.py    # CLISessionManager (CLI-specific)
+  persistence.py # Session command handlers
 ```
 
 ## Session Data
@@ -18,72 +20,76 @@ src/cli/
 A session contains:
 
 ```python
-@dataclass
-class Session:
-    id: str
-    created_at: datetime
-    messages: List[Dict]           # Conversation history
-    context: Optional[Dict]        # Codebase context snapshot
-    provider_states: Dict          # Provider-specific state
-    metadata: Dict                 # Custom metadata
+{
+    "file_reads": {
+        "src/main.py": {
+            "content": "...",
+            "timestamp": "2025-11-15T10:30:00",
+            "lines": 150
+        }
+    },
+    "search_results": [...],      # Recent code searches (last 10)
+    "git_operations": [...],      # Recent git commands (last 10)
+    "discoveries": [...],         # Key findings
+    "conversation_history": [     # Chat messages
+        {"role": "user", "content": "..."},
+        {"role": "assistant", "content": "..."}
+    ],
+    "task_history": [...],        # Task execution history
+    "saved_at": "2025-11-15T10:35:00",
+    "session_start": "2025-11-15T10:00:00"
+}
 ```
 
 ## Session Storage
 
-Sessions are stored in `.scrappy/sessions/`:
+Sessions are stored as a single file:
 
 ```
 .scrappy/
-  sessions/
-    session_abc123.json
-    session_def456.json
-    latest.json -> session_abc123.json
+  session.json    # Single session file per project
 ```
+
+Note: Only one session per project is supported. The session file is overwritten on each save.
 
 ## Session Operations
 
 ### Save Session
 
 ```python
-from src.orchestrator.session import SessionManager
+from src.orchestrator import AgentOrchestrator
 
-session_manager = SessionManager(storage_path=".scrappy/sessions")
+orch = AgentOrchestrator()
 
-# Save current session
-session_id = session_manager.save(
-    messages=conversation_history,
-    context=codebase_context,
-)
+# Save current session (includes working memory + conversation)
+orch.save_session(conversation_history)
 ```
 
-### Resume Session
+### Load Session
 
 ```python
-# Resume latest session
-session = session_manager.load_latest()
-
-# Resume specific session
-session = session_manager.load(session_id="abc123")
+# Load saved session
+result = orch.load_session()
+# Returns: {files, searches, git_ops, discoveries, tasks, conversation}
 ```
 
-### List Sessions
+### Clear Session
 
 ```python
-sessions = session_manager.list_sessions()
-for s in sessions:
-    print(f"{s.id}: {s.created_at}")
+# Delete saved session file
+orch.clear_session()
 ```
 
 ## CLI Integration
 
 ### Auto-save on Exit
 
-By default, sessions are saved when exiting interactive mode:
+By default, sessions are saved when exiting with `/quit`:
 
 ```bash
 scrappy  # Start interactive mode
 # ... conversation ...
-# Session auto-saved on exit
+/quit    # Session auto-saved
 ```
 
 Disable with `--no-save`:
@@ -91,6 +97,8 @@ Disable with `--no-save`:
 ```bash
 scrappy --no-save
 ```
+
+Note: Ctrl+C does NOT trigger auto-save. Use `/quit` to save.
 
 ### Resume Session
 
@@ -105,94 +113,66 @@ scrappy -r
 ### Interactive Commands
 
 ```
-/session            # Show session info
+/session            # Show session info and status
 /session save       # Save current session
-/session load       # Load a session
-/session list       # List available sessions
-/session clear      # Clear current session
+/session load       # Load saved session
+/session clear      # Delete saved session file
+/session toggle     # Toggle auto-save on/off
 ```
 
-## Session Protocol
+## Working Memory
+
+The session includes "working memory" that tracks context during your session:
+
+### What's Tracked
+
+- **File Reads** - Files read by agent, cached with content and metadata
+- **Search Results** - Code search queries and results (LRU, last 10)
+- **Git Operations** - Git command outputs (LRU, last 10)
+- **Discoveries** - Key findings with location metadata
+
+### Cache Limits
 
 ```python
-class SessionProtocol(Protocol):
-    def save(
-        self,
-        messages: List[Dict],
-        context: Optional[Dict] = None,
-        metadata: Optional[Dict] = None,
-    ) -> str: ...
-
-    def load(self, session_id: str) -> Session: ...
-    def load_latest(self) -> Optional[Session]: ...
-    def list_sessions(self) -> List[SessionInfo]: ...
-    def delete(self, session_id: str) -> bool: ...
+max_file_cache: int = 20      # LRU eviction for files
+max_search_results: int = 10  # Rolling window
+max_git_operations: int = 10  # Rolling window
 ```
 
-## Message Format
+### Clearing Working Memory
 
-Messages follow the standard chat format:
+Clear in-memory working memory without affecting saved session:
 
-```python
-messages = [
-    {"role": "user", "content": "What does this function do?"},
-    {"role": "assistant", "content": "This function calculates..."},
-    {"role": "user", "content": "Can you improve it?"},
-]
 ```
-
-## Context Snapshots
-
-Sessions can store a snapshot of codebase context:
-
-```python
-context = {
-    "project_type": "python",
-    "platform": "windows",
-    "files_indexed": 150,
-    "relevant_files": ["src/main.py", "src/utils.py"],
-}
-
-session_manager.save(messages=messages, context=context)
+/context clearmem
 ```
-
-This allows the session to restore context even if files have changed.
 
 ## Testing
 
 Use mock storage for testing:
 
 ```python
-class MockSessionStorage:
+class MockSessionManager:
     def __init__(self):
-        self._sessions = {}
+        self._session = None
 
-    def save(self, session: Session) -> str:
-        self._sessions[session.id] = session
-        return session.id
+    def save_session(self, conversation):
+        self._session = {"conversation": conversation}
 
-    def load(self, session_id: str) -> Session:
-        return self._sessions.get(session_id)
+    def load_session(self):
+        return self._session
 
 
 def test_session_roundtrip():
-    storage = MockSessionStorage()
-    manager = SessionManager(storage=storage)
-
-    session_id = manager.save(messages=[{"role": "user", "content": "test"}])
-    loaded = manager.load(session_id)
-
-    assert loaded.messages[0]["content"] == "test"
+    manager = MockSessionManager()
+    manager.save_session([{"role": "user", "content": "test"}])
+    loaded = manager.load_session()
+    assert loaded["conversation"][0]["content"] == "test"
 ```
 
-## Session Cleanup
+## Limitations
 
-Old sessions can be cleaned up:
-
-```python
-# Delete sessions older than 7 days
-session_manager.cleanup(max_age_days=7)
-
-# Keep only N most recent sessions
-session_manager.cleanup(keep_count=10)
-```
+- **Single session per project** - No multi-session support or session IDs
+- **No encryption** - Session data stored in plaintext JSON
+- **Ephemeral on interrupt** - Ctrl+C doesn't save (must use `/quit`)
+- **LRU eviction** - Only recent files/searches/git ops are kept

@@ -502,13 +502,14 @@ When in interactive mode, use slash commands:
 | `/plan <task>` | Create a task plan |
 | `/reason <question>` | Analyze with reasoning |
 | `/agent <task>` | Run code agent with human approval |
-| `/auto <query>` | Auto-route query to optimal strategy |
+| `/classify <query>` | Preview task classification without executing |
 | `/autoexec` | Toggle auto-execute for plan tasks |
 | `/smart <query>` | Research-first query (uses tools to gather context) |
 | `/smart toggle` | Toggle smart mode always-on |
 | `/synthesize` | Query multiple providers and synthesize |
 | `/delegate <provider> <prompt>` | Direct provider query |
 | `/explore [path]` | Explore a codebase |
+| `/tasks` | Show background tasks status |
 
 ### Provider Management
 
@@ -519,6 +520,8 @@ When in interactive mode, use slash commands:
 | `/models [provider]` | List available models |
 | `/status` | Show system status |
 | `/usage` | Show usage statistics |
+| `/limits [provider]` | Show rate limit usage (or filter by provider) |
+| `/limits reset` | Reset rate limit tracking |
 
 ### Context Management
 
@@ -555,7 +558,8 @@ See [Session Management](SESSION_MANAGEMENT.md) for full documentation.
 | Command | Description |
 |---------|-------------|
 | `/help` | Show all commands |
-| `/quit` or `/exit` | Exit CLI (auto-saves session by default) |
+| `/quit`, `/exit`, `/q` | Exit CLI (auto-saves session by default) |
+| `/verbose`, `/v` | Toggle verbose output mode |
 
 ## Task Routing and Auto-Execute
 

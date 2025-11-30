@@ -1,4 +1,4 @@
-# Contributing to LLM Team
+# Contributing to Scrappy
 
 First off, thank you for considering contributing! We're excited to have you. 
 This project is built by the community, and we welcome contributions of all sizes. 
@@ -30,9 +30,10 @@ This document provides a set of guidelines to help you contribute effectively.
 
 ## How to Contribute
 
-### TODOs
+### Finding Work
 
-I've been deving Scrappy locally, so there aren't Github Issues, there are TODOs. We should use Github issues now that the project is public.
+Check [GitHub Issues](https://github.com/HakAl/scrappy/issues) for bugs and feature requests. Issues tagged `good
+first issue` are great starting points.
 
 ### Reporting Bugs
 
@@ -50,6 +51,14 @@ Have an idea for a new feature? We'd love to hear it! Please open an issue and u
 ### Your First Code Contribution
 
 Unsure where to begin? Look for issues tagged with `good first issue` or `help wanted`. These are tasks that have been identified as good entry points to the project.
+A great way to learn a new codebase is by exercising it. 
+
+Run:
+```pytest tests/ --cov=src --cov-report=html --cov-report=term-missing```
+
+Open: `htmlcov/index.html`
+
+Find an area that could use more coverage, and get to know it!
 
 ## Development Setup
 
@@ -58,7 +67,7 @@ Before you can contribute, you need to set up the project on your local machine.
 1.  **Fork the repository** on GitHub.
 2.  **Clone your fork** to your local machine:
     ```bash
-    git clone https://github.com/HakAl/scrappy.git
+    git clone https://github.com/YOUR_USERNAME/scrappy.git
     cd scrappy
     ```
 3.  **Create a virtual environment**. This isolates the project's dependencies.
@@ -109,10 +118,11 @@ A great pull request includes:
 ---
 
 ## Code Guidelines
+  Before writing code, read [CLAUDE.md](CLAUDE.md) for architectural principles. Key requirements:
 
-**CRITICAL: All code changes must be accompanied by tests. Pull requests without adequate tests will not be merged.**
-
-**Never use emojis or special characters in code.**
+- Protocol-first design (define interfaces before implementations)
+- Dependency injection (all dependencies injected via constructors)
+- No emojis or special characters
 
 ---
 
