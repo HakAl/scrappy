@@ -198,12 +198,12 @@ class TestImportWithFallback:
         mock_primary = Mock()
         mock_fallback = Mock()
 
-        with patch('builtins.__import__') as mock_import:
-            # First call fails, second succeeds
-            mock_import.side_effect = [ImportError, mock_fallback]
+        # Patch setup_src_path FIRST, before mocking __import__
+        with patch('src.utils.imports.setup_src_path'):
+            with patch('builtins.__import__') as mock_import:
+                # First call fails, second succeeds
+                mock_import.side_effect = [ImportError, mock_fallback]
 
-            # Mock setup_src_path to avoid path manipulation in test
-            with patch('src.utils.imports.setup_src_path'):
                 result = import_with_fallback('nonexistent.primary', 'existing.fallback')
 
                 assert result == mock_fallback

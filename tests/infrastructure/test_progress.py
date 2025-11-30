@@ -152,6 +152,9 @@ def test_live_reporter_flow(mock_rich_modules):
 
 def test_live_reporter_exception_handling(caplog):
     """Test general exception during start (e.g., inside Rich logic)."""
+    # Set log level to capture ERROR logs from the progress module
+    caplog.set_level(logging.ERROR, logger='src.infrastructure.progress')
+
     with patch.dict(sys.modules, {'rich.console': MagicMock()}):
         # Force an error inside the try block
         with patch('rich.console.Console', side_effect=Exception("Boom")):

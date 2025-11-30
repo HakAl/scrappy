@@ -135,7 +135,9 @@ class TestGitHubModelsProvider:
         """Test basic chat functionality."""
         messages = [{"role": "user", "content": "Hello, how are you?"}]
 
-        response = provider_with_mock_client.chat(messages)
+        # Mock time.time to ensure measurable latency
+        with patch('time.time', side_effect=[1000.0, 1000.1]):  # 100ms difference
+            response = provider_with_mock_client.chat(messages)
 
         assert isinstance(response, LLMResponse)
         assert response.content == "Test response"
@@ -337,9 +339,9 @@ class TestGitHubModelsProvider:
         """Test that latency is properly measured."""
         messages = [{"role": "user", "content": "Test"}]
 
-        start_time = time.time()
-        response = provider_with_mock_client.chat(messages)
-        end_time = time.time()
+        # Mock time.time to return predictable values for latency measurement
+        with patch('time.time', side_effect=[1000.0, 1000.05]):  # 50ms difference
+            response = provider_with_mock_client.chat(messages)
 
         # Latency should be reasonable (less than 1 second for mock)
         assert response.latency_ms < 1000

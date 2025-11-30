@@ -127,7 +127,9 @@ class TestCohereProvider:
         """Test basic chat functionality."""
         messages = [{"role": "user", "content": "Hello, how are you?"}]
 
-        response = provider_with_mock_clients.chat(messages)
+        # Mock time.time to ensure measurable latency
+        with patch('time.time', side_effect=[1000.0, 1000.1]):  # 100ms difference
+            response = provider_with_mock_clients.chat(messages)
 
         assert isinstance(response, LLMResponse)
         assert response.content == "Test response from Cohere"
@@ -289,7 +291,9 @@ class TestCohereProvider:
         """Test that latency is properly measured."""
         messages = [{"role": "user", "content": "Test latency"}]
 
-        response = provider_with_mock_clients.chat(messages)
+        # Mock time.time to return predictable values for latency measurement
+        with patch('time.time', side_effect=[1000.0, 1000.05]):  # 50ms difference
+            response = provider_with_mock_clients.chat(messages)
 
         assert response.latency_ms > 0
         assert response.latency_ms < 1000  # Should be fast for mock
