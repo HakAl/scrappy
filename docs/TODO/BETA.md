@@ -1,11 +1,5 @@
 ## Release Bare Minimum (beta v.1)
 
-missing doc: theme
-
----
-NO API KEYS SET SCENARIO
-Consider a /tour or /features command - Show what's available
----
 
 
 ---

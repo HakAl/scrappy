@@ -1,6 +1,4 @@
-# Under Construction
-
-Usable, but I'll be working on main until beta version is released.
+> **Beta** - Usable today, but actively improving. Expect some rough edges.
 
 ---
 
@@ -17,15 +15,21 @@ This tool combines the power of multiple free-tier LLM APIs to give you **23,000
 Paid AI tools like ChatGPT Plus ($20/month) and Claude Pro ($20+/month) are fantastic, but their cost creates a barrier for:
 *   **Students** learning to code. I wish this existed when I was in university, I would have had a lot more free time!
 *   **Developers** in regions where $20 is significant or payments are blocked.
-*   **Anyone** frugal folk who don't like subscriptions, but like to build and learn.
+*   **Frugal folks** who don't like subscriptions, but like to build and learn.
 
 Scrappy exists to make powerful AI coding assistance accessible to anyone, anywhere.
 
 ---
 
+## Requirements
+
+- Python 3.10+
+- Git (for checkpoints and safety features)
+- Windows, macOS, or Linux
+
 ## Quick Start (5 Minutes)
 
-Get up and running with scrappy in your terminal.
+Get up and running with Scrappy in your terminal.
 
 **1. Install the Tool**
 Clone the repository and install the command-line tool.
@@ -151,11 +155,15 @@ You can use `scrappy` for quick, one-shot commands or in a persistent, interacti
 
 #### **Starting an Interactive Session**
 ```bash
-# Start and auto-explore the current directory
-scrappy explore
+# Start interactive mode and auto-explore the current directory
+scrappy --auto-explore
+
+# Start interactive mode without exploring
+scrappy
 
 # Resume your last session (history and context are saved)
-scrappy --resume or scrappy -r
+scrappy --resume
+scrappy -r
 
 # Start with a specific provider as the main "brain"
 scrappy --brain groq
@@ -176,6 +184,9 @@ You: /quit               # Exit the session
 
 #### **One-Shot Commands**
 ```bash
+# Explore a codebase (no interactive session)
+scrappy explore
+
 # Ask a quick question with codebase context
 scrappy query "How should I fix the auth bug?" --with-context
 
@@ -185,7 +196,10 @@ scrappy plan "Build a REST API with authentication"
 # Let the agent work on a task directly
 scrappy agent "Add a health check endpoint to the Flask app" --dry-run
 ```
+
 For a full command reference, see the [CLI Documentation](docs/CLI.md).
+
+To customize themes, display settings, and behavior, see the [Customization Guide](docs/CUSTOMIZATION.md).
 
 ---
 
@@ -227,17 +241,17 @@ For more information, please see the detailed documentation:
 
 ---
 
-### Disclaimer
+## Disclaimer
 
-Use at your own risk. Be smart create a branch or work from a clean git state with no changes so you can quickly revert.
+Use at your own risk. Be smart: create a branch or work from a clean git state with no uncommitted changes so you can quickly revert.
 
 Best practices:
-* Don't give code agents a shell with admin access
-* Use dry run or git checkpoints
+- Don't give code agents a shell with admin access
+- Use dry-run mode or git checkpoints
 
 ---
 
 ## License
 This project is licensed under the **MIT License**. Use it, modify it, and share it to help others access modern AI tools.
 
-If this project helps you, please give it a star on GitHub so others can discover it
+If this project helps you, please give it a star on GitHub so others can discover it.

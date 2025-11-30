@@ -7,6 +7,10 @@ Shown every time on load -- need a paradigm created so we show status bar on ini
 ---
 
 ---
+too much agent output? toggle with agent verbose mode?
+---
+
+---
 why python tools? what's the purpose?? generalize to dependencies tool? is that useful?
 ---
 
