@@ -368,7 +368,6 @@ class MetricsCollectorProtocol(Protocol):
 class QueryIntent(Enum):
     """All possible intent classifications."""
     FILE_STRUCTURE = "file_structure"
-    CODE_SEARCH = "code_search"
     CODE_EXPLANATION = "code_explanation"
     GIT_HISTORY = "git_history"
     DEPENDENCY_INFO = "dependency_info"

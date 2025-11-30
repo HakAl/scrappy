@@ -10,37 +10,6 @@ from src.cli.research_handlers.base import ClassificationResult
 class TestResearchPromptBuilder:
     """Tests for the ResearchPromptBuilder class."""
 
-    def test_builds_prompt_with_research_results(self):
-        """ResearchPromptBuilder includes research results in prompt."""
-        from src.cli.research_prompt_builder import ResearchPromptBuilder
-
-        classification = ClassificationResult(
-            query="Where is the CodeAgent class?",
-            intent_result=IntentResult(
-                intent=QueryIntent.CODE_SEARCH,
-                confidence=0.9,
-                metadata={}
-            ),
-            entities={'class_name': ['CodeAgent']},
-            keywords=['CodeAgent']
-        )
-
-        research_results = [
-            "Directory Structure:\nsrc/\n  agent.py",
-            "Class 'CodeAgent':\nsrc/agent.py:10: class CodeAgent:"
-        ]
-
-        builder = ResearchPromptBuilder()
-        prompt = builder.build(
-            query="Where is the CodeAgent class?",
-            classification=classification,
-            research_results=research_results
-        )
-
-        assert "CodeAgent" in prompt
-        assert "Research Results" in prompt
-        assert "src/agent.py" in prompt
-
     def test_builds_prompt_without_research_results(self):
         """ResearchPromptBuilder handles empty research results."""
         from src.cli.research_prompt_builder import ResearchPromptBuilder
@@ -66,36 +35,6 @@ class TestResearchPromptBuilder:
         assert "What is this project?" in prompt
         # Should not contain "Research Results" section
         assert "Research Results" not in prompt or "provide a helpful answer" in prompt.lower()
-
-    def test_includes_classification_context(self):
-        """ResearchPromptBuilder includes classification metadata."""
-        from src.cli.research_prompt_builder import ResearchPromptBuilder
-
-        classification = ClassificationResult(
-            query="Find authentication code",
-            intent_result=IntentResult(
-                intent=QueryIntent.CODE_SEARCH,
-                confidence=0.85,
-                metadata={}
-            ),
-            entities={'function_name': ['authenticate']},
-            keywords=['authentication', 'code']
-        )
-
-        builder = ResearchPromptBuilder()
-        prompt = builder.build(
-            query="Find authentication code",
-            classification=classification,
-            research_results=["Search result: auth.py"]
-        )
-
-        # Should include intent info
-        assert "CODE_SEARCH" in prompt or "code_search" in prompt
-        assert "0.85" in prompt or "85" in prompt
-        # Should include entities
-        assert "authenticate" in prompt
-        # Should include keywords
-        assert "authentication" in prompt
 
     def test_includes_project_summary_when_provided(self):
         """ResearchPromptBuilder includes project summary at the start."""
@@ -222,30 +161,6 @@ class TestResearchPromptBuilderEdgeCases:
         # Should include the content (may be truncated)
         assert len(prompt) > 100
         assert "Show everything" in prompt
-
-    def test_handles_special_characters_in_query(self):
-        """ResearchPromptBuilder handles queries with special characters."""
-        from src.cli.research_prompt_builder import ResearchPromptBuilder
-
-        classification = ClassificationResult(
-            query='Search for "error" in *.py files',
-            intent_result=IntentResult(
-                intent=QueryIntent.CODE_SEARCH,
-                confidence=0.9,
-                metadata={}
-            ),
-            entities={},
-            keywords=['error']
-        )
-
-        builder = ResearchPromptBuilder()
-        prompt = builder.build(
-            query='Search for "error" in *.py files',
-            classification=classification,
-            research_results=[]
-        )
-
-        assert '"error"' in prompt or 'error' in prompt
 
     def test_multiple_secondary_intents(self):
         """ResearchPromptBuilder handles classification with secondary intents."""

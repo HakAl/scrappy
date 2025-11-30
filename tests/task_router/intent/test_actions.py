@@ -22,18 +22,6 @@ def test_resolver_creates_file_structure_action():
     assert 'path' in action.args
 
 
-def test_resolver_creates_code_search_action():
-    """Test resolver creates correct action for code search intent."""
-    resolver = DefaultActionResolver()
-    result = IntentResult(QueryIntent.CODE_SEARCH, 0.8, {})
-    entities = {'class_name': ['UserManager']}
-
-    action = resolver.resolve(result, entities)
-
-    assert action.tool == 'CodeSearch'
-    assert action.func == 'search'
-
-
 def test_resolver_creates_git_history_action():
     """Test resolver creates correct action for git history intent."""
     resolver = DefaultActionResolver()
@@ -56,18 +44,6 @@ def test_resolver_creates_general_action_for_unknown_intent():
 
     assert action.tool == 'GeneralAgent'
     assert action.func == 'process'
-
-
-def test_resolver_handles_missing_entities():
-    """Test resolver handles missing entities gracefully."""
-    resolver = DefaultActionResolver()
-    result = IntentResult(QueryIntent.CODE_SEARCH, 0.8, {})
-    entities = {}
-
-    action = resolver.resolve(result, entities)
-
-    assert action.tool == 'CodeSearch'
-    assert action.func == 'search'
 
 
 def test_resolver_uses_entities_in_action_args():

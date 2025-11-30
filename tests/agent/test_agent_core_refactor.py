@@ -120,7 +120,7 @@ class TestRegistryCreation:
         """Agent's registry should include search tools."""
         tool_names = [t.name for t in agent_with_config.tool_registry.list_all()]
 
-        assert "search_code" in tool_names
+        assert "find_exact_text" in tool_names
 
     @pytest.mark.unit
     def test_agent_registry_has_web_tools(self, agent_with_config):
@@ -818,7 +818,7 @@ class TestAgentToolsMapping:
         """Tools dict should include all registry tools."""
         assert "read_file" in agent_with_config.tools
         assert "write_file" in agent_with_config.tools
-        assert "search_code" in agent_with_config.tools
+        assert "find_exact_text" in agent_with_config.tools
 
     @pytest.mark.unit
     def test_tools_dict_includes_run_command(self, agent_with_config):

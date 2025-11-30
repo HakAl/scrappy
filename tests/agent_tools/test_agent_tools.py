@@ -228,7 +228,7 @@ class TestToolRegistry:
         assert len(tools) > 0
 
         # Check for expected tools (using actual tool names)
-        expected_tools = ["read_file", "write_file", "search_code"]
+        expected_tools = ["read_file", "write_file", "find_exact_text"]
         for tool_name in expected_tools:
             assert tool_name in tools, f"Expected {tool_name} in default registry"
 

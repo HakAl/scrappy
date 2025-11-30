@@ -61,15 +61,15 @@ def mock_io():
 def sample_classification():
     """Create a sample classification result for testing."""
     intent_result = IntentResult(
-        intent=QueryIntent.CODE_SEARCH,
+        intent=QueryIntent.FILE_STRUCTURE,
         confidence=0.9,
-        metadata={'matched_patterns': ["where is .+ defined"]}
+        metadata={'matched_patterns': ["where is", "structure"]}
     )
     return ClassificationResult(
-        query="Where is the CodeAgent class defined?",
+        query="What is the directory structure?",
         intent_result=intent_result,
-        entities={'class_name': ['CodeAgent'], 'function_name': []},
-        keywords=['CodeAgent', 'class', 'defined']
+        entities={'file_path': []},
+        keywords=['directory', 'structure']
     )
 
 
@@ -156,114 +156,6 @@ class TestFileStructureHandler:
 
 
 # =============================================================================
-# CodeSearchHandler Tests
-# =============================================================================
-
-class TestCodeSearchHandler:
-    """Tests for CodeSearchHandler."""
-
-    def test_handles_code_search_intent(self):
-        """Handler identifies as CODE_SEARCH intent handler."""
-        from src.cli.research_handlers.code_search import CodeSearchHandler
-
-        handler = CodeSearchHandler()
-        assert handler.intent == QueryIntent.CODE_SEARCH
-
-    def test_searches_for_class_names(self, mock_agent, mock_io):
-        """Handler searches for extracted class names."""
-        from src.cli.research_handlers.code_search import CodeSearchHandler
-
-        classification = ClassificationResult(
-            query="Find the CodeAgent class",
-            intent_result=IntentResult(
-                intent=QueryIntent.CODE_SEARCH,
-                confidence=0.9,
-                metadata={}
-            ),
-            entities={'class_name': ['CodeAgent'], 'function_name': []},
-            keywords=['CodeAgent']
-        )
-
-        handler = CodeSearchHandler()
-        results = handler.execute(mock_agent, classification, mock_io)
-
-        # Should have searched for the class
-        mock_agent._tool_search_code.assert_called()
-        call_args = [str(call) for call in mock_agent._tool_search_code.call_args_list]
-        assert any('CodeAgent' in arg for arg in call_args)
-
-    def test_searches_for_function_names(self, mock_agent, mock_io):
-        """Handler searches for extracted function names."""
-        from src.cli.research_handlers.code_search import CodeSearchHandler
-
-        classification = ClassificationResult(
-            query="Find the process_data function",
-            intent_result=IntentResult(
-                intent=QueryIntent.CODE_SEARCH,
-                confidence=0.9,
-                metadata={}
-            ),
-            entities={'class_name': [], 'function_name': ['process_data']},
-            keywords=['process_data']
-        )
-
-        handler = CodeSearchHandler()
-        results = handler.execute(mock_agent, classification, mock_io)
-
-        mock_agent._tool_search_code.assert_called()
-        call_args = [str(call) for call in mock_agent._tool_search_code.call_args_list]
-        assert any('process_data' in arg for arg in call_args)
-
-    def test_falls_back_to_keywords_when_no_entities(self, mock_agent, mock_io):
-        """Handler uses keywords when no class/function entities found."""
-        from src.cli.research_handlers.code_search import CodeSearchHandler
-
-        classification = ClassificationResult(
-            query="Search for authentication logic",
-            intent_result=IntentResult(
-                intent=QueryIntent.CODE_SEARCH,
-                confidence=0.9,
-                metadata={}
-            ),
-            entities={'class_name': [], 'function_name': []},
-            keywords=['authentication', 'logic']
-        )
-
-        handler = CodeSearchHandler()
-        results = handler.execute(mock_agent, classification, mock_io)
-
-        # Should fall back to keyword search
-        if mock_agent._tool_search_code.called:
-            call_args = [str(call) for call in mock_agent._tool_search_code.call_args_list]
-            assert any('authentication' in arg for arg in call_args)
-
-    def test_limits_search_results(self, mock_agent, mock_io):
-        """Handler truncates very long search results."""
-        from src.cli.research_handlers.code_search import CodeSearchHandler
-
-        # Return a very long result
-        mock_agent._tool_search_code.return_value = "match\n" * 10000
-
-        classification = ClassificationResult(
-            query="Find all imports",
-            intent_result=IntentResult(
-                intent=QueryIntent.CODE_SEARCH,
-                confidence=0.9,
-                metadata={}
-            ),
-            entities={'class_name': ['Import']},
-            keywords=['import']
-        )
-
-        handler = CodeSearchHandler()
-        results = handler.execute(mock_agent, classification, mock_io)
-
-        # Results should be truncated
-        for result in results:
-            assert len(result) < 20000  # Some reasonable limit
-
-
-# =============================================================================
 # GitHistoryHandler Tests
 # =============================================================================
 
@@ -333,33 +225,33 @@ class TestResearchHandlerRegistry:
         """Registry can hold multiple handlers."""
         from src.cli.research_handlers.registry import ResearchHandlerRegistry
         from src.cli.research_handlers.file_structure import FileStructureHandler
-        from src.cli.research_handlers.code_search import CodeSearchHandler
+        from src.cli.research_handlers.git_history import GitHistoryHandler
 
         registry = ResearchHandlerRegistry()
 
         fs_handler = FileStructureHandler()
-        cs_handler = CodeSearchHandler()
+        git_handler = GitHistoryHandler()
 
         registry.register(fs_handler)
-        registry.register(cs_handler)
+        registry.register(git_handler)
 
         assert registry.get_handler(QueryIntent.FILE_STRUCTURE) is fs_handler
-        assert registry.get_handler(QueryIntent.CODE_SEARCH) is cs_handler
+        assert registry.get_handler(QueryIntent.GIT_HISTORY) is git_handler
 
     def test_list_registered_intents(self):
         """Registry can list all registered intents."""
         from src.cli.research_handlers.registry import ResearchHandlerRegistry
         from src.cli.research_handlers.file_structure import FileStructureHandler
-        from src.cli.research_handlers.code_search import CodeSearchHandler
+        from src.cli.research_handlers.git_history import GitHistoryHandler
 
         registry = ResearchHandlerRegistry()
         registry.register(FileStructureHandler())
-        registry.register(CodeSearchHandler())
+        registry.register(GitHistoryHandler())
 
         intents = registry.list_intents()
 
         assert QueryIntent.FILE_STRUCTURE in intents
-        assert QueryIntent.CODE_SEARCH in intents
+        assert QueryIntent.GIT_HISTORY in intents
         assert len(intents) == 2
 
 

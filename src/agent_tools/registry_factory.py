@@ -23,7 +23,7 @@ from .tools.git_tools import (
     GitShowTool,
     GitRecentChangesTool
 )
-from .tools.search_tools import SearchCodeTool
+from .tools.search_tools import FindExactTextTool
 from .tools.web_tools import WebFetchTool, WebSearchTool
 from .tools.python_tools import AnalyzePythonDependenciesTool
 from .tools.command_tool import CommandTool
@@ -69,7 +69,7 @@ def create_default_registry(
         registry.register(GitRecentChangesTool())
 
     # Register search tools
-    registry.register(SearchCodeTool())
+    registry.register(FindExactTextTool())
 
     # Register web tools (optional)
     if include_web:

@@ -67,9 +67,6 @@ class DefaultActionResolver(ActionResolverProtocol):
         if intent == QueryIntent.FILE_STRUCTURE:
             return self._file_structure_action(entities)
 
-        elif intent == QueryIntent.CODE_SEARCH:
-            return self._code_search_action(entities)
-
         elif intent == QueryIntent.CODE_EXPLANATION:
             return self._code_explanation_action(entities)
 
@@ -113,20 +110,6 @@ class DefaultActionResolver(ActionResolverProtocol):
             tool='FileSystem',
             func='list_directory',
             args={'path': path}
-        )
-
-    def _code_search_action(self, entities: Dict[str, List[str]]) -> Action:
-        """Create action for code search queries."""
-        pattern = ''
-        if entities.get('class_name'):
-            pattern = entities['class_name'][0]
-        elif entities.get('function_name'):
-            pattern = entities['function_name'][0]
-
-        return Action(
-            tool='CodeSearch',
-            func='search',
-            args={'pattern': pattern, 'entities': entities}
         )
 
     def _code_explanation_action(self, entities: Dict[str, List[str]]) -> Action:

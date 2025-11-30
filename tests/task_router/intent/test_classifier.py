@@ -20,16 +20,6 @@ def test_classifier_identifies_file_structure_query():
     assert result.confidence > 0.0
 
 
-def test_classifier_identifies_code_search_query():
-    """Test classifier correctly identifies code search queries."""
-    classifier = RegexIntentClassifier()
-
-    result = classifier.classify("find the definition of MyClass")
-
-    assert result.intent == QueryIntent.CODE_SEARCH
-    assert result.confidence > 0.0
-
-
 def test_classifier_identifies_code_explanation_query():
     """Test classifier correctly identifies code explanation queries."""
     classifier = RegexIntentClassifier()

@@ -216,7 +216,7 @@ When task is complete:
             GitShowTool,
             GitRecentChangesTool
         )
-        from .search_tools import SearchCodeTool
+        from .search_tools import FindExactTextTool
 
         registry = cls()
 
@@ -234,6 +234,6 @@ When task is complete:
         registry.register(GitRecentChangesTool())
 
         # Register search tools
-        registry.register(SearchCodeTool())
+        registry.register(FindExactTextTool())
 
         return registry

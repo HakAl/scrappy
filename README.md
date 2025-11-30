@@ -227,6 +227,16 @@ For more information, please see the detailed documentation:
 
 ---
 
+### Disclaimer
+
+Use at your own risk. Be smart create a branch or work from a clean git state with no changes so you can quickly revert.
+
+Best practices:
+* Don't give code agents a shell with admin access
+* Use dry run or git checkpoints
+
+---
+
 ## License
 This project is licensed under the **MIT License**. Use it, modify it, and share it to help others access modern AI tools.
 

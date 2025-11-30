@@ -43,19 +43,6 @@ def test_service_coordinates_components_correctly():
     assert action.tool == 'FileSystem'
 
 
-def test_service_handles_missing_entities():
-    """Test service handles gracefully when no entities extracted."""
-    classifier = StubIntentClassifier(QueryIntent.CODE_SEARCH)
-    extractor = StubEntityExtractor({})
-    resolver = DefaultActionResolver()
-
-    service = IntentService(classifier, extractor, resolver)
-    action = service.process_query("search for something")
-
-    assert action.tool == 'CodeSearch'
-    assert action.func == 'search'
-
-
 def test_service_uses_default_components_when_none_provided():
     """Test service creates default components when none injected."""
     service = IntentService()

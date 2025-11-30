@@ -9,7 +9,7 @@ import os
 import subprocess
 import threading
 import time
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, List, TYPE_CHECKING
 
 from ..protocols import ExecutionResult
 from .output_collector import ThreadSafeOutputCollector
@@ -138,6 +138,70 @@ class SubprocessRunner:
                 process.kill()
             raise TimeoutError("Command interrupted by user (Ctrl+C)")
         except Exception as e:
+            if process:
+                process.kill()
+            raise RuntimeError(f"Error running command: {str(e)}")
+
+    def execute_list(
+        self,
+        command: List[str],
+        cwd: str,
+        timeout: Optional[float] = None,
+    ) -> ExecutionResult:
+        """
+        Execute command as list (no shell interpolation).
+
+        Safer than execute() - no shell injection risk.
+
+        Args:
+            command: Command as list of arguments
+            cwd: Working directory
+            timeout: Optional timeout in seconds
+
+        Returns:
+            ExecutionResult with stdout, stderr, and exit code
+
+        Raises:
+            TimeoutError: If execution exceeds timeout
+        """
+        timeout = timeout or 120  # Default 2 minutes
+
+        start_time = time.time()
+
+        try:
+            # Run subprocess without shell=True for security
+            process = subprocess.Popen(
+                command,
+                shell=False,
+                cwd=cwd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding='utf-8',
+                errors='replace',
+            )
+
+            # Wait for process with timeout
+            try:
+                stdout, stderr = process.communicate(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                raise TimeoutError(f"Command timed out after {timeout}s")
+
+            execution_time = time.time() - start_time
+
+            return ExecutionResult(
+                stdout=stdout if stdout else "",
+                stderr=stderr if stderr else "",
+                exit_code=process.returncode,
+                execution_time=execution_time
+            )
+
+        except KeyboardInterrupt:
+            if process:
+                process.kill()
+            raise TimeoutError("Command interrupted by user (Ctrl+C)")
+        except subprocess.SubprocessError as e:
             if process:
                 process.kill()
             raise RuntimeError(f"Error running command: {str(e)}")

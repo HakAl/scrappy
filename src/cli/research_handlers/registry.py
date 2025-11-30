@@ -53,7 +53,6 @@ def create_default_registry() -> ResearchHandlerRegistry:
         ResearchHandlerRegistry with all standard handlers
     """
     from .file_structure import FileStructureHandler
-    from .code_search import CodeSearchHandler
     from .code_explanation import CodeExplanationHandler
     from .git_history import GitHistoryHandler
     from .dependency_info import DependencyInfoHandler
@@ -68,7 +67,6 @@ def create_default_registry() -> ResearchHandlerRegistry:
 
     # Register all handlers
     registry.register(FileStructureHandler())
-    registry.register(CodeSearchHandler())
     registry.register(CodeExplanationHandler())
     registry.register(GitHistoryHandler())
     registry.register(DependencyInfoHandler())

@@ -1,181 +1,251 @@
+"""Tests for FindExactTextTool."""
+
 import pytest
 from pathlib import Path
-from unittest.mock import MagicMock, Mock
+from unittest.mock import Mock
 
-from src.agent_tools.tools.search_tools import SearchCodeTool
+from src.agent_tools.tools.search_tools import FindExactTextTool
 from src.agent_tools.tools.base import ToolContext
+from src.agent_tools.protocols import SearchMatch, SearchMetadata, NoSearchToolError
 
-# --- Fixtures ---
 
 @pytest.fixture
 def mock_context(tmp_path):
-    """
-    Create a tool context backed by a real temporary directory.
-    This allows us to test file discovery and I/O.
-    """
-    context = MagicMock(spec=ToolContext)
+    """Create a mock tool context."""
+    context = Mock(spec=ToolContext)
     context.project_root = tmp_path
-    # Allow all paths within the temp dir
-    context.is_safe_path = Mock(return_value=True)
     context.remember_search = Mock()
     context.config = Mock()
-    context.config.max_search_results = 10
+    context.config.max_search_results = 100
     return context
 
-@pytest.fixture
-def tool():
-    return SearchCodeTool()
 
-# --- Unit Tests: Logic & Properties ---
+class TestFindExactTextTool:
+    """Tests for FindExactTextTool."""
 
-class TestToolProperties:
-    def test_metadata(self, tool):
-        assert tool.name == "search_code"
-        assert "search" in tool.description.lower()
+    def test_tool_properties(self):
+        """Should have correct name and description."""
+        tool = FindExactTextTool()
+
+        assert tool.name == "find_exact_text"
+        assert "exact" in tool.description.lower()
         assert any(p.name == "pattern" for p in tool.parameters)
 
-class TestInternalTextLogic:
-    """Detailed unit tests for _search_text logic, specifically context handling."""
-
-    def test_context_merging_overlapping(self, tool):
-        """
-        If matches are close enough, context lines should merge 
-        without duplicating lines or inserting separators.
-        """
-        # Lines: 0, 1, 2(match), 3, 4(match), 5, 6
-        # Context=1.
-        # Match 1 (line 2) wants: 1, 2, 3
-        # Match 2 (line 4) wants: 3, 4, 5
-        # Result should be: 1, 2, 3, 4, 5 (no '---' separator)
-        content = "0\n1\n2-match\n3\n4-match\n5\n6"
-        
-        results = tool._search_text(
-            content, "match", use_regex=False, case_sensitive=False, 
-            context_lines=1, rel_path=Path("test.py")
+    def test_uses_injected_backend(self, mock_context):
+        """Should use pre-configured search backend."""
+        mock_search = Mock()
+        mock_search.search.return_value = (
+            [SearchMatch("test.py", 10, "hello", True)],
+            SearchMetadata()
         )
-        
-        text_output = "\n".join(results)
-        
-        assert "test.py:2: " in text_output  # Line 1
-        assert "test.py:3:>" in text_output  # Line 2 (match)
-        assert "test.py:4: " in text_output  # Line 3 (shared context)
-        assert "test.py:5:>" in text_output  # Line 4 (match)
-        assert "test.py:6: " in text_output  # Line 5
-        assert "---" not in text_output
-        assert text_output.count("test.py:4: ") == 1  # Ensure line 3 appears once
+        mock_search.name = "mock"
 
-
-
-
-# --- Integration Tests: File System Execution ---
-
-class TestSearchExecution:
-    """Tests the full 'execute' flow with real files."""
-
-    def test_finds_text_in_files(self, tool, mock_context):
-        """Should find patterns in multiple files respecting file glob."""
-        # Setup
-        (mock_context.project_root / "src").mkdir()
-        (mock_context.project_root / "src/main.py").write_text("def hello():\n    print('Hello World')")
-        (mock_context.project_root / "README.md").write_text("Hello World")
-        (mock_context.project_root / "other.txt").write_text("Hello World")
-
-        # Execute: Search for "World" in .py files only
-        # Note: rglob("*.py") recursively finds all .py files including in subdirs
-        result = tool.execute(mock_context, pattern="World", file_pattern="*.py")
+        tool = FindExactTextTool(text_search=mock_search)
+        result = tool.execute(mock_context, pattern="hello")
 
         assert result.success
-        # Check that main.py is found (could be src/main.py or src\main.py on Windows)
-        assert "main.py" in result.output
-        assert "README.md" not in result.output
-        assert "matches" in result.metadata
+        assert "test.py:10" in result.output
+        mock_search.search.assert_called_once()
 
-    def test_ast_search_types(self, tool, mock_context):
-        """Test various AST search types on a complex file."""
-        code = """import os
-from sys import path as sys_path
+    def test_no_tool_returns_error(self, mock_context):
+        """Should return error when no search tool available."""
+        mock_factory = Mock()
+        mock_factory.create_backend.side_effect = NoSearchToolError("No tool")
 
-class MyClass:
-    def my_method(self):
-        pass
-
-def my_func():
-    pass
-"""
-        (mock_context.project_root / "test.py").write_text(code)
-
-        # 1. Test Function search
-        res_func = tool.execute(mock_context, pattern="my_func", search_type="function")
-        assert "[function] my_func" in res_func.output
-
-        # 2. Test Class search
-        res_class = tool.execute(mock_context, pattern="MyClass", search_type="class")
-        assert "[class] MyClass" in res_class.output
-
-        # 3. Test Method search
-        res_method = tool.execute(mock_context, pattern="my_method", search_type="method")
-        assert "[method] MyClass.my_method" in res_method.output
-
-        # 4. Test Import search (Standard)
-        res_imp = tool.execute(mock_context, pattern="os", search_type="import")
-        assert "[import] os" in res_imp.output
-
-        # 5. Test Import search (From/As) - search for "path" finds from-import
-        res_imp_from = tool.execute(mock_context, pattern="path", search_type="import")
-        # Should find either sys.path or the alias sys_path
-        assert "[from-import]" in res_imp_from.output
-
-    def test_ignore_directories(self, tool, mock_context):
-        """Should ignore .git and __pycache__."""
-        git_dir = mock_context.project_root / ".git"
-        git_dir.mkdir()
-        (git_dir / "dirty.py").write_text("secret = 'password'")
-
-        result = tool.execute(mock_context, pattern="secret")
-        
-        assert result.success
-        assert "No matches found" in result.output
-
-    def test_regex_error_handling(self, tool, mock_context):
-        """Should return a failed ToolResult if regex is invalid."""
-        # Need at least one .py file to trigger the regex error during search
-        (mock_context.project_root / "dummy.py").write_text("some content")
-
-        result = tool.execute(mock_context, pattern="[unclosed", use_regex=True)
+        tool = FindExactTextTool(backend_factory=mock_factory)
+        result = tool.execute(mock_context, pattern="hello")
 
         assert not result.success
-        assert "Invalid regex pattern" in result.error
+        assert "No tool" in result.error
 
-    def test_result_truncation(self, tool, mock_context):
-        """Should truncate results exceeding config.max_search_results."""
-        # Create a file with 20 matches, limit is 10 (set in fixture)
-        content = "\n".join([f"match {i}" for i in range(20)])
-        (mock_context.project_root / "large.py").write_text(content)
+    def test_search_error_returns_failure(self, mock_context):
+        """Should return failure when search encounters error."""
+        mock_search = Mock()
+        mock_search.search.return_value = (
+            [],
+            SearchMetadata(error="grep failed", stderr="permission denied")
+        )
+        mock_search.name = "grep"
 
-        result = tool.execute(mock_context, pattern="match")
-        
-        assert result.success
-        assert result.metadata["matches"] == 10
-        assert "truncated" in result.metadata
-        assert result.metadata["truncated"] is True
-        assert "... [truncated" in result.output
+        tool = FindExactTextTool(text_search=mock_search)
+        result = tool.execute(mock_context, pattern="hello")
 
-    def test_context_lines_in_execution(self, tool, mock_context):
-        """Verify context lines are rendered in the final output."""
-        (mock_context.project_root / "ctx.py").write_text("A\nB\nTARGET\nC\nD")
-        
-        result = tool.execute(mock_context, pattern="TARGET", context_lines=1)
-        
-        assert "ctx.py:2:  B" in result.output # Context before
-        assert "ctx.py:3:> TARGET" in result.output # Match
-        assert "ctx.py:4:  C" in result.output # Context after
+        assert not result.success
+        assert "grep failed" in result.error
+        assert result.metadata["stderr"] == "permission denied"
 
-    def test_syntax_error_in_file(self, tool, mock_context):
-        """AST search should gracefully skip files with syntax errors."""
-        (mock_context.project_root / "broken.py").write_text("def broken(params") # Missing parenthesis
-        
-        # Should not raise exception
-        result = tool.execute(mock_context, pattern="broken", search_type="function")
-        
+    def test_no_matches_returns_success(self, mock_context):
+        """Should return success with message when no matches found."""
+        mock_search = Mock()
+        mock_search.search.return_value = ([], SearchMetadata())
+        mock_search.name = "rg"
+
+        tool = FindExactTextTool(text_search=mock_search)
+        result = tool.execute(mock_context, pattern="nomatch")
+
         assert result.success
         assert "No matches found" in result.output
+        assert result.metadata["matches"] == 0
+
+    def test_formats_matches_correctly(self, mock_context):
+        """Should format matches with file:line:content."""
+        mock_search = Mock()
+        mock_search.search.return_value = (
+            [
+                SearchMatch("src/main.py", 42, "def hello():", True),
+                SearchMatch("src/test.py", 10, "import hello", True),
+            ],
+            SearchMetadata()
+        )
+        mock_search.name = "rg"
+
+        tool = FindExactTextTool(text_search=mock_search)
+        result = tool.execute(mock_context, pattern="hello")
+
+        assert result.success
+        assert "src/main.py:42:> def hello():" in result.output
+        assert "src/test.py:10:> import hello" in result.output
+
+    def test_context_lines_formatting(self, mock_context):
+        """Should format context lines with proper markers."""
+        mock_search = Mock()
+        mock_search.search.return_value = (
+            [
+                SearchMatch("test.py", 1, "before", False),  # Context
+                SearchMatch("test.py", 2, "match", True),    # Match
+                SearchMatch("test.py", 3, "after", False),   # Context
+            ],
+            SearchMetadata()
+        )
+        mock_search.name = "rg"
+
+        tool = FindExactTextTool(text_search=mock_search)
+        result = tool.execute(mock_context, pattern="match", context_lines=1)
+
+        assert result.success
+        assert "test.py:1:  before" in result.output  # Space marker for context
+        assert "test.py:2:> match" in result.output   # > marker for match
+        assert "test.py:3:  after" in result.output   # Space marker for context
+
+    def test_adds_separator_between_files(self, mock_context):
+        """Should add separator between different files when using context."""
+        mock_search = Mock()
+        mock_search.search.return_value = (
+            [
+                SearchMatch("file1.py", 10, "match1", True),
+                SearchMatch("file2.py", 20, "match2", True),
+            ],
+            SearchMetadata()
+        )
+        mock_search.name = "rg"
+
+        tool = FindExactTextTool(text_search=mock_search)
+        result = tool.execute(mock_context, pattern="match", context_lines=1)
+
+        assert result.success
+        assert "---" in result.output
+
+    def test_truncation_message(self, mock_context):
+        """Should show truncation message when max results reached."""
+        mock_context.config.max_search_results = 5
+
+        mock_search = Mock()
+        # Return exactly max_results matches
+        mock_search.search.return_value = (
+            [SearchMatch(f"file{i}.py", i, f"match{i}", True) for i in range(5)],
+            SearchMetadata()
+        )
+        mock_search.name = "rg"
+
+        tool = FindExactTextTool(text_search=mock_search)
+        result = tool.execute(mock_context, pattern="match")
+
+        assert result.success
+        assert "truncated to 5 matches" in result.output
+        assert result.metadata["truncated"] is True
+
+    def test_findstr_warning_shown(self, mock_context):
+        """Should display warning when backend has limitations."""
+        mock_search = Mock()
+        mock_search.search.return_value = (
+            [SearchMatch("test.py", 10, "hello", True)],
+            SearchMetadata(
+                warning="findstr does not support context lines",
+                context_lines_supported=False
+            )
+        )
+        mock_search.name = "findstr"
+
+        tool = FindExactTextTool(text_search=mock_search)
+        result = tool.execute(mock_context, pattern="hello", context_lines=2)
+
+        assert result.success
+        assert "[Warning:" in result.output
+        assert "findstr does not support context lines" in result.output
+
+    def test_remembers_search_in_context(self, mock_context):
+        """Should remember search in context."""
+        mock_search = Mock()
+        mock_search.search.return_value = (
+            [SearchMatch("test.py", 10, "hello", True)],
+            SearchMetadata()
+        )
+        mock_search.name = "rg"
+
+        tool = FindExactTextTool(text_search=mock_search)
+        tool.execute(mock_context, pattern="hello", file_pattern="*.py")
+
+        mock_context.remember_search.assert_called_once()
+        call_args = mock_context.remember_search.call_args[0]
+        assert "hello" in call_args[0]
+        assert "*.py" in call_args[0]
+        assert "test.py" in call_args[1]
+
+    def test_passes_all_parameters_to_backend(self, mock_context):
+        """Should pass all parameters to search backend."""
+        mock_search = Mock()
+        mock_search.search.return_value = ([], SearchMetadata())
+        mock_search.name = "rg"
+
+        tool = FindExactTextTool(text_search=mock_search)
+        tool.execute(
+            mock_context,
+            pattern="test",
+            file_pattern="*.js",
+            use_regex=True,
+            case_sensitive=True,
+            context_lines=3
+        )
+
+        call_kwargs = mock_search.search.call_args[1]
+        assert call_kwargs["pattern"] == "test"
+        assert call_kwargs["file_glob"] == "*.js"
+        assert call_kwargs["use_regex"] is True
+        assert call_kwargs["case_sensitive"] is True
+        assert call_kwargs["context_lines"] == 3
+
+    def test_backend_name_in_metadata(self, mock_context):
+        """Should include backend name in result metadata."""
+        mock_search = Mock()
+        mock_search.search.return_value = (
+            [SearchMatch("test.py", 10, "hello", True)],
+            SearchMetadata()
+        )
+        mock_search.name = "ripgrep"
+
+        tool = FindExactTextTool(text_search=mock_search)
+        result = tool.execute(mock_context, pattern="hello")
+
+        assert result.metadata["backend"] == "ripgrep"
+
+    def test_exception_handling(self, mock_context):
+        """Should handle unexpected exceptions gracefully."""
+        mock_search = Mock()
+        mock_search.search.side_effect = Exception("Unexpected error")
+        mock_search.name = "rg"
+
+        tool = FindExactTextTool(text_search=mock_search)
+        result = tool.execute(mock_context, pattern="hello")
+
+        assert not result.success
+        assert "Search error" in result.error

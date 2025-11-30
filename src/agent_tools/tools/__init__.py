@@ -4,7 +4,7 @@ from .base import ToolProtocol, ToolBase, ToolResult, ToolContext, ToolParameter
 from .registry import ToolRegistry
 from .file_tools import ReadFileTool, WriteFileTool, ListFilesTool, ListDirectoryTool
 from .git_tools import GitLogTool, GitDiffTool, GitBlameTool, GitShowTool, GitRecentChangesTool, GitStatusTool
-from .search_tools import SearchCodeTool
+from .search_tools import FindExactTextTool
 from .web_tools import WebFetchTool, WebSearchTool
 from .control_tools import CompleteTool
 
@@ -31,7 +31,7 @@ __all__ = [
     'GitShowTool',
     'GitRecentChangesTool',
     # Concrete tools - Search
-    'SearchCodeTool',
+    'FindExactTextTool',
     # Concrete tools - Web
     'WebFetchTool',
     'WebSearchTool',

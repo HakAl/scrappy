@@ -57,7 +57,7 @@ class TestToolRegistryFactoryBehavior:
         registry = create_default_registry()
         tool_names = [t.name for t in registry.list_all()]
 
-        assert "search_code" in tool_names
+        assert "find_exact_text" in tool_names
 
     @pytest.mark.unit
     def test_default_registry_has_web_tools(self):
@@ -164,7 +164,7 @@ class TestToolRegistryFactoryCustomization:
         assert "git_status" not in tool_names
         # But other tools present
         assert "read_file" in tool_names
-        assert "search_code" in tool_names
+        assert "find_exact_text" in tool_names
 
     @pytest.mark.unit
     def test_can_add_custom_tools_to_registry(self):

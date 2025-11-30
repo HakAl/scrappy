@@ -1,18 +1,17 @@
 ## Issues
 
 ---
-code search doesn't work:
-    {
-      "timestamp": "2025-11-30T08:50:25.540176",
-      "action": "search_code",
-      "parameters": {
-        "pattern": "pet_name|hair_color",
-        "file_pattern": "*.py",
-        "context_lines": 2
-      },
-      "result": "No matches found for 'pet_name|hair_color' (type: text)",
-      "approved": true
-    },
+create a plan for semantic search UX
+Current status: shows some numbers, progress doesn't move, timer remains at 0, isn't hidden when task completes.
+Shown every time on load -- need a paradigm created so we show status bar on initial / large scans. not each app launch
+---
+
+---
+why python tools? what's the purpose?? generalize to dependencies tool? is that useful?
+---
+
+---
+is max steps 10 for agent good? are existing safeguards good enough? 
 ---
 
 ---

@@ -20,16 +20,6 @@ INTENT_PATTERNS: Dict[QueryIntent, List[Tuple[str, float]]] = {
         (r'\bfind (file|module|package)\b', 0.8),
         (r'\b(project|codebase) (structure|layout|organization)\b', 0.9),
     ],
-    QueryIntent.CODE_SEARCH: [
-        (r'\b(function|method|class|interface|type)\b', 0.6),
-        (r'\bwhere is .+ (defined|implemented|declared)\b', 0.9),
-        (r'\bfind (the )?(definition|implementation|usage)\b', 0.9),
-        (r'\bsearch for\b', 0.7),
-        (r'\bwhich (file|module) (contains|has|defines)\b', 0.8),
-        (r'\bgrep\b', 0.8),
-        (r'\blook for\b', 0.6),
-        (r'\blocate\b', 0.7),
-    ],
     QueryIntent.CODE_EXPLANATION: [
         (r'\bhow does .+ work\b', 0.9),
         (r'\bwhat does .+ do\b', 0.9),
@@ -180,9 +170,9 @@ ENTITY_PATTERNS: Dict[str, List[str]] = {
 
 
 ENTITY_BOOST_MAP: Dict[str, List[QueryIntent]] = {
-    'file_path': [QueryIntent.FILE_STRUCTURE, QueryIntent.CODE_SEARCH],
-    'function_name': [QueryIntent.CODE_SEARCH, QueryIntent.CODE_EXPLANATION],
-    'class_name': [QueryIntent.CODE_SEARCH, QueryIntent.CODE_EXPLANATION],
+    'file_path': [QueryIntent.FILE_STRUCTURE],
+    'function_name': [QueryIntent.CODE_EXPLANATION],
+    'class_name': [QueryIntent.CODE_EXPLANATION],
     'error_type': [QueryIntent.BUG_INVESTIGATION],
     'package_name': [QueryIntent.DEPENDENCY_INFO],
 }

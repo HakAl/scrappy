@@ -5,8 +5,9 @@ This module defines the contracts that all command execution components
 must follow, enabling dependency injection and testability.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol, Optional, List
+from pathlib import Path
 
 
 @dataclass
@@ -16,6 +17,24 @@ class ExecutionResult:
     stderr: str
     exit_code: int
     execution_time: float
+
+
+@dataclass
+class SearchMatch:
+    """Single search match result."""
+    file_path: str
+    line_number: int
+    line_content: str
+    is_match: bool = True  # False for context lines
+
+
+@dataclass
+class SearchMetadata:
+    """Typed metadata from search operations."""
+    warning: Optional[str] = None
+    context_lines_supported: bool = True
+    error: Optional[str] = None
+    stderr: Optional[str] = None
 
 
 class CommandSecurityProtocol(Protocol):
@@ -160,6 +179,30 @@ class SubprocessRunnerProtocol(Protocol):
         """
         ...
 
+    def execute_list(
+        self,
+        command: List[str],
+        cwd: str,
+        timeout: Optional[float] = None,
+    ) -> ExecutionResult:
+        """Execute command as list (no shell interpolation).
+
+        Safer than execute() - no shell injection risk.
+
+        Args:
+            command: Command as list of arguments
+            cwd: Working directory
+            timeout: Optional timeout in seconds
+
+        Returns:
+            ExecutionResult with stdout, stderr, and exit code
+
+        Raises:
+            TimeoutError: If execution exceeds timeout
+            ExecutionError: If execution fails
+        """
+        ...
+
 
 class ThreadSafeOutputCollectorProtocol(Protocol):
     """Contract for thread-safe output collection.
@@ -202,12 +245,77 @@ class ThreadSafeOutputCollectorProtocol(Protocol):
         ...
 
 
+class SearchOutputParserProtocol(Protocol):
+    """Contract for parsing search tool output.
+
+    Distinct from PlatformSanitizerProtocol which handles command sanitization.
+    This protocol handles parsing rg/grep/findstr output formats.
+    """
+
+    def parse_line(self, line: str) -> Optional[tuple[str, int, str, bool]]:
+        """Parse a search tool output line.
+
+        Args:
+            line: Raw output line from rg/grep/findstr
+
+        Returns:
+            Tuple of (file_path, line_number, content, is_match) or None if unparseable.
+            is_match is False for context lines (marked with - instead of :).
+        """
+        ...
+
+    def normalize_path(self, path: str) -> str:
+        """Normalize path separators for consistent output."""
+        ...
+
+
+class TextSearchProtocol(Protocol):
+    """Contract for text-based code search."""
+
+    def search(
+        self,
+        pattern: str,
+        path: Path,
+        file_glob: str = "*",
+        use_regex: bool = False,
+        case_sensitive: bool = False,
+        context_lines: int = 0,
+        max_results: int = 100,
+    ) -> tuple[List[SearchMatch], SearchMetadata]:
+        """Search for pattern in files.
+
+        Returns:
+            Tuple of (matches, metadata). Metadata contains warnings/errors.
+            Never silently returns empty list on error - always populate metadata.error.
+        """
+        ...
+
+    def is_available(self) -> bool:
+        """Check if this search backend is available."""
+        ...
+
+    @property
+    def name(self) -> str:
+        """Backend name for logging/debugging."""
+        ...
+
+
+class NoSearchToolError(Exception):
+    """Raised when no search tool is available."""
+    pass
+
+
 __all__ = [
     'ExecutionResult',
+    'SearchMatch',
+    'SearchMetadata',
     'CommandSecurityProtocol',
     'OutputParserProtocol',
     'CommandAdvisorProtocol',
     'PlatformSanitizerProtocol',
     'SubprocessRunnerProtocol',
     'ThreadSafeOutputCollectorProtocol',
+    'SearchOutputParserProtocol',
+    'TextSearchProtocol',
+    'NoSearchToolError',
 ]
