@@ -2,22 +2,36 @@
 
 missing doc: theme
 
+---
+NO API KEYS SET SCENARIO
+Consider a /tour or /features command - Show what's available
+---
 
 
+---
   4. Complexity vs. discoverability
   The system does a LOT. New users might not discover features like:
   - /classify for debugging routing decisions
   - /limits for quota management
 
-  Recommendations
-  2. Consider a /tour or /features command - Show what's available
-  5. Add version/changelog - Beta users need to know what's new
+Make quick commands in welcome better:
+/help
+/plan
+/agent
+/providers
+/explore
 
+HOW TO DOCS?
+eg: change chat model, change agent models
+plan a task, complete a task
+---
+
+Add version/changelog - Beta users need to know what's new
 
 
 ### Graceful Degradation
 What happens when the API is down? 
-EG: rate-limited, or returns garbage? Users will blame your tool, not OpenAI.
+EG: rate-limited, or returns garbage? Users will blame your tool.
 - Retry with exponential backoff
 - Clear error messages: "XXX returned 429. Waiting 30s..." vs "Error: Unknown"
 

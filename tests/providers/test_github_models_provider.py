@@ -84,7 +84,7 @@ class TestGitHubModelsProvider:
 
         assert provider._api_key == "test-key"
         assert provider._client == mock_openai_client
-        assert provider.name == "github"
+        assert provider.name == "github_models"
         assert provider.default_model == "gpt-4o"
 
     def test_initialization_with_env_var(self, monkeypatch):
@@ -142,7 +142,7 @@ class TestGitHubModelsProvider:
         assert isinstance(response, LLMResponse)
         assert response.content == "Test response"
         assert response.model == "gpt-4o"
-        assert response.provider == "github"
+        assert response.provider == "github_models"
         assert response.tokens_used == 15
         assert response.input_tokens == 10
         assert response.output_tokens == 5
@@ -235,7 +235,7 @@ class TestGitHubModelsProvider:
                 assert isinstance(response, LLMResponse)
                 assert response.content == "Async test response"
                 assert response.model == "gpt-4o"
-                assert response.provider == "github"
+                assert response.provider == "github_models"
                 assert response.metadata['async'] is True
 
     @pytest.mark.asyncio
@@ -443,7 +443,7 @@ class TestGitHubModelsProviderIntegration:
     #     response = provider.chat(messages, max_tokens=50)
     #
     #     assert isinstance(response, LLMResponse)
-    #     assert response.provider == "github"
+    #     assert response.provider == "github_models"
     #     assert response.model == "gpt-4o"
     #     assert "Hello" in response.content or "hello" in response.content.lower()
 # todo
@@ -459,7 +459,7 @@ class TestGitHubModelsProviderIntegration:
     #     response = await provider.chat_async(messages, max_tokens=50)
     #
     #     assert isinstance(response, LLMResponse)
-    #     assert response.provider == "github"
+    #     assert response.provider == "github_models"
     #     assert "async" in response.content.lower() or "works" in response.content.lower()
 
 

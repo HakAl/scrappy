@@ -23,8 +23,8 @@ class ProviderInfo:
 class OrchestratorConfig(BaseConfig):
     """Configuration for the orchestrator and provider management."""
 
-    # Provider priority order for brain selection and fallback
-    # NOTE: GitHub Models excluded from default priority due to aggressive rate limiting
+    # Provider priority order for general use
+    # Note: Providers with supports_agent_role=False are filtered out for brain/agent roles
     provider_priority: List[str] = field(
         default_factory=lambda: ['cerebras', 'groq', 'gemini', 'cohere', 'github_models']
     )
@@ -50,7 +50,7 @@ class OrchestratorConfig(BaseConfig):
             ),
             'github_models': ProviderInfo(
                 quota='10K RPD',
-                description='aggressive rate limiting - not suitable for brain',
+                description='general use only - not for agent/brain roles',
             ),
         }
     )

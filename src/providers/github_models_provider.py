@@ -117,7 +117,7 @@ class GitHubModelsProvider(LLMProviderBase):
 
     @property
     def name(self) -> str:
-        return 'github'
+        return 'github_models'
 
     @property
     def available_models(self) -> list[str]:
@@ -126,6 +126,11 @@ class GitHubModelsProvider(LLMProviderBase):
     @property
     def default_model(self) -> str:
         return 'gpt-4o'
+
+    @property
+    def supports_agent_role(self) -> bool:
+        """GitHub Models has aggressive rate limiting unsuitable for agent/brain roles."""
+        return False
 
     def chat(
         self,

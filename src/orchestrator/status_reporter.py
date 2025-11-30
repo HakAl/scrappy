@@ -58,7 +58,12 @@ class ProviderStatusReporter:
         for provider_name in self.ALL_KNOWN_PROVIDERS:
             if provider_name in available:
                 reason = self._selector._get_brain_selection_reason(provider_name)
-                status_str = f"  [OK] {provider_name:<15} - {reason}"
+                # Check if provider supports agent role
+                provider = self._registry.get(provider_name)
+                if hasattr(provider, 'supports_agent_role') and not provider.supports_agent_role:
+                    status_str = f"  [OK] {provider_name:<15} - {reason} (general use only)"
+                else:
+                    status_str = f"  [OK] {provider_name:<15} - {reason}"
             else:
                 status_str = f"  [--] {provider_name:<15} - NOT AVAILABLE (missing API key or package)"
             self._output.info(status_str)
@@ -94,10 +99,20 @@ class ProviderStatusReporter:
 
         provider_info = {}
         for provider_name in self.ALL_KNOWN_PROVIDERS:
-            provider_info[provider_name] = {
-                'available': provider_name in available,
-                'reason': self._selector._get_brain_selection_reason(provider_name) if provider_name in available else 'not available'
-            }
+            if provider_name in available:
+                provider = self._registry.get(provider_name)
+                supports_agent = not hasattr(provider, 'supports_agent_role') or provider.supports_agent_role
+                provider_info[provider_name] = {
+                    'available': True,
+                    'supports_agent_role': supports_agent,
+                    'reason': self._selector._get_brain_selection_reason(provider_name)
+                }
+            else:
+                provider_info[provider_name] = {
+                    'available': False,
+                    'supports_agent_role': None,
+                    'reason': 'not available'
+                }
 
         return {
             'available_providers': available,

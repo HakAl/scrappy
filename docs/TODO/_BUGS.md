@@ -1,5 +1,19 @@
 ## Issues
 
+---
+code search doesn't work:
+    {
+      "timestamp": "2025-11-30T08:50:25.540176",
+      "action": "search_code",
+      "parameters": {
+        "pattern": "pet_name|hair_color",
+        "file_pattern": "*.py",
+        "context_lines": 2
+      },
+      "result": "No matches found for 'pet_name|hair_color' (type: text)",
+      "approved": true
+    },
+---
 
 ---
 automatically explore?

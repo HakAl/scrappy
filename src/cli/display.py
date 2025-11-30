@@ -165,8 +165,11 @@ class CLIDisplay:
             return
 
         old_brain = self.orchestrator.brain
-        self.orchestrator.brain = validation.provider
-        self.io.secho(f"Brain switched: {old_brain} -> {validation.provider}", fg=self.io.theme.success)
+        try:
+            self.orchestrator.brain = validation.provider
+            self.io.secho(f"Brain switched: {old_brain} -> {validation.provider}", fg=self.io.theme.success)
+        except ValueError as e:
+            self.io.secho(str(e), fg=self.io.theme.error)
 
     def show_usage(self):
         """Display usage statistics for the current session.

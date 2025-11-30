@@ -348,6 +348,24 @@ class LLMProviderBase:
         """
         return False
 
+    @property
+    def supports_agent_role(self) -> bool:
+        """
+        Check if this provider is suitable for agent/planner roles.
+
+        Some providers have aggressive rate limiting or other constraints
+        that make them unsuitable for sustained agent/orchestrator usage,
+        even if they offer quality models.
+
+        Returns:
+            True if provider can be used for brain/planner roles, False otherwise.
+
+        Note:
+            Override this property to return False in providers with constraints
+            that make them unsuitable for high-frequency agent usage.
+        """
+        return True
+
     def estimate_cost(self, input_tokens: int, output_tokens: int, model: str = None) -> float:
         """
         Estimate cost for a request (returns 0.0 for free tier).

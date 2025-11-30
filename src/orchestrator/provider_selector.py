@@ -142,36 +142,52 @@ class ProviderSelector:
 
         self._log(f"Available providers: {', '.join(available)}")
 
-        # Use specified provider if available
+        # Use specified provider if available and supports agent role
         if preferred_provider:
             self._log(f"User requested provider: {preferred_provider}")
             if preferred_provider in available:
                 provider = self.registry.get(preferred_provider)
-                self._log(f"Using user-specified brain: {preferred_provider}", "SELECTED")
-                return (preferred_provider, provider)
+                # Check if provider supports agent/brain role
+                if hasattr(provider, 'supports_agent_role') and not provider.supports_agent_role:
+                    self._log(
+                        f"{preferred_provider} does not support agent/brain roles (aggressive rate limiting)",
+                        "WARN"
+                    )
+                    self._log("Falling back to auto-selection...", "WARN")
+                else:
+                    self._log(f"Using user-specified brain: {preferred_provider}", "SELECTED")
+                    return (preferred_provider, provider)
             else:
                 self._log(f"Requested provider {preferred_provider} not available, using auto-selection", "WARN")
 
-        # Default priority: cerebras > groq > gemini
-        # NOTE: GitHub Models excluded due to aggressive rate limiting (crashes after ~10 requests)
-        # GitHub Models is NOT suitable for orchestrator brain or agent planner roles
+        # Default priority from config - providers filtered by supports_agent_role capability
         priority = self.config.brain_priority
         self._log(f"Auto-selection priority: {' > '.join(priority)}")
 
         for provider_name in priority:
             if provider_name in available:
                 provider = self.registry.get(provider_name)
+                # Skip providers that don't support agent role
+                if hasattr(provider, 'supports_agent_role') and not provider.supports_agent_role:
+                    self._log(f"Skipping {provider_name} - does not support agent role")
+                    continue
                 reason = self._get_brain_selection_reason(provider_name)
                 self._log(f"Auto-selected brain: {provider_name} ({reason})", "SELECTED")
                 return (provider_name, provider)
             else:
                 self._log(f"Skipping {provider_name} - not available")
 
-        # Fallback to first available
-        provider_name = available[0]
-        provider = self.registry.get(provider_name)
-        self._log(f"Fallback brain: {provider_name} (first available)", "SELECTED")
-        return (provider_name, provider)
+        # Fallback to first available that supports agent role
+        for provider_name in available:
+            provider = self.registry.get(provider_name)
+            if hasattr(provider, 'supports_agent_role') and not provider.supports_agent_role:
+                continue
+            self._log(f"Fallback brain: {provider_name} (first available)", "SELECTED")
+            return (provider_name, provider)
+
+        # Last resort - no agent-capable providers
+        self._log("No providers available that support agent role!", "ERROR")
+        raise RuntimeError("No providers available that support agent role")
 
     def _get_brain_selection_reason(self, provider_name: str) -> str:
         """Get human-readable reason for brain selection."""
@@ -223,12 +239,25 @@ class ProviderSelector:
             self._log("No providers available!", "ERROR")
             raise RuntimeError("No providers available!")
 
+        # Filter to only providers that support agent role
+        agent_capable = []
+        for name in available:
+            provider = self.registry.get(name)
+            if hasattr(provider, 'supports_agent_role') and not provider.supports_agent_role:
+                self._log(f"Skipping {name} for planning - does not support agent role")
+                continue
+            agent_capable.append(name)
+
+        if not agent_capable:
+            self._log("No agent-capable providers available!", "ERROR")
+            raise RuntimeError("No providers available that support agent role!")
+
         # First, try to find instruction-tuned models with high RPD
         best_provider = None
         best_model = None
         best_rpd = 0
 
-        for provider_name in available:
+        for provider_name in agent_capable:
             provider = self.registry.get(provider_name)
 
             # Check for instruction-tuned models
@@ -251,7 +280,7 @@ class ProviderSelector:
 
         # Fallback: try chat-tuned models
         self._log("No instruction-tuned models found, trying chat models", "WARN")
-        for provider_name in available:
+        for provider_name in agent_capable:
             provider = self.registry.get(provider_name)
 
             for model_id in provider.available_models:
@@ -268,9 +297,9 @@ class ProviderSelector:
             self._log(f"Selected {best_provider}/{best_model} (chat model, {best_rpd} RPD)", "SELECTED")
             return (best_provider, best_model)
 
-        # Last resort: use first available provider's default
+        # Last resort: use first agent-capable provider's default
         self._log("No instruction or chat models found, using default", "WARN")
-        provider_name = available[0]
+        provider_name = agent_capable[0]
         provider = self.registry.get(provider_name)
         model = provider.available_models[0] if provider.available_models else None
         self._log(f"Fallback to {provider_name}/{model}", "SELECTED")

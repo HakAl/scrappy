@@ -276,7 +276,14 @@ class AgentOrchestrator:
         available = self.registry.list_available()
         if provider_name not in available:
             raise ValueError(f"Provider '{provider_name}' not available. Available: {available}")
-        self._brain = self.registry.get(provider_name)
+        provider = self.registry.get(provider_name)
+        # Check if provider supports agent/brain role
+        if hasattr(provider, 'supports_agent_role') and not provider.supports_agent_role:
+            raise ValueError(
+                f"Provider '{provider_name}' does not support agent/brain roles (aggressive rate limiting). "
+                f"Use for general tasks only."
+            )
+        self._brain = provider
         self._brain_name = provider_name
 
     @property
