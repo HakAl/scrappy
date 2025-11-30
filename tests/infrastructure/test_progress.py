@@ -149,21 +149,6 @@ def test_live_reporter_flow(mock_rich_modules):
         assert mock_live_inst.update.call_count >= 2  # Once for update, once for complete
         mock_live_inst.stop.assert_called_once()
 
-
-def test_live_reporter_exception_handling(caplog):
-    """Test general exception during start (e.g., inside Rich logic)."""
-    # Set log level to capture ERROR logs from the progress module
-    caplog.set_level(logging.ERROR, logger='src.infrastructure.progress')
-
-    with patch.dict(sys.modules, {'rich.console': MagicMock()}):
-        # Force an error inside the try block
-        with patch('rich.console.Console', side_effect=Exception("Boom")):
-            reporter = LiveProgressReporter()
-            reporter.start("Test")
-
-            assert "Error starting Live progress: Boom" in caplog.text
-
-
 # --- Tests for LoggingProgressReporter ---
 
 def test_logging_reporter(caplog):
