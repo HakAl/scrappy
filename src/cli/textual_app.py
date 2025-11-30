@@ -7,6 +7,7 @@ wrapping the existing InteractiveMode with a modern UI.
 
 from typing import TYPE_CHECKING, Any, Optional, Dict, List
 import logging
+import os
 import re
 import threading
 import uuid
@@ -760,9 +761,14 @@ class ScrappyApp(App):
         # Start worker thread to consume output queue
         self.consume_output_queue()
 
-        # Display welcome banner
-        from src.cli.interactive_banner import display_banner
-        display_banner(self.interactive_mode.io)
+        # Check if providers are available
+        if not self._has_any_provider():
+            # No providers - force setup wizard
+            self._launch_setup_wizard(allow_cancel=False)
+        else:
+            # Normal startup - display welcome banner
+            from src.cli.interactive_banner import display_banner
+            display_banner(self.interactive_mode.io)
 
     def on_unmount(self) -> None:
         """Called when app is about to close."""
@@ -1101,3 +1107,39 @@ class ScrappyApp(App):
         # Remove visual feedback
         input_container = self.query_one("#input_container")
         input_container.remove_class("capture-mode")
+
+    def _has_any_provider(self) -> bool:
+        """Check if any provider is configured.
+
+        Returns:
+            True if at least one provider is available
+        """
+        from src.orchestrator.provider_definitions import PROVIDERS
+        for name, info in PROVIDERS.items():
+            if os.environ.get(info.env_var):
+                return True
+        return False
+
+    def _launch_setup_wizard(self, allow_cancel: bool = True) -> None:
+        """Launch setup wizard in worker thread.
+
+        Args:
+            allow_cancel: If False, user must configure at least one provider
+        """
+        self._run_setup_wizard(allow_cancel)
+
+    @work(exclusive=True, thread=True)
+    def _run_setup_wizard(self, allow_cancel: bool) -> None:
+        """Run wizard in worker thread (blocking IO safe).
+
+        Args:
+            allow_cancel: If False, user must configure at least one provider
+        """
+        from .setup_wizard import SetupWizard
+        wizard = SetupWizard(self.interactive_mode.io)
+        wizard.run(allow_cancel=allow_cancel)
+
+        # After wizard completes, show welcome banner if providers are now available
+        if self._has_any_provider():
+            from src.cli.interactive_banner import display_banner
+            display_banner(self.interactive_mode.io)

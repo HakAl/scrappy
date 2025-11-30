@@ -1,14 +1,19 @@
 """
 Single source of truth for provider configuration.
 
-This module centralizes all provider-related configuration that was previously
-scattered across provider_selector.py and rate_limiter.py.
+This module centralizes all provider-related configuration.
 """
 
 from dataclasses import dataclass, field
 from typing import Dict, List
 
 from src.infrastructure.config import BaseConfig
+from .provider_definitions import (
+    PROVIDERS,
+    get_provider_priority,
+    get_brain_priority,
+    get_task_providers,
+)
 
 
 @dataclass
@@ -26,32 +31,17 @@ class OrchestratorConfig(BaseConfig):
     # Provider priority order for general use
     # Note: Providers with supports_agent_role=False are filtered out for brain/agent roles
     provider_priority: List[str] = field(
-        default_factory=lambda: ['cerebras', 'groq', 'gemini', 'cohere', 'github_models']
+        default_factory=get_provider_priority
     )
 
     # Detailed provider information
     provider_info: Dict[str, ProviderInfo] = field(
         default_factory=lambda: {
-            'cerebras': ProviderInfo(
-                quota='14,400 RPD',
-                description='highest daily quota',
-            ),
-            'groq': ProviderInfo(
-                quota='7,000 RPD',
-                description='fast and reliable',
-            ),
-            'gemini': ProviderInfo(
-                quota='varies',
-                description='auto-fallback enabled',
-            ),
-            'cohere': ProviderInfo(
-                quota='1,000/month',
-                description='limited quota - embeddings only',
-            ),
-            'github_models': ProviderInfo(
-                quota='10K RPD',
-                description='general use only - not for agent/brain roles',
-            ),
+            name: ProviderInfo(
+                quota=info.quota,
+                description=info.description,
+            )
+            for name, info in PROVIDERS.items()
         }
     )
 
@@ -59,21 +49,21 @@ class OrchestratorConfig(BaseConfig):
     # Order matters - first available provider in list is selected
     task_preferences: Dict[str, List[str]] = field(
         default_factory=lambda: {
-            'planning': ['cerebras', 'groq', 'gemini'],
-            'execution': ['cerebras', 'groq', 'gemini'],
-            'quick': ['cerebras', 'groq'],
-            'general': ['cerebras', 'groq', 'gemini'],
+            'planning': get_task_providers('planning'),
+            'execution': get_task_providers('execution'),
+            'quick': get_task_providers('quick'),
+            'general': get_task_providers('general'),
         }
     )
 
     # Default priority for brain selection (excludes problematic providers)
     brain_priority: List[str] = field(
-        default_factory=lambda: ['cerebras', 'groq', 'gemini']
+        default_factory=get_brain_priority
     )
 
     # Fallback priority (same as brain for now)
     fallback_priority: List[str] = field(
-        default_factory=lambda: ['cerebras', 'groq', 'gemini']
+        default_factory=get_brain_priority
     )
 
     def get_provider_reason(self, provider_name: str) -> str:

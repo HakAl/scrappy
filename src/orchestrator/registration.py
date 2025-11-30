@@ -7,26 +7,13 @@ Handles auto-registration of all known providers with status tracking.
 from typing import Dict
 
 try:
-    from ..providers import (
-        ProviderRegistry,
-        GroqProvider,
-        CohereProvider,
-        GeminiProvider,
-        CerebrasProvider,
-        GitHubModelsProvider,
-    )
+    from ..providers import ProviderRegistry
 except ImportError:
-    from providers import (
-        ProviderRegistry,
-        GroqProvider,
-        CohereProvider,
-        GeminiProvider,
-        CerebrasProvider,
-        GitHubModelsProvider,
-    )
+    from providers import ProviderRegistry
 
 from .output import BaseOutputProtocol
-from .protocols import ProviderRegistryProtocol  # For type hints (Dependency Inversion)
+from .protocols import ProviderRegistryProtocol
+from .provider_definitions import PROVIDERS
 
 
 class ProviderRegistrar:
@@ -52,45 +39,15 @@ class ProviderRegistrar:
         """
         results = {}
 
-        # Try GitHub Models (RECOMMENDED BRAIN - GPT-4o with 10K RPD)
-        results['github_models'] = self._try_register(
-            'GitHub Models',
-            'github_models',
-            GitHubModelsProvider,
-            "GitHub Models provider registered (GPT-4o: 10K RPD, 10M TPD)"
-        )
-
-        # Try Cerebras (primary workhorse - highest quota)
-        results['cerebras'] = self._try_register(
-            'Cerebras',
-            'cerebras',
-            CerebrasProvider,
-            "Cerebras provider registered (14,400 RPD)"
-        )
-
-        # Try Groq (secondary)
-        results['groq'] = self._try_register(
-            'Groq',
-            'groq',
-            GroqProvider,
-            "Groq provider registered (7,000 RPD)"
-        )
-
-        # Try Gemini (with auto-fallback)
-        results['gemini'] = self._try_register(
-            'Gemini',
-            'gemini',
-            GeminiProvider,
-            "Gemini provider registered (auto-fallback enabled)"
-        )
-
-        # Try Cohere (limited - embeddings only)
-        results['cohere'] = self._try_register(
-            'Cohere',
-            'cohere',
-            CohereProvider,
-            "Cohere provider registered (1,000/month - use sparingly)"
-        )
+        for name, info in PROVIDERS.items():
+            display_name = name.replace('_', ' ').title()
+            success_message = f"{display_name} provider registered ({info.quota})"
+            results[name] = self._try_register(
+                display_name,
+                name,
+                info.provider_class,
+                success_message
+            )
 
         return results
 

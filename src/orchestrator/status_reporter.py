@@ -7,7 +7,7 @@ Handles presentation logic for displaying provider configuration and selection s
 from typing import Optional
 
 from src.orchestrator.protocols import BaseOutputProtocol
-
+from src.orchestrator.provider_definitions import get_all_provider_names, get_brain_priority
 
 
 class ProviderStatusReporter:
@@ -17,11 +17,15 @@ class ProviderStatusReporter:
     separating it from the core orchestrator logic.
     """
 
-    # Known providers in the system
-    ALL_KNOWN_PROVIDERS = ['github_models', 'cerebras', 'groq', 'gemini', 'cohere']
+    @property
+    def ALL_KNOWN_PROVIDERS(self):
+        """Known providers in the system."""
+        return get_all_provider_names()
 
-    # Selection priority order
-    SELECTION_PRIORITY = ['cerebras', 'groq', 'gemini']
+    @property
+    def SELECTION_PRIORITY(self):
+        """Selection priority order."""
+        return get_brain_priority()
 
     def __init__(
         self,

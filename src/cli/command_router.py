@@ -112,6 +112,8 @@ class CommandRouter:
             "/v": self._handle_verbose,
             # Tasks list command
             "/tasks": self._handle_tasks,
+            # Setup command
+            "/setup": self._handle_setup,
         }
 
     # =========================================================================
@@ -302,6 +304,16 @@ class CommandRouter:
         else:
             io.secho("Verbose mode: OFF", fg=io.theme.warning, bold=True)
             io.echo("  Clean output without metadata.")
+        return True
+
+    def _handle_setup(self, args: str) -> bool:
+        """Handle /setup command - launch provider setup wizard."""
+        from .setup_wizard import SetupWizard
+        io = self.io
+
+        io.echo("Launching provider setup wizard...")
+        wizard = SetupWizard(io)
+        wizard.run(allow_cancel=True)
         return True
 
     def route(self, cmd: str, args: str) -> bool:

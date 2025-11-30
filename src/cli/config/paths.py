@@ -6,7 +6,12 @@ constants used throughout the CLI for file system operations.
 """
 
 import os
+from pathlib import Path
 from typing import List, Set
+
+# User config directory (in user's home directory)
+USER_CONFIG_DIR = Path.home() / '.scrappy'
+USER_CONFIG_FILE = USER_CONFIG_DIR / 'config.json'
 
 # Session and tracking files (now in .scrappy/ directory)
 SESSION_FILE = '.scrappy/session.json'

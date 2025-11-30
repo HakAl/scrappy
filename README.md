@@ -36,6 +36,9 @@ Clone the repository and install the command-line tool.
 ```bash
 git clone https://github.com/HakAl/scrappy
 cd scrappy
+# Recommended: Create a virtual environment first
+python -m venv venv
+source venv/bin/activate  # On Windows: .\venv\Scripts\activate
 pip install -e .
 ```
 
