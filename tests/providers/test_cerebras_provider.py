@@ -303,3 +303,33 @@ def test_get_model_info(provider):
     # Unknown model (should fall back to generic via parent class)
     info_generic = provider.get_model_info("unknown-model")
     assert info_generic.id == "unknown-model"
+
+
+# -----------------------------------------------------------------------------
+# Null Content Handling Tests (Issue: NO_OUTPUT.md Issue 3)
+# -----------------------------------------------------------------------------
+
+def test_chat_returns_empty_string_when_api_returns_none_content(provider, mock_openai_client):
+    """
+    ISSUE: chat() does not handle None content from API.
+    chat_with_tools() has `content=message.content or ""` but chat() does not.
+
+    When the Cerebras API returns None for message.content, the LLMResponse
+    should contain an empty string, not None.
+
+    EXPECTED: LLMResponse.content should be "" (empty string), not None.
+    """
+    _, client_instance = mock_openai_client
+
+    # API returns None for content (can happen with some API responses)
+    mock_response = create_mock_completion(content=None)
+    client_instance.chat.completions.create.return_value = mock_response
+
+    messages = [{"role": "user", "content": "Hi"}]
+    response = provider.chat(messages)
+
+    # LLMResponse.content is typed as `str`, not `Optional[str]`
+    # So we should get empty string, not None
+    assert response.content is not None, "content should not be None"
+    assert isinstance(response.content, str), "content should be a string"
+    assert response.content == "", "content should be empty string when API returns None"

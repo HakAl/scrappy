@@ -188,7 +188,7 @@ class GeminiProvider(LLMProviderBase):
             output_tokens = getattr(response.usage_metadata, 'candidates_token_count', 0)
 
         return LLMResponse(
-            content=response.text,
+            content=response.text or "",
             model=model,
             provider=self.name,
             tokens_used=input_tokens + output_tokens,

@@ -151,7 +151,7 @@ class GroqProvider(LLMProviderBase):
         output_tokens = usage.completion_tokens if usage else 0
 
         return LLMResponse(
-            content=response.choices[0].message.content,
+            content=response.choices[0].message.content or "",
             model=model,
             provider=self.name,
             tokens_used=input_tokens + output_tokens,

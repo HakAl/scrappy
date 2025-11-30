@@ -235,3 +235,32 @@ def test_limits_tracking(provider):
 
     provider.reset_limited_models()
     assert len(provider._limited_models) == 0
+
+
+# --- Null Content Handling Tests (Issue: NO_OUTPUT.md Issue 3) ---
+
+def test_chat_returns_empty_string_when_response_text_is_none(provider, mock_genai):
+    """
+    ISSUE: _single_model_chat() does not handle None response.text from API.
+
+    When the Gemini API returns None for response.text, the LLMResponse
+    should contain an empty string, not None.
+
+    EXPECTED: LLMResponse.content should be "" (empty string), not None.
+    """
+    # Setup mock to return None for text
+    mock_model = mock_genai.GenerativeModel.return_value
+    mock_response = MagicMock()
+    mock_response.text = None  # API returns None
+    mock_response.usage_metadata = None
+    mock_model.generate_content.return_value = mock_response
+
+    messages = [{"role": "user", "content": "Hi"}]
+
+    response = provider.chat(messages)
+
+    # LLMResponse.content is typed as `str`, not `Optional[str]`
+    # So we should get empty string, not None
+    assert response.content is not None, "content should not be None"
+    assert isinstance(response.content, str), "content should be a string"
+    assert response.content == "", "content should be empty string when API returns None"

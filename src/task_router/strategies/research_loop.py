@@ -139,17 +139,48 @@ class ResearchLoop:
                 # No tool call or max iterations reached - this is the final response
                 final_response = self.response_cleaner.clean_response(response_text)
 
-                # If response is empty after cleanup but we have tool results, generate a summary
-                if not final_response and tool_calls_made:
-                    final_response = self.response_cleaner.generate_fallback_response(
-                        task,
-                        tool_calls_made,
-                        conversation_history
-                    )
+                # Handle empty response after cleanup
+                if not final_response:
+                    if tool_calls_made:
+                        # Tools were executed but LLM didn't summarize
+                        final_response = self.response_cleaner.generate_fallback_response(
+                            task,
+                            tool_calls_made,
+                            conversation_history
+                        )
+                    else:
+                        # LLM responded with only tool-call JSON that was not executed
+                        final_response = self._generate_no_response_fallback(response_text)
 
                 break
 
         return final_response, tool_calls_made, total_tokens
+
+    def _generate_no_response_fallback(self, original_response: str) -> str:
+        """
+        Generate fallback when LLM outputs only tool-call syntax but no tool was executed.
+
+        This happens when:
+        - Tool call was rejected (not in allowed_tools list)
+        - Tool call parsing failed
+        - No tools available but LLM output tool JSON anyway
+
+        Args:
+            original_response: The raw LLM response before cleaning
+
+        Returns:
+            User-friendly fallback message
+        """
+        # Check if original response contained tool-call-like JSON
+        if '{"tool"' in original_response or '"tool":' in original_response:
+            return (
+                "I attempted to use a tool that is not available for this query type. "
+                "Please try rephrasing your question or ask about a different topic."
+            )
+        return (
+            "I was unable to generate a response. "
+            "Please try rephrasing your question."
+        )
 
     def _parse_tool_call(self, response: str) -> Optional[Dict[str, object]]:
         """

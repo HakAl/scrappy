@@ -526,3 +526,127 @@ def test_multiple_sequential_tool_calls():
 
     # Should have final answer
     assert "All done!" in final_response
+
+
+# Tests: Empty response edge cases (Issue: NO_OUTPUT.md)
+
+def test_json_only_response_without_tools_available_returns_nonempty(simple_task):
+    """
+    ISSUE: When LLM outputs ONLY tool-call JSON but no tools are available,
+    the response becomes empty after cleaning. Fallback doesn't trigger because
+    tool_calls_made is empty.
+
+    EXPECTED: Should return a user-friendly message, not empty string.
+    """
+    from src.task_router.strategies.response_cleaner import ResponseCleaner
+
+    orchestrator = Mock()
+    # LLM outputs only tool-call JSON (common with llama3.1-8b)
+    orchestrator.delegate = Mock(return_value=Mock(
+        content='{"tool": "web_search", "parameters": {"query": "test"}}',
+        tokens_used=50
+    ))
+
+    # No tools available - tool call cannot be executed
+    tool_bundle = FakeToolBundle(has_tools=False)
+    cleaner = ResponseCleaner()  # Use real cleaner to demonstrate the issue
+
+    loop = ResearchLoop(
+        orchestrator=orchestrator,
+        tool_bundle=tool_bundle,
+        response_cleaner=cleaner
+    )
+
+    final_response, tool_calls, tokens = loop.run(
+        provider="test-provider",
+        initial_prompt="How do I add RAG to my codebase?",
+        system_prompt="You are a helpful assistant with tool access.",
+        task=simple_task,
+        max_iterations=3
+    )
+
+    # CURRENT BEHAVIOR: final_response is "" (empty)
+    # EXPECTED BEHAVIOR: final_response should be non-empty with helpful message
+    assert final_response != "", "Response should not be empty when LLM outputs only tool JSON"
+    assert len(tool_calls) == 0
+
+
+def test_rejected_tool_due_to_allowed_list_returns_nonempty(simple_task):
+    """
+    ISSUE: When LLM calls a tool that's not in allowed_tools list,
+    the tool_call is set to None, response is cleaned to empty,
+    and fallback doesn't trigger because tool_calls_made is empty.
+
+    EXPECTED: Should return a user-friendly message, not empty string.
+    """
+    from src.task_router.strategies.response_cleaner import ResponseCleaner
+
+    orchestrator = Mock()
+    # LLM tries to use read_file tool
+    orchestrator.delegate = Mock(return_value=Mock(
+        content='{"tool": "read_file", "parameters": {"file_path": "src/main.py"}}',
+        tokens_used=50
+    ))
+
+    tool_bundle = FakeToolBundle(has_tools=True)
+    cleaner = ResponseCleaner()
+
+    loop = ResearchLoop(
+        orchestrator=orchestrator,
+        tool_bundle=tool_bundle,
+        response_cleaner=cleaner
+    )
+
+    # Only allow web tools - read_file is NOT in this list
+    # This simulates GENERAL research subtype which restricts to web-only tools
+    final_response, tool_calls, tokens = loop.run(
+        provider="test-provider",
+        initial_prompt="What is in src/main.py?",
+        system_prompt="You have access to tools.",
+        task=simple_task,
+        max_iterations=3,
+        allowed_tools=["web_search", "web_fetch"]
+    )
+
+    # CURRENT BEHAVIOR: final_response is "" (empty)
+    # EXPECTED BEHAVIOR: final_response should be non-empty
+    assert final_response != "", "Response should not be empty when tool is rejected"
+    assert len(tool_calls) == 0
+
+
+def test_malformed_tool_json_returns_nonempty(simple_task):
+    """
+    ISSUE: When LLM outputs JSON that looks like a tool call but is malformed,
+    parsing fails, and response becomes empty after cleaning.
+
+    EXPECTED: Should return a user-friendly message, not empty string.
+    """
+    from src.task_router.strategies.response_cleaner import ResponseCleaner
+
+    orchestrator = Mock()
+    # LLM outputs malformed tool call (missing closing brace)
+    orchestrator.delegate = Mock(return_value=Mock(
+        content='{"tool": "web_search", "parameters": {"query": "test"}',  # Missing }
+        tokens_used=50
+    ))
+
+    tool_bundle = FakeToolBundle(has_tools=True)
+    cleaner = ResponseCleaner()
+
+    loop = ResearchLoop(
+        orchestrator=orchestrator,
+        tool_bundle=tool_bundle,
+        response_cleaner=cleaner
+    )
+
+    final_response, tool_calls, tokens = loop.run(
+        provider="test-provider",
+        initial_prompt="Search for something",
+        system_prompt="You have tools.",
+        task=simple_task,
+        max_iterations=3
+    )
+
+    # Response cleaner will strip lines starting with {"tool"
+    # Even though parsing failed, user should get SOMETHING back
+    assert final_response != "", "Response should not be empty when tool JSON is malformed"

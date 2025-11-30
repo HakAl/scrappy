@@ -382,6 +382,53 @@ class TestGitHubModelsProvider:
         assert response.output_tokens == 0
 
 
+class TestGitHubModelsProviderNullHandling:
+    """
+    Tests for null content handling (Issue: NO_OUTPUT.md Issue 3).
+
+    GitHub Models Provider should return empty string when API returns None for content.
+    """
+
+    @pytest.fixture
+    def mock_client_with_null_content(self):
+        """Create a mock OpenAI client that returns None for message content."""
+        mock_client = Mock()
+        mock_completion = Mock()
+        mock_completion.choices = [Mock()]
+        mock_completion.choices[0].message.content = None  # API returns None
+        mock_completion.choices[0].finish_reason = "stop"
+        mock_completion.usage = Mock()
+        mock_completion.usage.prompt_tokens = 10
+        mock_completion.usage.completion_tokens = 0
+
+        mock_response = Mock()
+        mock_response.parse.return_value = mock_completion
+        mock_response.headers = {}
+
+        mock_client.chat.completions.with_raw_response.create.return_value = mock_response
+        return mock_client
+
+    def test_chat_returns_empty_string_when_api_returns_none_content(self, mock_client_with_null_content):
+        """
+        ISSUE: chat() does not handle None content from API.
+
+        When the GitHub Models API returns None for message.content, the LLMResponse
+        should contain an empty string, not None.
+
+        EXPECTED: LLMResponse.content should be "" (empty string), not None.
+        """
+        provider = GitHubModelsProvider(client=mock_client_with_null_content, api_key="test-key")
+
+        messages = [{"role": "user", "content": "Hi"}]
+        response = provider.chat(messages)
+
+        # LLMResponse.content is typed as `str`, not `Optional[str]`
+        # So we should get empty string, not None
+        assert response.content is not None, "content should not be None"
+        assert isinstance(response.content, str), "content should be a string"
+        assert response.content == "", "content should be empty string when API returns None"
+
+
 class TestGitHubModelsProviderIntegration:
     """Integration tests for GitHubModelsProvider (requires real API key)."""
 # todo
