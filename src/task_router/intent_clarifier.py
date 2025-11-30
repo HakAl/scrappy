@@ -27,39 +27,16 @@ class InteractiveClarifier:
 
     def __init__(
         self,
-        io: Optional[TaskRouterInputProtocol] = None,
-        # Legacy parameters for backwards compatibility
-        input_fn: Optional[Callable[[str], str]] = None,
-        output_fn: Optional[Callable[[str], None]] = None
+        io: Optional[TaskRouterInputProtocol] = None
     ):
         """
         Initialize interactive clarifier.
 
         Args:
             io: Input protocol for user interaction. If None, uses
-                DefaultConsoleInput for backwards compatibility with
-                non-Textual usage.
-            input_fn: DEPRECATED - Legacy function to get user input.
-                      Use io parameter instead.
-            output_fn: DEPRECATED - Legacy function to display prompts.
-                       Use io parameter instead.
-
-        Note:
-            If both io and legacy parameters are provided, io takes precedence.
-            Legacy parameters are maintained for backwards compatibility but
-            will be removed in a future version.
+                DefaultConsoleInput for CLI usage.
         """
-        if io is not None:
-            self._io = io
-        elif input_fn is not None or output_fn is not None:
-            # Legacy mode: wrap functions in adapter
-            self._io = _LegacyInputAdapter(
-                input_fn=input_fn or input,
-                output_fn=output_fn or print
-            )
-        else:
-            # Default: use shared console input
-            self._io = DefaultConsoleInput()
+        self._io = io or DefaultConsoleInput()
 
     def clarify(self, task: ClassifiedTask) -> ClassifiedTask:
         """
@@ -103,43 +80,6 @@ class InteractiveClarifier:
         # else: choice == "3" or invalid input, keep original
 
         return task
-
-
-class _LegacyInputAdapter:
-    """
-    Adapter to wrap legacy input_fn/output_fn in TaskRouterInputProtocol.
-
-    This maintains backwards compatibility with code that passed
-    input_fn and output_fn to InteractiveClarifier.
-    """
-
-    def __init__(
-        self,
-        input_fn: Callable[[str], str],
-        output_fn: Callable[[str], None]
-    ):
-        self._input_fn = input_fn
-        self._output_fn = output_fn
-
-    def prompt(self, text: str, default: str = "") -> str:
-        """Get text input using legacy function."""
-        try:
-            result = self._input_fn(text)
-            return result if result else default
-        except (EOFError, KeyboardInterrupt):
-            return default
-
-    def confirm(self, text: str, default: bool = False) -> bool:
-        """Get yes/no confirmation using legacy function."""
-        try:
-            result = self._input_fn(text).strip().lower()
-            return result in ('y', 'yes')
-        except (EOFError, KeyboardInterrupt):
-            return default
-
-    def output(self, message: str) -> None:
-        """Output message using legacy function."""
-        self._output_fn(message)
 
 
 class AutoClarifier:

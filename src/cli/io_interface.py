@@ -86,16 +86,6 @@ class TestIO:
         else:
             self._output_buffer.append(message)
 
-    def styled_echo(
-        self,
-        message: str,
-        fg: Optional[str] = None,
-        bold: bool = False,
-        nl: bool = True
-    ) -> None:
-        """Alias for secho() for backwards compatibility."""
-        self.secho(message, fg=fg, bold=bold, nl=nl)
-
     def style(
         self,
         text: str,

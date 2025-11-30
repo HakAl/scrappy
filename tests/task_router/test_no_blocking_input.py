@@ -137,37 +137,6 @@ class TestInputProtocolImplementations:
         assert result.task_type == TaskType.RESEARCH
         assert result.confidence == 1.0
 
-    def test_interactive_clarifier_legacy_mode(self):
-        """InteractiveClarifier should support legacy input_fn/output_fn."""
-        from src.task_router.classifier import ClassifiedTask, TaskType
-        from src.task_router.intent_clarifier import InteractiveClarifier
-
-        outputs = []
-        inputs = iter(["2"])  # Choose action
-
-        def mock_input(prompt):
-            return next(inputs)
-
-        def mock_output(msg):
-            outputs.append(msg)
-
-        clarifier = InteractiveClarifier(input_fn=mock_input, output_fn=mock_output)
-
-        task = ClassifiedTask(
-            task_type=TaskType.RESEARCH,
-            confidence=0.5,
-            complexity_score=5,
-            reasoning="Test",
-            original_input="test query",
-        )
-
-        result = clarifier.clarify(task)
-
-        # Should have used legacy functions
-        assert len(outputs) > 0
-        # Should have changed to CODE_GENERATION since we chose "2"
-        assert result.task_type == TaskType.CODE_GENERATION
-
 
 class TestTaskRouterInputHandler:
     """Test TaskRouter input handler injection."""

@@ -9,7 +9,7 @@ import pytest
 from unittest.mock import Mock, MagicMock
 from typing import Optional
 
-from src.orchestrator.rate_limiter import RateLimitTracker
+from src.orchestrator.rate_limiting import RateLimitTracker
 from src.orchestrator.rate_limiting import RateLimitCalculator, RateLimitPolicy, RateLimitRecommender
 from src.providers.base import ProviderLimits
 from tests.helpers import create_test_rate_limit_tracker, FakeStorage

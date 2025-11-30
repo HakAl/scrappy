@@ -304,12 +304,13 @@ class TestIntentClarifierCompatibility:
     def test_interactive_clarifier_returns_new_task_on_research_choice(self):
         """Test that InteractiveClarifier returns a new task when user chooses research."""
         from src.task_router.intent_clarifier import InteractiveClarifier
+        from unittest.mock import Mock
 
         # Mock input to return "1" (research)
-        clarifier = InteractiveClarifier(
-            input_fn=lambda _: "1",
-            output_fn=lambda _: None
-        )
+        mock_io = Mock()
+        mock_io.prompt = Mock(return_value="1")
+        mock_io.output = Mock()
+        clarifier = InteractiveClarifier(io=mock_io)
 
         original = ClassifiedTask(
             original_input="create something",
@@ -333,12 +334,13 @@ class TestIntentClarifierCompatibility:
     def test_interactive_clarifier_returns_new_task_on_action_choice(self):
         """Test that InteractiveClarifier returns a new task when user chooses action."""
         from src.task_router.intent_clarifier import InteractiveClarifier
+        from unittest.mock import Mock
 
         # Mock input to return "2" (action)
-        clarifier = InteractiveClarifier(
-            input_fn=lambda _: "2",
-            output_fn=lambda _: None
-        )
+        mock_io = Mock()
+        mock_io.prompt = Mock(return_value="2")
+        mock_io.output = Mock()
+        clarifier = InteractiveClarifier(io=mock_io)
 
         original = ClassifiedTask(
             original_input="explain requirements",
@@ -360,12 +362,13 @@ class TestIntentClarifierCompatibility:
     def test_interactive_clarifier_keeps_original_on_choice_3(self):
         """Test that InteractiveClarifier returns original task when user chooses keep."""
         from src.task_router.intent_clarifier import InteractiveClarifier
+        from unittest.mock import Mock
 
         # Mock input to return "3" (keep)
-        clarifier = InteractiveClarifier(
-            input_fn=lambda _: "3",
-            output_fn=lambda _: None
-        )
+        mock_io = Mock()
+        mock_io.prompt = Mock(return_value="3")
+        mock_io.output = Mock()
+        clarifier = InteractiveClarifier(io=mock_io)
 
         original = ClassifiedTask(
             original_input="test",

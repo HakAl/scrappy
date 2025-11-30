@@ -441,15 +441,6 @@ class TestStreamWriter:
 class TestBackwardsCompatibility:
     """Test backwards compatibility with existing code."""
 
-    def test_styled_echo_alias(self):
-        """styled_echo() is an alias for secho()."""
-        sink = MockOutputSink()
-        io = UnifiedIO(output_sink=sink)
-
-        io.styled_echo("test", fg="red")
-
-        assert len(sink.renderables) > 0
-
     def test_echo_without_newline(self):
         """echo() supports nl=False."""
         sink = MockOutputSink()
@@ -510,7 +501,6 @@ class TestProtocolCompliance:
 
         assert hasattr(io, 'echo')
         assert hasattr(io, 'secho')
-        assert hasattr(io, 'styled_echo')
         assert hasattr(io, 'style')
         assert hasattr(io, 'prompt')
         assert hasattr(io, 'confirm')

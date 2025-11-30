@@ -91,7 +91,7 @@ class TestAgentProviderDelegation:
         )
 
         # Call _think which should delegate to orchestrator
-        agent._think(state)
+        agent._agent_loop.think(state)
 
         # Check what provider was requested
         assert len(tracking_orchestrator.delegate_calls) == 1
@@ -128,7 +128,7 @@ class TestAgentProviderDelegation:
             auto_confirm=False
         )
 
-        agent._think(state)
+        agent._agent_loop.think(state)
 
         # Agent should pass task_type so orchestrator knows what kind of provider to pick
         # This test will FAIL because agent doesn't pass task_type
@@ -174,9 +174,9 @@ class TestAgentProviderDelegation:
         )
 
         # Make multiple think calls
-        agent._think(state)
-        agent._think(state)
-        agent._think(state)
+        agent._agent_loop.think(state)
+        agent._agent_loop.think(state)
+        agent._agent_loop.think(state)
 
         # Orchestrator should have opportunity to pick different providers
         # Agent should pass task_type and let orchestrator rotate

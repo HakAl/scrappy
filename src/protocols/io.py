@@ -57,16 +57,6 @@ class CLIIOProtocol(Protocol):
         """
         ...
 
-    def styled_echo(
-        self,
-        message: str,
-        fg: Optional[str] = None,
-        bold: bool = False,
-        nl: bool = True
-    ) -> None:
-        """Alias for secho() for backwards compatibility."""
-        ...
-
     def style(
         self,
         text: str,

@@ -166,7 +166,7 @@ def mock_semantic_initializer():
 
 
 @pytest.fixture
-def mock_codebase_context(temp_project_dir, mock_semantic_initializer):
+def mock_codebase_context(temp_project_dir):
     """
     Create a mock CodebaseContext with semantic search disabled.
 
@@ -175,9 +175,7 @@ def mock_codebase_context(temp_project_dir, mock_semantic_initializer):
     from src.context import CodebaseContext
 
     context = CodebaseContext(
-        project_path=str(temp_project_dir),
-        auto_load_cache=False,
-        semantic_initializer=mock_semantic_initializer
+        project_path=str(temp_project_dir)
     )
     return context
 

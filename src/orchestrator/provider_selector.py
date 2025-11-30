@@ -13,7 +13,7 @@ except ImportError:
     from providers import ProviderRegistry
     from providers.base import ModelType, SpeedRank, QualityRank
 
-from .output import OperationalOutputProtocol, ConsoleOutput
+from .output import BaseOutputProtocol, ConsoleOutput
 from .config import OrchestratorConfig
 from .protocols import ProviderRegistryProtocol  # For type hints (Dependency Inversion)
 from .model_selection import ModelSelectionType
@@ -34,7 +34,7 @@ class ProviderSelector:
         self,
         registry: ProviderRegistryProtocol,
         verbose: bool = False,
-        output: Optional[OperationalOutputProtocol] = None,
+        output: Optional[BaseOutputProtocol] = None,
         config: Optional[OrchestratorConfig] = None
     ):
         """

@@ -14,7 +14,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 from pathlib import Path
 
-from src.agent import CodeAgent
+from src.agent.core import CodeAgent
 from src.platform import (
     normalize_command_paths,
     validate_command_for_platform,

@@ -12,7 +12,7 @@ from unittest.mock import patch, MagicMock, PropertyMock, AsyncMock
 from datetime import datetime
 
 from src.orchestrator.cache import ResponseCache
-from src.orchestrator.rate_limiter import RateLimitTracker
+from src.orchestrator.rate_limiting import RateLimitTracker
 from src.orchestrator.output import CapturingOutput, NullOutput
 from src.providers.base import LLMResponse, ProviderLimits
 

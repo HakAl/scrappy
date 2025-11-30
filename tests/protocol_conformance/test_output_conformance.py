@@ -1,7 +1,7 @@
 """Output protocol conformance tests.
 
 Tests that output implementations correctly conform to their protocols:
-- BaseOutputProtocol / OperationalOutputProtocol
+- BaseOutputProtocol
 - FormattedOutputProtocol
 - OutputSink / RichRenderableProtocol
 """
@@ -18,9 +18,7 @@ from src.protocols.output import (
     BaseOutputProtocol,
     FormattedOutputProtocol,
     RichRenderableProtocol,
-    OperationalOutputProtocol,
 )
-from src.orchestrator.protocols import OperationalOutputProtocol as OrchestratorOutputProtocol
 from src.cli.protocols import OutputSink
 
 
@@ -67,23 +65,8 @@ class TestBaseOutputProtocolConformance:
         assert_isinstance_protocol(instance, BaseOutputProtocol)
 
 
-class TestOperationalOutputProtocolConformance:
-    """Tests for OperationalOutputProtocol (alias of BaseOutputProtocol)."""
-
-    def test_operational_protocol_equals_base(self):
-        """OperationalOutputProtocol should be alias of BaseOutputProtocol."""
-        assert OperationalOutputProtocol is BaseOutputProtocol
-
-    def test_orchestrator_protocol_equals_base(self):
-        """Orchestrator's OperationalOutputProtocol should equal BaseOutputProtocol."""
-        assert OrchestratorOutputProtocol is BaseOutputProtocol
-
-    def test_console_output_isinstance_operational(self):
-        """ConsoleOutput should pass isinstance for OperationalOutputProtocol."""
-        from src.orchestrator.output import ConsoleOutput
-
-        instance = ConsoleOutput()
-        assert_isinstance_protocol(instance, OperationalOutputProtocol)
+# OperationalOutputProtocol was a backward compatibility alias that has been removed
+# All code now uses BaseOutputProtocol directly
 
 
 class TestFormattedOutputProtocolConformance:

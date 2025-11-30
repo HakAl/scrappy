@@ -35,8 +35,10 @@ class TestIntentClarifier:
         )
 
         # Mock the input source (dependency injection!)
-        mock_input = Mock(return_value="1")  # User chooses "explain"
-        clarifier = InteractiveClarifier(input_fn=mock_input)
+        mock_io = Mock()
+        mock_io.prompt = Mock(return_value="1")  # User chooses "explain"
+        mock_io.output = Mock()
+        clarifier = InteractiveClarifier(io=mock_io)
 
         result = clarifier.clarify(task)
 
@@ -45,7 +47,7 @@ class TestIntentClarifier:
         assert result.confidence == 1.0
         assert "User clarified" in result.reasoning
         # Verify the mock was called (user was prompted)
-        mock_input.assert_called_once()
+        mock_io.prompt.assert_called_once()
 
     @pytest.mark.unit
     def test_interactive_clarifier_asks_user_and_returns_code_generation(self):
@@ -59,8 +61,10 @@ class TestIntentClarifier:
             reasoning="Low confidence"
         )
 
-        mock_input = Mock(return_value="2")  # User chooses "do it"
-        clarifier = InteractiveClarifier(input_fn=mock_input)
+        mock_io = Mock()
+        mock_io.prompt = Mock(return_value="2")  # User chooses "do it"
+        mock_io.output = Mock()
+        clarifier = InteractiveClarifier(io=mock_io)
 
         result = clarifier.clarify(task)
 
@@ -80,8 +84,10 @@ class TestIntentClarifier:
             reasoning="Original reasoning"
         )
 
-        mock_input = Mock(return_value="3")  # User chooses "keep current"
-        clarifier = InteractiveClarifier(input_fn=mock_input)
+        mock_io = Mock()
+        mock_io.prompt = Mock(return_value="3")  # User chooses "keep current"
+        mock_io.output = Mock()
+        clarifier = InteractiveClarifier(io=mock_io)
 
         result = clarifier.clarify(task)
 
@@ -102,8 +108,10 @@ class TestIntentClarifier:
             reasoning="Original"
         )
 
-        mock_input = Mock(side_effect=EOFError)
-        clarifier = InteractiveClarifier(input_fn=mock_input)
+        mock_io = Mock()
+        mock_io.prompt = Mock(side_effect=EOFError)
+        mock_io.output = Mock()
+        clarifier = InteractiveClarifier(io=mock_io)
 
         result = clarifier.clarify(task)
 
@@ -123,8 +131,10 @@ class TestIntentClarifier:
             reasoning="Original"
         )
 
-        mock_input = Mock(side_effect=KeyboardInterrupt)
-        clarifier = InteractiveClarifier(input_fn=mock_input)
+        mock_io = Mock()
+        mock_io.prompt = Mock(side_effect=KeyboardInterrupt)
+        mock_io.output = Mock()
+        clarifier = InteractiveClarifier(io=mock_io)
 
         result = clarifier.clarify(task)
 
@@ -143,8 +153,10 @@ class TestIntentClarifier:
             reasoning="Original"
         )
 
-        mock_input = Mock(return_value="99")  # Invalid choice
-        clarifier = InteractiveClarifier(input_fn=mock_input)
+        mock_io = Mock()
+        mock_io.prompt = Mock(return_value="99")  # Invalid choice
+        mock_io.output = Mock()
+        clarifier = InteractiveClarifier(io=mock_io)
 
         result = clarifier.clarify(task)
 

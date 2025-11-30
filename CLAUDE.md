@@ -326,29 +326,6 @@ def test_end_to_end_flow():
 
 ---
 
-## REFACTORING PLAN
-
-### Current Architecture Issues
-
-1. **God Classes:**
-   - `AgentOrchestrator` (850+ lines, multiple responsibilities)
-   - `CodeAgent` (tightly coupled to everything)
-
-2. **Missing Protocols:**
-   - `CacheProtocol` - abstract caching interface
-   - `FileSystemProtocol` - abstract file operations
-   - `RateLimitTrackerProtocol` - abstract rate tracking
-   - `SessionManagerProtocol` - abstract session persistence
-   - `ProviderSelectorProtocol` - abstract provider selection
-   - `ToolRegistryProtocol` - abstract tool management
-
-3. **Tight Coupling:**
-   - Direct file system access (`Path()` operations)
-   - Hard-coded tool implementations
-   - Concrete class dependencies instead of protocols
-
----
-
 ## COMMANDS
 
 ```bash

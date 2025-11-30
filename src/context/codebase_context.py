@@ -56,8 +56,6 @@ class CodebaseContext:
         platform_detector: Optional[PlatformDetectorProtocol] = None,
         git_history_reader: Optional[GitHistoryReader] = None,
         project_detector: Optional[ProjectDetector] = None,
-        auto_load_cache: bool = False,
-        semantic_initializer: Optional[BackgroundInitializerProtocol] = None,
         path_provider: Optional[PathProviderProtocol] = None,
         file_collector: Optional[FileCollectorProtocol] = None,
         io: Optional['CLIIOProtocol'] = None,
@@ -77,8 +75,6 @@ class CodebaseContext:
             platform_detector: Injectable platform detector (default: creates new SystemPlatformDetector)
             git_history_reader: Injectable git history reader (default: creates new GitHistoryReader)
             project_detector: Injectable project detector (default: creates from project_path)
-            auto_load_cache: If True, automatically load cache in constructor (for backwards compatibility)
-            semantic_initializer: Background initializer for semantic search (deprecated, use semantic_manager)
             path_provider: Path provider for data files (auto-creates if None)
             file_collector: Injectable file collector for semantic search (default: creates SemanticFileCollector)
             io: Injectable IO interface for progress reporting (default: None, falls back to NullProgressReporter)
@@ -134,23 +130,17 @@ class CodebaseContext:
         else:
             self._semantic_manager = SemanticSearchManager(
                 project_path=self.project_path,
-                initializer=semantic_initializer,
                 event_queue=self._event_queue,
                 io=self._io,
             )
 
         # Backward compatibility: expose underlying state via manager
         self._semantic_search = None  # Cached for backward compatibility
-        self._semantic_initializer = semantic_initializer  # Backward compatibility
         self._indexing_progress_callback = None  # Callback for indexing progress updates
 
         # === Context Augmenter (extracted) ===
         # Defer augmenter creation until first use since it needs data providers
         self._context_augmenter = context_augmenter  # May be None initially
-
-        # Auto-load cache if requested (for backwards compatibility)
-        if auto_load_cache:
-            self._load_cache()
 
     @property
     def cache_file(self) -> Path:
@@ -310,7 +300,6 @@ class CodebaseContext:
         # Delegate to semantic manager
         self._semantic_manager.start_background_init()
 
-        # Set up callback bridge for backward compatibility
         if self._indexing_progress_callback:
             self._semantic_manager.set_progress_callback(self._indexing_progress_callback)
 

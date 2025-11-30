@@ -9,8 +9,8 @@ import pytest
 from unittest.mock import Mock, MagicMock, patch
 from pathlib import Path
 
-from src.agent import (
-    CodeAgent,
+from src.agent.core import CodeAgent
+from src.agent.types import (
     AgentAction,
     ActionResult,
     ConversationState
@@ -67,7 +67,7 @@ class TestDuplicateActionDetection:
         agent.tools['write_file'] = Mock(return_value="Successfully wrote 35 characters")
 
         # Execute action
-        result = agent._execute(action, state)
+        result = agent._agent_loop.execute(action, state)
 
         # Should NOT warn about duplicates (different file)
         assert result.success is True
@@ -130,7 +130,7 @@ class TestPostWriteVerification:
         thought.raw_response = '{"action": "write_file", ...}'
 
         # Update conversation
-        agent._update_conversation(state, thought, action, result)
+        agent._agent_loop.update_conversation(state, thought, action, result)
 
         # Check that latest user message encourages verification
         latest_message = state.messages[-1]
@@ -189,7 +189,7 @@ class TestPostWriteVerification:
         thought.raw_response = '{"action": "read_file", ...}'
 
         # Update conversation
-        agent._update_conversation(state, thought, action, result)
+        agent._agent_loop.update_conversation(state, thought, action, result)
 
         # Should NOT suggest verification for reads
         latest_message = state.messages[-1]

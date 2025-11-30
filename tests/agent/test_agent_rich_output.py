@@ -995,11 +995,11 @@ class TestAgentOutputHelpers:
         orch = ConfigurableTestOrchestrator()
         agent = CodeAgent(orchestrator=orch, io=io)
 
-        assert hasattr(agent, '_show_thinking'), \
-            "Agent should have _show_thinking method"
+        assert hasattr(agent.ui, 'show_thinking'), \
+            "Agent UI should have show_thinking method"
 
         # Test the method
-        agent._show_thinking("Test thinking")
+        agent.ui.show_thinking("Test thinking")
 
         panels = io.get_panels()
         assert len(panels) == 1
@@ -1015,11 +1015,11 @@ class TestAgentOutputHelpers:
         orch = ConfigurableTestOrchestrator()
         agent = CodeAgent(orchestrator=orch, io=io)
 
-        assert hasattr(agent, '_show_tool_request'), \
-            "Agent should have _show_tool_request method"
+        assert hasattr(agent.ui, 'show_tool_request'), \
+            "Agent UI should have show_tool_request method"
 
         # Test the method
-        agent._show_tool_request("read_file", {"path": "/test.py"})
+        agent.ui.show_tool_request("read_file", {"path": "/test.py"})
 
         tables = io.get_tables()
         assert len(tables) == 1
@@ -1034,11 +1034,11 @@ class TestAgentOutputHelpers:
         orch = ConfigurableTestOrchestrator()
         agent = CodeAgent(orchestrator=orch, io=io)
 
-        assert hasattr(agent, '_show_error'), \
-            "Agent should have _show_error method"
+        assert hasattr(agent.ui, 'show_error'), \
+            "Agent UI should have show_error method"
 
         # Test the method
-        agent._show_error("Test error message")
+        agent.ui.show_error("Test error message")
 
         panels = io.get_panels()
         assert len(panels) == 1
@@ -1054,11 +1054,11 @@ class TestAgentOutputHelpers:
         orch = ConfigurableTestOrchestrator()
         agent = CodeAgent(orchestrator=orch, io=io)
 
-        assert hasattr(agent, '_show_result'), \
-            "Agent should have _show_result method"
+        assert hasattr(agent.ui, 'show_result'), \
+            "Agent UI should have show_result method"
 
         # Test the method
-        agent._show_result("Test result")
+        agent.ui.show_result("Test result")
 
         panels = io.get_panels()
         assert len(panels) == 1
@@ -1073,11 +1073,11 @@ class TestAgentOutputHelpers:
         orch = ConfigurableTestOrchestrator()
         agent = CodeAgent(orchestrator=orch, io=io)
 
-        assert hasattr(agent, '_show_command'), \
-            "Agent should have _show_command method"
+        assert hasattr(agent.ui, 'show_command'), \
+            "Agent UI should have show_command method"
 
         # Test the method
-        agent._show_command("npm install")
+        agent.ui.show_command("npm install")
 
         blocks = io.get_syntax_blocks()
         assert len(blocks) == 1
@@ -1092,14 +1092,14 @@ class TestAgentOutputHelpers:
         orch = ConfigurableTestOrchestrator()
         agent = CodeAgent(orchestrator=orch, io=io)
 
-        assert hasattr(agent, '_show_progress'), \
-            "Agent should have _show_progress method"
+        assert hasattr(agent.ui, 'show_progress'), \
+            "Agent UI should have show_progress method"
 
         # Clear output from initialization
         io.clear_output()
 
         # Test the method
-        agent._show_progress("Loading...")
+        agent.ui.show_progress("Loading...")
 
         styled = io.get_styled_outputs()
         assert len(styled) == 1

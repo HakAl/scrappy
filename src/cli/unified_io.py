@@ -945,16 +945,6 @@ class UnifiedIO:
         """Output a styled message with color and formatting."""
         self._strategy.output_styled(message, fg, bold, nl)
 
-    def styled_echo(
-        self,
-        message: str,
-        fg: Optional[str] = None,
-        bold: bool = False,
-        nl: bool = True
-    ) -> None:
-        """Alias for secho() for backwards compatibility."""
-        self.secho(message, fg, bold, nl)
-
     def style(
         self,
         text: str,

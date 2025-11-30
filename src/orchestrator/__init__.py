@@ -24,7 +24,7 @@ The orchestrator:
 
 from .core import AgentOrchestrator, create_orchestrator
 from .cache import ResponseCache
-from .rate_limiter import RateLimitTracker
+from .rate_limiting import RateLimitTracker
 from .memory import WorkingMemory
 from .session import SessionManager
 from .task_executor import TaskExecutor
@@ -38,7 +38,7 @@ from .protocols import (
     ProviderSelectorProtocol,
     ProviderRegistryProtocol,
     WorkingMemoryProtocol,
-    OperationalOutputProtocol,
+    BaseOutputProtocol,
     ContextProvider,
     OrchestratorAdapter,
 )
@@ -72,7 +72,7 @@ __all__ = [
     'ProviderSelectorProtocol',
     'ProviderRegistryProtocol',
     'WorkingMemoryProtocol',
-    'OperationalOutputProtocol',
+    'BaseOutputProtocol',
     'ContextProvider',
     'OrchestratorAdapter',
     'DelegationManagerProtocol',

@@ -51,17 +51,6 @@ class TestTestIO:
         assert "No newline continues" in output or "No newline" in output
 
     @pytest.mark.unit
-    def test_testio_styled_echo_captures_content(self):
-        """Test that styled_echo captures content (ignores styling for testing)."""
-        from src.cli.io_interface import TestIO
-        io = TestIO()
-
-        io.styled_echo("Styled text", fg="green", bold=True)
-
-        assert "Styled text" in io.get_output()
-
-
-    @pytest.mark.unit
     def test_testio_secho_captures_content(self):
         """Test that secho captures content."""
         from src.cli.io_interface import TestIO
@@ -271,7 +260,7 @@ class TestIOProtocolUsage:
 
         # Example function that uses IO protocol
         def display_status(io: CLIIOProtocol, status: str) -> None:
-            io.styled_echo("Status:", fg="cyan", bold=True)
+            io.secho("Status:", fg="cyan", bold=True)
             io.echo(f"  {status}")
 
         # Test with TestIO
@@ -324,7 +313,7 @@ class TestIOProtocolUsage:
 
         # Example workflow function
         def setup_wizard(io: CLIIOProtocol) -> dict:
-            io.styled_echo("Welcome to Setup Wizard", fg="cyan", bold=True)
+            io.secho("Welcome to Setup Wizard", fg="cyan", bold=True)
             io.echo("-" * 30)
 
             name = io.prompt("Enter project name: ", default="my-project")
@@ -332,7 +321,7 @@ class TestIOProtocolUsage:
             io.echo(f"Creating project: {name}")
 
             if io.confirm("Add tests?", default=True):
-                io.styled_echo("Tests enabled", fg="green")
+                io.secho("Tests enabled", fg="green")
                 tests = True
             else:
                 tests = False
@@ -369,16 +358,6 @@ class TestEdgeCases:
 
         assert "tab" in io.get_output()
         assert "cafe" in io.get_output()
-
-    @pytest.mark.unit
-    def test_testio_styled_echo_with_none_fg(self):
-        """Test styled_echo with None foreground color."""
-        from src.cli.io_interface import TestIO
-        io = TestIO()
-
-        io.styled_echo("No color", fg=None, bold=False)
-
-        assert "No color" in io.get_output()
 
     @pytest.mark.unit
     def test_testio_prompt_empty_default(self):

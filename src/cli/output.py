@@ -172,16 +172,6 @@ class FormattedOutputInterface(ABC):
         """Backward compatible styled echo method."""
         self.print(message, color=fg, bold=bold, newline=nl)
 
-    def styled_echo(
-        self,
-        message: str,
-        fg: Optional[str] = None,
-        bold: bool = False,
-        nl: bool = True
-    ) -> None:
-        """Backward compatible styled echo method."""
-        self.print(message, color=fg, bold=bold, newline=nl)
-
     def input_line(self) -> str:
         """Read raw line of input.
 

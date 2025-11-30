@@ -132,27 +132,9 @@ class ModelInfo:
         # Extract context length (may be 'context' or 'context_length')
         context_length = config.get("context", config.get("context_length", 4096))
 
-        # Handle quality - accept enum or string
-        quality_val = config.get("quality", QualityRank.GOOD)
-        if isinstance(quality_val, str):
-            # Convert string to enum for backward compatibility
-            try:
-                quality = QualityRank(quality_val)
-            except ValueError:
-                quality = QualityRank.GOOD
-        else:
-            quality = quality_val
-
-        # Handle speed - accept enum or string
-        speed_val = config.get("speed", SpeedRank.FAST)
-        if isinstance(speed_val, str):
-            # Convert string to enum for backward compatibility
-            try:
-                speed = SpeedRank(speed_val)
-            except ValueError:
-                speed = SpeedRank.FAST
-        else:
-            speed = speed_val
+        # Extract quality and speed (must be enum values)
+        quality = config.get("quality", QualityRank.GOOD)
+        speed = config.get("speed", SpeedRank.FAST)
 
         return cls(
             id=model_id,

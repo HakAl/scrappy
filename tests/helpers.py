@@ -473,16 +473,6 @@ class MockIO:
         else:
             self._output_buffer.append(message)
 
-    def styled_echo(
-        self,
-        message: str,
-        fg: Optional[str] = None,
-        bold: bool = False,
-        nl: bool = True
-    ) -> None:
-        """Alias for secho() for backwards compatibility."""
-        self.secho(message, fg=fg, bold=bold, nl=nl)
-
     def style(
         self,
         text: str,
@@ -2119,16 +2109,6 @@ class MockTextualIO:
 
         new_content = f"{current}\n{formatted}" if current and nl else f"{current}{formatted}"
         output_widget.update(new_content)
-
-    def styled_echo(
-        self,
-        message: str,
-        fg: Optional[str] = None,
-        bold: bool = False,
-        nl: bool = True
-    ) -> None:
-        """Alias for secho() for backwards compatibility."""
-        self.secho(message, fg=fg, bold=bold, nl=nl)
 
     def style(
         self,

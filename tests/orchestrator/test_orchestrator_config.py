@@ -9,7 +9,7 @@ import pytest
 from unittest.mock import MagicMock, PropertyMock
 
 from src.orchestrator.provider_selector import ProviderSelector
-from src.orchestrator.rate_limiter import RateLimitTracker
+from src.orchestrator.rate_limiting import RateLimitTracker
 from src.orchestrator.model_selection import ModelSelectionType
 from src.providers.base import ProviderRegistry
 from tests.helpers import create_test_rate_limit_tracker
@@ -414,90 +414,3 @@ class TestSelectForTaskRegression:
         name, model = selector.get_model(ModelSelectionType.FAST)
 
         assert name == 'github_models'
-
-
-class TestConfigValidation:
-    """
-    Tests for config validation after consolidation.
-
-    These tests will validate the config.py structure once created.
-    They should fail until config.py is properly implemented.
-    """
-
-
-    def test_provider_priority_defined(self):
-        """PROVIDER_PRIORITY should be defined."""
-        try:
-            from src.orchestrator.config import PROVIDER_PRIORITY
-            assert isinstance(PROVIDER_PRIORITY, list)
-            assert len(PROVIDER_PRIORITY) > 0
-        except ImportError:
-            pytest.skip("config.py not yet created")
-
-    def test_provider_info_defined(self):
-        """PROVIDER_INFO should be defined."""
-        try:
-            from src.orchestrator.config import PROVIDER_INFO
-            assert isinstance(PROVIDER_INFO, dict)
-            assert len(PROVIDER_INFO) > 0
-        except ImportError:
-            pytest.skip("config.py not yet created")
-
-    def test_task_preferences_defined(self):
-        """TASK_PREFERENCES should be defined."""
-        try:
-            from src.orchestrator.config import TASK_PREFERENCES
-            assert isinstance(TASK_PREFERENCES, dict)
-            assert len(TASK_PREFERENCES) > 0
-        except ImportError:
-            pytest.skip("config.py not yet created")
-
-    def test_all_priority_providers_have_info(self):
-        """All providers in PROVIDER_PRIORITY should have PROVIDER_INFO."""
-        try:
-            from src.orchestrator.config import PROVIDER_PRIORITY, PROVIDER_INFO
-
-            for provider in PROVIDER_PRIORITY:
-                assert provider in PROVIDER_INFO, \
-                    f"Provider '{provider}' in PROVIDER_PRIORITY but not in PROVIDER_INFO"
-        except ImportError:
-            pytest.skip("config.py not yet created")
-
-    def test_all_task_preference_providers_are_valid(self):
-        """All providers in TASK_PREFERENCES should be in PROVIDER_PRIORITY."""
-        try:
-            from src.orchestrator.config import PROVIDER_PRIORITY, TASK_PREFERENCES
-
-            for task_type, providers in TASK_PREFERENCES.items():
-                for provider in providers:
-                    assert provider in PROVIDER_PRIORITY, \
-                        f"Provider '{provider}' in TASK_PREFERENCES['{task_type}'] but not in PROVIDER_PRIORITY"
-        except ImportError:
-            pytest.skip("config.py not yet created")
-
-    def test_provider_info_has_required_fields(self):
-        """PROVIDER_INFO entries should have required fields."""
-        try:
-            from src.orchestrator.config import PROVIDER_INFO
-
-            required_fields = ['quota', 'description']
-
-            for provider, info in PROVIDER_INFO.items():
-                for field in required_fields:
-                    assert field in info, \
-                        f"Provider '{provider}' missing required field '{field}'"
-        except ImportError:
-            pytest.skip("config.py not yet created")
-
-    def test_task_preferences_has_required_task_types(self):
-        """TASK_PREFERENCES should have required task types."""
-        try:
-            from src.orchestrator.config import TASK_PREFERENCES
-
-            required_tasks = ['planning', 'execution', 'quick', 'general']
-
-            for task in required_tasks:
-                assert task in TASK_PREFERENCES, \
-                    f"Required task type '{task}' not in TASK_PREFERENCES"
-        except ImportError:
-            pytest.skip("config.py not yet created")

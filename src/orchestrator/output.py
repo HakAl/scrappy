@@ -2,14 +2,14 @@
 Output abstraction for the orchestrator.
 
 Provides implementations for operational output (logging/status messages).
-The OperationalOutputProtocol protocol is defined in protocols.py.
+The BaseOutputProtocol protocol is defined in protocols.py.
 """
 
 import logging
 from typing import List, Tuple
 
 # Import protocol from centralized location
-from .protocols import OperationalOutputProtocol
+from .protocols import BaseOutputProtocol
 
 
 logger = logging.getLogger(__name__)

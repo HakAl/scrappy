@@ -10,7 +10,7 @@ from pathlib import Path
 import json
 import hashlib
 import re
-from .output import OperationalOutputProtocol
+from .output import BaseOutputProtocol
 
 if TYPE_CHECKING:
     from ..infrastructure.persistence import JSONPersistence
@@ -44,7 +44,7 @@ class ResponseCache:
         self,
         cache_file: Optional[str] = None,
         default_ttl_hours: int = 24,
-        output: Optional[OperationalOutputProtocol] = None,
+        output: Optional[BaseOutputProtocol] = None,
         auto_load: bool = False,
         persistence: Optional['JSONPersistence'] = None
     ):
@@ -98,7 +98,7 @@ class ResponseCache:
             self._load_cache()
         return self
 
-    def _create_default_output(self) -> OperationalOutputProtocol:
+    def _create_default_output(self) -> BaseOutputProtocol:
         """Create default output interface."""
         from .output import NullOutput
         return NullOutput()

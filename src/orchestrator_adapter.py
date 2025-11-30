@@ -80,36 +80,32 @@ class AgentOrchestratorAdapter:
 
     def delegate(
         self,
-        provider: Optional[str] = None,
+        provider_name: Optional[str] = None,
         prompt: str = "",
         system_prompt: Optional[str] = None,
         max_tokens: int = 1500,
         temperature: float = 0.3,
         use_context: bool = False,
         selection_type: Optional["ModelSelectionType"] = None,
-        provider_name: Optional[str] = None,  # Alias for provider
         **kwargs
     ) -> LLMResponse:
         """Delegate to the orchestrator's delegate method.
 
         Args:
-            provider: Provider name (legacy positional, can be None for auto-selection)
+            provider_name: Provider name (can be None for auto-selection)
             prompt: The prompt to send
             system_prompt: Optional system prompt
             max_tokens: Maximum tokens in response
             temperature: Sampling temperature
             use_context: Whether to use context augmentation
             selection_type: What kind of model to use for auto-selection
-            provider_name: Alias for provider (keyword-only)
             **kwargs: Additional arguments passed to orchestrator
         """
-        # Support both 'provider' and 'provider_name' for compatibility
-        actual_provider = provider_name if provider_name is not None else provider
 
         # Build kwargs for orchestrator - only pass selection_type if not None
         # This allows orchestrator to use its default value
         orch_kwargs = {
-            'provider_name': actual_provider,
+            'provider_name': provider_name,
             'prompt': prompt,
             'system_prompt': system_prompt,
             'max_tokens': max_tokens,
@@ -128,8 +124,8 @@ class AgentOrchestratorAdapter:
             return response
 
         # Adapt from orchestrator's response format
-        # Use response.provider if available, otherwise fall back to actual_provider
-        response_provider = getattr(response, 'provider', actual_provider or 'unknown')
+        # Use response.provider if available, otherwise fall back to provider_name
+        response_provider = getattr(response, 'provider', provider_name or 'unknown')
         return LLMResponse(
             content=getattr(response, 'content', str(response)),
             model=getattr(response, 'model', ''),
@@ -141,28 +137,26 @@ class AgentOrchestratorAdapter:
 
     def delegate_with_tools(
         self,
-        provider: Optional[str] = None,
+        provider_name: Optional[str] = None,
         prompt: str = "",
         tools: List[dict] = None,
         system_prompt: Optional[str] = None,
         max_tokens: int = 1500,
         temperature: float = 0.3,
         tool_choice: str = "auto",
-        provider_name: Optional[str] = None,
         **kwargs
     ) -> LLMResponse:
         """
         Delegate to provider with native tool calling support.
 
         Args:
-            provider: Provider name (legacy positional, can be None for auto-selection)
+            provider_name: Provider name (can be None for auto-selection)
             prompt: The prompt to send
             tools: List of OpenAI-compatible tool schemas
             system_prompt: Optional system prompt
             max_tokens: Maximum tokens in response
             temperature: Sampling temperature
             tool_choice: How the model should choose tools
-            provider_name: Alias for provider (keyword-only)
             **kwargs: Additional arguments
 
         Returns:
@@ -171,18 +165,15 @@ class AgentOrchestratorAdapter:
         if tools is None:
             tools = []
 
-        # Support both 'provider' and 'provider_name' for compatibility
-        actual_provider = provider_name if provider_name is not None else provider
-
         # Get the provider instance from registry
-        provider_obj = self._orch._registry.get(actual_provider)
+        provider_obj = self._orch._registry.get(provider_name)
         if provider_obj is None:
-            raise ValueError(f"Provider {actual_provider} not found in registry")
+            raise ValueError(f"Provider {provider_name} not found in registry")
 
         # Check if provider supports native tool calling
         if not provider_obj.supports_tool_calling:
             raise ValueError(
-                f"Provider {actual_provider} does not support native tool calling. "
+                f"Provider {provider_name} does not support native tool calling. "
                 "Use regular delegate() with JSON parsing instead."
             )
 

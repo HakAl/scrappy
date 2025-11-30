@@ -613,9 +613,6 @@ class WorkingMemoryProtocol(Protocol):
 # Import the unified output protocol from the central protocols module
 from ..protocols.output import BaseOutputProtocol
 
-# OperationalOutputProtocol is now an alias to BaseOutputProtocol
-# This maintains backward compatibility while using the unified hierarchy
-OperationalOutputProtocol = BaseOutputProtocol
 
 
 

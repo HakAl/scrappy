@@ -53,7 +53,6 @@ class GroqProvider(LLMProviderBase):
             'rpm': 30, 'rpd': 14400, 'tpm': 5000, 'tpd': None,
             'context': 32768, 'speed': SpeedRank.FAST, 'quality': QualityRank.VERY_GOOD
         },
-        # gemma2-9b-it removed - decommissioned by Groq as of 2025-11
         # New instruction-tuned models (added 2025-11)
         'meta-llama/llama-4-scout-17b-16e-instruct': {
             'rpm': 30, 'rpd': 7000, 'tpm': 20000, 'tpd': 200000,

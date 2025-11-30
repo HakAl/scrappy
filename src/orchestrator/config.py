@@ -119,29 +119,6 @@ class OrchestratorConfig(BaseConfig):
             if not providers:
                 raise ValueError(f"task_preferences['{task}'] cannot be empty")
 
-
-# Legacy constants for backward compatibility
-# DEPRECATED: Use OrchestratorConfig instance instead
-# These will be removed in a future version
-
-# Maintain minimal compatibility for external code that might still import these
-_default_config = OrchestratorConfig()
-
-PROVIDER_PRIORITY = _default_config.provider_priority
-BRAIN_PRIORITY = _default_config.brain_priority
-FALLBACK_PRIORITY = _default_config.fallback_priority
-TASK_PREFERENCES = _default_config.task_preferences
-
-# Convert ProviderInfo to dict for backward compatibility
-PROVIDER_INFO = {
-    name: {
-        'quota': info.quota,
-        'description': info.description,
-    }
-    for name, info in _default_config.provider_info.items()
-}
-
-
 def get_provider_reason(provider_name: str) -> str:
     """
     Get human-readable reason for provider selection.

@@ -23,7 +23,6 @@ from .output import (
     BaseOutputProtocol,
     FormattedOutputProtocol,
     RichRenderableProtocol,
-    OperationalOutputProtocol,
 )
 
 __all__ = [
@@ -43,5 +42,4 @@ __all__ = [
     'BaseOutputProtocol',
     'FormattedOutputProtocol',
     'RichRenderableProtocol',
-    'OperationalOutputProtocol',
 ]

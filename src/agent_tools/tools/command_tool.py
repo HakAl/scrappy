@@ -26,9 +26,6 @@ from src.platform import (
 )
 
 
-# Removed safe_print() - output should go through injected IO protocol, not print()
-
-
 def create_shell_executor(
     command_timeout: int = DEFAULT_COMMAND_TIMEOUT,
     max_command_output: int = DEFAULT_MAX_COMMAND_OUTPUT,

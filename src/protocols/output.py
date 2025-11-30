@@ -211,8 +211,3 @@ class RichRenderableProtocol(Protocol):
             obj: Rich renderable object (Panel, Table, Text, etc.)
         """
         ...
-
-
-# Backward compatibility alias
-# OperationalOutputProtocol is the same as BaseOutputProtocol
-OperationalOutputProtocol = BaseOutputProtocol

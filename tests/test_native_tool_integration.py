@@ -183,7 +183,7 @@ class TestThinkMethodNativeToolDetection:
         )
 
         # Call _think
-        thought = agent_with_native_orchestrator._think(state)
+        thought = agent_with_native_orchestrator._agent_loop.think(state)
 
         # Native tools are supported, so delegate_with_tools should be called
         assert mock_orchestrator_with_native_support.delegate_with_tools.called, \
@@ -226,7 +226,7 @@ class TestThinkMethodNativeToolDetection:
         )
 
         # This should use regular delegate, not delegate_with_tools
-        thought = agent._think(state)
+        thought = agent._agent_loop.think(state)
 
         # Should have used regular delegate (tracked in orch.delegate_calls)
         assert len(orch.delegate_calls) > 0
@@ -250,7 +250,7 @@ class TestThinkMethodNativeToolDetection:
             iteration=1
         )
 
-        agent_with_native_orchestrator._think(state)
+        agent_with_native_orchestrator._agent_loop.think(state)
 
         # delegate_with_tools should be called since provider supports native tools
         assert mock_orchestrator_with_native_support.delegate_with_tools.called, \
@@ -293,7 +293,7 @@ class TestPlanActionNativeToolParsing:
             llm_response=response
         )
 
-        action = agent_with_native_orchestrator._plan_action(thought)
+        action = agent_with_native_orchestrator._agent_loop.plan(thought)
 
         # Should have parsed the tool call correctly
         assert action.action == "read_file"
@@ -315,7 +315,7 @@ class TestPlanActionNativeToolParsing:
             llm_response=None  # No LLMResponse means JSON parsing
         )
 
-        action = agent_with_native_orchestrator._plan_action(thought)
+        action = agent_with_native_orchestrator._agent_loop.plan(thought)
 
         # Should have parsed JSON correctly
         assert action.action == "read_file"
@@ -344,7 +344,7 @@ class TestPlanActionNativeToolParsing:
             llm_response=response
         )
 
-        action = agent_with_native_orchestrator._plan_action(thought)
+        action = agent_with_native_orchestrator._agent_loop.plan(thought)
 
         # Should recognize completion
         assert action.is_complete is True
@@ -374,7 +374,7 @@ class TestPlanActionNativeToolParsing:
             llm_response=response
         )
 
-        action = agent_with_native_orchestrator._plan_action(thought)
+        action = agent_with_native_orchestrator._agent_loop.plan(thought)
 
         # Should parse JSON content successfully
         assert action.is_complete is True

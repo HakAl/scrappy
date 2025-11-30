@@ -14,7 +14,7 @@ except ImportError:
     from context import CodebaseContext
     from context.protocols import CodebaseContextProtocol
 
-from .protocols import OperationalOutputProtocol
+from .protocols import BaseOutputProtocol
 
 from .output import ConsoleOutput
 
@@ -44,7 +44,7 @@ class ContextCoordinator:
     def __init__(
         self,
         context: CodebaseContextProtocol,
-        output: Optional[OperationalOutputProtocol] = None,
+        output: Optional[BaseOutputProtocol] = None,
         generate_summary_func: Optional[Callable[[str], str]] = None,
     ):
         """

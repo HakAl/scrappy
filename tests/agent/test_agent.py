@@ -7,8 +7,8 @@ from pathlib import Path
 from dataclasses import dataclass
 import json
 
-from src.agent import (
-    CodeAgent,
+from src.agent.core import CodeAgent
+from src.agent.types import (
     AgentThought,
     AgentAction,
     ActionResult,

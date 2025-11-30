@@ -21,12 +21,12 @@ except ImportError:
     from infrastructure.exceptions import RateLimitError, AllProvidersRateLimitedError
 
 from .cache import ResponseCache
-from .rate_limiter import RateLimitTracker
+from .rate_limiting import RateLimitTracker
 from .memory import WorkingMemory
 from .session import SessionManager
 from .task_executor import TaskExecutor
 from .provider_selector import ProviderSelector
-from .output import OperationalOutputProtocol, ConsoleOutput
+from .output import BaseOutputProtocol, ConsoleOutput
 from .delegation import DelegationManager
 from .retry_orchestrator import RetryOrchestrator
 from .prompt_augmenter import PromptAugmenter
@@ -78,7 +78,7 @@ class AgentOrchestrator:
         cache_ttl_hours: int = 24,
         verbose_selection: bool = False,
         enable_semantic_search: bool = False,
-        output: Optional[OperationalOutputProtocol] = None,
+        output: Optional[BaseOutputProtocol] = None,
         # Injectable dependencies for testability (using protocols for Dependency Inversion)
         registry: Optional[ProviderRegistryProtocol] = None,
         codebase_context: Optional[ContextProvider] = None,

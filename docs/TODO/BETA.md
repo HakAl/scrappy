@@ -1,5 +1,7 @@
 ## Release Bare Minimum (beta v.1)
 
+missing doc: theme
+
 ---
  That makes sense. So the fix is narrower: GitHub Models should be blocked specifically from agent/planner roles,
   not removed entirely.

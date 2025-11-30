@@ -261,7 +261,7 @@ class TestRetryPatternDetection:
     def test_no_warning_for_empty_failures(self, agent_with_config):
         """Should return empty string when no previous failures."""
         cmd = "curl https://example.com"
-        result = agent_with_config._check_retry_pattern(cmd, [])
+        result = agent_with_config._command_executor._check_retry_pattern(cmd, [])
         assert result == ""
 
     @pytest.mark.unit
@@ -274,7 +274,7 @@ class TestRetryPatternDetection:
             "approach": "spring_initializr_download"
         }]
 
-        result = agent_with_config._check_retry_pattern(cmd, failed)
+        result = agent_with_config._command_executor._check_retry_pattern(cmd, failed)
 
         assert "spring_initializr_download" in result
         assert "already failed" in result
@@ -290,7 +290,7 @@ class TestRetryPatternDetection:
             "approach": "spring_initializr_download"
         }]
 
-        result = agent_with_config._check_retry_pattern(cmd, failed)
+        result = agent_with_config._command_executor._check_retry_pattern(cmd, failed)
 
         assert "write_file" in result
         assert "pom.xml" in result or "directly" in result
@@ -305,7 +305,7 @@ class TestRetryPatternDetection:
             "approach": "mkdir_unix_style"
         }]
 
-        result = agent_with_config._check_retry_pattern(cmd, failed)
+        result = agent_with_config._command_executor._check_retry_pattern(cmd, failed)
 
         assert "backslash" in result or "New-Item" in result
 
@@ -319,7 +319,7 @@ class TestRetryPatternDetection:
             "approach": "spring_initializr_download"
         }]
 
-        result = agent_with_config._check_retry_pattern(cmd, failed)
+        result = agent_with_config._command_executor._check_retry_pattern(cmd, failed)
 
         assert "WARNING" in result or "write_file" in result
 
@@ -332,7 +332,7 @@ class TestRetryPatternDetection:
             {"command": "curl https://start.spring.io/v2.zip", "error": "Err2", "approach": "spring_initializr_download"},
         ]
 
-        result = agent_with_config._check_retry_pattern(cmd, failed)
+        result = agent_with_config._command_executor._check_retry_pattern(cmd, failed)
 
         assert "2 time" in result
 
@@ -346,7 +346,7 @@ class TestRetryPatternDetection:
             "approach": "spring_initializr_download"
         }]
 
-        result = agent_with_config._check_retry_pattern(cmd, failed)
+        result = agent_with_config._command_executor._check_retry_pattern(cmd, failed)
 
         # No direct warning about retry pattern, might warn about scaffolding
         # but should not say "already failed"
@@ -363,7 +363,7 @@ class TestRetryPatternDetection:
             "approach": "spring_initializr_download"
         }]
 
-        result = agent_with_config._check_retry_pattern(cmd, failed)
+        result = agent_with_config._command_executor._check_retry_pattern(cmd, failed)
 
         # Should include part of error but truncated
         assert "XXX" in result

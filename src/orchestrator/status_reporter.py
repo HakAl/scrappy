@@ -6,7 +6,7 @@ Handles presentation logic for displaying provider configuration and selection s
 
 from typing import Optional
 
-from src.orchestrator.protocols import OperationalOutputProtocol
+from src.orchestrator.protocols import BaseOutputProtocol
 
 
 
@@ -27,7 +27,7 @@ class ProviderStatusReporter:
         self,
         registry,
         provider_selector,
-        output: OperationalOutputProtocol,
+        output: BaseOutputProtocol,
         brain_name: Optional[str],
         verbose_selection: bool
     ):
