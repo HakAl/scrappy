@@ -1,6 +1,6 @@
 # Orchestrator
 
-Allows any registered provider to act as the orchestrator brain. The orchestrator can automatically learns about your codebase and injects relevant context into prompts.
+Allows any registered provider to act as the orchestrator brain. The orchestrator can automatically learn about your codebase and inject relevant context into prompts.
 
 ## Dependency Injection Pattern
 

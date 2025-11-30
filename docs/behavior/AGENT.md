@@ -7,14 +7,19 @@ The Code Agent is an autonomous system that can analyze codebases, make changes,
 ```
 src/agent/
   core.py                 # Main CodeAgent class
+  agent_loop.py           # Think-plan-execute loop
   protocols.py            # Agent protocols
   action_executor.py      # Executes agent actions
   response_parser.py      # Parses LLM responses into actions
   tool_runner.py          # Runs tools on behalf of agent
-  system_prompt_builder.py # Builds system prompts
+  provider_strategy.py    # Provider selection for agent tasks
   safety_checker.py       # Safety validation
   checkpoint.py           # Git checkpoint creation/rollback
   audit.py                # Audit logging
+  duplicate_detector.py   # Detects repeated/stuck actions
+  denial_handler.py       # Handles user denial of actions
+  ui.py                   # User interaction components
+  types.py                # Type definitions
 ```
 
 ### Execution Flow
@@ -52,7 +57,7 @@ _register_crash_handlers()              [If any audit logging triggered]
     |                                         |
     v                                         v
 signal.signal()                          signal.signal()
-
+```
 
 ### Core Components
 
@@ -95,29 +100,14 @@ while not done and iterations < max_iterations:
 
 ## System Prompt
 
-### PromptBuilder Service
+The agent uses context-aware prompts built from:
 
-The `PromptBuilder` consumes `CodebaseContext` to generate context-aware prompts.
+1. **Platform detection** - Windows cmd.exe vs Unix shells
+2. **Project type** - Python, Java, Node.js specific guidance
+3. **Tool capabilities** - What tools can actually do
+4. **Safety rules** - Platform-specific gotchas
 
-```
-src/agent/prompt_builder.py
-  PlatformSection      # Windows cmd.exe, Unix shells
-  ProjectTypeSection   # Python, Java, Node.js specific
-  ToolCapabilities     # What tools can actually do
-  SafetyRules          # Platform-specific gotchas
-  TaskContext          # Current task requirements
-```
-
-### Context Detection Pipeline
-
-```
-DetectPlatform -> DetectProjectType -> DetectInstalledTools -> BuildPrompt
-```
-
-1. Detect platform (Windows/Unix) for command syntax
-2. Detect project type from markers (package.json, requirements.txt, etc.)
-3. Detect installed tools (git, npm, python, etc.)
-4. Build prompt with relevant guidance only
+Prompt building is handled by `src/prompts/` - see [PROMPTS.md](PROMPTS.md) for details.
 
 ## Response Parsing
 
