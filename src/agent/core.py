@@ -16,10 +16,8 @@ from ..agent_config import AgentConfig
 from ..agent_tools.tools import ToolRegistry, ToolContext
 from ..agent_tools.tools.command_tool import ShellCommandExecutor
 
-# Import IO interfaces - avoid circular import by importing module directly
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from ..cli.io_interface import CLIIOProtocol
+# Import IO protocol from shared location (no circular dependency)
+from ..protocols.io import CLIIOProtocol
 
 from ..orchestrator_adapter import (
     OrchestratorAdapter,

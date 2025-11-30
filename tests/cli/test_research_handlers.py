@@ -10,7 +10,7 @@ from typing import List
 
 from src.task_router.protocols import QueryIntent, IntentResult
 from src.cli.research_handlers.base import ClassificationResult
-from src.cli.io_interface import CLIIOProtocol
+from src.protocols.io import CLIIOProtocol
 
 
 # =============================================================================

@@ -5,15 +5,13 @@ Defines abstract interfaces for task classification, clarification,
 routing, metrics collection, and intent classification.
 """
 
-from typing import Protocol, Dict, Any, List, Optional, runtime_checkable, TYPE_CHECKING
+from typing import Protocol, Dict, Any, List, Optional, runtime_checkable
 from enum import Enum
 from datetime import datetime
 from dataclasses import dataclass
 
 from src.infrastructure.output_mode import OutputModeContext
-
-if TYPE_CHECKING:
-    from ..cli.io_interface import CLIIOProtocol
+from ..protocols.io import CLIIOProtocol
 
 
 @runtime_checkable
@@ -690,7 +688,7 @@ class IOBasedInput:
     Implements TaskRouterInputProtocol.
     """
 
-    def __init__(self, io: "CLIIOProtocol"):
+    def __init__(self, io: CLIIOProtocol):
         """Initialize with CLIIOProtocol instance.
 
         Args:
@@ -731,7 +729,7 @@ class IOBasedInput:
         self._io.echo(message)
 
 
-def create_task_router_input(io: Optional["CLIIOProtocol"] = None) -> TaskRouterInputProtocol:
+def create_task_router_input(io: Optional[CLIIOProtocol] = None) -> TaskRouterInputProtocol:
     """
     Factory function to create the appropriate input handler based on mode.
 

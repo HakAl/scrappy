@@ -5,7 +5,7 @@ Routes slash commands to appropriate handlers.
 """
 
 from datetime import datetime
-from typing import TYPE_CHECKING, List, Optional
+from typing import List, Optional
 from .io_interface import CLIIOProtocol
 from .state_manager import PlanStateManager
 from .session_context import SessionContextProtocol
@@ -23,9 +23,7 @@ from .utils.session_utils import (
     display_session_save_error,
     display_session_not_saved_warning
 )
-
-if TYPE_CHECKING:
-    from ..orchestrator.protocols import Orchestrator
+from ..orchestrator.protocols import Orchestrator
 
 
 class CommandRouter:
@@ -34,7 +32,7 @@ class CommandRouter:
     def __init__(
         self,
         io: CLIIOProtocol,
-        orchestrator: "Orchestrator",
+        orchestrator: Orchestrator,
         session_context: SessionContextProtocol,
         display: CLIDisplay,
         session_mgr: CLISessionManager,

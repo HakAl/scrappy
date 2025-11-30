@@ -11,12 +11,12 @@ from .unified_io import UnifiedIO
 from .interactive import InteractiveMode
 from .output_bridge import OutputBridge
 from .config_factory import get_config
+from ..orchestrator.protocols import Orchestrator
 
 # Re-export for backward compatibility
 OrchestratorOutputAdapter = OutputBridge
 
 if TYPE_CHECKING:
-    from ..orchestrator.protocols import Orchestrator
     from .state_manager import PlanStateManager
     from .session_context import SessionContextProtocol
     from .input_handler import InputHandler
@@ -45,7 +45,7 @@ class TextualInteractiveMode:
 
     def __init__(
         self,
-        orchestrator: "Orchestrator",
+        orchestrator: Orchestrator,
         session_context: "SessionContextProtocol",
         state_manager: "PlanStateManager",
         input_handler: "InputHandler",

@@ -2,7 +2,7 @@
 from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import Any, Dict, List, Optional
 
 from .protocols import (
     StorageProtocol,
@@ -11,10 +11,8 @@ from .protocols import (
     RecommenderProtocol,
     UsageQueryProtocol,
 )
-
-if TYPE_CHECKING:
-    from ..providers import ProviderLimits
-    from ..config import OrchestratorConfig
+from src.providers.base import ProviderLimits
+from ..config import OrchestratorConfig
 
 
 class RateLimitTracker:
@@ -34,7 +32,7 @@ class RateLimitTracker:
         calculator: CalculatorProtocol,
         recommender: RecommenderProtocol,
         auto_load: bool = False,
-        config: Optional['OrchestratorConfig'] = None,
+        config: Optional[OrchestratorConfig] = None,
     ):
         """
         Initialize tracker.
@@ -52,9 +50,7 @@ class RateLimitTracker:
         self._calc = calculator
         self._recommender = recommender
 
-        # Import here to avoid circular dependency
         if config is None:
-            from ..config import OrchestratorConfig
             config = OrchestratorConfig()
         self.config = config
 

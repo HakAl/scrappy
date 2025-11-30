@@ -26,9 +26,14 @@ from ..infrastructure.threading import (
 )
 from .semantic_manager import SemanticSearchManager
 from .augmenter import ContextAugmenter
+from .protocols import (
+    SemanticSearchManagerProtocol,
+    ContextAugmenterProtocol,
+    FileCollectorProtocol,
+)
 
 if TYPE_CHECKING:
-    from .protocols import SemanticSearchManagerProtocol, ContextAugmenterProtocol
+    from ..protocols.io import CLIIOProtocol
 
 
 class CodebaseContext:
@@ -54,11 +59,11 @@ class CodebaseContext:
         auto_load_cache: bool = False,
         semantic_initializer: Optional[BackgroundInitializerProtocol] = None,
         path_provider: Optional[PathProviderProtocol] = None,
-        file_collector: Optional['FileCollectorProtocol'] = None,
+        file_collector: Optional[FileCollectorProtocol] = None,
         io: Optional['CLIIOProtocol'] = None,
         event_queue: Optional[EventQueueProtocol] = None,
-        semantic_manager: Optional['SemanticSearchManagerProtocol'] = None,
-        context_augmenter: Optional['ContextAugmenterProtocol'] = None,
+        semantic_manager: Optional[SemanticSearchManagerProtocol] = None,
+        context_augmenter: Optional[ContextAugmenterProtocol] = None,
     ):
         """
         Initialize codebase context (dependencies only - NO file I/O by default).

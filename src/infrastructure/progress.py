@@ -13,7 +13,7 @@ from src.infrastructure.output_mode import OutputModeContext
 from src.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
 
 if TYPE_CHECKING:
-    from ..cli.io_interface import CLIIOProtocol
+    from ..protocols.io import CLIIOProtocol
 
 logger = logging.getLogger(__name__)
 

@@ -1,9 +1,8 @@
 """Rate limit calculations."""
 from __future__ import annotations
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import Any, Dict, Optional
 
-if TYPE_CHECKING:
-    from ..providers import ProviderLimits
+from src.providers.base import ProviderLimits
 
 
 class RateLimitCalculator:

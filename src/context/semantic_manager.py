@@ -20,13 +20,14 @@ from ..infrastructure.threading import (
     BackgroundEvent,
     EventType,
 )
+from .protocols import (
+    SemanticSearchProtocol,
+    FileCollectorProtocol,
+    SearchResult,
+)
 
 if TYPE_CHECKING:
-    from .protocols import (
-        SemanticSearchProtocol,
-        FileCollectorProtocol,
-        SearchResult,
-    )
+    from ..protocols.io import CLIIOProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -74,11 +75,11 @@ class SemanticSearchManager:
         self._io = io
 
         # Semantic search state
-        self._semantic_search: Optional['SemanticSearchProtocol'] = None
+        self._semantic_search: Optional[SemanticSearchProtocol] = None
         self._initializer = initializer
         self._progress_callback: Optional[Callable[[str], None]] = None
         self._is_indexed = False
-        self._file_collector_callback: Optional[Callable[[], Optional['FileCollectorProtocol']]] = None
+        self._file_collector_callback: Optional[Callable[[], Optional[FileCollectorProtocol]]] = None
         self._cancellation_check: Optional[Callable[[], bool]] = None
 
     @property
@@ -97,7 +98,7 @@ class SemanticSearchManager:
 
     def set_file_collector_callback(
         self,
-        callback: Optional[Callable[[], Optional['FileCollectorProtocol']]]
+        callback: Optional[Callable[[], Optional[FileCollectorProtocol]]]
     ) -> None:
         """
         Set callback to get file collector for auto-indexing.
@@ -242,7 +243,7 @@ class SemanticSearchManager:
             return self._initializer.get_status()
         return None
 
-    def get_search_provider(self) -> Optional['SemanticSearchProtocol']:
+    def get_search_provider(self) -> Optional[SemanticSearchProtocol]:
         """
         Get the semantic search provider if available.
 
@@ -265,7 +266,7 @@ class SemanticSearchManager:
 
         return None
 
-    def search(self, query: str, max_tokens: int = 4000) -> Optional['SearchResult']:
+    def search(self, query: str, max_tokens: int = 4000) -> Optional[SearchResult]:
         """
         Search indexed codebase semantically.
 
@@ -286,7 +287,7 @@ class SemanticSearchManager:
             logger.warning(f"Semantic search failed: {e}")
             return None
 
-    def index_files(self, file_collector: 'FileCollectorProtocol') -> None:
+    def index_files(self, file_collector: FileCollectorProtocol) -> None:
         """
         Index files for semantic search.
 
@@ -453,7 +454,7 @@ class NullSemanticSearchManager:
 
     def set_file_collector_callback(
         self,
-        callback: Optional[Callable[[], Optional['FileCollectorProtocol']]]
+        callback: Optional[Callable[[], Optional[FileCollectorProtocol]]]
     ) -> None:
         """No-op."""
         pass
@@ -478,7 +479,7 @@ class NullSemanticSearchManager:
         """Returns None."""
         return None
 
-    def index_files(self, file_collector: 'FileCollectorProtocol') -> None:
+    def index_files(self, file_collector: FileCollectorProtocol) -> None:
         """No-op."""
         pass
 

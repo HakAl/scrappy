@@ -6,14 +6,11 @@ Builds context blocks for prompt augmentation from various sources
 """
 
 import logging
-from typing import Optional, Callable, TYPE_CHECKING
+from pathlib import Path
+from typing import Optional, Callable
 
 from .config_loader import get_truncation_defaults
-
-if TYPE_CHECKING:
-    from pathlib import Path
-    from .protocols import SearchResult
-    from .semantic_manager import SemanticSearchManager
+from .protocols import SearchResult, SemanticSearchManagerProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -41,13 +38,13 @@ class ContextAugmenter:
 
     def __init__(
         self,
-        project_path: 'Path',
+        project_path: Path,
         summary_provider: Callable[[], Optional[str]],
         structure_provider: Callable[[], dict],
         git_history_provider: Callable[[], dict],
         file_index_provider: Callable[[], dict],
         is_explored_provider: Callable[[], bool],
-        semantic_manager: Optional['SemanticSearchManager'] = None,
+        semantic_manager: Optional[SemanticSearchManagerProtocol] = None,
     ):
         """
         Initialize context augmenter.
@@ -160,7 +157,7 @@ class ContextAugmenter:
         logger.debug("Using keyword-based context")
         return self._get_keyword_context(query)
 
-    def _format_search_result(self, result: 'SearchResult') -> str:
+    def _format_search_result(self, result: SearchResult) -> str:
         """
         Format search result into context string.
 

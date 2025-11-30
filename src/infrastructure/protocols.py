@@ -11,7 +11,7 @@ from io import StringIO
 
 if TYPE_CHECKING:
     from rich.console import Console
-    from src.cli.protocols import OutputSink
+    from src.protocols.output import RichRenderableProtocol as OutputSink
 
 
 class FileSystemProtocol(Protocol):

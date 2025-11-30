@@ -1,22 +1,20 @@
 """Factory for creating rate limit tracker with default dependencies."""
 from __future__ import annotations
 from pathlib import Path
-from typing import Optional, TYPE_CHECKING
+from typing import Optional
 
 from .tracker import RateLimitTracker
 from .storage import RateLimitStorage, FileSystemAdapter
 from .policy import RateLimitPolicy
 from .calculator import RateLimitCalculator
 from .recommender import RateLimitRecommender
-
-if TYPE_CHECKING:
-    from ..config import OrchestratorConfig
+from ..config import OrchestratorConfig
 
 
 def create_rate_limit_tracker(
     tracker_file: Optional[str | Path] = None,
     auto_load: bool = False,
-    config: Optional['OrchestratorConfig'] = None,
+    config: Optional[OrchestratorConfig] = None,
 ) -> RateLimitTracker:
     """
     Create rate limit tracker with default dependencies.

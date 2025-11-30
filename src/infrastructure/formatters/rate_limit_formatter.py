@@ -4,12 +4,9 @@ Rate limit display formatter.
 Extracts display formatting logic from CLI rate limiter handler.
 """
 
-from typing import TYPE_CHECKING, Any, Dict, List
-
-if TYPE_CHECKING:
-    from src.cli.unified_io import UnifiedIO
-
+from typing import Any, Dict, List
 from .stats_formatter import StatsFormatter
+from .types import FormatterOutputProtocol
 
 
 def extract_time_from_timestamp(timestamp: str) -> str:

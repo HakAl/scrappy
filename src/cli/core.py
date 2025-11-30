@@ -7,8 +7,9 @@ import sys
 from datetime import datetime
 from typing import Optional, TYPE_CHECKING
 
+from ..infrastructure.protocols import BackgroundInitializerProtocol
+
 if TYPE_CHECKING:
-    from ..infrastructure.protocols import BackgroundInitializerProtocol
     from .textual_app import ThreadSafeAsyncBridge
 
 from ..orchestrator import AgentOrchestrator

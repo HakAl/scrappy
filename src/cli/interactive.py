@@ -18,9 +18,9 @@ from .tasks import CLITaskExecution
 from .exceptions import CLIError, ProviderError
 from .error_recovery import graceful_degrade
 from .logging import CLILogger
+from ..orchestrator.protocols import Orchestrator
 
 if TYPE_CHECKING:
-    from ..orchestrator.protocols import Orchestrator
     from src.infrastructure.theme import ThemeProtocol
 
 
@@ -30,7 +30,7 @@ class InteractiveMode:
     def __init__(
         self,
         io: CLIIOProtocol,
-        orchestrator: "Orchestrator",
+        orchestrator: Orchestrator,
         session_context: SessionContextProtocol,
         state_manager: PlanStateManager,
         input_handler: InputHandler,

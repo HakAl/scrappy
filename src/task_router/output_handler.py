@@ -7,16 +7,14 @@ between console, file, buffer, or silent output.
 
 All handlers implement the OutputHandlerProtocol from protocols.py.
 """
-from typing import List, Optional, TYPE_CHECKING
+from typing import List, Optional
 
 from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 
 from src.infrastructure.output_mode import OutputModeContext
-
-if TYPE_CHECKING:
-    from ..cli.io_interface import CLIIOProtocol
+from ..protocols.io import CLIIOProtocol
 
 
 def format_complexity_bar(complexity: int, width: int = 10) -> str:
@@ -49,7 +47,7 @@ class ConsoleOutputHandler:
     If not provided, uses NullOutputHandler behavior (silent).
     """
 
-    def __init__(self, io: Optional['CLIIOProtocol'] = None):
+    def __init__(self, io: Optional[CLIIOProtocol] = None):
         """Initialize with optional IO interface.
 
         Args:
@@ -428,7 +426,7 @@ class RichOutputHandler:
         self._console.print(f"  {message}")
 
 
-def create_output_handler(io: Optional['CLIIOProtocol'] = None, rich_tables: bool = False):
+def create_output_handler(io: Optional[CLIIOProtocol] = None, rich_tables: bool = False):
     """
     Factory function to create the appropriate output handler based on mode.
 

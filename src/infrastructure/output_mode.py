@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Optional, Protocol
 from contextvars import ContextVar
 
 if TYPE_CHECKING:
-    from src.cli.protocols import OutputSink
+    from src.protocols.output import RichRenderableProtocol as OutputSink
 
 
 class OutputModeProtocol(Protocol):

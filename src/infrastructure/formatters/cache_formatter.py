@@ -4,12 +4,9 @@ Cache statistics display formatter.
 Extracts display formatting logic from CLI cache manager handler.
 """
 
-from typing import TYPE_CHECKING, Any, Dict, List, Tuple
-
-if TYPE_CHECKING:
-    from src.cli.unified_io import UnifiedIO
-
+from typing import Any, Dict, List, Tuple
 from .stats_formatter import StatsFormatter
+from .types import FormatterOutputProtocol
 
 
 class CacheFormatter(StatsFormatter):

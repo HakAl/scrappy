@@ -15,7 +15,7 @@ from ..protocols import ExecutionResult
 from .output_collector import ThreadSafeOutputCollector
 
 if TYPE_CHECKING:
-    from src.cli.io_interface import CLIIOProtocol
+    from src.protocols.io import CLIIOProtocol
 
 
 class SubprocessRunner:

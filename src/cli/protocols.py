@@ -8,58 +8,19 @@ enabling consistent behavior, testability, and type checking across the CLI laye
 from typing import TYPE_CHECKING, Protocol, Dict, Any, List, Optional, Callable, runtime_checkable, Generator
 from contextlib import contextmanager
 from .io_interface import CLIIOProtocol
+from ..orchestrator.protocols import Orchestrator
+from ..protocols.output import RichRenderableProtocol
 
 if TYPE_CHECKING:
-    from ..orchestrator.protocols import Orchestrator
     from rich.console import Console, RenderableType
     from rich.layout import Layout
     from textual.widget import Widget
 
 
-@runtime_checkable
-class OutputSink(Protocol):
-    """Abstraction for posting output to UI.
-
-    This protocol is functionally equivalent to RichRenderableProtocol
-    in src/protocols/output.py. It enables different UI implementations
-    (Rich console, Textual TUI, testing mocks) to receive output without
-    coupling the application logic to specific UI frameworks.
-
-    Note: This protocol exists for backward compatibility. New code should
-    prefer importing RichRenderableProtocol from src/protocols/output.py.
-
-    Implementations must handle both plain text and Rich renderables
-    (Panel, Table, Text, etc.) to preserve formatting.
-
-    Following SOLID principles:
-    - Dependency Inversion: High-level modules depend on this abstraction
-    - Interface Segregation: Focused, single-purpose interface for output
-    - Open/Closed: New UI implementations can be added without modification
-
-    Implementations:
-    - TextualOutputAdapter: Posts to Textual app via messages
-    - RichOutputAdapter: Renders to Rich console directly
-    - MockOutputSink: Test double for testing
-    """
-
-    def post_output(self, content: str) -> None:
-        """Post plain text output.
-
-        Args:
-            content: Plain text string to display
-        """
-        ...
-
-    def post_renderable(self, obj: "RenderableType") -> None:
-        """Post Rich renderable (Panel, Table, Text, etc.).
-
-        Rich renderables preserve formatting, colors, and structure.
-        Examples: Panel with borders, Table with columns, styled Text.
-
-        Args:
-            obj: Rich renderable object (Panel, Table, Text, etc.)
-        """
-        ...
+# Backward compatibility alias
+# OutputSink is now an alias to RichRenderableProtocol from the centralized protocols module
+# New code should import RichRenderableProtocol directly from src.protocols.output
+OutputSink = RichRenderableProtocol
 
 
 @runtime_checkable
@@ -96,7 +57,7 @@ class CLIHandlerProtocol(Protocol):
                 ...
     """
 
-    orchestrator: "Orchestrator"
+    orchestrator: Orchestrator
 
     def initialize(self) -> None:
         """Initialize the handler.
@@ -962,7 +923,7 @@ class AgentManagerProtocol(Protocol):
             mgr.run_agent(task)
     """
 
-    orchestrator: "Orchestrator"
+    orchestrator: Orchestrator
 
     def run_agent(self, task: str) -> None:
         """Run the code agent on a task.
@@ -993,7 +954,7 @@ class MultiProviderProtocol(Protocol):
             mp.delegate_mode("openai")  # Delegate to specific provider
     """
 
-    orchestrator: "Orchestrator"
+    orchestrator: Orchestrator
 
     def synthesize_mode(self) -> None:
         """Interactive synthesis mode.

@@ -16,11 +16,9 @@ Architecture (per CLAUDE.md):
 - Single responsibility: Each implementation handles one mode
 """
 
-from typing import TYPE_CHECKING, Optional
-
-if TYPE_CHECKING:
-    from .io_interface import CLIIOProtocol
-    from .textual_app import ThreadSafeAsyncBridge
+from typing import Optional
+from .io_interface import CLIIOProtocol
+from .textual_app import ThreadSafeAsyncBridge
 
 
 class CLIUserInteraction:
@@ -33,7 +31,7 @@ class CLIUserInteraction:
     Thread Safety: Only safe when called from main thread (CLI mode).
     """
 
-    def __init__(self, io: "CLIIOProtocol") -> None:
+    def __init__(self, io: CLIIOProtocol) -> None:
         """Initialize with IO interface.
 
         Args:
@@ -83,7 +81,7 @@ class TUIUserInteraction:
     Will raise RuntimeError if called from main thread (deadlock guard).
     """
 
-    def __init__(self, bridge: "ThreadSafeAsyncBridge") -> None:
+    def __init__(self, bridge: ThreadSafeAsyncBridge) -> None:
         """Initialize with ThreadSafeAsyncBridge.
 
         Args:
@@ -136,7 +134,7 @@ class AutoApproveInteraction:
     Thread Safety: Thread-safe (no blocking operations).
     """
 
-    def __init__(self, io: "CLIIOProtocol") -> None:
+    def __init__(self, io: CLIIOProtocol) -> None:
         """Initialize with IO interface for logging.
 
         Args:
@@ -174,9 +172,9 @@ class AutoApproveInteraction:
 
 
 def get_user_interaction(
-    io: "CLIIOProtocol",
-    bridge: Optional["ThreadSafeAsyncBridge"] = None,
-) -> "CLIUserInteraction | TUIUserInteraction | AutoApproveInteraction":
+    io: CLIIOProtocol,
+    bridge: Optional[ThreadSafeAsyncBridge] = None,
+) -> CLIUserInteraction | TUIUserInteraction | AutoApproveInteraction:
     """Get appropriate user interaction handler for current mode.
 
     Factory function that returns the right interaction strategy based on

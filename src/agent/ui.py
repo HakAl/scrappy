@@ -9,7 +9,7 @@ from typing import Optional, Dict, Any, TYPE_CHECKING
 import json
 
 if TYPE_CHECKING:
-    from ..cli.io_interface import CLIIOProtocol
+    from ..protocols.io import CLIIOProtocol
     from ..infrastructure.theme import ThemeProtocol
 
 from .protocols import AgentUIProtocol

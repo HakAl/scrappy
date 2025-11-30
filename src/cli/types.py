@@ -12,23 +12,20 @@ Usage:
         ...
 """
 
-from typing import TYPE_CHECKING, Dict, List
-
-if TYPE_CHECKING:
-    from ..orchestrator.protocols import Orchestrator
+from typing import Dict, List
+from ..orchestrator.protocols import Orchestrator
 
 #: Type alias for the Orchestrator Protocol.
 #:
-#: Used in TYPE_CHECKING blocks to provide type hints without runtime import.
-#: This allows handlers to be typed correctly while avoiding circular imports.
+#: Provides a convenient alias for the Orchestrator protocol type.
+#: This allows handlers to be typed correctly with a shorter name.
 #:
 #: Example:
-#:     if TYPE_CHECKING:
-#:         from ..types import OrchestratorType
+#:     from ..types import OrchestratorType
 #:
 #:     def __init__(self, orchestrator: OrchestratorType) -> None:
 #:         self.orchestrator = orchestrator
-OrchestratorType = "Orchestrator"
+OrchestratorType = Orchestrator
 
 #: Type alias for session operation result dictionaries.
 #:

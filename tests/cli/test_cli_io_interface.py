@@ -266,7 +266,8 @@ class TestIOProtocolUsage:
     @pytest.mark.unit
     def test_function_accepts_protocol(self):
         """Test that functions can accept CLIIOProtocol for dependency injection."""
-        from src.cli.io_interface import CLIIOProtocol, TestIO
+        from src.protocols.io import CLIIOProtocol
+        from src.cli.io_interface import TestIO
 
         # Example function that uses IO protocol
         def display_status(io: CLIIOProtocol, status: str) -> None:
@@ -284,7 +285,8 @@ class TestIOProtocolUsage:
     @pytest.mark.unit
     def test_function_with_user_input(self):
         """Test function that requires user input can be tested."""
-        from src.cli.io_interface import CLIIOProtocol, TestIO
+        from src.protocols.io import CLIIOProtocol
+        from src.cli.io_interface import TestIO
 
         # Example function that gets user confirmation
         def confirm_action(io: CLIIOProtocol, action: str) -> bool:
@@ -301,7 +303,8 @@ class TestIOProtocolUsage:
     @pytest.mark.unit
     def test_function_with_prompt(self):
         """Test function that prompts for input can be tested."""
-        from src.cli.io_interface import CLIIOProtocol, TestIO
+        from src.protocols.io import CLIIOProtocol
+        from src.cli.io_interface import TestIO
 
         # Example function that gets user input
         def get_username(io: CLIIOProtocol) -> str:
@@ -316,7 +319,8 @@ class TestIOProtocolUsage:
     @pytest.mark.unit
     def test_multiple_io_operations(self):
         """Test complex workflow with multiple I/O operations."""
-        from src.cli.io_interface import CLIIOProtocol, TestIO
+        from src.protocols.io import CLIIOProtocol
+        from src.cli.io_interface import TestIO
 
         # Example workflow function
         def setup_wizard(io: CLIIOProtocol) -> dict:

@@ -4,10 +4,8 @@ Base stats formatter implementation.
 Provides reusable formatting utilities for statistics displays.
 """
 
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from src.cli.unified_io import UnifiedIO
+from typing import Any
+from .types import FormatterOutputProtocol
 
 
 class StatsFormatter:
@@ -17,14 +15,14 @@ class StatsFormatter:
     percentages, and numbers with color coding.
 
     Args:
-        io: UnifiedIO instance for styled output
+        io: FormatterOutputProtocol instance for styled output
     """
 
-    def __init__(self, io: "UnifiedIO"):
-        """Initialize formatter with UnifiedIO.
+    def __init__(self, io: FormatterOutputProtocol):
+        """Initialize formatter with FormatterOutputProtocol.
 
         Args:
-            io: UnifiedIO instance (contains theme and styling methods)
+            io: FormatterOutputProtocol instance (contains theme and styling methods)
         """
         self._io = io
 
