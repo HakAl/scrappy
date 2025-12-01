@@ -8,8 +8,12 @@ import os
 
 # Suppress gRPC/abseil ALTS warnings BEFORE any imports
 # These warnings occur when using Google APIs (Gemini) outside of GCP
-os.environ['GRPC_VERBOSITY'] = 'ERROR'
+os.environ['GRPC_VERBOSITY'] = 'NONE'
+os.environ['GRPC_TRACE'] = ''
 os.environ['GLOG_minloglevel'] = '2'
+os.environ['GRPC_ENABLE_FORK_SUPPORT'] = '0'
+# Suppress absl logging (used by Google libraries)
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 # TODO TESTING
 # Limit ONNX Runtime to physical cores to prevent async blocking
 os.environ["OMP_NUM_THREADS"] = "4"

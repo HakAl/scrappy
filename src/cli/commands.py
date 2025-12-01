@@ -11,36 +11,19 @@ from datetime import datetime
 from pathlib import Path
 
 # Load environment variables from .env file (supplements, doesn't override existing env vars)
+# Suppress dotenv warnings for malformed .env files - users may have syntax issues
+import warnings
+import logging
 try:
     from dotenv import load_dotenv
-    load_dotenv(override=False)  # Don't override existing environment variables
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore")
+        logging.getLogger("dotenv.main").setLevel(logging.ERROR)
+        load_dotenv(override=False)
 except ImportError:
     pass  # python-dotenv not installed, skip
 
-# Load saved API keys from .scrappy/config.json
-from .setup_wizard import SetupWizard
-SetupWizard.load_saved_keys()
-
 from .utils.cli_factory import create_cli_from_context
-
-
-def _has_any_provider() -> bool:
-    """Check if any provider can be instantiated.
-
-    Returns:
-        True if at least one provider is available
-    """
-    from src.orchestrator.provider_definitions import PROVIDERS
-
-    for name, info in PROVIDERS.items():
-        env_var = info.env_var
-        if os.environ.get(env_var):
-            try:
-                provider = info.provider_class()
-                return True
-            except Exception:
-                continue
-    return False
 
 
 def create_orchestrator_for_command(ctx):

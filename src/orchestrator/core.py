@@ -210,8 +210,10 @@ class AgentOrchestrator:
         try:
             self._brain_name, self._brain = self.provider_selector.setup_brain(preferred_provider)
             self.output.info(f"[BRAIN] Using {self._brain_name} as orchestrator brain")
-        except RuntimeError as e:
-            self.output.warn(str(e))
+        except RuntimeError:
+            # Silent failure - no providers available
+            # The TUI will handle this by launching the setup wizard
+            pass
 
     def _record_task_completion(self, task_record: dict, is_async: bool = False) -> None:
         """

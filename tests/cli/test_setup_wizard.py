@@ -10,15 +10,12 @@ Test Coverage:
 """
 
 import pytest
-import os
-import json
-import tempfile
-from pathlib import Path
-from typing import List, Any
+from typing import List
 from unittest.mock import Mock, patch, MagicMock
 
 from src.cli.setup_wizard import SetupWizard
 from src.orchestrator.provider_definitions import PROVIDERS
+from .helpers import MockApiKeyConfigService
 
 
 class MockIO:
@@ -50,6 +47,48 @@ class MockIO:
         """Clear captured output."""
         self.output.clear()
         self.prompts.clear()
+
+
+class TestSetupWizardNonBlocking:
+    """Test non-blocking wizard API for TUI."""
+
+    def test_wizard_starts_in_menu_state(self):
+        """start() should initialize wizard in MENU state."""
+        io = MockIO()
+        mock_service = MockApiKeyConfigService()
+        wizard = SetupWizard(io, config_service=mock_service)
+
+        wizard.start(allow_cancel=True)
+
+        assert wizard.is_active
+        assert "Select provider" in wizard.current_prompt
+
+    def test_handle_input_processes_menu_selection(self):
+        """handle_input() should process menu selections."""
+        io = MockIO()
+        mock_service = MockApiKeyConfigService()
+        wizard = SetupWizard(io, config_service=mock_service)
+
+        wizard.start(allow_cancel=True)
+        wizard.handle_input("1")  # Select first provider
+
+        # Should be waiting for API key now
+        assert wizard.is_active
+        assert "API_KEY" in wizard.current_prompt
+
+    def test_wizard_completes_on_quit(self):
+        """Wizard should complete when user enters 'q'."""
+        io = MockIO()
+        mock_service = MockApiKeyConfigService()
+        mock_service.keys = {"GROQ_API_KEY": "test"}  # Has provider
+        wizard = SetupWizard(io, config_service=mock_service)
+
+        completed = []
+        wizard.start(allow_cancel=True, on_complete=lambda hp: completed.append(hp))
+        wizard.handle_input("q")
+
+        assert not wizard.is_active
+        assert len(completed) == 1
 
 
 class TestSetupWizardKeyValidation:
@@ -94,38 +133,38 @@ class TestSetupWizardProviderConfiguration:
     """Test provider configuration flow."""
 
     def test_is_configured_true(self):
-        """Returns True when provider env var is set."""
+        """Returns True when provider key is configured in service."""
         io = MockIO()
-        wizard = SetupWizard(io)
+        mock_service = MockApiKeyConfigService()
+        mock_service.keys = {"GROQ_API_KEY": "test_key"}
+        wizard = SetupWizard(io, config_service=mock_service)
 
-        with patch.dict(os.environ, {"GROQ_API_KEY": "test_key"}):
-            assert wizard._is_configured("groq") is True
+        assert wizard._is_configured("groq") is True
 
     def test_is_configured_false(self):
-        """Returns False when provider env var is not set."""
+        """Returns False when provider key is not configured."""
         io = MockIO()
-        wizard = SetupWizard(io)
+        mock_service = MockApiKeyConfigService()
+        wizard = SetupWizard(io, config_service=mock_service)
 
-        with patch.dict(os.environ, {}, clear=True):
-            assert wizard._is_configured("groq") is False
+        assert wizard._is_configured("groq") is False
 
     def test_has_any_provider_true(self):
         """Returns True when at least one provider is configured."""
         io = MockIO()
-        wizard = SetupWizard(io)
+        mock_service = MockApiKeyConfigService()
+        mock_service.keys = {"GROQ_API_KEY": "test_key"}
+        wizard = SetupWizard(io, config_service=mock_service)
 
-        with patch.dict(os.environ, {"GROQ_API_KEY": "test_key"}):
-            assert wizard._has_any_provider() is True
+        assert wizard._has_any_provider() is True
 
     def test_has_any_provider_false(self):
         """Returns False when no providers are configured."""
         io = MockIO()
-        wizard = SetupWizard(io)
+        mock_service = MockApiKeyConfigService()
+        wizard = SetupWizard(io, config_service=mock_service)
 
-        # Clear all provider env vars
-        env_vars = {info.env_var: "" for info in PROVIDERS.values()}
-        with patch.dict(os.environ, env_vars, clear=True):
-            assert wizard._has_any_provider() is False
+        assert wizard._has_any_provider() is False
 
     def test_get_provider_by_index_valid(self):
         """Returns provider name for valid index."""
@@ -149,114 +188,30 @@ class TestSetupWizardProviderConfiguration:
 
 
 class TestSetupWizardSaveLoad:
-    """Test key save/load functionality."""
+    """Test key save/load functionality via config service."""
 
-    def test_save_key_creates_config_file(self):
-        """Saving a key creates the config file."""
+    def test_save_key_uses_config_service(self):
+        """Saving a key delegates to config service."""
         io = MockIO()
-        wizard = SetupWizard(io)
+        mock_service = MockApiKeyConfigService()
+        wizard = SetupWizard(io, config_service=mock_service)
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config_file = Path(tmpdir) / "config.json"
-            config_dir = Path(tmpdir)
+        wizard._save_key("TEST_API_KEY", "test_value")
 
-            with patch("src.cli.setup_wizard.USER_CONFIG_FILE", config_file), \
-                 patch("src.cli.setup_wizard.USER_CONFIG_DIR", config_dir):
-
-                wizard._save_key("TEST_API_KEY", "test_value")
-
-                assert config_file.exists()
-                with open(config_file) as f:
-                    config = json.load(f)
-
-                assert config["api_keys"]["TEST_API_KEY"] == "test_value"
+        assert mock_service.save_called
+        assert mock_service.keys["TEST_API_KEY"] == "test_value"
 
     def test_save_key_preserves_existing_keys(self):
-        """Saving a new key preserves existing keys."""
+        """Saving a new key preserves existing keys in service."""
         io = MockIO()
-        wizard = SetupWizard(io)
+        mock_service = MockApiKeyConfigService()
+        mock_service.keys = {"EXISTING_KEY": "existing_value"}
+        wizard = SetupWizard(io, config_service=mock_service)
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config_file = Path(tmpdir) / "config.json"
-            config_dir = Path(tmpdir)
+        wizard._save_key("NEW_KEY", "new_value")
 
-            # Create existing config
-            config_dir.mkdir(exist_ok=True)
-            with open(config_file, 'w') as f:
-                json.dump({"api_keys": {"EXISTING_KEY": "existing_value"}}, f)
-
-            with patch("src.cli.setup_wizard.USER_CONFIG_FILE", config_file), \
-                 patch("src.cli.setup_wizard.USER_CONFIG_DIR", config_dir):
-
-                wizard._save_key("NEW_KEY", "new_value")
-
-                with open(config_file) as f:
-                    config = json.load(f)
-
-                assert config["api_keys"]["EXISTING_KEY"] == "existing_value"
-                assert config["api_keys"]["NEW_KEY"] == "new_value"
-
-    def test_load_config_empty_when_no_file(self):
-        """Returns empty dict when config file doesn't exist."""
-        io = MockIO()
-        wizard = SetupWizard(io)
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config_file = Path(tmpdir) / "nonexistent.json"
-
-            with patch("src.cli.setup_wizard.USER_CONFIG_FILE", config_file):
-                config = wizard._load_config()
-                assert config == {}
-
-    def test_load_saved_keys_loads_into_env(self):
-        """load_saved_keys() loads keys into os.environ."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config_file = Path(tmpdir) / "config.json"
-            config_dir = Path(tmpdir)
-
-            # Create config with API keys
-            config_dir.mkdir(exist_ok=True)
-            with open(config_file, 'w') as f:
-                json.dump({
-                    "api_keys": {
-                        "TEST_KEY_1": "value1",
-                        "TEST_KEY_2": "value2"
-                    }
-                }, f)
-
-            with patch("src.cli.setup_wizard.USER_CONFIG_FILE", config_file):
-                # Clear env vars first
-                os.environ.pop("TEST_KEY_1", None)
-                os.environ.pop("TEST_KEY_2", None)
-
-                SetupWizard.load_saved_keys()
-
-                assert os.environ.get("TEST_KEY_1") == "value1"
-                assert os.environ.get("TEST_KEY_2") == "value2"
-
-    def test_load_saved_keys_does_not_override_existing(self):
-        """load_saved_keys() doesn't override existing env vars."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config_file = Path(tmpdir) / "config.json"
-            config_dir = Path(tmpdir)
-
-            # Create config with API key
-            config_dir.mkdir(exist_ok=True)
-            with open(config_file, 'w') as f:
-                json.dump({
-                    "api_keys": {
-                        "TEST_KEY": "config_value"
-                    }
-                }, f)
-
-            with patch("src.cli.setup_wizard.USER_CONFIG_FILE", config_file):
-                # Set env var before loading
-                os.environ["TEST_KEY"] = "env_value"
-
-                SetupWizard.load_saved_keys()
-
-                # Should preserve env var value
-                assert os.environ.get("TEST_KEY") == "env_value"
+        assert mock_service.keys["EXISTING_KEY"] == "existing_value"
+        assert mock_service.keys["NEW_KEY"] == "new_value"
 
 
 class TestSetupWizardMenuGeneration:
@@ -276,12 +231,13 @@ class TestSetupWizardMenuGeneration:
     def test_show_menu_marks_configured_providers(self):
         """Menu shows [OK] for configured providers."""
         io = MockIO()
-        wizard = SetupWizard(io)
+        mock_service = MockApiKeyConfigService()
+        mock_service.keys = {"GROQ_API_KEY": "test_key"}
+        wizard = SetupWizard(io, config_service=mock_service)
 
-        with patch.dict(os.environ, {"GROQ_API_KEY": "test_key"}):
-            # This would show [OK] for groq
-            wizard._show_menu()
-            # Verification would require parsing Rich output, skip for now
+        # This would show [OK] for groq
+        wizard._show_menu()
+        # Verification would require parsing Rich output, skip for now
 
 
 class TestSetupWizardFlow:
@@ -301,7 +257,8 @@ class TestSetupWizardFlow:
     def test_run_requires_provider_when_flag_false(self):
         """Wizard shows error when trying to quit without providers configured."""
         io = MockIO()
-        wizard = SetupWizard(io)
+        mock_service = MockApiKeyConfigService()  # Empty service
+        wizard = SetupWizard(io, config_service=mock_service)
 
         # Mock _get_choice to return 'q' once, then raise exception to break loop
         call_count = []
@@ -312,39 +269,29 @@ class TestSetupWizardFlow:
             # Second call - raise to break test loop
             raise StopIteration("Test complete")
 
-        with patch.dict(os.environ, {}, clear=True):
-            with patch.object(wizard, '_has_any_provider', return_value=False):
-                with patch.object(wizard, '_get_choice', side_effect=mock_get_choice):
-                    try:
-                        wizard.run(allow_cancel=False)
-                    except StopIteration:
-                        pass
+        with patch.object(wizard, '_get_choice', side_effect=mock_get_choice):
+            try:
+                wizard.run(allow_cancel=False)
+            except StopIteration:
+                pass
 
-                    # Verify error message was shown
-                    error_shown = any("Must configure" in msg for msg in io.output)
-                    assert error_shown
+            # Verify error message was shown
+            error_shown = any("Must configure" in msg for msg in io.output)
+            assert error_shown
 
     def test_configure_provider_saves_valid_key(self):
-        """Configuring a provider saves the key."""
+        """Configuring a provider saves the key via config service."""
         io = MockIO()
         io.prompt_responses = ["valid_test_key_123456"]
-        wizard = SetupWizard(io)
+        mock_service = MockApiKeyConfigService()
+        wizard = SetupWizard(io, config_service=mock_service)
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config_file = Path(tmpdir) / "config.json"
-            config_dir = Path(tmpdir)
+        with patch.object(wizard, '_test_provider_key', return_value=(True, "")):
+            result = wizard._configure_provider("groq")
 
-            with patch("src.cli.setup_wizard.USER_CONFIG_FILE", config_file), \
-                 patch("src.cli.setup_wizard.USER_CONFIG_DIR", config_dir), \
-                 patch.object(wizard, '_test_provider_key', return_value=(True, "")):
-
-                result = wizard._configure_provider("groq")
-
-                assert result is True
-                assert config_file.exists()
-                with open(config_file) as f:
-                    config = json.load(f)
-                assert "GROQ_API_KEY" in config["api_keys"]
+            assert result is True
+            assert "GROQ_API_KEY" in mock_service.keys
+            assert mock_service.save_called
 
     def test_configure_provider_rejects_invalid_format(self):
         """Configuring with invalid key format fails."""
@@ -413,21 +360,24 @@ class TestSetupWizardProviderTesting:
                 assert success is False
                 assert "Invalid API key" in error
 
-    def test_test_provider_key_restores_env(self):
-        """Testing a key restores original env var."""
+    def test_test_provider_key_no_env_pollution(self):
+        """Testing a key does NOT pollute os.environ - key passed directly to provider."""
         io = MockIO()
         wizard = SetupWizard(io)
 
-        original_value = "original_key"
-        os.environ["TEST_ENV_VAR"] = original_value
+        # Ensure env var is NOT set
+        test_key = "test_api_key_value"
 
         with patch("src.cli.setup_wizard.PROVIDERS") as mock_providers:
+            mock_provider = Mock()
+            mock_provider.chat.return_value = {"content": "test"}
+
             mock_info = Mock()
             mock_info.env_var = "TEST_ENV_VAR"
-            mock_info.provider_class.side_effect = Exception("Test error")
             mock_providers.__getitem__.return_value = mock_info
 
-            wizard._test_provider_key("test_provider", "new_key")
+            success, _ = wizard._test_provider_key("test_provider", test_key)
 
-            # Original value should be restored
-            assert os.environ.get("TEST_ENV_VAR") == original_value
+            # Verify provider was called with api_key parameter (not os.environ)
+            mock_info.provider_class.assert_called_once_with(api_key=test_key)
+            assert success is True

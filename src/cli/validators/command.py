@@ -47,7 +47,7 @@ VALID_COMMANDS = {
     # Task commands
     "plan", "reason", "agent", "smart", "tasks", "classify",
     # Provider commands
-    "providers", "brain", "usage", "models",
+    "providers", "brain", "usage", "models", "setup",
     # Session commands
     "context", "cache", "session", "limits",
     # Multi-provider commands
