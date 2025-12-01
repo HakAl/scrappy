@@ -253,8 +253,9 @@ class TestGetSelectionInfo:
         reporter = self._make_reporter()
         info = reporter.get_selection_info()
 
-        expected = ['github_models', 'cerebras', 'groq', 'gemini', 'cohere']
-        assert info['all_known_providers'] == expected
+        # Check all expected providers are present (order depends on PROVIDERS dict)
+        expected_providers = {'github_models', 'cerebras', 'groq', 'gemini', 'cohere'}
+        assert set(info['all_known_providers']) == expected_providers
 
     def test_returns_selected_brain(self):
         """get_selection_info() should return the selected brain name."""

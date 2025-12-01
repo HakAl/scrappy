@@ -16,7 +16,34 @@ from scrappy.utils.errors import is_rate_limit_error, RateLimitError
 from scrappy.utils.errors import AllProvidersRateLimitedError as LegacyAllProvidersRateLimitedError
 from scrappy.infrastructure.exceptions import AllProvidersRateLimitedError
 from scrappy.orchestrator.core import AgentOrchestrator
+from scrappy.orchestrator.provider_definitions import ProviderDefinition
 from scrappy.providers.base import LLMResponse
+
+
+def make_test_providers(provider_mocks: dict) -> dict:
+    """Create a PROVIDERS dict for testing with mock provider classes."""
+    providers = {}
+    priority = 1
+    for name, mock_class in provider_mocks.items():
+        providers[name] = ProviderDefinition(
+            quota='test quota',
+            description='test description',
+            env_var=f'{name.upper()}_API_KEY',
+            console_url='test.com',
+            provider_class=mock_class,
+            priority=priority,
+            supports_brain=name not in ('cohere', 'github_models'),
+            task_types=['planning', 'execution', 'quick', 'general'] if name not in ('cohere',) else [],
+        )
+        priority += 1
+    return providers
+
+
+def make_mock_config_service(available_keys: dict) -> Mock:
+    """Create a mock config service that returns specified keys."""
+    mock_service = Mock()
+    mock_service.get_key = lambda key: available_keys.get(key)
+    return mock_service
 
 
 class TestRateLimitErrorDetection:
@@ -69,58 +96,68 @@ class TestRateLimitRecovery:
     @pytest.fixture
     def mock_orchestrator(self):
         """Create orchestrator with mocked providers."""
-        with patch('scrappy.orchestrator.registration.GroqProvider') as mock_groq, \
-             patch('scrappy.orchestrator.registration.CerebrasProvider') as mock_cerebras, \
-             patch('scrappy.orchestrator.registration.GeminiProvider') as mock_gemini, \
-             patch('scrappy.orchestrator.registration.CohereProvider') as mock_cohere, \
-             patch('scrappy.orchestrator.registration.GitHubModelsProvider') as mock_github:
+        # Set up mock provider instances
+        mock_groq_instance = MagicMock()
+        mock_groq_instance.name = 'groq'
+        mock_groq_instance.default_model = 'llama-3.1-8b-instant'
+        mock_groq_instance.is_available.return_value = True
+        mock_groq_instance.get_limits.return_value = Mock(
+            requests_per_day=7000,
+            requests_per_month=0,
+            tokens_per_day=0,
+            tokens_per_minute=20000
+        )
+        mock_groq_instance.chat = MagicMock()
+        mock_groq_instance.chat_async = AsyncMock()
 
-            # Set up mock providers
-            mock_groq_instance = MagicMock()
-            mock_groq_instance.name = 'groq'
-            mock_groq_instance.default_model = 'llama-3.1-8b-instant'
-            mock_groq_instance.is_available.return_value = True
-            mock_groq_instance.get_limits.return_value = Mock(
-                requests_per_day=7000,
-                requests_per_month=0,
-                tokens_per_day=0,
-                tokens_per_minute=20000
-            )
-            mock_groq_instance.chat = MagicMock()  # RetryOrchestrator.execute_with_retry_sync calls chat()
-            mock_groq_instance.chat_async = AsyncMock()  # Async path uses chat_async
-            mock_groq.return_value = mock_groq_instance
+        mock_cerebras_instance = MagicMock()
+        mock_cerebras_instance.name = 'cerebras'
+        mock_cerebras_instance.default_model = 'llama3.1-8b'
+        mock_cerebras_instance.is_available.return_value = True
+        mock_cerebras_instance.get_limits.return_value = Mock(
+            requests_per_day=14400,
+            requests_per_month=0,
+            tokens_per_day=0,
+            tokens_per_minute=60000
+        )
+        mock_cerebras_instance.chat = MagicMock()
+        mock_cerebras_instance.chat_async = AsyncMock()
 
-            mock_cerebras_instance = MagicMock()
-            mock_cerebras_instance.name = 'cerebras'
-            mock_cerebras_instance.default_model = 'llama3.1-8b'
-            mock_cerebras_instance.is_available.return_value = True
-            mock_cerebras_instance.get_limits.return_value = Mock(
-                requests_per_day=14400,
-                requests_per_month=0,
-                tokens_per_day=0,
-                tokens_per_minute=60000
-            )
-            mock_cerebras_instance.chat = MagicMock()  # RetryOrchestrator.execute_with_retry_sync calls chat()
-            mock_cerebras_instance.chat_async = AsyncMock()  # Async path uses chat_async
-            mock_cerebras.return_value = mock_cerebras_instance
+        mock_gemini_instance = MagicMock()
+        mock_gemini_instance.name = 'gemini'
+        mock_gemini_instance.default_model = 'gemini-2.0-flash-lite'
+        mock_gemini_instance.is_available.return_value = True
+        mock_gemini_instance.get_limits.return_value = Mock(
+            requests_per_day=200,
+            requests_per_month=0,
+            tokens_per_day=0,
+            tokens_per_minute=15000
+        )
+        mock_gemini_instance.chat = MagicMock()
+        mock_gemini_instance.chat_async = AsyncMock()
 
-            mock_gemini_instance = MagicMock()
-            mock_gemini_instance.name = 'gemini'
-            mock_gemini_instance.default_model = 'gemini-2.0-flash-lite'
-            mock_gemini_instance.is_available.return_value = True
-            mock_gemini_instance.get_limits.return_value = Mock(
-                requests_per_day=200,
-                requests_per_month=0,
-                tokens_per_day=0,
-                tokens_per_minute=15000
-            )
-            mock_gemini_instance.chat = MagicMock()  # RetryOrchestrator.execute_with_retry_sync calls chat()
-            mock_gemini_instance.chat_async = AsyncMock()  # Async path uses chat_async
-            mock_gemini.return_value = mock_gemini_instance
+        # Create mock provider classes that return the instances
+        mock_groq_class = Mock(return_value=mock_groq_instance)
+        mock_cerebras_class = Mock(return_value=mock_cerebras_instance)
+        mock_gemini_class = Mock(return_value=mock_gemini_instance)
 
-            # Make cohere and github unavailable to simplify tests
-            mock_cohere.side_effect = Exception("No API key")
-            mock_github.side_effect = Exception("No API key")
+        # Create test providers dict
+        test_providers = make_test_providers({
+            'cerebras': mock_cerebras_class,
+            'groq': mock_groq_class,
+            'gemini': mock_gemini_class,
+        })
+
+        # Mock config service with all keys available
+        mock_config = make_mock_config_service({
+            'CEREBRAS_API_KEY': 'test-key',
+            'GROQ_API_KEY': 'test-key',
+            'GEMINI_API_KEY': 'test-key',
+        })
+
+        with patch('scrappy.orchestrator.registration.PROVIDERS', test_providers), \
+             patch('scrappy.orchestrator.provider_definitions.PROVIDERS', test_providers), \
+             patch('scrappy.infrastructure.config.api_keys.create_api_key_service', return_value=mock_config):
 
             orch = AgentOrchestrator(context_aware=False, enable_cache=False)
             orch.initialize(auto_register=True)
