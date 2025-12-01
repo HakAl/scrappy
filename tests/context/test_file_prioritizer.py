@@ -13,11 +13,11 @@ from pathlib import Path
 
 import pytest
 
-from src.context.semantic.file_prioritizer import (
+from scrappy.context.semantic.file_prioritizer import (
     DefaultFilePrioritizer,
     FilePriorityConfig,
 )
-from src.context.protocols import FilePrioritizerProtocol
+from scrappy.context.protocols import FilePrioritizerProtocol
 
 
 class TestFilePriorityConfig:

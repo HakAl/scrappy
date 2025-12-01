@@ -5,7 +5,7 @@ Focuses on LLMRequest behavior, particularly kwargs filtering.
 """
 
 import pytest
-from src.protocols.delegation import LLMRequest, INTERNAL_KWARGS
+from scrappy.protocols.delegation import LLMRequest, INTERNAL_KWARGS
 
 
 class TestLLMRequestKwargsFiltering:

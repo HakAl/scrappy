@@ -13,8 +13,8 @@ Focuses on:
 import pytest
 from unittest.mock import MagicMock, Mock, patch
 
-from src.cli.multiprovider import CLIMultiProvider
-from src.cli.validators import ProviderValidationResult
+from scrappy.cli.multiprovider import CLIMultiProvider
+from scrappy.cli.validators import ProviderValidationResult
 from tests.helpers import MockIO, make_response
 
 
@@ -183,7 +183,7 @@ class TestSynthesizeMode:
 class TestDelegateMode:
     """Test direct provider delegation functionality."""
 
-    @patch('src.cli.multiprovider.validate_provider')
+    @patch('scrappy.cli.multiprovider.validate_provider')
     def test_delegates_with_args(self, mock_validate):
         """Should parse provider and prompt from args string."""
         mock_validate.return_value = ProviderValidationResult(
@@ -211,7 +211,7 @@ class TestDelegateMode:
         assert "Response from provider" in output
         assert "150 tokens" in output
 
-    @patch('src.cli.multiprovider.validate_provider')
+    @patch('scrappy.cli.multiprovider.validate_provider')
     def test_prompts_interactively_when_no_args(self, mock_validate):
         """Should prompt for provider and prompt when args is empty."""
         mock_validate.return_value = ProviderValidationResult(
@@ -288,7 +288,7 @@ class TestDelegateMode:
         # Should not have called delegate
         orchestrator.delegate.assert_not_called()
 
-    @patch('src.cli.multiprovider.validate_provider')
+    @patch('scrappy.cli.multiprovider.validate_provider')
     def test_displays_response_metadata(self, mock_validate):
         """Should display model, tokens, and latency info."""
         mock_validate.return_value = ProviderValidationResult(
@@ -314,7 +314,7 @@ class TestDelegateMode:
         assert "250 tokens" in output
         assert "1500" in output or "1501ms" in output  # May round
 
-    @patch('src.cli.multiprovider.validate_provider')
+    @patch('scrappy.cli.multiprovider.validate_provider')
     def test_handles_delegation_error(self, mock_validate):
         """Should display error when delegation fails."""
         mock_validate.return_value = ProviderValidationResult(
@@ -336,7 +336,7 @@ class TestDelegateMode:
         assert "Error" in output
         assert "rate limit" in output.lower()
 
-    @patch('src.cli.multiprovider.validate_provider')
+    @patch('scrappy.cli.multiprovider.validate_provider')
     def test_adds_delegation_to_working_memory(self, mock_validate):
         """Should record delegation in working memory."""
         mock_validate.return_value = ProviderValidationResult(

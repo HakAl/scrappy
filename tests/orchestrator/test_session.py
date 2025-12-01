@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch, mock_open
 from pathlib import Path
 from datetime import datetime
 
-from src.orchestrator.session import SessionManager
+from scrappy.orchestrator.session import SessionManager
 
 
 # -----------------------------------------------------------------------------
@@ -21,7 +21,7 @@ def mock_working_memory_class():
     2. The .from_dict() class method.
     3. The attributes accessed on the instance returned by from_dict (for stats).
     """
-    with patch('src.orchestrator.session.WorkingMemory') as MockClass:
+    with patch('scrappy.orchestrator.session.WorkingMemory') as MockClass:
         # Setup the instance returned by from_dict
         mock_instance = Mock()
         mock_instance.file_reads = {"file1.txt": "content"}

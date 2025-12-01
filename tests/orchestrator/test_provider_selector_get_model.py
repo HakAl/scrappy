@@ -8,9 +8,9 @@ select_for_task() method.
 import pytest
 from unittest.mock import Mock
 
-from src.orchestrator.provider_selector import ProviderSelector
-from src.orchestrator.model_selection import ModelSelectionType
-from src.providers.base import ModelInfo, ModelType, SpeedRank, QualityRank
+from scrappy.orchestrator.provider_selector import ProviderSelector
+from scrappy.orchestrator.model_selection import ModelSelectionType
+from scrappy.providers.base import ModelInfo, ModelType, SpeedRank, QualityRank
 
 
 def create_mock_registry_with_models(models_config):

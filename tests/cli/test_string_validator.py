@@ -5,7 +5,7 @@ that standardize common patterns across the CLI.
 """
 
 import pytest
-from src.cli.validators.string import (
+from scrappy.cli.validators.string import (
     is_empty_or_whitespace,
     normalize_string,
     StringValidationResult,

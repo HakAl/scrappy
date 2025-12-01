@@ -15,7 +15,7 @@ Key features tested:
 import json
 import pytest
 
-from src.task_router.json_extractor import JSONExtractor
+from scrappy.task_router.json_extractor import JSONExtractor
 
 
 class TestFixJsonPythonBooleans:

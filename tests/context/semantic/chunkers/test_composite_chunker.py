@@ -8,9 +8,9 @@ import pytest
 from typing import List, Set
 from unittest.mock import Mock
 
-from src.context.protocols import CodeChunk, ChunkingStrategyProtocol
-from src.context.semantic.chunkers.composite_chunker import CompositeCodeChunker
-from src.context.semantic.chunkers.python_chunker import PythonASTChunker
+from scrappy.context.protocols import CodeChunk, ChunkingStrategyProtocol
+from scrappy.context.semantic.chunkers.composite_chunker import CompositeCodeChunker
+from scrappy.context.semantic.chunkers.python_chunker import PythonASTChunker
 
 
 class MockChunkingStrategy:

@@ -8,7 +8,7 @@ including tool registry, execution, and validation.
 import pytest
 from pathlib import Path
 from unittest.mock import Mock, MagicMock
-from src.task_router.strategies.tool_bundle import ToolBundle
+from scrappy.task_router.strategies.tool_bundle import ToolBundle
 
 
 class FakeTool:

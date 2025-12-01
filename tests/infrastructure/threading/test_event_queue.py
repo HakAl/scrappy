@@ -11,7 +11,7 @@ from typing import List
 
 import pytest
 
-from src.infrastructure.threading import (
+from scrappy.infrastructure.threading import (
     ThreadSafeEventQueue,
     BackgroundEvent,
     EventType,

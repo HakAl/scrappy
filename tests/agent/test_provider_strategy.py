@@ -7,13 +7,13 @@ Tests the ProviderSelectionStrategy implementations extracted from CodeAgent.
 import pytest
 from unittest.mock import Mock, MagicMock
 
-from src.agent.provider_strategy import (
+from scrappy.agent.provider_strategy import (
     DynamicProviderStrategy,
     StaticProviderStrategy,
     create_provider_strategy,
 )
-from src.agent_config import AgentConfig
-from src.orchestrator.model_selection import ModelSelectionType
+from scrappy.agent_config import AgentConfig
+from scrappy.orchestrator.model_selection import ModelSelectionType
 
 
 class TestDynamicProviderStrategy:

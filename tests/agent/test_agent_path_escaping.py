@@ -14,14 +14,14 @@ import pytest
 from unittest.mock import MagicMock, patch
 from pathlib import Path
 
-from src.agent.core import CodeAgent
-from src.platform import (
+from scrappy.agent.core import CodeAgent
+from scrappy.platform import (
     normalize_command_paths,
     validate_command_for_platform,
     get_python_fallback,
 )
-from src.agent_tools.tools.file_tools import WriteFileTool
-from src.agent_tools.tools.base import ToolContext
+from scrappy.agent_tools.tools.file_tools import WriteFileTool
+from scrappy.agent_tools.tools.base import ToolContext
 
 
 class TestCommandExecutionIntegration:
@@ -40,7 +40,7 @@ class TestCommandExecutionIntegration:
         )
 
     @pytest.mark.unit
-    @patch('src.agent_tools.tools.command_tool.subprocess.Popen')
+    @patch('scrappy.agent_tools.tools.command_tool.subprocess.Popen')
     def test_command_executes_in_project_directory(self, mock_popen, agent, temp_project_dir):
         """Commands must execute with cwd set to project root."""
         mock_process = MagicMock()
@@ -189,7 +189,7 @@ class TestCrossPlatformConsistency:
     @pytest.mark.unit
     def test_path_separator_detection(self):
         """Path separator should be detected correctly."""
-        from src.platform import is_windows
+        from scrappy.platform import is_windows
         import os
 
         # Should match the actual platform

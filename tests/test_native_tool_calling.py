@@ -19,7 +19,7 @@ class TestToolCallDataclass:
     @pytest.mark.unit
     def test_tool_call_creation_with_required_fields(self):
         """ToolCall holds structured tool call data from LLM."""
-        from src.providers.base import ToolCall
+        from scrappy.providers.base import ToolCall
 
         tool_call = ToolCall(
             id="call_abc123",
@@ -34,7 +34,7 @@ class TestToolCallDataclass:
     @pytest.mark.unit
     def test_tool_call_with_empty_arguments(self):
         """ToolCall can have empty arguments dict."""
-        from src.providers.base import ToolCall
+        from scrappy.providers.base import ToolCall
 
         tool_call = ToolCall(
             id="call_xyz789",
@@ -47,7 +47,7 @@ class TestToolCallDataclass:
     @pytest.mark.unit
     def test_tool_call_with_complex_arguments(self):
         """ToolCall preserves complex nested argument structures."""
-        from src.providers.base import ToolCall
+        from scrappy.providers.base import ToolCall
 
         tool_call = ToolCall(
             id="call_complex",
@@ -69,7 +69,7 @@ class TestLLMResponseWithToolCalls:
     @pytest.mark.unit
     def test_llm_response_backward_compatibility(self):
         """LLMResponse without tool_calls remains backward compatible."""
-        from src.providers.base import LLMResponse
+        from scrappy.providers.base import LLMResponse
 
         response = LLMResponse(
             content="Here is the answer",
@@ -87,7 +87,7 @@ class TestLLMResponseWithToolCalls:
     @pytest.mark.unit
     def test_llm_response_with_tool_calls_defaults_to_none(self):
         """LLMResponse.tool_calls defaults to None when not specified."""
-        from src.providers.base import LLMResponse
+        from scrappy.providers.base import LLMResponse
 
         response = LLMResponse(
             content="Response text",
@@ -100,7 +100,7 @@ class TestLLMResponseWithToolCalls:
     @pytest.mark.unit
     def test_llm_response_with_single_tool_call(self):
         """LLMResponse can contain a single tool call."""
-        from src.providers.base import LLMResponse, ToolCall
+        from scrappy.providers.base import LLMResponse, ToolCall
 
         tool_call = ToolCall(
             id="call_single",
@@ -122,7 +122,7 @@ class TestLLMResponseWithToolCalls:
     @pytest.mark.unit
     def test_llm_response_with_multiple_tool_calls(self):
         """LLMResponse can contain multiple tool calls."""
-        from src.providers.base import LLMResponse, ToolCall
+        from scrappy.providers.base import LLMResponse, ToolCall
 
         call1 = ToolCall(id="call_1", name="read_file", arguments={"path": "a.txt"})
         call2 = ToolCall(id="call_2", name="read_file", arguments={"path": "b.txt"})
@@ -142,7 +142,7 @@ class TestLLMResponseWithToolCalls:
     @pytest.mark.unit
     def test_llm_response_with_empty_tool_calls_list(self):
         """LLMResponse can have empty tool_calls list (LLM decided not to call tools)."""
-        from src.providers.base import LLMResponse
+        from scrappy.providers.base import LLMResponse
 
         response = LLMResponse(
             content="I don't need to use any tools for this.",
@@ -157,7 +157,7 @@ class TestLLMResponseWithToolCalls:
     @pytest.mark.unit
     def test_llm_response_content_can_be_empty_with_tool_calls(self):
         """LLMResponse can have empty content when tool calls are present."""
-        from src.providers.base import LLMResponse, ToolCall
+        from scrappy.providers.base import LLMResponse, ToolCall
 
         tool_call = ToolCall(
             id="call_notext",
@@ -182,8 +182,8 @@ class TestNativeToolCallParser:
     @pytest.mark.unit
     def test_parser_parses_single_tool_call(self):
         """Parser extracts action from single tool call in LLMResponse."""
-        from src.agent.response_parser import NativeToolCallParser, ParseResult
-        from src.providers.base import LLMResponse, ToolCall
+        from scrappy.agent.response_parser import NativeToolCallParser, ParseResult
+        from scrappy.providers.base import LLMResponse, ToolCall
 
         tool_call = ToolCall(
             id="call_test",
@@ -210,8 +210,8 @@ class TestNativeToolCallParser:
     @pytest.mark.unit
     def test_parser_uses_first_tool_call_when_multiple(self):
         """Parser uses the first tool call when LLM returns multiple."""
-        from src.agent.response_parser import NativeToolCallParser
-        from src.providers.base import LLMResponse, ToolCall
+        from scrappy.agent.response_parser import NativeToolCallParser
+        from scrappy.providers.base import LLMResponse, ToolCall
 
         call1 = ToolCall(id="call_1", name="search_code", arguments={"pattern": "def"})
         call2 = ToolCall(id="call_2", name="list_files", arguments={"path": "."})
@@ -233,8 +233,8 @@ class TestNativeToolCallParser:
     @pytest.mark.unit
     def test_parser_handles_no_tool_calls_as_completion(self):
         """Parser treats no tool calls as task completion."""
-        from src.agent.response_parser import NativeToolCallParser
-        from src.providers.base import LLMResponse
+        from scrappy.agent.response_parser import NativeToolCallParser
+        from scrappy.providers.base import LLMResponse
 
         response = LLMResponse(
             content="Task completed successfully. The file has been created.",
@@ -253,8 +253,8 @@ class TestNativeToolCallParser:
     @pytest.mark.unit
     def test_parser_handles_empty_tool_calls_list_as_completion(self):
         """Parser treats empty tool_calls list as completion."""
-        from src.agent.response_parser import NativeToolCallParser
-        from src.providers.base import LLMResponse
+        from scrappy.agent.response_parser import NativeToolCallParser
+        from scrappy.providers.base import LLMResponse
 
         response = LLMResponse(
             content="All done!",
@@ -272,8 +272,8 @@ class TestNativeToolCallParser:
     @pytest.mark.unit
     def test_parser_uses_content_as_thought(self):
         """Parser uses response content as the thought field."""
-        from src.agent.response_parser import NativeToolCallParser
-        from src.providers.base import LLMResponse, ToolCall
+        from scrappy.agent.response_parser import NativeToolCallParser
+        from scrappy.providers.base import LLMResponse, ToolCall
 
         tool_call = ToolCall(
             id="call_x",
@@ -296,8 +296,8 @@ class TestNativeToolCallParser:
     @pytest.mark.unit
     def test_parser_handles_empty_content_with_tool_call(self):
         """Parser handles empty content when tool calls are present."""
-        from src.agent.response_parser import NativeToolCallParser
-        from src.providers.base import LLMResponse, ToolCall
+        from scrappy.agent.response_parser import NativeToolCallParser
+        from scrappy.providers.base import LLMResponse, ToolCall
 
         tool_call = ToolCall(
             id="call_silent",
@@ -322,8 +322,8 @@ class TestNativeToolCallParser:
     @pytest.mark.unit
     def test_parser_preserves_complex_arguments(self):
         """Parser preserves complex nested arguments from tool calls."""
-        from src.agent.response_parser import NativeToolCallParser
-        from src.providers.base import LLMResponse, ToolCall
+        from scrappy.agent.response_parser import NativeToolCallParser
+        from scrappy.providers.base import LLMResponse, ToolCall
 
         tool_call = ToolCall(
             id="call_complex",
@@ -352,8 +352,8 @@ class TestNativeToolCallParser:
     @pytest.mark.unit
     def test_parser_returns_no_error_for_valid_response(self):
         """Parser returns no error for valid tool call response."""
-        from src.agent.response_parser import NativeToolCallParser
-        from src.providers.base import LLMResponse, ToolCall
+        from scrappy.agent.response_parser import NativeToolCallParser
+        from scrappy.providers.base import LLMResponse, ToolCall
 
         tool_call = ToolCall(
             id="call_ok",

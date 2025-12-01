@@ -10,7 +10,7 @@ provide confidence for refactoring the pattern-based approach.
 import pytest
 from unittest.mock import patch
 
-from src.task_router.classifier import TaskClassifier, TaskType, ClassifiedTask
+from scrappy.task_router.classifier import TaskClassifier, TaskType, ClassifiedTask
 
 
 class TestDirectCommandPatterns:
@@ -548,14 +548,14 @@ class TestCommandSafety:
     @pytest.fixture(autouse=True)
     def reset_platform_orchestrator(self):
         """Reset platform caches before and after each test to ensure mocks work."""
-        from src.platform import _cached_validator, _cached_translator
+        from scrappy.platform import _cached_validator, _cached_translator
         # Clear cached instances
-        import src.platform
-        src.platform._cached_validator = None
-        src.platform._cached_translator = None
+        import scrappy.platform
+        scrappy.platform._cached_validator = None
+        scrappy.platform._cached_translator = None
         yield
-        src.platform._cached_validator = None
-        src.platform._cached_translator = None
+        scrappy.platform._cached_validator = None
+        scrappy.platform._cached_translator = None
 
     @pytest.mark.unit
     @patch('platform.system', return_value='Linux')

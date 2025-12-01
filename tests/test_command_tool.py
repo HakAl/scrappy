@@ -12,8 +12,8 @@ import subprocess
 import time
 
 # Import base tool infrastructure
-from src.agent_tools.tools.base import ToolContext, ToolResult
-from src.agent_config import AgentConfig
+from scrappy.agent_tools.tools.base import ToolContext, ToolResult
+from scrappy.agent_config import AgentConfig
 
 
 # Suppress safe_print output during tests
@@ -32,7 +32,7 @@ class TestCommandToolInterface:
 
     def test_tool_has_required_properties(self):
         """CommandTool must have name, description, and parameters."""
-        from src.agent_tools.tools.command_tool import CommandTool
+        from scrappy.agent_tools.tools.command_tool import CommandTool
 
         tool = CommandTool()
 
@@ -46,7 +46,7 @@ class TestCommandToolInterface:
 
     def test_execute_returns_tool_result(self):
         """Execute must return a ToolResult object."""
-        from src.agent_tools.tools.command_tool import CommandTool
+        from scrappy.agent_tools.tools.command_tool import CommandTool
 
         tool = CommandTool()
 
@@ -63,7 +63,7 @@ class TestCommandToolInterface:
 
     def test_dry_run_skips_execution(self):
         """Dry run mode should not execute commands."""
-        from src.agent_tools.tools.command_tool import CommandTool
+        from scrappy.agent_tools.tools.command_tool import CommandTool
 
         tool = CommandTool()
         dry_run_context = ToolContext(
@@ -80,7 +80,7 @@ class TestCommandToolInterface:
 
     def test_missing_command_parameter_fails_validation(self):
         """Missing required command parameter should fail validation."""
-        from src.agent_tools.tools.command_tool import CommandTool
+        from scrappy.agent_tools.tools.command_tool import CommandTool
 
         tool = CommandTool()
 
@@ -105,7 +105,7 @@ class TestCommandSecurityValidation:
 
     def test_blocks_dangerous_rm_rf_command(self):
         """Should block rm -rf commands."""
-        from src.agent_tools.tools.command_tool import CommandTool
+        from scrappy.agent_tools.tools.command_tool import CommandTool
 
         # Explicitly configure dangerous patterns to include rm -rf
         dangerous_patterns = [r'rm\s+-rf\s+/', r'format\s+[A-Za-z]:']
@@ -118,7 +118,7 @@ class TestCommandSecurityValidation:
 
     def test_blocks_dangerous_format_command(self):
         """Should block format/disk destruction commands."""
-        from src.agent_tools.tools.command_tool import CommandTool
+        from scrappy.agent_tools.tools.command_tool import CommandTool
 
         tool = CommandTool()
 
@@ -129,7 +129,7 @@ class TestCommandSecurityValidation:
 
     def test_blocks_command_matching_regex_pattern(self):
         """Should block commands matching configured dangerous patterns."""
-        from src.agent_tools.tools.command_tool import CommandTool
+        from scrappy.agent_tools.tools.command_tool import CommandTool
 
         dangerous_patterns = [r"sudo\s+rm", r":\(\)\s*\{.*\}"]
         tool = CommandTool(dangerous_patterns=dangerous_patterns)
@@ -141,7 +141,7 @@ class TestCommandSecurityValidation:
 
     def test_allows_safe_echo_command(self):
         """Should allow safe commands like echo."""
-        from src.agent_tools.tools.command_tool import CommandTool
+        from scrappy.agent_tools.tools.command_tool import CommandTool
 
         tool = CommandTool()
 
@@ -170,10 +170,10 @@ class TestPlatformSpecificFixes:
             config=self.config
         )
 
-    @patch('src.agent_tools.tools.command_tool.is_windows', return_value=True)
+    @patch('scrappy.agent_tools.tools.command_tool.is_windows', return_value=True)
     def test_intercepts_spring_initializr_on_windows(self, mock_is_windows):
         """Should block Spring Initializr downloads on Windows."""
-        from src.agent_tools.tools.command_tool import CommandTool
+        from scrappy.agent_tools.tools.command_tool import CommandTool
 
         tool = CommandTool()
 
@@ -202,7 +202,7 @@ class TestErrorHandling:
 
     def test_handles_exception_in_run(self):
         """Should handle exceptions gracefully."""
-        from src.agent_tools.tools.command_tool import CommandTool
+        from scrappy.agent_tools.tools.command_tool import CommandTool
 
         tool = CommandTool()
 
@@ -215,7 +215,7 @@ class TestErrorHandling:
 
     def test_error_output_returns_failure(self):
         """Should return failure when command output starts with Error."""
-        from src.agent_tools.tools.command_tool import CommandTool
+        from scrappy.agent_tools.tools.command_tool import CommandTool
 
         tool = CommandTool()
 

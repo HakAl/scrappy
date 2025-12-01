@@ -12,7 +12,7 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock, call
 from typing import List, Dict, Any, Optional
 
-from src.providers.cohere_provider import CohereProvider, LLMResponse, ProviderLimits
+from scrappy.providers.cohere_provider import CohereProvider, LLMResponse, ProviderLimits
 
 
 class TestCohereProvider:
@@ -53,7 +53,7 @@ class TestCohereProvider:
     @pytest.fixture
     def provider_with_mock_clients(self, mock_cohere_client_v2, mock_cohere_client_v1):
         """Create provider with mock clients."""
-        with patch('src.providers.cohere_provider.cohere') as mock_cohere:
+        with patch('scrappy.providers.cohere_provider.cohere') as mock_cohere:
             mock_cohere.ClientV2.return_value = mock_cohere_client_v2
             mock_cohere.Client.return_value = mock_cohere_client_v1
 
@@ -65,7 +65,7 @@ class TestCohereProvider:
         """Create provider with environment variable key."""
         monkeypatch.setenv("COHERE_API_KEY", "env-test-key")
 
-        with patch('src.providers.cohere_provider.cohere') as mock_cohere:
+        with patch('scrappy.providers.cohere_provider.cohere') as mock_cohere:
             mock_cohere.ClientV2.return_value = Mock()
             mock_cohere.Client.return_value = Mock()
 
@@ -73,7 +73,7 @@ class TestCohereProvider:
 
     def test_initialization_with_api_key(self, mock_cohere_client_v2, mock_cohere_client_v1):
         """Test provider initialization with explicit API key."""
-        with patch('src.providers.cohere_provider.cohere') as mock_cohere:
+        with patch('scrappy.providers.cohere_provider.cohere') as mock_cohere:
             mock_cohere.ClientV2.return_value = mock_cohere_client_v2
             mock_cohere.Client.return_value = mock_cohere_client_v1
 
@@ -100,7 +100,7 @@ class TestCohereProvider:
 
     def test_model_configurations(self, provider_with_mock_clients):
         """Test that model configurations are properly defined."""
-        from src.providers.base import ModelType, SpeedRank, QualityRank
+        from scrappy.providers.base import ModelType, SpeedRank, QualityRank
         configs = provider_with_mock_clients.MODELS
 
         # Test Command R7B configuration (default)
@@ -234,7 +234,7 @@ class TestCohereProvider:
 
     def test_embed_custom_model(self, mock_cohere_client_v2, mock_cohere_client_v1):
         """Test embedding with custom model."""
-        with patch('src.providers.cohere_provider.cohere') as mock_cohere:
+        with patch('scrappy.providers.cohere_provider.cohere') as mock_cohere:
             mock_cohere.ClientV2.return_value = mock_cohere_client_v2
             mock_cohere.Client.return_value = mock_cohere_client_v1
 
@@ -271,7 +271,7 @@ class TestCohereProvider:
 
         # Test with Cohere not available
         provider_with_mock_clients._api_key = "test-key"
-        with patch('src.providers.cohere_provider.COHERE_AVAILABLE', False):
+        with patch('scrappy.providers.cohere_provider.COHERE_AVAILABLE', False):
             assert provider_with_mock_clients.is_available() is False
 
     def test_get_remaining_budget(self, provider_with_mock_clients):
@@ -311,7 +311,7 @@ class TestCohereProvider:
 
     def test_client_initialization(self, mock_cohere_client_v2, mock_cohere_client_v1):
         """Test that both V1 and V2 clients are properly initialized."""
-        with patch('src.providers.cohere_provider.cohere') as mock_cohere:
+        with patch('scrappy.providers.cohere_provider.cohere') as mock_cohere:
             mock_cohere.ClientV2.return_value = mock_cohere_client_v2
             mock_cohere.Client.return_value = mock_cohere_client_v1
 
@@ -351,7 +351,7 @@ class TestCohereProvider:
 
     def test_model_config_variations(self, provider_with_mock_clients):
         """Test that different models have correct configurations."""
-        from src.providers.base import ModelType, SpeedRank
+        from scrappy.providers.base import ModelType, SpeedRank
         configs = provider_with_mock_clients.MODELS
 
         # Test multilingual models

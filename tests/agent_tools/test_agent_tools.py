@@ -5,13 +5,13 @@ import pytest
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 
-from src.agent_tools.tools.base import (
+from scrappy.agent_tools.tools.base import (
     ToolContext,
     ToolParameter,
     ToolResult,
     ToolBase
 )
-from src.agent_tools.tools.registry import ToolRegistry
+from scrappy.agent_tools.tools.registry import ToolRegistry
 
 
 class TestToolContext:

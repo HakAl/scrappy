@@ -12,11 +12,11 @@ import pytest
 from unittest.mock import Mock, MagicMock, AsyncMock, patch, call
 from datetime import datetime
 
-from src.utils.errors import is_rate_limit_error, RateLimitError
-from src.utils.errors import AllProvidersRateLimitedError as LegacyAllProvidersRateLimitedError
-from src.infrastructure.exceptions import AllProvidersRateLimitedError
-from src.orchestrator.core import AgentOrchestrator
-from src.providers.base import LLMResponse
+from scrappy.utils.errors import is_rate_limit_error, RateLimitError
+from scrappy.utils.errors import AllProvidersRateLimitedError as LegacyAllProvidersRateLimitedError
+from scrappy.infrastructure.exceptions import AllProvidersRateLimitedError
+from scrappy.orchestrator.core import AgentOrchestrator
+from scrappy.providers.base import LLMResponse
 
 
 class TestRateLimitErrorDetection:
@@ -69,11 +69,11 @@ class TestRateLimitRecovery:
     @pytest.fixture
     def mock_orchestrator(self):
         """Create orchestrator with mocked providers."""
-        with patch('src.orchestrator.registration.GroqProvider') as mock_groq, \
-             patch('src.orchestrator.registration.CerebrasProvider') as mock_cerebras, \
-             patch('src.orchestrator.registration.GeminiProvider') as mock_gemini, \
-             patch('src.orchestrator.registration.CohereProvider') as mock_cohere, \
-             patch('src.orchestrator.registration.GitHubModelsProvider') as mock_github:
+        with patch('scrappy.orchestrator.registration.GroqProvider') as mock_groq, \
+             patch('scrappy.orchestrator.registration.CerebrasProvider') as mock_cerebras, \
+             patch('scrappy.orchestrator.registration.GeminiProvider') as mock_gemini, \
+             patch('scrappy.orchestrator.registration.CohereProvider') as mock_cohere, \
+             patch('scrappy.orchestrator.registration.GitHubModelsProvider') as mock_github:
 
             # Set up mock providers
             mock_groq_instance = MagicMock()

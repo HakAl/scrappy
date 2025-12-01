@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch, MagicMock
 from typing import Dict, Any
 
 # Import the class to test
-from src.platform.fallback import PythonCommandFallbackImpl
+from scrappy.platform.fallback import PythonCommandFallbackImpl
 
 
 class TestPythonCommandFallbackImpl:

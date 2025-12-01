@@ -13,8 +13,8 @@ Tests cover:
 
 import pytest
 
-from src.context.protocols import RankingConfig, ResultRankerProtocol, ScoredChunk
-from src.context.semantic.ranker import DefaultResultRanker, PassthroughRanker
+from scrappy.context.protocols import RankingConfig, ResultRankerProtocol, ScoredChunk
+from scrappy.context.semantic.ranker import DefaultResultRanker, PassthroughRanker
 
 
 class TestScoredChunk:

@@ -13,14 +13,14 @@ import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, Mock
 
-from src.orchestrator.batch_scheduler import BatchScheduler, DEFAULT_MAX_CONCURRENT
-from src.protocols.delegation import (
+from scrappy.orchestrator.batch_scheduler import BatchScheduler, DEFAULT_MAX_CONCURRENT
+from scrappy.protocols.delegation import (
     BatchSchedulerProtocol,
     RetryOrchestratorProtocol,
     LLMRequest,
     OutputInterfaceProtocol,
 )
-from src.providers import LLMResponse
+from scrappy.providers import LLMResponse
 
 
 # Test doubles

@@ -8,10 +8,10 @@ import pytest
 from datetime import datetime
 from unittest.mock import Mock, patch
 from tests.helpers import MockIO, ConfigurableTestOrchestrator
-from src.cli.command_router import CommandRouter
-from src.cli.session_context import SessionContext
-from src.cli.input_handler import InputHandler
-from src.cli.utils.cli_factory import initialize_cli_handlers
+from scrappy.cli.command_router import CommandRouter
+from scrappy.cli.session_context import SessionContext
+from scrappy.cli.input_handler import InputHandler
+from scrappy.cli.utils.cli_factory import initialize_cli_handlers
 
 
 class TestCommandRouterValidation:
@@ -55,20 +55,20 @@ class TestCommandRouterValidation:
     def test_valid_status_command_passes_validation(self):
         """Valid /status command should pass validation."""
         # Test validation passes (may fail later due to mock limitations)
-        from src.cli.validators import validate_command
+        from scrappy.cli.validators import validate_command
         result = validate_command("/status")
         assert result.is_valid
 
     def test_valid_quit_command_passes_validation(self):
         """Valid /quit command should pass validation."""
-        from src.cli.validators import validate_command
+        from scrappy.cli.validators import validate_command
         result = validate_command("/quit")
         assert result.is_valid
         assert result.command == "quit"
 
     def test_valid_exit_command_passes_validation(self):
         """Valid /exit command should pass validation."""
-        from src.cli.validators import validate_command
+        from scrappy.cli.validators import validate_command
         result = validate_command("/exit")
         assert result.is_valid
         assert result.command == "exit"
@@ -195,7 +195,7 @@ class TestProviderValidationIntegration:
 
     def test_valid_provider_accepted(self):
         """Valid provider names should be accepted."""
-        from src.cli.validators import validate_provider
+        from scrappy.cli.validators import validate_provider
 
         for provider in ["cerebras", "groq", "gemini", "cohere", "github_models"]:
             result = validate_provider(provider)
@@ -203,7 +203,7 @@ class TestProviderValidationIntegration:
 
     def test_invalid_provider_rejected(self):
         """Invalid provider names should be rejected."""
-        from src.cli.validators import validate_provider
+        from scrappy.cli.validators import validate_provider
 
         result = validate_provider("notaprovider")
         assert not result.is_valid
@@ -211,7 +211,7 @@ class TestProviderValidationIntegration:
 
     def test_provider_case_normalization(self):
         """Provider names should be normalized to lowercase."""
-        from src.cli.validators import validate_provider
+        from scrappy.cli.validators import validate_provider
 
         result = validate_provider("CEREBRAS")
         assert result.is_valid
@@ -223,14 +223,14 @@ class TestPathValidationIntegration:
 
     def test_valid_path_accepted(self):
         """Valid paths should be accepted."""
-        from src.cli.validators import validate_path
+        from scrappy.cli.validators import validate_path
 
         result = validate_path("src/cli/commands.py")
         assert result.is_valid
 
     def test_path_with_glob_rejected(self):
         """Paths with glob patterns should be rejected."""
-        from src.cli.validators import validate_path
+        from scrappy.cli.validators import validate_path
 
         result = validate_path("src/*.py")
         assert not result.is_valid
@@ -238,7 +238,7 @@ class TestPathValidationIntegration:
 
     def test_empty_path_rejected(self):
         """Empty paths should be rejected."""
-        from src.cli.validators import validate_path
+        from scrappy.cli.validators import validate_path
 
         result = validate_path("")
         assert not result.is_valid
@@ -246,7 +246,7 @@ class TestPathValidationIntegration:
 
     def test_path_traversal_rejected(self):
         """Excessive path traversal should be rejected."""
-        from src.cli.validators import validate_path
+        from scrappy.cli.validators import validate_path
 
         result = validate_path("../../../../etc/passwd")
         assert not result.is_valid
@@ -257,7 +257,7 @@ class TestCommandValidationIntegration:
 
     def test_validate_command_before_routing(self):
         """Commands should be validated before routing."""
-        from src.cli.validators import validate_command
+        from scrappy.cli.validators import validate_command
 
         # Valid commands
         result = validate_command("/help")
@@ -270,7 +270,7 @@ class TestCommandValidationIntegration:
 
     def test_invalid_command_caught(self):
         """Invalid commands should be caught by validation."""
-        from src.cli.validators import validate_command
+        from scrappy.cli.validators import validate_command
 
         # Unknown command
         result = validate_command("/badcmd")
@@ -290,7 +290,7 @@ class TestValidatorErrorMessages:
 
     def test_error_messages_are_helpful(self):
         """Error messages should be helpful and actionable."""
-        from src.cli.validators import validate_command, validate_path, validate_provider
+        from scrappy.cli.validators import validate_command, validate_path, validate_provider
 
         # Command errors should mention what's wrong
         result = validate_command("")
@@ -313,7 +313,7 @@ class TestValidatorEdgeCases:
 
     def test_unicode_in_commands(self):
         """Unicode characters in commands should be handled."""
-        from src.cli.validators import validate_command
+        from scrappy.cli.validators import validate_command
 
         # Unicode in args should be fine
         result = validate_command("/plan create archivo")
@@ -321,7 +321,7 @@ class TestValidatorEdgeCases:
 
     def test_whitespace_handling(self):
         """Whitespace should be handled consistently."""
-        from src.cli.validators import validate_command, validate_provider
+        from scrappy.cli.validators import validate_command, validate_provider
 
         # Leading/trailing whitespace should be trimmed
         result = validate_command("  /help  ")
@@ -333,7 +333,7 @@ class TestValidatorEdgeCases:
 
     def test_multiple_spaces_in_args(self):
         """Multiple spaces in arguments should be preserved."""
-        from src.cli.validators import validate_command
+        from scrappy.cli.validators import validate_command
 
         result = validate_command("/plan create   multiple   spaces")
         assert result.is_valid

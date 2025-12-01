@@ -12,10 +12,10 @@ from typing import Any, List, Dict, Optional
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 
-from src.cli.unified_io import UnifiedIO
-from src.cli.mode_utils import is_tui_mode
-from src.infrastructure.progress import create_progress_reporter, UnifiedIOProgressReporter
-from src.task_router.output_handler import create_output_handler, CLIIOOutputHandler
+from scrappy.cli.unified_io import UnifiedIO
+from scrappy.cli.mode_utils import is_tui_mode
+from scrappy.infrastructure.progress import create_progress_reporter, UnifiedIOProgressReporter
+from scrappy.task_router.output_handler import create_output_handler, CLIIOOutputHandler
 
 
 class MockOutputSink:
@@ -183,7 +183,7 @@ class TestModeAwareFactories:
         assert isinstance(tui_reporter, UnifiedIOProgressReporter)
 
         # CLI mode with spinner gets RichProgressReporter (imported to check)
-        from src.infrastructure.progress import RichProgressReporter
+        from scrappy.infrastructure.progress import RichProgressReporter
         assert isinstance(cli_reporter, RichProgressReporter)
 
     def test_output_handler_factory_tui_vs_cli(self):
@@ -202,7 +202,7 @@ class TestModeAwareFactories:
         # CLI mode gets CLIIOOutputHandler or RichOutputHandler based on flag
         assert isinstance(cli_handler_simple, CLIIOOutputHandler)
 
-        from src.task_router.output_handler import RichOutputHandler
+        from scrappy.task_router.output_handler import RichOutputHandler
         assert isinstance(cli_handler_rich, RichOutputHandler)
 
 
@@ -273,7 +273,7 @@ class TestAgentManagerBridgedIO:
         be passed to CodeAgent so that all confirmations go through the
         bridged io, not a new unbridged RichIO.
         """
-        from src.cli.agent_manager import CLIAgentManager
+        from scrappy.cli.agent_manager import CLIAgentManager
         from unittest.mock import Mock, patch
 
         sink = MockOutputSink()
@@ -300,7 +300,7 @@ class TestAgentManagerBridgedIO:
         This tests that output from CLIAgentManager in TUI mode goes through
         the sink, not directly to console.
         """
-        from src.cli.agent_manager import CLIAgentManager
+        from scrappy.cli.agent_manager import CLIAgentManager
         from unittest.mock import Mock
 
         sink = MockOutputSink()
@@ -324,7 +324,7 @@ class TestAgentManagerBridgedIO:
         being created without io, causing it to create its own unbridged
         RichIO instance.
         """
-        from src.cli.agent_manager import CLIAgentManager
+        from scrappy.cli.agent_manager import CLIAgentManager
         from unittest.mock import Mock, patch
 
         sink = MockOutputSink()
@@ -337,8 +337,8 @@ class TestAgentManagerBridgedIO:
 
         manager = CLIAgentManager(mock_orch, io)
 
-        with patch('src.cli.agent_manager.CodeAgent') as mock_agent_class, \
-             patch('src.cli.agent_manager.create_git_checkpoint') as mock_checkpoint:
+        with patch('scrappy.cli.agent_manager.CodeAgent') as mock_agent_class, \
+             patch('scrappy.cli.agent_manager.create_git_checkpoint') as mock_checkpoint:
 
             mock_checkpoint.return_value = None
 

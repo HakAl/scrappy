@@ -6,8 +6,8 @@ import tempfile
 from pathlib import Path
 from unittest.mock import Mock, MagicMock
 
-from src.context.semantic_manager import SemanticSearchManager, NullSemanticSearchManager
-from src.infrastructure.threading import (
+from scrappy.context.semantic_manager import SemanticSearchManager, NullSemanticSearchManager
+from scrappy.infrastructure.threading import (
     EventQueueProtocol,
     ThreadSafeEventQueue,
     BackgroundEvent,

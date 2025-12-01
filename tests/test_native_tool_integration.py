@@ -13,11 +13,11 @@ Tests are written to FAIL until the integration is complete. They cover:
 import pytest
 from unittest.mock import Mock, patch
 
-from src.agent.core import CodeAgent
-from src.agent.types import AgentThought, ConversationState
-from src.agent_config import AgentConfig
-from src.orchestrator_adapter import OrchestratorAdapter
-from src.providers.base import LLMResponse, ToolCall
+from scrappy.agent.core import CodeAgent
+from scrappy.agent.types import AgentThought, ConversationState
+from scrappy.agent_config import AgentConfig
+from scrappy.orchestrator_adapter import OrchestratorAdapter
+from scrappy.providers.base import LLMResponse, ToolCall
 
 # Use existing test helpers
 from tests.helpers import make_response, ConfigurableTestOrchestrator

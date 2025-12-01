@@ -5,16 +5,16 @@ Tests integration of classifier, extractor, and resolver.
 """
 
 import pytest
-from src.task_router.intent.service import IntentService
-from src.task_router.intent.classifier import RegexIntentClassifier
-from src.task_router.intent.entities import RegexEntityExtractor
-from src.task_router.intent.actions import DefaultActionResolver
+from scrappy.task_router.intent.service import IntentService
+from scrappy.task_router.intent.classifier import RegexIntentClassifier
+from scrappy.task_router.intent.entities import RegexEntityExtractor
+from scrappy.task_router.intent.actions import DefaultActionResolver
 from tests.helpers import (
     StubIntentClassifier,
     StubEntityExtractor,
     StubActionResolver,
 )
-from src.task_router.protocols import QueryIntent, IntentResult, Action
+from scrappy.task_router.protocols import QueryIntent, IntentResult, Action
 
 
 def test_service_end_to_end_with_real_components():

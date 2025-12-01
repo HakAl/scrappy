@@ -16,7 +16,7 @@ from tests.protocol_conformance.conftest import (
     assert_has_method,
 )
 
-from src.orchestrator.protocols import CacheProtocol
+from scrappy.orchestrator.protocols import CacheProtocol
 
 
 class TestResponseCacheConformance:
@@ -24,32 +24,32 @@ class TestResponseCacheConformance:
 
     def test_response_cache_has_get(self):
         """ResponseCache should have get method."""
-        from src.orchestrator.cache import ResponseCache
+        from scrappy.orchestrator.cache import ResponseCache
 
         assert_has_method(ResponseCache, 'get')
 
     def test_response_cache_has_put(self):
         """ResponseCache should have put method."""
-        from src.orchestrator.cache import ResponseCache
+        from scrappy.orchestrator.cache import ResponseCache
 
         assert_has_method(ResponseCache, 'put')
 
     def test_response_cache_has_clear(self):
         """ResponseCache should have clear method."""
-        from src.orchestrator.cache import ResponseCache
+        from scrappy.orchestrator.cache import ResponseCache
 
         assert_has_method(ResponseCache, 'clear')
 
     def test_response_cache_has_get_stats(self):
         """ResponseCache should have get_stats method."""
-        from src.orchestrator.cache import ResponseCache
+        from scrappy.orchestrator.cache import ResponseCache
 
         assert_has_method(ResponseCache, 'get_stats')
 
     @pytest.mark.skip(reason="ResponseCache doesn't implement all CacheProtocol methods (invalidate)")
     def test_response_cache_isinstance(self):
         """ResponseCache instance should pass isinstance check."""
-        from src.orchestrator.cache import ResponseCache
+        from scrappy.orchestrator.cache import ResponseCache
 
         instance = ResponseCache()
         assert_isinstance_protocol(instance, CacheProtocol)
@@ -57,13 +57,13 @@ class TestResponseCacheConformance:
     @pytest.mark.skip(reason="ResponseCache uses invalidate_provider instead of invalidate")
     def test_response_cache_has_invalidate(self):
         """ResponseCache should have invalidate method (protocol requirement)."""
-        from src.orchestrator.cache import ResponseCache
+        from scrappy.orchestrator.cache import ResponseCache
 
         assert_has_method(ResponseCache, 'invalidate')
 
     def test_response_cache_has_invalidate_provider(self):
         """ResponseCache has invalidate_provider (implementation-specific)."""
-        from src.orchestrator.cache import ResponseCache
+        from scrappy.orchestrator.cache import ResponseCache
 
         assert_has_method(ResponseCache, 'invalidate_provider')
 
@@ -73,7 +73,7 @@ class TestResponseCacheBehavior:
 
     def test_get_returns_none_for_miss(self):
         """get() should return None for cache miss."""
-        from src.orchestrator.cache import ResponseCache
+        from scrappy.orchestrator.cache import ResponseCache
 
         cache = ResponseCache()
         result = cache.get("provider", "nonexistent prompt")
@@ -82,8 +82,8 @@ class TestResponseCacheBehavior:
 
     def test_put_and_get_roundtrip(self):
         """put() should store value retrievable by get()."""
-        from src.orchestrator.cache import ResponseCache
-        from src.providers.base import LLMResponse
+        from scrappy.orchestrator.cache import ResponseCache
+        from scrappy.providers.base import LLMResponse
 
         cache = ResponseCache()
 
@@ -106,8 +106,8 @@ class TestResponseCacheBehavior:
 
     def test_clear_removes_all_entries(self):
         """clear() should remove all cached entries."""
-        from src.orchestrator.cache import ResponseCache
-        from src.providers.base import LLMResponse
+        from scrappy.orchestrator.cache import ResponseCache
+        from scrappy.providers.base import LLMResponse
 
         cache = ResponseCache()
 
@@ -130,7 +130,7 @@ class TestResponseCacheBehavior:
 
     def test_get_stats_returns_dict(self):
         """get_stats() should return a dictionary with stats."""
-        from src.orchestrator.cache import ResponseCache
+        from scrappy.orchestrator.cache import ResponseCache
 
         cache = ResponseCache()
         stats = cache.get_stats()
@@ -141,8 +141,8 @@ class TestResponseCacheBehavior:
 
     def test_stats_track_hits_and_misses(self):
         """Stats should track cache hits and misses."""
-        from src.orchestrator.cache import ResponseCache
-        from src.providers.base import LLMResponse
+        from scrappy.orchestrator.cache import ResponseCache
+        from scrappy.providers.base import LLMResponse
 
         cache = ResponseCache()
 
@@ -171,8 +171,8 @@ class TestResponseCacheBehavior:
 
     def test_invalidate_provider_removes_entries(self):
         """invalidate_provider() should remove entries for that provider."""
-        from src.orchestrator.cache import ResponseCache
-        from src.providers.base import LLMResponse
+        from scrappy.orchestrator.cache import ResponseCache
+        from scrappy.providers.base import LLMResponse
 
         cache = ResponseCache()
 
@@ -199,7 +199,7 @@ class TestCacheProtocolSignature:
 
     def test_get_accepts_required_params(self):
         """get() should accept provider and prompt as required params."""
-        from src.orchestrator.cache import ResponseCache
+        from scrappy.orchestrator.cache import ResponseCache
 
         cache = ResponseCache()
         # Should not raise - these are required parameters
@@ -207,7 +207,7 @@ class TestCacheProtocolSignature:
 
     def test_get_accepts_optional_params(self):
         """get() should accept model and temperature as optional params."""
-        from src.orchestrator.cache import ResponseCache
+        from scrappy.orchestrator.cache import ResponseCache
 
         cache = ResponseCache()
         # Should not raise - these are optional parameters
@@ -215,8 +215,8 @@ class TestCacheProtocolSignature:
 
     def test_put_accepts_response_and_prompt(self):
         """put() should accept response and prompt."""
-        from src.orchestrator.cache import ResponseCache
-        from src.providers.base import LLMResponse
+        from scrappy.orchestrator.cache import ResponseCache
+        from scrappy.providers.base import LLMResponse
 
         cache = ResponseCache()
         response = LLMResponse(

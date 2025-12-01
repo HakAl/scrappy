@@ -3,7 +3,7 @@ Tests for WorkingMemory - session-scoped memory management.
 """
 import pytest
 from datetime import datetime
-from src.orchestrator.memory import WorkingMemory
+from scrappy.orchestrator.memory import WorkingMemory
 
 
 class TestWorkingMemoryBasics:

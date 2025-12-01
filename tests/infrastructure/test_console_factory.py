@@ -11,8 +11,8 @@ from io import StringIO
 
 from rich.console import Console
 
-from src.infrastructure.console_factory import ConsoleFactory
-from src.infrastructure.output_mode import OutputModeContext
+from scrappy.infrastructure.console_factory import ConsoleFactory
+from scrappy.infrastructure.output_mode import OutputModeContext
 
 
 class TestConsoleFactoryInCliMode:

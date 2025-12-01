@@ -14,9 +14,9 @@ from pathlib import Path
 
 import pytest
 
-from src.context.protocols import CodeChunk, CodeChunkerProtocol, EmbeddingFunctionProtocol
-from src.context.semantic.config import SemanticIndexConfig
-from src.context.semantic.provider import (
+from scrappy.context.protocols import CodeChunk, CodeChunkerProtocol, EmbeddingFunctionProtocol
+from scrappy.context.semantic.config import SemanticIndexConfig
+from scrappy.context.semantic.provider import (
     IndexingMetrics,
     LanceDBSearchProvider,
 )
@@ -412,7 +412,7 @@ class TestEmbeddingFunctionInjection:
         )
 
         # Mock the factory to ensure it's not called
-        with patch("src.context.semantic.provider._create_embedding_func") as mock_factory:
+        with patch("scrappy.context.semantic.provider._create_embedding_func") as mock_factory:
             # This would normally trigger lazy loading
             provider._code_schema = None  # Reset to trigger _ensure_schema logic
             provider._ensure_schema()

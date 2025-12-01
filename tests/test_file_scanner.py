@@ -4,7 +4,7 @@ Tests for FileScanner - file discovery and categorization.
 import pytest
 from pathlib import Path
 
-from src.context.file_scanner import FileScanner
+from scrappy.context.file_scanner import FileScanner
 
 
 class TestFileScannerBasics:
@@ -216,7 +216,7 @@ class TestDirectoryHandling:
             build_dir.mkdir()
             (build_dir / "output.js").write_text("")
 
-        (tmp_path / "src.js").write_text("")
+        (tmp_path / "scrappy.js").write_text("")
 
         scanner = FileScanner()
         result = scanner.scan_files(tmp_path)

@@ -24,11 +24,11 @@ from tests.helpers import (
 
 
 from datetime import datetime
-from src.cli.utils.cli_factory import initialize_cli_handlers
-from src.cli.state_manager import PlanStateManager
-from src.cli.session_context import SessionContext
-from src.cli.input_handler import InputHandler
-from src.cli.logging import get_logger
+from scrappy.cli.utils.cli_factory import initialize_cli_handlers
+from scrappy.cli.state_manager import PlanStateManager
+from scrappy.cli.session_context import SessionContext
+from scrappy.cli.input_handler import InputHandler
+from scrappy.cli.logging import get_logger
 
 
 def create_test_interactive_mode(io, orchestrator):
@@ -37,8 +37,8 @@ def create_test_interactive_mode(io, orchestrator):
     handlers = initialize_cli_handlers(orchestrator, session_start, io)
 
     # Import here to avoid circular imports
-    from src.cli.interactive import InteractiveMode
-    from src.cli.command_router import CommandRouter
+    from scrappy.cli.interactive import InteractiveMode
+    from scrappy.cli.command_router import CommandRouter
 
     state_manager = PlanStateManager()
     session_context = SessionContext()
@@ -81,8 +81,8 @@ def create_test_interactive_mode(io, orchestrator):
 def create_test_command_router(io, orchestrator):
     """Helper to create CommandRouter with all dependencies."""
     from datetime import datetime
-    from src.cli.command_router import CommandRouter
-    from src.cli.state_manager import PlanStateManager
+    from scrappy.cli.command_router import CommandRouter
+    from scrappy.cli.state_manager import PlanStateManager
 
     session_start = datetime.now()
     handlers = initialize_cli_handlers(orchestrator, session_start, io)
@@ -111,7 +111,7 @@ class TestSessionStartupFlow:
 
     def setup_method(self):
         """Set up test fixtures."""
-        from src.cli.interactive import InteractiveMode
+        from scrappy.cli.interactive import InteractiveMode
         self.InteractiveMode = InteractiveMode
 
 
@@ -120,8 +120,8 @@ class TestSessionExitFlow:
 
     def setup_method(self):
         """Set up test fixtures."""
-        from src.cli.interactive import InteractiveMode
-        from src.cli.command_router import CommandRouter
+        from scrappy.cli.interactive import InteractiveMode
+        from scrappy.cli.command_router import CommandRouter
         self.InteractiveMode = InteractiveMode
         self.CommandRouter = CommandRouter
 
@@ -168,8 +168,8 @@ class TestPlanCreationFlow:
 
     def setup_method(self):
         """Set up test fixtures."""
-        from src.cli.command_router import CommandRouter
-        from src.cli.state_manager import PlanStateManager
+        from scrappy.cli.command_router import CommandRouter
+        from scrappy.cli.state_manager import PlanStateManager
         self.CommandRouter = CommandRouter
         self.PlanStateManager = PlanStateManager
 
@@ -232,7 +232,7 @@ class TestPlanNavigationFlow:
 
     def setup_method(self):
         """Set up test fixtures."""
-        from src.cli.state_manager import PlanStateManager
+        from scrappy.cli.state_manager import PlanStateManager
         self.PlanStateManager = PlanStateManager
 
     def test_complete_task_advances_to_next(self):
@@ -325,7 +325,7 @@ class TestPlanDisplayFlow:
 
     def setup_method(self):
         """Set up test fixtures."""
-        from src.cli.state_manager import PlanStateManager
+        from scrappy.cli.state_manager import PlanStateManager
         self.PlanStateManager = PlanStateManager
 
     def test_show_all_tasks_displays_status(self):
@@ -376,7 +376,7 @@ class TestModeTogglingFlow:
 
     def setup_method(self):
         """Set up test fixtures."""
-        from src.cli.command_router import CommandRouter
+        from scrappy.cli.command_router import CommandRouter
         self.CommandRouter = CommandRouter
 
     def test_toggle_smart_mode(self):
@@ -417,7 +417,7 @@ class TestCommandExecutionFlow:
 
     def setup_method(self):
         """Set up test fixtures."""
-        from src.cli.command_router import CommandRouter
+        from scrappy.cli.command_router import CommandRouter
         self.CommandRouter = CommandRouter
 
     def test_clear_command_clears_history(self):
@@ -486,7 +486,7 @@ class TestChatWithAutoRouteFlow:
 
     def setup_method(self):
         """Set up test fixtures."""
-        from src.cli.interactive import InteractiveMode
+        from scrappy.cli.interactive import InteractiveMode
         self.InteractiveMode = InteractiveMode
 
     def test_chat_adds_to_conversation_history(self):
@@ -516,7 +516,7 @@ class TestSessionManagementFlow:
 
     def setup_method(self):
         """Set up test fixtures."""
-        from src.cli.command_router import CommandRouter
+        from scrappy.cli.command_router import CommandRouter
         self.CommandRouter = CommandRouter
 
     def test_session_load_restores_conversation(self):
@@ -561,8 +561,8 @@ class TestErrorHandlingFlow:
 
     def setup_method(self):
         """Set up test fixtures."""
-        from src.cli.interactive import InteractiveMode
-        from src.cli.exceptions import CLIError, ProviderError
+        from scrappy.cli.interactive import InteractiveMode
+        from scrappy.cli.exceptions import CLIError, ProviderError
         self.InteractiveMode = InteractiveMode
         self.CLIError = CLIError
         self.ProviderError = ProviderError
@@ -573,7 +573,7 @@ class TestErrorHandlingFlow:
         orchestrator = ConfigurableTestOrchestrator()
         mode = create_test_interactive_mode(io, orchestrator)
 
-        from src.cli.exceptions import CLIError, ErrorSeverity
+        from scrappy.cli.exceptions import CLIError, ErrorSeverity
         error = CLIError(
             "Test error",
             suggestion="Try this instead",
@@ -592,7 +592,7 @@ class TestErrorHandlingFlow:
         orchestrator = ConfigurableTestOrchestrator()
         mode = create_test_interactive_mode(io, orchestrator)
 
-        from src.cli.exceptions import ProviderError
+        from scrappy.cli.exceptions import ProviderError
         error = ProviderError(
             "API failed",
             provider="openai",
@@ -637,8 +637,8 @@ class TestCompleteUserWorkflows:
 
     def setup_method(self):
         """Set up test fixtures."""
-        from src.cli.interactive import InteractiveMode
-        from src.cli.command_router import CommandRouter
+        from scrappy.cli.interactive import InteractiveMode
+        from scrappy.cli.command_router import CommandRouter
         self.InteractiveMode = InteractiveMode
         self.CommandRouter = CommandRouter
 
@@ -699,7 +699,7 @@ class TestStateTransitions:
 
     def setup_method(self):
         """Set up test fixtures."""
-        from src.cli.state_manager import PlanStateManager
+        from scrappy.cli.state_manager import PlanStateManager
         self.PlanStateManager = PlanStateManager
 
     def test_plan_state_transitions(self):
@@ -780,7 +780,7 @@ class TestSideEffects:
 
     def setup_method(self):
         """Set up test fixtures."""
-        from src.cli.command_router import CommandRouter
+        from scrappy.cli.command_router import CommandRouter
         self.CommandRouter = CommandRouter
 
     def test_clear_actually_clears_history(self):

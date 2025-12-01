@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from src.agent_tools.components.output_collector import ThreadSafeOutputCollector
+from scrappy.agent_tools.components.output_collector import ThreadSafeOutputCollector
 
 
 class TestThreadSafeOutputCollector:

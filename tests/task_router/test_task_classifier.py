@@ -4,8 +4,8 @@ Tests for TaskClassifier - pattern matching and task type classification.
 Migrated from test_classification_improvements.py and examples/test_task_router.py
 """
 import pytest
-from src.task_router.classifier import TaskClassifier, ClassifiedTask, TaskType
-from src.task_router.config import ClarificationConfig
+from scrappy.task_router.classifier import TaskClassifier, ClassifiedTask, TaskType
+from scrappy.task_router.config import ClarificationConfig
 
 
 @pytest.fixture
@@ -164,7 +164,7 @@ class TestConfidenceScoring:
     @pytest.mark.unit
     def test_confidence_affects_escalation(self, default_clarification_config):
         """Test that low confidence tasks may need escalation."""
-        from src.task_router.router import TaskRouter
+        from scrappy.task_router.router import TaskRouter
 
         router = TaskRouter(orchestrator=None, verbose=False, clarification_config=default_clarification_config)
 
@@ -195,7 +195,7 @@ class TestIntentClarification:
         This is the Phase 2 fix: when classifier returns high confidence,
         we trust it even if there are conflicting signals in the text.
         """
-        from src.task_router.router import TaskRouter
+        from scrappy.task_router.router import TaskRouter
         from dataclasses import replace
 
         router = TaskRouter(orchestrator=None, verbose=False, clarification_config=default_clarification_config)
@@ -212,7 +212,7 @@ class TestIntentClarification:
     @pytest.mark.unit
     def test_conflicting_intents_medium_confidence_needs_clarification(self, default_clarification_config):
         """Test that medium confidence with conflicting signals needs clarification."""
-        from src.task_router.router import TaskRouter
+        from scrappy.task_router.router import TaskRouter
         from dataclasses import replace
 
         router = TaskRouter(orchestrator=None, verbose=False, clarification_config=default_clarification_config)
@@ -228,7 +228,7 @@ class TestIntentClarification:
     @pytest.mark.unit
     def test_clear_intents_no_clarification(self, default_clarification_config):
         """Test that clear intents don't need clarification."""
-        from src.task_router.router import TaskRouter
+        from scrappy.task_router.router import TaskRouter
 
         router = TaskRouter(orchestrator=None, verbose=False, clarification_config=default_clarification_config)
         classifier = TaskClassifier()
@@ -247,7 +247,7 @@ class TestIntentClarification:
     @pytest.mark.unit
     def test_question_with_action_words_high_confidence(self, default_clarification_config):
         """Test that high confidence bypasses question+action check."""
-        from src.task_router.router import TaskRouter
+        from scrappy.task_router.router import TaskRouter
 
         router = TaskRouter(orchestrator=None, verbose=False, clarification_config=default_clarification_config)
         classifier = TaskClassifier()

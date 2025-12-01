@@ -9,7 +9,7 @@ class TestCommandHistory:
 
     def test_in_memory_when_no_file_provided(self):
         """CommandHistory works without file (in-memory only)."""
-        from src.cli.command_history import CommandHistory
+        from scrappy.cli.command_history import CommandHistory
 
         history = CommandHistory(history_file=None)
         history.add_to_history("test")
@@ -18,7 +18,7 @@ class TestCommandHistory:
 
     def test_creates_directory_if_needed(self, tmp_path):
         """CommandHistory creates parent directory for history file."""
-        from src.cli.command_history import CommandHistory
+        from scrappy.cli.command_history import CommandHistory
 
         history_file = tmp_path / "subdir" / "history"
         history = CommandHistory(history_file=history_file)
@@ -32,7 +32,7 @@ class TestInMemoryCommandHistory:
 
     def test_basic_functionality(self):
         """InMemoryCommandHistory stores and retrieves entries."""
-        from src.cli.command_history import InMemoryCommandHistory
+        from scrappy.cli.command_history import InMemoryCommandHistory
 
         history = InMemoryCommandHistory()
         history.add_to_history("first")
@@ -47,7 +47,7 @@ class TestGetDefaultHistoryPath:
 
     def test_returns_path_in_home_directory(self):
         """get_default_history_path returns path under ~/.scrappy/."""
-        from src.cli.command_history import get_default_history_path
+        from scrappy.cli.command_history import get_default_history_path
 
         path = get_default_history_path()
 
@@ -57,7 +57,7 @@ class TestGetDefaultHistoryPath:
 
     def test_path_is_under_home(self):
         """get_default_history_path returns path under user's home."""
-        from src.cli.command_history import get_default_history_path
+        from scrappy.cli.command_history import get_default_history_path
 
         path = get_default_history_path()
         home = Path.home()
@@ -70,7 +70,7 @@ class TestCommandHistoryAddToHistory:
 
     def test_add_to_history_stores_command(self):
         """add_to_history stores valid command."""
-        from src.cli.command_history import InMemoryCommandHistory
+        from scrappy.cli.command_history import InMemoryCommandHistory
 
         history = InMemoryCommandHistory()
         history.add_to_history("test command")
@@ -79,7 +79,7 @@ class TestCommandHistoryAddToHistory:
 
     def test_add_to_history_strips_whitespace(self):
         """add_to_history strips whitespace from commands."""
-        from src.cli.command_history import InMemoryCommandHistory
+        from scrappy.cli.command_history import InMemoryCommandHistory
 
         history = InMemoryCommandHistory()
         history.add_to_history("  command with spaces  ")
@@ -88,7 +88,7 @@ class TestCommandHistoryAddToHistory:
 
     def test_add_to_history_ignores_empty_strings(self):
         """add_to_history ignores empty strings."""
-        from src.cli.command_history import InMemoryCommandHistory
+        from scrappy.cli.command_history import InMemoryCommandHistory
 
         history = InMemoryCommandHistory()
         history.add_to_history("")
@@ -98,7 +98,7 @@ class TestCommandHistoryAddToHistory:
 
     def test_add_to_history_ignores_none(self):
         """add_to_history handles None gracefully."""
-        from src.cli.command_history import InMemoryCommandHistory
+        from scrappy.cli.command_history import InMemoryCommandHistory
 
         history = InMemoryCommandHistory()
         history.add_to_history(None)
@@ -107,7 +107,7 @@ class TestCommandHistoryAddToHistory:
 
     def test_avoids_consecutive_duplicates(self):
         """add_to_history skips consecutive duplicate entries."""
-        from src.cli.command_history import InMemoryCommandHistory
+        from scrappy.cli.command_history import InMemoryCommandHistory
 
         history = InMemoryCommandHistory()
         history.add_to_history("same")
@@ -123,8 +123,8 @@ class TestInputHandlerWithHistory:
 
     def test_input_handler_accepts_history_parameter(self):
         """InputHandler accepts optional history parameter."""
-        from src.cli.input_handler import InputHandler
-        from src.cli.command_history import InMemoryCommandHistory
+        from scrappy.cli.input_handler import InputHandler
+        from scrappy.cli.command_history import InMemoryCommandHistory
         from tests.helpers import MockIO
 
         io = MockIO()
@@ -136,7 +136,7 @@ class TestInputHandlerWithHistory:
 
     def test_input_handler_none_history_is_valid(self):
         """InputHandler works without history (None)."""
-        from src.cli.input_handler import InputHandler
+        from scrappy.cli.input_handler import InputHandler
         from tests.helpers import MockIO
 
         io = MockIO()
@@ -150,7 +150,7 @@ class TestHistoryNavigation:
 
     def test_get_previous_returns_none_when_empty(self):
         """get_previous returns None when history is empty."""
-        from src.cli.command_history import InMemoryCommandHistory
+        from scrappy.cli.command_history import InMemoryCommandHistory
 
         history = InMemoryCommandHistory()
 
@@ -158,7 +158,7 @@ class TestHistoryNavigation:
 
     def test_get_next_returns_none_when_empty(self):
         """get_next returns None when history is empty."""
-        from src.cli.command_history import InMemoryCommandHistory
+        from scrappy.cli.command_history import InMemoryCommandHistory
 
         history = InMemoryCommandHistory()
 
@@ -166,7 +166,7 @@ class TestHistoryNavigation:
 
     def test_get_previous_navigates_history(self):
         """get_previous navigates backwards through history."""
-        from src.cli.command_history import InMemoryCommandHistory
+        from scrappy.cli.command_history import InMemoryCommandHistory
 
         history = InMemoryCommandHistory()
         history.add_to_history("first")
@@ -180,7 +180,7 @@ class TestHistoryNavigation:
 
     def test_get_next_navigates_history(self):
         """get_next navigates forwards through history."""
-        from src.cli.command_history import InMemoryCommandHistory
+        from scrappy.cli.command_history import InMemoryCommandHistory
 
         history = InMemoryCommandHistory()
         history.add_to_history("first")
@@ -198,7 +198,7 @@ class TestHistoryNavigation:
 
     def test_reset_position_moves_to_end(self):
         """reset_position moves navigation position to end."""
-        from src.cli.command_history import InMemoryCommandHistory
+        from scrappy.cli.command_history import InMemoryCommandHistory
 
         history = InMemoryCommandHistory()
         history.add_to_history("first")
@@ -216,7 +216,7 @@ class TestHistoryNavigation:
 
     def test_add_resets_position_to_end(self):
         """Adding new entry resets position to end."""
-        from src.cli.command_history import InMemoryCommandHistory
+        from scrappy.cli.command_history import InMemoryCommandHistory
 
         history = InMemoryCommandHistory()
         history.add_to_history("first")
@@ -238,7 +238,7 @@ class TestHistoryPersistence:
 
     def test_saves_to_file(self, tmp_path):
         """History is saved to file."""
-        from src.cli.command_history import CommandHistory
+        from scrappy.cli.command_history import CommandHistory
 
         history_file = tmp_path / "history"
         history = CommandHistory(history_file=history_file)
@@ -250,7 +250,7 @@ class TestHistoryPersistence:
 
     def test_loads_from_file(self, tmp_path):
         """History is loaded from existing file."""
-        from src.cli.command_history import CommandHistory
+        from scrappy.cli.command_history import CommandHistory
 
         history_file = tmp_path / "history"
         history_file.write_text("old command\nanother command")
@@ -262,7 +262,7 @@ class TestHistoryPersistence:
 
     def test_respects_max_size(self, tmp_path):
         """History respects max_size limit."""
-        from src.cli.command_history import CommandHistory
+        from scrappy.cli.command_history import CommandHistory
 
         history_file = tmp_path / "history"
         history = CommandHistory(history_file=history_file, max_size=3)

@@ -8,10 +8,10 @@ queries to codebase vs general research execution paths.
 import pytest
 from unittest.mock import Mock, MagicMock, patch
 
-from src.task_router.classifier import ClassifiedTask, TaskType
-from src.task_router.strategies.research_executor import ResearchExecutor
-from src.task_router.strategies.research_subtype import ResearchSubtype
-from src.task_router.strategies.research_subclassifier import ResearchSubclassifier
+from scrappy.task_router.classifier import ClassifiedTask, TaskType
+from scrappy.task_router.strategies.research_executor import ResearchExecutor
+from scrappy.task_router.strategies.research_subtype import ResearchSubtype
+from scrappy.task_router.strategies.research_subclassifier import ResearchSubclassifier
 
 
 class TestResearchExecutorSubtypeRouting:

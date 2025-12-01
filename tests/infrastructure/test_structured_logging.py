@@ -11,7 +11,7 @@ import logging
 from pathlib import Path
 from datetime import datetime
 
-from src.infrastructure.logging import (
+from scrappy.infrastructure.logging import (
     StructuredLogger,
     LoggerRegistry,
     get_logger,

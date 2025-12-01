@@ -7,7 +7,7 @@ then we refactor the code to make them pass.
 import pytest
 from unittest.mock import Mock
 
-from src.task_router.classifier import ClassifiedTask, TaskType
+from scrappy.task_router.classifier import ClassifiedTask, TaskType
 
 
 class TestIntentClarifier:
@@ -25,7 +25,7 @@ class TestIntentClarifier:
     def test_interactive_clarifier_asks_user_and_returns_research(self):
         """Test that interactive clarifier can return RESEARCH when user chooses option 1."""
         # This test demonstrates the INTERFACE we want
-        from src.task_router.intent_clarifier import InteractiveClarifier
+        from scrappy.task_router.intent_clarifier import InteractiveClarifier
 
         task = ClassifiedTask(
             original_input="explain how to create a file",
@@ -52,7 +52,7 @@ class TestIntentClarifier:
     @pytest.mark.unit
     def test_interactive_clarifier_asks_user_and_returns_code_generation(self):
         """Test that interactive clarifier can return CODE_GENERATION when user chooses option 2."""
-        from src.task_router.intent_clarifier import InteractiveClarifier
+        from scrappy.task_router.intent_clarifier import InteractiveClarifier
 
         task = ClassifiedTask(
             original_input="create a file",
@@ -75,7 +75,7 @@ class TestIntentClarifier:
     @pytest.mark.unit
     def test_interactive_clarifier_keeps_original_when_user_chooses_3(self):
         """Test that clarifier keeps original classification when user chooses option 3."""
-        from src.task_router.intent_clarifier import InteractiveClarifier
+        from scrappy.task_router.intent_clarifier import InteractiveClarifier
 
         task = ClassifiedTask(
             original_input="something ambiguous",
@@ -99,7 +99,7 @@ class TestIntentClarifier:
     @pytest.mark.unit
     def test_interactive_clarifier_handles_eof_error_gracefully(self):
         """Test that clarifier handles EOF (Ctrl+D) by keeping original."""
-        from src.task_router.intent_clarifier import InteractiveClarifier
+        from scrappy.task_router.intent_clarifier import InteractiveClarifier
 
         task = ClassifiedTask(
             original_input="test",
@@ -122,7 +122,7 @@ class TestIntentClarifier:
     @pytest.mark.unit
     def test_interactive_clarifier_handles_keyboard_interrupt(self):
         """Test that clarifier handles Ctrl+C by keeping original."""
-        from src.task_router.intent_clarifier import InteractiveClarifier
+        from scrappy.task_router.intent_clarifier import InteractiveClarifier
 
         task = ClassifiedTask(
             original_input="test",
@@ -144,7 +144,7 @@ class TestIntentClarifier:
     @pytest.mark.unit
     def test_interactive_clarifier_handles_invalid_choice(self):
         """Test that clarifier handles invalid input by keeping original."""
-        from src.task_router.intent_clarifier import InteractiveClarifier
+        from scrappy.task_router.intent_clarifier import InteractiveClarifier
 
         task = ClassifiedTask(
             original_input="test",
@@ -171,7 +171,7 @@ class TestIntentClarifier:
         This demonstrates that we can swap implementations easily.
         Useful for CI/CD where we don't want interactive prompts.
         """
-        from src.task_router.intent_clarifier import AutoClarifier
+        from scrappy.task_router.intent_clarifier import AutoClarifier
 
         task = ClassifiedTask(
             original_input="create something",
@@ -191,7 +191,7 @@ class TestIntentClarifier:
     @pytest.mark.unit
     def test_auto_clarifier_keeps_original_when_configured(self):
         """Test AutoClarifier can be configured to keep original."""
-        from src.task_router.intent_clarifier import AutoClarifier
+        from scrappy.task_router.intent_clarifier import AutoClarifier
 
         task = ClassifiedTask(
             original_input="something",
@@ -213,7 +213,7 @@ class TestIntentClarifier:
 
         Useful when clarification is disabled entirely.
         """
-        from src.task_router.intent_clarifier import NullClarifier
+        from scrappy.task_router.intent_clarifier import NullClarifier
 
         task = ClassifiedTask(
             original_input="test",
@@ -245,7 +245,7 @@ class TestOutputHandler:
     @pytest.mark.unit
     def test_console_output_handler_prints_to_stdout(self):
         """Test that ConsoleOutputHandler writes to provided IO."""
-        from src.task_router.output_handler import ConsoleOutputHandler
+        from scrappy.task_router.output_handler import ConsoleOutputHandler
         from tests.helpers import MockIO
 
         mock_io = MockIO()
@@ -265,7 +265,7 @@ class TestOutputHandler:
     @pytest.mark.unit
     def test_console_output_handler_logs_provider_selection(self):
         """Test that provider selection is logged."""
-        from src.task_router.output_handler import ConsoleOutputHandler
+        from scrappy.task_router.output_handler import ConsoleOutputHandler
         from tests.helpers import MockIO
 
         mock_io = MockIO()
@@ -283,7 +283,7 @@ class TestOutputHandler:
     @pytest.mark.unit
     def test_console_output_handler_logs_execution_start(self):
         """Test that execution start is logged."""
-        from src.task_router.output_handler import ConsoleOutputHandler
+        from scrappy.task_router.output_handler import ConsoleOutputHandler
         from tests.helpers import MockIO
 
         mock_io = MockIO()
@@ -301,7 +301,7 @@ class TestOutputHandler:
         This is crucial for testing - we can verify what would be printed
         without actually printing to console.
         """
-        from src.task_router.output_handler import BufferOutputHandler
+        from scrappy.task_router.output_handler import BufferOutputHandler
 
         handler = BufferOutputHandler()
         handler.log_classification(
@@ -326,7 +326,7 @@ class TestOutputHandler:
     @pytest.mark.unit
     def test_buffer_output_handler_can_be_cleared(self):
         """Test that buffer can be cleared."""
-        from src.task_router.output_handler import BufferOutputHandler
+        from scrappy.task_router.output_handler import BufferOutputHandler
 
         handler = BufferOutputHandler()
         handler.log_classification("RESEARCH", 0.8, 2, "test")
@@ -343,7 +343,7 @@ class TestOutputHandler:
 
         Useful for silent mode or when output is disabled.
         """
-        from src.task_router.output_handler import NullOutputHandler
+        from scrappy.task_router.output_handler import NullOutputHandler
 
         handler = NullOutputHandler()
         handler.log_classification("RESEARCH", 0.8, 2, "test")
@@ -368,7 +368,7 @@ class TestInputValidator:
     @pytest.mark.unit
     def test_validate_user_input_rejects_none(self):
         """Test that None input is rejected."""
-        from src.task_router.validator import InputValidator
+        from scrappy.task_router.validator import InputValidator
 
         validator = InputValidator()
 
@@ -380,7 +380,7 @@ class TestInputValidator:
     @pytest.mark.unit
     def test_validate_user_input_rejects_empty_string(self):
         """Test that empty string is rejected."""
-        from src.task_router.validator import InputValidator
+        from scrappy.task_router.validator import InputValidator
 
         validator = InputValidator()
 
@@ -392,7 +392,7 @@ class TestInputValidator:
     @pytest.mark.unit
     def test_validate_user_input_rejects_whitespace_only(self):
         """Test that whitespace-only input is rejected."""
-        from src.task_router.validator import InputValidator
+        from scrappy.task_router.validator import InputValidator
 
         validator = InputValidator()
 
@@ -404,7 +404,7 @@ class TestInputValidator:
     @pytest.mark.unit
     def test_validate_user_input_accepts_valid_input(self):
         """Test that valid input is accepted."""
-        from src.task_router.validator import InputValidator
+        from scrappy.task_router.validator import InputValidator
 
         validator = InputValidator()
 
@@ -416,7 +416,7 @@ class TestInputValidator:
     @pytest.mark.unit
     def test_validate_user_input_rejects_extremely_long_input(self):
         """Test that extremely long input is rejected (DoS protection)."""
-        from src.task_router.validator import InputValidator
+        from scrappy.task_router.validator import InputValidator
 
         validator = InputValidator(max_length=1000)
 
@@ -429,7 +429,7 @@ class TestInputValidator:
     @pytest.mark.unit
     def test_validate_user_input_accepts_long_but_valid_input(self):
         """Test that long but valid input is accepted."""
-        from src.task_router.validator import InputValidator
+        from scrappy.task_router.validator import InputValidator
 
         validator = InputValidator(max_length=1000)
 
@@ -442,7 +442,7 @@ class TestInputValidator:
     @pytest.mark.unit
     def test_validate_confidence_rejects_negative(self):
         """Test that negative confidence is rejected."""
-        from src.task_router.validator import InputValidator
+        from scrappy.task_router.validator import InputValidator
 
         validator = InputValidator()
 
@@ -454,7 +454,7 @@ class TestInputValidator:
     @pytest.mark.unit
     def test_validate_confidence_rejects_greater_than_one(self):
         """Test that confidence > 1.0 is rejected."""
-        from src.task_router.validator import InputValidator
+        from scrappy.task_router.validator import InputValidator
 
         validator = InputValidator()
 
@@ -466,7 +466,7 @@ class TestInputValidator:
     @pytest.mark.unit
     def test_validate_confidence_accepts_valid_values(self):
         """Test that valid confidence values are accepted."""
-        from src.task_router.validator import InputValidator
+        from scrappy.task_router.validator import InputValidator
 
         validator = InputValidator()
 
@@ -478,7 +478,7 @@ class TestInputValidator:
     @pytest.mark.unit
     def test_validate_task_type_rejects_none(self):
         """Test that None task type is rejected."""
-        from src.task_router.validator import InputValidator
+        from scrappy.task_router.validator import InputValidator
 
         validator = InputValidator()
 
@@ -490,7 +490,7 @@ class TestInputValidator:
     @pytest.mark.unit
     def test_validate_task_type_accepts_all_enum_values(self):
         """Test that all TaskType enum values are accepted."""
-        from src.task_router.validator import InputValidator
+        from scrappy.task_router.validator import InputValidator
 
         validator = InputValidator()
 

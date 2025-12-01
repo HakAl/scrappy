@@ -5,8 +5,8 @@ Tests behavior of action resolution from intents and entities.
 """
 
 import pytest
-from src.task_router.intent.actions import DefaultActionResolver
-from src.task_router.protocols import IntentResult, QueryIntent, Action
+from scrappy.task_router.intent.actions import DefaultActionResolver
+from scrappy.task_router.protocols import IntentResult, QueryIntent, Action
 
 
 def test_resolver_creates_file_structure_action():

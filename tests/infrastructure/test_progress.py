@@ -3,7 +3,7 @@ import logging
 from unittest.mock import MagicMock, patch, call
 import pytest
 
-from src.infrastructure.progress import (
+from scrappy.infrastructure.progress import (
     RichProgressReporter,
     LiveProgressReporter,
     LoggingProgressReporter,
@@ -11,7 +11,7 @@ from src.infrastructure.progress import (
     NullProgressReporter,
     UnifiedIOProgressReporter,
 )
-from src.infrastructure.theme import DEFAULT_THEME, LightTheme, NoColorTheme
+from scrappy.infrastructure.theme import DEFAULT_THEME, LightTheme, NoColorTheme
 
 
 # --- Fixtures ---

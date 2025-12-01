@@ -16,7 +16,7 @@ from unittest.mock import Mock, patch, MagicMock
 
 import pytest
 
-from src.context.semantic.file_collector import (
+from scrappy.context.semantic.file_collector import (
     IndexFilterConfig,
     SemanticFileCollector,
 )

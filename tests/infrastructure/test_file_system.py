@@ -15,7 +15,7 @@ import tempfile
 import shutil
 from pathlib import Path
 
-from src.infrastructure import RealFileSystem, InMemoryFileSystem
+from scrappy.infrastructure import RealFileSystem, InMemoryFileSystem
 
 
 class TestRealFileSystem:

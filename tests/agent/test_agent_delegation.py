@@ -15,9 +15,9 @@ import pytest
 from unittest.mock import Mock, MagicMock, patch, call
 from pathlib import Path
 
-from src.agent.core import CodeAgent
-from src.agent.types import ConversationState
-from src.agent_config import AgentConfig
+from scrappy.agent.core import CodeAgent
+from scrappy.agent.types import ConversationState
+from scrappy.agent_config import AgentConfig
 from helpers import ConfigurableTestOrchestrator
 
 
@@ -195,7 +195,7 @@ class TestAgentOrchestratorContract:
     @pytest.mark.unit
     def test_orchestrator_delegate_should_support_auto_provider_selection(self):
         """Orchestrator delegate should work without explicit provider specification."""
-        from src.orchestrator.core import AgentOrchestrator
+        from scrappy.orchestrator.core import AgentOrchestrator
         import inspect
 
         sig = inspect.signature(AgentOrchestrator.delegate)

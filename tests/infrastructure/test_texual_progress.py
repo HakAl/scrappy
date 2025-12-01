@@ -2,8 +2,8 @@ import sys
 import pytest
 from unittest.mock import MagicMock, patch, ANY
 
-from src.infrastructure.textual_progress import TextualProgressReporter
-from src.infrastructure.theme import DEFAULT_THEME, LightTheme, NoColorTheme
+from scrappy.infrastructure.textual_progress import TextualProgressReporter
+from scrappy.infrastructure.theme import DEFAULT_THEME, LightTheme, NoColorTheme
 
 
 @pytest.fixture

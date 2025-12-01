@@ -8,10 +8,10 @@ the consolidation of provider config into src/orchestrator/config.py.
 import pytest
 from unittest.mock import MagicMock, PropertyMock
 
-from src.orchestrator.provider_selector import ProviderSelector
-from src.orchestrator.rate_limiting import RateLimitTracker
-from src.orchestrator.model_selection import ModelSelectionType
-from src.providers.base import ProviderRegistry
+from scrappy.orchestrator.provider_selector import ProviderSelector
+from scrappy.orchestrator.rate_limiting import RateLimitTracker
+from scrappy.orchestrator.model_selection import ModelSelectionType
+from scrappy.providers.base import ProviderRegistry
 from tests.helpers import create_test_rate_limit_tracker
 
 
@@ -170,7 +170,7 @@ class TestTaskPreferencesRegression:
 
     def _create_real_tracker(self):
         """Create a tracker with real recommender for testing task preferences."""
-        from src.orchestrator.rate_limiting import RateLimitTracker, RateLimitRecommender
+        from scrappy.orchestrator.rate_limiting import RateLimitTracker, RateLimitRecommender
         from tests.helpers import FakeStorage, FakePolicy, FakeCalculator
 
         storage = FakeStorage()
@@ -324,7 +324,7 @@ class TestSelectForTaskRegression:
 
     def _create_mock_registry(self, available_providers: list[str]) -> ProviderRegistry:
         """Create a mock registry with specified providers."""
-        from src.providers.base import ModelInfo, ModelType, SpeedRank, QualityRank
+        from scrappy.providers.base import ModelInfo, ModelType, SpeedRank, QualityRank
         registry = ProviderRegistry()
 
         for provider_name in available_providers:

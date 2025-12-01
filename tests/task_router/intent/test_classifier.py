@@ -6,8 +6,8 @@ classification works correctly for various query types.
 """
 
 import pytest
-from src.task_router.intent.classifier import RegexIntentClassifier
-from src.task_router.protocols import QueryIntent
+from scrappy.task_router.intent.classifier import RegexIntentClassifier
+from scrappy.task_router.protocols import QueryIntent
 
 
 def test_classifier_identifies_file_structure_query():
@@ -186,7 +186,7 @@ def test_classifier_confidence_increases_with_multiple_matches():
 
 def test_classifier_accepts_custom_patterns():
     """Test classifier can be initialized with custom patterns."""
-    from src.task_router.protocols import QueryIntent
+    from scrappy.task_router.protocols import QueryIntent
 
     custom_patterns = {
         QueryIntent.GENERAL: [

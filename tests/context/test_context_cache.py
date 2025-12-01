@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from datetime import datetime
 
-from src.context.cache import ContextCache
+from scrappy.context.cache import ContextCache
 
 
 class TestContextCacheBasics:

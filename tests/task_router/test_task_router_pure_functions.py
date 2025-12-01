@@ -9,12 +9,12 @@ Following TDD: these tests are written first to define expected behavior.
 import pytest
 from dataclasses import dataclass
 
-from src.task_router.classifier import ClassifiedTask, TaskType
-from src.task_router.config import ClarificationConfig
+from scrappy.task_router.classifier import ClassifiedTask, TaskType
+from scrappy.task_router.config import ClarificationConfig
 
 
 # Import the pure functions module (will be created)
-from src.task_router.pure_functions import (
+from scrappy.task_router.pure_functions import (
     has_action_indicators,
     has_conflicting_signals,
     should_escalate_confidence,

@@ -24,7 +24,7 @@ def test_utf8_environment_variables():
         # Add parent directory to path to find scrappy
         parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         sys.path.insert(0, parent_dir)
-        import scrappy  # This triggers the encoding setup
+        import main  # This triggers the encoding setup (was scrappy.py, now main.py)
 
 
         # Check that environment variables are set

@@ -7,13 +7,13 @@ These tests verify:
 """
 import pytest
 
-from src.task_router.classifier import ClassifiedTask, TaskType
-from src.task_router.intent_clarifier import (
+from scrappy.task_router.classifier import ClassifiedTask, TaskType
+from scrappy.task_router.intent_clarifier import (
     AutoClarifier,
     InteractiveClarifier,
     NullClarifier,
 )
-from src.task_router.protocols import IntentClarifierProtocol
+from scrappy.task_router.protocols import IntentClarifierProtocol
 
 
 class TestIntentClarifierProtocolCompliance:

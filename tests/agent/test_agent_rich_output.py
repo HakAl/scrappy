@@ -910,7 +910,7 @@ class TestAgentIOIntegration:
 
     def test_agent_accepts_io_parameter(self):
         """CodeAgent should accept an io parameter."""
-        from src.agent.core import CodeAgent
+        from scrappy.agent.core import CodeAgent
         from tests.helpers import ConfigurableTestOrchestrator
 
         io = MockRichIO()
@@ -923,7 +923,7 @@ class TestAgentIOIntegration:
 
     def test_agent_init_uses_io_for_progress(self):
         """Agent initialization should output progress via IO."""
-        from src.agent.core import CodeAgent
+        from scrappy.agent.core import CodeAgent
         from tests.helpers import ConfigurableTestOrchestrator
 
         io = MockRichIO()
@@ -940,7 +940,7 @@ class TestAgentIOIntegration:
 
     def test_agent_thinking_output_uses_panel(self):
         """Agent thinking should use panel with blue border."""
-        from src.agent.core import CodeAgent
+        from scrappy.agent.core import CodeAgent
         from tests.helpers import ConfigurableTestOrchestrator
 
         io = MockRichIO(confirmations=[True])  # Approve any actions
@@ -988,7 +988,7 @@ class TestAgentOutputHelpers:
 
     def test_agent_has_show_thinking_method(self):
         """Agent should have _show_thinking helper method."""
-        from src.agent.core import CodeAgent
+        from scrappy.agent.core import CodeAgent
         from tests.helpers import ConfigurableTestOrchestrator
 
         io = MockRichIO()
@@ -1008,7 +1008,7 @@ class TestAgentOutputHelpers:
 
     def test_agent_has_show_tool_request_method(self):
         """Agent should have _show_tool_request helper method."""
-        from src.agent.core import CodeAgent
+        from scrappy.agent.core import CodeAgent
         from tests.helpers import ConfigurableTestOrchestrator
 
         io = MockRichIO()
@@ -1027,7 +1027,7 @@ class TestAgentOutputHelpers:
 
     def test_agent_has_show_error_method(self):
         """Agent should have _show_error helper method."""
-        from src.agent.core import CodeAgent
+        from scrappy.agent.core import CodeAgent
         from tests.helpers import ConfigurableTestOrchestrator
 
         io = MockRichIO()
@@ -1047,7 +1047,7 @@ class TestAgentOutputHelpers:
 
     def test_agent_has_show_result_method(self):
         """Agent should have _show_result helper method."""
-        from src.agent.core import CodeAgent
+        from scrappy.agent.core import CodeAgent
         from tests.helpers import ConfigurableTestOrchestrator
 
         io = MockRichIO()
@@ -1066,7 +1066,7 @@ class TestAgentOutputHelpers:
 
     def test_agent_has_show_command_method(self):
         """Agent should have _show_command helper method."""
-        from src.agent.core import CodeAgent
+        from scrappy.agent.core import CodeAgent
         from tests.helpers import ConfigurableTestOrchestrator
 
         io = MockRichIO()
@@ -1085,7 +1085,7 @@ class TestAgentOutputHelpers:
 
     def test_agent_has_show_progress_method(self):
         """Agent should have _show_progress helper method."""
-        from src.agent.core import CodeAgent
+        from scrappy.agent.core import CodeAgent
         from tests.helpers import ConfigurableTestOrchestrator
 
         io = MockRichIO()

@@ -12,7 +12,7 @@ import pytest
 from io import StringIO
 from rich.console import Console
 
-from src.task_router.output_handler import (
+from scrappy.task_router.output_handler import (
     BufferOutputHandler,
 )
 
@@ -43,7 +43,7 @@ class TestRichOutputHandlerClassification:
 
     def test_classification_displays_as_table(self, captured_console):
         """Classification info should display as a Rich table."""
-        from src.task_router.output_handler import RichOutputHandler
+        from scrappy.task_router.output_handler import RichOutputHandler
 
         console, string_io = captured_console
         handler = RichOutputHandler(console=console)
@@ -73,7 +73,7 @@ class TestRichOutputHandlerClassification:
 
     def test_complexity_displays_as_progress_bar(self, captured_console):
         """Complexity should display as a visual progress bar."""
-        from src.task_router.output_handler import RichOutputHandler
+        from scrappy.task_router.output_handler import RichOutputHandler
 
         console, string_io = captured_console
         handler = RichOutputHandler(console=console)
@@ -93,7 +93,7 @@ class TestRichOutputHandlerClassification:
 
     def test_complexity_progress_bar_zero(self, captured_console):
         """Zero complexity should show empty progress bar."""
-        from src.task_router.output_handler import RichOutputHandler
+        from scrappy.task_router.output_handler import RichOutputHandler
 
         console, string_io = captured_console
         handler = RichOutputHandler(console=console)
@@ -112,7 +112,7 @@ class TestRichOutputHandlerClassification:
 
     def test_complexity_progress_bar_max(self, captured_console):
         """Max complexity should show full progress bar."""
-        from src.task_router.output_handler import RichOutputHandler
+        from scrappy.task_router.output_handler import RichOutputHandler
 
         console, string_io = captured_console
         handler = RichOutputHandler(console=console)
@@ -131,7 +131,7 @@ class TestRichOutputHandlerClassification:
 
     def test_confidence_formatted_as_percentage(self, captured_console):
         """Confidence should be formatted as percentage."""
-        from src.task_router.output_handler import RichOutputHandler
+        from scrappy.task_router.output_handler import RichOutputHandler
 
         console, string_io = captured_console
         handler = RichOutputHandler(console=console)
@@ -159,7 +159,7 @@ class TestRichOutputHandlerProvider:
 
     def test_provider_selection_displays_provider_name(self, captured_console):
         """Provider selection should show provider name."""
-        from src.task_router.output_handler import RichOutputHandler
+        from scrappy.task_router.output_handler import RichOutputHandler
 
         console, string_io = captured_console
         handler = RichOutputHandler(console=console)
@@ -176,7 +176,7 @@ class TestRichOutputHandlerProvider:
 
     def test_provider_selection_displays_model(self, captured_console):
         """Provider selection should show model name when provided."""
-        from src.task_router.output_handler import RichOutputHandler
+        from scrappy.task_router.output_handler import RichOutputHandler
 
         console, string_io = captured_console
         handler = RichOutputHandler(console=console)
@@ -193,7 +193,7 @@ class TestRichOutputHandlerProvider:
 
     def test_provider_selection_displays_source(self, captured_console):
         """Provider selection should show selection source/reason."""
-        from src.task_router.output_handler import RichOutputHandler
+        from scrappy.task_router.output_handler import RichOutputHandler
 
         console, string_io = captured_console
         handler = RichOutputHandler(console=console)
@@ -210,7 +210,7 @@ class TestRichOutputHandlerProvider:
 
     def test_provider_selection_handles_no_model(self, captured_console):
         """Provider selection should handle None model gracefully."""
-        from src.task_router.output_handler import RichOutputHandler
+        from scrappy.task_router.output_handler import RichOutputHandler
 
         console, string_io = captured_console
         handler = RichOutputHandler(console=console)
@@ -229,7 +229,7 @@ class TestRichOutputHandlerProvider:
 
     def test_provider_selection_formatted_with_context(self, captured_console):
         """Provider selection should integrate with classification table."""
-        from src.task_router.output_handler import RichOutputHandler
+        from scrappy.task_router.output_handler import RichOutputHandler
 
         console, string_io = captured_console
         handler = RichOutputHandler(console=console)
@@ -265,7 +265,7 @@ class TestRichOutputHandlerStrategy:
 
     def test_execution_start_displays_strategy_name(self, captured_console):
         """Execution start should display strategy name."""
-        from src.task_router.output_handler import RichOutputHandler
+        from scrappy.task_router.output_handler import RichOutputHandler
 
         console, string_io = captured_console
         handler = RichOutputHandler(console=console)
@@ -278,7 +278,7 @@ class TestRichOutputHandlerStrategy:
 
     def test_execution_start_displays_different_strategies(self, captured_console):
         """Execution start should handle various strategy names."""
-        from src.task_router.output_handler import RichOutputHandler
+        from scrappy.task_router.output_handler import RichOutputHandler
 
         console, string_io = captured_console
         handler = RichOutputHandler(console=console)
@@ -304,7 +304,7 @@ class TestRichOutputHandlerInfo:
 
     def test_log_info_displays_message(self, captured_console):
         """Info messages should be displayed."""
-        from src.task_router.output_handler import RichOutputHandler
+        from scrappy.task_router.output_handler import RichOutputHandler
 
         console, string_io = captured_console
         handler = RichOutputHandler(console=console)
@@ -317,7 +317,7 @@ class TestRichOutputHandlerInfo:
 
     def test_multiple_info_messages_preserved(self, captured_console):
         """Multiple info messages should all be preserved."""
-        from src.task_router.output_handler import RichOutputHandler
+        from scrappy.task_router.output_handler import RichOutputHandler
 
         console, string_io = captured_console
         handler = RichOutputHandler(console=console)
@@ -346,7 +346,7 @@ class TestRichOutputHandlerIntegration:
 
     def test_full_classification_flow_produces_formatted_output(self, captured_console):
         """Full classification flow should produce well-formatted table output."""
-        from src.task_router.output_handler import RichOutputHandler
+        from scrappy.task_router.output_handler import RichOutputHandler
 
         console, string_io = captured_console
         handler = RichOutputHandler(console=console)
@@ -379,7 +379,7 @@ class TestRichOutputHandlerIntegration:
 
     def test_handler_accepts_custom_console(self):
         """RichOutputHandler should accept custom console for testing."""
-        from src.task_router.output_handler import RichOutputHandler
+        from scrappy.task_router.output_handler import RichOutputHandler
 
         string_io = StringIO()
         custom_console = Console(file=string_io, force_terminal=True)
@@ -403,7 +403,7 @@ class TestComplexityProgressBar:
 
     def test_progress_bar_custom_width(self):
         """Progress bar should respect custom width."""
-        from src.task_router.output_handler import format_complexity_bar
+        from scrappy.task_router.output_handler import format_complexity_bar
 
         result_narrow = format_complexity_bar(5, width=5)
         result_wide = format_complexity_bar(5, width=20)
@@ -414,7 +414,7 @@ class TestComplexityProgressBar:
 
     def test_progress_bar_visual_characters(self):
         """Progress bar should use visual fill characters."""
-        from src.task_router.output_handler import format_complexity_bar
+        from scrappy.task_router.output_handler import format_complexity_bar
 
         result = format_complexity_bar(8)
 

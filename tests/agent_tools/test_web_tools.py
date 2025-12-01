@@ -2,8 +2,8 @@ import pytest
 import json
 import httpx
 from unittest.mock import MagicMock, Mock, patch
-from src.agent_tools.tools.web_tools import WebFetchTool, WebSearchTool
-from src.agent_tools.tools.base import ToolContext
+from scrappy.agent_tools.tools.web_tools import WebFetchTool, WebSearchTool
+from scrappy.agent_tools.tools.base import ToolContext
 
 
 # --- Fixtures ---

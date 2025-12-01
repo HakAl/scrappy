@@ -7,16 +7,16 @@ from pathlib import Path
 from dataclasses import dataclass
 import json
 
-from src.agent.core import CodeAgent
-from src.agent.types import (
+from scrappy.agent.core import CodeAgent
+from scrappy.agent.types import (
     AgentThought,
     AgentAction,
     ActionResult,
     ConversationState
 )
-from src.agent_config import AgentConfig
-from src.agent_tools.tools import ToolRegistry
-from src.orchestrator_adapter import OrchestratorAdapter
+from scrappy.agent_config import AgentConfig
+from scrappy.agent_tools.tools import ToolRegistry
+from scrappy.orchestrator_adapter import OrchestratorAdapter
 
 
 class TestCodeAgentInitialization:

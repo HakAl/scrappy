@@ -4,9 +4,9 @@ import pytest
 from pathlib import Path
 from unittest.mock import Mock
 
-from src.agent_tools.tools.search_tools import FindExactTextTool
-from src.agent_tools.tools.base import ToolContext
-from src.agent_tools.protocols import SearchMatch, SearchMetadata, NoSearchToolError
+from scrappy.agent_tools.tools.search_tools import FindExactTextTool
+from scrappy.agent_tools.tools.base import ToolContext
+from scrappy.agent_tools.protocols import SearchMatch, SearchMetadata, NoSearchToolError
 
 
 @pytest.fixture

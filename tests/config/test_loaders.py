@@ -12,12 +12,12 @@ from pathlib import Path
 
 import pytest
 
-from src.config.loaders import (
+from scrappy.config.loaders import (
     ChainedConfigLoader,
     FileConfigLoader,
     FileSystemProtocol,
 )
-from src.config.protocols import ConfigLoadError
+from scrappy.config.protocols import ConfigLoadError
 
 
 class FakeFileSystem:
@@ -311,7 +311,7 @@ class TestConfigLoaderProtocol:
     @pytest.mark.unit
     def test_file_config_loader_implements_protocol(self):
         """FileConfigLoader should implement ConfigLoaderProtocol."""
-        from src.config.protocols import ConfigLoaderProtocol
+        from scrappy.config.protocols import ConfigLoaderProtocol
 
         fs = FakeFileSystem()
         loader = FileConfigLoader(Path("test.yaml"), file_system=fs)
@@ -323,7 +323,7 @@ class TestConfigLoaderProtocol:
     @pytest.mark.unit
     def test_chained_config_loader_implements_protocol(self):
         """ChainedConfigLoader should implement ConfigLoaderProtocol."""
-        from src.config.protocols import ConfigLoaderProtocol
+        from scrappy.config.protocols import ConfigLoaderProtocol
 
         loader = ChainedConfigLoader([])
 
@@ -338,7 +338,7 @@ class TestConfigIntegration:
     @pytest.mark.unit
     def test_loads_clarification_config_from_yaml(self):
         """Should load ClarificationConfig from YAML file."""
-        from src.task_router.config import ClarificationConfig
+        from scrappy.task_router.config import ClarificationConfig
 
         fs = FakeFileSystem()
         fs.add_file(
@@ -363,7 +363,7 @@ clarification:
     @pytest.mark.unit
     def test_uses_defaults_when_section_missing(self):
         """Should use defaults when clarification section is missing."""
-        from src.task_router.config import ClarificationConfig
+        from scrappy.task_router.config import ClarificationConfig
 
         fs = FakeFileSystem()
         fs.add_file(Path(".scrappy.yaml"), "other_section: value")

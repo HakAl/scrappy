@@ -3,8 +3,8 @@
 import pytest
 from unittest.mock import Mock
 
-from src.agent_tools.components.text_search_factory import TextSearchFactory
-from src.agent_tools.protocols import NoSearchToolError
+from scrappy.agent_tools.components.text_search_factory import TextSearchFactory
+from scrappy.agent_tools.protocols import NoSearchToolError
 
 
 class TestTextSearchFactory:

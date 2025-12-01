@@ -9,7 +9,7 @@ Tests follow CLAUDE.md guidelines:
 """
 
 import pytest
-from src.orchestrator.prompt_augmenter import PromptAugmenter
+from scrappy.orchestrator.prompt_augmenter import PromptAugmenter
 
 
 # Test Doubles (implementing protocols)

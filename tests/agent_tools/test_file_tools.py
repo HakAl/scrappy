@@ -3,13 +3,13 @@ import os
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
-from src.agent_tools.tools.file_tools import (
+from scrappy.agent_tools.tools.file_tools import (
     ReadFileTool,
     WriteFileTool,
     ListFilesTool,
     ListDirectoryTool
 )
-from src.agent_tools.tools.base import ToolContext
+from scrappy.agent_tools.tools.base import ToolContext
 
 
 # --- Fixtures ---

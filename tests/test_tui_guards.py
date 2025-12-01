@@ -8,7 +8,7 @@ when they should be using TUI-compatible alternatives.
 import pytest
 from unittest.mock import MagicMock
 
-from src.infrastructure.output_mode import OutputModeContext
+from scrappy.infrastructure.output_mode import OutputModeContext
 
 
 @pytest.fixture(autouse=True)
@@ -24,7 +24,7 @@ class TestProgressReporterTUIGuards:
 
     def test_rich_progress_reporter_raises_in_tui_mode(self):
         """RichProgressReporter raises RuntimeError in TUI mode."""
-        from src.infrastructure.progress import RichProgressReporter
+        from scrappy.infrastructure.progress import RichProgressReporter
 
         OutputModeContext.set_tui_mode(True)
 
@@ -36,7 +36,7 @@ class TestProgressReporterTUIGuards:
 
     def test_rich_progress_reporter_works_in_cli_mode(self):
         """RichProgressReporter works normally in CLI mode."""
-        from src.infrastructure.progress import RichProgressReporter
+        from scrappy.infrastructure.progress import RichProgressReporter
 
         # Should not raise
         reporter = RichProgressReporter()
@@ -44,7 +44,7 @@ class TestProgressReporterTUIGuards:
 
     def test_live_progress_reporter_raises_in_tui_mode(self):
         """LiveProgressReporter raises RuntimeError in TUI mode."""
-        from src.infrastructure.progress import LiveProgressReporter
+        from scrappy.infrastructure.progress import LiveProgressReporter
 
         OutputModeContext.set_tui_mode(True)
 
@@ -56,7 +56,7 @@ class TestProgressReporterTUIGuards:
 
     def test_live_progress_reporter_works_in_cli_mode(self):
         """LiveProgressReporter works normally in CLI mode."""
-        from src.infrastructure.progress import LiveProgressReporter
+        from scrappy.infrastructure.progress import LiveProgressReporter
 
         # Should not raise
         reporter = LiveProgressReporter()
@@ -68,7 +68,7 @@ class TestOutputHandlerTUIGuards:
 
     def test_rich_output_handler_raises_in_tui_mode(self):
         """RichOutputHandler raises RuntimeError in TUI mode."""
-        from src.task_router.output_handler import RichOutputHandler
+        from scrappy.task_router.output_handler import RichOutputHandler
         from rich.console import Console
 
         OutputModeContext.set_tui_mode(True)
@@ -81,7 +81,7 @@ class TestOutputHandlerTUIGuards:
 
     def test_rich_output_handler_works_in_cli_mode(self):
         """RichOutputHandler works normally in CLI mode."""
-        from src.task_router.output_handler import RichOutputHandler
+        from scrappy.task_router.output_handler import RichOutputHandler
         from rich.console import Console
 
         # Should not raise
@@ -94,7 +94,7 @@ class TestDefaultConsoleInputTUIGuards:
 
     def test_prompt_raises_in_tui_mode(self):
         """DefaultConsoleInput.prompt() raises in TUI mode."""
-        from src.task_router.protocols import DefaultConsoleInput
+        from scrappy.task_router.protocols import DefaultConsoleInput
 
         handler = DefaultConsoleInput()
         OutputModeContext.set_tui_mode(True)
@@ -107,7 +107,7 @@ class TestDefaultConsoleInputTUIGuards:
 
     def test_confirm_raises_in_tui_mode(self):
         """DefaultConsoleInput.confirm() raises in TUI mode."""
-        from src.task_router.protocols import DefaultConsoleInput
+        from scrappy.task_router.protocols import DefaultConsoleInput
 
         handler = DefaultConsoleInput()
         OutputModeContext.set_tui_mode(True)
@@ -119,7 +119,7 @@ class TestDefaultConsoleInputTUIGuards:
 
     def test_output_raises_in_tui_mode(self):
         """DefaultConsoleInput.output() raises in TUI mode."""
-        from src.task_router.protocols import DefaultConsoleInput
+        from scrappy.task_router.protocols import DefaultConsoleInput
 
         handler = DefaultConsoleInput()
         OutputModeContext.set_tui_mode(True)
@@ -135,7 +135,7 @@ class TestOutputClassTUIGuards:
 
     def test_input_line_raises_in_tui_mode(self):
         """Output.input_line() raises in TUI mode."""
-        from src.cli.output import Output
+        from scrappy.cli.output import Output
 
         output = Output()
         OutputModeContext.set_tui_mode(True)
@@ -151,7 +151,7 @@ class TestRichOutputTUIGuards:
 
     def test_rich_output_raises_in_tui_mode(self):
         """RichOutput raises RuntimeError when instantiated in TUI mode."""
-        from src.cli.output import RichOutput
+        from scrappy.cli.output import RichOutput
 
         OutputModeContext.set_tui_mode(True)
 
@@ -163,7 +163,7 @@ class TestRichOutputTUIGuards:
 
     def test_rich_output_works_in_cli_mode(self):
         """RichOutput works normally in CLI mode."""
-        from src.cli.output import RichOutput
+        from scrappy.cli.output import RichOutput
 
         # Should not raise
         output = RichOutput()
@@ -175,7 +175,7 @@ class TestDirectConsoleOutputTUIGuards:
 
     def test_input_prompt_raises_in_tui_mode(self):
         """DirectConsoleOutput.input_prompt() raises in TUI mode."""
-        from src.cli.unified_io import DirectConsoleOutput
+        from scrappy.cli.unified_io import DirectConsoleOutput
         from rich.console import Console
 
         strategy = DirectConsoleOutput(Console())
@@ -189,7 +189,7 @@ class TestDirectConsoleOutputTUIGuards:
 
     def test_input_confirm_raises_in_tui_mode(self):
         """DirectConsoleOutput.input_confirm() raises in TUI mode."""
-        from src.cli.unified_io import DirectConsoleOutput
+        from scrappy.cli.unified_io import DirectConsoleOutput
         from rich.console import Console
 
         strategy = DirectConsoleOutput(Console())
@@ -202,7 +202,7 @@ class TestDirectConsoleOutputTUIGuards:
 
     def test_input_line_raises_in_tui_mode(self):
         """DirectConsoleOutput.input_line() raises in TUI mode."""
-        from src.cli.unified_io import DirectConsoleOutput
+        from scrappy.cli.unified_io import DirectConsoleOutput
         from rich.console import Console
 
         strategy = DirectConsoleOutput(Console())
@@ -219,7 +219,7 @@ class TestInteractiveBannerTUIGuards:
 
     def test_display_banner_raises_when_tui_mode_but_no_sink(self):
         """display_banner raises RuntimeError when TUI mode but no output_sink."""
-        from src.cli.interactive_banner import display_banner
+        from scrappy.cli.interactive_banner import display_banner
 
         # Mock IO with no output_sink
         mock_io = MagicMock()
@@ -237,7 +237,7 @@ class TestInteractiveBannerTUIGuards:
 
     def test_display_banner_uses_io_output_sink_in_tui_mode(self):
         """display_banner uses io.output_sink when available in TUI mode."""
-        from src.cli.interactive_banner import display_banner
+        from scrappy.cli.interactive_banner import display_banner
 
         mock_sink = MagicMock()
         mock_io = MagicMock()
@@ -250,7 +250,7 @@ class TestInteractiveBannerTUIGuards:
 
     def test_display_banner_uses_context_sink_when_io_has_none(self):
         """display_banner uses OutputModeContext sink when io.output_sink is None."""
-        from src.cli.interactive_banner import display_banner
+        from scrappy.cli.interactive_banner import display_banner
 
         mock_sink = MagicMock()
         mock_io = MagicMock()
@@ -266,7 +266,7 @@ class TestInteractiveBannerTUIGuards:
 
     def test_display_banner_uses_console_in_cli_mode(self):
         """display_banner uses console.print in CLI mode."""
-        from src.cli.interactive_banner import display_banner
+        from scrappy.cli.interactive_banner import display_banner
 
         mock_console = MagicMock()
         mock_io = MagicMock()
@@ -283,7 +283,7 @@ class TestFactoryFunctionsBehavior:
 
     def test_create_progress_reporter_returns_unified_io_in_tui_mode(self):
         """create_progress_reporter returns UnifiedIOProgressReporter in TUI mode."""
-        from src.infrastructure.progress import create_progress_reporter, UnifiedIOProgressReporter
+        from scrappy.infrastructure.progress import create_progress_reporter, UnifiedIOProgressReporter
 
         # Create a mock IO that reports TUI mode
         mock_io = MagicMock()
@@ -296,7 +296,7 @@ class TestFactoryFunctionsBehavior:
 
     def test_create_output_handler_returns_cliio_in_tui_mode(self):
         """create_output_handler returns CLIIOOutputHandler in TUI mode."""
-        from src.task_router.output_handler import create_output_handler, CLIIOOutputHandler
+        from scrappy.task_router.output_handler import create_output_handler, CLIIOOutputHandler
 
         # Create a mock IO that reports TUI mode
         mock_io = MagicMock()

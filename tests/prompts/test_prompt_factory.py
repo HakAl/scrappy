@@ -2,8 +2,8 @@
 
 import pytest
 
-from src.prompts.factory import PromptFactory
-from src.prompts.protocols import (
+from scrappy.prompts.factory import PromptFactory
+from scrappy.prompts.protocols import (
     AgentPromptConfig,
     Platform,
     ResearchPromptConfig,

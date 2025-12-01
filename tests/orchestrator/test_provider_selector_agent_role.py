@@ -11,9 +11,9 @@ Tests that providers with supports_agent_role=False are:
 import pytest
 from unittest.mock import Mock
 
-from src.orchestrator.provider_selector import ProviderSelector
-from src.orchestrator.config import OrchestratorConfig
-from src.providers.base import ModelInfo, ModelType, SpeedRank, QualityRank
+from scrappy.orchestrator.provider_selector import ProviderSelector
+from scrappy.orchestrator.config import OrchestratorConfig
+from scrappy.providers.base import ModelInfo, ModelType, SpeedRank, QualityRank
 
 
 def create_mock_provider(name: str, supports_agent_role: bool = True, models: list = None):

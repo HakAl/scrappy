@@ -50,7 +50,7 @@ class TestCLITaskRouterHandler:
     @pytest.fixture
     def mock_classified_task(self):
         """Create mock classified task."""
-        from src.task_router import TaskType
+        from scrappy.task_router import TaskType
         classified = Mock()
         classified.task_type = Mock()
         classified.task_type.value = "code_generation"
@@ -67,7 +67,7 @@ class TestCLITaskRouterHandler:
     @pytest.mark.unit
     def test_handler_stores_orchestrator_reference(self, mock_orchestrator):
         """Test CLI handler stores orchestrator reference correctly."""
-        from src.cli.task_router_handler import CLITaskRouterHandler
+        from scrappy.cli.task_router_handler import CLITaskRouterHandler
 
         io = MockIO()
         handler = CLITaskRouterHandler(mock_orchestrator, io)
@@ -76,7 +76,7 @@ class TestCLITaskRouterHandler:
     @pytest.mark.unit
     def test_handler_initializes_router(self, mock_orchestrator):
         """Test that handler creates task router with correct config."""
-        from src.cli.task_router_handler import CLITaskRouterHandler
+        from scrappy.cli.task_router_handler import CLITaskRouterHandler
 
         io = MockIO()
         handler = CLITaskRouterHandler(
@@ -93,7 +93,7 @@ class TestCLITaskRouterHandler:
     @pytest.mark.unit
     def test_handler_starts_with_empty_history(self, mock_orchestrator):
         """Test handler initializes with empty history."""
-        from src.cli.task_router_handler import CLITaskRouterHandler
+        from scrappy.cli.task_router_handler import CLITaskRouterHandler
 
         io = MockIO()
         handler = CLITaskRouterHandler(mock_orchestrator, io)
@@ -102,7 +102,7 @@ class TestCLITaskRouterHandler:
     @pytest.mark.unit
     def test_handle_auto_route_adds_to_history(self, mock_orchestrator, mock_router_result):
         """Test that handle_auto_route adds entry to history."""
-        from src.cli.task_router_handler import CLITaskRouterHandler
+        from scrappy.cli.task_router_handler import CLITaskRouterHandler
 
         io = MockIO()
         handler = CLITaskRouterHandler(mock_orchestrator, io)
@@ -118,7 +118,7 @@ class TestCLITaskRouterHandler:
     @pytest.mark.unit
     def test_handle_auto_route_returns_router_result(self, mock_orchestrator, mock_router_result):
         """Test that handle_auto_route returns the routing result."""
-        from src.cli.task_router_handler import CLITaskRouterHandler
+        from scrappy.cli.task_router_handler import CLITaskRouterHandler
 
         io = MockIO()
         handler = CLITaskRouterHandler(mock_orchestrator, io)
@@ -133,7 +133,7 @@ class TestCLITaskRouterHandler:
     @pytest.mark.unit
     def test_handle_auto_route_multiple_tasks_build_history(self, mock_orchestrator, mock_router_result):
         """Test multiple auto_route calls accumulate in history."""
-        from src.cli.task_router_handler import CLITaskRouterHandler
+        from scrappy.cli.task_router_handler import CLITaskRouterHandler
 
         io = MockIO()
         handler = CLITaskRouterHandler(mock_orchestrator, io)
@@ -152,7 +152,7 @@ class TestCLITaskRouterHandler:
     @pytest.mark.unit
     def test_handle_classify_only_returns_classification(self, mock_orchestrator, mock_classified_task):
         """Test classify_only returns classification without executing."""
-        from src.cli.task_router_handler import CLITaskRouterHandler
+        from scrappy.cli.task_router_handler import CLITaskRouterHandler
 
         io = MockIO()
         handler = CLITaskRouterHandler(mock_orchestrator, io)
@@ -170,7 +170,7 @@ class TestCLITaskRouterHandler:
     @pytest.mark.unit
     def test_handle_route_history_shows_recent_entries(self, mock_orchestrator, mock_router_result):
         """Test route_history shows most recent entries."""
-        from src.cli.task_router_handler import CLITaskRouterHandler
+        from scrappy.cli.task_router_handler import CLITaskRouterHandler
 
         io = MockIO()
         handler = CLITaskRouterHandler(mock_orchestrator, io)
@@ -186,7 +186,7 @@ class TestCLITaskRouterHandler:
     @pytest.mark.unit
     def test_failed_result_stored_in_history(self, mock_orchestrator):
         """Test failed routing result is stored in history."""
-        from src.cli.task_router_handler import CLITaskRouterHandler
+        from scrappy.cli.task_router_handler import CLITaskRouterHandler
 
         io = MockIO()
         handler = CLITaskRouterHandler(mock_orchestrator, io)
@@ -221,7 +221,7 @@ class TestCLIAgentManager:
     @pytest.mark.unit
     def test_agent_manager_stores_orchestrator(self, mock_orchestrator):
         """Test CLIAgentManager stores orchestrator reference."""
-        from src.cli.agent_manager import CLIAgentManager
+        from scrappy.cli.agent_manager import CLIAgentManager
 
         io = MockIO()
         manager = CLIAgentManager(mock_orchestrator, io)
@@ -235,7 +235,7 @@ class TestCLIAgentManager:
         Phase 2 of AGENT_BUG_CLEANUP: io should be stored directly on
         the manager instance, not just passed through to DisplayManager.
         """
-        from src.cli.agent_manager import CLIAgentManager
+        from scrappy.cli.agent_manager import CLIAgentManager
 
         io = MockIO()
         manager = CLIAgentManager(mock_orchestrator, io)
@@ -245,8 +245,8 @@ class TestCLIAgentManager:
         assert manager.io is io
 
     @pytest.mark.unit
-    @patch('src.cli.agent_manager.CodeAgent')
-    @patch('src.cli.agent_manager.create_git_checkpoint')
+    @patch('scrappy.cli.agent_manager.CodeAgent')
+    @patch('scrappy.cli.agent_manager.create_git_checkpoint')
     def test_run_agent_passes_io_to_code_agent(self, mock_checkpoint, mock_agent_class, mock_orchestrator):
         """Test run_agent passes bridged io to CodeAgent constructor.
 
@@ -255,7 +255,7 @@ class TestCLIAgentManager:
         CodeAgent so that agent confirmations use the bridged io, not a new
         unbridged RichIO instance.
         """
-        from src.cli.agent_manager import CLIAgentManager
+        from scrappy.cli.agent_manager import CLIAgentManager
 
         mock_checkpoint.return_value = None
         mock_agent = Mock()
@@ -287,11 +287,11 @@ class TestCLIAgentManager:
   # Should show checkpoint hash
 
     @pytest.mark.unit
-    @patch('src.cli.agent_manager.CodeAgent')
-    @patch('src.cli.agent_manager.create_git_checkpoint')
+    @patch('scrappy.cli.agent_manager.CodeAgent')
+    @patch('scrappy.cli.agent_manager.create_git_checkpoint')
     def test_run_agent_success_shows_result(self, mock_checkpoint, mock_agent_class, mock_orchestrator):
         """Test run_agent displays success result."""
-        from src.cli.agent_manager import CLIAgentManager
+        from scrappy.cli.agent_manager import CLIAgentManager
 
         mock_checkpoint.return_value = None
         mock_agent = Mock()
@@ -319,11 +319,11 @@ class TestCLIAgentManager:
 
 
     @pytest.mark.unit
-    @patch('src.cli.agent_manager.CodeAgent')
-    @patch('src.cli.agent_manager.create_git_checkpoint')
+    @patch('scrappy.cli.agent_manager.CodeAgent')
+    @patch('scrappy.cli.agent_manager.create_git_checkpoint')
     def test_run_agent_dry_run_mode(self, mock_checkpoint, mock_agent_class, mock_orchestrator):
         """Test run_agent respects dry run mode."""
-        from src.cli.agent_manager import CLIAgentManager
+        from scrappy.cli.agent_manager import CLIAgentManager
 
         mock_checkpoint.return_value = None
         mock_agent = Mock()
@@ -350,11 +350,11 @@ class TestCLIAgentManager:
         assert "DRY RUN" in output
 
     @pytest.mark.unit
-    @patch('src.cli.agent_manager.CodeAgent')
-    @patch('src.cli.agent_manager.create_git_checkpoint')
+    @patch('scrappy.cli.agent_manager.CodeAgent')
+    @patch('scrappy.cli.agent_manager.create_git_checkpoint')
     def test_run_agent_handles_exception(self, mock_checkpoint, mock_agent_class, mock_orchestrator):
         """Test run_agent handles exceptions gracefully."""
-        from src.cli.agent_manager import CLIAgentManager
+        from scrappy.cli.agent_manager import CLIAgentManager
 
         mock_checkpoint.return_value = None
         mock_agent = Mock()
@@ -381,11 +381,11 @@ class TestCLIAgentManager:
         assert any("Crashing task" in d['content'] for d in discoveries)
 
     @pytest.mark.unit
-    @patch('src.cli.agent_manager.CodeAgent')
-    @patch('src.cli.agent_manager.create_git_checkpoint')
+    @patch('scrappy.cli.agent_manager.CodeAgent')
+    @patch('scrappy.cli.agent_manager.create_git_checkpoint')
     def test_run_agent_records_discovery(self, mock_checkpoint, mock_agent_class, mock_orchestrator):
         """Test run_agent records task result as discovery."""
-        from src.cli.agent_manager import CLIAgentManager
+        from scrappy.cli.agent_manager import CLIAgentManager
 
         mock_checkpoint.return_value = None
         mock_agent = Mock()

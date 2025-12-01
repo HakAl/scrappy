@@ -15,29 +15,29 @@ class TestSkipDirectories:
 
     def test_skip_dirs_contains_git(self):
         """SKIP_DIRS should contain .git."""
-        from src.cli.config.paths import SKIP_DIRS
+        from scrappy.cli.config.paths import SKIP_DIRS
         assert '.git' in SKIP_DIRS
 
     def test_skip_dirs_contains_pycache(self):
         """SKIP_DIRS should contain __pycache__."""
-        from src.cli.config.paths import SKIP_DIRS
+        from scrappy.cli.config.paths import SKIP_DIRS
         assert '__pycache__' in SKIP_DIRS
 
     def test_skip_dirs_contains_node_modules(self):
         """SKIP_DIRS should contain node_modules."""
-        from src.cli.config.paths import SKIP_DIRS
+        from scrappy.cli.config.paths import SKIP_DIRS
         assert 'node_modules' in SKIP_DIRS
 
     def test_skip_dirs_contains_venv_variants(self):
         """SKIP_DIRS should contain virtual environment directories."""
-        from src.cli.config.paths import SKIP_DIRS
+        from scrappy.cli.config.paths import SKIP_DIRS
         venv_dirs = {'.venv', 'venv', 'env', '.env'}
         for vdir in venv_dirs:
             assert vdir in SKIP_DIRS, f"Missing {vdir}"
 
     def test_skip_dirs_contains_build_dirs(self):
         """SKIP_DIRS should contain build output directories."""
-        from src.cli.config.paths import SKIP_DIRS
+        from scrappy.cli.config.paths import SKIP_DIRS
         build_dirs = {'dist', 'build'}
         for bdir in build_dirs:
             assert bdir in SKIP_DIRS, f"Missing {bdir}"
@@ -49,14 +49,14 @@ class TestSkipDirsMinimal:
 
     def test_skip_dirs_minimal_contains_essentials(self):
         """SKIP_DIRS_MINIMAL should contain the most critical dirs to skip."""
-        from src.cli.config.paths import SKIP_DIRS_MINIMAL
+        from scrappy.cli.config.paths import SKIP_DIRS_MINIMAL
         essentials = {'__pycache__', 'node_modules', 'venv', '.venv'}
         for dir in essentials:
             assert dir in SKIP_DIRS_MINIMAL, f"Missing {dir}"
 
     def test_skip_dirs_minimal_subset_of_full(self):
         """SKIP_DIRS_MINIMAL should be a subset of SKIP_DIRS."""
-        from src.cli.config.paths import SKIP_DIRS, SKIP_DIRS_MINIMAL
+        from scrappy.cli.config.paths import SKIP_DIRS, SKIP_DIRS_MINIMAL
         for dir in SKIP_DIRS_MINIMAL:
             assert dir in SKIP_DIRS, f"{dir} in minimal but not in full"
 
@@ -67,13 +67,13 @@ class TestSessionFiles:
 
     def test_session_file_value(self):
         """SESSION_FILE should be .scrappy/session.json."""
-        from src.cli.config.paths import SESSION_FILE
+        from scrappy.cli.config.paths import SESSION_FILE
         assert SESSION_FILE == '.scrappy/session.json'
 
 
     def test_rate_limits_file_value(self):
         """RATE_LIMITS_FILE should be .scrappy/rate_limits.json."""
-        from src.cli.config.paths import RATE_LIMITS_FILE
+        from scrappy.cli.config.paths import RATE_LIMITS_FILE
         assert RATE_LIMITS_FILE == '.scrappy/rate_limits.json'
 
 
@@ -83,19 +83,19 @@ class TestProjectIndicatorFiles:
 
     def test_project_indicators_python(self):
         """PROJECT_INDICATORS should contain Python project indicators."""
-        from src.cli.config.paths import PROJECT_INDICATORS
+        from scrappy.cli.config.paths import PROJECT_INDICATORS
         python_indicators = {'requirements.txt', 'pyproject.toml', 'setup.py'}
         for indicator in python_indicators:
             assert indicator in PROJECT_INDICATORS, f"Missing {indicator}"
 
     def test_project_indicators_javascript(self):
         """PROJECT_INDICATORS should contain JavaScript project indicator."""
-        from src.cli.config.paths import PROJECT_INDICATORS
+        from scrappy.cli.config.paths import PROJECT_INDICATORS
         assert 'package.json' in PROJECT_INDICATORS
 
     def test_project_indicators_git(self):
         """PROJECT_INDICATORS should contain .git."""
-        from src.cli.config.paths import PROJECT_INDICATORS
+        from scrappy.cli.config.paths import PROJECT_INDICATORS
         assert '.git' in PROJECT_INDICATORS
 
 
@@ -115,7 +115,7 @@ class TestSkipDirsProperties:
 
     def test_skip_dirs_no_duplicates(self):
         """SKIP_DIRS should not contain duplicates."""
-        from src.cli.config.paths import SKIP_DIRS
+        from scrappy.cli.config.paths import SKIP_DIRS
         # Convert to list to check for duplicates
         skip_list = list(SKIP_DIRS)
         assert len(skip_list) == len(set(skip_list)), "SKIP_DIRS contains duplicates"
@@ -123,7 +123,7 @@ class TestSkipDirsProperties:
 
     def test_skip_dirs_no_slashes(self):
         """Skip directory names should not contain slashes."""
-        from src.cli.config.paths import SKIP_DIRS
+        from scrappy.cli.config.paths import SKIP_DIRS
         for dir_name in SKIP_DIRS:
             assert '/' not in dir_name, f"Entry {dir_name} contains /"
             assert '\\' not in dir_name, f"Entry {dir_name} contains \\"
@@ -135,7 +135,7 @@ class TestCacheDirectories:
 
     def test_cache_dirs_contains_common_caches(self):
         """CACHE_DIRS should contain common cache directories."""
-        from src.cli.config.paths import CACHE_DIRS
+        from scrappy.cli.config.paths import CACHE_DIRS
         common_caches = {'__pycache__', '.cache', '.pytest_cache'}
         for cache in common_caches:
             assert cache in CACHE_DIRS, f"Missing {cache}"
@@ -147,7 +147,7 @@ class TestTestDirectoryPatterns:
 
     def test_test_dirs_contains_common_patterns(self):
         """TEST_DIRS should contain common test directory names."""
-        from src.cli.config.paths import TEST_DIRS
+        from scrappy.cli.config.paths import TEST_DIRS
         common_tests = {'tests', 'test', '__tests__', 'spec'}
         for test_dir in common_tests:
             assert test_dir in TEST_DIRS, f"Missing {test_dir}"
@@ -159,7 +159,7 @@ class TestBuildOutputDirectories:
 
     def test_build_dirs_contains_common_patterns(self):
         """BUILD_DIRS should contain common build output directories."""
-        from src.cli.config.paths import BUILD_DIRS
+        from scrappy.cli.config.paths import BUILD_DIRS
         common_builds = {'dist', 'build', 'out', 'target'}
         for build_dir in common_builds:
             assert build_dir in BUILD_DIRS, f"Missing {build_dir}"
@@ -171,7 +171,7 @@ class TestVendorDirectories:
 
     def test_vendor_dirs_contains_common_patterns(self):
         """VENDOR_DIRS should contain common vendor directories."""
-        from src.cli.config.paths import VENDOR_DIRS
+        from scrappy.cli.config.paths import VENDOR_DIRS
         common_vendors = {'node_modules', 'vendor', 'third_party'}
         for vendor_dir in common_vendors:
             assert vendor_dir in VENDOR_DIRS, f"Missing {vendor_dir}"
@@ -183,7 +183,7 @@ class TestVirtualEnvDirectories:
 
     def test_venv_dirs_contains_common_patterns(self):
         """VENV_DIRS should contain common virtual env directory names."""
-        from src.cli.config.paths import VENV_DIRS
+        from scrappy.cli.config.paths import VENV_DIRS
         common_venvs = {'.venv', 'venv', 'env', '.env'}
         for venv_dir in common_venvs:
             assert venv_dir in VENV_DIRS, f"Missing {venv_dir}"
@@ -195,7 +195,7 @@ class TestAllHiddenDirectories:
 
     def test_all_hidden_dirs_contains_dot_dirs(self):
         """ALL_HIDDEN_DIRS should contain directories starting with dot."""
-        from src.cli.config.paths import ALL_HIDDEN_DIRS
+        from scrappy.cli.config.paths import ALL_HIDDEN_DIRS
         dot_dirs = {'.git', '.venv', '.env', '.cache'}
         for dot_dir in dot_dirs:
             assert dot_dir in ALL_HIDDEN_DIRS, f"Missing {dot_dir}"
@@ -214,7 +214,7 @@ class TestPathsDocumentation:
 
     def test_all_skip_dirs_documented(self):
         """Each skip directory should have documentation."""
-        from src.cli.config.paths import SKIP_DIRS, SKIP_DIRS_DESCRIPTIONS
+        from scrappy.cli.config.paths import SKIP_DIRS, SKIP_DIRS_DESCRIPTIONS
         for dir_name in SKIP_DIRS:
             assert dir_name in SKIP_DIRS_DESCRIPTIONS, (
                 f"Directory {dir_name} should be documented"

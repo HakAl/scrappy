@@ -4,8 +4,8 @@ import pytest
 from pathlib import Path
 from unittest.mock import Mock
 
-from src.agent_tools.protocols import ExecutionResult, SearchMetadata
-from src.agent_tools.components.text_search import RipgrepSearch, GrepSearch, FindstrSearch
+from scrappy.agent_tools.protocols import ExecutionResult, SearchMetadata
+from scrappy.agent_tools.components.text_search import RipgrepSearch, GrepSearch, FindstrSearch
 
 
 class TestRipgrepSearch:

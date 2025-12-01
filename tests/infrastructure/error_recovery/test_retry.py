@@ -8,13 +8,13 @@ import pytest
 import time
 import asyncio
 from unittest.mock import Mock, call
-from src.infrastructure.error_recovery import (
+from scrappy.infrastructure.error_recovery import (
     ExponentialBackoffRetry,
     RetryConfig,
     retry_operation,
     retry_operation_async,
 )
-from src.infrastructure.exceptions import (
+from scrappy.infrastructure.exceptions import (
     BaseError,
     RetryableError,
     NonRetryableError,

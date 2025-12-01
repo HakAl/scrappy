@@ -13,7 +13,7 @@ class TestProjectDetectorBasics:
     @pytest.mark.unit
     def test_creation_with_project_path(self, tmp_path):
         """ProjectDetector can be created with a project path."""
-        from src.context.project_detector import ProjectDetector
+        from scrappy.context.project_detector import ProjectDetector
 
         detector = ProjectDetector(tmp_path)
         assert detector.project_path == tmp_path
@@ -21,7 +21,7 @@ class TestProjectDetectorBasics:
     @pytest.mark.unit
     def test_creation_accepts_string_path(self, tmp_path):
         """ProjectDetector accepts string path and converts to Path."""
-        from src.context.project_detector import ProjectDetector
+        from scrappy.context.project_detector import ProjectDetector
 
         detector = ProjectDetector(str(tmp_path))
         assert detector.project_path == tmp_path
@@ -34,7 +34,7 @@ class TestProjectMarkerDetection:
     @pytest.fixture
     def detector_factory(self):
         """Factory to create detector with file_index."""
-        from src.context.project_detector import ProjectDetector
+        from scrappy.context.project_detector import ProjectDetector
 
         def create(project_path, file_index=None):
             detector = ProjectDetector(project_path)
@@ -197,7 +197,7 @@ class TestProjectTypeDetection:
     @pytest.fixture
     def detector_factory(self):
         """Factory to create detector with markers pre-set."""
-        from src.context.project_detector import ProjectDetector
+        from scrappy.context.project_detector import ProjectDetector
 
         def create(project_path, file_index=None):
             detector = ProjectDetector(project_path)
@@ -326,7 +326,7 @@ class TestLanguageDetection:
     @pytest.fixture
     def detector_factory(self):
         """Factory to create detector with file_index."""
-        from src.context.project_detector import ProjectDetector
+        from scrappy.context.project_detector import ProjectDetector
 
         def create(project_path, file_index):
             detector = ProjectDetector(project_path)
@@ -425,7 +425,7 @@ class TestProjectMarkerLocations:
     @pytest.fixture
     def detector_factory(self):
         """Factory to create detector with file_index."""
-        from src.context.project_detector import ProjectDetector
+        from scrappy.context.project_detector import ProjectDetector
 
         def create(project_path, file_index):
             detector = ProjectDetector(project_path)
@@ -503,7 +503,7 @@ class TestSubProjectDetection:
     @pytest.fixture
     def detector_factory(self):
         """Factory to create detector with file_index."""
-        from src.context.project_detector import ProjectDetector
+        from scrappy.context.project_detector import ProjectDetector
 
         def create(project_path, file_index):
             detector = ProjectDetector(project_path)
@@ -599,7 +599,7 @@ class TestEdgeCases:
     @pytest.mark.unit
     def test_handles_empty_file_index(self, tmp_path):
         """Should handle empty file_index gracefully."""
-        from src.context.project_detector import ProjectDetector
+        from scrappy.context.project_detector import ProjectDetector
 
         detector = ProjectDetector(tmp_path)
         detector.set_file_index({})
@@ -619,7 +619,7 @@ class TestEdgeCases:
     @pytest.mark.unit
     def test_handles_nonexistent_path(self, tmp_path):
         """Should handle nonexistent project path."""
-        from src.context.project_detector import ProjectDetector
+        from scrappy.context.project_detector import ProjectDetector
 
         nonexistent = tmp_path / 'does_not_exist'
         detector = ProjectDetector(nonexistent)
@@ -630,7 +630,7 @@ class TestEdgeCases:
     @pytest.mark.unit
     def test_handles_windows_backslash_paths(self, tmp_path):
         """Should handle Windows-style backslash paths in file_index."""
-        from src.context.project_detector import ProjectDetector
+        from scrappy.context.project_detector import ProjectDetector
 
         detector = ProjectDetector(tmp_path)
         detector.set_file_index({
@@ -644,7 +644,7 @@ class TestEdgeCases:
     @pytest.mark.unit
     def test_markers_are_case_sensitive(self, tmp_path):
         """Marker detection should be case-sensitive."""
-        from src.context.project_detector import ProjectDetector
+        from scrappy.context.project_detector import ProjectDetector
 
         detector = ProjectDetector(tmp_path)
         detector.set_file_index({
@@ -658,7 +658,7 @@ class TestEdgeCases:
     @pytest.mark.unit
     def test_detects_gradle_kts(self, tmp_path):
         """Should detect Kotlin Gradle script as Gradle project."""
-        from src.context.project_detector import ProjectDetector
+        from scrappy.context.project_detector import ProjectDetector
 
         (tmp_path / 'build.gradle.kts').write_text('plugins { }\n')
 

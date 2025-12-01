@@ -2,8 +2,8 @@
 
 import pytest
 
-from src.prompts.protocols import Platform
-from src.prompts.sections import (
+from scrappy.prompts.protocols import Platform
+from scrappy.prompts.sections import (
     codebase_hint_section,
     codebase_structure_section,
     completion_section,

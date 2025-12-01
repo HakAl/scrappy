@@ -15,7 +15,7 @@ class TestTestIO:
     @pytest.mark.unit
     def test_testio_echo_captures_output(self):
         """Test that echo() captures output to internal buffer."""
-        from src.cli.io_interface import TestIO
+        from scrappy.cli.io_interface import TestIO
         io = TestIO()
 
         io.echo("Hello, World!")
@@ -25,7 +25,7 @@ class TestTestIO:
     @pytest.mark.unit
     def test_testio_echo_multiple_lines(self):
         """Test that multiple echo calls are captured."""
-        from src.cli.io_interface import TestIO
+        from scrappy.cli.io_interface import TestIO
         io = TestIO()
 
         io.echo("Line 1")
@@ -40,7 +40,7 @@ class TestTestIO:
     @pytest.mark.unit
     def test_testio_echo_newline_control(self):
         """Test that nl parameter controls newline behavior."""
-        from src.cli.io_interface import TestIO
+        from scrappy.cli.io_interface import TestIO
         io = TestIO()
 
         io.echo("No newline", nl=False)
@@ -53,7 +53,7 @@ class TestTestIO:
     @pytest.mark.unit
     def test_testio_secho_captures_content(self):
         """Test that secho captures content."""
-        from src.cli.io_interface import TestIO
+        from scrappy.cli.io_interface import TestIO
         io = TestIO()
 
         io.secho("Styled text", fg="green", bold=True)
@@ -64,7 +64,7 @@ class TestTestIO:
     @pytest.mark.unit
     def test_testio_style_returns_text(self):
         """Test that style() returns the text (for testing, no actual styling)."""
-        from src.cli.io_interface import TestIO
+        from scrappy.cli.io_interface import TestIO
         io = TestIO()
 
         result = io.style("styled text", fg="cyan", bold=True)
@@ -74,7 +74,7 @@ class TestTestIO:
     @pytest.mark.unit
     def test_testio_prompt_returns_preset_input(self):
         """Test that prompt() returns preset input values."""
-        from src.cli.io_interface import TestIO
+        from scrappy.cli.io_interface import TestIO
         io = TestIO(inputs=["user response"])
 
         result = io.prompt("Enter value: ")
@@ -84,7 +84,7 @@ class TestTestIO:
     @pytest.mark.unit
     def test_testio_prompt_uses_default_when_no_input(self):
         """Test that prompt uses default when no input available."""
-        from src.cli.io_interface import TestIO
+        from scrappy.cli.io_interface import TestIO
         io = TestIO(inputs=[])
 
         result = io.prompt("Enter value: ", default="default_value")
@@ -94,7 +94,7 @@ class TestTestIO:
     @pytest.mark.unit
     def test_testio_prompt_multiple_calls(self):
         """Test that multiple prompts consume inputs in order."""
-        from src.cli.io_interface import TestIO
+        from scrappy.cli.io_interface import TestIO
         io = TestIO(inputs=["first", "second", "third"])
 
         result1 = io.prompt("First: ")
@@ -108,7 +108,7 @@ class TestTestIO:
     @pytest.mark.unit
     def test_testio_confirm_returns_preset_bool(self):
         """Test that confirm() returns preset boolean values."""
-        from src.cli.io_interface import TestIO
+        from scrappy.cli.io_interface import TestIO
         io = TestIO(confirmations=[True, False])
 
         result1 = io.confirm("Continue?")
@@ -120,7 +120,7 @@ class TestTestIO:
     @pytest.mark.unit
     def test_testio_confirm_uses_default_when_no_confirmation(self):
         """Test that confirm uses default when no confirmation available."""
-        from src.cli.io_interface import TestIO
+        from scrappy.cli.io_interface import TestIO
         io = TestIO(confirmations=[])
 
         result = io.confirm("Continue?", default=True)
@@ -130,7 +130,7 @@ class TestTestIO:
     @pytest.mark.unit
     def test_testio_input_line_returns_preset(self):
         """Test that input_line() returns preset raw input."""
-        from src.cli.io_interface import TestIO
+        from scrappy.cli.io_interface import TestIO
         io = TestIO(inputs=["raw input line"])
 
         result = io.input_line()
@@ -140,7 +140,7 @@ class TestTestIO:
     @pytest.mark.unit
     def test_testio_clear_output(self):
         """Test that output can be cleared."""
-        from src.cli.io_interface import TestIO
+        from scrappy.cli.io_interface import TestIO
         io = TestIO()
 
         io.echo("Some output")
@@ -151,7 +151,7 @@ class TestTestIO:
     @pytest.mark.unit
     def test_testio_get_all_output_lines(self):
         """Test getting output as list of lines."""
-        from src.cli.io_interface import TestIO
+        from scrappy.cli.io_interface import TestIO
         io = TestIO()
 
         io.echo("Line 1")
@@ -165,7 +165,7 @@ class TestTestIO:
     @pytest.mark.unit
     def test_testio_add_input_at_runtime(self):
         """Test that inputs can be added at runtime."""
-        from src.cli.io_interface import TestIO
+        from scrappy.cli.io_interface import TestIO
         io = TestIO()
 
         io.add_input("dynamic input")
@@ -176,7 +176,7 @@ class TestTestIO:
     @pytest.mark.unit
     def test_testio_add_confirmation_at_runtime(self):
         """Test that confirmations can be added at runtime."""
-        from src.cli.io_interface import TestIO
+        from scrappy.cli.io_interface import TestIO
         io = TestIO()
 
         io.add_confirmation(True)
@@ -255,8 +255,8 @@ class TestIOProtocolUsage:
     @pytest.mark.unit
     def test_function_accepts_protocol(self):
         """Test that functions can accept CLIIOProtocol for dependency injection."""
-        from src.protocols.io import CLIIOProtocol
-        from src.cli.io_interface import TestIO
+        from scrappy.protocols.io import CLIIOProtocol
+        from scrappy.cli.io_interface import TestIO
 
         # Example function that uses IO protocol
         def display_status(io: CLIIOProtocol, status: str) -> None:
@@ -274,8 +274,8 @@ class TestIOProtocolUsage:
     @pytest.mark.unit
     def test_function_with_user_input(self):
         """Test function that requires user input can be tested."""
-        from src.protocols.io import CLIIOProtocol
-        from src.cli.io_interface import TestIO
+        from scrappy.protocols.io import CLIIOProtocol
+        from scrappy.cli.io_interface import TestIO
 
         # Example function that gets user confirmation
         def confirm_action(io: CLIIOProtocol, action: str) -> bool:
@@ -292,8 +292,8 @@ class TestIOProtocolUsage:
     @pytest.mark.unit
     def test_function_with_prompt(self):
         """Test function that prompts for input can be tested."""
-        from src.protocols.io import CLIIOProtocol
-        from src.cli.io_interface import TestIO
+        from scrappy.protocols.io import CLIIOProtocol
+        from scrappy.cli.io_interface import TestIO
 
         # Example function that gets user input
         def get_username(io: CLIIOProtocol) -> str:
@@ -308,8 +308,8 @@ class TestIOProtocolUsage:
     @pytest.mark.unit
     def test_multiple_io_operations(self):
         """Test complex workflow with multiple I/O operations."""
-        from src.protocols.io import CLIIOProtocol
-        from src.cli.io_interface import TestIO
+        from scrappy.protocols.io import CLIIOProtocol
+        from scrappy.cli.io_interface import TestIO
 
         # Example workflow function
         def setup_wizard(io: CLIIOProtocol) -> dict:
@@ -351,7 +351,7 @@ class TestEdgeCases:
     @pytest.mark.unit
     def test_testio_echo_with_special_characters(self):
         """Test echo with special characters."""
-        from src.cli.io_interface import TestIO
+        from scrappy.cli.io_interface import TestIO
         io = TestIO()
 
         io.echo("Line with\ttab and unicode: cafe")
@@ -362,7 +362,7 @@ class TestEdgeCases:
     @pytest.mark.unit
     def test_testio_prompt_empty_default(self):
         """Test prompt with empty default."""
-        from src.cli.io_interface import TestIO
+        from scrappy.cli.io_interface import TestIO
         io = TestIO(inputs=[])
 
         result = io.prompt("Enter: ", default="")
@@ -372,7 +372,7 @@ class TestEdgeCases:
     @pytest.mark.unit
     def test_testio_input_exhausted_raises_or_defaults(self):
         """Test behavior when inputs are exhausted."""
-        from src.cli.io_interface import TestIO
+        from scrappy.cli.io_interface import TestIO
         io = TestIO(inputs=["only one"])
 
         io.prompt("First: ")
@@ -384,7 +384,7 @@ class TestEdgeCases:
     @pytest.mark.unit
     def test_testio_styled_outputs_empty_initially(self):
         """Test that styled_outputs list is empty initially."""
-        from src.cli.io_interface import TestIO
+        from scrappy.cli.io_interface import TestIO
         io = TestIO()
 
         styles = io.get_styled_outputs()

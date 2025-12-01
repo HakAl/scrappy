@@ -6,8 +6,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from src.orchestrator.cache import ResponseCache
-from src.providers.base import LLMResponse
+from scrappy.orchestrator.cache import ResponseCache
+from scrappy.providers.base import LLMResponse
 
 
 class TestResponseCacheBasics:

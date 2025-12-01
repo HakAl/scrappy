@@ -11,11 +11,11 @@ from tests.helpers import MockIO, ConfigurableTestOrchestrator
 
 
 from datetime import datetime
-from src.cli.utils.cli_factory import initialize_cli_handlers
-from src.cli.state_manager import PlanStateManager
-from src.cli.session_context import SessionContext
-from src.cli.input_handler import InputHandler
-from src.cli.logging import get_logger
+from scrappy.cli.utils.cli_factory import initialize_cli_handlers
+from scrappy.cli.state_manager import PlanStateManager
+from scrappy.cli.session_context import SessionContext
+from scrappy.cli.input_handler import InputHandler
+from scrappy.cli.logging import get_logger
 
 
 def create_test_interactive_mode(io, orchestrator):
@@ -24,8 +24,8 @@ def create_test_interactive_mode(io, orchestrator):
     handlers = initialize_cli_handlers(orchestrator, session_start, io)
 
     # Import here to avoid circular imports
-    from src.cli.interactive import InteractiveMode
-    from src.cli.command_router import CommandRouter
+    from scrappy.cli.interactive import InteractiveMode
+    from scrappy.cli.command_router import CommandRouter
 
     state_manager = PlanStateManager()
     session_context = SessionContext()
@@ -68,7 +68,7 @@ class TestInteractiveMode:
 
     def setup_method(self):
         """Set up test fixtures."""
-        from src.cli.interactive import InteractiveMode
+        from scrappy.cli.interactive import InteractiveMode
         self.InteractiveMode = InteractiveMode
         self.orchestrator = ConfigurableTestOrchestrator()
 
@@ -186,7 +186,7 @@ class TestInteractiveModeDisplayOutput:
 
     def setup_method(self):
         """Set up test fixtures."""
-        from src.cli.interactive import InteractiveMode
+        from scrappy.cli.interactive import InteractiveMode
         self.InteractiveMode = InteractiveMode
         self.orchestrator = ConfigurableTestOrchestrator()
 

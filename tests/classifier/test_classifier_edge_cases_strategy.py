@@ -9,7 +9,7 @@ These tests demonstrate scenarios where the current regex approach struggles:
 """
 
 import pytest
-from src.task_router.classifier import TaskClassifier, TaskType
+from scrappy.task_router.classifier import TaskClassifier, TaskType
 
 
 class TestContextDependentClassification:

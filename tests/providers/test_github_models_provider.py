@@ -12,7 +12,7 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock, AsyncMock
 from typing import Dict, Any, Optional
 
-from src.providers.github_models_provider import GitHubModelsProvider, LLMResponse, ProviderLimits
+from scrappy.providers.github_models_provider import GitHubModelsProvider, LLMResponse, ProviderLimits
 
 
 class TestGitHubModelsProvider:
@@ -91,7 +91,7 @@ class TestGitHubModelsProvider:
         """Test provider initialization with environment variable."""
         monkeypatch.setenv("GITHUB_API_KEY", "env-test-key")
 
-        with patch('src.providers.github_models_provider.OpenAI') as mock_openai_class:
+        with patch('scrappy.providers.github_models_provider.OpenAI') as mock_openai_class:
             mock_openai_class.return_value = Mock()
             provider = GitHubModelsProvider()
 
@@ -113,7 +113,7 @@ class TestGitHubModelsProvider:
 
     def test_model_configurations(self, provider_with_mock_client):
         """Test that model configurations are properly defined."""
-        from src.providers.base import SpeedRank, QualityRank
+        from scrappy.providers.base import SpeedRank, QualityRank
         configs = provider_with_mock_client.MODELS
 
         # Test GPT-4o configuration
@@ -224,7 +224,7 @@ class TestGitHubModelsProvider:
         """Test basic async chat functionality."""
         messages = [{"role": "user", "content": "Hello async"}]
 
-        with patch('src.providers.github_models_provider.HTTPX_AVAILABLE', True):
+        with patch('scrappy.providers.github_models_provider.HTTPX_AVAILABLE', True):
             with patch('httpx.AsyncClient') as mock_client_class:
                 mock_client = AsyncMock()
                 mock_client_class.return_value.__aenter__.return_value = mock_client
@@ -259,7 +259,7 @@ class TestGitHubModelsProvider:
             'usage': {'prompt_tokens': 5, 'completion_tokens': 3}
         }
 
-        with patch('src.providers.github_models_provider.HTTPX_AVAILABLE', True):
+        with patch('scrappy.providers.github_models_provider.HTTPX_AVAILABLE', True):
             with patch('httpx.AsyncClient') as mock_client_class:
                 mock_client = AsyncMock()
                 mock_client_class.return_value.__aenter__.return_value = mock_client
@@ -276,7 +276,7 @@ class TestGitHubModelsProvider:
         """Test async chat falls back when httpx not available."""
         messages = [{"role": "user", "content": "Test"}]
 
-        with patch('src.providers.github_models_provider.HTTPX_AVAILABLE', False):
+        with patch('scrappy.providers.github_models_provider.HTTPX_AVAILABLE', False):
             with patch.object(provider_with_mock_client, 'chat') as mock_chat:
                 mock_chat.return_value = LLMResponse(
                     content="Fallback response",
@@ -305,7 +305,7 @@ class TestGitHubModelsProvider:
 
         # Test with OpenAI not available
         provider_with_mock_client._api_key = "test-key"
-        with patch('src.providers.github_models_provider.OPENAI_AVAILABLE', False):
+        with patch('scrappy.providers.github_models_provider.OPENAI_AVAILABLE', False):
             assert provider_with_mock_client.is_available() is False
 
 

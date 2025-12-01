@@ -8,14 +8,14 @@ import pytest
 from unittest.mock import Mock, MagicMock
 from pathlib import Path
 
-from src.orchestrator.core import AgentOrchestrator
-from src.orchestrator.cache import ResponseCache
-from src.orchestrator.rate_limiting import RateLimitTracker
-from src.orchestrator.memory import WorkingMemory
-from src.orchestrator.session import SessionManager
-from src.orchestrator.provider_selector import ProviderSelector
-from src.orchestrator.protocols import BaseOutputProtocol
-from src.orchestrator.output import NullOutput
+from scrappy.orchestrator.core import AgentOrchestrator
+from scrappy.orchestrator.cache import ResponseCache
+from scrappy.orchestrator.rate_limiting import RateLimitTracker
+from scrappy.orchestrator.memory import WorkingMemory
+from scrappy.orchestrator.session import SessionManager
+from scrappy.orchestrator.provider_selector import ProviderSelector
+from scrappy.orchestrator.protocols import BaseOutputProtocol
+from scrappy.orchestrator.output import NullOutput
 
 
 class TestDependencyInjection:
@@ -83,7 +83,7 @@ class TestDependencyInjection:
 
     def test_uses_injected_background_manager(self, tmp_path):
         """Injected background manager should be used instead of creating default."""
-        from src.orchestrator.manager_protocols import BackgroundTaskManagerProtocol
+        from scrappy.orchestrator.manager_protocols import BackgroundTaskManagerProtocol
 
         mock_manager = Mock(spec=BackgroundTaskManagerProtocol)
 
@@ -141,7 +141,7 @@ class TestDependencyInjection:
 
     def test_cache_stats_uses_injected_cache(self, tmp_path):
         """get_cache_stats should use injected cache."""
-        from src.orchestrator.usage_reporter import UsageReporter
+        from scrappy.orchestrator.usage_reporter import UsageReporter
 
         mock_cache = Mock(spec=ResponseCache)
         expected_stats = {'exact_hits': 10, 'intent_hits': 5}

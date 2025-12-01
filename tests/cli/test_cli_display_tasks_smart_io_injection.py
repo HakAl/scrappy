@@ -32,7 +32,7 @@ class TestDisplayIOInjection:
         self.orchestrator = ConfigurableTestOrchestrator()
         self.session_start = datetime.now()
         self.io = MockIO()
-        from src.cli.display import CLIDisplay
+        from scrappy.cli.display import CLIDisplay
         self.display = CLIDisplay(self.orchestrator, self.session_start, self.io)
 
     def test_show_help_accepts_io_parameter(self):
@@ -133,7 +133,7 @@ class TestDisplayIOInjection:
         """switch_brain() should use injected io from constructor."""
         io = MockIO()
         # Create a new display instance with the test io
-        from src.cli.display import CLIDisplay
+        from scrappy.cli.display import CLIDisplay
         display = CLIDisplay(self.orchestrator, self.session_start, io)
 
         display.switch_brain("")
@@ -145,7 +145,7 @@ class TestDisplayIOInjection:
         """switch_brain() with no args should show current brain through io."""
         io = MockIO()
         # Create a new display instance with the test io
-        from src.cli.display import CLIDisplay
+        from scrappy.cli.display import CLIDisplay
         display = CLIDisplay(self.orchestrator, self.session_start, io)
         self.orchestrator.brain = 'anthropic'
 
@@ -161,7 +161,7 @@ class TestDisplayIOInjection:
         """show_usage() should use injected io from constructor."""
         io = MockIO()
         # Create a new display instance with the test io
-        from src.cli.display import CLIDisplay
+        from scrappy.cli.display import CLIDisplay
         display = CLIDisplay(self.orchestrator, self.session_start, io)
 
         display.show_usage()
@@ -174,7 +174,7 @@ class TestDisplayIOInjection:
         """show_usage() should output totals through io."""
         io = MockIO()
         # Create a new display instance with the test io
-        from src.cli.display import CLIDisplay
+        from scrappy.cli.display import CLIDisplay
         display = CLIDisplay(self.orchestrator, self.session_start, io)
 
         # Make some delegate calls to generate usage
@@ -190,7 +190,7 @@ class TestDisplayIOInjection:
         """show_usage() should output per-provider stats through io."""
         io = MockIO()
         # Create a new display instance with the test io
-        from src.cli.display import CLIDisplay
+        from scrappy.cli.display import CLIDisplay
         display = CLIDisplay(self.orchestrator, self.session_start, io)
 
         # Make delegate calls
@@ -206,7 +206,7 @@ class TestDisplayIOInjection:
         """list_models() should use injected io from constructor."""
         io = MockIO()
         # Create a new display instance with the test io
-        from src.cli.display import CLIDisplay
+        from scrappy.cli.display import CLIDisplay
         display = CLIDisplay(self.orchestrator, self.session_start, io)
 
         # Mock providers for list_models
@@ -226,7 +226,7 @@ class TestDisplayIOInjection:
         """list_models() with no args should list all providers through io."""
         io = MockIO()
         # Create a new display instance with the test io
-        from src.cli.display import CLIDisplay
+        from scrappy.cli.display import CLIDisplay
         display = CLIDisplay(self.orchestrator, self.session_start, io)
 
         # Mock providers
@@ -246,7 +246,7 @@ class TestDisplayIOInjection:
         """list_models() with provider name should list that provider through io."""
         io = MockIO()
         # Create a new display instance with the test io
-        from src.cli.display import CLIDisplay
+        from scrappy.cli.display import CLIDisplay
         display = CLIDisplay(self.orchestrator, self.session_start, io)
 
         mock_provider = MagicMock()
@@ -266,7 +266,7 @@ class TestDisplayIOInjection:
         """list_models() should indicate default model through io."""
         io = MockIO()
         # Create a new display instance with the test io
-        from src.cli.display import CLIDisplay
+        from scrappy.cli.display import CLIDisplay
         display = CLIDisplay(self.orchestrator, self.session_start, io)
 
         mock_provider = MagicMock()
@@ -293,14 +293,14 @@ class TestTaskExecutionIOInjection:
         """Set up test fixtures."""
         self.orchestrator = ConfigurableTestOrchestrator()
         self.io = MockIO()
-        from src.cli.tasks import CLITaskExecution
+        from scrappy.cli.tasks import CLITaskExecution
         self.tasks = CLITaskExecution(self.orchestrator, self.io)
 
     def test_plan_task_accepts_io_parameter(self):
         """plan_task() should use injected io from constructor."""
         io = MockIO()
         # Create a new tasks instance with the test io
-        from src.cli.tasks import CLITaskExecution
+        from scrappy.cli.tasks import CLITaskExecution
         tasks = CLITaskExecution(self.orchestrator, io)
 
         # Mock the plan method
@@ -319,7 +319,7 @@ class TestTaskExecutionIOInjection:
         """plan_task() should output task header through io."""
         io = MockIO()
         # Create a new tasks instance with the test io
-        from src.cli.tasks import CLITaskExecution
+        from scrappy.cli.tasks import CLITaskExecution
         tasks = CLITaskExecution(self.orchestrator, io)
 
         self.orchestrator.plan = MagicMock(return_value=[])
@@ -339,7 +339,7 @@ class TestTaskExecutionIOInjection:
         """plan_task() should output plan steps through io."""
         io = MockIO()
         # Create a new tasks instance with the test io
-        from src.cli.tasks import CLITaskExecution
+        from scrappy.cli.tasks import CLITaskExecution
         tasks = CLITaskExecution(self.orchestrator, io)
 
         self.orchestrator.plan = MagicMock(return_value=[
@@ -361,7 +361,7 @@ class TestTaskExecutionIOInjection:
         """plan_task() should handle string steps through io."""
         io = MockIO()
         # Create a new tasks instance with the test io
-        from src.cli.tasks import CLITaskExecution
+        from scrappy.cli.tasks import CLITaskExecution
         tasks = CLITaskExecution(self.orchestrator, io)
 
         self.orchestrator.plan = MagicMock(return_value=[
@@ -379,7 +379,7 @@ class TestTaskExecutionIOInjection:
         """plan_task() should handle non-list responses through io."""
         io = MockIO()
         # Create a new tasks instance with the test io
-        from src.cli.tasks import CLITaskExecution
+        from scrappy.cli.tasks import CLITaskExecution
         tasks = CLITaskExecution(self.orchestrator, io)
 
         self.orchestrator.plan = MagicMock(return_value="Single step plan")
@@ -393,7 +393,7 @@ class TestTaskExecutionIOInjection:
         """plan_task() should return the steps for tracking."""
         io = MockIO()
         # Create a new tasks instance with the test io
-        from src.cli.tasks import CLITaskExecution
+        from scrappy.cli.tasks import CLITaskExecution
         tasks = CLITaskExecution(self.orchestrator, io)
 
         steps = [
@@ -410,7 +410,7 @@ class TestTaskExecutionIOInjection:
         """plan_task() should save plan to working memory."""
         io = MockIO()
         # Create a new tasks instance with the test io
-        from src.cli.tasks import CLITaskExecution
+        from scrappy.cli.tasks import CLITaskExecution
         tasks = CLITaskExecution(self.orchestrator, io)
 
         self.orchestrator.plan = MagicMock(return_value=[
@@ -427,7 +427,7 @@ class TestTaskExecutionIOInjection:
         """reason() should use injected io from constructor."""
         io = MockIO()
         # Create a new tasks instance with the test io
-        from src.cli.tasks import CLITaskExecution
+        from scrappy.cli.tasks import CLITaskExecution
         tasks = CLITaskExecution(self.orchestrator, io)
 
         # Mock the reason method
@@ -449,7 +449,7 @@ class TestTaskExecutionIOInjection:
         """reason() should output question header through io."""
         io = MockIO()
         # Create a new tasks instance with the test io
-        from src.cli.tasks import CLITaskExecution
+        from scrappy.cli.tasks import CLITaskExecution
         tasks = CLITaskExecution(self.orchestrator, io)
 
         self.orchestrator.reason = MagicMock(return_value={})
@@ -469,7 +469,7 @@ class TestTaskExecutionIOInjection:
         """reason() should output analysis through io."""
         io = MockIO()
         # Create a new tasks instance with the test io
-        from src.cli.tasks import CLITaskExecution
+        from scrappy.cli.tasks import CLITaskExecution
         tasks = CLITaskExecution(self.orchestrator, io)
 
         self.orchestrator.reason = MagicMock(return_value={
@@ -489,7 +489,7 @@ class TestTaskExecutionIOInjection:
         """reason() should output conclusion through io."""
         io = MockIO()
         # Create a new tasks instance with the test io
-        from src.cli.tasks import CLITaskExecution
+        from scrappy.cli.tasks import CLITaskExecution
         tasks = CLITaskExecution(self.orchestrator, io)
 
         self.orchestrator.reason = MagicMock(return_value={
@@ -515,7 +515,7 @@ class TestTaskExecutionIOInjection:
         """reason() should output confidence through io."""
         io = MockIO()
         # Create a new tasks instance with the test io
-        from src.cli.tasks import CLITaskExecution
+        from scrappy.cli.tasks import CLITaskExecution
         tasks = CLITaskExecution(self.orchestrator, io)
 
         self.orchestrator.reason = MagicMock(return_value={
@@ -536,7 +536,7 @@ class TestTaskExecutionIOInjection:
         """reason() should handle string responses through io."""
         io = MockIO()
         # Create a new tasks instance with the test io
-        from src.cli.tasks import CLITaskExecution
+        from scrappy.cli.tasks import CLITaskExecution
         tasks = CLITaskExecution(self.orchestrator, io)
 
         self.orchestrator.reason = MagicMock(return_value="Simple string response")
@@ -550,7 +550,7 @@ class TestTaskExecutionIOInjection:
         """reason() should save result to working memory."""
         io = MockIO()
         # Create a new tasks instance with the test io
-        from src.cli.tasks import CLITaskExecution
+        from scrappy.cli.tasks import CLITaskExecution
         tasks = CLITaskExecution(self.orchestrator, io)
 
         self.orchestrator.reason = MagicMock(return_value={
@@ -578,7 +578,7 @@ class TestDisplayTasksSmartDefaultIO:
         """CLIDisplay.show_help should use constructor-injected IO (no io parameter)."""
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
-        from src.cli.display import CLIDisplay
+        from scrappy.cli.display import CLIDisplay
         display = CLIDisplay(orchestrator, datetime.now(), io)
 
         import inspect
@@ -591,7 +591,7 @@ class TestDisplayTasksSmartDefaultIO:
         """CLIDisplay.show_status should use constructor-injected IO (no io parameter)."""
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
-        from src.cli.display import CLIDisplay
+        from scrappy.cli.display import CLIDisplay
         display = CLIDisplay(orchestrator, datetime.now(), io)
 
         import inspect
@@ -604,7 +604,7 @@ class TestDisplayTasksSmartDefaultIO:
         """CLIDisplay.list_providers should use constructor-injected IO (no io parameter)."""
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
-        from src.cli.display import CLIDisplay
+        from scrappy.cli.display import CLIDisplay
         display = CLIDisplay(orchestrator, datetime.now(), io)
 
         import inspect
@@ -617,7 +617,7 @@ class TestDisplayTasksSmartDefaultIO:
         """CLIDisplay.switch_brain should use constructor-injected IO (no io parameter)."""
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
-        from src.cli.display import CLIDisplay
+        from scrappy.cli.display import CLIDisplay
         display = CLIDisplay(orchestrator, datetime.now(), io)
 
         import inspect
@@ -630,7 +630,7 @@ class TestDisplayTasksSmartDefaultIO:
         """CLIDisplay.show_usage should use constructor-injected IO (no io parameter)."""
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
-        from src.cli.display import CLIDisplay
+        from scrappy.cli.display import CLIDisplay
         display = CLIDisplay(orchestrator, datetime.now(), io)
 
         import inspect
@@ -643,7 +643,7 @@ class TestDisplayTasksSmartDefaultIO:
         """CLIDisplay.list_models should use constructor-injected IO (no io parameter)."""
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
-        from src.cli.display import CLIDisplay
+        from scrappy.cli.display import CLIDisplay
         display = CLIDisplay(orchestrator, datetime.now(), io)
 
         import inspect
@@ -656,7 +656,7 @@ class TestDisplayTasksSmartDefaultIO:
         """CLITaskExecution.plan_task should use constructor-injected IO (no io parameter)."""
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
-        from src.cli.tasks import CLITaskExecution
+        from scrappy.cli.tasks import CLITaskExecution
         tasks = CLITaskExecution(orchestrator, io)
 
         import inspect
@@ -669,7 +669,7 @@ class TestDisplayTasksSmartDefaultIO:
         """CLITaskExecution.reason should use constructor-injected IO (no io parameter)."""
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
-        from src.cli.tasks import CLITaskExecution
+        from scrappy.cli.tasks import CLITaskExecution
         tasks = CLITaskExecution(orchestrator, io)
 
         import inspect
@@ -682,7 +682,7 @@ class TestDisplayTasksSmartDefaultIO:
         """CLISmartQuery.smart_query should use constructor-injected IO (no io parameter)."""
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
-        from src.cli.smart_query import CLISmartQuery
+        from scrappy.cli.smart_query import CLISmartQuery
         smart = CLISmartQuery(orchestrator, io)
 
         import inspect

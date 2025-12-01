@@ -16,8 +16,8 @@ class TestDisplayManagerProtocol:
     @pytest.mark.unit
     def test_display_manager_implements_protocol(self):
         """DisplayManager should satisfy DisplayManagerProtocol."""
-        from src.cli.display_manager import DisplayManager
-        from src.cli.protocols import DisplayManagerProtocol
+        from scrappy.cli.display_manager import DisplayManager
+        from scrappy.cli.protocols import DisplayManagerProtocol
 
         display = DisplayManager()
 
@@ -28,8 +28,8 @@ class TestDisplayManagerProtocol:
     @pytest.mark.unit
     def test_display_manager_provides_dashboard_when_enabled(self):
         """DisplayManager should provide dashboard when enabled."""
-        from src.cli.display_manager import DisplayManager
-        from src.cli.protocols import DashboardProtocol
+        from scrappy.cli.display_manager import DisplayManager
+        from scrappy.cli.protocols import DashboardProtocol
 
         display = DisplayManager(dashboard_enabled=True)
         dashboard = display.get_dashboard()
@@ -45,7 +45,7 @@ class TestDashboardModeToggle:
     @pytest.mark.unit
     def test_dashboard_disabled_by_default(self):
         """Dashboard should be disabled by default."""
-        from src.cli.display_manager import DisplayManager
+        from scrappy.cli.display_manager import DisplayManager
 
         display = DisplayManager()
 
@@ -55,7 +55,7 @@ class TestDashboardModeToggle:
     @pytest.mark.unit
     def test_dashboard_enabled_when_configured(self):
         """Dashboard should be enabled when configured."""
-        from src.cli.display_manager import DisplayManager
+        from scrappy.cli.display_manager import DisplayManager
 
         display = DisplayManager(dashboard_enabled=True)
 
@@ -65,7 +65,7 @@ class TestDashboardModeToggle:
     @pytest.mark.unit
     def test_enable_dashboard_creates_dashboard_if_not_exists(self):
         """Enabling dashboard should create dashboard if needed."""
-        from src.cli.display_manager import DisplayManager
+        from scrappy.cli.display_manager import DisplayManager
 
         display = DisplayManager(dashboard_enabled=False)
         assert display.get_dashboard() is None
@@ -78,7 +78,7 @@ class TestDashboardModeToggle:
     @pytest.mark.unit
     def test_disable_dashboard_keeps_dashboard_instance(self):
         """Disabling dashboard should retain instance but not use it."""
-        from src.cli.display_manager import DisplayManager
+        from scrappy.cli.display_manager import DisplayManager
 
         display = DisplayManager(dashboard_enabled=True)
         dashboard_ref = display.get_dashboard()
@@ -93,7 +93,7 @@ class TestDashboardModeToggle:
     @pytest.mark.unit
     def test_enable_disable_enable_cycle(self):
         """Dashboard should support enable/disable/enable cycle."""
-        from src.cli.display_manager import DisplayManager
+        from scrappy.cli.display_manager import DisplayManager
 
         display = DisplayManager(dashboard_enabled=False)
 
@@ -116,8 +116,8 @@ class TestDependencyInjection:
     @pytest.mark.unit
     def test_inject_custom_io(self):
         """DisplayManager should use injected IO."""
-        from src.cli.display_manager import DisplayManager
-        from src.cli.io_interface import TestIO
+        from scrappy.cli.display_manager import DisplayManager
+        from scrappy.cli.io_interface import TestIO
 
         custom_io = TestIO()
         display = DisplayManager(io=custom_io)
@@ -128,8 +128,8 @@ class TestDependencyInjection:
     @pytest.mark.unit
     def test_inject_custom_dashboard(self):
         """DisplayManager should use injected dashboard when enabled."""
-        from src.cli.display_manager import DisplayManager
-        from src.cli.rich_dashboard import RichDashboard
+        from scrappy.cli.display_manager import DisplayManager
+        from scrappy.cli.rich_dashboard import RichDashboard
 
         custom_dashboard = RichDashboard()
         display = DisplayManager(
@@ -143,8 +143,8 @@ class TestDependencyInjection:
     @pytest.mark.unit
     def test_creates_default_io_when_not_provided(self):
         """DisplayManager should create default IO if not injected."""
-        from src.cli.display_manager import DisplayManager
-        from src.cli.unified_io import UnifiedIO
+        from scrappy.cli.display_manager import DisplayManager
+        from scrappy.cli.unified_io import UnifiedIO
 
         display = DisplayManager()
         io = display.get_io()
@@ -156,8 +156,8 @@ class TestDependencyInjection:
     @pytest.mark.unit
     def test_creates_default_dashboard_when_enabled_without_injection(self):
         """DisplayManager should create default dashboard if enabled but not injected."""
-        from src.cli.display_manager import DisplayManager
-        from src.cli.rich_dashboard import RichDashboard
+        from scrappy.cli.display_manager import DisplayManager
+        from scrappy.cli.rich_dashboard import RichDashboard
 
         display = DisplayManager(dashboard_enabled=True)
         dashboard = display.get_dashboard()
@@ -173,7 +173,7 @@ class TestLiveDashboardContext:
     @pytest.mark.unit
     def test_live_dashboard_context_yields_dashboard(self):
         """Live dashboard context should yield dashboard instance."""
-        from src.cli.display_manager import DisplayManager
+        from scrappy.cli.display_manager import DisplayManager
 
         display = DisplayManager(dashboard_enabled=True)
 
@@ -185,7 +185,7 @@ class TestLiveDashboardContext:
     @pytest.mark.unit
     def test_live_dashboard_raises_if_disabled(self):
         """Live dashboard context should raise error if dashboard disabled."""
-        from src.cli.display_manager import DisplayManager
+        from scrappy.cli.display_manager import DisplayManager
 
         display = DisplayManager(dashboard_enabled=False)
 
@@ -198,7 +198,7 @@ class TestLiveDashboardContext:
     @pytest.mark.unit
     def test_dashboard_updates_within_live_context(self):
         """Dashboard should update successfully within live context."""
-        from src.cli.display_manager import DisplayManager
+        from scrappy.cli.display_manager import DisplayManager
 
         display = DisplayManager(dashboard_enabled=True)
 
@@ -220,7 +220,7 @@ class TestReset:
     @pytest.mark.unit
     def test_reset_clears_dashboard_if_present(self):
         """Reset should clear dashboard state."""
-        from src.cli.display_manager import DisplayManager
+        from scrappy.cli.display_manager import DisplayManager
 
         display = DisplayManager(dashboard_enabled=True)
         dashboard = display.get_dashboard()
@@ -246,8 +246,8 @@ class TestBackwardCompatibility:
     @pytest.mark.unit
     def test_can_use_io_directly_without_dashboard(self):
         """Should be able to use IO directly without dashboard."""
-        from src.cli.display_manager import DisplayManager
-        from src.cli.io_interface import TestIO
+        from scrappy.cli.display_manager import DisplayManager
+        from scrappy.cli.io_interface import TestIO
 
         test_io = TestIO()
         display = DisplayManager(io=test_io, dashboard_enabled=False)
@@ -261,8 +261,8 @@ class TestBackwardCompatibility:
     @pytest.mark.unit
     def test_simple_usage_pattern(self):
         """Test simple usage pattern for handlers."""
-        from src.cli.display_manager import DisplayManager
-        from src.cli.io_interface import TestIO
+        from scrappy.cli.display_manager import DisplayManager
+        from scrappy.cli.io_interface import TestIO
 
         # Simulate handler usage
         test_io = TestIO()
@@ -286,8 +286,8 @@ class TestBackwardCompatibility:
     @pytest.mark.unit
     def test_dashboard_mode_usage_pattern(self):
         """Test dashboard mode usage pattern for handlers."""
-        from src.cli.display_manager import DisplayManager
-        from src.cli.io_interface import TestIO
+        from scrappy.cli.display_manager import DisplayManager
+        from scrappy.cli.io_interface import TestIO
 
         # Simulate handler with dashboard enabled
         test_io = TestIO()
@@ -320,7 +320,7 @@ class TestEdgeCases:
     @pytest.mark.unit
     def test_get_dashboard_returns_none_when_disabled(self):
         """Getting dashboard when disabled should return None."""
-        from src.cli.display_manager import DisplayManager
+        from scrappy.cli.display_manager import DisplayManager
 
         display = DisplayManager(dashboard_enabled=False)
 
@@ -329,7 +329,7 @@ class TestEdgeCases:
     @pytest.mark.unit
     def test_enable_dashboard_multiple_times_is_safe(self):
         """Enabling dashboard multiple times should be safe."""
-        from src.cli.display_manager import DisplayManager
+        from scrappy.cli.display_manager import DisplayManager
 
         display = DisplayManager(dashboard_enabled=False)
 
@@ -345,7 +345,7 @@ class TestEdgeCases:
     @pytest.mark.unit
     def test_disable_dashboard_when_already_disabled(self):
         """Disabling already disabled dashboard should be safe."""
-        from src.cli.display_manager import DisplayManager
+        from scrappy.cli.display_manager import DisplayManager
 
         display = DisplayManager(dashboard_enabled=False)
 
@@ -363,8 +363,8 @@ class TestIntegrationWithHandlers:
     @pytest.mark.integration
     def test_simulated_task_execution_with_dashboard(self):
         """Simulate task execution handler using display manager."""
-        from src.cli.display_manager import DisplayManager
-        from src.cli.io_interface import TestIO
+        from scrappy.cli.display_manager import DisplayManager
+        from scrappy.cli.io_interface import TestIO
 
         test_io = TestIO()
         display = DisplayManager(io=test_io, dashboard_enabled=True)
@@ -401,8 +401,8 @@ class TestIntegrationWithHandlers:
     @pytest.mark.integration
     def test_simulated_smart_query_with_dashboard(self):
         """Simulate smart query handler using display manager."""
-        from src.cli.display_manager import DisplayManager
-        from src.cli.io_interface import TestIO
+        from scrappy.cli.display_manager import DisplayManager
+        from scrappy.cli.io_interface import TestIO
 
         test_io = TestIO()
         display = DisplayManager(io=test_io, dashboard_enabled=True)
@@ -442,8 +442,8 @@ class TestIntegrationWithHandlers:
     @pytest.mark.integration
     def test_handler_without_dashboard_mode(self):
         """Handlers should work correctly without dashboard mode."""
-        from src.cli.display_manager import DisplayManager
-        from src.cli.io_interface import TestIO
+        from scrappy.cli.display_manager import DisplayManager
+        from scrappy.cli.io_interface import TestIO
 
         test_io = TestIO()
         display = DisplayManager(io=test_io, dashboard_enabled=False)

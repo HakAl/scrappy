@@ -10,8 +10,8 @@ import logging
 from pathlib import Path
 from datetime import datetime
 
-from src.context import CodebaseContext
-from src.context.cache import ContextCache
+from scrappy.context import CodebaseContext
+from scrappy.context.cache import ContextCache
 
 
 class TestPathValidation:

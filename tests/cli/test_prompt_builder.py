@@ -3,8 +3,8 @@ Tests for ResearchPromptBuilder used by smart_query.
 """
 
 import pytest
-from src.task_router.protocols import QueryIntent, IntentResult
-from src.cli.research_handlers.base import ClassificationResult
+from scrappy.task_router.protocols import QueryIntent, IntentResult
+from scrappy.cli.research_handlers.base import ClassificationResult
 
 
 class TestResearchPromptBuilder:
@@ -12,7 +12,7 @@ class TestResearchPromptBuilder:
 
     def test_builds_prompt_without_research_results(self):
         """ResearchPromptBuilder handles empty research results."""
-        from src.cli.research_prompt_builder import ResearchPromptBuilder
+        from scrappy.cli.research_prompt_builder import ResearchPromptBuilder
 
         classification = ClassificationResult(
             query="What is this project?",
@@ -38,7 +38,7 @@ class TestResearchPromptBuilder:
 
     def test_includes_project_summary_when_provided(self):
         """ResearchPromptBuilder includes project summary at the start."""
-        from src.cli.research_prompt_builder import ResearchPromptBuilder
+        from scrappy.cli.research_prompt_builder import ResearchPromptBuilder
 
         classification = ClassificationResult(
             query="How does auth work?",
@@ -63,7 +63,7 @@ class TestResearchPromptBuilder:
 
     def test_separates_multiple_research_results(self):
         """ResearchPromptBuilder properly separates multiple results."""
-        from src.cli.research_prompt_builder import ResearchPromptBuilder
+        from scrappy.cli.research_prompt_builder import ResearchPromptBuilder
 
         classification = ClassificationResult(
             query="Show me tests",
@@ -96,7 +96,7 @@ class TestResearchPromptBuilder:
 
     def test_get_system_prompt(self):
         """ResearchPromptBuilder provides appropriate system prompt."""
-        from src.cli.research_prompt_builder import ResearchPromptBuilder
+        from scrappy.cli.research_prompt_builder import ResearchPromptBuilder
 
         builder = ResearchPromptBuilder()
         system_prompt = builder.get_system_prompt()
@@ -106,7 +106,7 @@ class TestResearchPromptBuilder:
 
     def test_handles_empty_entities(self):
         """ResearchPromptBuilder handles classification with no entities."""
-        from src.cli.research_prompt_builder import ResearchPromptBuilder
+        from scrappy.cli.research_prompt_builder import ResearchPromptBuilder
 
         classification = ClassificationResult(
             query="What is this?",
@@ -135,7 +135,7 @@ class TestResearchPromptBuilderEdgeCases:
 
     def test_handles_very_long_research_results(self):
         """ResearchPromptBuilder handles large research results without issues."""
-        from src.cli.research_prompt_builder import ResearchPromptBuilder
+        from scrappy.cli.research_prompt_builder import ResearchPromptBuilder
 
         classification = ClassificationResult(
             query="Show everything",
@@ -164,7 +164,7 @@ class TestResearchPromptBuilderEdgeCases:
 
     def test_multiple_secondary_intents(self):
         """ResearchPromptBuilder handles classification with secondary intents."""
-        from src.cli.research_prompt_builder import ResearchPromptBuilder
+        from scrappy.cli.research_prompt_builder import ResearchPromptBuilder
 
         classification = ClassificationResult(
             query="How does the auth system work and where is it tested?",

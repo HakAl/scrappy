@@ -13,7 +13,7 @@ class TestBaseModule:
 
     def test_validation_error_in_base(self):
         """ValidationError should be defined in base module."""
-        from src.cli.validators.base import ValidationError
+        from scrappy.cli.validators.base import ValidationError
 
         error = ValidationError("test error", field="test", value="bad")
         assert str(error) == "test error"
@@ -22,7 +22,7 @@ class TestBaseModule:
 
     def test_control_chars_pattern_in_base(self):
         """CONTROL_CHARS_PATTERN should be defined in base module."""
-        from src.cli.validators.base import CONTROL_CHARS_PATTERN
+        from scrappy.cli.validators.base import CONTROL_CHARS_PATTERN
 
         assert CONTROL_CHARS_PATTERN.search("\x00") is not None
         assert CONTROL_CHARS_PATTERN.search("\x07") is not None
@@ -30,7 +30,7 @@ class TestBaseModule:
 
     def test_newline_pattern_in_base(self):
         """NEWLINE_PATTERN should be defined in base module."""
-        from src.cli.validators.base import NEWLINE_PATTERN
+        from scrappy.cli.validators.base import NEWLINE_PATTERN
 
         assert NEWLINE_PATTERN.search("\n") is not None
         assert NEWLINE_PATTERN.search("\r") is not None
@@ -42,7 +42,7 @@ class TestCommandModule:
 
     def test_command_validation_result_in_command(self):
         """CommandValidationResult should be defined in command module."""
-        from src.cli.validators.command import CommandValidationResult
+        from scrappy.cli.validators.command import CommandValidationResult
 
         result = CommandValidationResult(
             is_valid=True,
@@ -55,7 +55,7 @@ class TestCommandModule:
 
     def test_validate_command_in_command(self):
         """validate_command should be defined in command module."""
-        from src.cli.validators.command import validate_command
+        from scrappy.cli.validators.command import validate_command
 
         result = validate_command("/help")
         assert result.is_valid
@@ -63,7 +63,7 @@ class TestCommandModule:
 
     def test_valid_commands_in_command(self):
         """VALID_COMMANDS should be defined in command module."""
-        from src.cli.validators.command import VALID_COMMANDS
+        from scrappy.cli.validators.command import VALID_COMMANDS
 
         assert "help" in VALID_COMMANDS
         assert "plan" in VALID_COMMANDS
@@ -71,7 +71,7 @@ class TestCommandModule:
 
     def test_max_command_length_in_command(self):
         """MAX_COMMAND_LENGTH should be defined in command module."""
-        from src.cli.validators.command import MAX_COMMAND_LENGTH
+        from scrappy.cli.validators.command import MAX_COMMAND_LENGTH
 
         assert MAX_COMMAND_LENGTH == 5000
 
@@ -81,7 +81,7 @@ class TestPathModule:
 
     def test_path_validation_result_in_path(self):
         """PathValidationResult should be defined in path module."""
-        from src.cli.validators.path import PathValidationResult
+        from scrappy.cli.validators.path import PathValidationResult
 
         result = PathValidationResult(
             is_valid=True,
@@ -92,7 +92,7 @@ class TestPathModule:
 
     def test_validate_path_in_path(self):
         """validate_path should be defined in path module."""
-        from src.cli.validators.path import validate_path
+        from scrappy.cli.validators.path import validate_path
 
         result = validate_path("src/cli/validators.py")
         assert result.is_valid
@@ -100,19 +100,19 @@ class TestPathModule:
 
     def test_max_path_length_in_path(self):
         """MAX_PATH_LENGTH should be defined in path module."""
-        from src.cli.validators.path import MAX_PATH_LENGTH
+        from scrappy.cli.validators.path import MAX_PATH_LENGTH
 
         assert MAX_PATH_LENGTH == 500
 
     def test_max_path_component_length_in_path(self):
         """MAX_PATH_COMPONENT_LENGTH should be defined in path module."""
-        from src.cli.validators.path import MAX_PATH_COMPONENT_LENGTH
+        from scrappy.cli.validators.path import MAX_PATH_COMPONENT_LENGTH
 
         assert MAX_PATH_COMPONENT_LENGTH == 255
 
     def test_windows_invalid_chars_in_path(self):
         """WINDOWS_INVALID_CHARS should be defined in path module."""
-        from src.cli.validators.path import WINDOWS_INVALID_CHARS
+        from scrappy.cli.validators.path import WINDOWS_INVALID_CHARS
 
         assert WINDOWS_INVALID_CHARS.search("<") is not None
         assert WINDOWS_INVALID_CHARS.search(">") is not None
@@ -120,7 +120,7 @@ class TestPathModule:
 
     def test_glob_chars_pattern_in_path(self):
         """GLOB_CHARS_PATTERN should be defined in path module."""
-        from src.cli.validators.path import GLOB_CHARS_PATTERN
+        from scrappy.cli.validators.path import GLOB_CHARS_PATTERN
 
         assert GLOB_CHARS_PATTERN.search("*") is not None
         assert GLOB_CHARS_PATTERN.search("?") is not None
@@ -132,7 +132,7 @@ class TestProviderModule:
 
     def test_provider_validation_result_in_provider(self):
         """ProviderValidationResult should be defined in provider module."""
-        from src.cli.validators.provider import ProviderValidationResult
+        from scrappy.cli.validators.provider import ProviderValidationResult
 
         result = ProviderValidationResult(
             is_valid=True,
@@ -143,7 +143,7 @@ class TestProviderModule:
 
     def test_validate_provider_in_provider(self):
         """validate_provider should be defined in provider module."""
-        from src.cli.validators.provider import validate_provider
+        from scrappy.cli.validators.provider import validate_provider
 
         result = validate_provider("cerebras")
         assert result.is_valid
@@ -151,7 +151,7 @@ class TestProviderModule:
 
     def test_valid_providers_in_provider(self):
         """VALID_PROVIDERS should be defined in provider module."""
-        from src.cli.validators.provider import VALID_PROVIDERS
+        from scrappy.cli.validators.provider import VALID_PROVIDERS
 
         assert "cerebras" in VALID_PROVIDERS
         assert "groq" in VALID_PROVIDERS
@@ -159,7 +159,7 @@ class TestProviderModule:
 
     def test_max_provider_length_in_provider(self):
         """MAX_PROVIDER_LENGTH should be defined in provider module."""
-        from src.cli.validators.provider import MAX_PROVIDER_LENGTH
+        from scrappy.cli.validators.provider import MAX_PROVIDER_LENGTH
 
         assert MAX_PROVIDER_LENGTH == 50
 
@@ -168,63 +168,63 @@ class TestBackwardCompatibility:
     """Tests for backward compatibility with existing imports."""
 
     def test_validation_error_importable_from_validators(self):
-        """ValidationError should be importable from src.cli.validators."""
-        from src.cli.validators import ValidationError
+        """ValidationError should be importable from scrappy.cli.validators."""
+        from scrappy.cli.validators import ValidationError
 
         error = ValidationError("test")
         assert str(error) == "test"
 
     def test_command_validation_result_importable(self):
-        """CommandValidationResult should be importable from src.cli.validators."""
-        from src.cli.validators import CommandValidationResult
+        """CommandValidationResult should be importable from scrappy.cli.validators."""
+        from scrappy.cli.validators import CommandValidationResult
 
         result = CommandValidationResult(is_valid=True, command="test")
         assert result.is_valid
 
     def test_path_validation_result_importable(self):
-        """PathValidationResult should be importable from src.cli.validators."""
-        from src.cli.validators import PathValidationResult
+        """PathValidationResult should be importable from scrappy.cli.validators."""
+        from scrappy.cli.validators import PathValidationResult
 
         result = PathValidationResult(is_valid=True, path="test")
         assert result.is_valid
 
     def test_provider_validation_result_importable(self):
-        """ProviderValidationResult should be importable from src.cli.validators."""
-        from src.cli.validators import ProviderValidationResult
+        """ProviderValidationResult should be importable from scrappy.cli.validators."""
+        from scrappy.cli.validators import ProviderValidationResult
 
         result = ProviderValidationResult(is_valid=True, provider="test")
         assert result.is_valid
 
     def test_validate_command_importable(self):
-        """validate_command should be importable from src.cli.validators."""
-        from src.cli.validators import validate_command
+        """validate_command should be importable from scrappy.cli.validators."""
+        from scrappy.cli.validators import validate_command
 
         result = validate_command("/help")
         assert result.is_valid
 
     def test_validate_path_importable(self):
-        """validate_path should be importable from src.cli.validators."""
-        from src.cli.validators import validate_path
+        """validate_path should be importable from scrappy.cli.validators."""
+        from scrappy.cli.validators import validate_path
 
         result = validate_path("src/file.py")
         assert result.is_valid
 
     def test_validate_provider_importable(self):
-        """validate_provider should be importable from src.cli.validators."""
-        from src.cli.validators import validate_provider
+        """validate_provider should be importable from scrappy.cli.validators."""
+        from scrappy.cli.validators import validate_provider
 
         result = validate_provider("cerebras")
         assert result.is_valid
 
     def test_valid_commands_importable(self):
-        """VALID_COMMANDS should be importable from src.cli.validators."""
-        from src.cli.validators import VALID_COMMANDS
+        """VALID_COMMANDS should be importable from scrappy.cli.validators."""
+        from scrappy.cli.validators import VALID_COMMANDS
 
         assert "help" in VALID_COMMANDS
 
     def test_valid_providers_importable(self):
-        """VALID_PROVIDERS should be importable from src.cli.validators."""
-        from src.cli.validators import VALID_PROVIDERS
+        """VALID_PROVIDERS should be importable from scrappy.cli.validators."""
+        from scrappy.cli.validators import VALID_PROVIDERS
 
         assert "cerebras" in VALID_PROVIDERS
 
@@ -234,7 +234,7 @@ class TestModuleIndependence:
 
     def test_command_module_uses_base(self):
         """Command module should import shared patterns from base."""
-        from src.cli.validators.command import validate_command
+        from scrappy.cli.validators.command import validate_command
 
         # Control characters should be rejected (uses CONTROL_CHARS_PATTERN from base)
         result = validate_command("/help\x00")
@@ -243,7 +243,7 @@ class TestModuleIndependence:
 
     def test_path_module_uses_base(self):
         """Path module should import shared patterns from base."""
-        from src.cli.validators.path import validate_path
+        from scrappy.cli.validators.path import validate_path
 
         # Control characters should be rejected (uses CONTROL_CHARS_PATTERN from base)
         result = validate_path("src/\x00file.py")
@@ -252,7 +252,7 @@ class TestModuleIndependence:
 
     def test_provider_module_uses_base(self):
         """Provider module should import shared patterns from base."""
-        from src.cli.validators.provider import validate_provider
+        from scrappy.cli.validators.provider import validate_provider
 
         # Control characters should be rejected (uses CONTROL_CHARS_PATTERN from base)
         result = validate_provider("cerebras\x00")
@@ -265,7 +265,7 @@ class TestAllExport:
 
     def test_all_exports_defined(self):
         """__all__ should be defined in validators package."""
-        from src.cli import validators
+        from scrappy.cli import validators
 
         assert hasattr(validators, '__all__')
         assert len(validators.__all__) > 0
@@ -273,7 +273,7 @@ class TestAllExport:
 
     def test_all_exports_complete(self):
         """__all__ should include all public exports."""
-        from src.cli import validators
+        from scrappy.cli import validators
 
         expected = {
             'ValidationError',
@@ -291,7 +291,7 @@ class TestExistingTestsStillWork:
 
     def test_original_import_pattern(self):
         """Original import pattern from existing tests should work."""
-        from src.cli.validators import (
+        from scrappy.cli.validators import (
             validate_command,
             validate_path,
             validate_provider,
@@ -315,7 +315,7 @@ class TestExistingTestsStillWork:
 
     def test_valid_commands_complete(self):
         """VALID_COMMANDS should contain all expected commands."""
-        from src.cli.validators import VALID_COMMANDS
+        from scrappy.cli.validators import VALID_COMMANDS
 
         expected_commands = {
             "help", "status", "quit", "exit", "q", "clear",
@@ -332,7 +332,7 @@ class TestExistingTestsStillWork:
 
     def test_valid_providers_complete(self):
         """VALID_PROVIDERS should contain all expected providers."""
-        from src.cli.validators import VALID_PROVIDERS
+        from scrappy.cli.validators import VALID_PROVIDERS
 
         expected_providers = {
             "cerebras", "groq", "gemini", "cohere", "github_models"
@@ -348,7 +348,7 @@ class TestFunctionalityPreserved:
     # Command validation
     def test_command_none_input(self):
         """validate_command should handle None input."""
-        from src.cli.validators import validate_command
+        from scrappy.cli.validators import validate_command
 
         result = validate_command(None)
         assert not result.is_valid
@@ -356,7 +356,7 @@ class TestFunctionalityPreserved:
 
     def test_command_empty_input(self):
         """validate_command should reject empty input."""
-        from src.cli.validators import validate_command
+        from scrappy.cli.validators import validate_command
 
         result = validate_command("")
         assert not result.is_valid
@@ -364,7 +364,7 @@ class TestFunctionalityPreserved:
 
     def test_command_missing_slash(self):
         """validate_command should require slash prefix."""
-        from src.cli.validators import validate_command
+        from scrappy.cli.validators import validate_command
 
         result = validate_command("help")
         assert not result.is_valid
@@ -372,7 +372,7 @@ class TestFunctionalityPreserved:
 
     def test_command_unknown(self):
         """validate_command should reject unknown commands."""
-        from src.cli.validators import validate_command
+        from scrappy.cli.validators import validate_command
 
         result = validate_command("/notacommand")
         assert not result.is_valid
@@ -380,7 +380,7 @@ class TestFunctionalityPreserved:
 
     def test_command_too_long(self):
         """validate_command should reject overly long commands."""
-        from src.cli.validators import validate_command
+        from scrappy.cli.validators import validate_command
 
         long_args = "x" * 10000
         result = validate_command(f"/plan {long_args}")
@@ -390,7 +390,7 @@ class TestFunctionalityPreserved:
     # Path validation
     def test_path_none_input(self):
         """validate_path should handle None input."""
-        from src.cli.validators import validate_path
+        from scrappy.cli.validators import validate_path
 
         result = validate_path(None)
         assert not result.is_valid
@@ -398,7 +398,7 @@ class TestFunctionalityPreserved:
 
     def test_path_empty_input(self):
         """validate_path should reject empty input."""
-        from src.cli.validators import validate_path
+        from scrappy.cli.validators import validate_path
 
         result = validate_path("")
         assert not result.is_valid
@@ -406,7 +406,7 @@ class TestFunctionalityPreserved:
 
     def test_path_glob_chars(self):
         """validate_path should reject glob characters."""
-        from src.cli.validators import validate_path
+        from scrappy.cli.validators import validate_path
 
         result = validate_path("src/*.py")
         assert not result.is_valid
@@ -414,7 +414,7 @@ class TestFunctionalityPreserved:
 
     def test_path_too_long(self):
         """validate_path should reject overly long paths."""
-        from src.cli.validators import validate_path
+        from scrappy.cli.validators import validate_path
 
         long_path = "a" * 600
         result = validate_path(long_path)
@@ -423,7 +423,7 @@ class TestFunctionalityPreserved:
 
     def test_path_traversal(self):
         """validate_path should reject excessive path traversal."""
-        from src.cli.validators import validate_path
+        from scrappy.cli.validators import validate_path
 
         result = validate_path("../../../../etc/passwd")
         assert not result.is_valid
@@ -432,7 +432,7 @@ class TestFunctionalityPreserved:
     # Provider validation
     def test_provider_none_input(self):
         """validate_provider should handle None input."""
-        from src.cli.validators import validate_provider
+        from scrappy.cli.validators import validate_provider
 
         result = validate_provider(None)
         assert not result.is_valid
@@ -440,7 +440,7 @@ class TestFunctionalityPreserved:
 
     def test_provider_empty_input(self):
         """validate_provider should reject empty input."""
-        from src.cli.validators import validate_provider
+        from scrappy.cli.validators import validate_provider
 
         result = validate_provider("")
         assert not result.is_valid
@@ -448,7 +448,7 @@ class TestFunctionalityPreserved:
 
     def test_provider_unknown(self):
         """validate_provider should reject unknown providers."""
-        from src.cli.validators import validate_provider
+        from scrappy.cli.validators import validate_provider
 
         result = validate_provider("notaprovider")
         assert not result.is_valid
@@ -456,7 +456,7 @@ class TestFunctionalityPreserved:
 
     def test_provider_case_normalization(self):
         """validate_provider should normalize case."""
-        from src.cli.validators import validate_provider
+        from scrappy.cli.validators import validate_provider
 
         result = validate_provider("CEREBRAS")
         assert result.is_valid
@@ -464,7 +464,7 @@ class TestFunctionalityPreserved:
 
     def test_provider_with_spaces(self):
         """validate_provider should reject spaces."""
-        from src.cli.validators import validate_provider
+        from scrappy.cli.validators import validate_provider
 
         result = validate_provider("github models")
         assert not result.is_valid

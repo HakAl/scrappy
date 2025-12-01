@@ -16,9 +16,9 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from src.cli.unified_io import UnifiedIO, ProgressTracker, StreamWriter, SimplifiedProgressTracker
-from src.cli.protocols import OutputSink, UnifiedIOProtocol
-from src.cli.mode_utils import is_tui_mode, get_output_sink
+from scrappy.cli.unified_io import UnifiedIO, ProgressTracker, StreamWriter, SimplifiedProgressTracker
+from scrappy.cli.protocols import OutputSink, UnifiedIOProtocol
+from scrappy.cli.mode_utils import is_tui_mode, get_output_sink
 
 
 class MockOutputSink:

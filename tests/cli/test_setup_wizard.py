@@ -13,8 +13,8 @@ import pytest
 from typing import List
 from unittest.mock import Mock, patch, MagicMock
 
-from src.cli.setup_wizard import SetupWizard
-from src.orchestrator.provider_definitions import PROVIDERS
+from scrappy.cli.setup_wizard import SetupWizard
+from scrappy.orchestrator.provider_definitions import PROVIDERS
 from .helpers import MockApiKeyConfigService
 
 
@@ -331,7 +331,7 @@ class TestSetupWizardProviderTesting:
         mock_provider.chat.return_value = {"content": "test"}
 
         # Patch PROVIDERS in the setup_wizard module where it's imported
-        with patch("src.cli.setup_wizard.PROVIDERS") as mock_providers:
+        with patch("scrappy.cli.setup_wizard.PROVIDERS") as mock_providers:
             mock_info = Mock()
             mock_info.env_var = "TEST_API_KEY"
             mock_info.provider_class.return_value = mock_provider
@@ -349,7 +349,7 @@ class TestSetupWizardProviderTesting:
 
         with patch.object(wizard, '_validate_key_format', return_value=True):
             # Simulate 401 error
-            with patch("src.cli.setup_wizard.PROVIDERS") as mock_providers:
+            with patch("scrappy.cli.setup_wizard.PROVIDERS") as mock_providers:
                 mock_info = Mock()
                 mock_info.env_var = "TEST_API_KEY"
                 mock_info.provider_class.side_effect = Exception("401 Unauthorized")
@@ -368,7 +368,7 @@ class TestSetupWizardProviderTesting:
         # Ensure env var is NOT set
         test_key = "test_api_key_value"
 
-        with patch("src.cli.setup_wizard.PROVIDERS") as mock_providers:
+        with patch("scrappy.cli.setup_wizard.PROVIDERS") as mock_providers:
             mock_provider = Mock()
             mock_provider.chat.return_value = {"content": "test"}
 

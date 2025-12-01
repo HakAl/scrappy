@@ -5,11 +5,11 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 import time
 
-from src.task_router.router import TaskRouter
-from src.task_router.classifier import TaskClassifier, ClassifiedTask, TaskType
-from src.task_router.config import ClarificationConfig
-from src.task_router.strategies import ExecutionResult
-from src.task_router.intent_clarifier import NullClarifier
+from scrappy.task_router.router import TaskRouter
+from scrappy.task_router.classifier import TaskClassifier, ClassifiedTask, TaskType
+from scrappy.task_router.config import ClarificationConfig
+from scrappy.task_router.strategies import ExecutionResult
+from scrappy.task_router.intent_clarifier import NullClarifier
 
 
 class TestConfidenceEscalation:

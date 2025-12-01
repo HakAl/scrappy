@@ -1,12 +1,12 @@
 """Tests for denial handler implementations."""
 
 import pytest
-from src.agent.denial_handler import (
+from scrappy.agent.denial_handler import (
     InteractiveDenialHandler,
     AutoStopDenialHandler,
     ContinueDenialHandler,
 )
-from src.agent.types import DenialHandlerResult
+from scrappy.agent.types import DenialHandlerResult
 from tests.helpers import StubAgentUI
 
 
@@ -143,7 +143,7 @@ class TestDenialHandlerProtocolCompliance:
 
     def test_interactive_handler_implements_protocol(self):
         """InteractiveDenialHandler should implement DenialHandlerProtocol."""
-        from src.agent.protocols import DenialHandlerProtocol
+        from scrappy.agent.protocols import DenialHandlerProtocol
 
         ui = StubAgentUI()
         handler = InteractiveDenialHandler(ui)
@@ -154,7 +154,7 @@ class TestDenialHandlerProtocolCompliance:
 
     def test_auto_stop_handler_implements_protocol(self):
         """AutoStopDenialHandler should implement DenialHandlerProtocol."""
-        from src.agent.protocols import DenialHandlerProtocol
+        from scrappy.agent.protocols import DenialHandlerProtocol
 
         handler = AutoStopDenialHandler()
 
@@ -164,7 +164,7 @@ class TestDenialHandlerProtocolCompliance:
 
     def test_continue_handler_implements_protocol(self):
         """ContinueDenialHandler should implement DenialHandlerProtocol."""
-        from src.agent.protocols import DenialHandlerProtocol
+        from scrappy.agent.protocols import DenialHandlerProtocol
 
         handler = ContinueDenialHandler()
 

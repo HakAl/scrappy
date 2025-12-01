@@ -10,7 +10,7 @@ import warnings
 
 import pytest
 
-from src.task_router.config import ClarificationConfig
+from scrappy.task_router.config import ClarificationConfig
 
 
 class TestClarificationConfig:
@@ -103,7 +103,7 @@ class TestClarificationConfig:
     @pytest.mark.unit
     def test_implements_protocol(self):
         """ClarificationConfig should implement ClarificationConfigProtocol."""
-        from src.task_router.protocols import ClarificationConfigProtocol
+        from scrappy.task_router.protocols import ClarificationConfigProtocol
 
         config = ClarificationConfig()
         # Check that it has the protocol attributes
@@ -148,28 +148,28 @@ class TestClarificationConfig:
 
 
 class TestDeprecatedImport:
-    """Tests for deprecated import from src.config.schema."""
+    """Tests for deprecated import from scrappy.config.schema."""
 
     @pytest.mark.unit
     def test_deprecated_import_emits_warning(self):
-        """Importing from src.config.schema should emit deprecation warning."""
+        """Importing from scrappy.config.schema should emit deprecation warning."""
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             # Import from deprecated location
-            from src.config.schema import ClarificationConfig as DeprecatedConfig
+            from scrappy.config.schema import ClarificationConfig as DeprecatedConfig
             # Check warning was issued
             assert len(w) == 1
             assert issubclass(w[0].category, DeprecationWarning)
             assert "deprecated" in str(w[0].message).lower()
-            assert "src.task_router.config" in str(w[0].message)
+            assert "scrappy.task_router.config" in str(w[0].message)
 
     @pytest.mark.unit
     def test_deprecated_import_returns_same_class(self):
         """Deprecated import should return the same class."""
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            from src.config.schema import ClarificationConfig as DeprecatedConfig
-        from src.task_router.config import ClarificationConfig
+            from scrappy.config.schema import ClarificationConfig as DeprecatedConfig
+        from scrappy.task_router.config import ClarificationConfig
 
         # Should be the exact same class
         assert DeprecatedConfig is ClarificationConfig

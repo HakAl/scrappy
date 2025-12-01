@@ -11,7 +11,7 @@ These tests verify that ClassifiedTask is a frozen dataclass that:
 import pytest
 from dataclasses import FrozenInstanceError, replace
 
-from src.task_router.classifier import ClassifiedTask, TaskType
+from scrappy.task_router.classifier import ClassifiedTask, TaskType
 
 
 
@@ -303,7 +303,7 @@ class TestIntentClarifierCompatibility:
     @pytest.mark.unit
     def test_interactive_clarifier_returns_new_task_on_research_choice(self):
         """Test that InteractiveClarifier returns a new task when user chooses research."""
-        from src.task_router.intent_clarifier import InteractiveClarifier
+        from scrappy.task_router.intent_clarifier import InteractiveClarifier
         from unittest.mock import Mock
 
         # Mock input to return "1" (research)
@@ -333,7 +333,7 @@ class TestIntentClarifierCompatibility:
     @pytest.mark.unit
     def test_interactive_clarifier_returns_new_task_on_action_choice(self):
         """Test that InteractiveClarifier returns a new task when user chooses action."""
-        from src.task_router.intent_clarifier import InteractiveClarifier
+        from scrappy.task_router.intent_clarifier import InteractiveClarifier
         from unittest.mock import Mock
 
         # Mock input to return "2" (action)
@@ -361,7 +361,7 @@ class TestIntentClarifierCompatibility:
     @pytest.mark.unit
     def test_interactive_clarifier_keeps_original_on_choice_3(self):
         """Test that InteractiveClarifier returns original task when user chooses keep."""
-        from src.task_router.intent_clarifier import InteractiveClarifier
+        from scrappy.task_router.intent_clarifier import InteractiveClarifier
         from unittest.mock import Mock
 
         # Mock input to return "3" (keep)
@@ -385,7 +385,7 @@ class TestIntentClarifierCompatibility:
     @pytest.mark.unit
     def test_auto_clarifier_returns_new_task_on_escalate(self):
         """Test that AutoClarifier returns a new task when escalating."""
-        from src.task_router.intent_clarifier import AutoClarifier
+        from scrappy.task_router.intent_clarifier import AutoClarifier
 
         clarifier = AutoClarifier(default_action="escalate")
 
@@ -407,7 +407,7 @@ class TestIntentClarifierCompatibility:
     @pytest.mark.unit
     def test_auto_clarifier_keeps_code_generation(self):
         """Test that AutoClarifier keeps CODE_GENERATION tasks unchanged."""
-        from src.task_router.intent_clarifier import AutoClarifier
+        from scrappy.task_router.intent_clarifier import AutoClarifier
 
         clarifier = AutoClarifier(default_action="escalate")
 
@@ -426,7 +426,7 @@ class TestIntentClarifierCompatibility:
     @pytest.mark.unit
     def test_auto_clarifier_keep_action_returns_original(self):
         """Test that AutoClarifier with keep action returns original."""
-        from src.task_router.intent_clarifier import AutoClarifier
+        from scrappy.task_router.intent_clarifier import AutoClarifier
 
         clarifier = AutoClarifier(default_action="keep")
 
@@ -445,7 +445,7 @@ class TestIntentClarifierCompatibility:
     @pytest.mark.unit
     def test_null_clarifier_returns_original(self):
         """Test that NullClarifier returns original task unchanged."""
-        from src.task_router.intent_clarifier import NullClarifier
+        from scrappy.task_router.intent_clarifier import NullClarifier
 
         clarifier = NullClarifier()
 

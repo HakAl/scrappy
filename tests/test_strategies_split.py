@@ -14,7 +14,7 @@ import pytest
 from unittest.mock import Mock
 from pathlib import Path
 
-from src.task_router.classifier import ClassifiedTask, TaskType
+from scrappy.task_router.classifier import ClassifiedTask, TaskType
 
 
 class TestStrategyImports:
@@ -23,7 +23,7 @@ class TestStrategyImports:
     @pytest.mark.unit
     def test_import_execution_result_from_base(self):
         """Test ExecutionResult can be imported from base module."""
-        from src.task_router.strategies.base import ExecutionResult
+        from scrappy.task_router.strategies.base import ExecutionResult
 
         result = ExecutionResult(
             success=True,
@@ -42,7 +42,7 @@ class TestStrategyImports:
     @pytest.mark.unit
     def test_import_direct_executor(self):
         """Test DirectExecutor can be imported from its own module."""
-        from src.task_router.strategies.direct_executor import DirectExecutor
+        from scrappy.task_router.strategies.direct_executor import DirectExecutor
 
         executor = DirectExecutor()
         assert executor.name == "DirectExecutor"
@@ -50,7 +50,7 @@ class TestStrategyImports:
     @pytest.mark.unit
     def test_import_conversation_executor(self):
         """Test ConversationExecutor can be imported from its own module."""
-        from src.task_router.strategies.conversation_executor import ConversationExecutor
+        from scrappy.task_router.strategies.conversation_executor import ConversationExecutor
 
         executor = ConversationExecutor()
         assert executor.name == "ConversationExecutor"
@@ -58,7 +58,7 @@ class TestStrategyImports:
     @pytest.mark.unit
     def test_import_research_executor(self):
         """Test ResearchExecutor can be imported from its own module."""
-        from src.task_router.strategies.research_executor import ResearchExecutor
+        from scrappy.task_router.strategies.research_executor import ResearchExecutor
 
         # Need mock orchestrator
         mock_orch = Mock()
@@ -74,7 +74,7 @@ class TestStrategyImports:
     @pytest.mark.unit
     def test_import_agent_executor(self):
         """Test AgentExecutor can be imported from its own module."""
-        from src.task_router.strategies.agent_executor import AgentExecutor
+        from scrappy.task_router.strategies.agent_executor import AgentExecutor
 
         # Need mock orchestrator
         mock_orch = Mock()
@@ -88,7 +88,7 @@ class TestDirectExecutorBehavior:
     @pytest.mark.unit
     def test_direct_executor_can_handle_direct_commands(self):
         """Test DirectExecutor correctly identifies tasks it can handle."""
-        from src.task_router.strategies.direct_executor import DirectExecutor
+        from scrappy.task_router.strategies.direct_executor import DirectExecutor
 
         executor = DirectExecutor()
 
@@ -106,7 +106,7 @@ class TestDirectExecutorBehavior:
     @pytest.mark.unit
     def test_direct_executor_rejects_non_direct_tasks(self):
         """Test DirectExecutor rejects tasks without extracted command."""
-        from src.task_router.strategies.direct_executor import DirectExecutor
+        from scrappy.task_router.strategies.direct_executor import DirectExecutor
 
         executor = DirectExecutor()
 
@@ -123,7 +123,7 @@ class TestDirectExecutorBehavior:
     @pytest.mark.unit
     def test_direct_executor_blocks_unsafe_commands(self):
         """Test DirectExecutor blocks dangerous commands."""
-        from src.task_router.strategies.direct_executor import DirectExecutor
+        from scrappy.task_router.strategies.direct_executor import DirectExecutor
 
         executor = DirectExecutor()
 
@@ -143,7 +143,7 @@ class TestDirectExecutorBehavior:
     @pytest.mark.unit
     def test_direct_executor_executes_safe_commands(self):
         """Test DirectExecutor executes safe commands."""
-        from src.task_router.strategies.direct_executor import DirectExecutor
+        from scrappy.task_router.strategies.direct_executor import DirectExecutor
 
         executor = DirectExecutor()
 
@@ -168,7 +168,7 @@ class TestConversationExecutorBehavior:
     @pytest.mark.unit
     def test_conversation_executor_handles_greetings(self):
         """Test ConversationExecutor handles greeting patterns."""
-        from src.task_router.strategies.conversation_executor import ConversationExecutor
+        from scrappy.task_router.strategies.conversation_executor import ConversationExecutor
 
         executor = ConversationExecutor()
 
@@ -189,7 +189,7 @@ class TestConversationExecutorBehavior:
     @pytest.mark.unit
     def test_conversation_executor_handles_thanks(self):
         """Test ConversationExecutor handles thank you patterns."""
-        from src.task_router.strategies.conversation_executor import ConversationExecutor
+        from scrappy.task_router.strategies.conversation_executor import ConversationExecutor
 
         executor = ConversationExecutor()
 
@@ -209,7 +209,7 @@ class TestConversationExecutorBehavior:
     @pytest.mark.unit
     def test_conversation_executor_only_handles_conversation(self):
         """Test ConversationExecutor only accepts CONVERSATION tasks."""
-        from src.task_router.strategies.conversation_executor import ConversationExecutor
+        from scrappy.task_router.strategies.conversation_executor import ConversationExecutor
 
         executor = ConversationExecutor()
 
@@ -257,7 +257,7 @@ class TestResearchExecutorBehavior:
     @pytest.mark.unit
     def test_research_executor_can_handle_research_tasks(self, mock_orchestrator):
         """Test ResearchExecutor identifies RESEARCH tasks."""
-        from src.task_router.strategies.research_executor import ResearchExecutor
+        from scrappy.task_router.strategies.research_executor import ResearchExecutor
 
         executor = ResearchExecutor(orchestrator=mock_orchestrator)
 
@@ -273,7 +273,7 @@ class TestResearchExecutorBehavior:
     @pytest.mark.unit
     def test_research_executor_rejects_non_research_tasks(self, mock_orchestrator):
         """Test ResearchExecutor rejects non-RESEARCH tasks."""
-        from src.task_router.strategies.research_executor import ResearchExecutor
+        from scrappy.task_router.strategies.research_executor import ResearchExecutor
 
         executor = ResearchExecutor(orchestrator=mock_orchestrator)
 
@@ -289,7 +289,7 @@ class TestResearchExecutorBehavior:
     @pytest.mark.unit
     def test_research_executor_executes_research_task(self, mock_orchestrator):
         """Test ResearchExecutor executes research tasks."""
-        from src.task_router.strategies.research_executor import ResearchExecutor
+        from scrappy.task_router.strategies.research_executor import ResearchExecutor
 
         executor = ResearchExecutor(orchestrator=mock_orchestrator)
 
@@ -311,7 +311,7 @@ class TestResearchExecutorBehavior:
     @pytest.mark.unit
     def test_research_executor_uses_preferred_provider(self, mock_orchestrator):
         """Test ResearchExecutor uses specified provider."""
-        from src.task_router.strategies.research_executor import ResearchExecutor
+        from scrappy.task_router.strategies.research_executor import ResearchExecutor
 
         executor = ResearchExecutor(
             orchestrator=mock_orchestrator,
@@ -340,7 +340,7 @@ class TestResearchExecutorBehavior:
     @pytest.mark.unit
     def test_research_executor_handles_errors_gracefully(self, mock_orchestrator):
         """Test ResearchExecutor handles errors without crashing."""
-        from src.task_router.strategies.research_executor import ResearchExecutor
+        from scrappy.task_router.strategies.research_executor import ResearchExecutor
 
         # Make delegate raise an exception
         mock_orchestrator.delegate.side_effect = Exception("API failure")
@@ -377,7 +377,7 @@ class TestAgentExecutorBehavior:
     @pytest.mark.unit
     def test_agent_executor_can_handle_code_generation(self, mock_orchestrator):
         """Test AgentExecutor identifies CODE_GENERATION tasks."""
-        from src.task_router.strategies.agent_executor import AgentExecutor
+        from scrappy.task_router.strategies.agent_executor import AgentExecutor
 
         executor = AgentExecutor(orchestrator=mock_orchestrator)
 
@@ -393,7 +393,7 @@ class TestAgentExecutorBehavior:
     @pytest.mark.unit
     def test_agent_executor_rejects_non_code_tasks(self, mock_orchestrator):
         """Test AgentExecutor rejects non-CODE_GENERATION tasks."""
-        from src.task_router.strategies.agent_executor import AgentExecutor
+        from scrappy.task_router.strategies.agent_executor import AgentExecutor
 
         executor = AgentExecutor(orchestrator=mock_orchestrator)
 
@@ -409,7 +409,7 @@ class TestAgentExecutorBehavior:
     @pytest.mark.unit
     def test_agent_executor_has_max_iterations(self, mock_orchestrator):
         """Test AgentExecutor can be configured with max iterations."""
-        from src.task_router.strategies.agent_executor import AgentExecutor
+        from scrappy.task_router.strategies.agent_executor import AgentExecutor
 
         executor = AgentExecutor(
             orchestrator=mock_orchestrator,
@@ -421,7 +421,7 @@ class TestAgentExecutorBehavior:
     @pytest.mark.unit
     def test_agent_executor_has_project_root(self, mock_orchestrator):
         """Test AgentExecutor accepts project root path."""
-        from src.task_router.strategies.agent_executor import AgentExecutor
+        from scrappy.task_router.strategies.agent_executor import AgentExecutor
 
         test_path = Path("/test/project")
         executor = AgentExecutor(
@@ -434,7 +434,7 @@ class TestAgentExecutorBehavior:
     @pytest.mark.unit
     def test_agent_executor_provider_resolution(self, mock_orchestrator):
         """Test AgentExecutor can have provider set dynamically."""
-        from src.task_router.strategies.agent_executor import AgentExecutor
+        from scrappy.task_router.strategies.agent_executor import AgentExecutor
 
         executor = AgentExecutor(orchestrator=mock_orchestrator)
 

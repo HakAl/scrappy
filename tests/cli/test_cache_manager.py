@@ -28,7 +28,7 @@ class TestCacheManagerShowStats:
 
     def test_show_cache_stats_displays_total_entries(self):
         """Should display total cache entries in table format."""
-        from src.cli.cache_manager import CacheManager
+        from scrappy.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
@@ -42,7 +42,7 @@ class TestCacheManagerShowStats:
 
     def test_show_cache_stats_displays_hit_counts(self):
         """Should display exact and intent cache hit counts in table format."""
-        from src.cli.cache_manager import CacheManager
+        from scrappy.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
@@ -56,7 +56,7 @@ class TestCacheManagerShowStats:
 
     def test_show_cache_stats_displays_miss_count(self):
         """Should display cache miss count in table format."""
-        from src.cli.cache_manager import CacheManager
+        from scrappy.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
@@ -69,7 +69,7 @@ class TestCacheManagerShowStats:
 
     def test_show_cache_stats_displays_hit_rates(self):
         """Should display hit rate percentages in table format."""
-        from src.cli.cache_manager import CacheManager
+        from scrappy.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
@@ -82,7 +82,7 @@ class TestCacheManagerShowStats:
 
     def test_show_cache_stats_displays_cache_file_location(self):
         """Should display cache file path in table format."""
-        from src.cli.cache_manager import CacheManager
+        from scrappy.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
@@ -95,7 +95,7 @@ class TestCacheManagerShowStats:
 
     def test_show_cache_stats_displays_caching_enabled_status(self):
         """Should display whether caching is enabled or disabled in table format."""
-        from src.cli.cache_manager import CacheManager
+        from scrappy.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
         orchestrator.caching_enabled = True
@@ -110,7 +110,7 @@ class TestCacheManagerShowStats:
 
     def test_show_cache_stats_displays_hit_rate_values(self):
         """Should display hit rate values in table format (no ANSI codes)."""
-        from src.cli.cache_manager import CacheManager
+        from scrappy.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
         orchestrator.get_cache_stats = lambda: {
@@ -138,7 +138,7 @@ class TestCacheManagerShowStats:
 
     def test_show_cache_stats_no_ansi_artifacts(self):
         """Should not contain raw ANSI code artifacts in output."""
-        from src.cli.cache_manager import CacheManager
+        from scrappy.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
         orchestrator.get_cache_stats = lambda: {
@@ -171,7 +171,7 @@ class TestCacheManagerClear:
 
     def test_clear_calls_orchestrator_clear_cache(self):
         """Should call orchestrator's clear_cache method."""
-        from src.cli.cache_manager import CacheManager
+        from scrappy.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
         clear_called = []
@@ -186,7 +186,7 @@ class TestCacheManagerClear:
 
     def test_clear_shows_confirmation_message(self):
         """Should display confirmation that cache was cleared."""
-        from src.cli.cache_manager import CacheManager
+        from scrappy.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
@@ -199,7 +199,7 @@ class TestCacheManagerClear:
 
     def test_clear_confirmation_is_styled_green(self):
         """Should style the confirmation message in green."""
-        from src.cli.cache_manager import CacheManager
+        from scrappy.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
@@ -219,7 +219,7 @@ class TestCacheManagerToggle:
 
     def test_toggle_disables_caching_when_enabled(self):
         """Should disable caching when currently enabled."""
-        from src.cli.cache_manager import CacheManager
+        from scrappy.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
         orchestrator.caching_enabled = True
@@ -234,7 +234,7 @@ class TestCacheManagerToggle:
 
     def test_toggle_enables_caching_when_disabled(self):
         """Should enable caching when currently disabled."""
-        from src.cli.cache_manager import CacheManager
+        from scrappy.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
         orchestrator.caching_enabled = False
@@ -249,7 +249,7 @@ class TestCacheManagerToggle:
 
     def test_toggle_returns_new_state(self):
         """Should call toggle_cache and return new state."""
-        from src.cli.cache_manager import CacheManager
+        from scrappy.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
         toggle_results = []
@@ -272,7 +272,7 @@ class TestCacheManagerInvalidCommand:
 
     def test_invalid_command_shows_usage(self):
         """Should display usage information for unknown commands."""
-        from src.cli.cache_manager import CacheManager
+        from scrappy.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
@@ -287,7 +287,7 @@ class TestCacheManagerInvalidCommand:
 
     def test_usage_shows_command_descriptions(self):
         """Should show descriptions for each command in usage."""
-        from src.cli.cache_manager import CacheManager
+        from scrappy.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
@@ -305,7 +305,7 @@ class TestCacheManagerCaseInsensitivity:
 
     def test_commands_are_case_insensitive(self):
         """Commands should work regardless of case."""
-        from src.cli.cache_manager import CacheManager
+        from scrappy.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
@@ -319,7 +319,7 @@ class TestCacheManagerCaseInsensitivity:
 
     def test_toggle_is_case_insensitive(self):
         """Toggle command should work regardless of case."""
-        from src.cli.cache_manager import CacheManager
+        from scrappy.cli.cache_manager import CacheManager
 
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()

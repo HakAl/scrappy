@@ -7,7 +7,7 @@ handling Unix->Windows translation, path normalization, and special cases.
 
 import pytest
 from tests.helpers import FakePlatformDetector
-from src.platform.translation import SmartCommandTranslator
+from scrappy.platform.translation import SmartCommandTranslator
 
 
 class TestCommandTranslation:

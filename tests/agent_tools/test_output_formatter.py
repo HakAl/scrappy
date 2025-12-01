@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import Mock, MagicMock, patch, call
-from src.agent_tools.formatters.output_formatter import (
+from scrappy.agent_tools.formatters.output_formatter import (
     NullFormatter,
     GitOutputFormatter,
     RichDirectoryFormatter,
@@ -153,7 +153,7 @@ class TestRichDirectoryFormatter:
 
     def test_init_raises_without_rich(self):
         """Verify ImportError is raised if HAS_RICH is False."""
-        with patch('src.agent_tools.formatters.output_formatter.HAS_RICH', False):
+        with patch('scrappy.agent_tools.formatters.output_formatter.HAS_RICH', False):
             with pytest.raises(ImportError) as exc:
                 RichDirectoryFormatter()
             assert "Rich library is required" in str(exc.value)
@@ -161,9 +161,9 @@ class TestRichDirectoryFormatter:
     def test_init_creates_default_console(self):
         """Verify a default console is created if none provided."""
         # Patch Console so we don't actually create a real system console
-        with patch('src.agent_tools.formatters.output_formatter.Console') as MockConsole:
+        with patch('scrappy.agent_tools.formatters.output_formatter.Console') as MockConsole:
             # Ensure HAS_RICH is True for this test
-            with patch('src.agent_tools.formatters.output_formatter.HAS_RICH', True):
+            with patch('scrappy.agent_tools.formatters.output_formatter.HAS_RICH', True):
                 formatter = RichDirectoryFormatter()
                 assert formatter._console is not None
                 MockConsole.assert_called_once()
@@ -181,10 +181,10 @@ class TestRichDirectoryFormatter:
     # ])
     # def test_format_file_name_extensions(self, mock_rich_console, ext, expected_style):
     #     """Test color mapping for different file extensions."""
-    #     with patch('src.agent_tools.formatters.output_formatter.HAS_RICH', True):
+    #     with patch('scrappy.agent_tools.formatters.output_formatter.HAS_RICH', True):
     #         formatter = RichDirectoryFormatter(console=mock_rich_console)
     #
-    #         with patch('src.agent_tools.formatters.output_formatter.Text') as MockText:
+    #         with patch('scrappy.agent_tools.formatters.output_formatter.Text') as MockText:
     #             filename = f"test{ext}"
     #             formatter.format_file_name(filename, ext)
     #
@@ -199,7 +199,7 @@ class TestRichDirectoryFormatter:
 
     def test_format_tree_line_passthrough(self, mock_rich_console):
         """Test that tree structural lines are passed through."""
-        with patch('src.agent_tools.formatters.output_formatter.HAS_RICH', True):
+        with patch('scrappy.agent_tools.formatters.output_formatter.HAS_RICH', True):
             formatter = RichDirectoryFormatter(console=mock_rich_console)
             line = "|-- "
             assert formatter.format_tree_line(line) == line
@@ -209,7 +209,7 @@ class TestRichDirectoryFormatter:
 # Theme Integration Tests (GIT_COLORS and SYNTAX_COLORS)
 # -----------------------------------------------------------------------------
 
-from src.infrastructure.theme import GIT_COLORS, SYNTAX_COLORS
+from scrappy.infrastructure.theme import GIT_COLORS, SYNTAX_COLORS
 
 
 class TestGitOutputFormatterThemeColors:
@@ -309,8 +309,8 @@ class TestRichDirectoryFormatterSyntaxColors:
     @pytest.mark.skipif(not HAS_RICH, reason="Rich not installed")
     def test_format_file_name_uses_syntax_colors_python(self, mock_rich_console):
         """Python files use SYNTAX_COLORS.python."""
-        with patch('src.agent_tools.formatters.output_formatter.HAS_RICH', True):
-            with patch('src.agent_tools.formatters.output_formatter.Text') as MockText:
+        with patch('scrappy.agent_tools.formatters.output_formatter.HAS_RICH', True):
+            with patch('scrappy.agent_tools.formatters.output_formatter.Text') as MockText:
                 formatter = RichDirectoryFormatter(console=mock_rich_console)
                 formatter.format_file_name("test.py", ".py")
 
@@ -320,8 +320,8 @@ class TestRichDirectoryFormatterSyntaxColors:
     @pytest.mark.skipif(not HAS_RICH, reason="Rich not installed")
     def test_format_file_name_uses_syntax_colors_javascript(self, mock_rich_console):
         """JavaScript/TypeScript files use SYNTAX_COLORS.javascript."""
-        with patch('src.agent_tools.formatters.output_formatter.HAS_RICH', True):
-            with patch('src.agent_tools.formatters.output_formatter.Text') as MockText:
+        with patch('scrappy.agent_tools.formatters.output_formatter.HAS_RICH', True):
+            with patch('scrappy.agent_tools.formatters.output_formatter.Text') as MockText:
                 formatter = RichDirectoryFormatter(console=mock_rich_console)
 
                 for ext in ['.js', '.ts', '.jsx', '.tsx']:
@@ -333,8 +333,8 @@ class TestRichDirectoryFormatterSyntaxColors:
     @pytest.mark.skipif(not HAS_RICH, reason="Rich not installed")
     def test_format_file_name_uses_syntax_colors_docs(self, mock_rich_console):
         """Documentation files use SYNTAX_COLORS.docs."""
-        with patch('src.agent_tools.formatters.output_formatter.HAS_RICH', True):
-            with patch('src.agent_tools.formatters.output_formatter.Text') as MockText:
+        with patch('scrappy.agent_tools.formatters.output_formatter.HAS_RICH', True):
+            with patch('scrappy.agent_tools.formatters.output_formatter.Text') as MockText:
                 formatter = RichDirectoryFormatter(console=mock_rich_console)
 
                 for ext in ['.md', '.txt', '.rst']:
@@ -346,8 +346,8 @@ class TestRichDirectoryFormatterSyntaxColors:
     @pytest.mark.skipif(not HAS_RICH, reason="Rich not installed")
     def test_format_file_name_uses_syntax_colors_config(self, mock_rich_console):
         """Config files use SYNTAX_COLORS.config."""
-        with patch('src.agent_tools.formatters.output_formatter.HAS_RICH', True):
-            with patch('src.agent_tools.formatters.output_formatter.Text') as MockText:
+        with patch('scrappy.agent_tools.formatters.output_formatter.HAS_RICH', True):
+            with patch('scrappy.agent_tools.formatters.output_formatter.Text') as MockText:
                 formatter = RichDirectoryFormatter(console=mock_rich_console)
 
                 for ext in ['.json', '.yaml', '.yml', '.toml']:
@@ -359,7 +359,7 @@ class TestRichDirectoryFormatterSyntaxColors:
     @pytest.mark.skipif(not HAS_RICH, reason="Rich not installed")
     def test_format_file_name_returns_unformatted_for_unknown(self, mock_rich_console):
         """Unknown extensions return plain filename without formatting."""
-        with patch('src.agent_tools.formatters.output_formatter.HAS_RICH', True):
+        with patch('scrappy.agent_tools.formatters.output_formatter.HAS_RICH', True):
             formatter = RichDirectoryFormatter(console=mock_rich_console)
             result = formatter.format_file_name("test.xyz", ".xyz")
             assert result == "test.xyz"

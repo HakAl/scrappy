@@ -14,7 +14,7 @@ Following CLAUDE.md guidelines:
 import pytest
 from datetime import datetime, timedelta
 from unittest.mock import Mock
-from src.orchestrator.usage_reporter import UsageReporter
+from scrappy.orchestrator.usage_reporter import UsageReporter
 
 
 class TestUsageRecording:

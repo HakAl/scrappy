@@ -9,28 +9,28 @@ from unittest.mock import Mock, MagicMock, patch
 from io import StringIO
 from rich.console import Console
 
-from src.infrastructure.theme import (
+from scrappy.infrastructure.theme import (
     ThemeProtocol,
     ScrappyTheme,
     LightTheme,
     NoColorTheme,
     DEFAULT_THEME,
 )
-from src.cli.display_rich import (
+from scrappy.cli.display_rich import (
     show_help_table,
     show_status_rich,
     show_rate_limits_rich,
     show_plan_tree,
 )
-from src.cli.interactive_banner import display_banner, render_welcome_banner
-from src.cli.rich_dashboard import RichDashboard
-from src.cli.task_router_handler import CLITaskRouterHandler
-from src.cli.output_bridge import (
+from scrappy.cli.interactive_banner import display_banner, render_welcome_banner
+from scrappy.cli.rich_dashboard import RichDashboard
+from scrappy.cli.task_router_handler import CLITaskRouterHandler
+from scrappy.cli.output_bridge import (
     OutputBridge,
     ConsoleOutputBridge,
     create_output_bridge,
 )
-from src.cli.unified_io import UnifiedIO
+from scrappy.cli.unified_io import UnifiedIO
 
 
 class TestDisplayRichThemeIntegration:

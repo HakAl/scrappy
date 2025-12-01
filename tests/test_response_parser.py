@@ -6,11 +6,11 @@ including edge cases and fallback strategies. This prepares for native tool call
 by isolating parsing logic.
 """
 import pytest
-from src.agent.response_parser import (
+from scrappy.agent.response_parser import (
     JSONResponseParser,
     ParseResult
 )
-from src.agent.protocols import ResponseParserProtocol
+from scrappy.agent.protocols import ResponseParserProtocol
 
 
 class TestParseResultDataStructure:
@@ -700,7 +700,7 @@ class TestUnifiedResponseParser:
     @pytest.fixture
     def parser(self):
         """Create unified parser instance."""
-        from src.agent.response_parser import UnifiedResponseParser
+        from scrappy.agent.response_parser import UnifiedResponseParser
         return UnifiedResponseParser()
 
     @pytest.mark.unit
@@ -722,7 +722,7 @@ class TestUnifiedResponseParser:
     @pytest.mark.unit
     def test_llm_response_without_tool_calls_uses_json_parser(self, parser):
         """LLMResponse with no tool_calls should parse content as JSON."""
-        from src.providers.base import LLMResponse
+        from scrappy.providers.base import LLMResponse
 
         llm_response = LLMResponse(
             content='''{
@@ -744,7 +744,7 @@ class TestUnifiedResponseParser:
     @pytest.mark.unit
     def test_llm_response_with_empty_tool_calls_uses_json_parser(self, parser):
         """LLMResponse with empty tool_calls list should parse content as JSON."""
-        from src.providers.base import LLMResponse
+        from scrappy.providers.base import LLMResponse
 
         llm_response = LLMResponse(
             content='''{
@@ -766,7 +766,7 @@ class TestUnifiedResponseParser:
     @pytest.mark.unit
     def test_llm_response_with_tool_calls_uses_native_parser(self, parser):
         """LLMResponse with tool_calls should use native tool calling parser."""
-        from src.providers.base import LLMResponse, ToolCall
+        from scrappy.providers.base import LLMResponse, ToolCall
 
         llm_response = LLMResponse(
             content="I'll read that file for you.",
@@ -790,7 +790,7 @@ class TestUnifiedResponseParser:
     @pytest.mark.unit
     def test_llm_response_with_multiple_tool_calls_uses_first(self, parser):
         """When multiple tool calls, parser should use the first one."""
-        from src.providers.base import LLMResponse, ToolCall
+        from scrappy.providers.base import LLMResponse, ToolCall
 
         llm_response = LLMResponse(
             content="Let me read these files.",
@@ -811,7 +811,7 @@ class TestUnifiedResponseParser:
     @pytest.mark.unit
     def test_llm_response_with_complete_action(self, parser):
         """Native tool call for completion should set is_complete."""
-        from src.providers.base import LLMResponse, ToolCall
+        from scrappy.providers.base import LLMResponse, ToolCall
 
         llm_response = LLMResponse(
             content="Task completed successfully.",
@@ -845,7 +845,7 @@ class TestUnifiedResponseParser:
     @pytest.mark.unit
     def test_llm_response_with_invalid_json_content_returns_retry_parse(self, parser):
         """LLMResponse with invalid JSON content should return retry_parse."""
-        from src.providers.base import LLMResponse
+        from scrappy.providers.base import LLMResponse
 
         llm_response = LLMResponse(
             content="I'm not sure what to do next",
@@ -862,7 +862,7 @@ class TestUnifiedResponseParser:
     @pytest.mark.unit
     def test_parser_preserves_tool_call_id_in_metadata(self, parser):
         """Parser should preserve tool call ID for potential future use."""
-        from src.providers.base import LLMResponse, ToolCall
+        from scrappy.providers.base import LLMResponse, ToolCall
 
         llm_response = LLMResponse(
             content="Reading file",

@@ -14,12 +14,12 @@ from tests.protocol_conformance.conftest import (
 )
 
 # Import protocols
-from src.protocols.output import (
+from scrappy.protocols.output import (
     BaseOutputProtocol,
     FormattedOutputProtocol,
     RichRenderableProtocol,
 )
-from src.cli.protocols import OutputSink
+from scrappy.cli.protocols import OutputSink
 
 
 class TestBaseOutputProtocolConformance:
@@ -27,39 +27,39 @@ class TestBaseOutputProtocolConformance:
 
     def test_console_output_implements_protocol(self):
         """ConsoleOutput should implement BaseOutputProtocol."""
-        from src.orchestrator.output import ConsoleOutput
+        from scrappy.orchestrator.output import ConsoleOutput
 
         assert_implements_protocol(ConsoleOutput, BaseOutputProtocol)
 
     def test_console_output_isinstance(self):
         """ConsoleOutput instance should pass isinstance check."""
-        from src.orchestrator.output import ConsoleOutput
+        from scrappy.orchestrator.output import ConsoleOutput
 
         instance = ConsoleOutput()
         assert_isinstance_protocol(instance, BaseOutputProtocol)
 
     def test_null_output_implements_protocol(self):
         """NullOutput should implement BaseOutputProtocol."""
-        from src.orchestrator.output import NullOutput
+        from scrappy.orchestrator.output import NullOutput
 
         assert_implements_protocol(NullOutput, BaseOutputProtocol)
 
     def test_null_output_isinstance(self):
         """NullOutput instance should pass isinstance check."""
-        from src.orchestrator.output import NullOutput
+        from scrappy.orchestrator.output import NullOutput
 
         instance = NullOutput()
         assert_isinstance_protocol(instance, BaseOutputProtocol)
 
     def test_capturing_output_implements_protocol(self):
         """CapturingOutput should implement BaseOutputProtocol."""
-        from src.orchestrator.output import CapturingOutput
+        from scrappy.orchestrator.output import CapturingOutput
 
         assert_implements_protocol(CapturingOutput, BaseOutputProtocol)
 
     def test_capturing_output_isinstance(self):
         """CapturingOutput instance should pass isinstance check."""
-        from src.orchestrator.output import CapturingOutput
+        from scrappy.orchestrator.output import CapturingOutput
 
         instance = CapturingOutput()
         assert_isinstance_protocol(instance, BaseOutputProtocol)
@@ -74,13 +74,13 @@ class TestFormattedOutputProtocolConformance:
 
     def test_test_output_implements_protocol(self):
         """TestOutput should implement FormattedOutputProtocol."""
-        from src.cli.output import TestOutput
+        from scrappy.cli.output import TestOutput
 
         assert_implements_protocol(TestOutput, FormattedOutputProtocol)
 
     def test_test_output_isinstance(self):
         """TestOutput instance should pass isinstance check."""
-        from src.cli.output import TestOutput
+        from scrappy.cli.output import TestOutput
 
         instance = TestOutput()
         assert_isinstance_protocol(instance, FormattedOutputProtocol)
@@ -88,14 +88,14 @@ class TestFormattedOutputProtocolConformance:
     def test_rich_output_implements_protocol(self):
         """RichOutput should implement FormattedOutputProtocol."""
         pytest.importorskip("rich")
-        from src.cli.output import RichOutput
+        from scrappy.cli.output import RichOutput
 
         assert_implements_protocol(RichOutput, FormattedOutputProtocol)
 
     def test_rich_output_isinstance(self):
         """RichOutput instance should pass isinstance check."""
         pytest.importorskip("rich")
-        from src.cli.output import RichOutput
+        from scrappy.cli.output import RichOutput
 
         instance = RichOutput()
         assert_isinstance_protocol(instance, FormattedOutputProtocol)
@@ -103,21 +103,21 @@ class TestFormattedOutputProtocolConformance:
     def test_click_output_implements_protocol(self):
         """ClickOutput should implement FormattedOutputProtocol."""
         pytest.importorskip("click")
-        from src.cli.output import ClickOutput
+        from scrappy.cli.output import ClickOutput
 
         assert_implements_protocol(ClickOutput, FormattedOutputProtocol)
 
     def test_click_output_isinstance(self):
         """ClickOutput instance should pass isinstance check."""
         pytest.importorskip("click")
-        from src.cli.output import ClickOutput
+        from scrappy.cli.output import ClickOutput
 
         instance = ClickOutput()
         assert_isinstance_protocol(instance, FormattedOutputProtocol)
 
     def test_output_factory_implements_protocol(self):
         """Output (factory delegator) should implement FormattedOutputProtocol."""
-        from src.cli.output import Output
+        from scrappy.cli.output import Output
 
         assert_implements_protocol(Output, FormattedOutputProtocol)
 
@@ -127,7 +127,7 @@ class TestFormattedOutputAlsoImplementsBase:
 
     def test_test_output_implements_base(self):
         """TestOutput should also implement BaseOutputProtocol (via inheritance)."""
-        from src.cli.output import TestOutput
+        from scrappy.cli.output import TestOutput
 
         instance = TestOutput()
         # FormattedOutputProtocol extends BaseOutputProtocol
@@ -136,7 +136,7 @@ class TestFormattedOutputAlsoImplementsBase:
     def test_rich_output_implements_base(self):
         """RichOutput should also implement BaseOutputProtocol."""
         pytest.importorskip("rich")
-        from src.cli.output import RichOutput
+        from scrappy.cli.output import RichOutput
 
         instance = RichOutput()
         assert_isinstance_protocol(instance, BaseOutputProtocol)
@@ -148,7 +148,7 @@ class TestRichRenderableProtocolConformance:
     @pytest.mark.skip(reason="OutputBridge implements BaseOutputProtocol, not RichRenderableProtocol")
     def test_output_bridge_implements_protocol(self):
         """OutputBridge should implement RichRenderableProtocol."""
-        from src.cli.output_bridge import OutputBridge
+        from scrappy.cli.output_bridge import OutputBridge
 
         assert_implements_protocol(OutputBridge, RichRenderableProtocol)
 
@@ -172,7 +172,7 @@ class TestOutputBehavior:
 
     def test_capturing_output_captures_all_levels(self):
         """CapturingOutput should capture info, warn, error, and success."""
-        from src.orchestrator.output import CapturingOutput
+        from scrappy.orchestrator.output import CapturingOutput
 
         output = CapturingOutput()
 
@@ -188,7 +188,7 @@ class TestOutputBehavior:
 
     def test_null_output_discards_all(self):
         """NullOutput should not raise errors when called."""
-        from src.orchestrator.output import NullOutput
+        from scrappy.orchestrator.output import NullOutput
 
         output = NullOutput()
 
@@ -200,7 +200,7 @@ class TestOutputBehavior:
 
     def test_test_output_captures_print(self):
         """TestOutput should capture printed text."""
-        from src.cli.output import TestOutput
+        from scrappy.cli.output import TestOutput
 
         output = TestOutput()
         output.print("hello", color="green", bold=True)
@@ -213,7 +213,7 @@ class TestOutputBehavior:
 
     def test_test_output_returns_preset_inputs(self):
         """TestOutput should return preset input values."""
-        from src.cli.output import TestOutput
+        from scrappy.cli.output import TestOutput
 
         output = TestOutput(inputs=["first", "second"])
 
@@ -223,7 +223,7 @@ class TestOutputBehavior:
 
     def test_test_output_returns_preset_confirmations(self):
         """TestOutput should return preset confirmation values."""
-        from src.cli.output import TestOutput
+        from scrappy.cli.output import TestOutput
 
         output = TestOutput(confirmations=[True, False])
 

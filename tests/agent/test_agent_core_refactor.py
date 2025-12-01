@@ -17,11 +17,11 @@ from pathlib import Path
 import json
 import subprocess
 
-from src.agent.core import CodeAgent
-from src.agent_config import AgentConfig
-from src.agent_tools.tools import ToolRegistry
-from src.agent_tools.tools.command_tool import ShellCommandExecutor
-from src.orchestrator_adapter import OrchestratorAdapter
+from scrappy.agent.core import CodeAgent
+from scrappy.agent_config import AgentConfig
+from scrappy.agent_tools.tools import ToolRegistry
+from scrappy.agent_tools.tools.command_tool import ShellCommandExecutor
+from scrappy.orchestrator_adapter import OrchestratorAdapter
 
 
 @pytest.fixture
@@ -81,7 +81,7 @@ class TestRegistryCreation:
     @pytest.mark.unit
     def test_agent_accepts_custom_registry(self, mock_orchestrator_adapter, minimal_config, tmp_path):
         """Agent should accept injected registry."""
-        from src.agent_tools.registry_factory import create_minimal_registry
+        from scrappy.agent_tools.registry_factory import create_minimal_registry
 
         custom_registry = create_minimal_registry()
 
@@ -502,8 +502,8 @@ class TestCommandSecurityChecks:
         assert "echo hello" in result
 
     @pytest.mark.unit
-    @patch('src.agent_tools.tools.command_tool.get_python_fallback', return_value=None)
-    @patch('src.agent_tools.tools.command_tool.validate_command_for_platform')
+    @patch('scrappy.agent_tools.tools.command_tool.get_python_fallback', return_value=None)
+    @patch('scrappy.agent_tools.tools.command_tool.validate_command_for_platform')
     def test_validates_command_for_platform(self, mock_validate, mock_fallback, agent_with_config):
         """Should validate command is appropriate for current platform."""
         mock_validate.return_value = (False, "grep is not available on Windows")
@@ -514,8 +514,8 @@ class TestCommandSecurityChecks:
         assert "platform" in result.lower() or "grep" in result
 
     @pytest.mark.unit
-    @patch('src.agent_tools.tools.command_tool.is_windows', return_value=True)
-    @patch('src.agent_tools.tools.command_tool.intercept_spring_initializr_download')
+    @patch('scrappy.agent_tools.tools.command_tool.is_windows', return_value=True)
+    @patch('scrappy.agent_tools.tools.command_tool.intercept_spring_initializr_download')
     def test_intercepts_spring_initializr_on_windows(self, mock_intercept, mock_windows, agent_with_config):
         """Should intercept Spring Initializr downloads on Windows."""
         mock_intercept.return_value = {
@@ -543,7 +543,7 @@ class TestCommandExecutionWithRetry:
     @pytest.mark.unit
     def test_successful_command_returns_immediately(self, agent_with_config):
         """Should return immediately on successful command."""
-        from src.agent_tools.protocols import ExecutionResult
+        from scrappy.agent_tools.protocols import ExecutionResult
         from tests.helpers import MockSubprocessRunner
 
         # Create mock runner that returns success
@@ -569,7 +569,7 @@ class TestCommandExecutionWithRetry:
     @patch('time.sleep')
     def test_retries_on_connection_reset(self, mock_sleep, agent_with_config):
         """Should retry on connection reset error."""
-        from src.agent_tools.protocols import ExecutionResult
+        from scrappy.agent_tools.protocols import ExecutionResult
 
         # Create a mock runner that fails then succeeds
         class MockRunnerWithRetry:
@@ -606,7 +606,7 @@ class TestCommandExecutionWithRetry:
     @patch('time.sleep')
     def test_retries_on_timeout_error(self, mock_sleep, agent_with_config):
         """Should retry on timeout errors."""
-        from src.agent_tools.protocols import ExecutionResult
+        from scrappy.agent_tools.protocols import ExecutionResult
 
         class MockRunnerWithRetry:
             def __init__(self):
@@ -635,7 +635,7 @@ class TestCommandExecutionWithRetry:
     @patch('time.sleep')
     def test_gives_up_after_max_retries(self, mock_sleep, agent_with_config):
         """Should give up after max retry attempts."""
-        from src.agent_tools.protocols import ExecutionResult
+        from scrappy.agent_tools.protocols import ExecutionResult
         from tests.helpers import MockSubprocessRunner
 
         mock_runner = MockSubprocessRunner(
@@ -657,7 +657,7 @@ class TestCommandExecutionWithRetry:
     @pytest.mark.unit
     def test_no_retry_on_non_recoverable_error(self, agent_with_config):
         """Should not retry on non-recoverable errors."""
-        from src.agent_tools.protocols import ExecutionResult
+        from scrappy.agent_tools.protocols import ExecutionResult
         from tests.helpers import MockSubprocessRunner
 
         mock_runner = MockSubprocessRunner(
@@ -682,7 +682,7 @@ class TestCommandExecutionWithRetry:
     @patch('time.sleep')
     def test_reports_retry_count_on_success(self, mock_sleep, agent_with_config):
         """Should report retry count when eventually successful."""
-        from src.agent_tools.protocols import ExecutionResult
+        from scrappy.agent_tools.protocols import ExecutionResult
 
         class MockRunnerWithRetry:
             def __init__(self):
@@ -712,7 +712,7 @@ class TestCommandStreamingExecution:
     """Tests for _run_command_streaming behavior (now in ShellCommandExecutor)."""
 
     @pytest.mark.unit
-    @patch('src.agent_tools.tools.command_tool.subprocess.Popen')
+    @patch('scrappy.agent_tools.tools.command_tool.subprocess.Popen')
     def test_captures_command_output(self, mock_popen, agent_with_config):
         """Should capture stdout from command."""
         mock_process = MagicMock()
@@ -727,7 +727,7 @@ class TestCommandStreamingExecution:
         assert "line2" in result
 
     @pytest.mark.unit
-    @patch('src.agent_tools.tools.command_tool.subprocess.Popen')
+    @patch('scrappy.agent_tools.tools.command_tool.subprocess.Popen')
     def test_returns_no_output_marker(self, mock_popen, agent_with_config):
         """Should return marker when command produces no output."""
         mock_process = MagicMock()
@@ -763,7 +763,7 @@ class TestCommandStreamingExecution:
             assert "10s" in result
 
     @pytest.mark.unit
-    @patch('src.agent_tools.tools.command_tool.subprocess.Popen')
+    @patch('scrappy.agent_tools.tools.command_tool.subprocess.Popen')
     def test_streaming_handles_process_errors_gracefully(self, mock_popen, agent_with_config):
         """Should handle process errors gracefully without crashing."""
         mock_process = MagicMock()
@@ -777,7 +777,7 @@ class TestCommandStreamingExecution:
         assert "Error" in result or "error" in result
 
     @pytest.mark.unit
-    @patch('src.agent_tools.tools.command_tool.subprocess.Popen')
+    @patch('scrappy.agent_tools.tools.command_tool.subprocess.Popen')
     def test_sets_environment_for_non_interactive(self, mock_popen, agent_with_config):
         """Should set CI=true to prevent interactive prompts."""
         mock_process = MagicMock()
@@ -794,7 +794,7 @@ class TestCommandStreamingExecution:
         assert call_kwargs['env']['npm_config_yes'] == 'true'
 
     @pytest.mark.unit
-    @patch('src.agent_tools.tools.command_tool.subprocess.Popen')
+    @patch('scrappy.agent_tools.tools.command_tool.subprocess.Popen')
     def test_uses_project_root_as_cwd(self, mock_popen, agent_with_config):
         """Should run command in project root directory."""
         mock_process = MagicMock()

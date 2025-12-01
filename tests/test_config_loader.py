@@ -11,7 +11,7 @@ class TestGetTruncationDefaults:
     @pytest.mark.unit
     def test_returns_dict_with_expected_keys(self):
         """Test that function returns dict with all truncation keys."""
-        from src.context.config_loader import get_truncation_defaults
+        from scrappy.context.config_loader import get_truncation_defaults
 
         result = get_truncation_defaults()
 
@@ -23,7 +23,7 @@ class TestGetTruncationDefaults:
     @pytest.mark.unit
     def test_values_are_positive_integers(self):
         """Test that all truncation values are positive integers."""
-        from src.context.config_loader import get_truncation_defaults
+        from scrappy.context.config_loader import get_truncation_defaults
 
         result = get_truncation_defaults()
 
@@ -35,10 +35,10 @@ class TestGetTruncationDefaults:
     @pytest.mark.unit
     def test_fallback_values_when_import_fails(self):
         """Test that fallback values are used when config imports fail."""
-        from src.context import config_loader
+        from scrappy.context import config_loader
 
         # Mock to simulate import failure
-        with patch.dict('sys.modules', {'src.cli.config.defaults': None}):
+        with patch.dict('sys.modules', {'scrappy.cli.config.defaults': None}):
             # Force reimport
             import importlib
             importlib.reload(config_loader)
@@ -60,7 +60,7 @@ class TestGetExtensionsConfig:
     @pytest.mark.unit
     def test_returns_tuple_with_two_elements(self):
         """Test that function returns tuple of (extensions_dict, entry_points)."""
-        from src.context.config_loader import get_extensions_config
+        from scrappy.context.config_loader import get_extensions_config
 
         result = get_extensions_config()
 
@@ -70,7 +70,7 @@ class TestGetExtensionsConfig:
     @pytest.mark.unit
     def test_extensions_dict_has_expected_categories(self):
         """Test that extensions dict has standard categories."""
-        from src.context.config_loader import get_extensions_config
+        from scrappy.context.config_loader import get_extensions_config
 
         extensions, _ = get_extensions_config()
 
@@ -84,7 +84,7 @@ class TestGetExtensionsConfig:
     @pytest.mark.unit
     def test_entry_points_is_list_of_strings(self):
         """Test that entry points is a list of filenames."""
-        from src.context.config_loader import get_extensions_config
+        from scrappy.context.config_loader import get_extensions_config
 
         _, entry_points = get_extensions_config()
 
@@ -103,7 +103,7 @@ class TestGetPathsConfig:
     @pytest.mark.unit
     def test_includes_venv_dirs(self):
         """Test that result includes virtual environment directories."""
-        from src.context.config_loader import get_paths_config
+        from scrappy.context.config_loader import get_paths_config
 
         result = get_paths_config()
 
@@ -118,7 +118,7 @@ class TestEdgeCases:
     @pytest.mark.unit
     def test_multiple_calls_return_same_values(self):
         """Test that repeated calls return consistent values."""
-        from src.context.config_loader import (
+        from scrappy.context.config_loader import (
             get_truncation_defaults,
             get_extensions_config,
             get_paths_config,

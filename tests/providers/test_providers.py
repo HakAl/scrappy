@@ -5,7 +5,7 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime
 
-from src.providers.base import LLMResponse, ProviderLimits, LLMProviderBase, ProviderRegistry
+from scrappy.providers.base import LLMResponse, ProviderLimits, LLMProviderBase, ProviderRegistry
 
 
 class TestLLMResponse:

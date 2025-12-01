@@ -13,7 +13,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch, mock_open
 
-from src.cli.codebase import CLICodebaseAnalysis
+from scrappy.cli.codebase import CLICodebaseAnalysis
 from tests.helpers import MockIO
 
 

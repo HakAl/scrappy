@@ -5,7 +5,7 @@ for commands, paths, and providers.
 """
 
 import pytest
-from src.cli.validators import (
+from scrappy.cli.validators import (
     validate_command,
     validate_path,
     validate_provider,

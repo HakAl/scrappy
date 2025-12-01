@@ -29,9 +29,9 @@ class TestTaskRouterHandlerIOInjection:
         self.io = MockIO()
 
         # Import here to avoid import errors during collection
-        from src.cli.task_router_handler import CLITaskRouterHandler
-        from src.task_router import ClassifiedTask, TaskType, ExecutionResult
-        from src.task_router.metrics_collector import RouterMetrics
+        from scrappy.cli.task_router_handler import CLITaskRouterHandler
+        from scrappy.task_router import ClassifiedTask, TaskType, ExecutionResult
+        from scrappy.task_router.metrics_collector import RouterMetrics
 
         self.CLITaskRouterHandler = CLITaskRouterHandler
         self.ClassifiedTask = ClassifiedTask
@@ -630,9 +630,9 @@ class TestTaskRouterHandlerIntegration:
         self.orchestrator = ConfigurableTestOrchestrator()
         self.io = MockIO()
 
-        from src.cli.task_router_handler import CLITaskRouterHandler
-        from src.task_router import ClassifiedTask, TaskType, ExecutionResult
-        from src.task_router.metrics_collector import RouterMetrics
+        from scrappy.cli.task_router_handler import CLITaskRouterHandler
+        from scrappy.task_router import ClassifiedTask, TaskType, ExecutionResult
+        from scrappy.task_router.metrics_collector import RouterMetrics
 
         self.CLITaskRouterHandler = CLITaskRouterHandler
         self.ClassifiedTask = ClassifiedTask

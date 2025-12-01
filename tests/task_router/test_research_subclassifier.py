@@ -5,8 +5,8 @@ Tests verify that queries are correctly classified as codebase or general resear
 """
 
 import pytest
-from src.task_router.strategies.research_subclassifier import ResearchSubclassifier
-from src.task_router.strategies.research_subtype import ResearchSubtype
+from scrappy.task_router.strategies.research_subclassifier import ResearchSubclassifier
+from scrappy.task_router.strategies.research_subtype import ResearchSubtype
 
 
 class TestResearchSubclassifierGeneral:

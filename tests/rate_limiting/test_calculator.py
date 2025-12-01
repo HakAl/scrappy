@@ -1,7 +1,7 @@
 """Tests for rate limit calculator."""
 import pytest
 
-from src.orchestrator.rate_limiting.calculator import RateLimitCalculator
+from scrappy.orchestrator.rate_limiting.calculator import RateLimitCalculator
 
 
 class FakeProviderLimits:

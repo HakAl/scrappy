@@ -15,7 +15,7 @@ import json
 from dataclasses import dataclass, field
 from typing import List
 
-from src.infrastructure.config import (
+from scrappy.infrastructure.config import (
     BaseConfig,
     EnvironmentConfig,
     ConfigLoader,

@@ -11,16 +11,16 @@ from typing import Any, List
 
 import pytest
 
-from src.cli.unified_io import UnifiedIO
-from src.cli.mode_utils import is_tui_mode, get_output_sink
-from src.infrastructure.progress import (
+from scrappy.cli.unified_io import UnifiedIO
+from scrappy.cli.mode_utils import is_tui_mode, get_output_sink
+from scrappy.infrastructure.progress import (
     create_progress_reporter,
     NullProgressReporter,
     RichProgressReporter,
     LiveProgressReporter,
     UnifiedIOProgressReporter,
 )
-from src.task_router.output_handler import (
+from scrappy.task_router.output_handler import (
     create_output_handler,
     NullOutputHandler,
     CLIIOOutputHandler,

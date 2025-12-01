@@ -10,9 +10,9 @@ import os
 import pytest
 from pathlib import Path
 
-from src.cli.config_factory import get_config, reset_config, CLIConfigFactory
-from src.cli.cli_config import CLIConfig
-from src.infrastructure.theme import (
+from scrappy.cli.config_factory import get_config, reset_config, CLIConfigFactory
+from scrappy.cli.cli_config import CLIConfig
+from scrappy.infrastructure.theme import (
     ThemeProtocol,
     ScrappyTheme,
     LightTheme,

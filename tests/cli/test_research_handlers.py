@@ -8,9 +8,9 @@ import pytest
 from unittest.mock import Mock, MagicMock
 from typing import List
 
-from src.task_router.protocols import QueryIntent, IntentResult
-from src.cli.research_handlers.base import ClassificationResult
-from src.protocols.io import CLIIOProtocol
+from scrappy.task_router.protocols import QueryIntent, IntentResult
+from scrappy.cli.research_handlers.base import ClassificationResult
+from scrappy.protocols.io import CLIIOProtocol
 
 
 # =============================================================================
@@ -82,8 +82,8 @@ class TestResearchHandlerProtocol:
 
     def test_handler_has_intent_property(self):
         """Handler must expose which intent it handles."""
-        from src.cli.research_handlers.base import ResearchHandler
-        from src.cli.research_handlers.file_structure import FileStructureHandler
+        from scrappy.cli.research_handlers.base import ResearchHandler
+        from scrappy.cli.research_handlers.file_structure import FileStructureHandler
 
         handler = FileStructureHandler()
         assert hasattr(handler, 'intent')
@@ -95,7 +95,7 @@ class TestResearchHandlerProtocol:
 
     def test_execute_uses_io_for_progress(self, mock_agent, mock_io, sample_classification):
         """execute() should report progress via io interface."""
-        from src.cli.research_handlers.file_structure import FileStructureHandler
+        from scrappy.cli.research_handlers.file_structure import FileStructureHandler
 
         handler = FileStructureHandler()
         handler.execute(mock_agent, sample_classification, mock_io)
@@ -113,14 +113,14 @@ class TestFileStructureHandler:
 
     def test_handles_file_structure_intent(self):
         """Handler identifies as FILE_STRUCTURE intent handler."""
-        from src.cli.research_handlers.file_structure import FileStructureHandler
+        from scrappy.cli.research_handlers.file_structure import FileStructureHandler
 
         handler = FileStructureHandler()
         assert handler.intent == QueryIntent.FILE_STRUCTURE
 
     def test_lists_directory_structure(self, mock_agent, mock_io, sample_classification):
         """Handler calls list_directory tool and returns formatted result."""
-        from src.cli.research_handlers.file_structure import FileStructureHandler
+        from scrappy.cli.research_handlers.file_structure import FileStructureHandler
 
         handler = FileStructureHandler()
         results = handler.execute(mock_agent, sample_classification, mock_io)
@@ -131,7 +131,7 @@ class TestFileStructureHandler:
 
     def test_handles_tool_error_gracefully(self, mock_agent, mock_io, sample_classification):
         """Handler returns empty list when tool raises exception."""
-        from src.cli.research_handlers.file_structure import FileStructureHandler
+        from scrappy.cli.research_handlers.file_structure import FileStructureHandler
 
         mock_agent._tool_list_directory.side_effect = Exception("Permission denied")
 
@@ -143,7 +143,7 @@ class TestFileStructureHandler:
 
     def test_reports_warning_on_error(self, mock_agent, mock_io, sample_classification):
         """Handler reports warning to io when tool fails."""
-        from src.cli.research_handlers.file_structure import FileStructureHandler
+        from scrappy.cli.research_handlers.file_structure import FileStructureHandler
 
         mock_agent._tool_list_directory.side_effect = Exception("Permission denied")
 
@@ -164,14 +164,14 @@ class TestGitHistoryHandler:
 
     def test_handles_git_history_intent(self):
         """Handler identifies as GIT_HISTORY intent handler."""
-        from src.cli.research_handlers.git_history import GitHistoryHandler
+        from scrappy.cli.research_handlers.git_history import GitHistoryHandler
 
         handler = GitHistoryHandler()
         assert handler.intent == QueryIntent.GIT_HISTORY
 
     def test_gets_git_log(self, mock_agent, mock_io, sample_classification):
         """Handler retrieves git log."""
-        from src.cli.research_handlers.git_history import GitHistoryHandler
+        from scrappy.cli.research_handlers.git_history import GitHistoryHandler
 
         handler = GitHistoryHandler()
         results = handler.execute(mock_agent, sample_classification, mock_io)
@@ -182,7 +182,7 @@ class TestGitHistoryHandler:
 
     def test_gets_git_status(self, mock_agent, mock_io, sample_classification):
         """Handler also retrieves git status."""
-        from src.cli.research_handlers.git_history import GitHistoryHandler
+        from scrappy.cli.research_handlers.git_history import GitHistoryHandler
 
         handler = GitHistoryHandler()
         results = handler.execute(mock_agent, sample_classification, mock_io)
@@ -201,8 +201,8 @@ class TestResearchHandlerRegistry:
 
     def test_register_handler(self):
         """Registry can register a handler."""
-        from src.cli.research_handlers.registry import ResearchHandlerRegistry
-        from src.cli.research_handlers.file_structure import FileStructureHandler
+        from scrappy.cli.research_handlers.registry import ResearchHandlerRegistry
+        from scrappy.cli.research_handlers.file_structure import FileStructureHandler
 
         registry = ResearchHandlerRegistry()
         handler = FileStructureHandler()
@@ -214,7 +214,7 @@ class TestResearchHandlerRegistry:
 
     def test_get_handler_returns_none_for_unregistered(self):
         """Registry returns None for unregistered intents."""
-        from src.cli.research_handlers.registry import ResearchHandlerRegistry
+        from scrappy.cli.research_handlers.registry import ResearchHandlerRegistry
 
         registry = ResearchHandlerRegistry()
 
@@ -223,9 +223,9 @@ class TestResearchHandlerRegistry:
 
     def test_register_multiple_handlers(self):
         """Registry can hold multiple handlers."""
-        from src.cli.research_handlers.registry import ResearchHandlerRegistry
-        from src.cli.research_handlers.file_structure import FileStructureHandler
-        from src.cli.research_handlers.git_history import GitHistoryHandler
+        from scrappy.cli.research_handlers.registry import ResearchHandlerRegistry
+        from scrappy.cli.research_handlers.file_structure import FileStructureHandler
+        from scrappy.cli.research_handlers.git_history import GitHistoryHandler
 
         registry = ResearchHandlerRegistry()
 
@@ -240,9 +240,9 @@ class TestResearchHandlerRegistry:
 
     def test_list_registered_intents(self):
         """Registry can list all registered intents."""
-        from src.cli.research_handlers.registry import ResearchHandlerRegistry
-        from src.cli.research_handlers.file_structure import FileStructureHandler
-        from src.cli.research_handlers.git_history import GitHistoryHandler
+        from scrappy.cli.research_handlers.registry import ResearchHandlerRegistry
+        from scrappy.cli.research_handlers.file_structure import FileStructureHandler
+        from scrappy.cli.research_handlers.git_history import GitHistoryHandler
 
         registry = ResearchHandlerRegistry()
         registry.register(FileStructureHandler())
@@ -266,7 +266,7 @@ class TestHandlerIntegration:
 
     def test_handlers_are_stateless(self, mock_agent, mock_io):
         """Handlers should be stateless - multiple calls work correctly."""
-        from src.cli.research_handlers.file_structure import FileStructureHandler
+        from scrappy.cli.research_handlers.file_structure import FileStructureHandler
 
         classification = ClassificationResult(
             query="Show files",

@@ -7,7 +7,7 @@ Tests LLMResponse, NullContext, AgentOrchestratorAdapter, and SimpleLLMAdapter.
 import pytest
 from unittest.mock import Mock, MagicMock, patch
 
-from src.orchestrator_adapter import (
+from scrappy.orchestrator_adapter import (
     LLMResponse,
     NullContext,
     ContextProvider,
@@ -78,7 +78,7 @@ class TestLLMResponse:
     @pytest.mark.unit
     def test_tool_calls_can_be_set(self):
         """Test that tool_calls can be populated with ToolCall objects."""
-        from src.providers.base import ToolCall
+        from scrappy.providers.base import ToolCall
 
         tool_calls = [
             ToolCall(id="call_1", name="read_file", arguments={"path": "/test.py"}),
@@ -165,7 +165,7 @@ class TestAgentOrchestratorAdapterSelectionType:
     @pytest.mark.unit
     def test_adapter_passes_explicit_selection_type(self):
         """Adapter should pass selection_type when explicitly provided."""
-        from src.orchestrator.model_selection import ModelSelectionType
+        from scrappy.orchestrator.model_selection import ModelSelectionType
 
         # Create mock orchestrator
         mock_orch = Mock()

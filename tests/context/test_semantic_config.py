@@ -9,7 +9,7 @@ Tests cover:
 
 import pytest
 
-from src.context.semantic.config import SemanticIndexConfig
+from scrappy.context.semantic.config import SemanticIndexConfig
 
 
 class TestSemanticIndexConfigDefaults:

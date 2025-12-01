@@ -23,7 +23,7 @@ class MockApiKeyConfigService:
 
     def load(self):
         """Mock load - returns in-memory config."""
-        from src.infrastructure.config.api_keys import ApiKeyConfig
+        from scrappy.infrastructure.config.api_keys import ApiKeyConfig
         self.load_called = True
         return ApiKeyConfig(api_keys=self.keys.copy())
 

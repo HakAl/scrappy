@@ -10,8 +10,8 @@ Verifies that:
 import pytest
 from unittest.mock import MagicMock, patch
 
-from src.cli.cli_config import CLIConfig
-from src.infrastructure.theme import (
+from scrappy.cli.cli_config import CLIConfig
+from scrappy.infrastructure.theme import (
     ScrappyTheme,
     LightTheme,
     CustomTheme,
@@ -148,7 +148,7 @@ class TestCLIFactoryTheme:
 
     def test_get_io_interface_returns_io_with_existing_io(self):
         """get_io_interface should return existing IO if provided."""
-        from src.cli.utils.cli_factory import get_io_interface
+        from scrappy.cli.utils.cli_factory import get_io_interface
 
         existing_io = MagicMock()
         result = get_io_interface(io=existing_io, theme=CustomTheme())
@@ -156,15 +156,15 @@ class TestCLIFactoryTheme:
 
     def test_get_io_interface_returns_test_io_in_test_mode(self):
         """get_io_interface in test_mode should return TestIO."""
-        from src.cli.utils.cli_factory import get_io_interface
-        from src.cli.io_interface import TestIO
+        from scrappy.cli.utils.cli_factory import get_io_interface
+        from scrappy.cli.io_interface import TestIO
 
         result = get_io_interface(test_mode=True)
         assert isinstance(result, TestIO)
 
     def test_initialize_cli_handlers_uses_theme(self):
         """initialize_cli_handlers should pass theme to handlers."""
-        from src.cli.utils.cli_factory import initialize_cli_handlers
+        from scrappy.cli.utils.cli_factory import initialize_cli_handlers
         from datetime import datetime
 
         orchestrator = MagicMock()
@@ -172,19 +172,19 @@ class TestCLIFactoryTheme:
         io = MagicMock()
         theme = CustomTheme(accent="orange")
 
-        with patch("src.cli.utils.cli_factory.CLIContextCommands") as mock_ctx:
-            with patch("src.cli.utils.cli_factory.CLITaskRouterHandler") as mock_router:
-                with patch("src.cli.utils.cli_factory.CacheManager"):
-                    with patch("src.cli.utils.cli_factory.RateLimiter"):
-                        with patch("src.cli.utils.cli_factory.SessionPersistence"):
-                            with patch("src.cli.utils.cli_factory.CLISessionManager"):
-                                with patch("src.cli.utils.cli_factory.get_user_interaction"):
-                                    with patch("src.cli.utils.cli_factory.CLIDisplay"):
-                                        with patch("src.cli.utils.cli_factory.CLICodebaseAnalysis"):
-                                            with patch("src.cli.utils.cli_factory.CLITaskExecution"):
-                                                with patch("src.cli.utils.cli_factory.CLIMultiProvider"):
-                                                    with patch("src.cli.utils.cli_factory.CLISmartQuery"):
-                                                        with patch("src.cli.utils.cli_factory.CLIAgentManager"):
+        with patch("scrappy.cli.utils.cli_factory.CLIContextCommands") as mock_ctx:
+            with patch("scrappy.cli.utils.cli_factory.CLITaskRouterHandler") as mock_router:
+                with patch("scrappy.cli.utils.cli_factory.CacheManager"):
+                    with patch("scrappy.cli.utils.cli_factory.RateLimiter"):
+                        with patch("scrappy.cli.utils.cli_factory.SessionPersistence"):
+                            with patch("scrappy.cli.utils.cli_factory.CLISessionManager"):
+                                with patch("scrappy.cli.utils.cli_factory.get_user_interaction"):
+                                    with patch("scrappy.cli.utils.cli_factory.CLIDisplay"):
+                                        with patch("scrappy.cli.utils.cli_factory.CLICodebaseAnalysis"):
+                                            with patch("scrappy.cli.utils.cli_factory.CLITaskExecution"):
+                                                with patch("scrappy.cli.utils.cli_factory.CLIMultiProvider"):
+                                                    with patch("scrappy.cli.utils.cli_factory.CLISmartQuery"):
+                                                        with patch("scrappy.cli.utils.cli_factory.CLIAgentManager"):
                                                             initialize_cli_handlers(
                                                                 orchestrator,
                                                                 datetime.now(),
@@ -221,7 +221,7 @@ class TestCLICoreTheme:
 
     def test_cli_stores_theme(self):
         """CLI should store the theme."""
-        from src.cli.core import CLI
+        from scrappy.cli.core import CLI
 
         theme = CustomTheme(primary="magenta")
 
@@ -229,25 +229,25 @@ class TestCLICoreTheme:
             mock_orch.return_value = MagicMock()
             with patch.object(CLI, "_create_default_io") as mock_io:
                 mock_io.return_value = MagicMock()
-                with patch("src.cli.core.initialize_cli_handlers", return_value=self._mock_handlers()):
+                with patch("scrappy.cli.core.initialize_cli_handlers", return_value=self._mock_handlers()):
                     cli = CLI(theme=theme)
                     assert cli._theme is theme
 
     def test_cli_uses_default_theme(self):
         """CLI without theme should use DEFAULT_THEME."""
-        from src.cli.core import CLI
+        from scrappy.cli.core import CLI
 
         with patch.object(CLI, "_create_default_orchestrator") as mock_orch:
             mock_orch.return_value = MagicMock()
             with patch.object(CLI, "_create_default_io") as mock_io:
                 mock_io.return_value = MagicMock()
-                with patch("src.cli.core.initialize_cli_handlers", return_value=self._mock_handlers()):
+                with patch("scrappy.cli.core.initialize_cli_handlers", return_value=self._mock_handlers()):
                     cli = CLI()
                     assert cli._theme is DEFAULT_THEME
 
     def test_cli_passes_theme_to_handlers(self):
         """CLI should pass theme to initialize_cli_handlers."""
-        from src.cli.core import CLI
+        from scrappy.cli.core import CLI
 
         theme = CustomTheme(accent="orange")
 
@@ -255,7 +255,7 @@ class TestCLICoreTheme:
             mock_orch.return_value = MagicMock()
             with patch.object(CLI, "_create_default_io") as mock_io:
                 mock_io.return_value = MagicMock()
-                with patch("src.cli.core.initialize_cli_handlers") as mock_init:
+                with patch("scrappy.cli.core.initialize_cli_handlers") as mock_init:
                     mock_init.return_value = self._mock_handlers()
                     CLI(theme=theme)
                     mock_init.assert_called_once()
@@ -268,8 +268,8 @@ class TestCreateCliFromContext:
 
     def test_passes_theme_to_cli(self):
         """create_cli_from_context should pass theme to CLI."""
-        from src.cli.utils.cli_factory import create_cli_from_context
-        from src.cli.core import CLI
+        from scrappy.cli.utils.cli_factory import create_cli_from_context
+        from scrappy.cli.core import CLI
 
         ctx = MagicMock()
         ctx.obj = {}
@@ -284,8 +284,8 @@ class TestCreateCliFromContext:
 
     def test_uses_default_theme_when_not_provided(self):
         """create_cli_from_context without theme should use DEFAULT_THEME."""
-        from src.cli.utils.cli_factory import create_cli_from_context
-        from src.cli.core import CLI
+        from scrappy.cli.utils.cli_factory import create_cli_from_context
+        from scrappy.cli.core import CLI
 
         ctx = MagicMock()
         ctx.obj = {}
@@ -303,8 +303,8 @@ class TestCreateCli:
 
     def test_passes_theme_to_cli(self):
         """create_cli should pass theme to CLI."""
-        from src.cli.utils.cli_factory import create_cli
-        from src.cli.core import CLI
+        from scrappy.cli.utils.cli_factory import create_cli
+        from scrappy.cli.core import CLI
 
         theme = LightTheme()
 
@@ -317,8 +317,8 @@ class TestCreateCli:
 
     def test_uses_default_theme_when_not_provided(self):
         """create_cli without theme should use DEFAULT_THEME."""
-        from src.cli.utils.cli_factory import create_cli
-        from src.cli.core import CLI
+        from scrappy.cli.utils.cli_factory import create_cli
+        from scrappy.cli.core import CLI
 
         with patch.object(CLI, "__init__", return_value=None) as mock_init:
             with patch.object(CLI, "initialize"):

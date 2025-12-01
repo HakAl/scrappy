@@ -14,7 +14,7 @@ class TestDisplaySessionRestored:
 
     def test_displays_basic_restoration_stats(self):
         """Should display all restored counts when session is loaded."""
-        from src.cli.utils.session_utils import display_session_restored
+        from scrappy.cli.utils.session_utils import display_session_restored
 
         io = MockIO()
         result = {
@@ -40,7 +40,7 @@ class TestDisplaySessionRestored:
 
     def test_displays_conversation_count(self):
         """Should display conversation message count when conversation exists."""
-        from src.cli.utils.session_utils import display_session_restored
+        from scrappy.cli.utils.session_utils import display_session_restored
 
         io = MockIO()
         result = {
@@ -65,7 +65,7 @@ class TestDisplaySessionRestored:
 
     def test_displays_last_conversation_messages(self):
         """Should display last few conversation messages."""
-        from src.cli.utils.session_utils import display_session_restored
+        from scrappy.cli.utils.session_utils import display_session_restored
 
         io = MockIO()
         conversation = [
@@ -100,7 +100,7 @@ class TestDisplaySessionRestored:
 
     def test_truncates_long_messages(self):
         """Should truncate messages longer than 100 characters."""
-        from src.cli.utils.session_utils import display_session_restored
+        from scrappy.cli.utils.session_utils import display_session_restored
 
         io = MockIO()
         long_message = 'A' * 150  # 150 character message
@@ -128,7 +128,7 @@ class TestDisplaySessionRestored:
 
     def test_handles_empty_conversation(self):
         """Should not display conversation section when no conversation."""
-        from src.cli.utils.session_utils import display_session_restored
+        from scrappy.cli.utils.session_utils import display_session_restored
 
         io = MockIO()
         result = {
@@ -152,7 +152,7 @@ class TestDisplaySessionRestored:
 
     def test_handles_missing_conversation_key(self):
         """Should handle result without conversation_history key."""
-        from src.cli.utils.session_utils import display_session_restored
+        from scrappy.cli.utils.session_utils import display_session_restored
 
         io = MockIO()
         result = {
@@ -175,7 +175,7 @@ class TestDisplaySessionRestored:
 
     def test_returns_conversation_for_assignment(self):
         """Should return conversation history for external assignment."""
-        from src.cli.utils.session_utils import display_session_restored
+        from scrappy.cli.utils.session_utils import display_session_restored
 
         io = MockIO()
         conversation = [
@@ -203,7 +203,7 @@ class TestDisplaySessionLoadError:
 
     def test_displays_no_session_message(self):
         """Should display appropriate message when no session exists."""
-        from src.cli.utils.session_utils import display_session_load_error
+        from scrappy.cli.utils.session_utils import display_session_load_error
 
         io = MockIO()
         result = {'status': 'no_session'}
@@ -216,7 +216,7 @@ class TestDisplaySessionLoadError:
 
     def test_displays_error_message(self):
         """Should display error message for other failures."""
-        from src.cli.utils.session_utils import display_session_load_error
+        from scrappy.cli.utils.session_utils import display_session_load_error
 
         io = MockIO()
         result = {
@@ -232,7 +232,7 @@ class TestDisplaySessionLoadError:
 
     def test_handles_missing_error_message(self):
         """Should display 'unknown' when error message is missing."""
-        from src.cli.utils.session_utils import display_session_load_error
+        from scrappy.cli.utils.session_utils import display_session_load_error
 
         io = MockIO()
         result = {'status': 'error'}
@@ -248,7 +248,7 @@ class TestDisplaySessionSaved:
 
     def test_displays_save_path(self):
         """Should display the path where session was saved."""
-        from src.cli.utils.session_utils import display_session_saved
+        from scrappy.cli.utils.session_utils import display_session_saved
 
         io = MockIO()
 
@@ -259,7 +259,7 @@ class TestDisplaySessionSaved:
 
     def test_displays_conversation_count(self):
         """Should display number of conversation messages saved."""
-        from src.cli.utils.session_utils import display_session_saved
+        from scrappy.cli.utils.session_utils import display_session_saved
 
         io = MockIO()
 
@@ -271,7 +271,7 @@ class TestDisplaySessionSaved:
 
     def test_displays_resume_help_when_requested(self):
         """Should display resume help text when with_help=True."""
-        from src.cli.utils.session_utils import display_session_saved
+        from scrappy.cli.utils.session_utils import display_session_saved
 
         io = MockIO()
 
@@ -282,7 +282,7 @@ class TestDisplaySessionSaved:
 
     def test_no_help_by_default(self):
         """Should not display help text by default."""
-        from src.cli.utils.session_utils import display_session_saved
+        from scrappy.cli.utils.session_utils import display_session_saved
 
         io = MockIO()
 
@@ -298,7 +298,7 @@ class TestDisplaySessionSaveError:
 
     def test_displays_error_message(self):
         """Should display the error that occurred during save."""
-        from src.cli.utils.session_utils import display_session_save_error
+        from scrappy.cli.utils.session_utils import display_session_save_error
 
         io = MockIO()
         error = Exception("Permission denied")
@@ -315,7 +315,7 @@ class TestDisplayPreviousSessionDetected:
 
     def test_displays_session_info(self):
         """Should display all session metadata."""
-        from src.cli.utils.session_utils import display_previous_session_detected
+        from scrappy.cli.utils.session_utils import display_previous_session_detected
 
         io = MockIO()
         session_info = {
@@ -337,7 +337,7 @@ class TestDisplayPreviousSessionDetected:
 
     def test_displays_conversation_indicator_when_present(self):
         """Should show conversation indicator when has_conversation is True."""
-        from src.cli.utils.session_utils import display_previous_session_detected
+        from scrappy.cli.utils.session_utils import display_previous_session_detected
 
         io = MockIO()
         session_info = {
@@ -357,7 +357,7 @@ class TestDisplayPreviousSessionDetected:
 
     def test_no_conversation_indicator_when_absent(self):
         """Should not show conversation indicator when has_conversation is False."""
-        from src.cli.utils.session_utils import display_previous_session_detected
+        from scrappy.cli.utils.session_utils import display_previous_session_detected
 
         io = MockIO()
         session_info = {
@@ -381,7 +381,7 @@ class TestDisplayPreviousSessionDetected:
 
     def test_handles_unknown_saved_at(self):
         """Should display 'unknown' when saved_at is missing."""
-        from src.cli.utils.session_utils import display_previous_session_detected
+        from scrappy.cli.utils.session_utils import display_previous_session_detected
 
         io = MockIO()
         session_info = {
@@ -402,7 +402,7 @@ class TestDisplayLastConversationMessages:
 
     def test_displays_user_messages_with_you_prefix(self):
         """Should prefix user messages with 'You:'."""
-        from src.cli.utils.session_utils import display_last_conversation_messages
+        from scrappy.cli.utils.session_utils import display_last_conversation_messages
 
         io = MockIO()
         conversation = [
@@ -417,7 +417,7 @@ class TestDisplayLastConversationMessages:
 
     def test_displays_assistant_messages_with_assistant_prefix(self):
         """Should prefix assistant messages with 'Assistant:'."""
-        from src.cli.utils.session_utils import display_last_conversation_messages
+        from scrappy.cli.utils.session_utils import display_last_conversation_messages
 
         io = MockIO()
         conversation = [
@@ -432,7 +432,7 @@ class TestDisplayLastConversationMessages:
 
     def test_limits_to_max_messages(self):
         """Should only display last N messages."""
-        from src.cli.utils.session_utils import display_last_conversation_messages
+        from scrappy.cli.utils.session_utils import display_last_conversation_messages
 
         io = MockIO()
         conversation = [
@@ -451,7 +451,7 @@ class TestDisplayLastConversationMessages:
 
     def test_truncates_at_specified_length(self):
         """Should truncate messages at specified character limit."""
-        from src.cli.utils.session_utils import display_last_conversation_messages
+        from scrappy.cli.utils.session_utils import display_last_conversation_messages
 
         io = MockIO()
         long_message = 'X' * 200
@@ -470,7 +470,7 @@ class TestDisplayLastConversationMessages:
 
     def test_shows_header_by_default(self):
         """Should display 'Last conversation:' header."""
-        from src.cli.utils.session_utils import display_last_conversation_messages
+        from scrappy.cli.utils.session_utils import display_last_conversation_messages
 
         io = MockIO()
         conversation = [
@@ -486,7 +486,7 @@ class TestDisplayLastConversationMessages:
 
     def test_handles_missing_role(self):
         """Should handle messages with missing role key."""
-        from src.cli.utils.session_utils import display_last_conversation_messages
+        from scrappy.cli.utils.session_utils import display_last_conversation_messages
 
         io = MockIO()
         conversation = [
@@ -506,7 +506,7 @@ class TestDisplaySessionNotSavedWarning:
 
     def test_displays_not_saved_message(self):
         """Should display message that session was not saved."""
-        from src.cli.utils.session_utils import display_session_not_saved_warning
+        from scrappy.cli.utils.session_utils import display_session_not_saved_warning
 
         io = MockIO()
 
@@ -517,7 +517,7 @@ class TestDisplaySessionNotSavedWarning:
 
     def test_displays_manual_save_hint(self):
         """Should hint about manual save option."""
-        from src.cli.utils.session_utils import display_session_not_saved_warning
+        from scrappy.cli.utils.session_utils import display_session_not_saved_warning
 
         io = MockIO()
 
@@ -533,7 +533,7 @@ class TestIntegration:
 
     def test_full_session_restore_flow(self):
         """Test complete session restoration display flow."""
-        from src.cli.utils.session_utils import (
+        from scrappy.cli.utils.session_utils import (
             display_session_restored,
             display_session_load_error
         )
@@ -567,7 +567,7 @@ class TestIntegration:
 
     def test_handles_all_error_states(self):
         """Test that all error states are handled correctly."""
-        from src.cli.utils.session_utils import display_session_load_error
+        from scrappy.cli.utils.session_utils import display_session_load_error
 
         # No session
         io = MockIO()

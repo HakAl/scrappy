@@ -6,7 +6,7 @@ from pathlib import Path
 from datetime import datetime
 import json
 
-from src.context import CodebaseContext
+from scrappy.context import CodebaseContext
 
 
 class TestCodebaseContextBasics:

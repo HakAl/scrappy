@@ -13,7 +13,7 @@ class TestNeedsToolSupport:
 
     def setup_method(self):
         """Import the module under test."""
-        from src.cli.tool_detector import needs_tool_support
+        from scrappy.cli.tool_detector import needs_tool_support
         self.needs_tool_support = needs_tool_support
 
     # =========================================================================

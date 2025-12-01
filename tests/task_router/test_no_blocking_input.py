@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from src.task_router.config import ClarificationConfig
+from scrappy.task_router.config import ClarificationConfig
 
 
 class TestNoBlockingInput:
@@ -86,7 +86,7 @@ class TestInputProtocolImplementations:
 
     def test_default_console_input_implements_protocol(self):
         """DefaultConsoleInput should implement TaskRouterInputProtocol."""
-        from src.task_router.protocols import (
+        from scrappy.task_router.protocols import (
             DefaultConsoleInput,
             TaskRouterInputProtocol,
         )
@@ -108,8 +108,8 @@ class TestInputProtocolImplementations:
         """InteractiveClarifier should accept TaskRouterInputProtocol."""
         from unittest.mock import MagicMock
 
-        from src.task_router.classifier import ClassifiedTask, TaskType
-        from src.task_router.intent_clarifier import InteractiveClarifier
+        from scrappy.task_router.classifier import ClassifiedTask, TaskType
+        from scrappy.task_router.intent_clarifier import InteractiveClarifier
 
         # Create mock IO
         mock_io = MagicMock()
@@ -145,7 +145,7 @@ class TestTaskRouterInputHandler:
         """TaskRouter should accept input_handler parameter."""
         from unittest.mock import MagicMock
 
-        from src.task_router.router import TaskRouter
+        from scrappy.task_router.router import TaskRouter
 
         mock_input = MagicMock()
         router = TaskRouter(input_handler=mock_input, clarification_config=ClarificationConfig())
@@ -154,8 +154,8 @@ class TestTaskRouterInputHandler:
 
     def test_task_router_creates_default_input_handler(self):
         """TaskRouter should create DefaultConsoleInput if no input_handler provided."""
-        from src.task_router.protocols import DefaultConsoleInput
-        from src.task_router.router import TaskRouter
+        from scrappy.task_router.protocols import DefaultConsoleInput
+        from scrappy.task_router.router import TaskRouter
 
         router = TaskRouter(clarification_config=ClarificationConfig())
 
@@ -163,7 +163,7 @@ class TestTaskRouterInputHandler:
 
     def test_task_router_shares_input_handler_with_clarifier(self):
         """TaskRouter should share input_handler with InteractiveClarifier by default."""
-        from src.task_router.router import TaskRouter
+        from scrappy.task_router.router import TaskRouter
 
         router = TaskRouter(clarification_config=ClarificationConfig())
 

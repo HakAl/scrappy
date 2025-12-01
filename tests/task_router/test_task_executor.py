@@ -3,8 +3,8 @@ Tests for TaskExecutor - planning, reasoning, and synthesis operations.
 """
 import pytest
 from unittest.mock import Mock, MagicMock
-from src.orchestrator.task_executor import TaskExecutor
-from src.providers import LLMResponse
+from scrappy.orchestrator.task_executor import TaskExecutor
+from scrappy.providers import LLMResponse
 
 
 class TestTaskExecutorSimpleTaskDetection:

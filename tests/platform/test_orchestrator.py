@@ -12,8 +12,8 @@ from tests.helpers import (
     FakeCommandValidator,
     FakeCommandExecutor
 )
-from src.platform.orchestrator import SmartPlatformOrchestrator
-from src.platform.protocols.execution import ExecutionResult
+from scrappy.platform.orchestrator import SmartPlatformOrchestrator
+from scrappy.platform.protocols.execution import ExecutionResult
 
 
 class TestOrchestratorBasicBehavior:

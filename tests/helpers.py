@@ -9,11 +9,11 @@ from unittest.mock import Mock
 from pathlib import Path
 import tempfile
 
-from src.providers.base import LLMResponse
-from src.orchestrator_adapter import NullContext, ContextProvider
-from src.infrastructure import InMemoryFileSystem, FileSystemProtocol
-from src.infrastructure.protocols import PathProviderProtocol
-from src.cli.session_context import SessionContext
+from scrappy.providers.base import LLMResponse
+from scrappy.orchestrator_adapter import NullContext, ContextProvider
+from scrappy.infrastructure import InMemoryFileSystem, FileSystemProtocol
+from scrappy.infrastructure.protocols import PathProviderProtocol
+from scrappy.cli.session_context import SessionContext
 
 
 class TestPathProvider:
@@ -1030,7 +1030,7 @@ def assert_delegate_called_with(
 # Intent Classification Test Helpers
 # =============================================================================
 
-from src.task_router.protocols import (
+from scrappy.task_router.protocols import (
     IntentClassifierProtocol,
     EntityExtractorProtocol,
     ActionResolverProtocol,
@@ -1339,7 +1339,7 @@ def create_test_rate_limit_tracker(
         tracker.record_request('openai', 'gpt-4', 100, 50)
         assert tracker.get_remaining('openai', limits).usage_today == 1
     """
-    from src.orchestrator.rate_limiting import RateLimitTracker
+    from scrappy.orchestrator.rate_limiting import RateLimitTracker
 
     storage = FakeStorage()
     policy = FakePolicy(reset_flags=reset_flags)
@@ -1361,7 +1361,7 @@ def create_test_rate_limit_tracker(
 # Command Tool Protocol Test Doubles
 # =============================================================================
 
-from src.agent_tools.protocols import (
+from scrappy.agent_tools.protocols import (
     ExecutionResult,
     CommandSecurityProtocol,
     OutputParserProtocol,
@@ -1698,7 +1698,7 @@ class FakeCommandExecutor:
         timeout: int = 30
     ):
         """Execute command (fake)."""
-        from src.platform.protocols.execution import ExecutionResult
+        from scrappy.platform.protocols.execution import ExecutionResult
 
         self.commands_executed.append(command)
 

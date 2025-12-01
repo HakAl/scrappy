@@ -11,7 +11,7 @@ Following CLAUDE.md guidelines:
 
 import pytest
 from unittest.mock import Mock
-from src.orchestrator.context_coordinator import ContextCoordinator
+from scrappy.orchestrator.context_coordinator import ContextCoordinator
 
 class MockCodebaseContext:
     """Test double for CodebaseContext."""

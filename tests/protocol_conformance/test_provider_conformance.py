@@ -11,7 +11,7 @@ from tests.protocol_conformance.conftest import (
     assert_has_property,
 )
 
-from src.providers.base import LLMProviderProtocol, LLMProviderBase
+from scrappy.providers.base import LLMProviderProtocol, LLMProviderBase
 
 
 class TestLLMProviderProtocolDefinition:
@@ -60,7 +60,7 @@ class TestGroqProviderConformance:
     @pytest.fixture
     def provider_class(self):
         """Get GroqProvider class."""
-        from src.providers.groq_provider import GroqProvider
+        from scrappy.providers.groq_provider import GroqProvider
         return GroqProvider
 
     def test_groq_implements_protocol(self, provider_class):
@@ -94,7 +94,7 @@ class TestCerebrasProviderConformance:
     @pytest.fixture
     def provider_class(self):
         """Get CerebrasProvider class."""
-        from src.providers.cerebras_provider import CerebrasProvider
+        from scrappy.providers.cerebras_provider import CerebrasProvider
         return CerebrasProvider
 
     def test_cerebras_implements_protocol(self, provider_class):
@@ -116,7 +116,7 @@ class TestCohereProviderConformance:
     @pytest.fixture
     def provider_class(self):
         """Get CohereProvider class."""
-        from src.providers.cohere_provider import CohereProvider
+        from scrappy.providers.cohere_provider import CohereProvider
         return CohereProvider
 
     def test_cohere_implements_protocol(self, provider_class):
@@ -138,7 +138,7 @@ class TestGeminiProviderConformance:
     @pytest.fixture
     def provider_class(self):
         """Get GeminiProvider class."""
-        from src.providers.gemini_provider import GeminiProvider
+        from scrappy.providers.gemini_provider import GeminiProvider
         return GeminiProvider
 
     def test_gemini_implements_protocol(self, provider_class):
@@ -160,7 +160,7 @@ class TestGitHubModelsProviderConformance:
     @pytest.fixture
     def provider_class(self):
         """Get GitHubModelsProvider class."""
-        from src.providers.github_models_provider import GitHubModelsProvider
+        from scrappy.providers.github_models_provider import GitHubModelsProvider
         return GitHubModelsProvider
 
     def test_github_implements_protocol(self, provider_class):
@@ -182,19 +182,19 @@ class TestProviderRegistryConformance:
 
     def test_registry_has_register(self):
         """ProviderRegistry should have register method."""
-        from src.providers.registry import ProviderRegistry
+        from scrappy.providers.registry import ProviderRegistry
 
         assert_has_method(ProviderRegistry, 'register')
 
     def test_registry_has_get(self):
         """ProviderRegistry should have get method."""
-        from src.providers.registry import ProviderRegistry
+        from scrappy.providers.registry import ProviderRegistry
 
         assert_has_method(ProviderRegistry, 'get')
 
     def test_registry_has_list_all(self):
         """ProviderRegistry should have list_all method."""
-        from src.providers.registry import ProviderRegistry
+        from scrappy.providers.registry import ProviderRegistry
 
         assert_has_method(ProviderRegistry, 'list_all')
 
@@ -204,7 +204,7 @@ class TestProviderSignatures:
 
     def test_chat_accepts_messages(self):
         """chat() should accept messages list as first parameter."""
-        from src.providers.base import LLMProviderBase
+        from scrappy.providers.base import LLMProviderBase
         import inspect
 
         sig = inspect.signature(LLMProviderBase.chat)
@@ -215,7 +215,7 @@ class TestProviderSignatures:
 
     def test_chat_accepts_optional_model(self):
         """chat() should accept optional model parameter."""
-        from src.providers.base import LLMProviderBase
+        from scrappy.providers.base import LLMProviderBase
         import inspect
 
         sig = inspect.signature(LLMProviderBase.chat)
@@ -227,7 +227,7 @@ class TestProviderSignatures:
 
     def test_chat_accepts_kwargs(self):
         """chat() should accept **kwargs for provider-specific params."""
-        from src.providers.base import LLMProviderBase
+        from scrappy.providers.base import LLMProviderBase
         import inspect
 
         sig = inspect.signature(LLMProviderBase.chat)

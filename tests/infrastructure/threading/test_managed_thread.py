@@ -11,7 +11,7 @@ from typing import List, Optional
 
 import pytest
 
-from src.infrastructure.threading import ManagedThread
+from scrappy.infrastructure.threading import ManagedThread
 
 
 class TestManagedThread:

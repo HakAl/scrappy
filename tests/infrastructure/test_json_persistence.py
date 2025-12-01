@@ -10,8 +10,8 @@ import json
 import tempfile
 from pathlib import Path
 
-from src.infrastructure.persistence import JSONPersistence
-from src.orchestrator.output import CapturingOutput
+from scrappy.infrastructure.persistence import JSONPersistence
+from scrappy.orchestrator.output import CapturingOutput
 
 
 class TestJSONPersistenceLoad:

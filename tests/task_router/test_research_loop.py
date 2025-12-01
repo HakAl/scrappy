@@ -13,8 +13,8 @@ conversation with the LLM, including:
 
 import pytest
 from unittest.mock import Mock
-from src.task_router.strategies.research_loop import ResearchLoop
-from src.task_router.classifier import ClassifiedTask, TaskType
+from scrappy.task_router.strategies.research_loop import ResearchLoop
+from scrappy.task_router.classifier import ClassifiedTask, TaskType
 
 
 # Test Doubles
@@ -538,7 +538,7 @@ def test_json_only_response_without_tools_available_returns_nonempty(simple_task
 
     EXPECTED: Should return a user-friendly message, not empty string.
     """
-    from src.task_router.strategies.response_cleaner import ResponseCleaner
+    from scrappy.task_router.strategies.response_cleaner import ResponseCleaner
 
     orchestrator = Mock()
     # LLM outputs only tool-call JSON (common with llama3.1-8b)
@@ -579,7 +579,7 @@ def test_rejected_tool_due_to_allowed_list_returns_nonempty(simple_task):
 
     EXPECTED: Should return a user-friendly message, not empty string.
     """
-    from src.task_router.strategies.response_cleaner import ResponseCleaner
+    from scrappy.task_router.strategies.response_cleaner import ResponseCleaner
 
     orchestrator = Mock()
     # LLM tries to use read_file tool
@@ -621,7 +621,7 @@ def test_malformed_tool_json_returns_nonempty(simple_task):
 
     EXPECTED: Should return a user-friendly message, not empty string.
     """
-    from src.task_router.strategies.response_cleaner import ResponseCleaner
+    from scrappy.task_router.strategies.response_cleaner import ResponseCleaner
 
     orchestrator = Mock()
     # LLM outputs malformed tool call (missing closing brace)

@@ -5,8 +5,8 @@ from unittest.mock import Mock, patch, MagicMock, AsyncMock
 from types import SimpleNamespace
 
 # Assumes the class is in src/providers/cerebras_provider.py
-from src.providers.cerebras_provider import CerebrasProvider
-from src.providers.base import LLMResponse, ToolCall, ProviderLimits
+from scrappy.providers.cerebras_provider import CerebrasProvider
+from scrappy.providers.base import LLMResponse, ToolCall, ProviderLimits
 
 
 # -----------------------------------------------------------------------------
@@ -23,7 +23,7 @@ def mock_env():
 @pytest.fixture
 def mock_openai_client():
     """Mocks the OpenAI class and the returned client instance."""
-    with patch("src.providers.cerebras_provider.OpenAI") as MockClass:
+    with patch("scrappy.providers.cerebras_provider.OpenAI") as MockClass:
         mock_client = Mock()
         MockClass.return_value = mock_client
         yield MockClass, mock_client
@@ -85,7 +85,7 @@ def test_init_raises_missing_key():
     """Test initialization fails if no key provided."""
     with patch.dict(os.environ, {}, clear=True):
         # We also need to mock safe_import or OPENAI_AVAILABLE so it doesn't fail on that first
-        with patch("src.providers.cerebras_provider.OPENAI_AVAILABLE", True):
+        with patch("scrappy.providers.cerebras_provider.OPENAI_AVAILABLE", True):
             with pytest.raises(ValueError) as exc:  # raises raise_env_var_not_found
                 CerebrasProvider()
             assert "CEREBRAS_API_KEY" in str(exc.value)
@@ -93,7 +93,7 @@ def test_init_raises_missing_key():
 
 def test_init_raises_missing_package():
     """Test initialization fails if openai package is missing."""
-    with patch("src.providers.cerebras_provider.OPENAI_AVAILABLE", False):
+    with patch("scrappy.providers.cerebras_provider.OPENAI_AVAILABLE", False):
         with pytest.raises(ImportError) as exc:
             CerebrasProvider(api_key="test")
         assert "openai" in str(exc.value)
@@ -175,7 +175,7 @@ async def test_chat_async_success(provider):
     }
 
     # Mock httpx.AsyncClient
-    with patch("src.providers.cerebras_provider.httpx.AsyncClient") as MockClient:
+    with patch("scrappy.providers.cerebras_provider.httpx.AsyncClient") as MockClient:
         mock_instance = MockClient.return_value
         mock_instance.__aenter__.return_value = mock_instance
 
@@ -206,7 +206,7 @@ async def test_chat_async_rate_limit_retry(provider):
         "usage": {}
     }
 
-    with patch("src.providers.cerebras_provider.httpx.AsyncClient") as MockClient:
+    with patch("scrappy.providers.cerebras_provider.httpx.AsyncClient") as MockClient:
         mock_instance = MockClient.return_value
         mock_instance.__aenter__.return_value = mock_instance
 
@@ -236,7 +236,7 @@ async def test_chat_async_rate_limit_retry(provider):
 @pytest.mark.asyncio
 async def test_chat_async_exhausted_retries(provider):
     """Test that exception is raised after max retries."""
-    with patch("src.providers.cerebras_provider.httpx.AsyncClient") as MockClient:
+    with patch("scrappy.providers.cerebras_provider.httpx.AsyncClient") as MockClient:
         mock_instance = MockClient.return_value
         mock_instance.__aenter__.return_value = mock_instance
 
@@ -258,7 +258,7 @@ async def test_chat_async_fallback_if_no_httpx(provider):
     """Test fallback to parent method if httpx is missing."""
 
     # Simulate HTTPX_AVAILABLE = False
-    with patch("src.providers.cerebras_provider.HTTPX_AVAILABLE", False):
+    with patch("scrappy.providers.cerebras_provider.HTTPX_AVAILABLE", False):
         # Mock the super().chat_async behavior (which calls synchronous chat in a thread usually)
         # Since we can't easily patch super(), we rely on the fact that base.chat_async calls self.chat
 
@@ -288,7 +288,7 @@ def test_get_limits(provider):
 
 def test_get_model_info(provider):
     """Verify detailed model info retrieval."""
-    from src.providers.base import ModelInfo, SpeedRank, QualityRank
+    from scrappy.providers.base import ModelInfo, SpeedRank, QualityRank
 
     # Known model
     info = provider.get_model_info("llama3.1-8b")

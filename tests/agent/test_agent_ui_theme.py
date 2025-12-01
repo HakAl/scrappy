@@ -7,8 +7,8 @@ Verifies that AgentUI correctly uses theme colors for display.
 import pytest
 from unittest.mock import Mock, MagicMock
 
-from src.agent.ui import AgentUI
-from src.infrastructure.theme import (
+from scrappy.agent.ui import AgentUI
+from scrappy.infrastructure.theme import (
     DEFAULT_THEME,
     LightTheme,
     NoColorTheme,

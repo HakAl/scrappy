@@ -14,8 +14,8 @@ Integration tests with real providers are in other test files.
 
 import pytest
 from unittest.mock import Mock
-from src.orchestrator.delegation import DelegationManager
-from src.providers.base import LLMResponse
+from scrappy.orchestrator.delegation import DelegationManager
+from scrappy.providers.base import LLMResponse
 
 
 # Test Doubles

@@ -5,7 +5,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import Mock
 
-from src.context.augmenter import ContextAugmenter, NullContextAugmenter
+from scrappy.context.augmenter import ContextAugmenter, NullContextAugmenter
 
 
 @pytest.fixture

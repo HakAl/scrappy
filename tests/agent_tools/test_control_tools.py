@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from src.agent_tools.tools.control_tools import CompleteTool
-from src.agent_tools.tools.base import ToolContext
-from src.agent_config import AgentConfig
+from scrappy.agent_tools.tools.control_tools import CompleteTool
+from scrappy.agent_tools.tools.base import ToolContext
+from scrappy.agent_config import AgentConfig
 
 
 class TestCompleteTool:
@@ -84,7 +84,7 @@ class TestCompleteToolInRegistry:
 
     def test_registered_in_default_registry(self):
         """Verify CompleteTool is registered in default registry."""
-        from src.agent_tools.registry_factory import create_default_registry
+        from scrappy.agent_tools.registry_factory import create_default_registry
 
         registry = create_default_registry()
 
@@ -92,7 +92,7 @@ class TestCompleteToolInRegistry:
 
     def test_schema_in_openai_format(self):
         """Verify CompleteTool schema is in OpenAI format."""
-        from src.agent_tools.registry_factory import create_default_registry
+        from scrappy.agent_tools.registry_factory import create_default_registry
 
         registry = create_default_registry()
         schemas = registry.to_openai_schema()
@@ -110,7 +110,7 @@ class TestCompleteToolInRegistry:
 
     def test_can_execute_via_registry(self):
         """Verify CompleteTool can be executed via registry."""
-        from src.agent_tools.registry_factory import create_default_registry
+        from scrappy.agent_tools.registry_factory import create_default_registry
 
         registry = create_default_registry()
         context = ToolContext(project_root=Path("."), config=AgentConfig())

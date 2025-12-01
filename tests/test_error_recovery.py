@@ -7,13 +7,13 @@ from pathlib import Path
 import json
 from datetime import datetime
 
-from src.providers.base import LLMResponse, ProviderRegistry
-from src.orchestrator.cache import ResponseCache
-from src.orchestrator.memory import WorkingMemory
-from src.task_router.classifier import TaskClassifier, TaskType
-from src.task_router.config import ClarificationConfig
-from src.task_router.router import TaskRouter
-from src.context import CodebaseContext
+from scrappy.providers.base import LLMResponse, ProviderRegistry
+from scrappy.orchestrator.cache import ResponseCache
+from scrappy.orchestrator.memory import WorkingMemory
+from scrappy.task_router.classifier import TaskClassifier, TaskType
+from scrappy.task_router.config import ClarificationConfig
+from scrappy.task_router.router import TaskRouter
+from scrappy.context import CodebaseContext
 
 
 class TestProviderFailover:

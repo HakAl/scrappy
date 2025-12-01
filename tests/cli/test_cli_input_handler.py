@@ -14,7 +14,7 @@ class TestInputHandler:
 
     def setup_method(self):
         """Set up test fixtures."""
-        from src.cli.input_handler import InputHandler
+        from scrappy.cli.input_handler import InputHandler
         self.InputHandler = InputHandler
 
     # =========================================================================
@@ -278,8 +278,8 @@ class TestInputHandler:
 
     def test_read_interactive_input_rejects_too_long(self):
         """Should reject input exceeding max length."""
-        from src.cli.input_handler import InputTooLongError
-        from src.cli.config.defaults import MAX_INPUT_CHARS
+        from scrappy.cli.input_handler import InputTooLongError
+        from scrappy.cli.config.defaults import MAX_INPUT_CHARS
 
         # Create input just over the limit
         long_input = "x" * (MAX_INPUT_CHARS + 1)
@@ -294,8 +294,8 @@ class TestInputHandler:
 
     def test_read_interactive_input_rejects_too_many_lines(self):
         """Should reject input exceeding max lines."""
-        from src.cli.input_handler import InputTooLongError
-        from src.cli.config.defaults import MAX_INPUT_LINES
+        from scrappy.cli.input_handler import InputTooLongError
+        from scrappy.cli.config.defaults import MAX_INPUT_LINES
 
         # Create input with too many continuation lines
         lines = ["line\\"] * (MAX_INPUT_LINES + 1) + [""]
@@ -309,7 +309,7 @@ class TestInputHandler:
 
     def test_read_interactive_input_accepts_at_limit(self):
         """Should accept input exactly at max length."""
-        from src.cli.config.defaults import MAX_INPUT_CHARS
+        from scrappy.cli.config.defaults import MAX_INPUT_CHARS
 
         # Create input exactly at the limit
         at_limit_input = "x" * MAX_INPUT_CHARS

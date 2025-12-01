@@ -6,7 +6,7 @@ and maintain backward compatibility with existing code.
 """
 
 import pytest
-from src.exceptions.delegation import (
+from scrappy.exceptions.delegation import (
     DelegationError,
     RetryExhaustedError,
     CacheError,
@@ -17,7 +17,7 @@ from src.exceptions.delegation import (
     BatchSchedulingError,
     ProviderExecutionError,
 )
-from src.utils.errors import (
+from scrappy.utils.errors import (
     RateLimitError,
     AllProvidersRateLimitedError,
 )

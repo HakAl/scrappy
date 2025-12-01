@@ -2,8 +2,8 @@ import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
-from src.agent_tools.tools.python_tools import AnalyzePythonDependenciesTool
-from src.agent_tools.tools.base import ToolContext
+from scrappy.agent_tools.tools.python_tools import AnalyzePythonDependenciesTool
+from scrappy.agent_tools.tools.base import ToolContext
 
 
 # --- Fixtures ---

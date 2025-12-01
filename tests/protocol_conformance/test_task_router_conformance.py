@@ -15,7 +15,7 @@ from tests.protocol_conformance.conftest import (
     assert_has_property,
 )
 
-from src.task_router.protocols import (
+from scrappy.task_router.protocols import (
     OutputHandlerProtocol,
     ExecutionStrategyProtocol,
     TaskClassifierProtocol,
@@ -28,37 +28,37 @@ class TestOutputHandlerProtocolConformance:
 
     def test_console_handler_implements_protocol(self):
         """ConsoleOutputHandler should implement OutputHandlerProtocol."""
-        from src.task_router.output_handler import ConsoleOutputHandler
+        from scrappy.task_router.output_handler import ConsoleOutputHandler
 
         assert_implements_protocol(ConsoleOutputHandler, OutputHandlerProtocol)
 
     def test_buffer_handler_implements_protocol(self):
         """BufferOutputHandler should implement OutputHandlerProtocol."""
-        from src.task_router.output_handler import BufferOutputHandler
+        from scrappy.task_router.output_handler import BufferOutputHandler
 
         assert_implements_protocol(BufferOutputHandler, OutputHandlerProtocol)
 
     def test_null_handler_implements_protocol(self):
         """NullOutputHandler should implement OutputHandlerProtocol."""
-        from src.task_router.output_handler import NullOutputHandler
+        from scrappy.task_router.output_handler import NullOutputHandler
 
         assert_implements_protocol(NullOutputHandler, OutputHandlerProtocol)
 
     def test_file_handler_implements_protocol(self):
         """FileOutputHandler should implement OutputHandlerProtocol."""
-        from src.task_router.output_handler import FileOutputHandler
+        from scrappy.task_router.output_handler import FileOutputHandler
 
         assert_implements_protocol(FileOutputHandler, OutputHandlerProtocol)
 
     def test_cliio_handler_implements_protocol(self):
         """CLIIOOutputHandler should implement OutputHandlerProtocol."""
-        from src.task_router.output_handler import CLIIOOutputHandler
+        from scrappy.task_router.output_handler import CLIIOOutputHandler
 
         assert_implements_protocol(CLIIOOutputHandler, OutputHandlerProtocol)
 
     def test_rich_handler_implements_protocol(self):
         """RichOutputHandler should implement OutputHandlerProtocol."""
-        from src.task_router.output_handler import RichOutputHandler
+        from scrappy.task_router.output_handler import RichOutputHandler
 
         assert_implements_protocol(RichOutputHandler, OutputHandlerProtocol)
 
@@ -68,7 +68,7 @@ class TestOutputHandlerBehavior:
 
     def test_buffer_handler_captures_classification(self):
         """BufferOutputHandler should capture classification info."""
-        from src.task_router.output_handler import BufferOutputHandler
+        from scrappy.task_router.output_handler import BufferOutputHandler
 
         handler = BufferOutputHandler()
         handler.log_classification("RESEARCH", 0.85, 5, "Test reasoning")
@@ -80,7 +80,7 @@ class TestOutputHandlerBehavior:
 
     def test_buffer_handler_captures_provider(self):
         """BufferOutputHandler should capture provider selection."""
-        from src.task_router.output_handler import BufferOutputHandler
+        from scrappy.task_router.output_handler import BufferOutputHandler
 
         handler = BufferOutputHandler()
         handler.log_provider_selection("groq", "llama3", "test source")
@@ -92,7 +92,7 @@ class TestOutputHandlerBehavior:
 
     def test_buffer_handler_captures_execution(self):
         """BufferOutputHandler should capture execution start."""
-        from src.task_router.output_handler import BufferOutputHandler
+        from scrappy.task_router.output_handler import BufferOutputHandler
 
         handler = BufferOutputHandler()
         handler.log_execution_start("ResearchStrategy")
@@ -102,7 +102,7 @@ class TestOutputHandlerBehavior:
 
     def test_buffer_handler_captures_info(self):
         """BufferOutputHandler should capture info messages."""
-        from src.task_router.output_handler import BufferOutputHandler
+        from scrappy.task_router.output_handler import BufferOutputHandler
 
         handler = BufferOutputHandler()
         handler.log_info("Test info message")
@@ -112,7 +112,7 @@ class TestOutputHandlerBehavior:
 
     def test_null_handler_does_not_raise(self):
         """NullOutputHandler should accept calls without raising."""
-        from src.task_router.output_handler import NullOutputHandler
+        from scrappy.task_router.output_handler import NullOutputHandler
 
         handler = NullOutputHandler()
 
@@ -124,7 +124,7 @@ class TestOutputHandlerBehavior:
 
     def test_console_handler_without_io_is_silent(self):
         """ConsoleOutputHandler without IO should be silent (not raise)."""
-        from src.task_router.output_handler import ConsoleOutputHandler
+        from scrappy.task_router.output_handler import ConsoleOutputHandler
 
         handler = ConsoleOutputHandler(io=None)
 
@@ -152,13 +152,13 @@ class TestExecutionStrategyProtocolConformance:
 
     def test_direct_executor_implements_protocol(self):
         """DirectExecutor should implement ExecutionStrategyProtocol."""
-        from src.task_router.strategies.direct_executor import DirectExecutor
+        from scrappy.task_router.strategies.direct_executor import DirectExecutor
 
         assert_implements_protocol(DirectExecutor, ExecutionStrategyProtocol)
 
     def test_conversation_executor_implements_protocol(self):
         """ConversationExecutor should implement ExecutionStrategyProtocol."""
-        from src.task_router.strategies.conversation_executor import ConversationExecutor
+        from scrappy.task_router.strategies.conversation_executor import ConversationExecutor
 
         assert_implements_protocol(ConversationExecutor, ExecutionStrategyProtocol)
 
@@ -168,7 +168,7 @@ class TestExecutionStrategyBehavior:
 
     def test_direct_executor_has_name(self):
         """DirectExecutor.name should return a string."""
-        from src.task_router.strategies.direct_executor import DirectExecutor
+        from scrappy.task_router.strategies.direct_executor import DirectExecutor
 
         executor = DirectExecutor()
         assert isinstance(executor.name, str)
@@ -200,19 +200,19 @@ class TestIntentClarifierProtocolConformance:
 
     def test_interactive_clarifier_implements_protocol(self):
         """InteractiveClarifier should implement IntentClarifierProtocol."""
-        from src.task_router.intent_clarifier import InteractiveClarifier
+        from scrappy.task_router.intent_clarifier import InteractiveClarifier
 
         assert_implements_protocol(InteractiveClarifier, IntentClarifierProtocol)
 
     def test_auto_clarifier_implements_protocol(self):
         """AutoClarifier should implement IntentClarifierProtocol."""
-        from src.task_router.intent_clarifier import AutoClarifier
+        from scrappy.task_router.intent_clarifier import AutoClarifier
 
         assert_implements_protocol(AutoClarifier, IntentClarifierProtocol)
 
     def test_null_clarifier_implements_protocol(self):
         """NullClarifier should implement IntentClarifierProtocol."""
-        from src.task_router.intent_clarifier import NullClarifier
+        from scrappy.task_router.intent_clarifier import NullClarifier
 
         assert_implements_protocol(NullClarifier, IntentClarifierProtocol)
 
@@ -222,8 +222,8 @@ class TestIntentClarifierBehavior:
 
     def test_null_clarifier_returns_input_unchanged(self):
         """NullClarifier.clarify() should return task unchanged."""
-        from src.task_router.intent_clarifier import NullClarifier
-        from src.task_router.classifier import ClassifiedTask, TaskType
+        from scrappy.task_router.intent_clarifier import NullClarifier
+        from scrappy.task_router.classifier import ClassifiedTask, TaskType
 
         clarifier = NullClarifier()
         task = ClassifiedTask(
@@ -241,8 +241,8 @@ class TestIntentClarifierBehavior:
 
     def test_auto_clarifier_does_not_prompt(self):
         """AutoClarifier should not require user interaction."""
-        from src.task_router.intent_clarifier import AutoClarifier
-        from src.task_router.classifier import ClassifiedTask, TaskType
+        from scrappy.task_router.intent_clarifier import AutoClarifier
+        from scrappy.task_router.classifier import ClassifiedTask, TaskType
 
         clarifier = AutoClarifier()
         task = ClassifiedTask(
@@ -263,18 +263,18 @@ class TestDefaultConsoleInputConformance:
 
     def test_default_input_has_prompt(self):
         """DefaultConsoleInput should have prompt method."""
-        from src.task_router.protocols import DefaultConsoleInput
+        from scrappy.task_router.protocols import DefaultConsoleInput
 
         assert_has_method(DefaultConsoleInput, 'prompt')
 
     def test_default_input_has_confirm(self):
         """DefaultConsoleInput should have confirm method."""
-        from src.task_router.protocols import DefaultConsoleInput
+        from scrappy.task_router.protocols import DefaultConsoleInput
 
         assert_has_method(DefaultConsoleInput, 'confirm')
 
     def test_default_input_has_output(self):
         """DefaultConsoleInput should have output method."""
-        from src.task_router.protocols import DefaultConsoleInput
+        from scrappy.task_router.protocols import DefaultConsoleInput
 
         assert_has_method(DefaultConsoleInput, 'output')

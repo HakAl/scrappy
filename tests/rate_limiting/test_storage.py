@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 import pytest
 
-from src.orchestrator.rate_limiting.storage import RateLimitStorage
+from scrappy.orchestrator.rate_limiting.storage import RateLimitStorage
 from tests.helpers import FakeFileSystem
 
 

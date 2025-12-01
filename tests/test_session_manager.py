@@ -15,8 +15,8 @@ import tempfile
 import shutil
 from pathlib import Path
 from datetime import datetime
-from src.orchestrator.session import SessionManager
-from src.orchestrator.memory import WorkingMemory
+from scrappy.orchestrator.session import SessionManager
+from scrappy.orchestrator.memory import WorkingMemory
 
 
 @pytest.fixture

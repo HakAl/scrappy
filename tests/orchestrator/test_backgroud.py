@@ -1,6 +1,6 @@
 import pytest
 import asyncio
-from src.orchestrator.background import BackgroundTaskManager
+from scrappy.orchestrator.background import BackgroundTaskManager
 
 
 @pytest.fixture

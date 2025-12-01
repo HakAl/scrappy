@@ -11,7 +11,7 @@ import pytest
 from unittest.mock import Mock, MagicMock
 from pathlib import Path
 
-from src.task_router import (
+from scrappy.task_router import (
     TaskRouter,
     TaskClassifier,
     ClassifiedTask,
@@ -21,8 +21,8 @@ from src.task_router import (
     InputValidator,
     ClarificationConfig,
 )
-from src.task_router.metrics_collector import MetricsCollector, RouterMetrics
-from src.task_router.provider_resolver import ProviderResolver
+from scrappy.task_router.metrics_collector import MetricsCollector, RouterMetrics
+from scrappy.task_router.provider_resolver import ProviderResolver
 from tests.helpers import ConfigurableTestOrchestrator
 
 

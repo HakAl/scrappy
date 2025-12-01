@@ -6,7 +6,7 @@ Following TDD - these tests are written first, implementation comes after.
 
 import pytest
 
-from src.cli.validators import (
+from scrappy.cli.validators import (
     validate_provider,
     ProviderValidationResult,
 )

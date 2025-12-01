@@ -11,8 +11,8 @@ Tests provider hint resolution to actual provider names and models:
 import pytest
 from unittest.mock import Mock
 
-from src.task_router.provider_resolver import ProviderResolver
-from src.orchestrator.model_selection import ModelSelectionType
+from scrappy.task_router.provider_resolver import ProviderResolver
+from scrappy.orchestrator.model_selection import ModelSelectionType
 
 
 class TestProviderResolverBasics:

@@ -8,7 +8,7 @@ whether output should route through TUI or CLI.
 import pytest
 from unittest.mock import MagicMock
 
-from src.infrastructure.output_mode import OutputModeContext
+from scrappy.infrastructure.output_mode import OutputModeContext
 
 
 class TestOutputModeContextDefaults:

@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import Mock, MagicMock, patch
 from dataclasses import dataclass
 
-from src.task_router.config import ClarificationConfig
+from scrappy.task_router.config import ClarificationConfig
 
 
 def pytest_configure(config):
@@ -172,7 +172,7 @@ def mock_codebase_context(temp_project_dir):
 
     Returns a context that won't load real databases or models in tests.
     """
-    from src.context import CodebaseContext
+    from scrappy.context import CodebaseContext
 
     context = CodebaseContext(
         project_path=str(temp_project_dir)

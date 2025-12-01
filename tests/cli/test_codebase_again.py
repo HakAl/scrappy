@@ -59,7 +59,7 @@ def analysis():
     """Fresh CLICodebaseAnalysis instance with fake orchestrator."""
     orch = FakeOrchestrator()
     io = MockIO()
-    from src.cli.codebase import CLICodebaseAnalysis
+    from scrappy.cli.codebase import CLICodebaseAnalysis
     return CLICodebaseAnalysis(orch, io)
 
 

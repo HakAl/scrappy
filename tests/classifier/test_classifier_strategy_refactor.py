@@ -15,7 +15,7 @@ CRITICAL: Tests prove features work and provide refactoring confidence.
 """
 
 import pytest
-from src.task_router.classifier import TaskClassifier, TaskType, ClassifiedTask
+from scrappy.task_router.classifier import TaskClassifier, TaskType, ClassifiedTask
 
 
 class TestDirectCommandClassification:

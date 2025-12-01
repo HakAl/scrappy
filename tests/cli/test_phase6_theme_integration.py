@@ -15,7 +15,7 @@ from io import StringIO
 from pathlib import Path
 from dataclasses import dataclass
 
-from src.infrastructure.theme import (
+from scrappy.infrastructure.theme import (
     ThemeProtocol,
     ScrappyTheme,
     LightTheme,
@@ -58,7 +58,7 @@ class TestContextCommandsThemeIntegration:
 
     def test_accepts_theme_parameter(self):
         """CLIContextCommands accepts theme parameter."""
-        from src.cli.context_commands import CLIContextCommands
+        from scrappy.cli.context_commands import CLIContextCommands
 
         cmd = CLIContextCommands(
             orchestrator=self.orchestrator,
@@ -69,7 +69,7 @@ class TestContextCommandsThemeIntegration:
 
     def test_uses_default_theme_when_not_provided(self):
         """CLIContextCommands uses DEFAULT_THEME when not provided."""
-        from src.cli.context_commands import CLIContextCommands
+        from scrappy.cli.context_commands import CLIContextCommands
 
         cmd = CLIContextCommands(
             orchestrator=self.orchestrator,
@@ -79,7 +79,7 @@ class TestContextCommandsThemeIntegration:
 
     def test_context_status_uses_theme_primary_for_header(self):
         """manage_context uses theme.primary for Context Status header."""
-        from src.cli.context_commands import CLIContextCommands
+        from scrappy.cli.context_commands import CLIContextCommands
 
         cmd = CLIContextCommands(
             orchestrator=self.orchestrator,
@@ -98,7 +98,7 @@ class TestContextCommandsThemeIntegration:
 
     def test_context_status_uses_theme_success_for_explored(self):
         """manage_context uses theme.success when explored is True."""
-        from src.cli.context_commands import CLIContextCommands
+        from scrappy.cli.context_commands import CLIContextCommands
 
         cmd = CLIContextCommands(
             orchestrator=self.orchestrator,
@@ -115,7 +115,7 @@ class TestContextCommandsThemeIntegration:
 
     def test_validation_error_uses_theme_error(self):
         """manage_context uses theme.error for validation errors."""
-        from src.cli.context_commands import CLIContextCommands
+        from scrappy.cli.context_commands import CLIContextCommands
 
         cmd = CLIContextCommands(
             orchestrator=self.orchestrator,
@@ -132,7 +132,7 @@ class TestContextCommandsThemeIntegration:
 
     def test_toggle_uses_theme_success_when_enabled(self):
         """manage_context toggle uses theme.success when context becomes enabled."""
-        from src.cli.context_commands import CLIContextCommands
+        from scrappy.cli.context_commands import CLIContextCommands
 
         self.orchestrator.context_aware = False  # Will become True after toggle
 
@@ -150,7 +150,7 @@ class TestContextCommandsThemeIntegration:
 
     def test_toggle_uses_theme_warning_when_disabled(self):
         """manage_context toggle uses theme.warning when context becomes disabled."""
-        from src.cli.context_commands import CLIContextCommands
+        from scrappy.cli.context_commands import CLIContextCommands
 
         self.orchestrator.context_aware = True  # Will become False after toggle
 
@@ -202,7 +202,7 @@ class TestInteractiveModeThemeIntegration:
 
     def test_accepts_theme_parameter(self):
         """InteractiveMode accepts theme parameter."""
-        from src.cli.interactive import InteractiveMode
+        from scrappy.cli.interactive import InteractiveMode
 
         mode = InteractiveMode(
             io=self.io,
@@ -222,7 +222,7 @@ class TestInteractiveModeThemeIntegration:
 
     def test_uses_default_theme_when_not_provided(self):
         """InteractiveMode uses DEFAULT_THEME when not provided."""
-        from src.cli.interactive import InteractiveMode
+        from scrappy.cli.interactive import InteractiveMode
 
         mode = InteractiveMode(
             io=self.io,
@@ -241,7 +241,7 @@ class TestInteractiveModeThemeIntegration:
 
     def test_process_input_echoes_with_theme_text(self):
         """_process_input uses theme.text for user input echo."""
-        from src.cli.interactive import InteractiveMode
+        from scrappy.cli.interactive import InteractiveMode
 
         mode = InteractiveMode(
             io=self.io,
@@ -269,7 +269,7 @@ class TestInteractiveModeThemeIntegration:
 
     def test_handle_eof_uses_theme_warning(self):
         """_handle_eof uses theme.warning for EOF message."""
-        from src.cli.interactive import InteractiveMode
+        from scrappy.cli.interactive import InteractiveMode
 
         mode = InteractiveMode(
             io=self.io,
@@ -296,7 +296,7 @@ class TestInteractiveModeThemeIntegration:
 
     def test_handle_eof_uses_theme_primary_for_goodbye(self):
         """_handle_eof uses theme.primary for Goodbye message."""
-        from src.cli.interactive import InteractiveMode
+        from scrappy.cli.interactive import InteractiveMode
 
         mode = InteractiveMode(
             io=self.io,
@@ -323,7 +323,7 @@ class TestInteractiveModeThemeIntegration:
 
     def test_handle_error_uses_theme_error(self):
         """_handle_error uses theme.error for error messages."""
-        from src.cli.interactive import InteractiveMode
+        from scrappy.cli.interactive import InteractiveMode
 
         mode = InteractiveMode(
             io=self.io,
@@ -352,7 +352,7 @@ class TestTextualAppThemeIntegration:
 
     def test_accepts_theme_parameter(self):
         """ScrappyApp accepts theme parameter."""
-        from src.cli.textual_app import ScrappyApp, TextualOutputAdapter
+        from scrappy.cli.textual_app import ScrappyApp, TextualOutputAdapter
 
         interactive_mode = Mock()
         output_adapter = TextualOutputAdapter()
@@ -367,7 +367,7 @@ class TestTextualAppThemeIntegration:
 
     def test_uses_default_theme_when_not_provided(self):
         """ScrappyApp uses DEFAULT_THEME when not provided."""
-        from src.cli.textual_app import ScrappyApp, TextualOutputAdapter
+        from scrappy.cli.textual_app import ScrappyApp, TextualOutputAdapter
 
         interactive_mode = Mock()
         output_adapter = TextualOutputAdapter()
@@ -384,7 +384,7 @@ class TestToolResultThemeIntegration:
 
     def test_tool_result_rich_uses_default_theme_error(self):
         """ToolResult.__rich__ uses DEFAULT_THEME.error for error styling."""
-        from src.agent_tools.tools.base import ToolResult
+        from scrappy.agent_tools.tools.base import ToolResult
 
         result = ToolResult(success=False, output="", error="test error")
         rich_output = result.__rich__()
@@ -398,8 +398,8 @@ class TestFileToolsThemeIntegration:
 
     def test_list_directory_uses_theme_primary_for_directories(self):
         """ListDirectoryTool uses DEFAULT_THEME.primary for directory names."""
-        from src.agent_tools.tools.file_tools import ListDirectoryTool
-        from src.agent_tools.tools.base import ToolContext
+        from scrappy.agent_tools.tools.file_tools import ListDirectoryTool
+        from scrappy.agent_tools.tools.base import ToolContext
         import tempfile
         import os
 
@@ -436,8 +436,8 @@ class TestFileToolsThemeIntegration:
 
     def test_list_directory_uses_syntax_colors_for_files(self):
         """ListDirectoryTool uses SYNTAX_COLORS for file type colors."""
-        from src.agent_tools.tools.file_tools import ListDirectoryTool
-        from src.agent_tools.tools.base import ToolContext
+        from scrappy.agent_tools.tools.file_tools import ListDirectoryTool
+        from scrappy.agent_tools.tools.base import ToolContext
         import tempfile
 
         # Create a mock output interface
@@ -473,8 +473,8 @@ class TestFileToolsThemeIntegration:
 
     def test_list_directory_uses_theme_text_muted_for_size(self):
         """ListDirectoryTool uses DEFAULT_THEME.text_muted for file sizes."""
-        from src.agent_tools.tools.file_tools import ListDirectoryTool
-        from src.agent_tools.tools.base import ToolContext
+        from scrappy.agent_tools.tools.file_tools import ListDirectoryTool
+        from scrappy.agent_tools.tools.base import ToolContext
         import tempfile
 
         # Create a mock output interface
@@ -518,7 +518,7 @@ class TestNoColorThemePhase6Integration:
 
     def test_context_commands_with_no_color_theme(self):
         """CLIContextCommands works with NoColorTheme."""
-        from src.cli.context_commands import CLIContextCommands
+        from scrappy.cli.context_commands import CLIContextCommands
 
         io = Mock()
         io.secho = Mock()
@@ -557,7 +557,7 @@ class TestNoColorThemePhase6Integration:
 
     def test_interactive_mode_with_no_color_theme(self):
         """InteractiveMode works with NoColorTheme."""
-        from src.cli.interactive import InteractiveMode
+        from scrappy.cli.interactive import InteractiveMode
 
         io = Mock()
         io.secho = Mock()
@@ -605,7 +605,7 @@ class TestNoColorThemePhase6Integration:
 
     def test_textual_app_with_no_color_theme(self):
         """ScrappyApp works with NoColorTheme."""
-        from src.cli.textual_app import ScrappyApp, TextualOutputAdapter
+        from scrappy.cli.textual_app import ScrappyApp, TextualOutputAdapter
 
         interactive_mode = Mock()
         output_adapter = TextualOutputAdapter()

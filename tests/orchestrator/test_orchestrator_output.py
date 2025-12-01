@@ -9,7 +9,7 @@ import pytest
 from io import StringIO
 import sys
 
-from src.orchestrator.output import (
+from scrappy.orchestrator.output import (
     BaseOutputProtocol,
     ConsoleOutput,
     NullOutput,

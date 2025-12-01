@@ -13,8 +13,8 @@ import pytest
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from src.cli.rate_limiter import RateLimiter
-from src.infrastructure.formatters.rate_limit_formatter import extract_time_from_timestamp
+from scrappy.cli.rate_limiter import RateLimiter
+from scrappy.infrastructure.formatters.rate_limit_formatter import extract_time_from_timestamp
 from tests.helpers import MockIO
 
 class TestRateLimiterDisplay:
@@ -214,7 +214,7 @@ class TestRateLimiterQuotaDisplay:
         orchestrator.context.project_path = Path('/test')
 
         # Create UnifiedIO for proper color support
-        from src.cli.unified_io import UnifiedIO
+        from scrappy.cli.unified_io import UnifiedIO
         from rich.console import Console
         from io import StringIO
 

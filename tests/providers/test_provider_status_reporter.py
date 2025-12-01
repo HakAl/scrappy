@@ -7,8 +7,8 @@ Tests presentation logic for provider status display and information retrieval.
 import pytest
 from unittest.mock import Mock
 
-from src.orchestrator.output import CapturingOutput
-from src.orchestrator.status_reporter import ProviderStatusReporter
+from scrappy.orchestrator.output import CapturingOutput
+from scrappy.orchestrator.status_reporter import ProviderStatusReporter
 
 class TestPrintStatus:
     """Test print_status() presentation logic."""

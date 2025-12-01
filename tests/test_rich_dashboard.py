@@ -15,7 +15,7 @@ class TestStateManagement:
     @pytest.mark.unit
     def test_set_state_updates_agent_state_panel_with_custom_message(self):
         """When state is set with message, agent state panel should show that message."""
-        from src.cli.rich_dashboard import RichDashboard
+        from scrappy.cli.rich_dashboard import RichDashboard
 
         dashboard = RichDashboard()
         dashboard.set_state("thinking", "Analyzing user requirements...")
@@ -29,7 +29,7 @@ class TestStateManagement:
     @pytest.mark.unit
     def test_set_state_without_message_shows_capitalized_state(self):
         """When state is set without message, panel should show capitalized state name."""
-        from src.cli.rich_dashboard import RichDashboard
+        from scrappy.cli.rich_dashboard import RichDashboard
 
         dashboard = RichDashboard()
         dashboard.set_state("executing")
@@ -41,7 +41,7 @@ class TestStateManagement:
     @pytest.mark.unit
     def test_set_state_changes_panel_style_based_on_state(self):
         """Panel style should change when state changes."""
-        from src.cli.rich_dashboard import RichDashboard
+        from scrappy.cli.rich_dashboard import RichDashboard
 
         dashboard = RichDashboard()
 
@@ -60,7 +60,7 @@ class TestStateManagement:
     @pytest.mark.unit
     def test_set_state_raises_error_for_invalid_state(self):
         """Setting invalid state should raise ValueError."""
-        from src.cli.rich_dashboard import RichDashboard
+        from scrappy.cli.rich_dashboard import RichDashboard
 
         dashboard = RichDashboard()
 
@@ -77,7 +77,7 @@ class TestThoughtProcessPanel:
     @pytest.mark.unit
     def test_update_thought_process_replaces_existing_content(self):
         """Updating thought process should replace old content."""
-        from src.cli.rich_dashboard import RichDashboard
+        from scrappy.cli.rich_dashboard import RichDashboard
 
         dashboard = RichDashboard()
 
@@ -90,7 +90,7 @@ class TestThoughtProcessPanel:
     @pytest.mark.unit
     def test_append_thought_accumulates_content(self):
         """Appending thoughts should preserve previous content."""
-        from src.cli.rich_dashboard import RichDashboard
+        from scrappy.cli.rich_dashboard import RichDashboard
 
         dashboard = RichDashboard()
 
@@ -104,7 +104,7 @@ class TestThoughtProcessPanel:
     @pytest.mark.unit
     def test_clear_thought_process_removes_all_content(self):
         """Clearing thought process should remove all content."""
-        from src.cli.rich_dashboard import RichDashboard
+        from scrappy.cli.rich_dashboard import RichDashboard
 
         dashboard = RichDashboard()
 
@@ -121,7 +121,7 @@ class TestTerminalPanel:
     @pytest.mark.unit
     def test_update_terminal_replaces_existing_output(self):
         """Updating terminal should replace old output."""
-        from src.cli.rich_dashboard import RichDashboard
+        from scrappy.cli.rich_dashboard import RichDashboard
 
         dashboard = RichDashboard()
 
@@ -134,7 +134,7 @@ class TestTerminalPanel:
     @pytest.mark.unit
     def test_append_terminal_accumulates_output(self):
         """Appending to terminal should preserve previous output."""
-        from src.cli.rich_dashboard import RichDashboard
+        from scrappy.cli.rich_dashboard import RichDashboard
 
         dashboard = RichDashboard()
 
@@ -148,7 +148,7 @@ class TestTerminalPanel:
     @pytest.mark.unit
     def test_terminal_enforces_max_line_limit(self):
         """Terminal should keep only most recent lines when limit exceeded."""
-        from src.cli.rich_dashboard import RichDashboard
+        from scrappy.cli.rich_dashboard import RichDashboard
 
         dashboard = RichDashboard()
 
@@ -171,7 +171,7 @@ class TestTerminalPanel:
     @pytest.mark.unit
     def test_capture_output_appends_to_terminal(self):
         """Capturing stdout should append to terminal."""
-        from src.cli.rich_dashboard import RichDashboard
+        from scrappy.cli.rich_dashboard import RichDashboard
 
         dashboard = RichDashboard()
 
@@ -183,7 +183,7 @@ class TestTerminalPanel:
     @pytest.mark.unit
     def test_capture_output_marks_stderr_differently(self):
         """Capturing stderr should mark it as stderr."""
-        from src.cli.rich_dashboard import RichDashboard
+        from scrappy.cli.rich_dashboard import RichDashboard
 
         dashboard = RichDashboard()
 
@@ -196,7 +196,7 @@ class TestTerminalPanel:
     @pytest.mark.unit
     def test_capture_command_shows_command_and_output(self):
         """Capturing command should show both command and its output."""
-        from src.cli.rich_dashboard import RichDashboard
+        from scrappy.cli.rich_dashboard import RichDashboard
 
         dashboard = RichDashboard()
 
@@ -210,7 +210,7 @@ class TestTerminalPanel:
     @pytest.mark.unit
     def test_capture_command_with_empty_output(self):
         """Capturing command with no output should only show command."""
-        from src.cli.rich_dashboard import RichDashboard
+        from scrappy.cli.rich_dashboard import RichDashboard
 
         dashboard = RichDashboard()
 
@@ -222,7 +222,7 @@ class TestTerminalPanel:
     @pytest.mark.unit
     def test_clear_terminal_removes_all_output(self):
         """Clearing terminal should remove all output."""
-        from src.cli.rich_dashboard import RichDashboard
+        from scrappy.cli.rich_dashboard import RichDashboard
 
         dashboard = RichDashboard()
 
@@ -239,7 +239,7 @@ class TestContextPanel:
     @pytest.mark.unit
     def test_update_context_shows_files_and_tokens(self):
         """Updating context should display files and token count."""
-        from src.cli.rich_dashboard import RichDashboard
+        from scrappy.cli.rich_dashboard import RichDashboard
 
         dashboard = RichDashboard()
 
@@ -259,7 +259,7 @@ class TestContextPanel:
     @pytest.mark.unit
     def test_update_active_files_preserves_token_count(self):
         """Updating only files should keep existing token count."""
-        from src.cli.rich_dashboard import RichDashboard
+        from scrappy.cli.rich_dashboard import RichDashboard
 
         dashboard = RichDashboard()
 
@@ -282,7 +282,7 @@ class TestContextPanel:
     @pytest.mark.unit
     def test_update_tokens_preserves_file_list(self):
         """Updating only tokens should keep existing files."""
-        from src.cli.rich_dashboard import RichDashboard
+        from scrappy.cli.rich_dashboard import RichDashboard
 
         dashboard = RichDashboard()
 
@@ -303,7 +303,7 @@ class TestContextPanel:
     @pytest.mark.unit
     def test_context_panel_with_empty_file_list(self):
         """Context panel should handle empty file list."""
-        from src.cli.rich_dashboard import RichDashboard
+        from scrappy.cli.rich_dashboard import RichDashboard
 
         dashboard = RichDashboard()
 
@@ -321,7 +321,7 @@ class TestReset:
     @pytest.mark.unit
     def test_reset_clears_all_panels_and_state(self):
         """Reset should clear all content and return to idle state."""
-        from src.cli.rich_dashboard import RichDashboard
+        from scrappy.cli.rich_dashboard import RichDashboard
 
         dashboard = RichDashboard()
 
@@ -354,7 +354,7 @@ class TestRendering:
     @pytest.mark.unit
     def test_render_to_string_produces_output(self):
         """Rendering to string should produce non-empty output."""
-        from src.cli.rich_dashboard import RichDashboard
+        from scrappy.cli.rich_dashboard import RichDashboard
 
         dashboard = RichDashboard()
 
@@ -372,7 +372,7 @@ class TestRendering:
     @pytest.mark.unit
     def test_get_renderable_returns_layout(self):
         """Getting renderable should return a Layout object."""
-        from src.cli.rich_dashboard import RichDashboard
+        from scrappy.cli.rich_dashboard import RichDashboard
         from rich.layout import Layout
 
         dashboard = RichDashboard()
@@ -389,8 +389,8 @@ class TestDashboardProtocolCompliance:
     @pytest.mark.unit
     def test_rich_dashboard_implements_protocol(self):
         """RichDashboard should satisfy DashboardProtocol."""
-        from src.cli.rich_dashboard import RichDashboard
-        from src.cli.protocols import DashboardProtocol
+        from scrappy.cli.rich_dashboard import RichDashboard
+        from scrappy.cli.protocols import DashboardProtocol
 
         dashboard = RichDashboard()
 
@@ -405,7 +405,7 @@ class TestEdgeCases:
     @pytest.mark.unit
     def test_append_terminal_on_empty_terminal(self):
         """Appending to empty terminal should not add extra newline."""
-        from src.cli.rich_dashboard import RichDashboard
+        from scrappy.cli.rich_dashboard import RichDashboard
 
         dashboard = RichDashboard()
 
@@ -418,7 +418,7 @@ class TestEdgeCases:
     @pytest.mark.unit
     def test_append_thought_on_empty_thought_process(self):
         """Appending to empty thought process should not add extra newline."""
-        from src.cli.rich_dashboard import RichDashboard
+        from scrappy.cli.rich_dashboard import RichDashboard
 
         dashboard = RichDashboard()
 
@@ -431,7 +431,7 @@ class TestEdgeCases:
     @pytest.mark.unit
     def test_get_panel_content_for_unknown_panel_returns_empty(self):
         """Getting content for unknown panel should return empty string."""
-        from src.cli.rich_dashboard import RichDashboard
+        from scrappy.cli.rich_dashboard import RichDashboard
 
         dashboard = RichDashboard()
 
@@ -442,7 +442,7 @@ class TestEdgeCases:
     @pytest.mark.unit
     def test_get_panel_title_for_unknown_panel_returns_empty(self):
         """Getting title for unknown panel should return empty string."""
-        from src.cli.rich_dashboard import RichDashboard
+        from scrappy.cli.rich_dashboard import RichDashboard
 
         dashboard = RichDashboard()
 
@@ -453,7 +453,7 @@ class TestEdgeCases:
     @pytest.mark.unit
     def test_get_panel_style_for_non_agent_state_panel(self):
         """Getting style for non-agent-state panel should return default style."""
-        from src.cli.rich_dashboard import RichDashboard
+        from scrappy.cli.rich_dashboard import RichDashboard
 
         dashboard = RichDashboard()
 
@@ -465,7 +465,7 @@ class TestEdgeCases:
     @pytest.mark.unit
     def test_update_context_with_large_token_count(self):
         """Context should format large token counts with comma separator."""
-        from src.cli.rich_dashboard import RichDashboard
+        from scrappy.cli.rich_dashboard import RichDashboard
 
         dashboard = RichDashboard()
 
@@ -479,7 +479,7 @@ class TestEdgeCases:
     @pytest.mark.unit
     def test_custom_console_injection(self):
         """Dashboard should use injected console for testing."""
-        from src.cli.rich_dashboard import RichDashboard
+        from scrappy.cli.rich_dashboard import RichDashboard
 
         # Create custom console with string buffer
         string_io = StringIO()

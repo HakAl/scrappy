@@ -10,7 +10,7 @@ Tests verify that:
 
 import pytest
 
-from src.infrastructure.theme import (
+from scrappy.infrastructure.theme import (
     CustomTheme,
     DEFAULT_THEME,
     GIT_COLORS,

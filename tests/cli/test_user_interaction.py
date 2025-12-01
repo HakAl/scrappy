@@ -13,7 +13,7 @@ import pytest
 from unittest.mock import MagicMock, Mock
 import threading
 
-from src.cli.user_interaction import (
+from scrappy.cli.user_interaction import (
     CLIUserInteraction,
     TUIUserInteraction,
     AutoApproveInteraction,
@@ -249,7 +249,7 @@ class TestGetUserInteraction:
 
         # Mock mode_utils.is_tui_mode to return True
         from unittest.mock import patch
-        with patch('src.cli.mode_utils.is_tui_mode', return_value=True):
+        with patch('scrappy.cli.mode_utils.is_tui_mode', return_value=True):
             interaction = get_user_interaction(io, bridge)
 
         assert isinstance(interaction, TUIUserInteraction)
@@ -259,7 +259,7 @@ class TestGetUserInteraction:
         io = MagicMock()
 
         from unittest.mock import patch
-        with patch('src.cli.mode_utils.is_tui_mode', return_value=True):
+        with patch('scrappy.cli.mode_utils.is_tui_mode', return_value=True):
             interaction = get_user_interaction(io)  # No bridge
 
         assert isinstance(interaction, AutoApproveInteraction)
@@ -333,7 +333,7 @@ class TestBridgeWiring:
         mock_bridge = MagicMock()
 
         # Import and test the reinitialization logic directly
-        with patch('src.cli.mode_utils.is_tui_mode', return_value=True):
+        with patch('scrappy.cli.mode_utils.is_tui_mode', return_value=True):
             interaction = get_user_interaction(mock_io, mock_bridge)
 
         assert isinstance(interaction, TUIUserInteraction)
@@ -342,14 +342,14 @@ class TestBridgeWiring:
     def test_agent_manager_receives_tui_interaction_after_reinitialize(self):
         """After reinitialization, CLIAgentManager should have TUI interaction."""
         from unittest.mock import MagicMock, patch
-        from src.cli.agent_manager import CLIAgentManager
+        from scrappy.cli.agent_manager import CLIAgentManager
 
         mock_orchestrator = MagicMock()
         mock_io = MagicMock()
         mock_io.is_tui_mode = True
         mock_bridge = MagicMock()
 
-        with patch('src.cli.mode_utils.is_tui_mode', return_value=True):
+        with patch('scrappy.cli.mode_utils.is_tui_mode', return_value=True):
             interaction = get_user_interaction(mock_io, mock_bridge)
 
         agent_mgr = CLIAgentManager(mock_orchestrator, mock_io, interaction)
@@ -359,14 +359,14 @@ class TestBridgeWiring:
     def test_multiprovider_receives_tui_interaction_after_reinitialize(self):
         """After reinitialization, CLIMultiProvider should have TUI interaction."""
         from unittest.mock import MagicMock, patch
-        from src.cli.multiprovider import CLIMultiProvider
+        from scrappy.cli.multiprovider import CLIMultiProvider
 
         mock_orchestrator = MagicMock()
         mock_io = MagicMock()
         mock_io.is_tui_mode = True
         mock_bridge = MagicMock()
 
-        with patch('src.cli.mode_utils.is_tui_mode', return_value=True):
+        with patch('scrappy.cli.mode_utils.is_tui_mode', return_value=True):
             interaction = get_user_interaction(mock_io, mock_bridge)
 
         multiprovider = CLIMultiProvider(mock_orchestrator, mock_io, interaction)
@@ -375,7 +375,7 @@ class TestBridgeWiring:
 
     def test_initial_handlers_have_cli_interaction_without_bridge(self):
         """Before bridge wiring, handlers should have CLI/AutoApprove interaction."""
-        from src.cli.agent_manager import CLIAgentManager
+        from scrappy.cli.agent_manager import CLIAgentManager
 
         mock_orchestrator = MagicMock()
         io = MockIO()

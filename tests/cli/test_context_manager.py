@@ -14,7 +14,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from src.cli.context_commands import CLIContextCommands
+from scrappy.cli.context_commands import CLIContextCommands
 from tests.helpers import MockIO
 
 

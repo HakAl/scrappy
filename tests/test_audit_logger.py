@@ -9,8 +9,8 @@ from pathlib import Path
 from datetime import datetime
 from unittest.mock import patch, MagicMock
 
-from src.agent.audit import AuditLogger
-from src.infrastructure.paths import TempPathProvider
+from scrappy.agent.audit import AuditLogger
+from scrappy.infrastructure.paths import TempPathProvider
 
 
 class TestAuditLoggerBasics:

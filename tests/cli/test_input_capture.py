@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import Mock
 
-from src.cli.input_capture import InputCaptureManager, InputRequest
+from scrappy.cli.input_capture import InputCaptureManager, InputRequest
 
 
 class TestInputCaptureManager:

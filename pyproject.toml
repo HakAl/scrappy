@@ -56,7 +56,7 @@ dev = [
 ]
 
 [project.scripts]
-scrappy = "src.cli:main"
+scrappy = "scrappy.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/yourusername/scrappy"
@@ -64,8 +64,8 @@ Repository = "https://github.com/yourusername/scrappy"
 Issues = "https://github.com/yourusername/scrappy/issues"
 
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["src*"]
+where = ["src"]
+include = ["scrappy*"]
 
 [tool.setuptools.package-data]
 "*" = ["*.md", "*.json"]
@@ -84,7 +84,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["src"]
+source = ["src/scrappy"]
 omit = [
     "*/tests/*",
     "*/__pycache__/*",

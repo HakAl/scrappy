@@ -22,7 +22,7 @@ class TestSharedSessionRestoration:
 
     def test_restore_session_loads_and_displays_on_success(self):
         """Restoration should load session and display success info."""
-        from src.cli.utils.session_utils import restore_session_to_cli
+        from scrappy.cli.utils.session_utils import restore_session_to_cli
 
         io = MockIO()
 
@@ -66,7 +66,7 @@ class TestSharedSessionRestoration:
 
     def test_restore_session_displays_error_on_no_session(self):
         """When no session exists, should display appropriate message."""
-        from src.cli.utils.session_utils import restore_session_to_cli
+        from scrappy.cli.utils.session_utils import restore_session_to_cli
 
         io = MockIO()
 
@@ -92,7 +92,7 @@ class TestSharedSessionRestoration:
 
     def test_restore_session_displays_error_on_load_failure(self):
         """When session load fails, should display error."""
-        from src.cli.utils.session_utils import restore_session_to_cli
+        from scrappy.cli.utils.session_utils import restore_session_to_cli
 
         io = MockIO()
 
@@ -115,7 +115,7 @@ class TestSharedSessionRestoration:
 
     def test_restore_session_handles_empty_conversation(self):
         """Restoration with empty conversation should still succeed."""
-        from src.cli.utils.session_utils import restore_session_to_cli
+        from scrappy.cli.utils.session_utils import restore_session_to_cli
 
         io = MockIO()
 
@@ -149,7 +149,7 @@ class TestConsolidatedExceptionHandling:
 
     def test_command_error_handler_custom_exit_code(self):
         """Error handler should support custom exit codes."""
-        from src.cli.utils.error_utils import handle_command_error
+        from scrappy.cli.utils.error_utils import handle_command_error
 
         io = MockIO()
         error = RuntimeError("Critical failure")
@@ -160,7 +160,7 @@ class TestConsolidatedExceptionHandling:
 
     def test_run_with_error_handling_success(self):
         """Wrapper should execute function and return result on success."""
-        from src.cli.utils.error_utils import run_with_error_handling
+        from scrappy.cli.utils.error_utils import run_with_error_handling
 
         io = MockIO()
 
@@ -173,7 +173,7 @@ class TestConsolidatedExceptionHandling:
 
     def test_run_with_error_handling_failure(self):
         """Wrapper should catch errors and call sys.exit on failure."""
-        from src.cli.utils.error_utils import run_with_error_handling
+        from scrappy.cli.utils.error_utils import run_with_error_handling
 
         io = MockIO()
 
@@ -190,7 +190,7 @@ class TestConsolidatedExceptionHandling:
 
     def test_run_with_error_handling_keyboard_interrupt(self):
         """Wrapper should handle keyboard interrupt gracefully."""
-        from src.cli.utils.error_utils import run_with_error_handling
+        from scrappy.cli.utils.error_utils import run_with_error_handling
 
         io = MockIO()
 
@@ -211,7 +211,7 @@ class TestCLIFactoryConvenience:
 
     def test_cli_factory_create_from_dict(self):
         """Factory should create CLI from simple dict config."""
-        from src.cli.utils.cli_factory import create_cli
+        from scrappy.cli.utils.cli_factory import create_cli
 
         config = {
             'brain': 'cerebras',
@@ -219,7 +219,7 @@ class TestCLIFactoryConvenience:
             'context_aware': False,
         }
 
-        with patch('src.cli.core.CLI') as MockCLI:
+        with patch('scrappy.cli.core.CLI') as MockCLI:
             mock_instance = Mock()
             MockCLI.return_value = mock_instance
 
@@ -234,9 +234,9 @@ class TestCLIFactoryConvenience:
 
     def test_cli_factory_create_with_defaults(self):
         """Factory should use sensible defaults for missing config."""
-        from src.cli.utils.cli_factory import create_cli
+        from scrappy.cli.utils.cli_factory import create_cli
 
-        with patch('src.cli.core.CLI') as MockCLI:
+        with patch('scrappy.cli.core.CLI') as MockCLI:
             mock_instance = Mock()
             MockCLI.return_value = mock_instance
 
@@ -250,11 +250,11 @@ class TestCLIFactoryConvenience:
 
     def test_cli_factory_create_with_io(self):
         """Factory should accept custom IO interface."""
-        from src.cli.utils.cli_factory import create_cli
+        from scrappy.cli.utils.cli_factory import create_cli
 
         io = MockIO()
 
-        with patch('src.cli.core.CLI') as MockCLI:
+        with patch('scrappy.cli.core.CLI') as MockCLI:
             mock_instance = Mock()
             MockCLI.return_value = mock_instance
 
@@ -272,7 +272,7 @@ class TestSessionRestorationIntegration:
         # This test verifies the refactoring pattern is applied
         # We check that the same restoration logic is used
 
-        from src.cli.utils.session_utils import restore_session_to_cli
+        from scrappy.cli.utils.session_utils import restore_session_to_cli
 
         io = MockIO()
 
@@ -333,7 +333,7 @@ class TestErrorHandlingIntegration:
         """Query command should use consolidated error handling."""
         # This tests that when we refactor, the error handling is consistent
 
-        from src.cli.utils.error_utils import handle_command_error
+        from scrappy.cli.utils.error_utils import handle_command_error
 
         io = MockIO()
 
@@ -348,7 +348,7 @@ class TestErrorHandlingIntegration:
 
     def test_reason_command_uses_error_handler(self):
         """Reason command should use same consolidated error handling."""
-        from src.cli.utils.error_utils import handle_command_error
+        from scrappy.cli.utils.error_utils import handle_command_error
 
         io = MockIO()
 
@@ -367,7 +367,7 @@ class TestFactoryWithResume:
 
     def test_create_cli_and_restore_session(self):
         """Factory-created CLI should work with session restoration."""
-        from src.cli.utils.session_utils import restore_session_to_cli
+        from scrappy.cli.utils.session_utils import restore_session_to_cli
 
         io = MockIO()
 
@@ -403,7 +403,7 @@ class TestEdgeCases:
 
     def test_restore_session_handles_none_conversation(self):
         """Should handle None conversation history gracefully."""
-        from src.cli.utils.session_utils import restore_session_to_cli
+        from scrappy.cli.utils.session_utils import restore_session_to_cli
 
         io = MockIO()
 
@@ -432,7 +432,7 @@ class TestEdgeCases:
 
     def test_error_handler_with_empty_error_message(self):
         """Should handle errors with empty messages."""
-        from src.cli.utils.error_utils import handle_command_error
+        from scrappy.cli.utils.error_utils import handle_command_error
 
         io = MockIO()
 
@@ -446,7 +446,7 @@ class TestEdgeCases:
 
     def test_error_handler_with_complex_error(self):
         """Should handle errors with complex messages."""
-        from src.cli.utils.error_utils import handle_command_error
+        from scrappy.cli.utils.error_utils import handle_command_error
 
         io = MockIO()
 

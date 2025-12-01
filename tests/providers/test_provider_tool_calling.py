@@ -15,8 +15,8 @@ class TestGroqProviderToolCalling:
     @pytest.fixture
     def mock_groq_client(self):
         """Create a mock Groq client."""
-        with patch('src.providers.groq_provider.GROQ_AVAILABLE', True):
-            with patch('src.providers.groq_provider.Groq') as mock_groq:
+        with patch('scrappy.providers.groq_provider.GROQ_AVAILABLE', True):
+            with patch('scrappy.providers.groq_provider.Groq') as mock_groq:
                 mock_client = MagicMock()
                 mock_groq.return_value = mock_client
                 yield mock_client
@@ -25,7 +25,7 @@ class TestGroqProviderToolCalling:
     def groq_provider(self, mock_groq_client):
         """Create Groq provider with mock client."""
         with patch.dict('os.environ', {'GROQ_API_KEY': 'test-key'}):
-            from src.providers.groq_provider import GroqProvider
+            from scrappy.providers.groq_provider import GroqProvider
             provider = GroqProvider()
             return provider
 
@@ -37,7 +37,7 @@ class TestGroqProviderToolCalling:
     @pytest.mark.unit
     def test_groq_chat_with_tools_single_call(self, groq_provider, mock_groq_client):
         """Groq returns single tool call from API."""
-        from src.providers.base import ToolCall
+        from scrappy.providers.base import ToolCall
 
         # Mock API response with tool call
         mock_response = MagicMock()
@@ -146,8 +146,8 @@ class TestCerebrasProviderToolCalling:
     @pytest.fixture
     def mock_cerebras_client(self):
         """Create a mock OpenAI client for Cerebras."""
-        with patch('src.providers.cerebras_provider.OPENAI_AVAILABLE', True):
-            with patch('src.providers.cerebras_provider.OpenAI') as mock_openai:
+        with patch('scrappy.providers.cerebras_provider.OPENAI_AVAILABLE', True):
+            with patch('scrappy.providers.cerebras_provider.OpenAI') as mock_openai:
                 mock_client = MagicMock()
                 mock_openai.return_value = mock_client
                 yield mock_client
@@ -156,7 +156,7 @@ class TestCerebrasProviderToolCalling:
     def cerebras_provider(self, mock_cerebras_client):
         """Create Cerebras provider with mock client."""
         with patch.dict('os.environ', {'CEREBRAS_API_KEY': 'test-key'}):
-            from src.providers.cerebras_provider import CerebrasProvider
+            from scrappy.providers.cerebras_provider import CerebrasProvider
             provider = CerebrasProvider()
             return provider
 
@@ -279,8 +279,8 @@ class TestProviderToolCallIntegration:
     @pytest.mark.unit
     def test_groq_response_works_with_native_parser(self):
         """Groq response can be parsed by NativeToolCallParser."""
-        from src.agent.response_parser import NativeToolCallParser
-        from src.providers.base import LLMResponse, ToolCall
+        from scrappy.agent.response_parser import NativeToolCallParser
+        from scrappy.providers.base import LLMResponse, ToolCall
 
         # Simulate what Groq would return
         response = LLMResponse(
@@ -310,8 +310,8 @@ class TestProviderToolCallIntegration:
     @pytest.mark.unit
     def test_cerebras_response_works_with_native_parser(self):
         """Cerebras response can be parsed by NativeToolCallParser."""
-        from src.agent.response_parser import NativeToolCallParser
-        from src.providers.base import LLMResponse, ToolCall
+        from scrappy.agent.response_parser import NativeToolCallParser
+        from scrappy.providers.base import LLMResponse, ToolCall
 
         response = LLMResponse(
             content="Let me search for that pattern.",
@@ -338,8 +338,8 @@ class TestProviderToolCallIntegration:
     @pytest.mark.unit
     def test_no_tool_calls_parsed_as_completion(self):
         """Provider response without tool calls is parsed as completion."""
-        from src.agent.response_parser import NativeToolCallParser
-        from src.providers.base import LLMResponse
+        from scrappy.agent.response_parser import NativeToolCallParser
+        from scrappy.providers.base import LLMResponse
 
         response = LLMResponse(
             content="Task completed successfully. All files have been created.",

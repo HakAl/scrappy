@@ -6,8 +6,8 @@ for research tasks.
 """
 
 import pytest
-from src.task_router.strategies.path_resolver import PathResolver
-from src.task_router.classifier import ClassifiedTask, TaskType
+from scrappy.task_router.strategies.path_resolver import PathResolver
+from scrappy.task_router.classifier import ClassifiedTask, TaskType
 
 
 def make_task(

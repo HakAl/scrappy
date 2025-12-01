@@ -12,7 +12,7 @@ from tests.protocol_conformance.conftest import (
     assert_has_method,
 )
 
-from src.infrastructure.protocols import FileSystemProtocol
+from scrappy.infrastructure.protocols import FileSystemProtocol
 
 
 class TestRealFileSystemConformance:
@@ -20,13 +20,13 @@ class TestRealFileSystemConformance:
 
     def test_real_filesystem_implements_protocol(self):
         """RealFileSystem should implement FileSystemProtocol."""
-        from src.infrastructure.file_system import RealFileSystem
+        from scrappy.infrastructure.file_system import RealFileSystem
 
         assert_implements_protocol(RealFileSystem, FileSystemProtocol)
 
     def test_real_filesystem_has_all_methods(self):
         """RealFileSystem should have all protocol methods."""
-        from src.infrastructure.file_system import RealFileSystem
+        from scrappy.infrastructure.file_system import RealFileSystem
 
         methods = [
             'read_text', 'write_text', 'read_bytes', 'write_bytes',
@@ -43,13 +43,13 @@ class TestInMemoryFileSystemConformance:
 
     def test_in_memory_filesystem_implements_protocol(self):
         """InMemoryFileSystem should implement FileSystemProtocol."""
-        from src.infrastructure.file_system import InMemoryFileSystem
+        from scrappy.infrastructure.file_system import InMemoryFileSystem
 
         assert_implements_protocol(InMemoryFileSystem, FileSystemProtocol)
 
     def test_in_memory_filesystem_has_all_methods(self):
         """InMemoryFileSystem should have all protocol methods."""
-        from src.infrastructure.file_system import InMemoryFileSystem
+        from scrappy.infrastructure.file_system import InMemoryFileSystem
 
         methods = [
             'read_text', 'write_text', 'read_bytes', 'write_bytes',
@@ -73,7 +73,7 @@ class TestRealFileSystemBehavior:
     @pytest.fixture
     def fs(self):
         """Create RealFileSystem instance."""
-        from src.infrastructure.file_system import RealFileSystem
+        from scrappy.infrastructure.file_system import RealFileSystem
         return RealFileSystem()
 
     def test_write_and_read_text(self, fs, temp_dir):
@@ -196,7 +196,7 @@ class TestInMemoryFileSystemBehavior:
     @pytest.fixture
     def fs(self):
         """Create InMemoryFileSystem instance."""
-        from src.infrastructure.file_system import InMemoryFileSystem
+        from scrappy.infrastructure.file_system import InMemoryFileSystem
         return InMemoryFileSystem()
 
     def test_write_and_read_text(self, fs):

@@ -8,8 +8,8 @@ models for tasks that require JSON compliance (like agent planning).
 import pytest
 from unittest.mock import MagicMock, patch, PropertyMock
 
-from src.orchestrator.provider_selector import ProviderSelector
-from src.providers.base import ProviderRegistry, ModelType, ModelInfo
+from scrappy.orchestrator.provider_selector import ProviderSelector
+from scrappy.providers.base import ProviderRegistry, ModelType, ModelInfo
 
 
 class TestProviderSelectorInstructModels:
@@ -257,7 +257,7 @@ class TestProviderSelectorPlanningIntegration:
         registry.register(provider)
 
         selector = ProviderSelector(registry)
-        from src.orchestrator.model_selection import ModelSelectionType
+        from scrappy.orchestrator.model_selection import ModelSelectionType
         provider_name, model = selector.get_model(ModelSelectionType.FAST)
 
         assert provider_name == "cerebras"
@@ -291,7 +291,7 @@ class TestProviderSelectorPlanningIntegration:
         selector = ProviderSelector(registry)
 
         # INSTRUCT type should prefer instruction-tuned
-        from src.orchestrator.model_selection import ModelSelectionType
+        from scrappy.orchestrator.model_selection import ModelSelectionType
         provider_name, model = selector.get_model(ModelSelectionType.INSTRUCT)
 
         assert provider_name == "groq"

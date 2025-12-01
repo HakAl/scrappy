@@ -8,8 +8,8 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 from typing import Dict
 
-from src.orchestrator.output import CapturingOutput
-from src.providers import ProviderRegistry
+from scrappy.orchestrator.output import CapturingOutput
+from scrappy.providers import ProviderRegistry
 
 
 class TestProviderRegistrarInit:
@@ -17,7 +17,7 @@ class TestProviderRegistrarInit:
 
     def test_init_stores_registry(self):
         """Registrar should store the registry reference."""
-        from src.orchestrator.registration import ProviderRegistrar
+        from scrappy.orchestrator.registration import ProviderRegistrar
 
         registry = ProviderRegistry()
         output = CapturingOutput()
@@ -28,7 +28,7 @@ class TestProviderRegistrarInit:
 
     def test_init_stores_output(self):
         """Registrar should store the output interface reference."""
-        from src.orchestrator.registration import ProviderRegistrar
+        from scrappy.orchestrator.registration import ProviderRegistrar
 
         registry = ProviderRegistry()
         output = CapturingOutput()
@@ -43,14 +43,14 @@ class TestAutoRegisterAll:
 
     def test_returns_dict_with_provider_status(self):
         """auto_register_all should return dict mapping provider names to success status."""
-        from src.orchestrator.registration import ProviderRegistrar
+        from scrappy.orchestrator.registration import ProviderRegistrar
 
         registry = ProviderRegistry()
         output = CapturingOutput()
         registrar = ProviderRegistrar(registry, output)
 
         with patch.multiple(
-            'src.orchestrator.registration',
+            'scrappy.orchestrator.registration',
             GitHubModelsProvider=Mock(return_value=Mock()),
             CerebrasProvider=Mock(return_value=Mock()),
             GroqProvider=Mock(return_value=Mock()),
@@ -68,7 +68,7 @@ class TestAutoRegisterAll:
 
     def test_successful_registration_returns_true(self):
         """Successfully registered provider should have True status."""
-        from src.orchestrator.registration import ProviderRegistrar
+        from scrappy.orchestrator.registration import ProviderRegistrar
 
         registry = ProviderRegistry()
         output = CapturingOutput()
@@ -78,7 +78,7 @@ class TestAutoRegisterAll:
         mock_provider.name = 'github_models'
 
         with patch.multiple(
-            'src.orchestrator.registration',
+            'scrappy.orchestrator.registration',
             GitHubModelsProvider=Mock(return_value=mock_provider),
             CerebrasProvider=Mock(side_effect=Exception("No API key")),
             GroqProvider=Mock(side_effect=Exception("No API key")),
@@ -91,14 +91,14 @@ class TestAutoRegisterAll:
 
     def test_failed_registration_returns_false(self):
         """Failed provider registration should have False status."""
-        from src.orchestrator.registration import ProviderRegistrar
+        from scrappy.orchestrator.registration import ProviderRegistrar
 
         registry = ProviderRegistry()
         output = CapturingOutput()
         registrar = ProviderRegistrar(registry, output)
 
         with patch.multiple(
-            'src.orchestrator.registration',
+            'scrappy.orchestrator.registration',
             GitHubModelsProvider=Mock(side_effect=ValueError("No API key")),
             CerebrasProvider=Mock(side_effect=Exception("No API key")),
             GroqProvider=Mock(side_effect=Exception("No API key")),
@@ -112,7 +112,7 @@ class TestAutoRegisterAll:
 
     def test_all_providers_succeed(self):
         """When all providers register successfully, all should be True."""
-        from src.orchestrator.registration import ProviderRegistrar
+        from scrappy.orchestrator.registration import ProviderRegistrar
 
         registry = ProviderRegistry()
         output = CapturingOutput()
@@ -124,7 +124,7 @@ class TestAutoRegisterAll:
             return mock
 
         with patch.multiple(
-            'src.orchestrator.registration',
+            'scrappy.orchestrator.registration',
             GitHubModelsProvider=Mock(return_value=make_mock_provider('github_models')),
             CerebrasProvider=Mock(return_value=make_mock_provider('cerebras')),
             GroqProvider=Mock(return_value=make_mock_provider('groq')),
@@ -137,14 +137,14 @@ class TestAutoRegisterAll:
 
     def test_all_providers_fail(self):
         """When all providers fail to register, all should be False."""
-        from src.orchestrator.registration import ProviderRegistrar
+        from scrappy.orchestrator.registration import ProviderRegistrar
 
         registry = ProviderRegistry()
         output = CapturingOutput()
         registrar = ProviderRegistrar(registry, output)
 
         with patch.multiple(
-            'src.orchestrator.registration',
+            'scrappy.orchestrator.registration',
             GitHubModelsProvider=Mock(side_effect=Exception("No API key")),
             CerebrasProvider=Mock(side_effect=Exception("No API key")),
             GroqProvider=Mock(side_effect=Exception("No API key")),
@@ -157,7 +157,7 @@ class TestAutoRegisterAll:
 
     def test_mixed_success_and_failure(self):
         """Some providers succeed while others fail."""
-        from src.orchestrator.registration import ProviderRegistrar
+        from scrappy.orchestrator.registration import ProviderRegistrar
 
         registry = ProviderRegistry()
         output = CapturingOutput()
@@ -169,7 +169,7 @@ class TestAutoRegisterAll:
             return mock
 
         with patch.multiple(
-            'src.orchestrator.registration',
+            'scrappy.orchestrator.registration',
             GitHubModelsProvider=Mock(return_value=make_mock_provider('github_models')),
             CerebrasProvider=Mock(return_value=make_mock_provider('cerebras')),
             GroqProvider=Mock(side_effect=Exception("No API key")),
@@ -191,7 +191,7 @@ class TestProviderRegistration:
 
     def test_multiple_providers_registered(self):
         """Multiple successful providers should all be registered."""
-        from src.orchestrator.registration import ProviderRegistrar
+        from scrappy.orchestrator.registration import ProviderRegistrar
 
         registry = ProviderRegistry()
         output = CapturingOutput()
@@ -203,7 +203,7 @@ class TestProviderRegistration:
             return mock
 
         with patch.multiple(
-            'src.orchestrator.registration',
+            'scrappy.orchestrator.registration',
             GitHubModelsProvider=Mock(return_value=make_mock_provider('github_models')),
             CerebrasProvider=Mock(return_value=make_mock_provider('cerebras')),
             GroqProvider=Mock(return_value=make_mock_provider('groq')),
@@ -225,7 +225,7 @@ class TestRegistrationOrder:
 
     def test_registration_order_is_documented(self):
         """Providers should be registered in documented priority order."""
-        from src.orchestrator.registration import ProviderRegistrar
+        from scrappy.orchestrator.registration import ProviderRegistrar
 
         registry = ProviderRegistry()
         output = CapturingOutput()
@@ -242,7 +242,7 @@ class TestRegistrationOrder:
             return create_provider
 
         with patch.multiple(
-            'src.orchestrator.registration',
+            'scrappy.orchestrator.registration',
             GitHubModelsProvider=track_registration('github_models'),
             CerebrasProvider=track_registration('cerebras'),
             GroqProvider=track_registration('groq'),
@@ -261,7 +261,7 @@ class TestEdgeCases:
 
     def test_registry_exception_during_register(self):
         """Handle exceptions during registry.register call."""
-        from src.orchestrator.registration import ProviderRegistrar
+        from scrappy.orchestrator.registration import ProviderRegistrar
 
         registry = Mock(spec=ProviderRegistry)
         registry.register.side_effect = Exception("Registry error")
@@ -274,7 +274,7 @@ class TestEdgeCases:
         mock_provider.name = 'github_models'
 
         with patch.multiple(
-            'src.orchestrator.registration',
+            'scrappy.orchestrator.registration',
             GitHubModelsProvider=Mock(return_value=mock_provider),
             CerebrasProvider=Mock(side_effect=Exception("fail")),
             GroqProvider=Mock(side_effect=Exception("fail")),
@@ -290,7 +290,7 @@ class TestEdgeCases:
 
     def test_can_be_called_multiple_times(self):
         """auto_register_all can be called multiple times."""
-        from src.orchestrator.registration import ProviderRegistrar
+        from scrappy.orchestrator.registration import ProviderRegistrar
 
         registry = ProviderRegistry()
         output = CapturingOutput()
@@ -302,7 +302,7 @@ class TestEdgeCases:
             return mock
 
         with patch.multiple(
-            'src.orchestrator.registration',
+            'scrappy.orchestrator.registration',
             GitHubModelsProvider=Mock(return_value=make_mock_provider('github_models')),
             CerebrasProvider=Mock(side_effect=Exception("fail")),
             GroqProvider=Mock(side_effect=Exception("fail")),

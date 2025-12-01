@@ -7,7 +7,7 @@ not just that code runs. Focus on behavior, edge cases, and error conditions.
 
 import pytest
 from unittest.mock import Mock, patch
-from src.platform.detection import SystemPlatformDetector
+from scrappy.platform.detection import SystemPlatformDetector
 
 
 class TestSystemPlatformDetector:

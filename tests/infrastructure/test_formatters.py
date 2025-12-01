@@ -6,12 +6,12 @@ with appropriate colors, alignment, and structure.
 """
 
 import pytest
-from src.infrastructure.formatters import (
+from scrappy.infrastructure.formatters import (
     StatsFormatter,
     RateLimitFormatter,
     CacheFormatter,
 )
-from src.infrastructure.theme import (
+from scrappy.infrastructure.theme import (
     DEFAULT_THEME,
     LightTheme,
     NoColorTheme,

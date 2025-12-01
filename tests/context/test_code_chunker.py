@@ -3,8 +3,8 @@ from typing import List
 from unittest.mock import Mock
 
 # Import actual protocol classes
-from src.context.protocols import CodeChunk, CodeChunkerProtocol
-from src.context.code_chunker import SemanticCodeChunker
+from scrappy.context.protocols import CodeChunk, CodeChunkerProtocol
+from scrappy.context.code_chunker import SemanticCodeChunker
 
 
 class TestSemanticCodeChunker:

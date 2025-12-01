@@ -3,12 +3,12 @@ import subprocess
 from unittest.mock import MagicMock, Mock, patch
 from pathlib import Path
 
-from src.agent_tools.tools.git_tools import (
+from scrappy.agent_tools.tools.git_tools import (
     GitTool, GitLogTool, GitStatusTool,
     GitDiffTool, GitBlameTool, GitShowTool,
     GitRecentChangesTool
 )
-from src.agent_tools.tools.base import ToolContext
+from scrappy.agent_tools.tools.base import ToolContext
 
 
 # --- Fixtures ---

@@ -4,8 +4,8 @@ Tests for MetricsCollector - metrics tracking and calculation.
 Following TDD: These tests define expected behavior BEFORE implementation.
 """
 import pytest
-from src.task_router.classifier import ClassifiedTask, TaskType
-from src.task_router.strategies import ExecutionResult
+from scrappy.task_router.classifier import ClassifiedTask, TaskType
+from scrappy.task_router.strategies import ExecutionResult
 
 
 class TestMetricsCollectorInitialization:
@@ -14,7 +14,7 @@ class TestMetricsCollectorInitialization:
     @pytest.mark.unit
     def test_collector_initializes_with_zero_tasks(self):
         """Test that new collector starts with zero tasks."""
-        from src.task_router.metrics_collector import MetricsCollector
+        from scrappy.task_router.metrics_collector import MetricsCollector
 
         collector = MetricsCollector()
         metrics = collector.get_metrics()
@@ -24,7 +24,7 @@ class TestMetricsCollectorInitialization:
     @pytest.mark.unit
     def test_collector_initializes_with_empty_type_tracking(self):
         """Test that new collector has empty task type dictionary."""
-        from src.task_router.metrics_collector import MetricsCollector
+        from scrappy.task_router.metrics_collector import MetricsCollector
 
         collector = MetricsCollector()
         metrics = collector.get_metrics()
@@ -34,7 +34,7 @@ class TestMetricsCollectorInitialization:
     @pytest.mark.unit
     def test_collector_initializes_with_zero_avg_time(self):
         """Test that average execution time starts at zero."""
-        from src.task_router.metrics_collector import MetricsCollector
+        from scrappy.task_router.metrics_collector import MetricsCollector
 
         collector = MetricsCollector()
         metrics = collector.get_metrics()
@@ -44,7 +44,7 @@ class TestMetricsCollectorInitialization:
     @pytest.mark.unit
     def test_collector_initializes_with_zero_tokens(self):
         """Test that total tokens starts at zero."""
-        from src.task_router.metrics_collector import MetricsCollector
+        from scrappy.task_router.metrics_collector import MetricsCollector
 
         collector = MetricsCollector()
         metrics = collector.get_metrics()
@@ -54,7 +54,7 @@ class TestMetricsCollectorInitialization:
     @pytest.mark.unit
     def test_collector_initializes_with_perfect_success_rate(self):
         """Test that success rate starts at 100% (1.0)."""
-        from src.task_router.metrics_collector import MetricsCollector
+        from scrappy.task_router.metrics_collector import MetricsCollector
 
         collector = MetricsCollector()
         metrics = collector.get_metrics()
@@ -68,7 +68,7 @@ class TestMetricsCollectorSingleTask:
     @pytest.mark.unit
     def test_update_increments_total_tasks(self):
         """Test that updating metrics increments total task count."""
-        from src.task_router.metrics_collector import MetricsCollector
+        from scrappy.task_router.metrics_collector import MetricsCollector
 
         collector = MetricsCollector()
         task = ClassifiedTask(
@@ -91,7 +91,7 @@ class TestMetricsCollectorSingleTask:
     @pytest.mark.unit
     def test_update_tracks_task_by_type(self):
         """Test that tasks are tracked by their type."""
-        from src.task_router.metrics_collector import MetricsCollector
+        from scrappy.task_router.metrics_collector import MetricsCollector
 
         collector = MetricsCollector()
         task = ClassifiedTask(
@@ -115,7 +115,7 @@ class TestMetricsCollectorSingleTask:
     @pytest.mark.unit
     def test_update_sets_avg_execution_time_for_first_task(self):
         """Test that first task sets the average execution time."""
-        from src.task_router.metrics_collector import MetricsCollector
+        from scrappy.task_router.metrics_collector import MetricsCollector
 
         collector = MetricsCollector()
         task = ClassifiedTask(
@@ -138,7 +138,7 @@ class TestMetricsCollectorSingleTask:
     @pytest.mark.unit
     def test_update_tracks_tokens_used(self):
         """Test that tokens are accumulated correctly."""
-        from src.task_router.metrics_collector import MetricsCollector
+        from scrappy.task_router.metrics_collector import MetricsCollector
 
         collector = MetricsCollector()
         task = ClassifiedTask(
@@ -162,7 +162,7 @@ class TestMetricsCollectorSingleTask:
     @pytest.mark.unit
     def test_successful_task_maintains_perfect_success_rate(self):
         """Test that single successful task keeps 100% success rate."""
-        from src.task_router.metrics_collector import MetricsCollector
+        from scrappy.task_router.metrics_collector import MetricsCollector
 
         collector = MetricsCollector()
         task = ClassifiedTask(
@@ -185,7 +185,7 @@ class TestMetricsCollectorSingleTask:
     @pytest.mark.unit
     def test_failed_task_reduces_success_rate_to_zero(self):
         """Test that single failed task results in 0% success rate."""
-        from src.task_router.metrics_collector import MetricsCollector
+        from scrappy.task_router.metrics_collector import MetricsCollector
 
         collector = MetricsCollector()
         task = ClassifiedTask(
@@ -213,7 +213,7 @@ class TestMetricsCollectorMultipleTasks:
     @pytest.mark.unit
     def test_multiple_updates_increment_total_tasks(self):
         """Test that multiple updates correctly increment total count."""
-        from src.task_router.metrics_collector import MetricsCollector
+        from scrappy.task_router.metrics_collector import MetricsCollector
 
         collector = MetricsCollector()
 
@@ -237,7 +237,7 @@ class TestMetricsCollectorMultipleTasks:
     @pytest.mark.unit
     def test_tracks_multiple_task_types(self):
         """Test that different task types are tracked separately."""
-        from src.task_router.metrics_collector import MetricsCollector
+        from scrappy.task_router.metrics_collector import MetricsCollector
 
         collector = MetricsCollector()
 
@@ -270,7 +270,7 @@ class TestMetricsCollectorMultipleTasks:
     @pytest.mark.unit
     def test_calculates_average_execution_time_correctly(self):
         """Test that average execution time is calculated correctly over multiple tasks."""
-        from src.task_router.metrics_collector import MetricsCollector
+        from scrappy.task_router.metrics_collector import MetricsCollector
 
         collector = MetricsCollector()
 
@@ -296,7 +296,7 @@ class TestMetricsCollectorMultipleTasks:
     @pytest.mark.unit
     def test_accumulates_tokens_across_tasks(self):
         """Test that tokens are accumulated across multiple tasks."""
-        from src.task_router.metrics_collector import MetricsCollector
+        from scrappy.task_router.metrics_collector import MetricsCollector
 
         collector = MetricsCollector()
 
@@ -322,7 +322,7 @@ class TestMetricsCollectorMultipleTasks:
     @pytest.mark.unit
     def test_calculates_success_rate_with_mixed_results(self):
         """Test success rate calculation with mix of successful and failed tasks."""
-        from src.task_router.metrics_collector import MetricsCollector
+        from scrappy.task_router.metrics_collector import MetricsCollector
 
         collector = MetricsCollector()
 
@@ -353,7 +353,7 @@ class TestMetricsCollectorMultipleTasks:
     @pytest.mark.unit
     def test_success_rate_with_all_failures(self):
         """Test success rate calculation when all tasks fail."""
-        from src.task_router.metrics_collector import MetricsCollector
+        from scrappy.task_router.metrics_collector import MetricsCollector
 
         collector = MetricsCollector()
 
@@ -377,7 +377,7 @@ class TestMetricsCollectorEdgeCases:
     @pytest.mark.unit
     def test_handles_zero_execution_time(self):
         """Test that collector handles zero execution time gracefully."""
-        from src.task_router.metrics_collector import MetricsCollector
+        from scrappy.task_router.metrics_collector import MetricsCollector
 
         collector = MetricsCollector()
         task = ClassifiedTask(
@@ -400,7 +400,7 @@ class TestMetricsCollectorEdgeCases:
     @pytest.mark.unit
     def test_handles_zero_tokens(self):
         """Test that collector handles zero tokens gracefully."""
-        from src.task_router.metrics_collector import MetricsCollector
+        from scrappy.task_router.metrics_collector import MetricsCollector
 
         collector = MetricsCollector()
         task = ClassifiedTask(
@@ -424,7 +424,7 @@ class TestMetricsCollectorEdgeCases:
     @pytest.mark.unit
     def test_increments_existing_task_type_count(self):
         """Test that updating same task type increments existing count."""
-        from src.task_router.metrics_collector import MetricsCollector
+        from scrappy.task_router.metrics_collector import MetricsCollector
 
         collector = MetricsCollector()
 
@@ -454,7 +454,7 @@ class TestMetricsCollectorEdgeCases:
     @pytest.mark.unit
     def test_running_average_updates_correctly(self):
         """Test that running average calculation is numerically stable."""
-        from src.task_router.metrics_collector import MetricsCollector
+        from scrappy.task_router.metrics_collector import MetricsCollector
 
         collector = MetricsCollector()
 
@@ -496,7 +496,7 @@ class TestMetricsCollectorReturnedData:
     @pytest.mark.unit
     def test_metrics_reflects_current_state(self):
         """Test that get_metrics returns current state, not a snapshot."""
-        from src.task_router.metrics_collector import MetricsCollector
+        from scrappy.task_router.metrics_collector import MetricsCollector
 
         collector = MetricsCollector()
 

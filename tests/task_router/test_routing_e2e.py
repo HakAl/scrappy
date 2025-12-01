@@ -7,12 +7,12 @@ Tests the full flow from TaskRouter through classification and execution.
 import pytest
 from unittest.mock import Mock
 
-from src.task_router.router import TaskRouter
-from src.task_router.classifier import TaskType
-from src.task_router.config import ClarificationConfig
-from src.task_router.output_handler import NullOutputHandler
-from src.task_router.intent_clarifier import NullClarifier
-from src.task_router.provider_resolver import ProviderResolver
+from scrappy.task_router.router import TaskRouter
+from scrappy.task_router.classifier import TaskType
+from scrappy.task_router.config import ClarificationConfig
+from scrappy.task_router.output_handler import NullOutputHandler
+from scrappy.task_router.intent_clarifier import NullClarifier
+from scrappy.task_router.provider_resolver import ProviderResolver
 from tests.helpers import ConfigurableTestOrchestrator
 
 

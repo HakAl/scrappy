@@ -16,7 +16,7 @@ class TestRetryStrategy:
     @pytest.mark.unit
     def test_retry_succeeds_on_second_attempt(self):
         """Retry should succeed if second attempt works."""
-        from src.cli.error_recovery import retry_operation
+        from scrappy.cli.error_recovery import retry_operation
 
         attempts = []
 
@@ -36,8 +36,8 @@ class TestRetryStrategy:
     @pytest.mark.unit
     def test_retry_only_on_retryable_errors(self):
         """Retry should not retry non-retryable errors."""
-        from src.cli.error_recovery import retry_operation
-        from src.cli.exceptions import ProviderError
+        from scrappy.cli.error_recovery import retry_operation
+        from scrappy.cli.exceptions import ProviderError
 
         attempts = []
 
@@ -54,7 +54,7 @@ class TestRetryStrategy:
     @pytest.mark.unit
     def test_retry_with_custom_exception_filter(self):
         """Retry should allow custom exception filtering."""
-        from src.cli.error_recovery import retry_operation
+        from scrappy.cli.error_recovery import retry_operation
 
         attempts = []
 
@@ -80,7 +80,7 @@ class TestFallbackStrategy:
     @pytest.mark.unit
     def test_fallback_uses_alternative_provider(self):
         """Fallback should try alternative providers."""
-        from src.cli.error_recovery import with_fallback
+        from scrappy.cli.error_recovery import with_fallback
 
         providers_tried = []
 
@@ -104,8 +104,8 @@ class TestFallbackStrategy:
     @pytest.mark.unit
     def test_fallback_tries_all_alternatives(self):
         """Fallback should try all alternatives before failing."""
-        from src.cli.error_recovery import with_fallback
-        from src.cli.exceptions import CLIError
+        from scrappy.cli.error_recovery import with_fallback
+        from scrappy.cli.exceptions import CLIError
 
         providers_tried = []
 
@@ -127,7 +127,7 @@ class TestFallbackStrategy:
     @pytest.mark.unit
     def test_fallback_returns_first_success(self):
         """Fallback should return immediately on first success."""
-        from src.cli.error_recovery import with_fallback
+        from scrappy.cli.error_recovery import with_fallback
 
         call_count = []
 
@@ -154,7 +154,7 @@ class TestFallbackStrategy:
     @pytest.mark.unit
     def test_fallback_with_provider_registry(self):
         """Fallback should work with provider registry."""
-        from src.cli.error_recovery import fallback_providers
+        from scrappy.cli.error_recovery import fallback_providers
 
         mock_orchestrator = Mock()
         mock_orchestrator.list_available.return_value = ["primary", "secondary", "tertiary"]
@@ -183,7 +183,7 @@ class TestGracefulDegradation:
     @pytest.mark.unit
     def test_degraded_returns_partial_result(self):
         """Degraded operation should return partial results."""
-        from src.cli.error_recovery import graceful_degrade
+        from scrappy.cli.error_recovery import graceful_degrade
 
         def partial_operation():
             results = ["step1", "step2"]
@@ -201,7 +201,7 @@ class TestGracefulDegradation:
     @pytest.mark.unit
     def test_degraded_notifies_user(self):
         """Degraded operation should notify user of partial results."""
-        from src.cli.error_recovery import graceful_degrade
+        from scrappy.cli.error_recovery import graceful_degrade
         from tests.helpers import MockIO
 
         io = MockIO()
@@ -233,7 +233,7 @@ class TestErrorRecoveryContext:
     @pytest.mark.unit
     def test_recovery_context_catches_and_handles(self):
         """Recovery context should catch and handle errors."""
-        from src.cli.error_recovery import error_recovery_context
+        from scrappy.cli.error_recovery import error_recovery_context
         from tests.helpers import MockIO
 
         io = MockIO()
@@ -249,7 +249,7 @@ class TestErrorRecoveryContext:
     @pytest.mark.unit
     def test_recovery_context_with_retry(self):
         """Recovery context should support retry strategy."""
-        from src.cli.error_recovery import error_recovery_context
+        from scrappy.cli.error_recovery import error_recovery_context
 
         attempts = [0]
 
@@ -265,7 +265,7 @@ class TestErrorRecoveryContext:
     @pytest.mark.unit
     def test_recovery_context_with_fallback(self):
         """Recovery context should support fallback strategy."""
-        from src.cli.error_recovery import error_recovery_context
+        from scrappy.cli.error_recovery import error_recovery_context
 
         with error_recovery_context(fallback=lambda: "fallback_value") as ctx:
             raise Exception("Primary failed")
@@ -279,7 +279,7 @@ class TestSafeOperationEnhancements:
     @pytest.mark.unit
     def test_safe_operation_with_retry(self):
         """safe_operation should support retry parameter."""
-        from src.cli.error_recovery import safe_operation_with_recovery
+        from scrappy.cli.error_recovery import safe_operation_with_recovery
 
         attempts = []
 
@@ -302,7 +302,7 @@ class TestSafeOperationEnhancements:
     @pytest.mark.unit
     def test_safe_operation_with_fallback_value(self):
         """safe_operation should support fallback values."""
-        from src.cli.error_recovery import safe_operation_with_recovery
+        from scrappy.cli.error_recovery import safe_operation_with_recovery
 
         def failing():
             raise Exception("Fail")
@@ -322,7 +322,7 @@ class TestRecoveryLogging:
     @pytest.mark.unit
     def test_retry_logs_attempts(self):
         """Retry should log each attempt."""
-        from src.cli.error_recovery import retry_operation
+        from scrappy.cli.error_recovery import retry_operation
         import logging
 
         attempts = []
@@ -345,7 +345,7 @@ class TestRecoveryLogging:
     @pytest.mark.unit
     def test_fallback_logs_provider_switch(self):
         """Fallback should log when switching providers."""
-        from src.cli.error_recovery import with_fallback
+        from scrappy.cli.error_recovery import with_fallback
         import logging
 
         def failing():

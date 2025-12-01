@@ -6,8 +6,8 @@ for research tasks.
 """
 
 import pytest
-from src.task_router.strategies.response_cleaner import ResponseCleaner
-from src.task_router.classifier import ClassifiedTask, TaskType
+from scrappy.task_router.strategies.response_cleaner import ResponseCleaner
+from scrappy.task_router.classifier import ClassifiedTask, TaskType
 
 
 def make_task(original_input: str = "test query") -> ClassifiedTask:

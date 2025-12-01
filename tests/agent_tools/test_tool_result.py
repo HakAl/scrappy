@@ -4,7 +4,7 @@ import pytest
 from rich.syntax import Syntax
 from rich.text import Text
 
-from src.agent_tools.tools.base import ToolResult
+from scrappy.agent_tools.tools.base import ToolResult
 
 
 class TestToolResultStr:

@@ -18,7 +18,7 @@ class TestGitHistoryReaderEdgeCases:
     @pytest.mark.unit
     def test_limits_recent_commits_to_20(self, temp_project_dir):
         """Should limit recent commits to 20."""
-        from src.context.git_history import GitHistoryReader
+        from scrappy.context.git_history import GitHistoryReader
 
         with patch('subprocess.run') as mock_run:
             # Generate 30 commits
@@ -37,7 +37,7 @@ class TestGitHistoryReaderEdgeCases:
     @pytest.mark.unit
     def test_limits_branches_to_10(self, temp_project_dir):
         """Should limit branches to 10."""
-        from src.context.git_history import GitHistoryReader
+        from scrappy.context.git_history import GitHistoryReader
 
         with patch('subprocess.run') as mock_run:
             # Generate 20 branches
@@ -56,7 +56,7 @@ class TestGitHistoryReaderEdgeCases:
     @pytest.mark.unit
     def test_limits_contributors_to_5(self, temp_project_dir):
         """Should limit contributors to top 5."""
-        from src.context.git_history import GitHistoryReader
+        from scrappy.context.git_history import GitHistoryReader
 
         with patch('subprocess.run') as mock_run:
             # Generate 10 contributors
@@ -75,7 +75,7 @@ class TestGitHistoryReaderEdgeCases:
     @pytest.mark.unit
     def test_limits_changed_files_to_20(self, temp_project_dir):
         """Should limit recently changed files to 20."""
-        from src.context.git_history import GitHistoryReader
+        from scrappy.context.git_history import GitHistoryReader
 
         with patch('subprocess.run') as mock_run:
             # Generate 30 files
@@ -94,7 +94,7 @@ class TestGitHistoryReaderEdgeCases:
     @pytest.mark.unit
     def test_deduplicates_changed_files(self, temp_project_dir):
         """Should deduplicate recently changed files."""
-        from src.context.git_history import GitHistoryReader
+        from scrappy.context.git_history import GitHistoryReader
 
         with patch('subprocess.run') as mock_run:
             # Same file appears multiple times
@@ -149,7 +149,7 @@ class TestGitHistoryReaderIntegration:
     @pytest.mark.integration
     def test_reads_actual_git_history(self, git_repo):
         """Should read actual git history from a real repo."""
-        from src.context.git_history import GitHistoryReader
+        from scrappy.context.git_history import GitHistoryReader
 
         reader = GitHistoryReader()
         result = reader.get_history(git_repo)
@@ -161,7 +161,7 @@ class TestGitHistoryReaderIntegration:
     @pytest.mark.integration
     def test_finds_current_branch(self, git_repo):
         """Should find the current branch in a real repo."""
-        from src.context.git_history import GitHistoryReader
+        from scrappy.context.git_history import GitHistoryReader
 
         reader = GitHistoryReader()
         result = reader.get_history(git_repo)
@@ -173,7 +173,7 @@ class TestGitHistoryReaderIntegration:
     @pytest.mark.integration
     def test_finds_contributors(self, git_repo):
         """Should find contributors in a real repo."""
-        from src.context.git_history import GitHistoryReader
+        from scrappy.context.git_history import GitHistoryReader
 
         reader = GitHistoryReader()
         result = reader.get_history(git_repo)
@@ -186,7 +186,7 @@ class TestGitHistoryReaderIntegration:
     @pytest.mark.integration
     def test_finds_changed_files(self, git_repo):
         """Should find recently changed files in a real repo."""
-        from src.context.git_history import GitHistoryReader
+        from scrappy.context.git_history import GitHistoryReader
 
         reader = GitHistoryReader()
         result = reader.get_history(git_repo)
@@ -204,7 +204,7 @@ class TestGitHistoryReaderTimeouts:
     @pytest.mark.unit
     def test_uses_timeout_for_subprocess_calls(self, temp_project_dir):
         """Should use timeout for all subprocess calls."""
-        from src.context.git_history import GitHistoryReader
+        from scrappy.context.git_history import GitHistoryReader
 
         with patch('subprocess.run') as mock_run:
             mock_result = MagicMock()
@@ -224,7 +224,7 @@ class TestGitHistoryReaderTimeouts:
     @pytest.mark.unit
     def test_default_timeout_is_reasonable(self, temp_project_dir):
         """Default timeout should be reasonable (e.g., 10 seconds)."""
-        from src.context.git_history import GitHistoryReader
+        from scrappy.context.git_history import GitHistoryReader
 
         with patch('subprocess.run') as mock_run:
             mock_result = MagicMock()

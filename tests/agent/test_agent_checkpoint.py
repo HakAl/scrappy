@@ -9,7 +9,7 @@ from datetime import datetime
 from unittest.mock import Mock, patch, MagicMock
 import pytest
 
-from src.agent.checkpoint import create_git_checkpoint, rollback_to_checkpoint
+from scrappy.agent.checkpoint import create_git_checkpoint, rollback_to_checkpoint
 
 
 class TestCreateGitCheckpoint:

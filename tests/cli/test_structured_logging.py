@@ -19,7 +19,7 @@ class TestCLILogger:
     @pytest.mark.unit
     def test_logger_creation(self):
         """CLILogger should be created with name and io interface."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
 
         io = MockIO()
@@ -30,7 +30,7 @@ class TestCLILogger:
     @pytest.mark.unit
     def test_logger_outputs_to_io(self):
         """Logger should output to IO interface."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
 
         io = MockIO()
@@ -46,7 +46,7 @@ class TestCLILogger:
     @pytest.mark.unit
     def test_logger_info_uses_default_color(self):
         """Info messages should use default or cyan color."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
 
         io = MockIO()
@@ -60,7 +60,7 @@ class TestCLILogger:
     @pytest.mark.unit
     def test_logger_debug_respects_level(self):
         """Debug messages should respect log level."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
         import logging
 
@@ -80,7 +80,7 @@ class TestStructuredOutput:
     @pytest.mark.unit
     def test_logger_can_output_structured_data(self):
         """Logger should support structured data output."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
 
         io = MockIO()
@@ -101,7 +101,7 @@ class TestStructuredOutput:
     @pytest.mark.unit
     def test_logger_records_timestamp(self):
         """Logger should record timestamp for each message."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
 
         io = MockIO()
@@ -115,7 +115,7 @@ class TestStructuredOutput:
     @pytest.mark.unit
     def test_logger_records_level(self):
         """Logger should record log level for each message."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
 
         io = MockIO()
@@ -129,7 +129,7 @@ class TestStructuredOutput:
     @pytest.mark.unit
     def test_logger_records_location(self):
         """Logger should record source location."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
 
         io = MockIO()
@@ -144,7 +144,7 @@ class TestStructuredOutput:
     @pytest.mark.unit
     def test_logger_export_to_json(self):
         """Logger should export records as JSON."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
 
         io = MockIO()
@@ -167,7 +167,7 @@ class TestExceptionLogging:
     @pytest.mark.unit
     def test_logger_exception_includes_traceback(self):
         """Logger should include traceback for exceptions."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
 
         io = MockIO()
@@ -184,7 +184,7 @@ class TestExceptionLogging:
     @pytest.mark.unit
     def test_logger_exception_includes_type(self):
         """Logger should include exception type."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
 
         io = MockIO()
@@ -201,8 +201,8 @@ class TestExceptionLogging:
     @pytest.mark.unit
     def test_logger_cli_exception_includes_extra(self):
         """Logger should extract extra data from CLI exceptions."""
-        from src.cli.logging import CLILogger
-        from src.cli.exceptions import ProviderError
+        from scrappy.cli.logging import CLILogger
+        from scrappy.cli.exceptions import ProviderError
         from tests.helpers import MockIO
 
         io = MockIO()
@@ -225,7 +225,7 @@ class TestLoggerConfiguration:
     @pytest.mark.unit
     def test_logger_set_level(self):
         """Logger level should be configurable."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
         import logging
 
@@ -242,7 +242,7 @@ class TestLoggerConfiguration:
     @pytest.mark.unit
     def test_logger_enable_structured_mode(self):
         """Logger should support structured-only mode for machine parsing."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
 
         io = MockIO()
@@ -259,7 +259,7 @@ class TestLoggerConfiguration:
     @pytest.mark.unit
     def test_logger_format_string(self):
         """Logger should support custom format strings."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
 
         io = MockIO()
@@ -277,7 +277,7 @@ class TestLoggerConfiguration:
     @pytest.mark.unit
     def test_logger_max_records(self):
         """Logger should limit stored records to prevent memory issues."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
 
         io = MockIO()
@@ -296,7 +296,7 @@ class TestLoggerContextManagement:
     @pytest.mark.unit
     def test_logger_with_context(self):
         """Logger should support context that applies to all messages."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
 
         io = MockIO()
@@ -314,7 +314,7 @@ class TestLoggerContextManagement:
     @pytest.mark.unit
     def test_logger_nested_context(self):
         """Logger should support nested contexts."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
 
         io = MockIO()
@@ -332,7 +332,7 @@ class TestLoggerContextManagement:
     @pytest.mark.unit
     def test_logger_bind_returns_new_logger(self):
         """bind() should return logger with bound context."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
 
         io = MockIO()
@@ -352,8 +352,8 @@ class TestLoggerIntegration:
     @pytest.mark.unit
     def test_logger_integrates_with_error_handler(self):
         """Logger should integrate with existing error_handler functions."""
-        from src.cli.logging import CLILogger
-        from src.cli.utils.error_handler import ErrorSeverity
+        from scrappy.cli.logging import CLILogger
+        from scrappy.cli.utils.error_handler import ErrorSeverity
         from tests.helpers import MockIO
 
         io = MockIO()
@@ -375,7 +375,7 @@ class TestFileHandler:
     @pytest.mark.unit
     def test_logger_writes_to_file(self, tmp_path):
         """Logger should write to file when configured."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
 
         log_file = tmp_path / "test.log"
@@ -394,7 +394,7 @@ class TestFileHandler:
     @pytest.mark.unit
     def test_file_output_is_structured(self, tmp_path):
         """File output should be structured JSON lines."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
 
         log_file = tmp_path / "test.log"
@@ -420,7 +420,7 @@ class TestLoggerFactory:
     @pytest.mark.unit
     def test_get_logger_returns_configured_instance(self):
         """get_logger should return configured logger instance."""
-        from src.cli.logging import get_logger
+        from scrappy.cli.logging import get_logger
         from tests.helpers import MockIO
 
         io = MockIO()
@@ -431,7 +431,7 @@ class TestLoggerFactory:
     @pytest.mark.unit
     def test_get_logger_returns_same_instance(self):
         """get_logger should return same instance for same name."""
-        from src.cli.logging import get_logger
+        from scrappy.cli.logging import get_logger
         from tests.helpers import MockIO
 
         io = MockIO()
@@ -443,7 +443,7 @@ class TestLoggerFactory:
     @pytest.mark.unit
     def test_configure_all_loggers(self):
         """Should be able to configure all loggers at once."""
-        from src.cli.logging import configure_logging, get_logger
+        from scrappy.cli.logging import configure_logging, get_logger
         from tests.helpers import MockIO
         import logging
 
@@ -460,7 +460,7 @@ class TestPerformance:
     @pytest.mark.unit
     def test_logger_disabled_check_is_fast(self):
         """Logger should quickly skip disabled levels."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
         import logging
 
@@ -477,7 +477,7 @@ class TestPerformance:
     @pytest.mark.unit
     def test_logger_lazy_formatting(self):
         """Logger should use lazy formatting for expensive operations."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
         import logging
 
@@ -502,7 +502,7 @@ class TestLogRotation:
     @pytest.mark.unit
     def test_logger_rotates_large_files(self, tmp_path):
         """Logger should rotate log files when they get too large."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
 
         log_file = tmp_path / "test.log"
@@ -536,8 +536,8 @@ class TestFilterAndSampling:
     @pytest.mark.unit
     def test_logger_filter_by_category(self):
         """Logger should support filtering by category."""
-        from src.cli.logging import CLILogger
-        from src.cli.utils.error_handler import ErrorCategory
+        from scrappy.cli.logging import CLILogger
+        from scrappy.cli.utils.error_handler import ErrorCategory
         from tests.helpers import MockIO
 
         io = MockIO()
@@ -558,7 +558,7 @@ class TestFilterAndSampling:
     @pytest.mark.unit
     def test_logger_sampling(self):
         """Logger should support sampling for high-volume logs."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
 
         io = MockIO()
@@ -579,7 +579,7 @@ class TestJSONSerializationSafety:
     @pytest.mark.unit
     def test_logger_handles_datetime_in_extra(self):
         """Logger should handle datetime objects in extra without crashing."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
         from datetime import datetime
 
@@ -598,7 +598,7 @@ class TestJSONSerializationSafety:
     @pytest.mark.unit
     def test_logger_handles_set_in_extra(self):
         """Logger should handle set objects in extra without crashing."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
 
         io = MockIO()
@@ -614,7 +614,7 @@ class TestJSONSerializationSafety:
     @pytest.mark.unit
     def test_logger_handles_custom_object_in_extra(self):
         """Logger should handle custom objects in extra without crashing."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
 
         class CustomObject:
@@ -633,7 +633,7 @@ class TestJSONSerializationSafety:
     @pytest.mark.unit
     def test_logger_handles_bytes_in_extra(self):
         """Logger should handle bytes objects in extra without crashing."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
 
         io = MockIO()
@@ -648,7 +648,7 @@ class TestJSONSerializationSafety:
     @pytest.mark.unit
     def test_file_output_handles_non_serializable(self, tmp_path):
         """File output should handle non-serializable data without crashing."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
         from datetime import datetime
 
@@ -670,7 +670,7 @@ class TestJSONSerializationSafety:
     @pytest.mark.unit
     def test_structured_output_handles_non_serializable(self):
         """Structured output mode should handle non-serializable data."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
         from datetime import datetime
 
@@ -690,7 +690,7 @@ class TestJSONSerializationSafety:
     @pytest.mark.unit
     def test_export_json_handles_non_serializable(self):
         """export_json should handle non-serializable data without crashing."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
         from datetime import datetime
 
@@ -711,7 +711,7 @@ class TestJSONSerializationSafety:
     @pytest.mark.unit
     def test_logger_handles_nested_non_serializable(self):
         """Logger should handle nested non-serializable objects."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
         from datetime import datetime
 
@@ -732,7 +732,7 @@ class TestJSONSerializationSafety:
     @pytest.mark.unit
     def test_logger_handles_function_in_extra(self):
         """Logger should handle function objects in extra without crashing."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
 
         def my_func():
@@ -750,7 +750,7 @@ class TestJSONSerializationSafety:
     @pytest.mark.unit
     def test_bound_context_with_non_serializable(self):
         """Bound context with non-serializable data should not crash."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
         from datetime import datetime
 
@@ -767,7 +767,7 @@ class TestJSONSerializationSafety:
     @pytest.mark.unit
     def test_context_manager_with_non_serializable(self):
         """Context manager with non-serializable data should not crash."""
-        from src.cli.logging import CLILogger
+        from scrappy.cli.logging import CLILogger
         from tests.helpers import MockIO
         from datetime import datetime
 
@@ -787,7 +787,7 @@ class TestLoggerRegistry:
     @pytest.mark.unit
     def test_registry_get_logger_returns_same_instance(self):
         """Registry get_logger should return same instance for same name."""
-        from src.cli.logging import LoggerRegistry
+        from scrappy.cli.logging import LoggerRegistry
         from tests.helpers import MockIO
 
         registry = LoggerRegistry()
@@ -801,7 +801,7 @@ class TestLoggerRegistry:
     @pytest.mark.unit
     def test_registry_configure_updates_existing_loggers(self):
         """Registry configure should update existing loggers."""
-        from src.cli.logging import LoggerRegistry
+        from scrappy.cli.logging import LoggerRegistry
         from tests.helpers import MockIO
 
         registry = LoggerRegistry()
@@ -818,7 +818,7 @@ class TestLoggerRegistry:
     @pytest.mark.unit
     def test_registry_reset_clears_all_state(self):
         """Registry reset should clear all loggers and defaults."""
-        from src.cli.logging import LoggerRegistry
+        from scrappy.cli.logging import LoggerRegistry
         from tests.helpers import MockIO
 
         registry = LoggerRegistry()
@@ -837,7 +837,7 @@ class TestLoggerRegistry:
     @pytest.mark.unit
     def test_separate_registries_are_isolated(self):
         """Separate registries should not affect each other."""
-        from src.cli.logging import LoggerRegistry
+        from scrappy.cli.logging import LoggerRegistry
         from tests.helpers import MockIO
 
         registry1 = LoggerRegistry()
@@ -854,7 +854,7 @@ class TestLoggerRegistry:
     @pytest.mark.unit
     def test_reset_logging_resets_default_registry(self):
         """reset_logging should reset the default global registry."""
-        from src.cli.logging import (
+        from scrappy.cli.logging import (
             configure_logging, get_logger, reset_logging, _default_registry
         )
         from tests.helpers import MockIO
@@ -871,7 +871,7 @@ class TestLoggerRegistry:
     @pytest.mark.unit
     def test_module_functions_use_default_registry(self):
         """Module-level functions should delegate to default registry."""
-        from src.cli.logging import (
+        from scrappy.cli.logging import (
             get_logger, configure_logging, reset_logging, _default_registry
         )
         from tests.helpers import MockIO

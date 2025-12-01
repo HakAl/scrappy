@@ -26,7 +26,7 @@ class TestPersistenceShowInfo:
 
     def test_show_info_displays_header(self):
         """Should display session management header."""
-        from src.cli.persistence import SessionPersistence
+        from scrappy.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
@@ -39,7 +39,7 @@ class TestPersistenceShowInfo:
 
     def test_show_info_displays_session_file_path(self):
         """Should display session file location."""
-        from src.cli.persistence import SessionPersistence
+        from scrappy.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
         orchestrator.context.project_path = Path('/my/project')
@@ -53,7 +53,7 @@ class TestPersistenceShowInfo:
 
     def test_show_info_displays_session_exists_status(self):
         """Should indicate whether session file exists."""
-        from src.cli.persistence import SessionPersistence
+        from scrappy.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
@@ -66,7 +66,7 @@ class TestPersistenceShowInfo:
 
     def test_show_info_displays_current_memory_stats(self):
         """Should display current session memory statistics."""
-        from src.cli.persistence import SessionPersistence
+        from scrappy.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
@@ -80,7 +80,7 @@ class TestPersistenceShowInfo:
 
     def test_show_info_displays_conversation_message_count(self):
         """Should display number of conversation messages."""
-        from src.cli.persistence import SessionPersistence
+        from scrappy.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
@@ -102,7 +102,7 @@ class TestPersistenceShowInfo:
 
     def test_show_info_displays_auto_save_status(self):
         """Should display whether auto-save is enabled."""
-        from src.cli.persistence import SessionPersistence
+        from scrappy.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
@@ -122,7 +122,7 @@ class TestPersistenceShowSavedSessionInfo:
 
     def test_displays_saved_session_details(self):
         """Should display details when session file exists."""
-        from src.cli.persistence import SessionPersistence
+        from scrappy.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
         # Create a mock session file path that "exists"
@@ -148,7 +148,7 @@ class TestPersistenceShowSavedSessionInfo:
 
     def test_handles_corrupted_session_file(self):
         """Should handle errors when session file is corrupted."""
-        from src.cli.persistence import SessionPersistence
+        from scrappy.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
 
@@ -169,7 +169,7 @@ class TestPersistenceSave:
 
     def test_save_calls_orchestrator_save_session(self):
         """Should call orchestrator's save_session method."""
-        from src.cli.persistence import SessionPersistence
+        from scrappy.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
         save_calls = []
@@ -192,7 +192,7 @@ class TestPersistenceSave:
 
     def test_save_shows_success_message(self):
         """Should display success message after saving."""
-        from src.cli.persistence import SessionPersistence
+        from scrappy.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
@@ -208,7 +208,7 @@ class TestPersistenceSave:
 
     def test_save_shows_message_count(self):
         """Should display number of messages saved."""
-        from src.cli.persistence import SessionPersistence
+        from scrappy.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
@@ -229,7 +229,7 @@ class TestPersistenceSave:
 
     def test_save_handles_error(self):
         """Should handle save errors gracefully."""
-        from src.cli.persistence import SessionPersistence
+        from scrappy.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
         orchestrator.save_session = Mock(side_effect=Exception("Disk full"))
@@ -247,7 +247,7 @@ class TestPersistenceSave:
 
     def test_save_success_styled_green(self):
         """Should style success message in green."""
-        from src.cli.persistence import SessionPersistence
+        from scrappy.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
@@ -268,7 +268,7 @@ class TestPersistenceLoad:
 
     def test_load_calls_orchestrator_load_session(self):
         """Should call orchestrator's load_session method."""
-        from src.cli.persistence import SessionPersistence
+        from scrappy.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
         load_called = []
@@ -287,7 +287,7 @@ class TestPersistenceLoad:
 
     def test_load_shows_restored_counts(self):
         """Should display counts of restored items."""
-        from src.cli.persistence import SessionPersistence
+        from scrappy.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
         orchestrator.load_session = lambda: {
@@ -312,7 +312,7 @@ class TestPersistenceLoad:
 
     def test_load_returns_conversation_history(self):
         """Should return loaded conversation history."""
-        from src.cli.persistence import SessionPersistence
+        from scrappy.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
         loaded_conversation = [
@@ -338,7 +338,7 @@ class TestPersistenceLoad:
 
     def test_load_no_session_shows_message(self):
         """Should show message when no session exists."""
-        from src.cli.persistence import SessionPersistence
+        from scrappy.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
         orchestrator.load_session = lambda: {'status': 'no_session'}
@@ -353,7 +353,7 @@ class TestPersistenceLoad:
 
     def test_load_error_shows_message(self):
         """Should show error message when load fails."""
-        from src.cli.persistence import SessionPersistence
+        from scrappy.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
         orchestrator.load_session = lambda: {
@@ -375,7 +375,7 @@ class TestPersistenceToggle:
 
     def test_toggle_disables_auto_save_when_enabled(self):
         """Should disable auto-save when currently enabled."""
-        from src.cli.persistence import SessionPersistence
+        from scrappy.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
@@ -392,7 +392,7 @@ class TestPersistenceToggle:
 
     def test_toggle_enables_auto_save_when_disabled(self):
         """Should enable auto-save when currently disabled."""
-        from src.cli.persistence import SessionPersistence
+        from scrappy.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
@@ -409,7 +409,7 @@ class TestPersistenceToggle:
 
     def test_toggle_shows_behavior_explanation(self):
         """Should explain auto-save behavior after toggle."""
-        from src.cli.persistence import SessionPersistence
+        from scrappy.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
@@ -429,7 +429,7 @@ class TestPersistenceInvalidCommand:
 
     def test_invalid_command_shows_usage(self):
         """Should display usage information for unknown commands."""
-        from src.cli.persistence import SessionPersistence
+        from scrappy.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
@@ -446,7 +446,7 @@ class TestPersistenceInvalidCommand:
 
     def test_usage_shows_auto_save_status(self):
         """Should show current auto-save status in usage."""
-        from src.cli.persistence import SessionPersistence
+        from scrappy.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
@@ -466,7 +466,7 @@ class TestPersistenceReturnValues:
 
     def test_returns_dict_with_conversation_history(self):
         """Should always return dict with conversation_history key."""
-        from src.cli.persistence import SessionPersistence
+        from scrappy.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
@@ -483,7 +483,7 @@ class TestPersistenceReturnValues:
 
     def test_returns_dict_with_auto_save(self):
         """Should always return dict with auto_save key."""
-        from src.cli.persistence import SessionPersistence
+        from scrappy.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
@@ -499,7 +499,7 @@ class TestPersistenceReturnValues:
 
     def test_preserves_original_values_when_not_modified(self):
         """Should preserve original values when command doesn't modify them."""
-        from src.cli.persistence import SessionPersistence
+        from scrappy.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
@@ -521,7 +521,7 @@ class TestPersistenceCaseInsensitivity:
 
     def test_commands_are_case_insensitive(self):
         """Commands should work regardless of case."""
-        from src.cli.persistence import SessionPersistence
+        from scrappy.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
 
@@ -542,7 +542,7 @@ class TestPersistenceDefaultParameters:
 
     def test_handles_none_conversation_history(self):
         """Should handle None conversation_history gracefully."""
-        from src.cli.persistence import SessionPersistence
+        from scrappy.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()
@@ -558,7 +558,7 @@ class TestPersistenceDefaultParameters:
 
     def test_handles_default_auto_save(self):
         """Should use default auto_save value when not specified."""
-        from src.cli.persistence import SessionPersistence
+        from scrappy.cli.persistence import SessionPersistence
 
         orchestrator = ConfigurableTestOrchestrator()
         io = MockIO()

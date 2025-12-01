@@ -12,10 +12,10 @@ import pytest
 from unittest.mock import Mock
 from datetime import datetime
 
-from src.orchestrator.retry_orchestrator import RetryOrchestrator
-from src.protocols.delegation import LLMRequest
-from src.providers.base import LLMResponse
-from src.infrastructure.exceptions import (
+from scrappy.orchestrator.retry_orchestrator import RetryOrchestrator
+from scrappy.protocols.delegation import LLMRequest
+from scrappy.providers.base import LLMResponse
+from scrappy.infrastructure.exceptions import (
     RateLimitError,
     AllProvidersRateLimitedError,
 )

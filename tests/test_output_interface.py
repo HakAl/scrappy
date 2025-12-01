@@ -14,7 +14,7 @@ class TestOutputForTesting:
     @pytest.mark.unit
     def test_test_output_captures_print(self):
         """Test that TestOutput captures print calls."""
-        from src.cli.output import TestOutput
+        from scrappy.cli.output import TestOutput
         output = TestOutput()
 
         output.print("Test message")
@@ -24,7 +24,7 @@ class TestOutputForTesting:
     @pytest.mark.unit
     def test_test_output_captures_styled_print(self):
         """Test that TestOutput captures styled print calls."""
-        from src.cli.output import TestOutput
+        from scrappy.cli.output import TestOutput
         output = TestOutput()
 
         output.print("Error!", color="red", bold=True)
@@ -34,7 +34,7 @@ class TestOutputForTesting:
     @pytest.mark.unit
     def test_test_output_tracks_style_info(self):
         """Test that TestOutput records style parameters for verification."""
-        from src.cli.output import TestOutput
+        from scrappy.cli.output import TestOutput
         output = TestOutput()
 
         output.print("Warning", color="yellow", bold=True)
@@ -48,7 +48,7 @@ class TestOutputForTesting:
     @pytest.mark.unit
     def test_test_output_style_returns_text(self):
         """Test that style() returns unstyled text in test mode."""
-        from src.cli.output import TestOutput
+        from scrappy.cli.output import TestOutput
         output = TestOutput()
 
         result = output.style("text", color="green")
@@ -58,7 +58,7 @@ class TestOutputForTesting:
     @pytest.mark.unit
     def test_test_output_preset_inputs(self):
         """Test that TestOutput can provide preset inputs for testing."""
-        from src.cli.output import TestOutput
+        from scrappy.cli.output import TestOutput
         output = TestOutput(inputs=["user input"])
 
         result = output.prompt("Enter value: ")
@@ -68,7 +68,7 @@ class TestOutputForTesting:
     @pytest.mark.unit
     def test_test_output_preset_confirmations(self):
         """Test that TestOutput can provide preset confirmations."""
-        from src.cli.output import TestOutput
+        from scrappy.cli.output import TestOutput
         output = TestOutput(confirmations=[True, False])
 
         result1 = output.confirm("Continue?")
@@ -80,7 +80,7 @@ class TestOutputForTesting:
     @pytest.mark.unit
     def test_test_output_clear(self):
         """Test that TestOutput can clear captured output."""
-        from src.cli.output import TestOutput
+        from scrappy.cli.output import TestOutput
         output = TestOutput()
 
         output.print("Some output")
@@ -95,7 +95,7 @@ class TestOutputUsage:
     @pytest.mark.unit
     def test_function_uses_output_without_knowing_library(self):
         """Test that functions use Output without knowing implementation."""
-        from src.cli.output import TestOutput
+        from scrappy.cli.output import TestOutput
 
         # Example function - never imports click or rich
         def display_message(output, message: str, is_error: bool = False):
@@ -123,7 +123,7 @@ class TestOutputUsage:
     @pytest.mark.unit
     def test_formatter_uses_output_abstraction(self):
         """Test that formatters use generic output interface."""
-        from src.cli.output import TestOutput
+        from scrappy.cli.output import TestOutput
 
         # Example formatter - no library knowledge
         def format_git_diff(output, diff_line: str) -> str:
@@ -150,7 +150,7 @@ class TestOutputUsage:
     @pytest.mark.unit
     def test_tool_receives_output_instance(self):
         """Test that tools receive output instance, not library."""
-        from src.cli.output import TestOutput
+        from scrappy.cli.output import TestOutput
 
         # Example tool - completely library-agnostic
         class FileLister:
@@ -189,7 +189,7 @@ class TestBackwardCompatibility:
     @pytest.mark.unit
     def test_echo_method_exists(self):
         """Test that echo() method exists for compatibility."""
-        from src.cli.output import TestOutput
+        from scrappy.cli.output import TestOutput
 
         output = TestOutput()
         output.echo("test")
@@ -199,7 +199,7 @@ class TestBackwardCompatibility:
     @pytest.mark.unit
     def test_secho_method_exists(self):
         """Test that secho() method exists for compatibility."""
-        from src.cli.output import TestOutput
+        from scrappy.cli.output import TestOutput
 
         output = TestOutput()
         output.secho("test", fg="green")
@@ -213,7 +213,7 @@ class TestEdgeCases:
     @pytest.mark.unit
     def test_output_style_with_no_color(self):
         """Test style with no color specified."""
-        from src.cli.output import TestOutput
+        from scrappy.cli.output import TestOutput
 
         output = TestOutput()
         result = output.style("text", color=None)
@@ -223,7 +223,7 @@ class TestEdgeCases:
     @pytest.mark.unit
     def test_output_prompt_with_default(self):
         """Test prompt with default value when no input."""
-        from src.cli.output import TestOutput
+        from scrappy.cli.output import TestOutput
 
         output = TestOutput(inputs=[])
         result = output.prompt("Enter: ", default="default_value")
@@ -233,7 +233,7 @@ class TestEdgeCases:
     @pytest.mark.unit
     def test_output_confirm_with_default(self):
         """Test confirm with default value when no confirmation."""
-        from src.cli.output import TestOutput
+        from scrappy.cli.output import TestOutput
 
         output = TestOutput(confirmations=[])
         result = output.confirm("Continue?", default=True)

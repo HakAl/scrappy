@@ -9,8 +9,8 @@ import os
 from unittest.mock import Mock, patch
 from types import SimpleNamespace
 
-from src.providers.groq_provider import GroqProvider
-from src.providers.base import LLMResponse
+from scrappy.providers.groq_provider import GroqProvider
+from scrappy.providers.base import LLMResponse
 
 
 # --- Fixtures ---
@@ -25,7 +25,7 @@ def mock_env():
 @pytest.fixture
 def mock_groq_client():
     """Mocks the Groq class and the returned client instance."""
-    with patch("src.providers.groq_provider.Groq") as MockClass:
+    with patch("scrappy.providers.groq_provider.Groq") as MockClass:
         mock_client = Mock()
         MockClass.return_value = mock_client
         yield MockClass, mock_client

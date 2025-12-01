@@ -9,8 +9,8 @@ import pytest
 from pathlib import Path
 from unittest.mock import Mock, MagicMock
 
-from src.orchestrator.context_coordinator import ContextCoordinator
-from src.context.codebase_context import CodebaseContext
+from scrappy.orchestrator.context_coordinator import ContextCoordinator
+from scrappy.context.codebase_context import CodebaseContext
 
 
 class TestContextCoordinatorAutoExplore:

@@ -7,7 +7,7 @@ Tests ApiKeyConfig dataclass and ApiKeyConfigService with in-memory persistence.
 import pytest
 from typing import Dict, Optional, Any
 
-from src.infrastructure.config.api_keys import (
+from scrappy.infrastructure.config.api_keys import (
     ApiKeyConfig,
     ApiKeyConfigService,
 )
@@ -293,7 +293,7 @@ class TestCreateApiKeyService:
 
     def test_factory_creates_service(self):
         """Factory should create ApiKeyConfigService instance."""
-        from src.infrastructure.config.api_keys import create_api_key_service
+        from scrappy.infrastructure.config.api_keys import create_api_key_service
 
         service = create_api_key_service()
 

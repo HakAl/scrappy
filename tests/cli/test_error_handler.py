@@ -18,7 +18,7 @@ class TestErrorSeverity:
 
     def test_severity_ordering(self):
         """Severity levels have correct ordering (CRITICAL > ERROR > WARNING > INFO)."""
-        from src.cli.utils.error_handler import ErrorSeverity
+        from scrappy.cli.utils.error_handler import ErrorSeverity
 
         assert ErrorSeverity.CRITICAL.value > ErrorSeverity.ERROR.value
         assert ErrorSeverity.ERROR.value > ErrorSeverity.WARNING.value
@@ -35,7 +35,7 @@ class TestFormatError:
 
     def test_format_error_basic(self):
         """format_error converts exception to user-friendly message."""
-        from src.cli.utils.error_handler import format_error
+        from scrappy.cli.utils.error_handler import format_error
 
         error = ValueError("Invalid input value")
         result = format_error(error)
@@ -46,7 +46,7 @@ class TestFormatError:
 
     def test_format_error_with_traceback(self):
         """format_error can include traceback when requested."""
-        from src.cli.utils.error_handler import format_error
+        from scrappy.cli.utils.error_handler import format_error
 
         try:
             raise ValueError("Test error")
@@ -58,7 +58,7 @@ class TestFormatError:
 
     def test_format_error_file_not_found(self):
         """format_error handles FileNotFoundError with clear message."""
-        from src.cli.utils.error_handler import format_error
+        from scrappy.cli.utils.error_handler import format_error
 
         error = FileNotFoundError("config.json")
         result = format_error(error)
@@ -69,7 +69,7 @@ class TestFormatError:
 
     def test_format_error_permission_error(self):
         """format_error handles PermissionError with clear message."""
-        from src.cli.utils.error_handler import format_error
+        from scrappy.cli.utils.error_handler import format_error
 
         error = PermissionError("Access denied to /etc/passwd")
         result = format_error(error)
@@ -78,7 +78,7 @@ class TestFormatError:
 
     def test_format_error_json_decode_error(self):
         """format_error handles JSONDecodeError with clear message."""
-        from src.cli.utils.error_handler import format_error
+        from scrappy.cli.utils.error_handler import format_error
 
         try:
             json.loads("invalid json")
@@ -91,7 +91,7 @@ class TestFormatError:
 
     def test_format_error_connection_error(self):
         """format_error handles connection errors clearly."""
-        from src.cli.utils.error_handler import format_error
+        from scrappy.cli.utils.error_handler import format_error
 
         error = ConnectionError("Failed to connect to API")
         result = format_error(error)
@@ -100,7 +100,7 @@ class TestFormatError:
 
     def test_format_error_strips_long_messages(self):
         """format_error truncates very long error messages."""
-        from src.cli.utils.error_handler import format_error
+        from scrappy.cli.utils.error_handler import format_error
 
         long_message = "x" * 1000
         error = Exception(long_message)
@@ -111,7 +111,7 @@ class TestFormatError:
 
     def test_format_error_empty_message(self):
         """format_error handles exceptions with empty messages."""
-        from src.cli.utils.error_handler import format_error
+        from scrappy.cli.utils.error_handler import format_error
 
         error = Exception("")
         result = format_error(error)
@@ -126,7 +126,7 @@ class TestHandleError:
 
     def test_handle_error_displays_message(self):
         """handle_error outputs error message to IO."""
-        from src.cli.utils.error_handler import handle_error, ErrorSeverity
+        from scrappy.cli.utils.error_handler import handle_error, ErrorSeverity
 
         io = MockIO()
         error = ValueError("Test error message")
@@ -141,7 +141,7 @@ class TestHandleError:
 
     def test_handle_error_bold_for_critical(self):
         """handle_error uses bold for CRITICAL severity."""
-        from src.cli.utils.error_handler import handle_error, ErrorSeverity
+        from scrappy.cli.utils.error_handler import handle_error, ErrorSeverity
 
         io = MockIO()
         error = ValueError("Critical error")
@@ -154,7 +154,7 @@ class TestHandleError:
 
     def test_handle_error_with_context(self):
         """handle_error includes context in output when provided."""
-        from src.cli.utils.error_handler import handle_error
+        from scrappy.cli.utils.error_handler import handle_error
 
         io = MockIO()
         error = ValueError("Test error")
@@ -171,7 +171,7 @@ class TestGetErrorSuggestion:
 
     def test_suggestion_for_file_not_found(self):
         """get_error_suggestion provides help for FileNotFoundError."""
-        from src.cli.utils.error_handler import get_error_suggestion
+        from scrappy.cli.utils.error_handler import get_error_suggestion
 
         error = FileNotFoundError("config.json")
         suggestion = get_error_suggestion(error)
@@ -183,7 +183,7 @@ class TestGetErrorSuggestion:
 
     def test_suggestion_for_permission_error(self):
         """get_error_suggestion provides help for PermissionError."""
-        from src.cli.utils.error_handler import get_error_suggestion
+        from scrappy.cli.utils.error_handler import get_error_suggestion
 
         error = PermissionError("Access denied")
         suggestion = get_error_suggestion(error)
@@ -193,7 +193,7 @@ class TestGetErrorSuggestion:
 
     def test_suggestion_for_connection_error(self):
         """get_error_suggestion provides help for ConnectionError."""
-        from src.cli.utils.error_handler import get_error_suggestion
+        from scrappy.cli.utils.error_handler import get_error_suggestion
 
         error = ConnectionError("Failed to connect")
         suggestion = get_error_suggestion(error)
@@ -203,7 +203,7 @@ class TestGetErrorSuggestion:
 
     def test_suggestion_for_json_error(self):
         """get_error_suggestion provides help for JSON parsing errors."""
-        from src.cli.utils.error_handler import get_error_suggestion
+        from scrappy.cli.utils.error_handler import get_error_suggestion
 
         try:
             json.loads("invalid")
@@ -215,7 +215,7 @@ class TestGetErrorSuggestion:
 
     def test_suggestion_for_unknown_error(self):
         """get_error_suggestion provides generic help for unknown errors."""
-        from src.cli.utils.error_handler import get_error_suggestion
+        from scrappy.cli.utils.error_handler import get_error_suggestion
 
         error = Exception("Unknown error type")
         suggestion = get_error_suggestion(error)
@@ -226,7 +226,7 @@ class TestGetErrorSuggestion:
 
     def test_suggestion_with_context(self):
         """get_error_suggestion uses context for better suggestions."""
-        from src.cli.utils.error_handler import get_error_suggestion
+        from scrappy.cli.utils.error_handler import get_error_suggestion
 
         error = FileNotFoundError("missing.py")
         suggestion = get_error_suggestion(error, context="loading project files")
@@ -241,7 +241,7 @@ class TestSafeOperation:
 
     def test_safe_operation_failure(self):
         """safe_operation returns failure and error for failed operations."""
-        from src.cli.utils.error_handler import safe_operation
+        from scrappy.cli.utils.error_handler import safe_operation
 
         def failing_func():
             raise ValueError("Test error")
@@ -253,7 +253,7 @@ class TestSafeOperation:
 
     def test_safe_operation_with_default(self):
         """safe_operation returns default value on failure when provided."""
-        from src.cli.utils.error_handler import safe_operation
+        from scrappy.cli.utils.error_handler import safe_operation
 
         def failing_func():
             raise ValueError("Test error")
@@ -267,7 +267,7 @@ class TestSafeOperation:
 
     def test_safe_operation_with_io(self):
         """safe_operation can output errors to IO when provided."""
-        from src.cli.utils.error_handler import safe_operation
+        from scrappy.cli.utils.error_handler import safe_operation
 
         io = MockIO()
 
@@ -283,7 +283,7 @@ class TestSafeOperation:
 
     def test_safe_operation_suppresses_output_when_silent(self):
         """safe_operation can suppress error output when silent=True."""
-        from src.cli.utils.error_handler import safe_operation
+        from scrappy.cli.utils.error_handler import safe_operation
 
         io = MockIO()
 
@@ -304,7 +304,7 @@ class TestFileOperationError:
 
     def test_permission_error(self):
         """file_operation_error handles PermissionError."""
-        from src.cli.utils.error_handler import file_operation_error
+        from scrappy.cli.utils.error_handler import file_operation_error
 
         io = MockIO()
         error = PermissionError("Access denied")
@@ -316,7 +316,7 @@ class TestFileOperationError:
 
     def test_generic_io_error(self):
         """file_operation_error handles generic IOError."""
-        from src.cli.utils.error_handler import file_operation_error
+        from scrappy.cli.utils.error_handler import file_operation_error
 
         io = MockIO()
         error = IOError("Disk full")
@@ -332,7 +332,7 @@ class TestApiDelegationError:
 
     def test_api_error_display(self):
         """api_delegation_error displays error message."""
-        from src.cli.utils.error_handler import api_delegation_error
+        from scrappy.cli.utils.error_handler import api_delegation_error
 
         io = MockIO()
         error = Exception("API rate limit exceeded")
@@ -344,7 +344,7 @@ class TestApiDelegationError:
 
     def test_api_error_includes_provider(self):
         """api_delegation_error includes provider name in output."""
-        from src.cli.utils.error_handler import api_delegation_error
+        from scrappy.cli.utils.error_handler import api_delegation_error
 
         io = MockIO()
         error = Exception("Connection failed")
@@ -356,7 +356,7 @@ class TestApiDelegationError:
 
     def test_api_timeout_error(self):
         """api_delegation_error handles timeout errors."""
-        from src.cli.utils.error_handler import api_delegation_error
+        from scrappy.cli.utils.error_handler import api_delegation_error
 
         io = MockIO()
         error = TimeoutError("Request timed out")
@@ -372,7 +372,7 @@ class TestTaskExecutionError:
 
     def test_task_error_display(self):
         """task_execution_error displays error message."""
-        from src.cli.utils.error_handler import task_execution_error
+        from scrappy.cli.utils.error_handler import task_execution_error
 
         io = MockIO()
         error = Exception("Task failed")
@@ -384,7 +384,7 @@ class TestTaskExecutionError:
 
     def test_task_error_includes_task_name(self):
         """task_execution_error includes task name in output."""
-        from src.cli.utils.error_handler import task_execution_error
+        from scrappy.cli.utils.error_handler import task_execution_error
 
         io = MockIO()
         error = Exception("Error")
@@ -400,7 +400,7 @@ class TestSessionError:
 
     def test_session_save_error(self):
         """session_error handles save errors."""
-        from src.cli.utils.error_handler import session_error
+        from scrappy.cli.utils.error_handler import session_error
 
         io = MockIO()
         error = IOError("Could not write to disk")
@@ -412,7 +412,7 @@ class TestSessionError:
 
     def test_session_load_error(self):
         """session_error handles load errors."""
-        from src.cli.utils.error_handler import session_error
+        from scrappy.cli.utils.error_handler import session_error
 
         io = MockIO()
         error = FileNotFoundError("session.json")
@@ -428,7 +428,7 @@ class TestParseError:
 
     def test_json_parse_error(self):
         """parse_error handles JSON parsing errors."""
-        from src.cli.utils.error_handler import parse_error
+        from scrappy.cli.utils.error_handler import parse_error
 
         io = MockIO()
         try:
@@ -441,7 +441,7 @@ class TestParseError:
 
     def test_parse_error_with_content_preview(self):
         """parse_error can show content preview for debugging."""
-        from src.cli.utils.error_handler import parse_error
+        from scrappy.cli.utils.error_handler import parse_error
 
         io = MockIO()
         error = ValueError("Invalid format")
@@ -458,7 +458,7 @@ class TestValidationError:
 
     def test_validation_error_display(self):
         """validation_error displays validation message."""
-        from src.cli.utils.error_handler import validation_error
+        from scrappy.cli.utils.error_handler import validation_error
 
         io = MockIO()
 
@@ -469,7 +469,7 @@ class TestValidationError:
 
     def test_validation_error_with_value(self):
         """validation_error can include the invalid value."""
-        from src.cli.utils.error_handler import validation_error
+        from scrappy.cli.utils.error_handler import validation_error
 
         io = MockIO()
 
@@ -484,7 +484,7 @@ class TestErrorHandlerIntegration:
 
     def test_chained_error_handling(self):
         """Error handler works correctly with multiple sequential errors."""
-        from src.cli.utils.error_handler import handle_error, ErrorSeverity
+        from scrappy.cli.utils.error_handler import handle_error, ErrorSeverity
 
         io = MockIO()
 
@@ -505,7 +505,7 @@ class TestErrorHandlerIntegration:
 
     def test_safe_operation_with_real_file_operations(self):
         """safe_operation handles real file I/O errors correctly."""
-        from src.cli.utils.error_handler import safe_operation
+        from scrappy.cli.utils.error_handler import safe_operation
 
         def read_nonexistent():
             return Path("/nonexistent/file.txt").read_text()
@@ -516,7 +516,7 @@ class TestErrorHandlerIntegration:
 
     def test_error_context_propagation(self):
         """Error context is properly propagated through handlers."""
-        from src.cli.utils.error_handler import handle_error
+        from scrappy.cli.utils.error_handler import handle_error
 
         io = MockIO()
 
@@ -538,7 +538,7 @@ class TestErrorMessageQuality:
 
     def test_no_raw_exception_types_exposed(self):
         """Error messages don't expose raw Python exception types to users."""
-        from src.cli.utils.error_handler import format_error
+        from scrappy.cli.utils.error_handler import format_error
 
         errors = [
             ValueError("test"),
@@ -555,7 +555,7 @@ class TestErrorMessageQuality:
 
     def test_messages_are_sentence_like(self):
         """Error messages are formatted as readable sentences."""
-        from src.cli.utils.error_handler import handle_error
+        from scrappy.cli.utils.error_handler import handle_error
 
         io = MockIO()
         handle_error(ValueError("Invalid input provided"), io)
@@ -566,7 +566,7 @@ class TestErrorMessageQuality:
 
     def test_suggestions_are_actionable(self):
         """Error suggestions provide actionable steps."""
-        from src.cli.utils.error_handler import get_error_suggestion
+        from scrappy.cli.utils.error_handler import get_error_suggestion
 
         error = FileNotFoundError("config.json")
         suggestion = get_error_suggestion(error)
@@ -582,7 +582,7 @@ class TestEdgeCases:
 
     def test_format_error_with_unicode(self):
         """format_error handles Unicode characters in error messages."""
-        from src.cli.utils.error_handler import format_error
+        from scrappy.cli.utils.error_handler import format_error
 
         error = Exception("Error with unicode: cafe, nino")
         result = format_error(error)
@@ -592,7 +592,7 @@ class TestEdgeCases:
 
     def test_deeply_nested_exception_chain(self):
         """handle_error works with deeply nested exception chains."""
-        from src.cli.utils.error_handler import handle_error
+        from scrappy.cli.utils.error_handler import handle_error
 
         io = MockIO()
 

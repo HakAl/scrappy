@@ -4,8 +4,8 @@ Tests for extracted agent components.
 Uses test doubles to verify behavior without concrete dependencies.
 """
 import pytest
-from src.agent.types import AgentAction, ActionResult, ConversationState
-from src.agent_tools.tools.base import ToolResult
+from scrappy.agent.types import AgentAction, ActionResult, ConversationState
+from scrappy.agent_tools.tools.base import ToolResult
 
 
 # =============================================================================
@@ -124,7 +124,7 @@ class MockToolRunner:
 def test_executor_runs_safe_action_without_confirmation():
     """Safe actions should execute without user confirmation."""
     # Arrange
-    from src.agent.action_executor import ActionExecutor
+    from scrappy.agent.action_executor import ActionExecutor
 
     ui = TestAgentUI()
     safety = PermissiveSafetyChecker()
@@ -156,7 +156,7 @@ def test_executor_runs_safe_action_without_confirmation():
 def test_executor_requests_confirmation_for_unsafe_action():
     """Unsafe actions should require confirmation when auto_confirm=False."""
     # Arrange
-    from src.agent.action_executor import ActionExecutor
+    from scrappy.agent.action_executor import ActionExecutor
 
     ui = TestAgentUI()
     ui.confirmation_responses = [True]  # User approves
@@ -188,7 +188,7 @@ def test_executor_requests_confirmation_for_unsafe_action():
 def test_executor_blocks_duplicate_action():
     """Duplicate actions should be rejected without execution."""
     # Arrange
-    from src.agent.action_executor import ActionExecutor
+    from scrappy.agent.action_executor import ActionExecutor
 
     ui = TestAgentUI()
     safety = PermissiveSafetyChecker()
@@ -219,7 +219,7 @@ def test_executor_blocks_duplicate_action():
 def test_executor_skips_confirmation_when_auto_confirm():
     """When auto_confirm=True, even unsafe actions skip confirmation."""
     # Arrange
-    from src.agent.action_executor import ActionExecutor
+    from scrappy.agent.action_executor import ActionExecutor
 
     ui = TestAgentUI()
     safety = StrictSafetyChecker()
@@ -249,7 +249,7 @@ def test_executor_skips_confirmation_when_auto_confirm():
 def test_executor_handles_dry_run_mode():
     """In dry-run mode, actions should not execute."""
     # Arrange
-    from src.agent.action_executor import ActionExecutor
+    from scrappy.agent.action_executor import ActionExecutor
 
     ui = TestAgentUI()
     safety = PermissiveSafetyChecker()

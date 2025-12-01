@@ -12,11 +12,11 @@ TDD: These tests will FAIL until we create src/agent_tools/registry_factory.py
 import pytest
 from unittest.mock import Mock, patch
 
-from src.agent_tools.tools import ToolRegistry
+from scrappy.agent_tools.tools import ToolRegistry
 
 # These imports will FAIL until we create the factory module
 # This is intentional TDD - tests fail first, then we implement
-from src.agent_tools.registry_factory import (
+from scrappy.agent_tools.registry_factory import (
     create_default_registry,
     create_minimal_registry
 )
@@ -189,8 +189,8 @@ class TestToolRegistryFactoryIntegration:
     @pytest.mark.unit
     def test_code_agent_can_use_factory_registry(self, mock_orchestrator_adapter, tmp_path):
         """CodeAgent should accept registry from factory."""
-        from src.agent.core import CodeAgent
-        from src.agent_config import AgentConfig
+        from scrappy.agent.core import CodeAgent
+        from scrappy.agent_config import AgentConfig
 
         # Create registry using factory
         registry = create_default_registry()
@@ -209,8 +209,8 @@ class TestToolRegistryFactoryIntegration:
     @pytest.mark.unit
     def test_code_agent_tools_match_registry(self, mock_orchestrator_adapter, tmp_path):
         """CodeAgent.tools dict should include all registry tools."""
-        from src.agent.core import CodeAgent
-        from src.agent_config import AgentConfig
+        from scrappy.agent.core import CodeAgent
+        from scrappy.agent_config import AgentConfig
 
         registry = create_default_registry()
 
@@ -228,8 +228,8 @@ class TestToolRegistryFactoryIntegration:
     @pytest.mark.unit
     def test_agent_with_minimal_registry(self, mock_orchestrator_adapter, tmp_path):
         """CodeAgent should work with minimal registry."""
-        from src.agent.core import CodeAgent
-        from src.agent_config import AgentConfig
+        from scrappy.agent.core import CodeAgent
+        from scrappy.agent_config import AgentConfig
 
         # Create minimal registry
         registry = create_minimal_registry()
@@ -252,7 +252,7 @@ class TestToolRegistryFactoryIntegration:
 @pytest.fixture
 def mock_orchestrator_adapter():
     """Create a minimal mock orchestrator adapter for testing."""
-    from src.orchestrator_adapter import OrchestratorAdapter
+    from scrappy.orchestrator_adapter import OrchestratorAdapter
 
     adapter = Mock(spec=OrchestratorAdapter)
     adapter.list_providers.return_value = ["mock_provider"]

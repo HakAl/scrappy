@@ -13,7 +13,7 @@ import pytest
 import asyncio
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from src.orchestrator.background import BackgroundTaskManager
+from scrappy.orchestrator.background import BackgroundTaskManager
 
 
 class TestBackgroundTaskSubmission:

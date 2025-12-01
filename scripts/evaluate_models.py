@@ -23,9 +23,9 @@ import time
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.providers.cerebras_provider import CerebrasProvider
-from src.providers.groq_provider import GroqProvider
-from src.providers.gemini_provider import GeminiProvider
+from scrappy.providers.cerebras_provider import CerebrasProvider
+from scrappy.providers.groq_provider import GroqProvider
+from scrappy.providers.gemini_provider import GeminiProvider
 
 
 # Test scenarios for JSON compliance

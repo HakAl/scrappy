@@ -14,9 +14,9 @@ from io import StringIO
 
 from rich.console import Console
 
-from src.cli.unified_io import UnifiedIO
-from src.cli.display import CLIDisplay
-from src.cli.interactive import InteractiveMode
+from scrappy.cli.unified_io import UnifiedIO
+from scrappy.cli.display import CLIDisplay
+from scrappy.cli.interactive import InteractiveMode
 from tests.helpers import MockIO, ConfigurableTestOrchestrator
 
 
@@ -54,7 +54,7 @@ class TestWelcomeBannerPanel:
         orch = ConfigurableTestOrchestrator()
 
         # Create a function to render the enhanced welcome banner
-        from src.cli.interactive_banner import render_welcome_banner
+        from scrappy.cli.interactive_banner import render_welcome_banner
 
         render_welcome_banner(io)
         output = get_captured_output(console)
@@ -69,7 +69,7 @@ class TestWelcomeBannerPanel:
         """Welcome banner should include ASCII art or styled title."""
         io, console = make_capturing_rich_io()
 
-        from src.cli.interactive_banner import render_welcome_banner
+        from scrappy.cli.interactive_banner import render_welcome_banner
 
         render_welcome_banner(io)
         output = get_captured_output(console)
@@ -83,7 +83,7 @@ class TestWelcomeBannerPanel:
         """Welcome banner should list key commands."""
         io, console = make_capturing_rich_io()
 
-        from src.cli.interactive_banner import render_welcome_banner
+        from scrappy.cli.interactive_banner import render_welcome_banner
 
         render_welcome_banner(io)
         output = get_captured_output(console)
@@ -97,7 +97,7 @@ class TestWelcomeBannerPanel:
         """Welcome banner panel should have styled border."""
         io, console = make_capturing_rich_io()
 
-        from src.cli.interactive_banner import render_welcome_banner
+        from scrappy.cli.interactive_banner import render_welcome_banner
 
         render_welcome_banner(io)
         output = get_captured_output(console)
@@ -111,7 +111,7 @@ class TestWelcomeBannerPanel:
         """Welcome banner should display current mode statuses."""
         io, console = make_capturing_rich_io()
 
-        from src.cli.interactive_banner import render_welcome_banner
+        from scrappy.cli.interactive_banner import render_welcome_banner
 
         render_welcome_banner(io)
         output = get_captured_output(console)
@@ -134,7 +134,7 @@ class TestHelpCommandsTable:
         orch = ConfigurableTestOrchestrator()
         display = CLIDisplay(orch, datetime.now(), io)
 
-        from src.cli.display_rich import show_help_table
+        from scrappy.cli.display_rich import show_help_table
 
         show_help_table(io)
         output = get_captured_output(console)
@@ -148,7 +148,7 @@ class TestHelpCommandsTable:
         """Help table should have a column for command names."""
         io, console = make_capturing_rich_io()
 
-        from src.cli.display_rich import show_help_table
+        from scrappy.cli.display_rich import show_help_table
 
         show_help_table(io)
         output = get_captured_output(console)
@@ -163,7 +163,7 @@ class TestHelpCommandsTable:
         """Help table should have descriptions for commands."""
         io, console = make_capturing_rich_io()
 
-        from src.cli.display_rich import show_help_table
+        from scrappy.cli.display_rich import show_help_table
 
         show_help_table(io)
         output = get_captured_output(console)
@@ -178,7 +178,7 @@ class TestHelpCommandsTable:
         """Help table should group commands by category."""
         io, console = make_capturing_rich_io()
 
-        from src.cli.display_rich import show_help_table
+        from scrappy.cli.display_rich import show_help_table
 
         show_help_table(io)
         output = get_captured_output(console)
@@ -195,7 +195,7 @@ class TestHelpCommandsTable:
         """Help table should syntax-highlight command names."""
         io, console = make_capturing_rich_io()
 
-        from src.cli.display_rich import show_help_table
+        from scrappy.cli.display_rich import show_help_table
 
         show_help_table(io)
         output = get_captured_output(console)
@@ -210,7 +210,7 @@ class TestHelpCommandsTable:
         """Help table should optionally filter by category."""
         io, console = make_capturing_rich_io()
 
-        from src.cli.display_rich import show_help_table
+        from scrappy.cli.display_rich import show_help_table
 
         # Show only provider-related commands
         show_help_table(io, category='provider')
@@ -235,7 +235,7 @@ class TestStatusDisplayComponents:
         orch = ConfigurableTestOrchestrator()
         display = CLIDisplay(orch, datetime.now(), io)
 
-        from src.cli.display_rich import show_status_rich
+        from scrappy.cli.display_rich import show_status_rich
 
         show_status_rich(io, orch, datetime.now())
         output = get_captured_output(console)
@@ -249,7 +249,7 @@ class TestStatusDisplayComponents:
         io, console = make_capturing_rich_io()
         orch = ConfigurableTestOrchestrator(recommended_provider='cerebras')
 
-        from src.cli.display_rich import show_status_rich
+        from scrappy.cli.display_rich import show_status_rich
 
         show_status_rich(io, orch, datetime.now())
         output = get_captured_output(console)
@@ -264,7 +264,7 @@ class TestStatusDisplayComponents:
         orch = ConfigurableTestOrchestrator()
         session_start = datetime.now()
 
-        from src.cli.display_rich import show_status_rich
+        from scrappy.cli.display_rich import show_status_rich
 
         show_status_rich(io, orch, session_start)
         output = get_captured_output(console)
@@ -281,7 +281,7 @@ class TestStatusDisplayComponents:
         orch.delegate('cerebras', 'test')
         orch.delegate('cerebras', 'test2')
 
-        from src.cli.display_rich import show_status_rich
+        from scrappy.cli.display_rich import show_status_rich
 
         show_status_rich(io, orch, datetime.now())
         output = get_captured_output(console)
@@ -302,7 +302,7 @@ class TestRateLimitProgressBars:
         """Rate limit usage should display as progress bars."""
         io, console = make_capturing_rich_io()
 
-        from src.cli.display_rich import show_rate_limits_rich
+        from scrappy.cli.display_rich import show_rate_limits_rich
 
         # Mock rate limit data
         rate_data = {
@@ -329,7 +329,7 @@ class TestRateLimitProgressBars:
         """Rate limits should show percentage of quota used."""
         io, console = make_capturing_rich_io()
 
-        from src.cli.display_rich import show_rate_limits_rich
+        from scrappy.cli.display_rich import show_rate_limits_rich
 
         rate_data = {
             'providers': {
@@ -353,7 +353,7 @@ class TestRateLimitProgressBars:
         """Rate limits should color-code based on usage level."""
         io, console = make_capturing_rich_io()
 
-        from src.cli.display_rich import show_rate_limits_rich
+        from scrappy.cli.display_rich import show_rate_limits_rich
 
         # High usage should show warning colors
         rate_data = {
@@ -379,7 +379,7 @@ class TestRateLimitProgressBars:
         """Rate limits should handle missing or empty data gracefully."""
         io, console = make_capturing_rich_io()
 
-        from src.cli.display_rich import show_rate_limits_rich
+        from scrappy.cli.display_rich import show_rate_limits_rich
 
         # Empty rate data
         rate_data = {'providers': {}}
@@ -395,7 +395,7 @@ class TestRateLimitProgressBars:
         """Rate limits should display data for multiple providers."""
         io, console = make_capturing_rich_io()
 
-        from src.cli.display_rich import show_rate_limits_rich
+        from scrappy.cli.display_rich import show_rate_limits_rich
 
         rate_data = {
             'providers': {
@@ -436,7 +436,7 @@ class TestUsageStatisticsRich:
         orch = ConfigurableTestOrchestrator()
         display = CLIDisplay(orch, datetime.now(), io)
 
-        from src.cli.display_rich import show_usage_rich
+        from scrappy.cli.display_rich import show_usage_rich
 
         # Generate some usage
         orch.delegate('cerebras', 'test1')
@@ -457,7 +457,7 @@ class TestUsageStatisticsRich:
 
         orch.delegate('cerebras', 'test')
 
-        from src.cli.display_rich import show_usage_rich
+        from scrappy.cli.display_rich import show_usage_rich
 
         show_usage_rich(io, orch.get_usage_report())
         output = get_captured_output(console)
@@ -470,7 +470,7 @@ class TestUsageStatisticsRich:
         """Usage stats should display cache hit/miss information."""
         io, console = make_capturing_rich_io()
 
-        from src.cli.display_rich import show_usage_rich
+        from scrappy.cli.display_rich import show_usage_rich
 
         report = {
             'total_tasks': 10,
@@ -498,7 +498,7 @@ class TestUsageStatisticsRich:
         """Usage stats should display latency information."""
         io, console = make_capturing_rich_io()
 
-        from src.cli.display_rich import show_usage_rich
+        from scrappy.cli.display_rich import show_usage_rich
 
         report = {
             'total_tasks': 5,
@@ -534,7 +534,7 @@ class TestPlanTaskTreeDisplay:
         """Active plan should display tasks as a tree structure."""
         io, console = make_capturing_rich_io()
 
-        from src.cli.display_rich import show_plan_tree
+        from scrappy.cli.display_rich import show_plan_tree
 
         plan = {
             'goal': 'Implement feature X',
@@ -559,7 +559,7 @@ class TestPlanTaskTreeDisplay:
         """Plan tree should indicate task completion status."""
         io, console = make_capturing_rich_io()
 
-        from src.cli.display_rich import show_plan_tree
+        from scrappy.cli.display_rich import show_plan_tree
 
         plan = {
             'goal': 'Test task',
@@ -582,7 +582,7 @@ class TestPlanTaskTreeDisplay:
         """Plan tree should highlight the current in-progress task."""
         io, console = make_capturing_rich_io()
 
-        from src.cli.display_rich import show_plan_tree
+        from scrappy.cli.display_rich import show_plan_tree
 
         plan = {
             'goal': 'Test highlighting',
@@ -604,7 +604,7 @@ class TestPlanTaskTreeDisplay:
         """Plan tree should handle empty or missing plan gracefully."""
         io, console = make_capturing_rich_io()
 
-        from src.cli.display_rich import show_plan_tree
+        from scrappy.cli.display_rich import show_plan_tree
 
         # Empty plan
         plan = {'goal': '', 'tasks': []}

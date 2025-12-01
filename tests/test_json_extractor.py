@@ -11,7 +11,7 @@ Tests JSON extraction from LLM responses that may contain:
 import json
 import pytest
 
-from src.task_router.json_extractor import JSONExtractor
+from scrappy.task_router.json_extractor import JSONExtractor
 
 
 class TestJSONExtractorBasicExtractions:

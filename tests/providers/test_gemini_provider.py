@@ -1,7 +1,7 @@
 import pytest
 import os
 from unittest.mock import MagicMock, patch, AsyncMock
-from src.providers.gemini_provider import GeminiProvider
+from scrappy.providers.gemini_provider import GeminiProvider
 
 
 # --- Fixtures ---
@@ -15,7 +15,7 @@ def mock_env_setup(monkeypatch):
 @pytest.fixture
 def mock_genai():
     """Mock the google.generativeai module."""
-    with patch("src.providers.gemini_provider.genai") as mock:
+    with patch("scrappy.providers.gemini_provider.genai") as mock:
         # Setup default response structure
         mock_response = MagicMock()
         mock_response.text = "Gemini response"
@@ -34,7 +34,7 @@ def mock_genai():
 def provider(mock_env_setup, mock_genai):
     """Return an initialized provider with mocked dependencies."""
     # We must patch GEMINI_AVAILABLE to True to bypass the safe_import check
-    with patch("src.providers.gemini_provider.GEMINI_AVAILABLE", True):
+    with patch("scrappy.providers.gemini_provider.GEMINI_AVAILABLE", True):
         return GeminiProvider()
 
 
@@ -168,7 +168,7 @@ async def test_chat_async_success(provider):
         "usageMetadata": {"promptTokenCount": 5, "candidatesTokenCount": 5}
     }
 
-    with patch("src.providers.gemini_provider.HTTPX_AVAILABLE", True):
+    with patch("scrappy.providers.gemini_provider.HTTPX_AVAILABLE", True):
         with patch("httpx.AsyncClient") as MockClient:
             # Setup mock client context manager
             mock_client_instance = AsyncMock()
@@ -192,7 +192,7 @@ async def test_chat_async_fallback(provider):
     """Should handle fallback in async mode via HTTP 429 codes."""
     messages = [{"role": "user", "content": "Hi"}]
 
-    with patch("src.providers.gemini_provider.HTTPX_AVAILABLE", True):
+    with patch("scrappy.providers.gemini_provider.HTTPX_AVAILABLE", True):
         with patch("httpx.AsyncClient") as MockClient:
             mock_client_instance = AsyncMock()
             MockClient.return_value.__aenter__.return_value = mock_client_instance

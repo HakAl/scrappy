@@ -7,15 +7,15 @@ Tests the AgentLoop class extracted from CodeAgent.
 import pytest
 from unittest.mock import Mock, MagicMock, patch
 
-from src.agent.agent_loop import AgentLoop
-from src.agent.types import (
+from scrappy.agent.agent_loop import AgentLoop
+from scrappy.agent.types import (
     AgentThought,
     AgentAction,
     ActionResult,
     EvaluationResult,
     ConversationState,
 )
-from src.agent_config import AgentConfig
+from scrappy.agent_config import AgentConfig
 
 
 @pytest.fixture

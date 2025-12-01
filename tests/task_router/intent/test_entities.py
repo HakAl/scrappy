@@ -5,7 +5,7 @@ Tests behavior of entity extraction from user queries.
 """
 
 import pytest
-from src.task_router.intent.entities import RegexEntityExtractor
+from scrappy.task_router.intent.entities import RegexEntityExtractor
 
 
 def test_extractor_finds_file_paths():

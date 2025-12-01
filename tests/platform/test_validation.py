@@ -7,7 +7,7 @@ commands and platform incompatibilities while allowing safe commands.
 
 import pytest
 from tests.helpers import FakePlatformDetector
-from src.platform.validation import SecurityCommandValidator
+from scrappy.platform.validation import SecurityCommandValidator
 
 
 class TestCommandValidation:

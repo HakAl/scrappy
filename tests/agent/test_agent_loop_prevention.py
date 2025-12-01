@@ -9,14 +9,14 @@ import pytest
 from unittest.mock import Mock, MagicMock, patch
 from pathlib import Path
 
-from src.agent.core import CodeAgent
-from src.agent.types import (
+from scrappy.agent.core import CodeAgent
+from scrappy.agent.types import (
     AgentAction,
     ActionResult,
     ConversationState
 )
-from src.agent_config import AgentConfig
-from src.orchestrator_adapter import OrchestratorAdapter
+from scrappy.agent_config import AgentConfig
+from scrappy.orchestrator_adapter import OrchestratorAdapter
 
 
 class TestDuplicateActionDetection:

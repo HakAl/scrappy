@@ -15,7 +15,7 @@ class TestPlanStateManager:
 
     def setup_method(self):
         """Set up test fixtures."""
-        from src.cli.state_manager import PlanStateManager
+        from scrappy.cli.state_manager import PlanStateManager
         self.PlanStateManager = PlanStateManager
         self.orchestrator = ConfigurableTestOrchestrator()
 
@@ -226,7 +226,7 @@ class TestPlanStateManagerDisplay:
 
     def setup_method(self):
         """Set up test fixtures."""
-        from src.cli.state_manager import PlanStateManager
+        from scrappy.cli.state_manager import PlanStateManager
         self.PlanStateManager = PlanStateManager
 
     def test_show_current_task_outputs_task(self):
@@ -341,7 +341,7 @@ class TestPlanStateManagerProgression:
 
     def setup_method(self):
         """Set up test fixtures."""
-        from src.cli.state_manager import PlanStateManager
+        from scrappy.cli.state_manager import PlanStateManager
         self.PlanStateManager = PlanStateManager
 
     def test_prompt_task_progression_shows_options(self):
@@ -472,7 +472,7 @@ class TestPlanStateManagerTaskExecution:
 
     def setup_method(self):
         """Set up test fixtures."""
-        from src.cli.state_manager import PlanStateManager
+        from scrappy.cli.state_manager import PlanStateManager
         self.PlanStateManager = PlanStateManager
 
     def test_get_task_description_from_dict(self):

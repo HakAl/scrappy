@@ -6,10 +6,10 @@ even after native tool call integration.
 """
 import pytest
 from tests.helpers import ConfigurableTestOrchestrator
-from src.agent.core import CodeAgent
-from src.agent_config import AgentConfig
-from src.agent.types import ConversationState
-from src.agent.response_parser import UnifiedResponseParser
+from scrappy.agent.core import CodeAgent
+from scrappy.agent_config import AgentConfig
+from scrappy.agent.types import ConversationState
+from scrappy.agent.response_parser import UnifiedResponseParser
 
 
 @pytest.fixture
@@ -46,7 +46,7 @@ def test_unified_parser_handles_json_text():
 def test_system_prompt_includes_json_format_for_json_providers(json_only_config):
     """System prompt should include JSON format instructions for JSON-only providers."""
     # Test that tool registry's get_full_prompt_section includes JSON format
-    from src.agent_tools.registry_factory import create_default_registry
+    from scrappy.agent_tools.registry_factory import create_default_registry
 
     registry = create_default_registry()
 
@@ -79,7 +79,7 @@ def test_agent_switches_between_json_and_native_tool_providers():
     assert json_result.action == "read_file"
 
     # Test 2: Parse LLMResponse with tool_calls (native tool provider)
-    from src.providers.base import LLMResponse, ToolCall
+    from scrappy.providers.base import LLMResponse, ToolCall
 
     native_response = LLMResponse(
         content="I'll read the file",

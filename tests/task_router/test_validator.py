@@ -1,5 +1,5 @@
 import pytest
-from src.task_router.validator import InputValidator, TaskType, ValidationError
+from scrappy.task_router.validator import InputValidator, TaskType, ValidationError
 
 # -----------------------------------------------------------------------------
 # Fixtures
