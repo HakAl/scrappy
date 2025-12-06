@@ -4,6 +4,22 @@
 
 ---
 
+## SESSION STARTUP
+
+On session start, run `/work` to check the Beads issue tracker for current work.
+
+**Beads Workflow (binary at `.beads/bd.exe`):**
+- `.beads/bd.exe ready --json` - See issues with no blockers (ready to work on)
+- `.beads/bd.exe list --status in_progress` - See what's currently being worked on
+- `.beads/bd.exe create "title" -t task -p 2` - Create new issue (types: bug, feature, task, epic, chore; priority 0-4)
+- `.beads/bd.exe update <id> --status in_progress` - Start working on an issue
+- `.beads/bd.exe close <id>` - Complete an issue
+- `.beads/bd.exe dep add <child> <parent>` - Add dependency (child depends on parent)
+
+When you discover new work while implementing, create an issue with `.beads/bd.exe create --discovered-from <current-issue>`.
+
+---
+
 ## PROJECT STATUS: PRERELEASE
 
 This is a local development project in active prerelease development. There are no external users or published APIs.

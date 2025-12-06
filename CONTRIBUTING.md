@@ -27,6 +27,7 @@ This document provides a set of guidelines to help you contribute effectively.
   - [Writing Tests](#writing-tests)
   - [Test Commands](#test-commands)
   - [A Note on Coverage](#a-note-on-coverage)
+- [AI-Assisted Development (Beads)](#ai-assisted-development-beads)
 
 ## How to Contribute
 
@@ -176,3 +177,46 @@ python -m pytest tests/ --cov=src --cov-report=term-missing
 ### A Note on Coverage
 
 Coverage metrics are informational only. High coverage with poor tests provides a false sense of confidence. Focus on test quality: meaningful assertions, edge case coverage, and behavior verification.
+
+---
+
+## AI-Assisted Development (Beads)
+
+This project uses [Beads](https://github.com/steveyegge/beads) for issue tracking during AI-assisted development sessions. Beads is a lightweight, git-backed issue tracker designed for AI coding agents.
+
+### Setup (Optional)
+
+If you're using Claude Code or similar AI assistants, Beads helps maintain context across sessions:
+
+1. **Download the binary** from [Beads releases](https://github.com/steveyegge/beads/releases)
+2. **Place it in `.beads/`** directory (already gitignored)
+3. **Check current work:** `.beads/bd.exe ready`
+
+### Why Beads?
+
+- **Session continuity** - AI agents lose context between sessions. Beads provides persistent memory.
+- **Work discovery** - Track issues discovered during implementation with `bd create --discovered-from <id>`
+- **Dependency management** - Model task dependencies so agents know what's blocked
+
+### Quick Reference
+
+```bash
+# See what's ready to work on
+.beads/bd.exe ready
+
+# See current work in progress
+.beads/bd.exe list --status in_progress
+
+# Create a new issue
+.beads/bd.exe create "Fix auth bug" -t bug -p 1
+
+# Start working on an issue
+.beads/bd.exe update <id> --status in_progress
+
+# Complete an issue
+.beads/bd.exe close <id>
+```
+
+### For Human Contributors
+
+Beads is optional. You can ignore the `.beads/` directory entirely and use GitHub Issues instead. The two systems are independent.

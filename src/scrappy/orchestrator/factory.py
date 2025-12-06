@@ -225,9 +225,9 @@ class OrchestratorFactory:
         """Create default codebase context."""
         context = CodebaseContext(self.project_path)
 
-        # TODO: Only initialize semantic search if explicitly enabled
-        # TODO: Only initialize semantic search if explicitly enabled
-        # TODO: Only initialize semantic search if explicitly enabled
+        # TODO:
+        # TODO:
+        # TODO:  initialize semantic search
         # if self.enable_semantic_search:
         #     try:
         #         from ..context.semantic.initializer import SemanticSearchInitializer
@@ -237,9 +237,9 @@ class OrchestratorFactory:
         #     except ImportError:
         #         # Semantic search dependencies not available
         #         pass
-        # TODO: Only initialize semantic search if explicitly enabled
-        # TODO: Only initialize semantic search if explicitly enabled
-        # TODO: Only initialize semantic search if explicitly enabled
+        # TODO:
+        # TODO:
+        # TODO:
 
         return context
 

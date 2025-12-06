@@ -66,3 +66,6 @@ htmlcov/
 /CON
 /con
 nul
+
+# Beads binary (installed locally)
+.beads/bd.exe

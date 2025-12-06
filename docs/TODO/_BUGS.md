@@ -1,10 +1,6 @@
 ## Issues
 
----
-create a plan for semantic search UX
-Current status: shows some numbers, progress doesn't move, timer remains at 0, isn't hidden when task completes.
-Shown every time on load -- need a paradigm created so we show status bar on initial / large scans. not each app launch
----
+
 
 ---
 too much agent output? toggle with agent verbose mode?
