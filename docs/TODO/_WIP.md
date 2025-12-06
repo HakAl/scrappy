@@ -1,20 +1,11 @@
----
-docs/TODO/PLAN_SEMANTIC_SEARCH_UX.md
 
-semantic search backend is theoretically functional, but we haven't built a tool for it, or integrated with UX.
-it's initialization is commented out here src/scrappy/orchestrator/factory.py
-let's research and create a plan for semantic search UX
-Current status: status bar shows some numbers, progress doesn't move, timer remains at 0, isn't hidden when task completes. 
-Shown every time on load -- need a paradigm created so we show status bar on initial / large scans. not each app launch
-Desired status: Semantic search is shown on initial index. Not shown for small updates -- need to define limits and ensure indexing occurs periodically as projects evolve. avoid blocking UX waiting to load in all scenarios.
----
 
 how can we create agent/claude functionality to follow this process with a single command?
 prompts, hooks, slash commands? what tools should we use?
 PROCESS: 3 steps? plan, implement, maybe test?
 ```
 PLAN
-- review TODO_ITEM
+- review TODO_ITEM.md
 - create integration plan (TODO_ITEM_PLAN) from docs
 - create/update .beads + clear context
 - refine integration TODO_ITEM_PLAN based on architectural goals

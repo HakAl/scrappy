@@ -8,13 +8,6 @@
 
 On session start, run `/work` to check the Beads issue tracker for current work.
 
-**Autonomous Workflow:**
-Run `/auto <bead-id>` to execute full autonomous workflow (PLAN -> IMPLEMENT -> TEST).
-Or run directly: `python workflows/orchestrator.py <bead-id>`
-
-The orchestrator uses aggressive context isolation - each step runs in a fresh agent.
-State persists only in beads. No context survives between agents.
-
 **Beads Workflow (binary at `.beads/bd.exe`):**
 - `.beads/bd.exe ready --json` - See issues with no blockers (ready to work on)
 - `.beads/bd.exe list --status in_progress` - See what's currently being worked on
