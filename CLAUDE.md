@@ -8,6 +8,13 @@
 
 On session start, run `/work` to check the Beads issue tracker for current work.
 
+**Autonomous Workflow:**
+Run `/auto <bead-id>` to execute full autonomous workflow (PLAN -> IMPLEMENT -> TEST).
+Or run directly: `python workflows/orchestrator.py <bead-id>`
+
+The orchestrator uses aggressive context isolation - each step runs in a fresh agent.
+State persists only in beads. No context survives between agents.
+
 **Beads Workflow (binary at `.beads/bd.exe`):**
 - `.beads/bd.exe ready --json` - See issues with no blockers (ready to work on)
 - `.beads/bd.exe list --status in_progress` - See what's currently being worked on
@@ -17,6 +24,50 @@ On session start, run `/work` to check the Beads issue tracker for current work.
 - `.beads/bd.exe dep add <child> <parent>` - Add dependency (child depends on parent)
 
 When you discover new work while implementing, create an issue with `.beads/bd.exe create --discovered-from <current-issue>`.
+
+---
+
+## ISSUE DISCOVERY (MANDATORY)
+
+While coding, you MUST create beads for any issues you encounter. This includes:
+
+**Code Quality Issues:**
+- SOLID principle violations (god classes, missing protocols, hard-coded dependencies)
+- Missing dependency injection
+- Concrete classes without protocols
+- Tests that violate guidelines (over-mocked, structure-only, no behavior testing)
+- Missing edge case handling
+
+**Bugs and Problems:**
+- Runtime errors or unexpected behavior
+- Logic errors discovered during implementation
+- Integration issues between components
+- Performance problems
+
+**Technical Debt:**
+- TODO/FIXME comments in code
+- Incomplete implementations
+- Missing tests for existing functionality
+- Documentation gaps
+
+**How to Log Issues:**
+```bash
+# Create a bug for code quality violation
+.beads/bd.exe create "SRP violation in XyzClass - does caching AND validation" -t bug -p 2
+
+# Create a task for missing protocol
+.beads/bd.exe create "Add protocol for FooService - currently concrete only" -t task -p 3
+
+# Create chore for tech debt
+.beads/bd.exe create "Add edge case tests for bar() function" -t chore -p 3
+```
+
+**After creating the bead**, append a one-line summary to `docs/TODO/AGENT_BUGS.md`:
+```
+- [BEAD-ID] Brief description (discovered while working on X)
+```
+
+This creates a persistent human-readable log of agent-discovered issues.
 
 ---
 
