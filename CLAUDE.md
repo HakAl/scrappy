@@ -4,25 +4,9 @@
 
 ---
 
-## SESSION STARTUP
-
-On session start, run `/work` to check the Beads issue tracker for current work.
-
-**Beads Workflow (binary at `.beads/bd.exe`):**
-- `.beads/bd.exe ready --json` - See issues with no blockers (ready to work on)
-- `.beads/bd.exe list --status in_progress` - See what's currently being worked on
-- `.beads/bd.exe create "title" -t task -p 2` - Create new issue (types: bug, feature, task, epic, chore; priority 0-4)
-- `.beads/bd.exe update <id> --status in_progress` - Start working on an issue
-- `.beads/bd.exe close <id>` - Complete an issue
-- `.beads/bd.exe dep add <child> <parent>` - Add dependency (child depends on parent)
-
-When you discover new work while implementing, create an issue with `.beads/bd.exe create --discovered-from <current-issue>`.
-
----
-
 ## ISSUE DISCOVERY (MANDATORY)
 
-While coding, you MUST create beads for any issues you encounter. This includes:
+While coding, you MUST document any issues you encounter here: docs/TODO/AGENT_BUGS.md. This includes:
 
 **Code Quality Issues:**
 - SOLID principle violations (god classes, missing protocols, hard-coded dependencies)
@@ -43,39 +27,24 @@ While coding, you MUST create beads for any issues you encounter. This includes:
 - Missing tests for existing functionality
 - Documentation gaps
 
-**How to Log Issues:**
-```bash
-# Create a bug for code quality violation
-.beads/bd.exe create "SRP violation in XyzClass - does caching AND validation" -t bug -p 2
-
-# Create a task for missing protocol
-.beads/bd.exe create "Add protocol for FooService - currently concrete only" -t task -p 3
-
-# Create chore for tech debt
-.beads/bd.exe create "Add edge case tests for bar() function" -t chore -p 3
-```
-
-**After creating the bead**, append a one-line summary to `docs/TODO/AGENT_BUGS.md`:
-```
-- [BEAD-ID] Brief description (discovered while working on X)
-```
-
-This creates a persistent human-readable log of agent-discovered issues.
-
 ---
 
-## PROJECT STATUS: PRERELEASE
+## PROJECT STATUS: PRERELEASE (AGGRESSIVE REFACTORING)
 
-This is a local development project in active prerelease development. There are no external users or published APIs.
+This is a local development project. There are no external users.
 
-**Therefore:**
-- **NO deprecation warnings** - Just remove or change code directly
-- **NO backward compatibility shims** - Delete old code, don't wrap it
-- **NO fallback code paths** - If something is replaced, remove the old version
-- **NO legacy support** - No need to maintain old interfaces
-- **NO migration code** - Just make the change
+**THE GOLDEN RULE: CLEAN BREAKS OVER SHIMS**
+- **NO deprecation warnings** - Just remove the code.
+- **NO backward compatibility** - Delete the old path.
+- **NO "I left the old one just in case"** - Delete it.
 
-When refactoring or fixing bugs: delete the old code, write the new code. Done.
+**HOW TO HANDLE BREAKING CHANGES:**
+1. **Search First:** Before changing a function signature or class, run `grep`/`find` to locate all callers.
+2. **Atomic Update:** You must update the Definition AND all Callers in the same work unit.
+3. **Verify:** If you delete a file, ensure no imports point to it.
+
+**When you see legacy code/technical debt:**
+Do not wrap it. Do not suppress it. **Delete it and rewrite it.**
 
 ---
 

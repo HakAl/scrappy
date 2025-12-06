@@ -1,560 +1,273 @@
 #!/usr/bin/env python3
 """
-Autonomous workflow runner using claude CLI.
+Zen Mode: Pure Markdown Workflow.
 
-Each step runs in a fresh claude session (no context pollution).
-State persists in beads between steps.
+PHILOSOPHY:
+- The File System is the Database.
+- Markdown is the API.
+- If a file exists, that step is done.
 
-Usage:
-Run it with a TODO file path:
+USAGE:
+  python scripts/zen_auto.py <TODO_FILE> [flags]
 
-  python scripts/auto.py docs/TODO/PLAN_SOMETHING_UX.md
-  or you can use:
-  /auto docs/TODO/PLAN_SEMANTIC_SEARCH_UX.md
-
-  It will:
-  1. Create a bead to track the work
-  2. PLAN (5 fresh Claude sessions) - create and refine the plan, saving to bead
-  3. IMPLEMENT - sanity check, implement each step, audit loop
-  4. TEST - run tests, fix loop, generate final report
-  5. Close the bead
-
-  Each step runs in a fresh claude -p session (no context pollution). State persists in the bead between steps.
-
-  Output streams to console so you can watch progress. The bead tracks everything via comments.
+FLAGS:
+  --reset        Nuke everything and start over.
+  --retry-steps  Keep Plan/Scout, but clear 'Step Complete' logs to force re-implementation.
 """
-
+from __future__ import annotations
+import os
+import re
+import shutil
 import subprocess
 import sys
-import json
+import time
+import tempfile
 from pathlib import Path
+from typing import List, Optional
+
+# =============================================================================
+# CONFIGURATION
+# =============================================================================
 
 PROJECT_ROOT = Path(__file__).parent.parent
-BD_EXE = PROJECT_ROOT / ".beads" / "bd.exe"
-TEMP_PLAN = PROJECT_ROOT / ".beads" / "tmp_plan.md"
-TEMP_NOTES = PROJECT_ROOT / ".beads" / "tmp_notes.md"
+WORK_DIR = PROJECT_ROOT / ".agent_work"
+
+# The Artifacts are the State
+SCOUT_FILE = WORK_DIR / "scout.md"
+PLAN_FILE = WORK_DIR / "plan.md"
+LOG_FILE = WORK_DIR / "work_log.md"
+NOTES_FILE = WORK_DIR / "final_notes.md"
+
+CLAUDE_EXE = shutil.which("claude")
+if not CLAUDE_EXE:
+    print("ERROR: claude not found.")
+    sys.exit(1)
+
+# Models
+MODEL_BRAIN = "opus"  # Planning / Architecture
+MODEL_HANDS = "sonnet"  # Coding / Scouting
+MODEL_EYES = "haiku"  # Checks / Summaries
 
 
-def run_claude(prompt: str, timeout: int = 300) -> str:
-    """Run claude CLI in print mode with fresh context."""
+# =============================================================================
+# CORE UTILS
+# =============================================================================
+
+def log(msg: str):
+    """Persistent logging to file + stdout."""
+    WORK_DIR.mkdir(exist_ok=True)
+    ts = time.strftime("%H:%M:%S")
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(f"[{ts}] {msg}\n")
+    print(f"  {msg}")
+
+
+def read_file(path: Path) -> str:
+    return path.read_text(encoding="utf-8") if path.exists() else ""
+
+
+def write_file(path: Path, content: str):
+    """Atomic write to prevent corruption."""
+    WORK_DIR.mkdir(exist_ok=True)
+    # Strip the #EOF sentinel we ask Claude for
+    clean_content = re.sub(r"\n?#EOF\s*$", "", content)
+
+    # Write to temp then rename (Atomic)
+    with tempfile.NamedTemporaryFile("w", dir=WORK_DIR, delete=False, encoding="utf-8") as tf:
+        tf.write(clean_content)
+        tmp_path = Path(tf.name)
+
+    tmp_path.replace(path)
+
+
+def run_claude(prompt: str, model: str, timeout: int = 480) -> Optional[str]:
+    """Run Claude in a clean subprocess."""
+    cmd = [CLAUDE_EXE, "-p", "--dangerously-skip-permissions", "--model", model]
     try:
-        result = subprocess.run(
-            ["claude", "-p", "--dangerously-skip-permissions", prompt],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            cwd=PROJECT_ROOT,
-            encoding="utf-8",
-            errors="replace",
+        proc = subprocess.Popen(
+            cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            cwd=PROJECT_ROOT, text=True, encoding="utf-8", errors="replace"
         )
-        if result.returncode != 0:
-            print(f"Claude error: {result.stderr}", file=sys.stderr)
-        return result.stdout
-    except subprocess.TimeoutExpired:
-        print(f"Timeout after {timeout}s", file=sys.stderr)
-        return ""
-
-
-def run_bd(args: list[str]) -> str:
-    """Run beads command."""
-    result = subprocess.run(
-        [str(BD_EXE)] + args,
-        capture_output=True,
-        text=True,
-        cwd=PROJECT_ROOT,
-        encoding="utf-8",
-        errors="replace",
-    )
-    return result.stdout
-
-
-def create_bead(title: str, description: str) -> str:
-    """Create a bead and return its ID."""
-    result = subprocess.run(
-        [str(BD_EXE), "create", title, "-t", "task", "-p", "2", "-d", description, "--json"],
-        capture_output=True,
-        text=True,
-        cwd=PROJECT_ROOT,
-        encoding="utf-8",
-        errors="replace",
-    )
-    data = json.loads(result.stdout)
-    return data["id"]
-
-
-def update_bead(bead_id: str, design: str = None, notes: str = None) -> None:
-    """Update bead with plan or notes."""
-    args = [str(BD_EXE), "update", bead_id]
-    if design:
-        args.extend(["--design", design])
-    if notes:
-        args.extend(["--notes", notes])
-    subprocess.run(args, cwd=PROJECT_ROOT, encoding="utf-8", errors="replace")
-
-
-def update_bead_from_temp(bead_id: str, field: str = "design") -> bool:
-    """Read temp file and update bead. Returns True if file existed."""
-    temp_file = TEMP_PLAN if field == "design" else TEMP_NOTES
-    if temp_file.exists():
-        content = temp_file.read_text(encoding="utf-8")
-        if content.strip():
-            args = [str(BD_EXE), "update", bead_id, f"--{field}", content]
-            subprocess.run(args, cwd=PROJECT_ROOT, encoding="utf-8", errors="replace")
-            temp_file.unlink()  # Clean up
-            return True
-    return False
-
-
-def add_comment(bead_id: str, comment: str) -> None:
-    """Add comment to bead."""
-    subprocess.run([str(BD_EXE), "comment", bead_id, comment], cwd=PROJECT_ROOT, encoding="utf-8", errors="replace")
-
-
-def get_bead(bead_id: str) -> dict:
-    """Get bead data."""
-    result = subprocess.run(
-        [str(BD_EXE), "show", bead_id, "--json"],
-        capture_output=True,
-        text=True,
-        cwd=PROJECT_ROOT,
-        encoding="utf-8",
-        errors="replace",
-    )
-    data = json.loads(result.stdout)
-    return data[0] if isinstance(data, list) else data
-
-
-def close_bead(bead_id: str) -> None:
-    """Close bead."""
-    subprocess.run([str(BD_EXE), "close", bead_id], cwd=PROJECT_ROOT, encoding="utf-8", errors="replace")
+        stdout, stderr = proc.communicate(input=prompt, timeout=timeout)
+        if proc.returncode != 0:
+            log(f"[ERROR] Claude ({model}): {stderr[:200]}")
+            return None
+        return stdout
+    except Exception as e:
+        log(f"[ERROR] Subprocess: {e}")
+        return None
 
 
 # =============================================================================
-# PLAN PHASE
+# PHASES
 # =============================================================================
 
-def run_with_retry(step_func, bead_id: str, max_retries: int = 3, **kwargs) -> bool:
-    """Run step 1 with retry logic - checks if design field was populated."""
-    for attempt in range(max_retries):
-        step_func(bead_id, **kwargs)
-        bead = get_bead(bead_id)
-        if bead.get("design"):
-            return True
-        print(f"  Retry {attempt + 1}/{max_retries}: design not populated")
-    return False
+def phase_1_scout(todo_file: str):
+    if SCOUT_FILE.exists():
+        log("[SCOUT] Found existing report. Skipping.")
+        return
 
+    log(f"\n[SCOUT] Investigating {todo_file}...")
 
-def plan_step_1_create(bead_id: str, todo_file: str) -> None:
-    """Step 1: Review TODO and create initial integration plan."""
-    print("\n[PLAN 1/5] Creating initial integration plan...")
+    prompt = f"""TASK: Scout the codebase for {todo_file}
+CONTEXT: Personal Project. Legacy code exists.
+GOAL: Map the files. Do NOT plan yet.
 
-    prompt = f"""TASK: Create integration plan for {todo_file}
+ACTIONS:
+1. `ls -R`, `find`, `grep` to find relevant files.
+2. Read code to understand dependencies.
+3. Identify what to DELETE (Clean Code policy).
 
-REQUIRED ACTIONS:
-1. Read {todo_file} to understand the goal
-2. Read CLAUDE.md for architectural principles
-3. Create a step-by-step integration plan with numbered steps
-4. Each step must specify exact files and concrete actions
-
-MANDATORY - Write your plan to this file:
-.beads/tmp_plan.md
-
-Write the complete plan to that file. Use the Write tool, not echo/cat.
-The plan will be saved to the bead from this file.
+OUTPUT: Write report to {SCOUT_FILE}
+End with: #EOF
 """
-
-    output = run_claude(prompt)
-    print(output)
-    update_bead_from_temp(bead_id, "design")
-    add_comment(bead_id, "[PLAN 1/5] Complete")
-
-
-def plan_step_2_architecture(bead_id: str) -> None:
-    """Step 2: Refine plan for architectural goals."""
-    print("\n[PLAN 2/5] Refining for architectural goals...")
-
-    bead = get_bead(bead_id)
-    current_plan = bead.get("design", "")
-
-    prompt = f"""TASK: Refine integration plan for architectural quality
-
-CURRENT PLAN:
-{current_plan}
-
-REQUIRED ACTIONS:
-1. Read CLAUDE.md for architectural principles
-2. Refine the plan to ensure it follows:
-   - SOLID principles
-   - Protocol-first design
-   - Dependency injection
-   - No god classes
-
-MANDATORY - Write the refined plan to this file:
-.beads/tmp_plan.md
-
-Write the complete refined plan to that file. Use the Write tool.
-"""
-
-    output = run_claude(prompt)
-    print(output)
-    update_bead_from_temp(bead_id, "design")
-    add_comment(bead_id, "[PLAN 2/5] Complete")
-
-
-def plan_step_3_outcome(bead_id: str, todo_file: str) -> None:
-    """Step 3: Verify plan achieves desired outcome."""
-    print("\n[PLAN 3/5] Verifying plan achieves desired outcome...")
-
-    bead = get_bead(bead_id)
-    current_plan = bead.get("design", "")
-
-    prompt = f"""TASK: Verify plan achieves the desired outcome
-
-REQUIRED ACTIONS:
-1. Read {todo_file} to understand the original goal
-2. Compare the current plan against that goal
-3. If the plan does NOT achieve the goal, fix it
-4. If the plan DOES achieve the goal, save it unchanged
-
-CURRENT PLAN:
-{current_plan}
-
-MANDATORY - Write the verified plan to this file:
-.beads/tmp_plan.md
-
-Write the complete plan (fixed or unchanged) to that file. Use the Write tool.
-"""
-
-    output = run_claude(prompt)
-    print(output)
-    update_bead_from_temp(bead_id, "design")
-    add_comment(bead_id, "[PLAN 3/5] Complete")
-
-
-def plan_step_4_tests(bead_id: str) -> None:
-    """Step 4: Verify new behavior is tested."""
-    print("\n[PLAN 4/5] Verifying tests are covered...")
-
-    bead = get_bead(bead_id)
-    current_plan = bead.get("design", "")
-
-    prompt = f"""TASK: Ensure plan includes adequate testing
-
-REQUIRED ACTIONS:
-1. Read CLAUDE.md for testing principles
-2. Review the current plan for test coverage
-3. Verify it includes:
-   - Tests that prove features work (behavior tests)
-   - Edge case coverage
-   - No over-mocking
-4. If testing is inadequate, add specific testing steps
-
-CURRENT PLAN:
-{current_plan}
-
-MANDATORY - Write the plan with tests to this file:
-.beads/tmp_plan.md
-
-Write the complete plan (with testing steps added if needed) to that file. Use the Write tool.
-"""
-
-    output = run_claude(prompt)
-    print(output)
-    update_bead_from_temp(bead_id, "design")
-    add_comment(bead_id, "[PLAN 4/5] Complete")
-
-
-def plan_step_5_concrete(bead_id: str) -> None:
-    """Step 5: Verify all steps are concrete."""
-    print("\n[PLAN 5/5] Verifying all steps are concrete...")
-
-    bead = get_bead(bead_id)
-    current_plan = bead.get("design", "")
-
-    prompt = f"""TASK: Make all plan steps concrete and actionable
-
-REQUIRED ACTIONS:
-1. Review each step in the current plan
-2. Ensure each step specifies:
-   - Exactly what file(s) to create/modify
-   - Exactly what code to write
-   - A single focused action (achievable in one session)
-   - No ambiguity
-3. Replace vague steps like "implement the feature" with specific actions
-
-CURRENT PLAN:
-{current_plan}
-
-MANDATORY - Write the final concrete plan to this file:
-.beads/tmp_plan.md
-
-Write the complete final plan to that file. Use the Write tool.
-This is the FINAL plan step - make it perfect.
-"""
-
-    output = run_claude(prompt)
-    print(output)
-    update_bead_from_temp(bead_id, "design")
-    add_comment(bead_id, "[PLAN 5/5] Complete - PLAN PHASE DONE")
-
-
-# =============================================================================
-# IMPLEMENT PHASE
-# =============================================================================
-
-def implement_sanity_check(bead_id: str) -> bool:
-    """Sanity check before implementation."""
-    print("\n[IMPLEMENT] Sanity check...")
-
-    bead = get_bead(bead_id)
-    plan = bead.get("design", "")
-
-    prompt = f"""Review this plan before implementation:
-
-PLAN:
-{plan}
-
-Does this make sense to implement? Any red flags?
-
-If OK, respond with EXACTLY: PROCEED
-If not OK, respond with EXACTLY: STOP: <reason>
-"""
-
-    output = run_claude(prompt, timeout=60)
-    print(output)
-
-    if "STOP" in output.upper():
-        add_comment(bead_id, f"[IMPLEMENT] Blocked: {output[:200]}")
-        return False
-
-    add_comment(bead_id, "[IMPLEMENT] Sanity check passed")
-    run_bd(["update", bead_id, "--status", "in_progress"])
-    return True
-
-
-def implement_step(bead_id: str, step_num: int, step_text: str) -> None:
-    """Implement a single step from the plan."""
-    print(f"\n[IMPLEMENT {step_num}] {step_text[:60]}...")
-
-    bead = get_bead(bead_id)
-    plan = bead.get("design", "")
-
-    prompt = f"""TASK: Implement step {step_num} of the plan
-
-STEP TO IMPLEMENT: {step_text}
-
-FULL PLAN CONTEXT:
-{plan}
-
-REQUIRED ACTIONS:
-1. Read CLAUDE.md for architectural principles
-2. Implement the step - write the actual code
-3. Verify your implementation aligns with CLAUDE.md principles
-4. If it doesn't align, fix it before finishing
-
-Write real code. Make real file changes. This is implementation, not planning.
-"""
-
-    output = run_claude(prompt, timeout=600)
-    print(output)
-    add_comment(bead_id, f"[IMPLEMENT {step_num}] Complete")
-
-
-def implement_audit(bead_id: str) -> bool:
-    """Audit implementation against plan."""
-    print("\n[AUDIT] Comparing code to plan...")
-
-    bead = get_bead(bead_id)
-    plan = bead.get("design", "")
-
-    prompt = f"""TASK: Audit implementation against the plan
-
-PLAN:
-{plan}
-
-REQUIRED ACTIONS:
-1. Read CLAUDE.md for architectural principles
-2. Review the current code state (read the files that were supposed to be modified)
-3. Compare actual code against the plan
-4. Verify code follows CLAUDE.md principles
-
-IF changes are needed: Make them, then respond with: CHANGES_MADE: <description>
-IF everything is correct: Respond with exactly: AUDIT_PASS
-
-You must respond with one of these two options.
-"""
-
-    output = run_claude(prompt, timeout=600)
-    print(output)
-
-    if "AUDIT_PASS" in output.upper():
-        add_comment(bead_id, "[AUDIT] Passed")
-        return True
+    output = run_claude(prompt, model=MODEL_HANDS)
+    if output and SCOUT_FILE.exists():
+        log("[SCOUT] Complete.")
     else:
-        add_comment(bead_id, f"[AUDIT] Changes made: {output[:100]}")
-        return False
+        log("[SCOUT] Failed to generate report.")
+        sys.exit(1)
 
 
-def parse_plan_steps(plan: str) -> list[str]:
-    """Extract numbered steps from plan."""
-    lines = plan.split("\n")
-    steps = []
-    for line in lines:
-        stripped = line.strip()
-        if stripped and len(stripped) > 2:
-            # Check if line starts with a number
-            if stripped[0].isdigit() or (stripped.startswith("Step") or stripped.startswith("###")):
-                steps.append(stripped)
-    return steps if steps else [plan]  # fallback: treat whole plan as one step
+def phase_2_plan(todo_file: str):
+    if PLAN_FILE.exists():
+        log("[PLAN] Found existing plan. Skipping.")
+        return
 
+    log("\n[PLAN] Drafting Architecture...")
+    scout_data = read_file(SCOUT_FILE)
 
-# =============================================================================
-# TEST PHASE
-# =============================================================================
+    prompt = f"""TASK: Create execution plan for {todo_file}
+CONTEXT: Personal Project. "Clean Code" > "Backward Compatibility".
 
-def test_run(bead_id: str) -> bool:
-    """Run tests and check if they pass."""
-    print("\n[TEST] Running tests...")
+SCOUT REPORT:
+{scout_data}
 
-    bead = get_bead(bead_id)
+REQUIRED:
+1. Create a numbered list of ATOMIC steps.
+2. "DELETE file X" (No deprecation).
+3. "UPDATE callers" (No adapters).
+4. Include a final Verification step.
 
-    prompt = f"""TASK: Run tests and verify implementation works
-
-GOAL: {bead.get('title', '')}
-
-REQUIRED ACTIONS:
-1. Run the test suite: python -m pytest tests/ -v
-2. Check for any runtime errors or test failures
-
-IF tests pass: Respond with exactly: TESTS_PASS
-IF tests fail: Fix the issues, then respond with: FIXED: <what you fixed>
-IF you cannot fix: Respond with: BLOCKED: <reason>
-
-You must respond with one of these three options after running tests.
+OUTPUT: Write to {PLAN_FILE}
+End with: #EOF
 """
-
-    output = run_claude(prompt, timeout=600)
-    print(output)
-
-    if "TESTS_PASS" in output.upper():
-        add_comment(bead_id, "[TEST] All tests passing")
-        return True
-    elif "BLOCKED" in output.upper():
-        add_comment(bead_id, f"[TEST] Blocked: {output[:200]}")
-        return False
+    output = run_claude(prompt, model=MODEL_BRAIN)
+    if output and PLAN_FILE.exists():
+        log("[PLAN] Complete.")
     else:
-        add_comment(bead_id, "[TEST] Fixed issues, will retry")
-        return False
+        log("[PLAN] Failed to generate plan.")
+        sys.exit(1)
 
 
-def test_final_report(bead_id: str) -> None:
-    """Generate final implementation report."""
-    print("\n[TEST] Generating final report...")
+def phase_3_implement():
+    plan_content = read_file(PLAN_FILE)
 
-    bead = get_bead(bead_id)
+    # Robust Regex: Handle missing trailing newline by appending \n
+    # Looks for "Step N:" or "1." followed by content until next step
+    steps = re.findall(
+        r"(?:^|\n)(?:Step\s+\d+|[0-9]+\.)[:\s]+(.*?)(?=\n(?:Step|[0-9]+\.)|$)",
+        plan_content + "\n",
+        re.DOTALL | re.IGNORECASE
+    )
 
-    prompt = f"""TASK: Generate final implementation report
+    if not steps:
+        # Fallback for bullets
+        steps = re.findall(r"(?:^|\n)[-*]\s+(.*?)(?=\n[-*]|$)", plan_content)
 
-BEAD: {bead_id}
-GOAL: {bead.get('title', '')}
-PLAN: {bead.get('design', '')[:2000]}
+    log(f"\n[IMPLEMENT] Found {len(steps)} steps.")
 
-REQUIRED ACTIONS:
-1. Summarize what was implemented
-2. List what tests were added/modified
-3. Note any deviations from the plan
-4. Document any known limitations
+    for i, step_text in enumerate(steps, 1):
+        step_text = step_text.strip()
 
-MANDATORY - Write the report to this file:
-.beads/tmp_notes.md
+        # Simple Resume Logic: Check log file for completion
+        if f"[COMPLETE] Step {i}" in read_file(LOG_FILE):
+            log(f"[SKIP] Step {i} (Already done)")
+            continue
 
-Write the complete report to that file. Use the Write tool.
+        log(f"\n[STEP {i}] {step_text[:60]}...")
+
+        prompt = f"""TASK: Implement Step {i}
+STEP: {step_text}
+FULL PLAN: {plan_content}
+
+RULES:
+1. DELETE old code (No shims).
+2. Update callers immediately.
+3. No broken imports.
+
+CRITICAL: WRITE CODE or DELETE FILES.
+End with: STEP_COMPLETE or STEP_BLOCKED
 """
+        output = run_claude(prompt, model=MODEL_HANDS, timeout=600)
 
-    output = run_claude(prompt, timeout=120)
-    print(output)
-    update_bead_from_temp(bead_id, "notes")
-    add_comment(bead_id, "[TEST] Final report generated")
+        if output and "STEP_COMPLETE" in output:
+            log(f"[COMPLETE] Step {i}")
+        else:
+            log(f"[FAILED] Step {i}")
+            sys.exit(1)
+
+
+def phase_4_verify():
+    log("\n[VERIFY] Running Tests...")
+
+    prompt = f"""Run tests (pytest) and verify app loads.
+If tests fail due to deleted code, UPDATE THE TEST.
+End with: TESTS_PASS or TESTS_FAIL
+"""
+    output = run_claude(prompt, model=MODEL_HANDS, timeout=600)
+
+    if output and "TESTS_PASS" in output:
+        log("[VERIFY] Passed.")
+    else:
+        log("[VERIFY] Failed.")
+        sys.exit(1)
+
+    # Generate Note
+    prompt = f"Summarize changes. Write to {NOTES_FILE}. End with #EOF"
+    run_claude(prompt, model=MODEL_EYES, timeout=120)
 
 
 # =============================================================================
 # MAIN
 # =============================================================================
 
-def run_workflow(todo_file: str) -> None:
-    """Run the full workflow."""
-    todo_path = Path(todo_file)
-    if not todo_path.exists():
-        print(f"Error: {todo_file} not found")
-        sys.exit(1)
+def handle_flags():
+    """Handle CLI flags for reset and retry."""
+    if "--reset" in sys.argv:
+        if WORK_DIR.exists(): shutil.rmtree(WORK_DIR)
+        print("Reset complete. Starting fresh.")
 
-    # Create bead for this task
-    title = todo_path.stem.replace("_", " ").replace("PLAN ", "")
-    description = f"Implementation of {todo_file}"
-
-    print(f"\n{'='*60}")
-    print(f"AUTO: Starting workflow for {todo_file}")
-    print(f"{'='*60}")
-
-    bead_id = create_bead(title, description)
-    print(f"Created bead: {bead_id}")
-
-    # PLAN PHASE
-    print("\n" + "="*60)
-    print("PLAN PHASE")
-    print("="*60)
-
-    # Step 1: Create initial plan (with retry - this is the critical one)
-    if not run_with_retry(plan_step_1_create, bead_id, todo_file=todo_file):
-        print("ERROR: Failed to create initial plan after retries")
-        return
-
-    # Steps 2-5: Refine plan (no retry needed - design already exists)
-    plan_step_2_architecture(bead_id)
-    plan_step_3_outcome(bead_id, todo_file)
-    plan_step_4_tests(bead_id)
-    plan_step_5_concrete(bead_id)
-
-    # IMPLEMENT PHASE
-    print("\n" + "="*60)
-    print("IMPLEMENT PHASE")
-    print("="*60)
-
-    if not implement_sanity_check(bead_id):
-        print("Implementation blocked at sanity check")
-        return
-
-    bead = get_bead(bead_id)
-    steps = parse_plan_steps(bead.get("design", ""))
-
-    for i, step in enumerate(steps, 1):
-        implement_step(bead_id, i, step)
-
-    # Audit loop
-    for audit_num in range(3):
-        if implement_audit(bead_id):
-            break
-
-    # TEST PHASE
-    print("\n" + "="*60)
-    print("TEST PHASE")
-    print("="*60)
-
-    for attempt in range(5):
-        if test_run(bead_id):
-            break
-
-    test_final_report(bead_id)
-    close_bead(bead_id)
-
-    print(f"\n{'='*60}")
-    print(f"AUTO: Workflow complete for {bead_id}")
-    print(f"{'='*60}")
+    if "--retry-steps" in sys.argv or "--resume" in sys.argv:
+        # "Resume" usually implies continuing, which is default.
+        # But per user request, this flag clears completion markers to FORCE retry.
+        if LOG_FILE.exists():
+            print("Clearing completion markers to force step retry...")
+            lines = LOG_FILE.read_text(encoding="utf-8").splitlines()
+            # Filter out [COMPLETE] lines
+            clean_log = "\n".join(l for l in lines if "[COMPLETE] Step" not in l)
+            LOG_FILE.write_text(clean_log + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print(__doc__)
+        print("Usage: python zen_auto.py <TODO_FILE> [--reset] [--retry-steps]")
         sys.exit(1)
 
-    run_workflow(sys.argv[1])
+    todo = sys.argv[1]
+    handle_flags()
+
+    try:
+        phase_1_scout(todo)
+        phase_2_plan(todo)
+        phase_3_implement()
+        phase_4_verify()
+        print("\nSUCCESS.")
+        sys.exit(0)
+
+    except KeyboardInterrupt:
+        print("\nStopped.")
+        sys.exit(130)
+    except Exception as e:
+        print(f"\nError: {e}")
+        sys.exit(1)
