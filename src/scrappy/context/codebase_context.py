@@ -34,6 +34,8 @@ from .protocols import (
 
 if TYPE_CHECKING:
     from ..protocols.io import CLIIOProtocol
+    from .semantic.config import SemanticIndexConfig
+    from .protocols import IndexStateProtocol, IndexingDecisionProtocol
 
 
 class CodebaseContext:
@@ -278,6 +280,37 @@ class CodebaseContext:
                 self._indexing_progress_callback(message)
             except Exception as e:
                 logger.debug(f"Error in indexing progress callback: {e}")
+
+    def configure_semantic_search(
+        self,
+        config: 'SemanticIndexConfig',
+        state_manager: 'IndexStateProtocol',
+        decision_maker: 'IndexingDecisionProtocol',
+    ) -> None:
+        """
+        Configure semantic search with custom dependencies.
+
+        This must be called BEFORE start_background_initialization() to
+        inject custom configuration and managers.
+
+        Args:
+            config: Semantic index configuration with thresholds
+            state_manager: Index state persistence manager
+            decision_maker: Indexing decision logic
+        """
+        # Re-create semantic manager with new dependencies
+        self._semantic_manager = SemanticSearchManager(
+            project_path=self.project_path,
+            event_queue=self._event_queue,
+            io=self._io,
+            config=config,
+            state_manager=state_manager,
+            decision_maker=decision_maker,
+        )
+
+        # Re-apply progress callback if it was set
+        if self._indexing_progress_callback:
+            self._semantic_manager.set_progress_callback(self._indexing_progress_callback)
 
     def start_background_initialization(self) -> None:
         """

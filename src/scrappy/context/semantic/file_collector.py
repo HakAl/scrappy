@@ -8,12 +8,13 @@ Implements intelligent file filtering following the hierarchy:
 4. Detect and skip binary files
 """
 
+import hashlib
 import logging
 import re
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Generator, List, Optional, Set
+from typing import Dict, List, Optional, Set
 
 from scrappy.context.protocols import FilePrioritizerProtocol
 from scrappy.context.semantic.file_prioritizer import DefaultFilePrioritizer
@@ -261,6 +262,29 @@ class SemanticFileCollector:
         self._project_path = project_path.resolve()
         self._filter_config = filter_config or IndexFilterConfig()
         self._prioritizer = prioritizer or DefaultFilePrioritizer()
+
+    def collect_file_paths(self) -> List[Path]:
+        """
+        Return list of file paths without reading content (fast scan for metrics).
+
+        This method quickly scans the filesystem to determine which files would be
+        indexed, without the overhead of reading their content. Used for metrics
+        calculation and change detection.
+
+        Returns:
+            List of relative file paths (as Path objects)
+        """
+        is_git_repo = (self._project_path / '.git').exists()
+
+        if self._filter_config.respect_gitignore and is_git_repo:
+            try:
+                candidates = self._list_files_git()
+            except RuntimeError:
+                return []
+        else:
+            candidates = self._list_files_plain()
+
+        return [Path(p) for p in candidates]
 
     def collect_files(self) -> Dict[str, str]:
         """
@@ -575,3 +599,72 @@ class SemanticFileCollector:
             logger.error(f"Error during filesystem scan: {e}")
 
         return files
+
+    def get_file_hashes(self, files: List[Path]) -> Dict[str, str]:
+        """
+        Compute content hashes for files.
+
+        Uses MD5 hashing for fast content comparison to detect changes
+        since last index.
+
+        Args:
+            files: List of file paths (relative to project root)
+
+        Returns:
+            Dict mapping path string to MD5 hash of file contents
+        """
+        hashes = {}
+
+        for file_path in files:
+            # Convert to Path if string
+            if isinstance(file_path, str):
+                file_path = Path(file_path)
+
+            # Build absolute path
+            full_path = self._project_path / file_path
+
+            # Skip non-existent files
+            if not full_path.exists() or not full_path.is_file():
+                logger.debug(f"Skipping non-existent file for hashing: {file_path}")
+                continue
+
+            # Compute MD5 hash
+            try:
+                md5_hash = hashlib.md5()
+                with open(full_path, 'rb') as f:
+                    # Read in chunks to handle large files efficiently
+                    for chunk in iter(lambda: f.read(8192), b''):
+                        md5_hash.update(chunk)
+
+                hashes[str(file_path)] = md5_hash.hexdigest()
+
+            except Exception as e:
+                logger.debug(f"Failed to hash file {file_path}: {e}")
+                # Continue processing other files even if one fails
+
+        logger.debug(f"Computed hashes for {len(hashes)}/{len(files)} files")
+        return hashes
+
+    def get_file_sizes(self, files: List[Path]) -> Dict[str, int]:
+        """
+        Return dict mapping path string to file size in bytes.
+
+        Used for metrics calculation to estimate indexing work.
+
+        Args:
+            files: List of file paths (relative to project root)
+
+        Returns:
+            Dict mapping path string to file size in bytes
+        """
+        sizes = {}
+        for file_path in files:
+            if isinstance(file_path, str):
+                file_path = Path(file_path)
+            full_path = self._project_path / file_path
+            try:
+                if full_path.exists() and full_path.is_file():
+                    sizes[str(file_path)] = full_path.stat().st_size
+            except Exception:
+                pass
+        return sizes

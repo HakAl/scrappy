@@ -27,6 +27,10 @@ class SemanticIndexConfig:
         fts_rebuild_threshold: Min chunks added before FTS rebuild
         db_dir_name: Database directory name
         lock_timeout: Lock acquisition timeout in seconds
+        avg_chunk_bytes: Average bytes per chunk (for chunk count estimation)
+        show_progress_chunks: Show progress bar if estimated chunks exceed this
+        max_index_age_days: Force full re-index if older than this
+        reindex_chunk_change_percent: Force re-index if chunks change by this percent
     """
 
     # Embedding settings
@@ -43,6 +47,14 @@ class SemanticIndexConfig:
     # Database settings
     db_dir_name: str = ".scrappy/lancedb"
     lock_timeout: int = 300
+
+    # Chunk estimation (for progress decisions)
+    avg_chunk_bytes: int = 400  # Average bytes per chunk (for estimation)
+
+    # Progress thresholds
+    show_progress_chunks: int = 20  # Show progress bar if estimated chunks exceed this
+    max_index_age_days: int = 7  # Force full re-index if older than this
+    reindex_chunk_change_percent: float = 0.25  # Force re-index if chunks change by this %
 
     @classmethod
     def from_memory_adaptive(cls) -> "SemanticIndexConfig":

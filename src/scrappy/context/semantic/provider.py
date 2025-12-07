@@ -934,3 +934,82 @@ class LanceDBSearchProvider:
 
             logger.info(f"Cleaned up {removed} stale file entries")
             return removed
+
+    def save_index_state(self, state_manager) -> None:
+        """
+        Save current index state after successful indexing.
+
+        Args:
+            state_manager: IndexStateProtocol implementation for persisting state
+        """
+        from datetime import datetime
+        from ..protocols import IndexState
+
+        if not self.is_indexed():
+            logger.warning("Cannot save state: index does not exist")
+            return
+
+        try:
+            total_chunks, total_files = self.get_current_stats()
+
+            # Build file_hashes from current index
+            file_hashes = {}
+            self._ensure_db()
+            table = self._db.open_table(TABLE_NAME)
+
+            try:
+                for batch in table.search().select(["file_path", "content_hash"]).to_batches():
+                    df = batch.to_pandas()
+                    for _, row in df.iterrows():
+                        # Store the latest hash for each file
+                        file_hashes[row["file_path"]] = row["content_hash"]
+            except Exception as e:
+                logger.warning(f"Could not read file hashes from index: {e}")
+
+            state = IndexState(
+                last_indexed=datetime.now(),
+                total_chunks=total_chunks,
+                total_files=total_files,
+                index_version="1.0",
+                file_hashes=file_hashes,
+            )
+
+            state_manager.save(state)
+            logger.debug(f"Saved index state: {total_chunks} chunks, {total_files} files")
+
+        except Exception as e:
+            logger.warning(f"Failed to save index state: {e}")
+
+    def get_current_stats(self) -> tuple:
+        """
+        Return (total_chunks, total_files) from current index.
+
+        Returns:
+            Tuple of (total_chunks, total_files)
+        """
+        if not self.is_indexed():
+            return (0, 0)
+
+        try:
+            self._ensure_db()
+            table = self._db.open_table(TABLE_NAME)
+
+            # Count total chunks
+            total_chunks = table.count_rows()
+
+            # Count unique files
+            unique_files = set()
+            try:
+                for batch in table.search().select(["file_path"]).to_batches():
+                    df = batch.to_pandas()
+                    unique_files.update(df["file_path"].tolist())
+            except Exception as e:
+                logger.warning(f"Could not read file paths: {e}")
+
+            total_files = len(unique_files)
+
+            return (total_chunks, total_files)
+
+        except Exception as e:
+            logger.warning(f"Failed to get index stats: {e}")
+            return (0, 0)

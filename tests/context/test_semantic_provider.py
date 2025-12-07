@@ -641,3 +641,141 @@ class TestCleanupDeletedFiles:
         # Should have tried both batches, only second succeeded
         assert mock_table.delete.call_count == 2
         assert result == 50  # Only second batch (50 files) succeeded
+
+
+# --- State Persistence Tests ---
+
+
+class TestIndexStatePersistence:
+    """Test save_index_state and get_current_stats methods."""
+
+    def setup_method(self):
+        """Create provider with mock dependencies."""
+        self.chunker = MockChunker()
+        self.config = SemanticIndexConfig.for_testing()
+        self.provider = LanceDBSearchProvider(
+            project_path=Path("."),
+            chunker=self.chunker,
+            config=self.config,
+        )
+
+    def test_get_current_stats_returns_zero_when_not_indexed(self):
+        """Should return (0, 0) when index doesn't exist."""
+        self.provider.is_indexed = Mock(return_value=False)
+
+        total_chunks, total_files = self.provider.get_current_stats()
+
+        assert total_chunks == 0
+        assert total_files == 0
+
+    def test_get_current_stats_returns_actual_counts(self):
+        """Should return actual counts from index."""
+        self.provider.is_indexed = Mock(return_value=True)
+        self.provider._ensure_db = Mock()
+
+        mock_table = Mock()
+        mock_table.count_rows.return_value = 150  # 150 chunks
+
+        mock_batch = Mock()
+        mock_df = Mock()
+        # 3 unique files - need to mock the file_path column access and tolist()
+        mock_column = Mock()
+        mock_column.tolist.return_value = ["file1.py", "file2.py", "file1.py", "file3.py"]  # 3 unique
+        mock_df.__getitem__ = Mock(return_value=mock_column)
+        mock_batch.to_pandas.return_value = mock_df
+        mock_table.search.return_value.select.return_value.to_batches.return_value = [mock_batch]
+
+        mock_db = Mock()
+        mock_db.open_table.return_value = mock_table
+        self.provider._db = mock_db
+
+        total_chunks, total_files = self.provider.get_current_stats()
+
+        assert total_chunks == 150
+        assert total_files == 3
+
+    def test_get_current_stats_handles_errors_gracefully(self):
+        """Should return (0, 0) on error."""
+        self.provider.is_indexed = Mock(return_value=True)
+        self.provider._ensure_db = Mock(side_effect=Exception("DB error"))
+
+        total_chunks, total_files = self.provider.get_current_stats()
+
+        assert total_chunks == 0
+        assert total_files == 0
+
+    def test_save_index_state_saves_state_after_indexing(self):
+        """Should save index state using state manager."""
+        from scrappy.context.protocols import IndexState
+        from datetime import datetime
+
+        self.provider.is_indexed = Mock(return_value=True)
+        self.provider._ensure_db = Mock()
+
+        mock_table = Mock()
+        mock_table.count_rows.return_value = 100
+
+        # Mock for get_current_stats (file_path query)
+        mock_batch_stats = Mock()
+        mock_df_stats = Mock()
+        mock_column_stats = Mock()
+        mock_column_stats.tolist.return_value = ["file1.py", "file2.py", "file3.py", "file4.py", "file5.py"]
+        mock_df_stats.__getitem__ = Mock(return_value=mock_column_stats)
+        mock_batch_stats.to_pandas.return_value = mock_df_stats
+
+        # Mock for save_index_state (file_path + content_hash query)
+        mock_batch_hashes = Mock()
+        mock_df_hashes = Mock()
+        mock_df_hashes.iterrows.return_value = iter([
+            (0, {"file_path": "file1.py", "content_hash": "hash1"}),
+            (1, {"file_path": "file2.py", "content_hash": "hash2"}),
+        ])
+        mock_batch_hashes.to_pandas.return_value = mock_df_hashes
+
+        # Return different batches based on select() call
+        def select_side_effect(columns):
+            if columns == ["file_path"]:
+                return Mock(to_batches=Mock(return_value=[mock_batch_stats]))
+            elif columns == ["file_path", "content_hash"]:
+                return Mock(to_batches=Mock(return_value=[mock_batch_hashes]))
+            return Mock(to_batches=Mock(return_value=[]))
+
+        mock_table.search.return_value.select.side_effect = select_side_effect
+
+        mock_db = Mock()
+        mock_db.open_table.return_value = mock_table
+        self.provider._db = mock_db
+
+        # Create mock state manager
+        mock_state_manager = Mock()
+
+        # Call save_index_state
+        self.provider.save_index_state(mock_state_manager)
+
+        # Verify state manager was called
+        mock_state_manager.save.assert_called_once()
+        saved_state = mock_state_manager.save.call_args[0][0]
+
+        # Verify state has correct values
+        assert isinstance(saved_state, IndexState)
+        assert saved_state.total_chunks == 100
+        assert saved_state.total_files == 5
+
+    def test_save_index_state_handles_not_indexed(self):
+        """Should not save state when not indexed."""
+        self.provider.is_indexed = Mock(return_value=False)
+        mock_state_manager = Mock()
+
+        self.provider.save_index_state(mock_state_manager)
+
+        # Should not call save
+        mock_state_manager.save.assert_not_called()
+
+    def test_save_index_state_handles_errors(self):
+        """Should handle errors gracefully without raising."""
+        self.provider.is_indexed = Mock(return_value=True)
+        self.provider._ensure_db = Mock(side_effect=Exception("DB error"))
+        mock_state_manager = Mock()
+
+        # Should not raise
+        self.provider.save_index_state(mock_state_manager)

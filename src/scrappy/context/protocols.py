@@ -9,6 +9,7 @@ from typing import Protocol, Dict, Any, List, Optional, Set, runtime_checkable
 from pathlib import Path
 from datetime import datetime
 from dataclasses import dataclass
+from enum import Enum
 
 
 @runtime_checkable
@@ -972,3 +973,54 @@ class ContextAugmenterProtocol(Protocol):
             Relevant context string
         """
         ...
+
+
+# --- Index State Management ---
+
+
+@dataclass
+class IndexState:
+    """Persisted index metadata."""
+    last_indexed: datetime
+    total_chunks: int
+    total_files: int
+    index_version: str
+    file_hashes: Dict[str, str]  # path -> content_hash
+
+
+@dataclass
+class ChangeMetrics:
+    """Metrics about what changed since last index."""
+    new_files: int
+    modified_files: int
+    deleted_files: int
+    estimated_chunks: int
+    total_bytes_changed: int
+
+
+class IndexingDecision(Enum):
+    FULL_INDEX = "full"
+    INCREMENTAL_UPDATE = "incremental"
+    SKIP = "skip"
+
+
+@runtime_checkable
+class IndexStateProtocol(Protocol):
+    """Single responsibility: Persist and retrieve index state."""
+
+    def load(self) -> Optional[IndexState]: ...
+    def save(self, state: IndexState) -> None: ...
+    def clear(self) -> None: ...
+
+
+@runtime_checkable
+class IndexingDecisionProtocol(Protocol):
+    """Single responsibility: Decide what indexing action to take."""
+
+    def decide(
+        self,
+        saved_state: Optional[IndexState],
+        current_metrics: ChangeMetrics,
+    ) -> IndexingDecision: ...
+
+    def should_show_progress(self, metrics: ChangeMetrics) -> bool: ...

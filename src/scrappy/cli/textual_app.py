@@ -8,13 +8,14 @@ wrapping the existing InteractiveMode with a modern UI.
 from typing import TYPE_CHECKING, Any, Optional, Dict, List
 import logging
 import threading
+import time
 import uuid
 from queue import Queue, Empty
 from textual.app import App, ComposeResult
 from textual.message import Message
 from textual.theme import Theme
-from textual.widgets import Label, ProgressBar
-from textual.containers import Container, Vertical, Horizontal
+from textual.widgets import Label
+from textual.containers import Container, Vertical
 from textual.reactive import reactive
 from textual import work
 
@@ -194,9 +195,8 @@ class ProgressIndicator:
         self._total: int = 0
         self._message: str = ""
         self._active: bool = False
-        self._widget: Optional[Horizontal] = None
-        self._label: Optional[Label] = None
-        self._bar: Optional[ProgressBar] = None
+        self._start_time: Optional[float] = None
+        self._widget: Optional[Label] = None
 
     @property
     def component_id(self) -> str:
@@ -207,25 +207,37 @@ class ProgressIndicator:
         return self._active
 
     @property
-    def widget(self) -> Horizontal:
+    def widget(self) -> Label:
         if self._widget is None:
-            self._label = Label(self._message, id="progress_label")
-            self._bar = ProgressBar(total=self._total or 100, id="progress_bar")
-            self._widget = Horizontal(
-                self._label,
-                self._bar,
-                id=self.component_id
-            )
+            self._widget = Label(self._message, id=self.component_id)
         return self._widget
 
+    def start(self, message: str = "", total: int = 0) -> None:
+        """Start progress tracking with timing."""
+        self._start_time = time.time()
+        self._message = message
+        self._total = total
+        self._progress = 0
+        self._active = True
+        self.update_widget()
+
+    def get_elapsed(self) -> float:
+        """Get elapsed time in seconds since start()."""
+        if self._start_time is None:
+            return 0.0
+        return time.time() - self._start_time
+
     def update_widget(self) -> None:
-        if self._label is not None:
-            self._label.update(self._message)
-        if self._bar is not None:
-            self._bar.total = self._total or 100
-            self._bar.progress = self._progress
+        if self._widget is not None:
+            elapsed = self.get_elapsed()
+            if elapsed > 0.0:
+                self._widget.update(f"{self._message} ({elapsed:.1f}s)")
+            else:
+                self._widget.update(self._message)
 
     def update(self, progress: int, total: int, message: str) -> None:
+        if self._start_time is None:
+            self._start_time = time.time()
         self._progress = progress
         self._total = total
         self._message = message
@@ -234,6 +246,7 @@ class ProgressIndicator:
 
     def complete(self) -> None:
         self._active = False
+        self._start_time = None
 
 
 class TokenCounter:
@@ -318,6 +331,64 @@ class PromptDisplay:
         self._input_type = ""
         self._default = ""
         self._visible = False
+        self.update_widget()
+
+
+class SemanticStatusComponent:
+    """Shows semantic search status in the status bar (always visible)."""
+
+    def __init__(self) -> None:
+        self._state: str = "initializing"  # initializing, indexing, ready, error
+        self._chunks: int = 0
+        self._files: int = 0
+        self._widget: Optional[Label] = None
+
+    @property
+    def component_id(self) -> str:
+        return "semantic_status"
+
+    @property
+    def is_visible(self) -> bool:
+        return True  # Always visible unlike ProgressIndicator
+
+    @property
+    def widget(self) -> Label:
+        if self._widget is None:
+            self._widget = Label(self._format_status(), id=self.component_id)
+        return self._widget
+
+    def _format_status(self) -> str:
+        if self._state == "ready":
+            return "Search: ready"
+        elif self._state == "indexing":
+            return "Search: indexing..."
+        elif self._state == "error":
+            return "Search: unavailable"
+        else:
+            return "Search: initializing..."
+
+    def update_widget(self) -> None:
+        if self._widget is not None:
+            self._widget.update(self._format_status())
+
+    def set_indexing(self) -> None:
+        self._state = "indexing"
+        if self._widget is not None:
+            self._widget.remove_class("ready")
+            self._widget.add_class("indexing")
+        self.update_widget()
+
+    def set_ready(self, chunks: int = 0, files: int = 0) -> None:
+        self._state = "ready"
+        self._chunks = chunks
+        self._files = files
+        if self._widget is not None:
+            self._widget.remove_class("indexing")
+            self._widget.add_class("ready")
+        self.update_widget()
+
+    def set_error(self) -> None:
+        self._state = "error"
         self.update_widget()
 
 

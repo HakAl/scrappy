@@ -110,16 +110,25 @@ TextArea > .text-area--cursor {
 #progress_indicator {
     width: 100%;
     height: auto;
-    margin: 0 0 1 0;
-}
-
-#progress_indicator Label {
-    width: 30;
+    padding: 0 1;
     content-align: left middle;
+    color: $text-muted;
 }
 
-#progress_indicator ProgressBar {
-    width: 1fr;
+/* Semantic status styling */
+#semantic_status {
+    width: auto;
+    height: auto;
+    padding: 0 1;
+    color: $text-muted;
+}
+
+#semantic_status.indexing {
+    color: $accent;
+}
+
+#semantic_status.ready {
+    color: $success;
 }
 
 /* Token counter styling */

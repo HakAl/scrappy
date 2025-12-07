@@ -13,6 +13,7 @@ from scrappy.infrastructure.threading import (
     BackgroundEvent,
     EventType,
 )
+from scrappy.infrastructure.progress import NullProgressReporter
 
 
 @pytest.fixture
@@ -71,6 +72,8 @@ class MockSearchProvider:
         self._indexed = indexed
         self._search_results = search_results or Mock()
         self._files_indexed = {}
+        self.index_files = Mock(side_effect=self._index_files_impl)
+        self.save_index_state = Mock()
 
     def is_indexed(self):
         return self._indexed
@@ -78,7 +81,8 @@ class MockSearchProvider:
     def search(self, query, max_results=25, max_tokens=4000):
         return self._search_results
 
-    def index_files(self, files, is_batch=False):
+    def _index_files_impl(self, files, is_batch=False):
+        """Internal implementation for index_files."""
         self._files_indexed.update(files)
         self._indexed = True
 
@@ -98,6 +102,73 @@ class MockFileCollector:
     def collect_files_batched(self, batch_size=50):
         # Yield all files in one batch for simplicity
         yield self._files
+
+    def collect_file_paths(self):
+        """Return list of file paths (for metrics)."""
+        return [Path(p) for p in self._files.keys()]
+
+    def get_file_hashes(self, files):
+        """Return dict mapping paths to hashes."""
+        return {str(f): "mock_hash_123" for f in files}
+
+    def get_file_sizes(self, files):
+        """Return dict mapping paths to sizes."""
+        return {str(f): 100 for f in files}
+
+
+class MockIndexStateManager:
+    """Mock index state manager for testing."""
+
+    def __init__(self):
+        self._state = None
+
+    def load(self):
+        return self._state
+
+    def save(self, state):
+        self._state = state
+
+    def clear(self):
+        self._state = None
+
+
+class MockDecisionMaker:
+    """Mock indexing decision maker for testing."""
+
+    def __init__(self, decision=None, show_progress=False):
+        # Import here to avoid circular dependency
+        from scrappy.context.protocols import IndexingDecision
+
+        # Default to FULL_INDEX if no decision provided
+        if decision is None:
+            self._decision = IndexingDecision.FULL_INDEX
+        elif isinstance(decision, str):
+            # Convert string to enum for backward compatibility
+            decision_map = {
+                "full": IndexingDecision.FULL_INDEX,
+                "incremental": IndexingDecision.INCREMENTAL_UPDATE,
+                "skip": IndexingDecision.SKIP,
+            }
+            self._decision = decision_map.get(decision, IndexingDecision.FULL_INDEX)
+        else:
+            self._decision = decision
+        self._show_progress = show_progress
+
+    def decide(self, saved_state, current_metrics):
+        return self._decision
+
+    def should_show_progress(self, metrics):
+        return self._show_progress
+
+
+class MockConfig:
+    """Mock semantic index config for testing."""
+
+    def __init__(self):
+        self.db_dir_name = ".scrappy_index"
+        self.table_name = "code_chunks"
+        self.avg_chunk_bytes = 400
+        self.show_progress_chunks = 20
 
 
 class TestSemanticSearchManagerCreation:
@@ -131,6 +202,36 @@ class TestSemanticSearchManagerCreation:
         # Verify initializer is set
         manager.start_background_init()
         assert initializer._started
+
+    @pytest.mark.unit
+    def test_creation_with_config(self, test_path):
+        """Test creating manager with custom config."""
+        config = MockConfig()
+        manager = SemanticSearchManager(
+            project_path=test_path,
+            config=config,
+        )
+        assert manager is not None
+
+    @pytest.mark.unit
+    def test_creation_with_state_manager(self, test_path):
+        """Test creating manager with custom state manager."""
+        state_manager = MockIndexStateManager()
+        manager = SemanticSearchManager(
+            project_path=test_path,
+            state_manager=state_manager,
+        )
+        assert manager is not None
+
+    @pytest.mark.unit
+    def test_creation_with_decision_maker(self, test_path):
+        """Test creating manager with custom decision maker."""
+        decision_maker = MockDecisionMaker()
+        manager = SemanticSearchManager(
+            project_path=test_path,
+            decision_maker=decision_maker,
+        )
+        assert manager is not None
 
 
 class TestSemanticSearchManagerLifecycle:
@@ -266,8 +367,9 @@ class TestSemanticSearchManagerIndexing:
             initializer=initializer,
         )
         collector = MockFileCollector()
+        progress_reporter = NullProgressReporter()
         # Should not raise, just log warning
-        manager.index_files(collector)
+        manager.index_files(collector, progress_reporter=progress_reporter)
 
     @pytest.mark.unit
     def test_index_files_delegates_to_provider(self, test_path):
@@ -281,10 +383,66 @@ class TestSemanticSearchManagerIndexing:
             initializer=initializer,
         )
         collector = MockFileCollector({"main.py": "print('main')"})
+        progress_reporter = NullProgressReporter()
+        manager.index_files(collector, progress_reporter=progress_reporter)
+
+        assert provider._indexed
+        assert "main.py" in provider._files_indexed
+
+    @pytest.mark.unit
+    def test_index_files_uses_null_reporter_by_default(self, test_path):
+        """Test that index_files defaults to NullProgressReporter when none provided."""
+        provider = MockSearchProvider()
+        initializer = MockInitializer(result=provider)
+        initializer.complete(result=provider)
+
+        manager = SemanticSearchManager(
+            project_path=test_path,
+            initializer=initializer,
+        )
+        collector = MockFileCollector({"main.py": "print('main')"})
+        # Don't pass progress_reporter parameter
         manager.index_files(collector)
 
         assert provider._indexed
         assert "main.py" in provider._files_indexed
+
+    @pytest.mark.unit
+    def test_index_files_skips_when_no_changes(self, test_path):
+        """index_files skips indexing when decision is SKIP."""
+        from scrappy.context.protocols import IndexingDecision, IndexState
+        from datetime import datetime
+
+        # Create a mock saved state
+        mock_saved_state = IndexState(
+            last_indexed=datetime.now(),
+            total_chunks=100,
+            total_files=5,
+            index_version="1.0",
+            file_hashes={"test.py": "hash123"}
+        )
+
+        # Set up decision maker to return SKIP
+        decision_maker = MockDecisionMaker(decision=IndexingDecision.SKIP)
+        state_manager = MockIndexStateManager()
+        state_manager._state = mock_saved_state
+
+        provider = MockSearchProvider()
+        initializer = MockInitializer(result=provider)
+        initializer.complete(result=provider)
+
+        manager = SemanticSearchManager(
+            project_path=test_path,
+            initializer=initializer,
+            state_manager=state_manager,
+            decision_maker=decision_maker,
+        )
+
+        collector = MockFileCollector({"test.py": "print('hello')"})
+        manager.index_files(collector)
+
+        # Provider.index_files should NOT be called
+        provider.index_files.assert_not_called()
 
 
 class TestSemanticSearchManagerEvents:
@@ -342,6 +500,50 @@ class TestSemanticSearchManagerCallbacks:
         callback = Mock()
         manager.set_progress_callback(callback)
         # Callback is stored (no public way to verify except through behavior)
+
+
+class TestSemanticSearchManagerDecisionMaker:
+    """Tests for decision maker integration."""
+
+    @pytest.mark.unit
+    def test_decision_maker_is_stored(self, test_path):
+        """Test that decision maker is stored when provided."""
+        decision_maker = MockDecisionMaker()
+        manager = SemanticSearchManager(
+            project_path=test_path,
+            decision_maker=decision_maker,
+        )
+        # Decision maker is stored (accessible via _decision_maker for testing)
+        assert manager._decision_maker is decision_maker
+
+    @pytest.mark.unit
+    def test_decision_maker_defaults_to_none(self, test_path):
+        """Test that decision maker defaults to None when not provided."""
+        manager = SemanticSearchManager(
+            project_path=test_path,
+        )
+        # Default factory returns None
+        assert manager._decision_maker is None
+
+    @pytest.mark.unit
+    def test_state_manager_is_stored(self, test_path):
+        """Test that state manager is stored when provided."""
+        state_manager = MockIndexStateManager()
+        manager = SemanticSearchManager(
+            project_path=test_path,
+            state_manager=state_manager,
+        )
+        # State manager is stored (accessible via _state_manager for testing)
+        assert manager._state_manager is state_manager
+
+    @pytest.mark.unit
+    def test_state_manager_defaults_to_none(self, test_path):
+        """Test that state manager defaults to None when not provided."""
+        manager = SemanticSearchManager(
+            project_path=test_path,
+        )
+        # Default factory returns None
+        assert manager._state_manager is None
 
 
 class TestSemanticSearchManagerAutoIndexing:

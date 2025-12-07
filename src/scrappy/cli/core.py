@@ -177,6 +177,7 @@ class CLI:
     def _create_default_orchestrator(self) -> AgentOrchestrator:
         """Create default orchestrator."""
         orch = AgentOrchestrator(
+            project_path=".",
             context_aware=self._context_aware,
             verbose_selection=self._verbose_selection,
             enable_semantic_search=True,  # Enable for CLI usage

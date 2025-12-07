@@ -7,9 +7,12 @@ Following SOLID principles:
 - Open/Closed: Can be extended by subclassing
 """
 
+import logging
 from typing import Optional, Callable
 from datetime import datetime
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 try:
     from ..providers import ProviderRegistry
@@ -100,7 +103,7 @@ class OrchestratorFactory:
         created_at: Optional[datetime] = None,
         path_provider: Optional[PathProviderProtocol] = None,
         config: Optional[OrchestratorConfig] = None,
-        enable_semantic_search: bool = False,
+        enable_semantic_search: bool = True,
     ):
         """
         Initialize factory with configuration.
@@ -115,7 +118,7 @@ class OrchestratorFactory:
             created_at: Creation timestamp
             path_provider: Path provider for data files (auto-creates if None)
             config: OrchestratorConfig instance (creates default if None)
-            enable_semantic_search: Enable background semantic search initialization (default: False for tests)
+            enable_semantic_search: Enable background semantic search initialization (default: True)
         """
         self.project_path = project_path
         self.cache_ttl_hours = cache_ttl_hours
@@ -222,24 +225,39 @@ class OrchestratorFactory:
         return BackgroundTaskManager()
 
     def create_codebase_context(self) -> ContextProvider:
-        """Create default codebase context."""
+        """Create default codebase context with semantic search if enabled."""
         context = CodebaseContext(self.project_path)
 
-        # TODO:
-        # TODO:
-        # TODO:  initialize semantic search
-        # if self.enable_semantic_search:
-        #     try:
-        #         from ..context.semantic.initializer import SemanticSearchInitializer
-        #         initializer = SemanticSearchInitializer(context.project_path)
-        #         context._semantic_initializer = initializer
-        #         context.start_background_initialization()
-        #     except ImportError:
-        #         # Semantic search dependencies not available
-        #         pass
-        # TODO:
-        # TODO:
-        # TODO:
+        if self.enable_semantic_search:
+            try:
+                from ..context.semantic.config import SemanticIndexConfig
+                from ..context.semantic.state import LanceDBIndexStateManager
+                from ..context.semantic.decision import ThresholdDecisionMaker
+                from ..context.semantic_manager import SemanticSearchManager
+
+                config = SemanticIndexConfig()
+                db_path = Path(self.project_path) / config.db_dir_name if self.project_path else None
+
+                if db_path:
+                    state_manager = LanceDBIndexStateManager(db_path)
+                    decision_maker = ThresholdDecisionMaker(config)
+
+                    # Create semantic manager with dependencies
+                    semantic_manager = SemanticSearchManager(
+                        project_path=Path(self.project_path) if self.project_path else Path("."),
+                        config=config,
+                        state_manager=state_manager,
+                        decision_maker=decision_maker,
+                    )
+
+                    # Replace default semantic manager with configured one
+                    context._semantic_manager = semantic_manager
+
+                    # Start background initialization
+                    context.start_background_initialization()
+            except ImportError as e:
+                # Semantic search dependencies not available, fall back to basic context
+                logger.warning(f"Semantic search dependencies not available: {e}")
 
         return context
 

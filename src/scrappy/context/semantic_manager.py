@@ -24,7 +24,10 @@ from .protocols import (
     SemanticSearchProtocol,
     FileCollectorProtocol,
     SearchResult,
+    IndexStateProtocol,
+    IndexingDecisionProtocol,
 )
+from .semantic.config import SemanticIndexConfig
 
 if TYPE_CHECKING:
     from ..protocols.io import CLIIOProtocol
@@ -60,6 +63,9 @@ class SemanticSearchManager:
         initializer: Optional[BackgroundInitializerProtocol] = None,
         event_queue: Optional[EventQueueProtocol] = None,
         io: Optional['CLIIOProtocol'] = None,
+        config: Optional[SemanticIndexConfig] = None,
+        state_manager: Optional[IndexStateProtocol] = None,
+        decision_maker: Optional[IndexingDecisionProtocol] = None,
     ):
         """
         Initialize semantic search manager.
@@ -69,16 +75,21 @@ class SemanticSearchManager:
             initializer: Background initializer for semantic search (auto-created if None)
             event_queue: Event queue for background notifications (auto-created if None)
             io: IO interface for progress reporting (optional)
+            config: Semantic index configuration (auto-created if None)
+            state_manager: Index state persistence manager (auto-created if None)
+            decision_maker: Indexing decision logic (auto-created if None)
         """
         self._project_path = project_path
         self._event_queue = event_queue or ThreadSafeEventQueue()
         self._io = io
+        self._config = config or self._create_default_config()
+        self._state_manager = state_manager or self._create_default_state_manager()
+        self._decision_maker = decision_maker or self._create_default_decision_maker()
 
         # Semantic search state
         self._semantic_search: Optional[SemanticSearchProtocol] = None
         self._initializer = initializer
         self._progress_callback: Optional[Callable[[str], None]] = None
-        self._is_indexed = False
         self._file_collector_callback: Optional[Callable[[], Optional[FileCollectorProtocol]]] = None
         self._cancellation_check: Optional[Callable[[], bool]] = None
 
@@ -174,7 +185,8 @@ class SemanticSearchManager:
                 try:
                     file_collector = self._file_collector_callback()
                     if file_collector:
-                        self.index_files(file_collector)
+                        # Let index_files use its own default progress reporter
+                        self.index_files(file_collector, progress_reporter=None)
                     else:
                         logger.debug("File collector callback returned None, skipping auto-indexing")
                 except Exception as e:
@@ -204,7 +216,8 @@ class SemanticSearchManager:
             try:
                 file_collector = self._file_collector_callback()
                 if file_collector:
-                    self.index_files(file_collector)
+                    # Let index_files use its own default progress reporter
+                    self.index_files(file_collector, progress_reporter=None)
                 else:
                     logger.debug("File collector callback returned None")
             except Exception as e:
@@ -287,7 +300,11 @@ class SemanticSearchManager:
             logger.warning(f"Semantic search failed: {e}")
             return None
 
-    def index_files(self, file_collector: FileCollectorProtocol) -> None:
+    def index_files(
+        self,
+        file_collector: FileCollectorProtocol,
+        progress_reporter: Optional[ProgressReporterProtocol] = None,
+    ) -> None:
         """
         Index files for semantic search.
 
@@ -295,15 +312,42 @@ class SemanticSearchManager:
 
         Args:
             file_collector: Collector providing files to index
+            progress_reporter: Progress reporter for indexing updates (optional)
         """
         provider = self.get_search_provider()
         if not provider:
             logger.warning("Cannot index - semantic search not available")
             return
 
-        # Create progress reporter
-        from ..infrastructure.progress import UnifiedIOProgressReporter, NullProgressReporter
-        progress = UnifiedIOProgressReporter(self._io) if self._io else NullProgressReporter()
+        # P0/P1: Check if indexing is needed
+        if self._state_manager and self._decision_maker:
+            from .semantic.metrics import ChangeMetricsCalculator
+            from .protocols import IndexingDecision
+
+            saved_state = self._state_manager.load()
+
+            # Get file paths, hashes, and sizes for metrics
+            files = file_collector.collect_file_paths()
+            hashes = file_collector.get_file_hashes(files)
+            sizes = file_collector.get_file_sizes(files)
+
+            # Calculate metrics
+            metrics_calc = ChangeMetricsCalculator(self._config)
+            metrics = metrics_calc.calculate(saved_state, files, hashes, sizes)
+
+            # Make decision
+            decision = self._decision_maker.decide(saved_state, metrics)
+
+            if decision == IndexingDecision.SKIP:
+                logger.info("No changes detected, skipping indexing")
+                self._notify_progress("Index up to date - no changes detected")
+                return
+
+            logger.info(f"Indexing decision: {decision.value} ({metrics.estimated_chunks} estimated chunks)")
+
+        # Use provided progress reporter or default to NullProgressReporter
+        from ..infrastructure.progress import NullProgressReporter
+        progress = progress_reporter or NullProgressReporter()
         progress_started = False
 
         try:
@@ -355,9 +399,12 @@ class SemanticSearchManager:
                 self._notify_progress("No files to index")
                 return
 
-            self._is_indexed = True
             logger.info(f"Semantic search indexing complete ({total_indexed} files)")
             self._notify_progress(f"Indexing complete ({total_indexed} files)")
+
+            # Save state for future decision-making
+            if self._state_manager:
+                provider.save_index_state(self._state_manager)
 
         except Exception as e:
             logger.error(f"Semantic indexing failed: {e}")
@@ -427,6 +474,18 @@ class SemanticSearchManager:
                 self._progress_callback(message)
             except Exception as e:
                 logger.debug(f"Error in progress callback: {e}")
+
+    def _create_default_config(self) -> SemanticIndexConfig:
+        """Create default semantic index configuration."""
+        return SemanticIndexConfig()
+
+    def _create_default_state_manager(self) -> Optional[IndexStateProtocol]:
+        """Create default state manager (returns None - factory creates it)."""
+        return None
+
+    def _create_default_decision_maker(self) -> Optional[IndexingDecisionProtocol]:
+        """Create default decision maker (returns None - factory creates it)."""
+        return None
 
     def shutdown(self) -> None:
         """Signal background tasks to stop and clean up resources."""

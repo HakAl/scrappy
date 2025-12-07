@@ -20,6 +20,7 @@ if TYPE_CHECKING:
         TextualOutputAdapter,
         ThreadSafeAsyncBridge,
         StatusBar,
+        SemanticStatusComponent,
     )
     from scrappy.infrastructure.theme import ThemeProtocol
 
@@ -82,6 +83,14 @@ class MainAppScreen(Screen):
         # Layout component (set on mount)
         self._layout: Optional[ChatLayout] = None
 
+    @property
+    def semantic_status(self) -> "SemanticStatusComponent":
+        """Lazy-load semantic status component."""
+        if not hasattr(self, '_semantic_status'):
+            from ..textual_app import SemanticStatusComponent
+            self._semantic_status = SemanticStatusComponent()
+        return self._semantic_status
+
     def compose(self) -> ComposeResult:
         """Create child widgets using ChatLayout."""
         yield ChatLayout(
@@ -103,6 +112,7 @@ class MainAppScreen(Screen):
         status_bar.register_component(self.progress_indicator)
         status_bar.register_component(self.token_counter)
         status_bar.register_component(self.prompt_display)
+        status_bar.register_component(self.semantic_status)
 
         # Display welcome banner
         from scrappy.cli.interactive_banner import display_banner
@@ -292,17 +302,47 @@ class MainAppScreen(Screen):
         total: int = 0,
         complete: bool = False
     ) -> None:
-        """Update indexing progress in status bar."""
+        """Update indexing progress in status bar.
+
+        Args:
+            message: Status message to display
+            progress: Current progress value (number of items processed)
+            total: Total number of items to process
+            complete: Whether the operation is complete
+        """
         from ..textual_app import StatusBar
 
-        if complete:
+        # Detect completion from message content
+        is_complete = (
+            complete
+            or message.startswith("Indexing complete")
+            or message == "Semantic search ready"
+            or message == "Index up to date - no changes detected"
+        )
+
+        if is_complete:
             self.progress_indicator.complete()
+            # Update semantic status to ready
+            if hasattr(self, '_semantic_status'):
+                # Extract chunk count from message if present
+                chunks = total
+                if "Indexing complete" in message:
+                    # Try to extract number from "Indexing complete (N files)"
+                    import re
+                    match = re.search(r'\((\d+)\s+files?\)', message)
+                    if match:
+                        chunks = int(match.group(1))
+                self._semantic_status.set_ready(chunks=chunks)
         else:
+            effective_total = total if total > 0 else 100
             self.progress_indicator.update(
                 progress=progress,
-                total=total,
+                total=effective_total,
                 message=message
             )
+            # Update semantic status to indexing
+            if hasattr(self, '_semantic_status'):
+                self._semantic_status.set_indexing()
 
         status_bar = self.query_one(StatusBar)
         status_bar.refresh_display()
