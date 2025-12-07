@@ -369,16 +369,13 @@ class CodebaseContext:
         # Delegate to semantic manager
         return self._semantic_manager.is_ready()
 
-    def _ensure_semantic_search(self) -> Optional['SemanticSearchProtocol']:
+    def get_search_provider(self) -> Optional['SemanticSearchProtocol']:
         """
-        Return semantic search provider if available.
-
-        Checks cached result from background initializer.
+        Get the semantic search provider if available.
 
         Returns:
             SemanticSearchProtocol instance or None if not available
         """
-        # Delegate to semantic manager
         return self._semantic_manager.get_search_provider()
 
     def is_explored(self) -> bool:
@@ -542,7 +539,7 @@ Be concise and technical. No fluff."""
         """
         # Check for lazy indexing (for backward compatibility)
         if self.is_explored():
-            semantic_search = self._ensure_semantic_search()
+            semantic_search = self.get_search_provider()
             if semantic_search and not semantic_search.is_indexed():
                 logger.info("Indexing files for semantic search (first use)...")
                 try:

@@ -40,9 +40,10 @@ class FindExactTextTool(ToolBase):
     @property
     def description(self) -> str:
         return (
-            "Exact-match text search. Use when you know the precise string "
-            "(e.g., error code, variable name, function signature) and need "
-            "every occurrence. Supports regex patterns."
+            "EXACT LITERAL MATCH ONLY. Use when you know the precise string "
+            "(e.g., specific error code, exact variable name, exact function signature) "
+            "and need every occurrence. NOT for conceptual/semantic queries - use "
+            "codebase_search for those. Supports regex patterns."
         )
 
     @property

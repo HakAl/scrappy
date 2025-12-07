@@ -150,6 +150,15 @@ class CodebaseContextProtocol(Protocol):
         """
         ...
 
+    def get_search_provider(self) -> Optional['SemanticSearchProtocol']:
+        """
+        Get the semantic search provider if available.
+
+        Returns:
+            SemanticSearchProtocol instance or None if not available
+        """
+        ...
+
 
 @runtime_checkable
 class ProjectDetectorProtocol(Protocol):

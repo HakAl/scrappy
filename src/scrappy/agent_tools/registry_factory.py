@@ -6,7 +6,7 @@ Extracted from CodeAgent._create_default_registry() for:
 - Dependency injection of different registries
 - Separation of concerns (configuration vs orchestration)
 """
-from typing import Optional, List
+from typing import Optional, List, TYPE_CHECKING
 
 from .tools import ToolRegistry
 from .tools.file_tools import (
@@ -24,11 +24,15 @@ from .tools.git_tools import (
     GitRecentChangesTool
 )
 from .tools.search_tools import FindExactTextTool
+from .tools.semantic_search_tool import SemanticSearchTool
 from .tools.web_tools import WebFetchTool, WebSearchTool
 from .tools.python_tools import AnalyzePythonDependenciesTool
 from .tools.command_tool import CommandTool
 from .tools.control_tools import CompleteTool
 from .constants import DEFAULT_COMMAND_TIMEOUT, DEFAULT_MAX_COMMAND_OUTPUT
+
+if TYPE_CHECKING:
+    from ..context.protocols import SemanticSearchProtocol
 
 
 def create_default_registry(
@@ -36,7 +40,8 @@ def create_default_registry(
     max_command_output: int = DEFAULT_MAX_COMMAND_OUTPUT,
     dangerous_commands: Optional[List[str]] = None,
     include_web: bool = True,
-    include_git: bool = True
+    include_git: bool = True,
+    semantic_search: Optional['SemanticSearchProtocol'] = None
 ) -> ToolRegistry:
     """
     Create the default tool registry with all standard tools.
@@ -47,6 +52,7 @@ def create_default_registry(
         dangerous_commands: List of dangerous command patterns to block
         include_web: Include web fetch/search tools (default True)
         include_git: Include git tools (default True)
+        semantic_search: Optional semantic search provider for codebase_search tool
 
     Returns:
         Configured ToolRegistry instance
@@ -70,6 +76,7 @@ def create_default_registry(
 
     # Register search tools
     registry.register(FindExactTextTool())
+    registry.register(SemanticSearchTool(semantic_search=semantic_search))
 
     # Register web tools (optional)
     if include_web:

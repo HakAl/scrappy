@@ -35,6 +35,8 @@ from .agent_tools.constants import (
     DEFAULT_PLANNER_PREFERENCES,
     DEFAULT_EXECUTOR_PREFERENCES,
     DEFAULT_MEANINGFUL_ACTIONS,
+    DEFAULT_PASSIVE_RAG_ENABLED,
+    DEFAULT_PASSIVE_RAG_MAX_TOKENS,
 )
 
 
@@ -76,6 +78,8 @@ class AgentConfig(BaseConfig):
     _planner_preferences: List[str] = field(default_factory=lambda: DEFAULT_PLANNER_PREFERENCES.copy(), init=False, repr=False)
     _executor_preferences: List[str] = field(default_factory=lambda: DEFAULT_EXECUTOR_PREFERENCES.copy(), init=False, repr=False)
     _meaningful_actions: List[str] = field(default_factory=lambda: DEFAULT_MEANINGFUL_ACTIONS.copy(), init=False, repr=False)
+    _passive_rag_enabled: bool = field(default=DEFAULT_PASSIVE_RAG_ENABLED, init=False, repr=False)
+    _passive_rag_max_tokens: int = field(default=DEFAULT_PASSIVE_RAG_MAX_TOKENS, init=False, repr=False)
 
     # File operations
     @property
@@ -375,6 +379,29 @@ class AgentConfig(BaseConfig):
         if not isinstance(value, list):
             raise TypeError(f"meaningful_actions must be a list, got {type(value)}")
         self._meaningful_actions = value
+
+    # Passive RAG settings
+    @property
+    def passive_rag_enabled(self) -> bool:
+        """Whether to enable passive RAG context injection."""
+        return self._passive_rag_enabled
+
+    @passive_rag_enabled.setter
+    def passive_rag_enabled(self, value: bool) -> None:
+        if not isinstance(value, bool):
+            raise TypeError(f"passive_rag_enabled must be a bool, got {type(value)}")
+        self._passive_rag_enabled = value
+
+    @property
+    def passive_rag_max_tokens(self) -> int:
+        """Maximum tokens for passive RAG context."""
+        return self._passive_rag_max_tokens
+
+    @passive_rag_max_tokens.setter
+    def passive_rag_max_tokens(self, value: int) -> None:
+        if value <= 0:
+            raise ValueError(f"passive_rag_max_tokens must be positive, got {value}")
+        self._passive_rag_max_tokens = value
 
     def validate(self) -> None:
         """

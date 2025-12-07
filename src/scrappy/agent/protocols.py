@@ -899,3 +899,45 @@ class DenialHandlerProtocol(Protocol):
             DenialHandlerResult with should_stop flag and message
         """
         ...
+
+
+@runtime_checkable
+class AgentContextFactoryProtocol(Protocol):
+    """
+    Protocol for building agent execution context.
+
+    Abstracts context building to enable testing with controlled
+    context generation and support different context strategies.
+
+    Implementations:
+    - AgentContextFactory: Full context building with passive RAG and tool filtering
+    - TestAgentContextFactory: Minimal context for testing
+    - StaticAgentContextFactory: Fixed context without dynamic RAG
+
+    Example:
+        def prepare_context(
+            factory: AgentContextFactoryProtocol,
+            task: str,
+            base_prompt: str
+        ) -> AgentContext:
+            context = factory.build_context(task, base_prompt)
+            return context
+    """
+
+    def build_context(self, task: str, base_system_prompt: str) -> Any:  # Returns AgentContext
+        """
+        Build agent execution context for a task.
+
+        Context includes:
+        - System prompt with passive RAG context injected
+        - Active tools list (filtered based on semantic search availability)
+        - Passive RAG context string (pre-computed relevant code snippets)
+
+        Args:
+            task: Task description to build context for
+            base_system_prompt: Base system prompt template to augment
+
+        Returns:
+            AgentContext with system prompt, active tools, and passive RAG context
+        """
+        ...

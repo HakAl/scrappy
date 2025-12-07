@@ -50,6 +50,9 @@ from .provider_strategy import create_provider_strategy
 # Import prompt factory
 from scrappy.prompts import PromptFactory, AgentPromptConfig, Platform
 
+# Import context factory
+from .context_factory import AgentContextFactory
+
 # Import protocols
 from .protocols import (
     AgentUIProtocol,
@@ -294,19 +297,29 @@ class CodeAgent:
 
     def _create_default_tool_context(self):
         """Create default tool context."""
+        # Get semantic search provider from orchestrator context
+        semantic_search = None
+        if hasattr(self._initial_orchestrator, 'context') and hasattr(self._initial_orchestrator.context, 'get_search_provider'):
+            semantic_search = self._initial_orchestrator.context.get_search_provider()
+
         return ToolContext(
             project_root=self.project_root,
             dry_run=self.dry_run,
             config=self.config,
-            orchestrator=self._initial_orchestrator
+            orchestrator=self._initial_orchestrator,
+            semantic_search=semantic_search
         )
 
     def _create_default_tool_registry(self):
         """Create default tool registry."""
+        # Get semantic search from tool_context (already created)
+        semantic_search = getattr(self.tool_context, 'semantic_search', None)
+
         return create_default_registry(
             command_timeout=self.config.command_timeout,
             max_command_output=self.config.max_command_output,
-            dangerous_commands=self.config.dangerous_commands
+            dangerous_commands=self.config.dangerous_commands,
+            semantic_search=semantic_search
         )
 
     def _create_default_command_executor(self):
@@ -580,8 +593,29 @@ class CodeAgent:
             codebase_structure=self._format_codebase_structure()
         )
 
-        # Build the complete system prompt with task context
-        system_prompt = self._prompt_factory.create_agent_system_prompt(config)
+        # Build the base system prompt
+        base_system_prompt = self._prompt_factory.create_agent_system_prompt(config)
+
+        # Get semantic search manager from orchestrator context
+        semantic_manager = None
+        if hasattr(self._orchestrator, 'context') and hasattr(self._orchestrator.context, 'get_search_provider'):
+            semantic_manager = self._orchestrator.context
+
+        # Create context factory and build agent context
+        context_factory = AgentContextFactory(
+            semantic_manager=semantic_manager,
+            config=self.config,
+            tool_registry=self.tool_registry,
+        )
+
+        # Build agent context with passive RAG and tool filtering
+        agent_context = context_factory.build_context(
+            task=task,
+            base_system_prompt=base_system_prompt,
+        )
+
+        # Use the enriched system prompt from context factory
+        system_prompt = agent_context.system_prompt
 
         # Initialize conversation state
         state = ConversationState(

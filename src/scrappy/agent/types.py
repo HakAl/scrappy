@@ -73,3 +73,11 @@ class ConversationState:
     # Track action history for duplicate detection
     action_history: List[Dict[str, object]] = field(default_factory=list)  # List of {action, parameters}
     last_action: Optional[Dict[str, object]] = None  # Most recent action for quick duplicate check
+
+
+@dataclass
+class AgentContext:
+    """Context for agent execution including system prompt and passive RAG data."""
+    system_prompt: str
+    active_tools: List[str]
+    passive_rag_context: Optional[str] = None

@@ -21,6 +21,7 @@ from scrappy.infrastructure.theme import DEFAULT_THEME
 
 if TYPE_CHECKING:
     from ...agent_config import AgentConfig
+    from ...context.protocols import SemanticSearchProtocol
 
 
 class MemoryProvider(Protocol):
@@ -52,6 +53,7 @@ class ToolContext:
     dry_run: bool = False
     config: Optional["AgentConfig"] = None
     orchestrator: Optional[MemoryProvider] = None
+    semantic_search: Optional["SemanticSearchProtocol"] = None
 
     def is_safe_path(self, path: str) -> bool:
         """Check if path is within project sandbox.

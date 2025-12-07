@@ -58,6 +58,7 @@ class TestToolRegistryFactoryBehavior:
         tool_names = [t.name for t in registry.list_all()]
 
         assert "find_exact_text" in tool_names
+        assert "codebase_search" in tool_names
 
     @pytest.mark.unit
     def test_default_registry_has_web_tools(self):
@@ -81,8 +82,8 @@ class TestToolRegistryFactoryBehavior:
         """Default registry should have expected number of tools."""
         registry = create_default_registry()
 
-        # 4 file + 6 git + 1 search + 2 web + 1 python + 1 command + 1 complete = 16 tools
-        assert len(registry.list_all()) == 16
+        # 4 file + 6 git + 2 search + 2 web + 1 python + 1 command + 1 complete = 17 tools
+        assert len(registry.list_all()) == 17
 
     @pytest.mark.unit
     def test_all_tools_are_callable(self):
@@ -129,6 +130,43 @@ class TestToolRegistryFactoryBehavior:
 
 class TestToolRegistryFactoryCustomization:
     """Tests for customizing registry creation."""
+
+    @pytest.mark.unit
+    def test_can_inject_semantic_search_provider(self):
+        """Should be able to inject semantic search provider to codebase_search tool."""
+        mock_semantic_search = Mock()
+        mock_semantic_search.is_indexed.return_value = True
+
+        registry = create_default_registry(semantic_search=mock_semantic_search)
+
+        # Find the codebase_search tool
+        codebase_search_tool = None
+        for tool in registry.list_all():
+            if tool.name == "codebase_search":
+                codebase_search_tool = tool
+                break
+
+        assert codebase_search_tool is not None, "codebase_search tool not found in registry"
+        # Verify the tool received the semantic_search dependency
+        assert hasattr(codebase_search_tool, '_semantic_search')
+        assert codebase_search_tool._semantic_search is mock_semantic_search
+
+    @pytest.mark.unit
+    def test_codebase_search_without_semantic_provider(self):
+        """codebase_search tool should handle None semantic_search gracefully."""
+        registry = create_default_registry(semantic_search=None)
+
+        # Find the codebase_search tool
+        codebase_search_tool = None
+        for tool in registry.list_all():
+            if tool.name == "codebase_search":
+                codebase_search_tool = tool
+                break
+
+        assert codebase_search_tool is not None, "codebase_search tool not found in registry"
+        # Should have None semantic_search
+        assert hasattr(codebase_search_tool, '_semantic_search')
+        assert codebase_search_tool._semantic_search is None
 
     @pytest.mark.unit
     def test_can_create_minimal_registry(self):
@@ -180,7 +218,7 @@ class TestToolRegistryFactoryCustomization:
 
         tool_names = [t.name for t in registry.list_all()]
         assert "custom_analysis" in tool_names
-        assert len(tool_names) == 17  # 16 default + 1 custom
+        assert len(tool_names) == 18  # 17 default + 1 custom
 
 
 class TestToolRegistryFactoryIntegration:

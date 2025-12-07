@@ -77,5 +77,9 @@ DEFAULT_TEMPERATURE = 0.3  # temperature - low for deterministic code generation
 DEFAULT_PLANNER_PREFERENCES: List[str] = ['cerebras', 'groq', 'gemini']
 DEFAULT_EXECUTOR_PREFERENCES: List[str] = ['cerebras', 'groq']
 
+# Passive RAG settings
+DEFAULT_PASSIVE_RAG_ENABLED = True  # bool - enable passive RAG context injection
+DEFAULT_PASSIVE_RAG_MAX_TOKENS = 2000  # tokens - max tokens for passive RAG context
+
 # Completion validation
 DEFAULT_MEANINGFUL_ACTIONS: List[str] = ['write_file', 'run_command']
