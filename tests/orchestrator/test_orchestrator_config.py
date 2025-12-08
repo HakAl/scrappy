@@ -34,6 +34,10 @@ class TestProviderPriorityRegression:
             type(provider).available_models = PropertyMock(return_value=["test-model"])
             type(provider).default_model = PropertyMock(return_value="test-model")
             provider.get_model_for_task.return_value = "test-model"
+            # Mock get_model_info to return proper context_length for fallback filtering
+            mock_model_info = MagicMock()
+            mock_model_info.context_length = 128000  # Sufficient context for brain
+            provider.get_model_info.return_value = mock_model_info
             registry.register(provider)
 
         return registry

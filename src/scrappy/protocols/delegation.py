@@ -20,6 +20,8 @@ from dataclasses import dataclass
 # These are orchestration metadata, not provider parameters
 INTERNAL_KWARGS = frozenset({
     'task_type',  # Internal hint for orchestration (e.g., 'planning', 'execution')
+    'selection_type',  # ModelSelectionType used for provider selection (for fallback)
+    'min_context',  # Minimum context length required (for fallback filtering)
     # Add future internal kwargs here
 })
 
@@ -41,6 +43,9 @@ class LLMRequest:
     use_cache: Optional[bool] = None
     intent_classification: Optional[dict] = None
     auto_fallback: bool = True
+    # Fallback metadata - helps maintain selection constraints during provider fallback
+    selection_type: Optional[str] = None  # ModelSelectionType.value (e.g., 'quality', 'fast')
+    min_context: int = 0  # Minimum context length required (0 = no constraint)
     kwargs: dict = None
 
     def __post_init__(self):

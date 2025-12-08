@@ -357,6 +357,15 @@ class StatusReporterProtocol(Protocol):
         """
         ...
 
+    def update_quality_mode(self, quality_mode: bool) -> None:
+        """
+        Update the quality mode setting.
+
+        Args:
+            quality_mode: Whether quality mode is enabled
+        """
+        ...
+
     def get_health(self) -> Dict[str, bool]:
         """
         Get health check results.

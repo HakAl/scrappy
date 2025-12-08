@@ -120,9 +120,9 @@ class ProviderSelector:
 
     def setup_brain(self, preferred_provider: Optional[str] = None) -> tuple[str, object]:
         """
-        Set up the orchestrator's reasoning brain.
+        Set up the orchestrator's reasoning brain using QUALITY selection.
 
-        Priority: specified > cerebras > groq > gemini > any available
+        Priority: specified > QUALITY selection > config priority > any available
 
         Args:
             preferred_provider: Preferred provider name (optional)
@@ -133,6 +133,8 @@ class ProviderSelector:
         Raises:
             RuntimeError: If no providers available
         """
+        from .model_selection import ModelSelectionType
+
         self._log("Setting up orchestrator brain")
         available = self.registry.list_available()
 
@@ -160,22 +162,58 @@ class ProviderSelector:
             else:
                 self._log(f"Requested provider {preferred_provider} not available, using auto-selection", "WARN")
 
-        # Default priority from config - providers filtered by supports_agent_role capability
+        # Try QUALITY selection for best reasoning capability
+        try:
+            provider_name, model = self.get_model(ModelSelectionType.QUALITY)
+            if provider_name:
+                provider = self.registry.get(provider_name)
+                # Verify provider supports agent/brain role
+                if hasattr(provider, 'supports_agent_role') and not provider.supports_agent_role:
+                    self._log(
+                        f"{provider_name} selected by quality but does not support agent role, trying priority list",
+                        "WARN"
+                    )
+                    raise RuntimeError("Provider doesn't support agent role")
+                self._log(f"QUALITY selection: {provider_name}/{model} (best reasoning)", "SELECTED")
+                return (provider_name, provider)
+        except Exception as e:
+            self._log(f"QUALITY selection failed: {e}, falling back to priority list", "WARN")
+
+        # Fallback to priority from config - providers filtered by:
+        # 1. supports_agent_role capability
+        # 2. minimum context length for planner use (32k)
+        MIN_CONTEXT_FOR_BRAIN = 32768
         priority = self.config.brain_priority
         self._log(f"Auto-selection priority: {' > '.join(priority)}")
 
+        # First pass: try priority list with context constraint
+        suitable_providers = self._get_providers_with_context(available, MIN_CONTEXT_FOR_BRAIN)
+
         for provider_name in priority:
-            if provider_name in available:
+            if provider_name in suitable_providers:
                 provider = self.registry.get(provider_name)
                 # Skip providers that don't support agent role
                 if hasattr(provider, 'supports_agent_role') and not provider.supports_agent_role:
                     self._log(f"Skipping {provider_name} - does not support agent role")
                     continue
                 reason = self._get_brain_selection_reason(provider_name)
-                self._log(f"Auto-selected brain: {provider_name} ({reason})", "SELECTED")
+                self._log(f"Auto-selected brain: {provider_name} ({reason}, context >= {MIN_CONTEXT_FOR_BRAIN})", "SELECTED")
                 return (provider_name, provider)
+            elif provider_name in available:
+                self._log(f"Skipping {provider_name} - insufficient context window")
             else:
                 self._log(f"Skipping {provider_name} - not available")
+
+        # Second pass: relax context constraint if no suitable providers found
+        self._log(f"No providers with >= {MIN_CONTEXT_FOR_BRAIN} context, relaxing constraint", "WARN")
+        for provider_name in priority:
+            if provider_name in available:
+                provider = self.registry.get(provider_name)
+                if hasattr(provider, 'supports_agent_role') and not provider.supports_agent_role:
+                    continue
+                reason = self._get_brain_selection_reason(provider_name)
+                self._log(f"Auto-selected brain: {provider_name} ({reason}, WARNING: may have limited context)", "SELECTED")
+                return (provider_name, provider)
 
         # Fallback to first available that supports agent role
         for provider_name in available:
@@ -193,18 +231,36 @@ class ProviderSelector:
         """Get human-readable reason for brain selection."""
         return self.config.get_provider_reason(provider_name)
 
-    def get_provider_for_fallback(self, exclude: list[str] = None) -> Optional[str]:
+    def get_provider_for_fallback(
+        self,
+        exclude: list[str] = None,
+        selection_type: Optional[ModelSelectionType] = None,
+        min_context: int = 0
+    ) -> Optional[str]:
         """
         Get a fallback provider, excluding specified ones.
 
+        When selection_type is provided, filters providers to those that have
+        models meeting the selection criteria. This ensures fallback maintains
+        quality/context requirements.
+
         Args:
             exclude: List of provider names to exclude
+            selection_type: Optional selection type to filter by (QUALITY, FAST, etc.)
+            min_context: Minimum context length required (only used with QUALITY)
 
         Returns:
             Provider name or None if no fallback available
         """
         exclude = exclude or []
         available = self.registry.list_available()
+
+        # If selection_type provided, filter to providers with suitable models
+        if selection_type == ModelSelectionType.QUALITY and min_context > 0:
+            suitable_providers = self._get_providers_with_context(available, min_context)
+            if suitable_providers:
+                available = suitable_providers
+                self._log(f"Fallback filtered to providers with >={min_context} context: {available}")
 
         # Priority order for fallback
         priority = self.config.fallback_priority
@@ -219,6 +275,27 @@ class ProviderSelector:
                 return provider_name
 
         return None
+
+    def _get_providers_with_context(self, available: list[str], min_context: int) -> list[str]:
+        """
+        Filter providers to those with at least one model meeting context requirement.
+
+        Args:
+            available: List of available provider names
+            min_context: Minimum context length required
+
+        Returns:
+            Filtered list of provider names
+        """
+        suitable = []
+        for provider_name in available:
+            provider = self.registry.get(provider_name)
+            for model_id in provider.available_models:
+                info = provider.get_model_info(model_id)
+                if info.context_length and info.context_length >= min_context:
+                    suitable.append(provider_name)
+                    break  # One suitable model is enough
+        return suitable
 
     def select_for_planning(self) -> Tuple[str, str]:
         """
@@ -436,14 +513,29 @@ class ProviderSelector:
         self._log(f"No candidates, using {available[0]}", "WARN")
         return (available[0], None)
 
-    def _select_by_quality(self, available: list[str]) -> tuple[str, str]:
-        """Select highest quality model."""
+    def _select_by_quality(self, available: list[str], min_context: int = 32768) -> tuple[str, str]:
+        """
+        Select highest quality model with sufficient context length.
+
+        Args:
+            available: List of available provider names
+            min_context: Minimum context length required (default 32k for planner use)
+
+        Returns:
+            Tuple of (provider_name, model_id)
+        """
         candidates = []
         for provider_name in available:
             provider = self.registry.get(provider_name)
             for model_id in provider.available_models:
                 info = provider.get_model_info(model_id)
-                candidates.append((provider_name, model_id, info))
+                # Filter: must have >= min_context for planner role
+                if info.context_length and info.context_length >= min_context:
+                    candidates.append((provider_name, model_id, info))
+                elif self.verbose:
+                    self._log(
+                        f"Skipping {provider_name}/{model_id} - context {info.context_length} < {min_context}"
+                    )
 
         quality_rank = {
             QualityRank.EXCELLENT: 0,
@@ -455,7 +547,29 @@ class ProviderSelector:
 
         if candidates:
             best = candidates[0]
-            self._log(f"Selected {best[0]}/{best[1]} (quality: {best[2].quality.value})", "SELECTED")
+            self._log(
+                f"Selected {best[0]}/{best[1]} (quality: {best[2].quality.value}, "
+                f"context: {best[2].context_length})", "SELECTED"
+            )
+            return (best[0], best[1])
+
+        # If no models meet min_context, relax constraint and log warning
+        self._log(f"No models with {min_context} context, trying without filter", "WARN")
+        candidates = []
+        for provider_name in available:
+            provider = self.registry.get(provider_name)
+            for model_id in provider.available_models:
+                info = provider.get_model_info(model_id)
+                candidates.append((provider_name, model_id, info))
+
+        candidates.sort(key=lambda x: (quality_rank.get(x[2].quality, 4), -(x[2].rpd or 0)))
+
+        if candidates:
+            best = candidates[0]
+            self._log(
+                f"Selected {best[0]}/{best[1]} (quality: {best[2].quality.value}, "
+                f"WARNING: context {best[2].context_length} < {min_context})", "SELECTED"
+            )
             return (best[0], best[1])
 
         self._log(f"No candidates, using {available[0]}", "WARN")

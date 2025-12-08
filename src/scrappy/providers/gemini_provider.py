@@ -16,7 +16,7 @@ import os
 import time
 from typing import Optional
 
-from .base import LLMProviderBase, LLMResponse, ProviderLimits, ModelInfo, SpeedRank, QualityRank
+from .base import LLMProviderBase, LLMResponse, ProviderLimits, ModelInfo, SpeedRank, QualityRank, ModelType
 from ..utils.imports import safe_import
 
 logger = logging.getLogger(__name__)
@@ -52,23 +52,28 @@ class GeminiProvider(LLMProviderBase):
     MODELS = {
         'gemini-2.5-flash-lite': {
             'rpm': 15, 'rpd': 1000, 'tpd': 250000,
-            'quality': QualityRank.GOOD, 'speed': SpeedRank.FAST, 'priority': 1
+            'quality': QualityRank.GOOD, 'speed': SpeedRank.FAST, 'priority': 1,
+            'type': ModelType.CHAT
         },
         'gemini-2.0-flash-lite': {
             'rpm': 30, 'rpd': 200, 'tpd': 1000000,
-            'quality': QualityRank.MODERATE, 'speed': SpeedRank.VERY_FAST, 'priority': 2
+            'quality': QualityRank.MODERATE, 'speed': SpeedRank.VERY_FAST, 'priority': 2,
+            'type': ModelType.CHAT
         },
         'gemini-2.0-flash': {
             'rpm': 15, 'rpd': 200, 'tpd': 1000000,
-            'quality': QualityRank.GOOD, 'speed': SpeedRank.FAST, 'priority': 3
+            'quality': QualityRank.GOOD, 'speed': SpeedRank.FAST, 'priority': 3,
+            'type': ModelType.CHAT
         },
         'gemini-2.5-flash': {
             'rpm': 10, 'rpd': 250, 'tpd': 250000,
-            'quality': QualityRank.VERY_GOOD, 'speed': SpeedRank.MODERATE, 'priority': 4
+            'quality': QualityRank.VERY_GOOD, 'speed': SpeedRank.MODERATE, 'priority': 4,
+            'type': ModelType.CHAT
         },
         'gemini-2.0-flash-exp': {
             'rpm': 10, 'rpd': 50, 'tpd': None,
-            'quality': 'experimental', 'speed': SpeedRank.FAST, 'priority': 5
+            'quality': QualityRank.MODERATE, 'speed': SpeedRank.FAST, 'priority': 5,
+            'type': ModelType.CHAT
         },
     }
 

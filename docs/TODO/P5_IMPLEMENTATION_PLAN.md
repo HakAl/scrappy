@@ -131,7 +131,6 @@ class TestLazySummaryGenerator:
 ### Problem Statement
 
 Auto-explore skips re-indexing if context is cached, even when files have been added/modified since the last exploration.
-This causes semantic search to miss content in new/modified files.
 
 ### Current Behavior
 

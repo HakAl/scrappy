@@ -25,8 +25,11 @@ class TestChatMode:
         factory = PromptFactory()
         prompt = factory.create_chat_system_prompt()
 
-        assert "helpful" in prompt.lower() or "assistant" in prompt.lower()
-        assert len(prompt) < 200  # Should be very short
+        # Should have assistant identity and guidelines
+        assert "scrappy" in prompt.lower() or "assistant" in prompt.lower()
+        # Should be concise (not a complex agent prompt with tools/actions)
+        assert len(prompt) < 500  # Chat prompt should be short
+        assert "action" not in prompt.lower()  # No agent action instructions
 
     def test_chat_user_prompt_is_just_query(self):
         factory = PromptFactory()

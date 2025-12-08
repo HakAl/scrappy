@@ -151,8 +151,9 @@ class FakeProviderSelector:
         self.fallback_order = fallback_order or []
         self.fallback_index = 0
 
-    def get_provider_for_fallback(self, exclude: list):
+    def get_provider_for_fallback(self, exclude: list = None, selection_type=None, min_context: int = 0):
         """Get next provider not in exclude list."""
+        exclude = exclude or []
         for provider in self.fallback_order:
             if provider not in exclude:
                 return provider

@@ -8,6 +8,7 @@ from .sections import (
     efficiency_section,
     platform_section,
     project_section,
+    quality_section,
     safety_section,
     strategy_section,
     tool_format_section,
@@ -29,7 +30,14 @@ class PromptFactory:
         Returns:
             Minimal system prompt for direct Q&A
         """
-        return "You are a helpful assistant. Answer questions directly and concisely."
+        return """You are Scrappy, an intelligent coding assistant.
+
+Guidelines:
+- Answer questions directly and concisely
+- When explaining code, use clear examples
+- If you're unsure, say so rather than guessing
+- For complex topics, break down your explanation into steps
+- Use markdown formatting for code blocks"""
 
     def create_chat_user_prompt(self, query: str) -> str:
         """Generate chat user prompt - just the query.
@@ -60,6 +68,7 @@ class PromptFactory:
             tool_format_section(use_json=not config.use_native_tools),
             strategy_section(),
             efficiency_section(),
+            quality_section(),
             completion_section(),
             safety_section(),
         ]
@@ -158,10 +167,21 @@ class PromptFactory:
 
 {config.tool_descriptions}
 
-{tool_format_section()}
+{tool_format_section()}"""
 
-Use search_code, read_file, or list_directory to find information in the codebase."""
+        return f"""You are a codebase research assistant with access to file system tools.
 
-        return f"""You are a helpful research assistant with access to codebase tools.
+Your role:
+- Find and explain code patterns, implementations, and architecture
+- Search thoroughly before answering - use search_code and read_file
+- Cite specific files and line numbers when referencing code
+- If information isn't found, say so clearly
 
-{tool_section}""".strip()
+{tool_section}
+
+Strategy:
+1. CAST A WIDE NET: Use search_code for keywords first
+2. VERIFY: Read the actual files found. Do not guess implementation details
+3. CITATIONS: You MUST quote the filepath and line numbers in your findings
+4. HONESTY: If you find conflicting patterns, report the conflict
+5. Indicate confidence level in your findings""".strip()

@@ -28,6 +28,7 @@ try:
         ProviderSelectorProtocol,
     )
     from ..providers import LLMResponse
+    from .model_selection import ModelSelectionType
     from ..config import (
         DEFAULT_MAX_RETRIES,
         DEFAULT_QUOTA_THRESHOLD,
@@ -106,6 +107,23 @@ class RetryOrchestrator:
             jitter=False  # Keep deterministic behavior for now
         )
 
+    def _parse_selection_type(self, selection_type_str: Optional[str]) -> Optional[ModelSelectionType]:
+        """
+        Parse selection_type string to ModelSelectionType enum.
+
+        Args:
+            selection_type_str: String value (e.g., 'quality', 'fast') or None
+
+        Returns:
+            ModelSelectionType enum or None if not parseable
+        """
+        if not selection_type_str:
+            return None
+        try:
+            return ModelSelectionType(selection_type_str)
+        except ValueError:
+            return None
+
     async def execute_with_retry(
         self,
         request: LLMRequest,
@@ -142,10 +160,16 @@ class RetryOrchestrator:
         current_provider_name = request.provider
         current_model = request.model
 
+        # Parse selection_type for fallback filtering (maintains quality constraints)
+        selection_type = self._parse_selection_type(request.selection_type)
+
         # If no provider specified or provider already excluded, get a fallback
+        # Pass selection_type and min_context to maintain quality constraints during fallback
         if not current_provider_name or current_provider_name in excluded_providers:
             current_provider_name = self._provider_selector.get_provider_for_fallback(
-                exclude=attempted_providers
+                exclude=attempted_providers,
+                selection_type=selection_type,
+                min_context=request.min_context,
             )
             if current_provider_name is None:
                 self._output.error(
@@ -305,9 +329,11 @@ class RetryOrchestrator:
                         provider_name=current_provider_name,
                     )
 
-            # Get next fallback provider
+            # Get next fallback provider (maintaining selection constraints)
             fallback_provider = self._provider_selector.get_provider_for_fallback(
-                exclude=attempted_providers
+                exclude=attempted_providers,
+                selection_type=selection_type,
+                min_context=request.min_context,
             )
 
             if fallback_provider is None:
@@ -357,10 +383,16 @@ class RetryOrchestrator:
         current_provider_name = request.provider
         current_model = request.model
 
+        # Parse selection_type for fallback filtering (maintains quality constraints)
+        selection_type = self._parse_selection_type(request.selection_type)
+
         # If no provider specified or provider already excluded, get a fallback
+        # Pass selection_type and min_context to maintain quality constraints during fallback
         if not current_provider_name or current_provider_name in excluded_providers:
             current_provider_name = self._provider_selector.get_provider_for_fallback(
-                exclude=attempted_providers
+                exclude=attempted_providers,
+                selection_type=selection_type,
+                min_context=request.min_context,
             )
             if current_provider_name is None:
                 self._output.error(
@@ -516,9 +548,11 @@ class RetryOrchestrator:
                         provider_name=current_provider_name,
                     )
 
-            # Get next fallback provider
+            # Get next fallback provider (maintaining selection constraints)
             fallback_provider = self._provider_selector.get_provider_for_fallback(
-                exclude=attempted_providers
+                exclude=attempted_providers,
+                selection_type=selection_type,
+                min_context=request.min_context,
             )
 
             if fallback_provider is None:

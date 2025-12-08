@@ -126,6 +126,8 @@ class DelegationManager:
         intent_classification: Optional[dict] = None,
         auto_fallback: bool = True,
         max_retries: int = DEFAULT_MAX_RETRIES,
+        selection_type: Optional[str] = None,
+        min_context: int = 0,
         **kwargs
     ) -> tuple[LLMResponse, dict]:
         """
@@ -148,6 +150,8 @@ class DelegationManager:
             intent_classification: Intent data for semantic caching
             auto_fallback: Automatically try other providers on rate limit
             max_retries: Maximum retry attempts per provider
+            selection_type: ModelSelectionType value for fallback filtering (e.g., 'quality')
+            min_context: Minimum context length for fallback filtering
             **kwargs: Additional provider-specific arguments
 
         Returns:
@@ -208,6 +212,8 @@ class DelegationManager:
             use_cache=use_cache,
             intent_classification=intent_classification,
             auto_fallback=auto_fallback,
+            selection_type=selection_type,
+            min_context=min_context,
             kwargs=kwargs,
         )
 
@@ -258,6 +264,8 @@ class DelegationManager:
         intent_classification: Optional[dict] = None,
         auto_fallback: bool = True,
         max_retries: int = DEFAULT_MAX_RETRIES,
+        selection_type: Optional[str] = None,
+        min_context: int = 0,
         **kwargs
     ) -> tuple[LLMResponse, dict]:
         """
@@ -278,6 +286,8 @@ class DelegationManager:
             intent_classification: Intent data for semantic caching
             auto_fallback: Automatically try other providers on rate limit
             max_retries: Maximum retry attempts per provider
+            selection_type: ModelSelectionType value for fallback filtering (e.g., 'quality')
+            min_context: Minimum context length for fallback filtering
             **kwargs: Additional provider-specific arguments
 
         Returns:
@@ -338,6 +348,8 @@ class DelegationManager:
             use_cache=use_cache,
             intent_classification=intent_classification,
             auto_fallback=auto_fallback,
+            selection_type=selection_type,
+            min_context=min_context,
             kwargs=kwargs,
         )
 

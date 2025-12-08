@@ -13,7 +13,7 @@ import time
 import json
 from typing import Optional
 
-from .base import LLMProviderBase, LLMResponse, ProviderLimits, ModelInfo, ToolCall, SpeedRank, QualityRank
+from .base import LLMProviderBase, LLMResponse, ProviderLimits, ModelInfo, ToolCall, SpeedRank, QualityRank, ModelType
 from ..utils.imports import safe_import
 from ..utils.errors import raise_package_not_installed, raise_env_var_not_found, raise_model_not_supported
 
@@ -42,20 +42,24 @@ class CerebrasProvider(LLMProviderBase):
     MODELS = {
         'llama3.1-8b': {
             'rpd': 14400, 'tpm': 60000,
-            'context': 8192, 'speed': SpeedRank.ULTRA_FAST, 'quality': QualityRank.GOOD
+            'context': 8192, 'speed': SpeedRank.ULTRA_FAST, 'quality': QualityRank.GOOD,
+            'type': ModelType.CHAT
         },
         'llama-3.3-70b': {
             'rpd': 14400, 'tpm': 60000,
-            'context': 8192, 'speed': SpeedRank.VERY_FAST, 'quality': QualityRank.EXCELLENT
+            'context': 8192, 'speed': SpeedRank.VERY_FAST, 'quality': QualityRank.EXCELLENT,
+            'type': ModelType.CHAT
         },
         'qwen-3-32b': {
             'rpd': 14400, 'tpm': 60000,
-            'context': 8192, 'speed': SpeedRank.VERY_FAST, 'quality': QualityRank.VERY_GOOD
+            'context': 8192, 'speed': SpeedRank.VERY_FAST, 'quality': QualityRank.VERY_GOOD,
+            'type': ModelType.CHAT
         },
         # New instruction-tuned model (added 2025-11) - excellent JSON compliance
         'qwen-3-235b-a22b-instruct-2507': {
             'rpd': 14400, 'tpm': 60000,
-            'context': 8192, 'speed': SpeedRank.FAST, 'quality': QualityRank.EXCELLENT
+            'context': 8192, 'speed': SpeedRank.FAST, 'quality': QualityRank.EXCELLENT,
+            'type': ModelType.INSTRUCT
         },
     }
 

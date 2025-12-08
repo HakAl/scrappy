@@ -78,6 +78,7 @@ class AgentOrchestrator:
         cache_ttl_hours: int = 24,
         verbose_selection: bool = False,
         enable_semantic_search: bool = False,
+        quality_mode: bool = True,
         output: Optional[BaseOutputProtocol] = None,
         # Injectable dependencies for testability (using protocols for Dependency Inversion)
         registry: Optional[ProviderRegistryProtocol] = None,
@@ -111,6 +112,7 @@ class AgentOrchestrator:
         self.caching_enabled = enable_cache
         self.verbose_selection = verbose_selection
         self.enable_semantic_search = enable_semantic_search
+        self.quality_mode = quality_mode
 
         # Use injected components or create defaults via factory
         if all([
@@ -308,6 +310,8 @@ class AgentOrchestrator:
 
     def print_provider_status(self):
         """Print comprehensive provider status summary."""
+        # Update status reporter with current quality_mode before printing
+        self._status_reporter.update_quality_mode(self.quality_mode)
         self._status_reporter.print_status()
 
     def get_provider_selection_info(self) -> dict:
@@ -434,7 +438,7 @@ class AgentOrchestrator:
         intent_classification: Optional[dict] = None,
         auto_fallback: bool = True,
         max_retries: int = 3,
-        selection_type: ModelSelectionType = ModelSelectionType.FAST,
+        selection_type: Optional[ModelSelectionType] = None,
         **kwargs
     ) -> LLMResponse:
         """
@@ -463,6 +467,10 @@ class AgentOrchestrator:
             ProviderNotFoundError: If no providers are available
             Exception: Other non-rate-limit errors
         """
+        # Determine selection type based on quality_mode if not explicitly provided
+        if selection_type is None:
+            selection_type = ModelSelectionType.QUALITY if self.quality_mode else ModelSelectionType.FAST
+
         # Auto-select provider if not specified
         if provider_name is None:
             provider_name = self.get_recommended_provider(selection_type)
@@ -475,6 +483,9 @@ class AgentOrchestrator:
 
         # Determine cache setting
         should_use_cache = use_cache if use_cache is not None else self.caching_enabled
+
+        # Determine min_context based on selection type (32k for QUALITY mode)
+        min_context = 32768 if selection_type == ModelSelectionType.QUALITY else 0
 
         # Delegate to DelegationManager
         response, task_record = self.delegation_manager.delegate(
@@ -489,6 +500,8 @@ class AgentOrchestrator:
             intent_classification=intent_classification,
             auto_fallback=auto_fallback,
             max_retries=max_retries,
+            selection_type=selection_type.value if selection_type else None,
+            min_context=min_context,
             **kwargs
         )
 

@@ -42,15 +42,25 @@ class DynamicProviderStrategy:
         self._cached_executor: Optional[str] = None
 
     def get_planner(self) -> Optional[str]:
-        """Get recommended provider for planning/reasoning tasks."""
+        """
+        Get recommended provider for planning/reasoning tasks.
+
+        Uses QUALITY selection for best reasoning capability.
+        Planning requires strong reasoning to analyze problems and create solutions.
+        """
         if hasattr(self._orchestrator, 'get_recommended_provider'):
-            provider = self._orchestrator.get_recommended_provider(ModelSelectionType.INSTRUCT)
+            provider = self._orchestrator.get_recommended_provider(ModelSelectionType.QUALITY)
             self._cached_planner = provider
             return provider
         return self._cached_planner
 
     def get_executor(self) -> Optional[str]:
-        """Get recommended provider for execution tasks."""
+        """
+        Get recommended provider for execution tasks.
+
+        Uses INSTRUCT selection for JSON/tool compliance.
+        Executor needs instruction-tuned models for reliable tool calling.
+        """
         if hasattr(self._orchestrator, 'get_recommended_provider'):
             provider = self._orchestrator.get_recommended_provider(ModelSelectionType.INSTRUCT)
             self._cached_executor = provider

@@ -60,6 +60,7 @@ class CLIDisplay:
             self.io.secho("Provider Management:", bold=True)
             self.io.echo(f"  {self.io.style('/providers', fg=self.io.theme.warning)}       - List all providers")
             self.io.echo(f"  {self.io.style('/brain', fg=self.io.theme.warning)} <name>    - Switch brain")
+            self.io.echo(f"  {self.io.style('/model', fg=self.io.theme.warning)} [mode]    - Toggle quality/fast mode")
             self.io.echo(f"  {self.io.style('/status', fg=self.io.theme.warning)}          - Show status")
             self.io.echo(f"  {self.io.style('/usage', fg=self.io.theme.warning)}           - Show usage")
             self.io.echo()

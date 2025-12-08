@@ -23,6 +23,7 @@ from ..orchestrator_adapter import (
     OrchestratorAdapter,
     AgentOrchestratorAdapter,
 )
+from ..infrastructure.exceptions import AllProvidersRateLimitedError
 from ..agent_tools.registry_factory import create_default_registry
 
 from .types import (
@@ -658,6 +659,25 @@ class CodeAgent:
             self.ui.show_warning("Agent interrupted by user. Saving audit log...")
             self._audit_logger.mark_complete(False, "Interrupted by user (KeyboardInterrupt)")
             raise  # Re-raise to let caller handle
+        except AllProvidersRateLimitedError as e:
+            # All providers exhausted - graceful degradation
+            self.io.echo("")  # New line
+            self.ui.show_error(
+                f"All LLM providers are rate limited.\n"
+                f"Attempted providers: {', '.join(e.attempted_providers)}\n"
+                f"Please wait a few minutes before retrying, or configure additional providers."
+            )
+            self._audit_logger.mark_complete(False, f"Rate limited: {str(e)}")
+            # Return a result instead of raising, for graceful degradation
+            return {
+                'success': False,
+                'result': f"Task paused: All providers rate limited ({', '.join(e.attempted_providers)})",
+                'iterations': state.iteration,
+                'tools_executed': state.tools_executed,
+                'audit_log': self.audit_log,
+                'rate_limited': True,
+                'attempted_providers': e.attempted_providers,
+            }
         except Exception as e:
             # Unexpected error - save partial state for debugging
             self.io.echo("")  # New line

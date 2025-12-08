@@ -24,6 +24,7 @@ from .utils.session_utils import (
     display_session_not_saved_warning
 )
 from ..orchestrator.protocols import Orchestrator
+from ..orchestrator.model_selection import ModelSelectionType
 
 
 class CommandRouter:
@@ -87,6 +88,7 @@ class CommandRouter:
             "/brain": self._handle_brain,
             "/usage": self._handle_usage,
             "/models": self._handle_models,
+            "/model": self._handle_model,
             # Session commands
             "/context": self._handle_context,
             "/cache": self._handle_cache,
@@ -164,6 +166,48 @@ class CommandRouter:
     def _handle_models(self, args: str) -> bool:
         """Handle /models command."""
         self.display.list_models(args)
+        return True
+
+    def _handle_model(self, args: str) -> bool:
+        """Handle /model command to toggle between fast and quality modes."""
+        io = self.io
+        arg = args.strip().lower()
+
+        if arg == "fast":
+            self.orchestrator.quality_mode = False
+            # Get actual model being used for feedback
+            try:
+                provider, model = self.orchestrator.provider_selector.get_model(ModelSelectionType.FAST)
+                io.secho(f"Switched to FAST mode", fg=io.theme.success, bold=True)
+                io.echo(f"  Using: {provider}/{model}")
+                io.echo(f"  High throughput, cost efficient.")
+            except Exception as e:
+                io.secho(f"Switched to FAST mode", fg=io.theme.success)
+                io.secho(f"  Warning: Could not determine model - {e}", fg=io.theme.warning)
+        elif arg == "quality":
+            self.orchestrator.quality_mode = True
+            # Get actual model being used for feedback
+            try:
+                provider, model = self.orchestrator.provider_selector.get_model(ModelSelectionType.QUALITY)
+                io.secho(f"Switched to QUALITY mode", fg=io.theme.success, bold=True)
+                io.echo(f"  Using: {provider}/{model}")
+                io.echo(f"  Enhanced reasoning.")
+            except Exception as e:
+                io.secho(f"Switched to QUALITY mode", fg=io.theme.success)
+                io.secho(f"  Warning: Could not determine model - {e}", fg=io.theme.warning)
+        else:
+            # Show current mode
+            mode = "QUALITY" if self.orchestrator.quality_mode else "FAST"
+            selection_type = ModelSelectionType.QUALITY if self.orchestrator.quality_mode else ModelSelectionType.FAST
+            try:
+                provider, model = self.orchestrator.provider_selector.get_model(selection_type)
+                io.echo(f"Current mode: {io.style(mode, fg=io.theme.success, bold=True)}")
+                io.echo(f"  Using: {provider}/{model}")
+            except Exception as e:
+                io.echo(f"Current mode: {io.style(mode, fg=io.theme.success, bold=True)}")
+                io.secho(f"  Warning: Could not determine model - {e}", fg=io.theme.warning)
+            io.echo()
+            io.echo("Usage: /model fast | /model quality")
         return True
 
     def _handle_context(self, args: str) -> bool:

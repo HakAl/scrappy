@@ -52,6 +52,7 @@ def show_help_table(
             ('/providers', 'List all providers'),
             ('/brain <name>', 'Switch brain provider'),
             ('/models [prov]', 'List available models'),
+            ('/model [mode]', 'Toggle quality/fast mode'),
             ('/status', 'Show system status'),
             ('/usage', 'Show usage statistics'),
         ],

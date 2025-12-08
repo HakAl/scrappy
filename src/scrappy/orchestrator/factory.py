@@ -207,7 +207,8 @@ class OrchestratorFactory:
             components.registry,
             components.provider_selector,
             components.output,
-            brain_name=None  # Will be updated after brain setup
+            brain_name=None,  # Will be updated after brain setup
+            quality_mode=self.config.quality_mode
         )
 
         return components
@@ -317,7 +318,8 @@ class OrchestratorFactory:
         registry: ProviderRegistryProtocol,
         provider_selector: ProviderSelectorProtocol,
         output: BaseOutputProtocol,
-        brain_name: Optional[str] = None
+        brain_name: Optional[str] = None,
+        quality_mode: bool = True
     ) -> StatusReporterProtocol:
         """Create default status reporter."""
         return ProviderStatusReporter(
@@ -325,7 +327,8 @@ class OrchestratorFactory:
             provider_selector=provider_selector,
             output=output,
             brain_name=brain_name,
-            verbose_selection=self.verbose_selection
+            verbose_selection=self.verbose_selection,
+            quality_mode=quality_mode
         )
 
     def create_task_executor(

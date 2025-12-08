@@ -12,7 +12,7 @@ import time
 import json
 from typing import Optional
 
-from .base import LLMProviderBase, LLMResponse, ProviderLimits, ModelInfo, ToolCall, SpeedRank, QualityRank
+from .base import LLMProviderBase, LLMResponse, ProviderLimits, ModelInfo, ToolCall, SpeedRank, QualityRank, ModelType
 from ..utils.imports import safe_import
 from ..utils.errors import raise_package_not_installed, raise_env_var_not_found, raise_model_not_supported
 
@@ -39,28 +39,34 @@ class GroqProvider(LLMProviderBase):
     MODELS = {
         'llama-3.1-8b-instant': {
             'rpm': 30, 'rpd': 7000, 'tpm': 20000, 'tpd': 200000,
-            'context': 131072, 'speed': SpeedRank.VERY_FAST, 'quality': QualityRank.GOOD
+            'context': 131072, 'speed': SpeedRank.VERY_FAST, 'quality': QualityRank.GOOD,
+            'type': ModelType.CHAT
         },
         'llama-3.3-70b-versatile': {
             'rpm': 30, 'rpd': 1000, 'tpm': 12000, 'tpd': 100000,
-            'context': 32768, 'speed': SpeedRank.FAST, 'quality': QualityRank.EXCELLENT
+            'context': 32768, 'speed': SpeedRank.FAST, 'quality': QualityRank.EXCELLENT,
+            'type': ModelType.CHAT
         },
         'llama-3.1-70b-versatile': {
             'rpm': 30, 'rpd': 1000, 'tpm': 12000, 'tpd': 100000,
-            'context': 32768, 'speed': SpeedRank.FAST, 'quality': QualityRank.EXCELLENT
+            'context': 32768, 'speed': SpeedRank.FAST, 'quality': QualityRank.EXCELLENT,
+            'type': ModelType.CHAT
         },
         'mixtral-8x7b-32768': {
             'rpm': 30, 'rpd': 14400, 'tpm': 5000, 'tpd': None,
-            'context': 32768, 'speed': SpeedRank.FAST, 'quality': QualityRank.VERY_GOOD
+            'context': 32768, 'speed': SpeedRank.FAST, 'quality': QualityRank.VERY_GOOD,
+            'type': ModelType.CHAT
         },
         # New instruction-tuned models (added 2025-11)
         'meta-llama/llama-4-scout-17b-16e-instruct': {
             'rpm': 30, 'rpd': 7000, 'tpm': 20000, 'tpd': 200000,
-            'context': 16384, 'speed': SpeedRank.ULTRA_FAST, 'quality': QualityRank.EXCELLENT
+            'context': 16384, 'speed': SpeedRank.ULTRA_FAST, 'quality': QualityRank.EXCELLENT,
+            'type': ModelType.INSTRUCT
         },
         'moonshotai/kimi-k2-instruct': {
             'rpm': 30, 'rpd': 7000, 'tpm': 20000, 'tpd': 200000,
-            'context': 131072, 'speed': SpeedRank.ULTRA_FAST, 'quality': QualityRank.EXCELLENT
+            'context': 131072, 'speed': SpeedRank.ULTRA_FAST, 'quality': QualityRank.EXCELLENT,
+            'type': ModelType.INSTRUCT
         },
     }
 

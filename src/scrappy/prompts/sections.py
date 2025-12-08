@@ -182,6 +182,21 @@ Test changes before marking complete.
 Don't delete files unless explicitly requested."""
 
 
+def quality_section() -> str:
+    """Generate quality standards guidelines.
+
+    Returns:
+        Quality section with code standards and best practices
+    """
+    return """## Quality Standards
+
+- Write clean, maintainable code following existing patterns
+- Include appropriate error handling
+- Consider edge cases
+- Prefer simple solutions over complex ones
+- Test your changes when possible"""
+
+
 def codebase_hint_section(
     extracted_files: tuple[str, ...], extracted_directories: tuple[str, ...]
 ) -> str:

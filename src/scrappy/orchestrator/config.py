@@ -66,6 +66,9 @@ class OrchestratorConfig(BaseConfig):
         default_factory=get_brain_priority
     )
 
+    # Quality mode: prioritize best reasoning models over speed
+    quality_mode: bool = True
+
     def get_provider_reason(self, provider_name: str) -> str:
         """
         Get human-readable reason for provider selection.

@@ -33,7 +33,8 @@ class ProviderStatusReporter:
         provider_selector,
         output: BaseOutputProtocol,
         brain_name: Optional[str],
-        verbose_selection: bool
+        verbose_selection: bool,
+        quality_mode: bool = True
     ):
         """Initialize the status reporter.
 
@@ -43,12 +44,22 @@ class ProviderStatusReporter:
             output: Output interface for displaying messages
             brain_name: Currently selected brain name
             verbose_selection: Whether to show detailed selection log
+            quality_mode: Whether quality mode is enabled
         """
         self._registry = registry
         self._selector = provider_selector
         self._output = output
         self._brain_name = brain_name
         self._verbose_selection = verbose_selection
+        self._quality_mode = quality_mode
+
+    def update_quality_mode(self, quality_mode: bool) -> None:
+        """Update the quality mode setting.
+
+        Args:
+            quality_mode: Whether quality mode is enabled
+        """
+        self._quality_mode = quality_mode
 
     def print_status(self) -> None:
         """Print comprehensive provider status summary."""
@@ -76,6 +87,10 @@ class ProviderStatusReporter:
         if self._brain_name:
             reason = self._selector._get_brain_selection_reason(self._brain_name)
             self._output.info(f"Selection Reason: {reason}")
+
+        mode = "QUALITY" if self._quality_mode else "FAST"
+        self._output.info(f"\nModel Selection Mode: {mode}")
+        self._output.info(f"  Use /model fast or /model quality to change mode")
 
         self._output.info("\nSelection Priority: cerebras > groq > gemini")
         self._output.info("Use --brain <provider> to override auto-selection")
