@@ -1,17 +1,15 @@
 """
 File collection for semantic search indexing.
 
-Implements intelligent file filtering following the hierarchy:
-1. Trust Git first (respect .gitignore)
-2. Fall back to regex/directory filters (only if not a git repo)
-3. Check file size before reading
-4. Detect and skip binary files
+Implements intelligent file filtering:
+1. Apply regex/directory filters
+2. Check file size before reading
+3. Detect and skip binary files
 """
 
 import hashlib
 import logging
 import re
-import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Set
@@ -20,6 +18,11 @@ from scrappy.context.protocols import FilePrioritizerProtocol
 from scrappy.context.semantic.file_prioritizer import DefaultFilePrioritizer
 
 logger = logging.getLogger(__name__)
+
+
+class FileCollectionError(Exception):
+    """Exception raised when file collection fails."""
+    pass
 
 
 @dataclass
@@ -84,10 +87,6 @@ class IndexFilterConfig:
     # Skip large JSON files in test directories (likely test data fixtures)
     skip_large_json_in_tests: bool = True
     large_json_threshold_bytes: int = 50_000  # 50KB
-
-    # Git configuration
-    respect_gitignore: bool = True
-    include_untracked: bool = False  # Whether to include untracked files in git repos
 
     # Size limits
     max_file_size_bytes: int = 5 * 1024 * 1024  # 5MB default
@@ -216,6 +215,9 @@ class IndexFilterConfig:
 
         Returns:
             True if file appears to be binary
+
+        Raises:
+            PermissionError: If file cannot be accessed due to permissions
         """
         try:
             with open(path, 'rb') as f:
@@ -224,6 +226,8 @@ class IndexFilterConfig:
                     logger.debug(f"Skipping binary file: {path.name}")
                     return True
             return False
+        except PermissionError:
+            raise
         except Exception as e:
             logger.debug(f"Cannot read file {path}: {e}")
             return True
@@ -234,10 +238,9 @@ class SemanticFileCollector:
     Collects files for semantic search indexing with intelligent filtering.
 
     Follows the hierarchy:
-    1. Trust Git first - use git ls-files to respect .gitignore
-    2. Fall back to directory scanning only if NOT a git repo
-    3. Check file size before reading
-    4. Detect and skip binary files
+    1. Scan filesystem with configurable filters
+    2. Check file size before reading
+    3. Detect and skip binary files
 
     Architecture:
     - Follows SOLID principles (dependency injection, single responsibility)
@@ -274,16 +277,7 @@ class SemanticFileCollector:
         Returns:
             List of relative file paths (as Path objects)
         """
-        is_git_repo = (self._project_path / '.git').exists()
-
-        if self._filter_config.respect_gitignore and is_git_repo:
-            try:
-                candidates = self._list_files_git()
-            except RuntimeError:
-                return []
-        else:
-            candidates = self._list_files_plain()
-
+        candidates = self._list_files()
         return [Path(p) for p in candidates]
 
     def collect_files(self) -> Dict[str, str]:
@@ -297,28 +291,8 @@ class SemanticFileCollector:
         """
         logger.info("Collecting files for semantic search indexing...")
 
-        # Determine if this is a git repository
-        is_git_repo = (self._project_path / '.git').exists()
-
         # Get candidate files
-        if self._filter_config.respect_gitignore and is_git_repo:
-            logger.debug("Using git ls-files (respects .gitignore)")
-            try:
-                candidates = self._list_files_git()
-            except RuntimeError as e:
-                logger.error(
-                    f"Git command failed in git repository: {e}. "
-                    "Returning empty set for security (won't bypass .gitignore)."
-                )
-                # Security: Don't fallback to plain scan in git repos when git fails
-                # This ensures we never bypass .gitignore
-                return {}
-        else:
-            if is_git_repo:
-                logger.info("Git repo detected but respect_gitignore=False, using plain scan")
-            logger.debug("Using plain directory scan")
-            candidates = self._list_files_plain()
-
+        candidates = self._list_files()
         logger.debug(f"Found {len(candidates)} candidate files")
 
         # Prioritize files for indexing order
@@ -340,7 +314,7 @@ class SemanticFileCollector:
             file_path = str(path_obj)
             full_path = self._project_path / file_path
 
-            # Skip if file doesn't exist (rare, but possible in git edge cases)
+            # Skip if file doesn't exist (defensive check)
             if not full_path.exists():
                 continue
 
@@ -395,28 +369,8 @@ class SemanticFileCollector:
         """
         logger.info(f"Collecting files in batches of {batch_size}...")
 
-        # Determine if this is a git repository
-        is_git_repo = (self._project_path / '.git').exists()
-
         # Get candidate files
-        if self._filter_config.respect_gitignore and is_git_repo:
-            logger.debug("Using git ls-files (respects .gitignore)")
-            try:
-                candidates = self._list_files_git()
-            except RuntimeError as e:
-                logger.error(
-                    f"Git command failed in git repository: {e}. "
-                    "Returning empty for security (won't bypass .gitignore)."
-                )
-                # Security: Don't fallback to plain scan in git repos when git fails
-                # This ensures we never bypass .gitignore
-                return  # Empty generator
-        else:
-            if is_git_repo:
-                logger.info("Git repo detected but respect_gitignore=False, using plain scan")
-            logger.debug("Using plain directory scan")
-            candidates = self._list_files_plain()
-
+        candidates = self._list_files()
         logger.debug(f"Found {len(candidates)} candidate files")
 
         # Prioritize files for indexing order
@@ -489,91 +443,18 @@ class SemanticFileCollector:
             f"{stats['skipped_read_error']} read errors)"
         )
 
-    def _list_files_git(self) -> Set[str]:
+    def _list_files(self) -> Set[str]:
         """
-        Get file list from git ls-files.
+        Get file list by scanning filesystem with filters.
 
-        This respects .gitignore and only returns tracked (and optionally untracked) files.
+        Recursively walks the directory tree and applies filter configuration
+        to exclude unwanted files.
 
         Returns:
             Set of relative file paths
 
         Raises:
-            RuntimeError: If git command fails (to distinguish from "no files found")
-        """
-        try:
-            files = set()
-
-            # Get tracked files
-            result_tracked = subprocess.run(
-                ['git', 'ls-files'],
-                cwd=self._project_path,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-
-            if result_tracked.returncode != 0:
-                logger.warning(f"git ls-files failed: {result_tracked.stderr}")
-                raise RuntimeError(f"git ls-files failed: {result_tracked.stderr}")
-
-            # Parse tracked files
-            for line in result_tracked.stdout.strip().split('\n'):
-                if line:
-                    path = Path(line)
-                    if not self._filter_config.should_skip_by_path(
-                        self._project_path / path,
-                        self._project_path
-                    ):
-                        files.add(line)
-
-            # Add untracked files if configured
-            if self._filter_config.include_untracked:
-                result_untracked = subprocess.run(
-                    ['git', 'ls-files', '--others', '--exclude-standard'],
-                    cwd=self._project_path,
-                    capture_output=True,
-                    text=True,
-                    timeout=30,
-                )
-
-                if result_untracked.returncode != 0:
-                    logger.warning(f"git ls-files --others failed: {result_untracked.stderr}")
-                    raise RuntimeError(f"git ls-files --others failed: {result_untracked.stderr}")
-
-                # Parse untracked files
-                for line in result_untracked.stdout.strip().split('\n'):
-                    if line:
-                        path = Path(line)
-                        if not self._filter_config.should_skip_by_path(
-                            self._project_path / path,
-                            self._project_path
-                        ):
-                            files.add(line)
-
-            return files
-
-        except subprocess.TimeoutExpired:
-            logger.error("git ls-files timed out after 30 seconds")
-            raise RuntimeError("git ls-files timed out")
-        except FileNotFoundError:
-            logger.warning("git command not found")
-            raise RuntimeError("git command not found")
-        except RuntimeError:
-            # Re-raise RuntimeError (git failures)
-            raise
-        except Exception as e:
-            logger.error(f"Unexpected error running git ls-files: {e}")
-            raise RuntimeError(f"Unexpected error running git ls-files: {e}")
-
-    def _list_files_plain(self) -> Set[str]:
-        """
-        Get file list by scanning filesystem with regex/directory filters.
-
-        ONLY used when NOT a git repository or respect_gitignore=False.
-
-        Returns:
-            Set of relative file paths
+            FileCollectionError: If filesystem scan fails
         """
         files = set()
 
@@ -597,6 +478,7 @@ class SemanticFileCollector:
 
         except Exception as e:
             logger.error(f"Error during filesystem scan: {e}")
+            raise FileCollectionError(f"Failed to scan filesystem: {e}") from e
 
         return files
 

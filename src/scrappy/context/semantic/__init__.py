@@ -10,7 +10,7 @@ Key Components:
     - SemanticCodeChunker: Intelligent code chunking for embeddings
     - SemanticSearchInitializer: Background initializer for heavy dependencies
     - NullInitializer: No-op initializer for testing
-    - SemanticFileCollector: Git-aware file collection with size limits
+    - SemanticFileCollector: File collection with size limits
     - IndexFilterConfig: Configuration for file filtering
 
 Usage:

@@ -5,16 +5,12 @@ Tests cover:
 - Path filtering (avoiding substring bug)
 - File size limits
 - Binary file detection
-- Git integration
-- Fallback behavior
+- Plain filesystem scanning
 """
 
-import subprocess
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
-
-import pytest
+from unittest.mock import patch
 
 from scrappy.context.semantic.file_collector import (
     IndexFilterConfig,
@@ -156,72 +152,8 @@ class TestIndexFilterConfig:
 class TestSemanticFileCollector:
     """Test SemanticFileCollector file collection."""
 
-    def test_collect_files_uses_git_when_available(self, tmp_path):
-        """Should use git ls-files when in a git repository."""
-        # Create a git repo
-        subprocess.run(['git', 'init'], cwd=tmp_path, capture_output=True)
-
-        # Create some files
-        (tmp_path / 'tracked.py').write_text('print("tracked")')
-        (tmp_path / 'untracked.py').write_text('print("untracked")')
-
-        # Track only one file
-        subprocess.run(['git', 'add', 'tracked.py'], cwd=tmp_path, capture_output=True)
-
-        # Collect files
-        collector = SemanticFileCollector(tmp_path)
-        files = collector.collect_files()
-
-        # Should only get tracked file
-        assert 'tracked.py' in files
-        assert 'untracked.py' not in files
-
-    def test_collect_files_respects_gitignore(self, tmp_path):
-        """Should respect .gitignore when using git ls-files."""
-        # Create a git repo
-        subprocess.run(['git', 'init'], cwd=tmp_path, capture_output=True)
-
-        # Create .gitignore
-        (tmp_path / '.gitignore').write_text('ignored.py\n')
-
-        # Create files
-        (tmp_path / 'tracked.py').write_text('print("tracked")')
-        (tmp_path / 'ignored.py').write_text('print("ignored")')
-
-        # Track files (git respects .gitignore during add)
-        subprocess.run(['git', 'add', '.'], cwd=tmp_path, capture_output=True)
-
-        # Collect files
-        collector = SemanticFileCollector(tmp_path)
-        files = collector.collect_files()
-
-        # Should only get tracked file
-        assert 'tracked.py' in files
-        assert 'ignored.py' not in files
-
-    def test_collect_files_includes_untracked_when_configured(self, tmp_path):
-        """Should include untracked files when include_untracked=True."""
-        # Create a git repo
-        subprocess.run(['git', 'init'], cwd=tmp_path, capture_output=True)
-
-        # Create files
-        (tmp_path / 'tracked.py').write_text('print("tracked")')
-        (tmp_path / 'untracked.py').write_text('print("untracked")')
-
-        # Track only one file
-        subprocess.run(['git', 'add', 'tracked.py'], cwd=tmp_path, capture_output=True)
-
-        # Collect with include_untracked
-        config = IndexFilterConfig(include_untracked=True)
-        collector = SemanticFileCollector(tmp_path, filter_config=config)
-        files = collector.collect_files()
-
-        # Should get both files
-        assert 'tracked.py' in files
-        assert 'untracked.py' in files
-
-    def test_collect_files_falls_back_to_plain_scan_when_not_git_repo(self, tmp_path):
-        """Should use plain filesystem scan when not a git repository."""
+    def test_collect_files_scans_filesystem(self, tmp_path):
+        """Should scan filesystem and collect files."""
         # Create files (no git init)
         (tmp_path / 'file1.py').write_text('print("file1")')
         (tmp_path / 'file2.py').write_text('print("file2")')
@@ -283,51 +215,6 @@ class TestSemanticFileCollector:
         assert not any('node_modules' in f for f in files)
         assert not any('dist' in f for f in files)
 
-    def test_collect_files_returns_empty_dict_when_git_fails_in_git_repo(self, tmp_path):
-        """Should return empty dict (not fallback) when git fails in a git repo."""
-        # Create a git repo
-        (tmp_path / '.git').mkdir()  # Fake git repo
-        (tmp_path / 'file.py').write_text('print("file")')
-
-        # Mock git ls-files to fail
-        with patch('subprocess.run') as mock_run:
-            mock_result = Mock()
-            mock_result.returncode = 1
-            mock_result.stderr = 'git error'
-            mock_run.return_value = mock_result
-
-            collector = SemanticFileCollector(tmp_path)
-            files = collector.collect_files()
-
-            # Should return empty (security: don't bypass .gitignore)
-            assert len(files) == 0
-
-    def test_collect_files_handles_git_timeout(self, tmp_path):
-        """Should handle git ls-files timeout gracefully."""
-        # Create a git repo
-        (tmp_path / '.git').mkdir()
-
-        # Mock git to timeout
-        with patch('subprocess.run', side_effect=subprocess.TimeoutExpired('git', 30)):
-            collector = SemanticFileCollector(tmp_path)
-            files = collector.collect_files()
-
-            # Should return empty
-            assert len(files) == 0
-
-    def test_collect_files_handles_git_not_found(self, tmp_path):
-        """Should handle git command not found."""
-        # Create a git repo
-        (tmp_path / '.git').mkdir()
-
-        # Mock git not found
-        with patch('subprocess.run', side_effect=FileNotFoundError()):
-            collector = SemanticFileCollector(tmp_path)
-            files = collector.collect_files()
-
-            # Should return empty
-            assert len(files) == 0
-
     def test_collect_files_plain_scan_filters_by_path(self, tmp_path):
         """Plain scan should apply path filtering."""
         # Create directory structure
@@ -338,8 +225,8 @@ class TestSemanticFileCollector:
         (tmp_path / 'src' / 'distributed.py').write_text('print("distributed")')  # Should NOT be filtered
         (tmp_path / 'dist' / 'bundle.js').write_text('console.log("bundle")')  # Should be filtered
 
-        # Collect with respect_gitignore=False to force plain scan
-        config = IndexFilterConfig(respect_gitignore=False)
+        # Collect with default config (plain scan only now)
+        config = IndexFilterConfig()
         collector = SemanticFileCollector(tmp_path, filter_config=config)
         files = collector.collect_files()
 

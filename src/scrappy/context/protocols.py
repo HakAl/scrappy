@@ -774,14 +774,13 @@ class FileCollectorProtocol(Protocol):
     Protocol for collecting files for semantic search indexing.
 
     Abstracts file collection to enable:
-    - Respecting .gitignore via git ls-files
     - File size limits to prevent OOM
     - Binary file detection
     - Batched streaming to prevent memory spikes
     - Testing with mock file sets
 
     Implementations:
-    - SemanticFileCollector: Git-aware with size limits and batching
+    - SemanticFileCollector: Collects files with size limits and batching
     - MockFileCollector: Fixed file set for testing
 
     Example:
