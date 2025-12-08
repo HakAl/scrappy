@@ -30,7 +30,8 @@ from .types import (
     AgentAction,
     ActionResult,
     EvaluationResult,
-    ConversationState
+    ConversationState,
+    AgentContext,
 )
 from .audit import AuditLogger
 from .response_parser import UnifiedResponseParser
@@ -251,6 +252,18 @@ class CodeAgent:
         self.planner = self._provider_strategy.get_planner()
         self.executor = self._provider_strategy.get_executor()
 
+        # Get semantic search manager from orchestrator context for context factory
+        semantic_manager = None
+        if hasattr(self._orchestrator, 'context') and hasattr(self._orchestrator.context, 'get_search_provider'):
+            semantic_manager = self._orchestrator.context
+
+        # Create context factory for per-iteration context building
+        self._context_factory = AgentContextFactory(
+            semantic_manager=semantic_manager,
+            config=self.config,
+            tool_registry=self.tool_registry,
+        )
+
         # Phase 1 refactoring: Create AgentLoop
         self._agent_loop = agent_loop or AgentLoop(
             orchestrator=self.adapter,
@@ -260,6 +273,7 @@ class CodeAgent:
             tool_registry=self.tool_registry,
             provider_strategy=self._provider_strategy,
             config=self.config,
+            context_factory=self._context_factory,
             audit_logger=self._audit_logger,
             tools=self.tools,
         )
@@ -596,20 +610,8 @@ class CodeAgent:
         # Build the base system prompt
         base_system_prompt = self._prompt_factory.create_agent_system_prompt(config)
 
-        # Get semantic search manager from orchestrator context
-        semantic_manager = None
-        if hasattr(self._orchestrator, 'context') and hasattr(self._orchestrator.context, 'get_search_provider'):
-            semantic_manager = self._orchestrator.context
-
-        # Create context factory and build agent context
-        context_factory = AgentContextFactory(
-            semantic_manager=semantic_manager,
-            config=self.config,
-            tool_registry=self.tool_registry,
-        )
-
-        # Build agent context with passive RAG and tool filtering
-        agent_context = context_factory.build_context(
+        # Build agent context with passive RAG and tool filtering using injected factory
+        agent_context = self._context_factory.build_context(
             task=task,
             base_system_prompt=base_system_prompt,
         )
@@ -631,9 +633,14 @@ class CodeAgent:
         )
 
         # Phase 1 refactoring: Delegate to AgentLoop
+        # AgentLoop now uses injected context_factory to rebuild context per iteration
         try:
             self.io.secho("Working...", fg="cyan")
-            result = self._agent_loop.run(task, state, dry_run=self.dry_run)
+            result = self._agent_loop.run(
+                task,
+                state,
+                dry_run=self.dry_run,
+            )
 
             # Update audit log with result
             if result['success']:

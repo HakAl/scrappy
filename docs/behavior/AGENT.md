@@ -7,8 +7,10 @@ The Code Agent is an autonomous system that can analyze codebases, make changes,
 ```
 src/agent/
   core.py                 # Main CodeAgent class
-  agent_loop.py           # Think-plan-execute loop
+  agent_loop.py           # Think-plan-execute loop (stateless)
+  context_factory.py      # Builds AgentContext with RAG and tool filtering
   protocols.py            # Agent protocols
+  types.py                # AgentContext, AgentThought, etc.
   action_executor.py      # Executes agent actions
   response_parser.py      # Parses LLM responses into actions
   tool_runner.py          # Runs tools on behalf of agent
@@ -19,7 +21,6 @@ src/agent/
   duplicate_detector.py   # Detects repeated/stuck actions
   denial_handler.py       # Handles user denial of actions
   ui.py                   # User interaction components
-  types.py                # Type definitions
 ```
 
 ### Execution Flow
@@ -85,18 +86,71 @@ signal.signal()                          signal.signal()
 
 ```python
 while not done and iterations < max_iterations:
+    # Build context (rebuilt each iteration for dynamic updates)
+    context = context_factory.build_context(task, base_system_prompt)
+
     # Think: Analyze current state
-    thought = agent._think(context)
+    thought = agent_loop.think(state, context)
 
     # Plan: Decide next action
-    action = agent._plan_action(thought)
+    action = agent_loop.plan(thought)
 
     # Execute: Run the action
-    result = agent._execute_action(action)
+    result = agent_loop.execute(action, state)
 
-    # Observe: Update context with result
-    context.add_observation(result)
+    # Evaluate: Check if task is complete
+    evaluation = agent_loop.evaluate(action, result, state)
 ```
+
+## Semantic Search Integration
+
+The agent integrates semantic search in two ways:
+
+### 1. Passive RAG (Automatic)
+
+`AgentContextFactory` pre-fetches relevant code into the system prompt:
+
+```python
+context = AgentContextFactory(
+    semantic_manager=semantic_manager,
+    config=config,
+    tool_registry=registry,
+).build_context(task, base_prompt)
+
+# context.system_prompt now includes relevant code snippets
+# context.active_tools excludes unavailable tools
+```
+
+Configuration in `AgentConfig`:
+- `passive_rag_enabled` - Enable/disable passive RAG (default: True)
+- `passive_rag_max_tokens` - Token budget for RAG context (default: 2000)
+
+### 2. Explicit Tool (On-Demand)
+
+The `codebase_search` tool lets the LLM search when needed:
+
+```python
+# LLM can call:
+{
+    "action": "codebase_search",
+    "parameters": {
+        "query": "how does authentication work",
+        "max_tokens": 4000
+    }
+}
+```
+
+### Dynamic Tool Filtering
+
+Tools are filtered per-iteration based on availability:
+
+```python
+# AgentContextFactory._get_active_tools()
+if not semantic_search_ready:
+    return [t for t in tools if t != "codebase_search"]
+```
+
+This prevents the LLM from trying to use unavailable tools.
 
 ## System Prompt
 

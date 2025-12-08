@@ -14,6 +14,7 @@ from scrappy.agent.types import (
     ActionResult,
     EvaluationResult,
     ConversationState,
+    AgentContext,
 )
 from scrappy.agent_config import AgentConfig
 
@@ -88,6 +89,18 @@ def mock_provider_strategy():
 
 
 @pytest.fixture
+def mock_context_factory():
+    """Create a mock context factory."""
+    mock = Mock()
+    mock.build_context.return_value = AgentContext(
+        system_prompt="Test system prompt",
+        active_tools=["read_file", "write_file"],
+        passive_rag_context="",
+    )
+    return mock
+
+
+@pytest.fixture
 def agent_loop(
     mock_orchestrator,
     mock_action_executor,
@@ -95,6 +108,7 @@ def agent_loop(
     mock_ui,
     mock_tool_registry,
     mock_provider_strategy,
+    mock_context_factory,
 ):
     """Create an AgentLoop instance with all mocked dependencies."""
     config = AgentConfig()
@@ -106,6 +120,7 @@ def agent_loop(
         tool_registry=mock_tool_registry,
         provider_strategy=mock_provider_strategy,
         config=config,
+        context_factory=mock_context_factory,
         tools={"read_file": Mock(), "write_file": Mock()},
     )
 
@@ -128,8 +143,12 @@ class TestAgentLoopThink:
             system_prompt="system prompt",
             iteration=1,
         )
+        context = AgentContext(
+            system_prompt="system prompt",
+            active_tools=["read_file", "write_file"],
+        )
 
-        result = agent_loop.think(state)
+        result = agent_loop.think(state, context)
 
         # With dynamic selection, delegate is called with provider_name=None
         mock_orchestrator.delegate.assert_called_once()
@@ -147,8 +166,12 @@ class TestAgentLoopThink:
             system_prompt="system prompt",
             iteration=1,
         )
+        context = AgentContext(
+            system_prompt="system prompt",
+            active_tools=["read_file", "write_file"],
+        )
 
-        agent_loop.think(state)
+        agent_loop.think(state, context)
 
         mock_provider_strategy.get_planner.assert_called()
 
@@ -164,8 +187,12 @@ class TestAgentLoopThink:
             system_prompt="system prompt",
             iteration=1,
         )
+        context = AgentContext(
+            system_prompt="system prompt",
+            active_tools=["read_file", "write_file"],
+        )
 
-        agent_loop.think(state)
+        agent_loop.think(state, context)
 
         mock_ui.show_provider_status.assert_called()
         # First call should mention "Analyzing"
@@ -457,6 +484,13 @@ class TestAgentLoopRun:
         config = AgentConfig()
         config.meaningful_actions = ["write_file"]
 
+        mock_context_factory = Mock()
+        mock_context_factory.build_context.return_value = AgentContext(
+            system_prompt="system",
+            active_tools=["write_file"],
+            passive_rag_context="",
+        )
+
         agent_loop = AgentLoop(
             orchestrator=mock_orchestrator,
             action_executor=mock_action_executor,
@@ -465,6 +499,7 @@ class TestAgentLoopRun:
             tool_registry=mock_tool_registry,
             provider_strategy=mock_provider_strategy,
             config=config,
+            context_factory=mock_context_factory,
             tools={"write_file": Mock()},
         )
 
@@ -510,6 +545,14 @@ class TestAgentLoopRun:
         )
 
         config = AgentConfig()
+
+        mock_context_factory = Mock()
+        mock_context_factory.build_context.return_value = AgentContext(
+            system_prompt="system",
+            active_tools=["read_file"],
+            passive_rag_context="",
+        )
+
         agent_loop = AgentLoop(
             orchestrator=mock_orchestrator,
             action_executor=mock_action_executor,
@@ -518,6 +561,7 @@ class TestAgentLoopRun:
             tool_registry=mock_tool_registry,
             provider_strategy=mock_provider_strategy,
             config=config,
+            context_factory=mock_context_factory,
             tools={"read_file": Mock()},
         )
 
@@ -536,3 +580,308 @@ class TestAgentLoopRun:
         assert result["success"] is False
         assert "Max iterations" in result["result"]
         assert result["iterations"] == 3
+
+
+class TestAgentLoopContextRebuild:
+    """Tests for per-iteration context rebuild behavior."""
+
+    def test_context_rebuilt_every_iteration(
+        self,
+        mock_action_executor,
+        mock_response_parser,
+        mock_ui,
+        mock_tool_registry,
+        mock_provider_strategy,
+    ):
+        """run() should rebuild context on each iteration."""
+        mock_orchestrator = Mock(spec=['delegate', 'list_providers'])
+        response = Mock()
+        response.content = '{"thought": "test", "action": "read_file", "parameters": {}}'
+        response.provider = "openai"
+        response.tool_calls = None
+        mock_orchestrator.delegate.return_value = response
+
+        mock_response_parser.parse.return_value = Mock(
+            thought="working",
+            action="read_file",
+            parameters={"path": "test.py"},
+            is_complete=False,
+            result_text="",
+        )
+
+        config = AgentConfig()
+
+        # Track context factory calls
+        mock_context_factory = Mock()
+        mock_context_factory.build_context.return_value = AgentContext(
+            system_prompt="system",
+            active_tools=["read_file"],
+            passive_rag_context="",
+        )
+
+        agent_loop = AgentLoop(
+            orchestrator=mock_orchestrator,
+            action_executor=mock_action_executor,
+            response_parser=mock_response_parser,
+            ui=mock_ui,
+            tool_registry=mock_tool_registry,
+            provider_strategy=mock_provider_strategy,
+            config=config,
+            context_factory=mock_context_factory,
+            tools={"read_file": Mock()},
+        )
+
+        state = ConversationState(
+            messages=[
+                {"role": "system", "content": "system"},
+                {"role": "user", "content": "task"},
+            ],
+            system_prompt="system",
+            iteration=0,
+            max_iterations=3,
+        )
+
+        agent_loop.run("test task", state)
+
+        # Context factory should be called once per iteration
+        assert mock_context_factory.build_context.call_count == 3
+        # Each call should receive task and system_prompt
+        for call in mock_context_factory.build_context.call_args_list:
+            assert call[0][0] == "test task"
+            assert call[0][1] == "system"
+
+    def test_context_changes_reflected_immediately(
+        self,
+        mock_action_executor,
+        mock_response_parser,
+        mock_ui,
+        mock_tool_registry,
+        mock_provider_strategy,
+    ):
+        """run() should pick up context changes mid-conversation."""
+        mock_orchestrator = Mock(spec=['delegate', 'list_providers'])
+        response = Mock()
+        response.content = '{"thought": "test", "action": "read_file", "parameters": {}}'
+        response.provider = "openai"
+        response.tool_calls = None
+        mock_orchestrator.delegate.return_value = response
+
+        mock_response_parser.parse.return_value = Mock(
+            thought="working",
+            action="read_file",
+            parameters={"path": "test.py"},
+            is_complete=False,
+            result_text="",
+        )
+
+        config = AgentConfig()
+
+        # Context factory that changes output over iterations
+        # Simulates index becoming ready after first iteration
+        call_count = [0]
+
+        def build_context_side_effect(task, system_prompt):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                # First iteration: no RAG
+                return AgentContext(
+                    system_prompt="system",
+                    active_tools=["read_file"],
+                    passive_rag_context="",
+                )
+            else:
+                # Second+ iterations: RAG available
+                return AgentContext(
+                    system_prompt="system with RAG",
+                    active_tools=["read_file", "search_index"],
+                    passive_rag_context="RAG context available",
+                )
+
+        mock_context_factory = Mock()
+        mock_context_factory.build_context.side_effect = build_context_side_effect
+
+        agent_loop = AgentLoop(
+            orchestrator=mock_orchestrator,
+            action_executor=mock_action_executor,
+            response_parser=mock_response_parser,
+            ui=mock_ui,
+            tool_registry=mock_tool_registry,
+            provider_strategy=mock_provider_strategy,
+            config=config,
+            context_factory=mock_context_factory,
+            tools={"read_file": Mock(), "search_index": Mock()},
+        )
+
+        state = ConversationState(
+            messages=[
+                {"role": "system", "content": "system"},
+                {"role": "user", "content": "task"},
+            ],
+            system_prompt="system",
+            iteration=0,
+            max_iterations=3,
+        )
+
+        agent_loop.run("test task", state)
+
+        # Verify think() was called with different contexts
+        # First call should have no RAG context
+        # Subsequent calls should have RAG context
+        assert mock_context_factory.build_context.call_count == 3
+
+    def test_index_readiness_changes_mid_conversation(
+        self,
+        mock_action_executor,
+        mock_response_parser,
+        mock_ui,
+        mock_tool_registry,
+        mock_provider_strategy,
+    ):
+        """run() should immediately use new tools when index becomes ready."""
+        mock_orchestrator = Mock(spec=['delegate', 'list_providers'])
+        response = Mock()
+        response.content = '{"thought": "test", "action": "read_file", "parameters": {}}'
+        response.provider = "openai"
+        response.tool_calls = None
+        mock_orchestrator.delegate.return_value = response
+
+        mock_response_parser.parse.return_value = Mock(
+            thought="working",
+            action="read_file",
+            parameters={"path": "test.py"},
+            is_complete=False,
+            result_text="",
+        )
+
+        config = AgentConfig()
+
+        # Simulate index becoming ready after iteration 2
+        iteration_count = [0]
+
+        def build_context_side_effect(task, system_prompt):
+            iteration_count[0] += 1
+            if iteration_count[0] <= 2:
+                # Iterations 1-2: Index not ready
+                return AgentContext(
+                    system_prompt="basic system prompt",
+                    active_tools=["read_file", "write_file"],
+                    passive_rag_context="",
+                )
+            else:
+                # Iteration 3+: Index ready, semantic search available
+                return AgentContext(
+                    system_prompt="system prompt with semantic search",
+                    active_tools=["read_file", "write_file", "semantic_search"],
+                    passive_rag_context="Semantic index ready",
+                )
+
+        mock_context_factory = Mock()
+        mock_context_factory.build_context.side_effect = build_context_side_effect
+
+        agent_loop = AgentLoop(
+            orchestrator=mock_orchestrator,
+            action_executor=mock_action_executor,
+            response_parser=mock_response_parser,
+            ui=mock_ui,
+            tool_registry=mock_tool_registry,
+            provider_strategy=mock_provider_strategy,
+            config=config,
+            context_factory=mock_context_factory,
+            tools={
+                "read_file": Mock(),
+                "write_file": Mock(),
+                "semantic_search": Mock(),
+            },
+        )
+
+        state = ConversationState(
+            messages=[
+                {"role": "system", "content": "system"},
+                {"role": "user", "content": "task"},
+            ],
+            system_prompt="system",
+            iteration=0,
+            max_iterations=3,
+        )
+
+        agent_loop.run("test task", state)
+
+        # Verify context was rebuilt 3 times
+        assert mock_context_factory.build_context.call_count == 3
+
+        # Verify each call passed correct parameters
+        for call in mock_context_factory.build_context.call_args_list:
+            assert call[0][0] == "test task"
+            assert call[0][1] == "system"
+
+    def test_context_passed_to_think_on_each_iteration(
+        self,
+        mock_action_executor,
+        mock_response_parser,
+        mock_ui,
+        mock_tool_registry,
+        mock_provider_strategy,
+    ):
+        """run() should pass fresh context to think() on each iteration."""
+        mock_orchestrator = Mock(spec=['delegate', 'list_providers'])
+        response = Mock()
+        response.content = '{"thought": "test", "action": "read_file", "parameters": {}}'
+        response.provider = "openai"
+        response.tool_calls = None
+        mock_orchestrator.delegate.return_value = response
+
+        mock_response_parser.parse.return_value = Mock(
+            thought="working",
+            action="read_file",
+            parameters={"path": "test.py"},
+            is_complete=False,
+            result_text="",
+        )
+
+        config = AgentConfig()
+
+        # Track what contexts are generated
+        contexts_generated = []
+
+        def build_context_side_effect(task, system_prompt):
+            context = AgentContext(
+                system_prompt=f"system {len(contexts_generated) + 1}",
+                active_tools=["read_file"],
+                passive_rag_context=f"iteration {len(contexts_generated) + 1}",
+            )
+            contexts_generated.append(context)
+            return context
+
+        mock_context_factory = Mock()
+        mock_context_factory.build_context.side_effect = build_context_side_effect
+
+        agent_loop = AgentLoop(
+            orchestrator=mock_orchestrator,
+            action_executor=mock_action_executor,
+            response_parser=mock_response_parser,
+            ui=mock_ui,
+            tool_registry=mock_tool_registry,
+            provider_strategy=mock_provider_strategy,
+            config=config,
+            context_factory=mock_context_factory,
+            tools={"read_file": Mock()},
+        )
+
+        state = ConversationState(
+            messages=[
+                {"role": "system", "content": "system"},
+                {"role": "user", "content": "task"},
+            ],
+            system_prompt="system",
+            iteration=0,
+            max_iterations=2,
+        )
+
+        agent_loop.run("test task", state)
+
+        # Should generate unique context for each iteration
+        assert len(contexts_generated) == 2
+        assert contexts_generated[0].system_prompt == "system 1"
+        assert contexts_generated[1].system_prompt == "system 2"
+        assert contexts_generated[0].passive_rag_context == "iteration 1"
+        assert contexts_generated[1].passive_rag_context == "iteration 2"

@@ -1,40 +1,65 @@
 # Agent VS Orchestrator
 
-### Agent's responsibility:
+## Core Responsibilities
 
-Decide what to do (reason, plan, execute tools). The agent properly delegates provider selection to the orchestrator, respecting rate limits and enabling smart provider rotation.
+| Aspect | Agent | Orchestrator |
+|--------|-------|--------------|
+| **Primary Role** | Decide what to do (reason, plan, execute tools) | Decide which provider to use |
+| **LLM Interaction** | Sends prompts via orchestrator | Routes to providers, handles retries |
+| **Context** | Builds per-iteration context with RAG | Augments prompts with codebase context |
+| **Semantic Search** | Explicit tool + passive RAG in system prompt | Implicit context augmentation |
 
-### Orchestrator's responsibility:
+## Semantic Search Integration
 
-Decide which provider to use (rate limits, availability, capabilities)
+Both agent and orchestrator use semantic search, but differently:
 
-**Orchestrator uses LLMResponse from providers/base.py**
+```
+Orchestrator (implicit)                 Agent (explicit)
+=======================                 ================
+CodebaseContext                         AgentContextFactory
+    |                                       |
+    +-- augment_prompt()                    +-- Passive RAG (system prompt)
+    |       |                               |
+    |       +-- Semantic search             +-- Tool filtering
+    |           for context                 |
+    |                                       +-- SemanticSearchTool
+    +-- use_context=True in                     |
+        delegate() calls                        +-- LLM calls codebase_search
+```
 
-### Specific Behavior:
+**Orchestrator**: When `use_context=True`, automatically injects relevant code into prompts.
 
-1.  Agent should not hardcode provider selection. The current `self.planner = 'gemini'` approach defeats the orchestrator's purpose.
-2.  Agent should request delegation by task type, not provider name:
-    ```python
-    # Instead of:
-    response = self.orch.delegate('gemini', prompt, ...)
+**Agent**:
+1. `AgentContextFactory` pre-fetches relevant context into system prompt (passive RAG)
+2. `codebase_search` tool lets LLM explicitly search when needed
+3. Tool is hidden until index is ready (dynamic filtering)
 
-    # Should be:
-    response = self.orch.delegate_for_task(
-        task_type='planning',  # or 'execution', 'quick_response'
-        prompt=prompt,
-        ...
-    )
-    ```
-3.  Orchestrator decides provider based on:
-    *   Task type requirements (planning needs reasoning → gemini/groq; execution needs speed → cerebras)
-    *   Current rate limit status (don't pick gemini if exhausted)
-    *   Provider availability
-    *   Provider health/error rates
-4.  Fallback logic lives in orchestrator, not agent. If preferred provider is rate-limited, orchestrator picks next best.
+## Provider Selection
 
-### Benefits:
+Agent delegates provider selection to orchestrator:
 
-*   Rate limiting actually works
-*   Provider rotation when limits approached
-*   Agent code stays clean and focused
-*   Easy to add new providers without touching agent
+```python
+# Agent should NOT hardcode providers:
+response = self.orch.delegate('gemini', prompt, ...)  # Bad
+
+# Agent lets orchestrator decide:
+response = self.orch.delegate(
+    provider_name=None,  # Let orchestrator pick
+    prompt=prompt,
+    ...
+)
+```
+
+Orchestrator decides based on:
+- Task type requirements (planning vs execution)
+- Current rate limit status
+- Provider availability
+- Provider health/error rates
+
+## Benefits
+
+- Rate limiting actually works
+- Provider rotation when limits approached
+- Agent code stays clean and focused
+- Easy to add new providers without touching agent
+- Semantic search works at both levels

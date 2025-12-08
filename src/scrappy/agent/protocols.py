@@ -742,32 +742,43 @@ class AgentLoopProtocol(Protocol):
             return loop.run(task, state)
     """
 
-    def run(self, task: str, state: Any) -> Any:
+    def run(
+        self,
+        task: str,
+        state: "ConversationState",
+        dry_run: bool = False,
+    ) -> Dict[str, Any]:
         """
         Run the complete agent loop until completion or max iterations.
 
         Args:
             task: Task description to accomplish
             state: ConversationState to track progress
+            dry_run: If True, simulate execution without actual changes
 
         Returns:
-            EvaluationResult with completion status
+            Dict with completion status, result, and iteration count
         """
         ...
 
-    def think(self, state: Any) -> Any:
+    def think(
+        self,
+        state: "ConversationState",
+        context: "AgentContext",
+    ) -> "AgentThought":
         """
         Generate the next thought/action from the LLM.
 
         Args:
             state: Current conversation state
+            context: AgentContext with system prompt and active tools
 
         Returns:
             AgentThought containing raw LLM response
         """
         ...
 
-    def plan(self, thought: Any) -> Any:
+    def plan(self, thought: "AgentThought") -> "AgentAction":
         """
         Parse the LLM response into a structured action.
 
@@ -779,7 +790,11 @@ class AgentLoopProtocol(Protocol):
         """
         ...
 
-    def execute(self, action: Any, state: Any) -> Any:
+    def execute(
+        self,
+        action: "AgentAction",
+        state: "ConversationState",
+    ) -> "ActionResult":
         """
         Execute the planned action (tool call).
 
@@ -792,7 +807,12 @@ class AgentLoopProtocol(Protocol):
         """
         ...
 
-    def evaluate(self, action: Any, result: Any, state: Any) -> Any:
+    def evaluate(
+        self,
+        action: "AgentAction",
+        result: "ActionResult",
+        state: "ConversationState",
+    ) -> "EvaluationResult":
         """
         Evaluate whether the task is complete.
 
@@ -924,7 +944,11 @@ class AgentContextFactoryProtocol(Protocol):
             return context
     """
 
-    def build_context(self, task: str, base_system_prompt: str) -> Any:  # Returns AgentContext
+    def build_context(
+        self,
+        task: str,
+        base_system_prompt: str,
+    ) -> "AgentContext":
         """
         Build agent execution context for a task.
 

@@ -16,7 +16,7 @@ from unittest.mock import Mock, MagicMock, patch, call
 from pathlib import Path
 
 from scrappy.agent.core import CodeAgent
-from scrappy.agent.types import ConversationState
+from scrappy.agent.types import ConversationState, AgentContext
 from scrappy.agent_config import AgentConfig
 from helpers import ConfigurableTestOrchestrator
 
@@ -89,9 +89,13 @@ class TestAgentProviderDelegation:
             max_iterations=5,
             auto_confirm=False
         )
+        context = AgentContext(
+            system_prompt="You are a helpful assistant",
+            active_tools=["read_file", "write_file"],
+        )
 
         # Call _think which should delegate to orchestrator
-        agent._agent_loop.think(state)
+        agent._agent_loop.think(state, context)
 
         # Check what provider was requested
         assert len(tracking_orchestrator.delegate_calls) == 1
@@ -127,8 +131,12 @@ class TestAgentProviderDelegation:
             max_iterations=5,
             auto_confirm=False
         )
+        context = AgentContext(
+            system_prompt="test",
+            active_tools=["read_file", "write_file"],
+        )
 
-        agent._agent_loop.think(state)
+        agent._agent_loop.think(state, context)
 
         # Agent should pass task_type so orchestrator knows what kind of provider to pick
         # This test will FAIL because agent doesn't pass task_type
@@ -172,11 +180,15 @@ class TestAgentProviderDelegation:
             max_iterations=5,
             auto_confirm=False
         )
+        context = AgentContext(
+            system_prompt="test",
+            active_tools=["read_file", "write_file"],
+        )
 
         # Make multiple think calls
-        agent._agent_loop.think(state)
-        agent._agent_loop.think(state)
-        agent._agent_loop.think(state)
+        agent._agent_loop.think(state, context)
+        agent._agent_loop.think(state, context)
+        agent._agent_loop.think(state, context)
 
         # Orchestrator should have opportunity to pick different providers
         # Agent should pass task_type and let orchestrator rotate

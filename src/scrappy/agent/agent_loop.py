@@ -17,6 +17,7 @@ from .types import (
     EvaluationResult,
     ConversationState,
     DenialHandlerResult,
+    AgentContext,
 )
 from .protocols import (
     AgentLoopProtocol,
@@ -26,6 +27,7 @@ from .protocols import (
     ToolRegistryProtocol,
     ProviderSelectionStrategyProtocol,
     DenialHandlerProtocol,
+    AgentContextFactoryProtocol,
 )
 
 if TYPE_CHECKING:
@@ -58,6 +60,7 @@ class AgentLoop:
         tool_registry: ToolRegistryProtocol,
         provider_strategy: ProviderSelectionStrategyProtocol,
         config: "AgentConfig",
+        context_factory: AgentContextFactoryProtocol,
         audit_logger: Any = None,  # AuditLoggerProtocol
         tools: Optional[Dict[str, Any]] = None,
         denial_handler: Optional[DenialHandlerProtocol] = None,
@@ -73,6 +76,7 @@ class AgentLoop:
             tool_registry: ToolRegistry for tool schemas
             provider_strategy: Strategy for selecting providers
             config: AgentConfig with settings
+            context_factory: Factory for building AgentContext per iteration
             audit_logger: Optional audit logger
             tools: Optional tools dict for backward compat
             denial_handler: Optional handler for user denials
@@ -84,6 +88,7 @@ class AgentLoop:
         self._tool_registry = tool_registry
         self._provider_strategy = provider_strategy
         self._config = config
+        self._context_factory = context_factory
         self._audit_logger = audit_logger
         self._tools = tools or {}
         self._denial_handler = denial_handler
@@ -92,7 +97,7 @@ class AgentLoop:
         # Track denials in current session
         self._denial_count = 0
 
-    def think(self, state: ConversationState) -> AgentThought:
+    def think(self, state: ConversationState, context: AgentContext) -> AgentThought:
         """
         Generate the next thought/action from the LLM.
 
@@ -100,6 +105,7 @@ class AgentLoop:
 
         Args:
             state: Current conversation state
+            context: Agent context with system prompt and RAG data
 
         Returns:
             AgentThought containing raw LLM response
@@ -143,7 +149,7 @@ class AgentLoop:
         # Use native tool calling if both adapter and provider support it
         if has_delegate_with_tools and provider_supports_tools:
             response = self._delegate_with_tools(
-                current_provider, user_prompt, state.system_prompt
+                current_provider, user_prompt, context.system_prompt
             )
             actual_provider = response.provider
         else:
@@ -152,7 +158,7 @@ class AgentLoop:
                 response = self._orchestrator.delegate(
                     provider_name=None,  # Let orchestrator decide
                     prompt=user_prompt,
-                    system_prompt=state.system_prompt,
+                    system_prompt=context.system_prompt,
                     max_tokens=self._config.default_max_tokens,
                     temperature=self._config.default_temperature,
                     use_context=False,  # Context already in system prompt
@@ -163,7 +169,7 @@ class AgentLoop:
                 response = self._orchestrator.delegate(
                     current_provider,
                     user_prompt,
-                    system_prompt=state.system_prompt,
+                    system_prompt=context.system_prompt,
                     max_tokens=self._config.default_max_tokens,
                     temperature=self._config.default_temperature,
                     use_context=False,  # Context already in system prompt
@@ -606,7 +612,7 @@ class AgentLoop:
         Run the complete agent loop until completion or max iterations.
 
         Args:
-            task: Task description (for logging)
+            task: Task description (for context building)
             state: ConversationState to track progress
             dry_run: If True, simulate execution
 
@@ -625,7 +631,9 @@ class AgentLoop:
                 pass  # UI messages handled in think()
 
             # Stage 1: Think - LLM generates next thought/action
-            thought = self.think(state)
+            # Build context per iteration to pick up changes (e.g., index becoming ready)
+            context = self._context_factory.build_context(task, state.system_prompt)
+            thought = self.think(state, context)
 
             # Stage 2: Plan - Parse response into structured action
             action = self.plan(thought)

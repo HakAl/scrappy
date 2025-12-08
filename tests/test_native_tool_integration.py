@@ -14,7 +14,7 @@ import pytest
 from unittest.mock import Mock, patch
 
 from scrappy.agent.core import CodeAgent
-from scrappy.agent.types import AgentThought, ConversationState
+from scrappy.agent.types import AgentThought, ConversationState, AgentContext
 from scrappy.agent_config import AgentConfig
 from scrappy.orchestrator_adapter import OrchestratorAdapter
 from scrappy.providers.base import LLMResponse, ToolCall
@@ -181,9 +181,13 @@ class TestThinkMethodNativeToolDetection:
             system_prompt="You are a helpful assistant",
             iteration=1
         )
+        context = AgentContext(
+            system_prompt="You are a helpful assistant",
+            active_tools=["read_file", "write_file"],
+        )
 
         # Call _think
-        thought = agent_with_native_orchestrator._agent_loop.think(state)
+        thought = agent_with_native_orchestrator._agent_loop.think(state, context)
 
         # Native tools are supported, so delegate_with_tools should be called
         assert mock_orchestrator_with_native_support.delegate_with_tools.called, \
@@ -224,9 +228,13 @@ class TestThinkMethodNativeToolDetection:
             system_prompt="You are a helpful assistant",
             iteration=1
         )
+        context = AgentContext(
+            system_prompt="You are a helpful assistant",
+            active_tools=["read_file", "write_file"],
+        )
 
         # This should use regular delegate, not delegate_with_tools
-        thought = agent._agent_loop.think(state)
+        thought = agent._agent_loop.think(state, context)
 
         # Should have used regular delegate (tracked in orch.delegate_calls)
         assert len(orch.delegate_calls) > 0
@@ -249,8 +257,12 @@ class TestThinkMethodNativeToolDetection:
             system_prompt="You are a helpful assistant",
             iteration=1
         )
+        context = AgentContext(
+            system_prompt="You are a helpful assistant",
+            active_tools=["read_file", "write_file"],
+        )
 
-        agent_with_native_orchestrator._agent_loop.think(state)
+        agent_with_native_orchestrator._agent_loop.think(state, context)
 
         # delegate_with_tools should be called since provider supports native tools
         assert mock_orchestrator_with_native_support.delegate_with_tools.called, \
