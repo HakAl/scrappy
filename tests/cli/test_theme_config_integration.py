@@ -34,10 +34,10 @@ def reset_global_config():
 class TestEndToEndThemeLoading:
     """Tests for complete end-to-end theme loading flow."""
 
-    def test_yaml_config_to_theme_protocol(self, test_config_dir: Path, monkeypatch):
+    def test_yaml_config_to_theme_protocol(self, tmp_path: Path, monkeypatch):
         """Complete flow: .scrappy.yaml → CLIConfig → ThemeProtocol."""
         # Create config file
-        config_file = test_config_dir / ".scrappy.yaml"
+        config_file = tmp_path / ".scrappy.yaml"
         config_file.write_text("""
 theme:
   preset: dark
@@ -45,7 +45,7 @@ theme:
   accent: "#e5c07b"
   success: "#98c379"
 """)
-        monkeypatch.chdir(test_config_dir)
+        monkeypatch.chdir(tmp_path)
 
         # Load config using factory
         config = get_config()
@@ -64,9 +64,9 @@ theme:
         assert config.theme.text == "#ffffff"
         assert config.theme.surface == "#1e1e1e"
 
-    def test_json_config_to_theme_protocol(self, test_config_dir: Path, monkeypatch):
+    def test_json_config_to_theme_protocol(self, tmp_path: Path, monkeypatch):
         """Complete flow: .scrappy.json → CLIConfig → ThemeProtocol."""
-        config_file = test_config_dir / ".scrappy.json"
+        config_file = tmp_path / ".scrappy.json"
         config_file.write_text(json.dumps({
             "theme": {
                 "preset": "light",
@@ -74,7 +74,7 @@ theme:
                 "error": "#ff0000"
             }
         }))
-        monkeypatch.chdir(test_config_dir)
+        monkeypatch.chdir(tmp_path)
 
         config = get_config()
 
@@ -83,10 +83,10 @@ theme:
         assert config.theme.error == "#ff0000"
         assert config.theme.text == "#000000"  # from light preset (hex code)
 
-    def test_no_config_file_uses_default_theme(self, test_config_dir: Path, monkeypatch):
+    def test_no_config_file_uses_default_theme(self, tmp_path: Path, monkeypatch):
         """When no config file exists, uses DEFAULT_THEME."""
         # Empty directory
-        monkeypatch.chdir(test_config_dir)
+        monkeypatch.chdir(tmp_path)
 
         config = get_config()
 
@@ -94,9 +94,9 @@ theme:
         assert config.theme.primary == DEFAULT_THEME.primary
         assert config.theme.surface == DEFAULT_THEME.surface
 
-    def test_empty_theme_section_uses_default(self, test_config_dir: Path):
+    def test_empty_theme_section_uses_default(self, tmp_path: Path):
         """Config with empty theme section uses default theme."""
-        config_file = test_config_dir / "empty_theme.yaml"
+        config_file = tmp_path / "empty_theme.yaml"
         config_file.write_text("""
 temperature_default: 0.8
 theme:
@@ -109,9 +109,9 @@ theme:
         # Other config values load correctly
         assert config.temperature_default == 0.8
 
-    def test_theme_properties_are_accessible(self, test_config_dir: Path, monkeypatch):
+    def test_theme_properties_are_accessible(self, tmp_path: Path, monkeypatch):
         """All ThemeProtocol properties are accessible from loaded theme."""
-        config_file = test_config_dir / ".scrappy.yaml"
+        config_file = tmp_path / ".scrappy.yaml"
         config_file.write_text("""
 theme:
   preset: dark
@@ -126,7 +126,7 @@ theme:
   surface: "#1a1a1a"
   surface_alt: "#2a2a2a"
 """)
-        monkeypatch.chdir(test_config_dir)
+        monkeypatch.chdir(tmp_path)
 
         config = get_config()
         theme = config.theme
@@ -147,7 +147,7 @@ theme:
 class TestThemeConfigMerging:
     """Tests for theme configuration merging from multiple sources."""
 
-    def test_config_merge_preserves_theme(self, test_config_dir: Path):
+    def test_config_merge_preserves_theme(self, tmp_path: Path):
         """Merging configs combines theme from both sources."""
         base_config = CLIConfig(theme_config={"preset": "dark", "primary": "cyan"})
         override_config = CLIConfig(theme_config={"primary": "magenta", "accent": "orange"})
@@ -161,7 +161,7 @@ class TestThemeConfigMerging:
         assert isinstance(merged.theme, (CustomTheme, ScrappyTheme))
         assert merged.theme.primary == "magenta"
 
-    def test_config_merge_override_preset(self, test_config_dir: Path):
+    def test_config_merge_override_preset(self, tmp_path: Path):
         """Later config overrides preset from earlier config."""
         base_config = CLIConfig(theme_config={"preset": "dark"})
         override_config = CLIConfig(theme_config={"preset": "light"})
@@ -171,7 +171,7 @@ class TestThemeConfigMerging:
         assert merged.theme_config["preset"] == "light"
         assert isinstance(merged.theme, LightTheme)
 
-    def test_empty_theme_config_does_not_override(self, test_config_dir: Path):
+    def test_empty_theme_config_does_not_override(self, tmp_path: Path):
         """Empty theme_config doesn't override existing theme."""
         base_config = CLIConfig(theme_config={"preset": "light", "primary": "blue"})
         empty_config = CLIConfig(theme_config={})
@@ -218,14 +218,14 @@ class TestGlobalConfigTheme:
     """Tests for global config getter with theme."""
 
 
-    def test_get_config_caches_theme(self, test_config_dir: Path, monkeypatch):
+    def test_get_config_caches_theme(self, tmp_path: Path, monkeypatch):
         """get_config() returns same config instance on repeated calls."""
-        config_file = test_config_dir / ".scrappy.yaml"
+        config_file = tmp_path / ".scrappy.yaml"
         config_file.write_text("""
 theme:
   preset: dark
 """)
-        monkeypatch.chdir(test_config_dir)
+        monkeypatch.chdir(tmp_path)
 
         config1 = get_config()
         config2 = get_config()
@@ -235,14 +235,14 @@ theme:
         # Theme should be the same type
         assert type(config1.theme) == type(config2.theme)
 
-    def test_get_config_reload_creates_new_theme(self, test_config_dir: Path, monkeypatch):
+    def test_get_config_reload_creates_new_theme(self, tmp_path: Path, monkeypatch):
         """get_config(reload=True) creates new theme instance."""
-        config_file = test_config_dir / ".scrappy.yaml"
+        config_file = tmp_path / ".scrappy.yaml"
         config_file.write_text("""
 theme:
   preset: dark
 """)
-        monkeypatch.chdir(test_config_dir)
+        monkeypatch.chdir(tmp_path)
 
         config1 = get_config()
         config2 = get_config(reload=True)
@@ -256,9 +256,9 @@ theme:
 class TestThemeWithOtherConfig:
     """Tests that theme works alongside other config options."""
 
-    def test_theme_and_temperature_both_load(self, test_config_dir: Path):
+    def test_theme_and_temperature_both_load(self, tmp_path: Path):
         """Theme and other config options load together."""
-        config_file = test_config_dir / "mixed_config.yaml"
+        config_file = tmp_path / "mixed_config.yaml"
         config_file.write_text("""
 temperature_default: 0.9
 max_tokens_query: 2000
@@ -317,9 +317,9 @@ dashboard_enabled: false
 class TestRealWorldScenarios:
     """Real-world usage scenarios for theme configuration."""
 
-    def test_one_dark_pro_theme_config(self, test_config_dir: Path, monkeypatch):
+    def test_one_dark_pro_theme_config(self, tmp_path: Path, monkeypatch):
         """User configures One Dark Pro theme (real-world example)."""
-        config_file = test_config_dir / ".scrappy.yaml"
+        config_file = tmp_path / ".scrappy.yaml"
         config_file.write_text("""
 theme:
   preset: dark
@@ -334,7 +334,7 @@ theme:
   surface: "#282c34"
   surface_alt: "#3e4451"
 """)
-        monkeypatch.chdir(test_config_dir)
+        monkeypatch.chdir(tmp_path)
 
         config = get_config()
 
@@ -350,14 +350,14 @@ theme:
         assert config.theme.surface == "#282c34"
         assert config.theme.surface_alt == "#3e4451"
 
-    def test_minimal_theme_override(self, test_config_dir: Path, monkeypatch):
+    def test_minimal_theme_override(self, tmp_path: Path, monkeypatch):
         """User overrides just one color (real-world minimal config)."""
-        config_file = test_config_dir / ".scrappy.yaml"
+        config_file = tmp_path / ".scrappy.yaml"
         config_file.write_text("""
 theme:
   accent: "#ff00ff"
 """)
-        monkeypatch.chdir(test_config_dir)
+        monkeypatch.chdir(tmp_path)
 
         config = get_config()
 
@@ -368,14 +368,14 @@ theme:
         assert config.theme.success == "#00ff00"
         assert config.theme.surface == "#1e1e1e"
 
-    def test_switch_to_light_theme(self, test_config_dir: Path, monkeypatch):
+    def test_switch_to_light_theme(self, tmp_path: Path, monkeypatch):
         """User switches from dark to light preset (real-world scenario)."""
-        config_file = test_config_dir / ".scrappy.yaml"
+        config_file = tmp_path / ".scrappy.yaml"
         config_file.write_text("""
 theme:
   preset: light
 """)
-        monkeypatch.chdir(test_config_dir)
+        monkeypatch.chdir(tmp_path)
 
         config = get_config()
 
@@ -385,15 +385,15 @@ theme:
         assert config.theme.surface == "#ffffff"
         assert config.theme.surface_alt == "#f0f0f0"
 
-    def test_light_theme_with_custom_accent(self, test_config_dir: Path, monkeypatch):
+    def test_light_theme_with_custom_accent(self, tmp_path: Path, monkeypatch):
         """User uses light theme with custom accent color."""
-        config_file = test_config_dir / ".scrappy.yaml"
+        config_file = tmp_path / ".scrappy.yaml"
         config_file.write_text("""
 theme:
   preset: light
   accent: "#ff6600"
 """)
-        monkeypatch.chdir(test_config_dir)
+        monkeypatch.chdir(tmp_path)
 
         config = get_config()
 

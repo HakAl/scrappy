@@ -170,28 +170,28 @@ class TestSemanticSearchManagerCreation:
     """Tests for SemanticSearchManager creation."""
 
     @pytest.mark.unit
-    def test_creation_with_defaults(self, test_path):
+    def test_creation_with_defaults(self, temp_project_dir):
         """Test creating manager with default parameters."""
-        manager = SemanticSearchManager(project_path=test_path)
+        manager = SemanticSearchManager(project_path=temp_project_dir)
         assert manager is not None
         assert manager.event_queue is not None
 
     @pytest.mark.unit
-    def test_creation_with_custom_event_queue(self, test_path):
+    def test_creation_with_custom_event_queue(self, temp_project_dir):
         """Test creating manager with custom event queue."""
         queue = ThreadSafeEventQueue()
         manager = SemanticSearchManager(
-            project_path=test_path,
+            project_path=temp_project_dir,
             event_queue=queue,
         )
         assert manager.event_queue is queue
 
     @pytest.mark.unit
-    def test_creation_with_initializer(self, test_path):
+    def test_creation_with_initializer(self, temp_project_dir):
         """Test creating manager with custom initializer."""
         initializer = MockInitializer()
         manager = SemanticSearchManager(
-            project_path=test_path,
+            project_path=temp_project_dir,
             initializer=initializer,
         )
         # Verify initializer is set
@@ -199,31 +199,31 @@ class TestSemanticSearchManagerCreation:
         assert initializer._started
 
     @pytest.mark.unit
-    def test_creation_with_config(self, test_path):
+    def test_creation_with_config(self, temp_project_dir):
         """Test creating manager with custom config."""
         config = MockConfig()
         manager = SemanticSearchManager(
-            project_path=test_path,
+            project_path=temp_project_dir,
             config=config,
         )
         assert manager is not None
 
     @pytest.mark.unit
-    def test_creation_with_state_manager(self, test_path):
+    def test_creation_with_state_manager(self, temp_project_dir):
         """Test creating manager with custom state manager."""
         state_manager = MockIndexStateManager()
         manager = SemanticSearchManager(
-            project_path=test_path,
+            project_path=temp_project_dir,
             state_manager=state_manager,
         )
         assert manager is not None
 
     @pytest.mark.unit
-    def test_creation_with_decision_maker(self, test_path):
+    def test_creation_with_decision_maker(self, temp_project_dir):
         """Test creating manager with custom decision maker."""
         decision_maker = MockDecisionMaker()
         manager = SemanticSearchManager(
-            project_path=test_path,
+            project_path=temp_project_dir,
             decision_maker=decision_maker,
         )
         assert manager is not None
@@ -233,59 +233,59 @@ class TestSemanticSearchManagerLifecycle:
     """Tests for semantic search initialization lifecycle."""
 
     @pytest.mark.unit
-    def test_start_background_init_starts_initializer(self, test_path):
+    def test_start_background_init_starts_initializer(self, temp_project_dir):
         """Test that start_background_init starts the initializer."""
         initializer = MockInitializer()
         manager = SemanticSearchManager(
-            project_path=test_path,
+            project_path=temp_project_dir,
             initializer=initializer,
         )
         manager.start_background_init()
         assert initializer._started
 
     @pytest.mark.unit
-    def test_is_ready_false_before_init(self, test_path):
+    def test_is_ready_false_before_init(self, temp_project_dir):
         """Test that is_ready returns False before initialization."""
         initializer = MockInitializer()
         manager = SemanticSearchManager(
-            project_path=test_path,
+            project_path=temp_project_dir,
             initializer=initializer,
         )
         assert manager.is_ready() is False
 
     @pytest.mark.unit
-    def test_is_ready_true_after_successful_init(self, test_path):
+    def test_is_ready_true_after_successful_init(self, temp_project_dir):
         """Test that is_ready returns True after successful initialization."""
         provider = MockSearchProvider()
         initializer = MockInitializer(result=provider)
         initializer.complete(result=provider)
 
         manager = SemanticSearchManager(
-            project_path=test_path,
+            project_path=temp_project_dir,
             initializer=initializer,
         )
         assert manager.is_ready() is True
 
     @pytest.mark.unit
-    def test_is_ready_false_after_failed_init(self, test_path):
+    def test_is_ready_false_after_failed_init(self, temp_project_dir):
         """Test that is_ready returns False after failed initialization."""
         initializer = MockInitializer()
         initializer.complete(error=Exception("Init failed"))
 
         manager = SemanticSearchManager(
-            project_path=test_path,
+            project_path=temp_project_dir,
             initializer=initializer,
         )
         assert manager.is_ready() is False
 
     @pytest.mark.unit
-    def test_get_status_returns_initializer_status(self, test_path):
+    def test_get_status_returns_initializer_status(self, temp_project_dir):
         """Test that get_status delegates to initializer."""
         initializer = MockInitializer()
         initializer._status = "Loading model..."
 
         manager = SemanticSearchManager(
-            project_path=test_path,
+            project_path=temp_project_dir,
             initializer=initializer,
         )
         assert manager.get_status() == "Loading model..."
@@ -295,18 +295,18 @@ class TestSemanticSearchManagerSearch:
     """Tests for semantic search functionality."""
 
     @pytest.mark.unit
-    def test_search_returns_none_when_not_ready(self, test_path):
+    def test_search_returns_none_when_not_ready(self, temp_project_dir):
         """Test that search returns None when not ready."""
         initializer = MockInitializer()
         manager = SemanticSearchManager(
-            project_path=test_path,
+            project_path=temp_project_dir,
             initializer=initializer,
         )
         result = manager.search("test query")
         assert result is None
 
     @pytest.mark.unit
-    def test_search_delegates_to_provider(self, test_path):
+    def test_search_delegates_to_provider(self, temp_project_dir):
         """Test that search delegates to the search provider."""
         mock_result = Mock()
         mock_result.chunks = [{"path": "test.py", "content": "test"}]
@@ -316,35 +316,35 @@ class TestSemanticSearchManagerSearch:
         initializer.complete(result=provider)
 
         manager = SemanticSearchManager(
-            project_path=test_path,
+            project_path=temp_project_dir,
             initializer=initializer,
         )
         result = manager.search("test query")
         assert result is mock_result
 
     @pytest.mark.unit
-    def test_search_returns_none_when_provider_not_indexed(self, test_path):
+    def test_search_returns_none_when_provider_not_indexed(self, temp_project_dir):
         """Test that search returns None when provider not indexed."""
         provider = MockSearchProvider(indexed=False)
         initializer = MockInitializer(result=provider)
         initializer.complete(result=provider)
 
         manager = SemanticSearchManager(
-            project_path=test_path,
+            project_path=temp_project_dir,
             initializer=initializer,
         )
         result = manager.search("test query")
         assert result is None
 
     @pytest.mark.unit
-    def test_get_search_provider_returns_provider(self, test_path):
+    def test_get_search_provider_returns_provider(self, temp_project_dir):
         """Test that get_search_provider returns the provider."""
         provider = MockSearchProvider()
         initializer = MockInitializer(result=provider)
         initializer.complete(result=provider)
 
         manager = SemanticSearchManager(
-            project_path=test_path,
+            project_path=temp_project_dir,
             initializer=initializer,
         )
         assert manager.get_search_provider() is provider
@@ -355,14 +355,14 @@ class TestSemanticSearchManagerIndexing:
 
 
     @pytest.mark.unit
-    def test_index_files_delegates_to_provider(self, test_path):
+    def test_index_files_delegates_to_provider(self, temp_project_dir):
         """Test that index_files indexes via the provider."""
         provider = MockSearchProvider()
         initializer = MockInitializer(result=provider)
         initializer.complete(result=provider)
 
         manager = SemanticSearchManager(
-            project_path=test_path,
+            project_path=temp_project_dir,
             initializer=initializer,
         )
         collector = MockFileCollector({"main.py": "print('main')"})
@@ -373,14 +373,14 @@ class TestSemanticSearchManagerIndexing:
         assert "main.py" in provider._files_indexed
 
     @pytest.mark.unit
-    def test_index_files_uses_null_reporter_by_default(self, test_path):
+    def test_index_files_uses_null_reporter_by_default(self, temp_project_dir):
         """Test that index_files defaults to NullProgressReporter when none provided."""
         provider = MockSearchProvider()
         initializer = MockInitializer(result=provider)
         initializer.complete(result=provider)
 
         manager = SemanticSearchManager(
-            project_path=test_path,
+            project_path=temp_project_dir,
             initializer=initializer,
         )
         collector = MockFileCollector({"main.py": "print('main')"})
@@ -396,11 +396,11 @@ class TestSemanticSearchManagerEvents:
     """Tests for event handling."""
 
     @pytest.mark.unit
-    def test_process_events_processes_queue(self, test_path):
+    def test_process_events_processes_queue(self, temp_project_dir):
         """Test that process_events processes pending events."""
         queue = ThreadSafeEventQueue()
         manager = SemanticSearchManager(
-            project_path=test_path,
+            project_path=temp_project_dir,
             event_queue=queue,
         )
 
@@ -409,13 +409,13 @@ class TestSemanticSearchManagerEvents:
         assert count == 0
 
     @pytest.mark.unit
-    def test_handles_init_complete_event(self, test_path):
+    def test_handles_init_complete_event(self, temp_project_dir):
         """Test that INIT_COMPLETE event updates state."""
         queue = ThreadSafeEventQueue()
         initializer = MockInitializer()
 
         manager = SemanticSearchManager(
-            project_path=test_path,
+            project_path=temp_project_dir,
             initializer=initializer,
             event_queue=queue,
         )
@@ -447,41 +447,41 @@ class TestSemanticSearchManagerDecisionMaker:
     """Tests for decision maker integration."""
 
     @pytest.mark.unit
-    def test_decision_maker_is_stored(self, test_path):
+    def test_decision_maker_is_stored(self, temp_project_dir):
         """Test that decision maker is stored when provided."""
         decision_maker = MockDecisionMaker()
         manager = SemanticSearchManager(
-            project_path=test_path,
+            project_path=temp_project_dir,
             decision_maker=decision_maker,
         )
         # Decision maker is stored (accessible via _decision_maker for testing)
         assert manager._decision_maker is decision_maker
 
     @pytest.mark.unit
-    def test_decision_maker_defaults_to_none(self, test_path):
+    def test_decision_maker_defaults_to_none(self, temp_project_dir):
         """Test that decision maker defaults to None when not provided."""
         manager = SemanticSearchManager(
-            project_path=test_path,
+            project_path=temp_project_dir,
         )
         # Default factory returns None
         assert manager._decision_maker is None
 
     @pytest.mark.unit
-    def test_state_manager_is_stored(self, test_path):
+    def test_state_manager_is_stored(self, temp_project_dir):
         """Test that state manager is stored when provided."""
         state_manager = MockIndexStateManager()
         manager = SemanticSearchManager(
-            project_path=test_path,
+            project_path=temp_project_dir,
             state_manager=state_manager,
         )
         # State manager is stored (accessible via _state_manager for testing)
         assert manager._state_manager is state_manager
 
     @pytest.mark.unit
-    def test_state_manager_defaults_to_none(self, test_path):
+    def test_state_manager_defaults_to_none(self, temp_project_dir):
         """Test that state manager defaults to None when not provided."""
         manager = SemanticSearchManager(
-            project_path=test_path,
+            project_path=temp_project_dir,
         )
         # Default factory returns None
         assert manager._state_manager is None
@@ -491,13 +491,13 @@ class TestSemanticSearchManagerAutoIndexing:
     """Tests for auto-indexing flow triggered by INIT_COMPLETE event."""
 
     @pytest.mark.unit
-    def test_init_complete_triggers_indexing_when_callback_set(self, test_path):
+    def test_init_complete_triggers_indexing_when_callback_set(self, temp_project_dir):
         """INIT_COMPLETE should trigger indexing if file collector callback exists."""
         queue = ThreadSafeEventQueue()
         initializer = MockInitializer()
 
         manager = SemanticSearchManager(
-            project_path=test_path,
+            project_path=temp_project_dir,
             initializer=initializer,
             event_queue=queue,
         )
@@ -525,13 +525,13 @@ class TestSemanticSearchManagerAutoIndexing:
         assert "test.py" in provider._files_indexed
 
     @pytest.mark.unit
-    def test_init_complete_skips_indexing_when_no_callback(self, test_path):
+    def test_init_complete_skips_indexing_when_no_callback(self, temp_project_dir):
         """INIT_COMPLETE should not fail if no file collector callback."""
         queue = ThreadSafeEventQueue()
         initializer = MockInitializer()
 
         manager = SemanticSearchManager(
-            project_path=test_path,
+            project_path=temp_project_dir,
             initializer=initializer,
             event_queue=queue,
         )
@@ -556,13 +556,13 @@ class TestSemanticSearchManagerAutoIndexing:
         assert not provider._indexed
 
     @pytest.mark.unit
-    def test_init_complete_handles_callback_returning_none(self, test_path):
+    def test_init_complete_handles_callback_returning_none(self, temp_project_dir):
         """INIT_COMPLETE should handle callback returning None gracefully."""
         queue = ThreadSafeEventQueue()
         initializer = MockInitializer()
 
         manager = SemanticSearchManager(
-            project_path=test_path,
+            project_path=temp_project_dir,
             initializer=initializer,
             event_queue=queue,
         )

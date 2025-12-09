@@ -24,9 +24,9 @@ from scrappy.infrastructure.theme import (
 class TestThemeLoadingFromYAML:
     """Tests for loading theme from YAML config files."""
 
-    def test_load_dark_preset_from_yaml(self, test_config_dir: Path):
+    def test_load_dark_preset_from_yaml(self, tmp_path: Path):
         """Dark preset loads correctly from YAML."""
-        config_file = test_config_dir / "dark.yaml"
+        config_file = tmp_path / "dark.yaml"
         config_file.write_text("""
 theme:
   preset: dark
@@ -37,9 +37,9 @@ theme:
         assert config.theme_config == {"preset": "dark"}
         assert isinstance(config.theme, ScrappyTheme)
 
-    def test_load_light_preset_from_yaml(self, test_config_dir: Path):
+    def test_load_light_preset_from_yaml(self, tmp_path: Path):
         """Light preset loads correctly from YAML."""
-        config_file = test_config_dir / "light.yaml"
+        config_file = tmp_path / "light.yaml"
         config_file.write_text("""
 theme:
   preset: light
@@ -53,9 +53,9 @@ theme:
         assert config.theme.text == "#000000"
         assert config.theme.surface == "#ffffff"
 
-    def test_load_all_color_overrides_from_yaml(self, test_config_dir: Path):
+    def test_load_all_color_overrides_from_yaml(self, tmp_path: Path):
         """All 10 color properties load correctly from YAML."""
-        config_file = test_config_dir / "all_colors.yaml"
+        config_file = tmp_path / "all_colors.yaml"
         config_file.write_text("""
 theme:
   preset: dark
@@ -85,9 +85,9 @@ theme:
         assert config.theme.surface == "#282c34"
         assert config.theme.surface_alt == "#3e4451"
 
-    def test_load_partial_overrides_from_yaml(self, test_config_dir: Path):
+    def test_load_partial_overrides_from_yaml(self, tmp_path: Path):
         """Partial color overrides work, rest use preset defaults."""
-        config_file = test_config_dir / "partial.yaml"
+        config_file = tmp_path / "partial.yaml"
         config_file.write_text("""
 theme:
   preset: dark
@@ -105,9 +105,9 @@ theme:
         assert config.theme.success == "#00ff00"
         assert config.theme.surface == "#1e1e1e"
 
-    def test_load_overrides_on_light_preset_from_yaml(self, test_config_dir: Path):
+    def test_load_overrides_on_light_preset_from_yaml(self, tmp_path: Path):
         """Color overrides on light preset use light defaults for non-overridden."""
-        config_file = test_config_dir / "light_override.yaml"
+        config_file = tmp_path / "light_override.yaml"
         config_file.write_text("""
 theme:
   preset: light
@@ -126,9 +126,9 @@ theme:
 class TestThemeLoadingFromJSON:
     """Tests for loading theme from JSON config files."""
 
-    def test_load_dark_preset_from_json(self, test_config_dir: Path):
+    def test_load_dark_preset_from_json(self, tmp_path: Path):
         """Dark preset loads correctly from JSON."""
-        config_file = test_config_dir / "dark.json"
+        config_file = tmp_path / "dark.json"
         config_file.write_text(json.dumps({
             "theme": {
                 "preset": "dark"
@@ -140,9 +140,9 @@ class TestThemeLoadingFromJSON:
         assert config.theme_config == {"preset": "dark"}
         assert isinstance(config.theme, ScrappyTheme)
 
-    def test_load_light_preset_from_json(self, test_config_dir: Path):
+    def test_load_light_preset_from_json(self, tmp_path: Path):
         """Light preset loads correctly from JSON."""
-        config_file = test_config_dir / "light.json"
+        config_file = tmp_path / "light.json"
         config_file.write_text(json.dumps({
             "theme": {
                 "preset": "light"
@@ -154,9 +154,9 @@ class TestThemeLoadingFromJSON:
         assert config.theme_config == {"preset": "light"}
         assert isinstance(config.theme, LightTheme)
 
-    def test_load_all_color_overrides_from_json(self, test_config_dir: Path):
+    def test_load_all_color_overrides_from_json(self, tmp_path: Path):
         """All 10 color properties load correctly from JSON."""
-        config_file = test_config_dir / "all_colors.json"
+        config_file = tmp_path / "all_colors.json"
         config_file.write_text(json.dumps({
             "theme": {
                 "preset": "dark",
@@ -191,9 +191,9 @@ class TestThemeLoadingFromJSON:
 class TestThemeLoadingEdgeCases:
     """Tests for edge cases in theme loading."""
 
-    def test_missing_theme_section_uses_default(self, test_config_dir: Path):
+    def test_missing_theme_section_uses_default(self, tmp_path: Path):
         """Config without theme section uses default dark theme."""
-        config_file = test_config_dir / "no_theme.yaml"
+        config_file = tmp_path / "no_theme.yaml"
         config_file.write_text("""
 temperature_default: 0.8
 """)
@@ -205,9 +205,9 @@ temperature_default: 0.8
 
 
 
-    def test_invalid_color_keys_are_ignored(self, test_config_dir: Path):
+    def test_invalid_color_keys_are_ignored(self, tmp_path: Path):
         """Invalid color keys are silently ignored."""
-        config_file = test_config_dir / "invalid_keys.yaml"
+        config_file = tmp_path / "invalid_keys.yaml"
         config_file.write_text("""
 theme:
   preset: dark
@@ -222,9 +222,9 @@ theme:
         assert config.theme.primary == "cyan"
         # No error raised, invalid keys ignored
 
-    def test_theme_with_other_config_options(self, test_config_dir: Path):
+    def test_theme_with_other_config_options(self, tmp_path: Path):
         """Theme loads correctly alongside other config options."""
-        config_file = test_config_dir / "mixed.yaml"
+        config_file = tmp_path / "mixed.yaml"
         config_file.write_text("""
 temperature_default: 0.9
 max_tokens_query: 2000
@@ -254,9 +254,9 @@ class TestThemeConfigFactoryCreate:
 
 
 
-    def test_create_with_explicit_path_loads_theme(self, test_config_dir: Path):
+    def test_create_with_explicit_path_loads_theme(self, tmp_path: Path):
         """create() with explicit path loads theme."""
-        config_file = test_config_dir / "custom_config.yaml"
+        config_file = tmp_path / "custom_config.yaml"
         config_file.write_text("""
 theme:
   preset: light

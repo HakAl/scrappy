@@ -28,11 +28,11 @@ class TestContextAugmenterCreation:
 
 
     @pytest.mark.unit
-    def test_creation_with_semantic_manager(self, test_path):
+    def test_creation_with_semantic_manager(self, temp_project_dir):
         """Test creating augmenter with semantic manager."""
         manager = MockSemanticManager()
         augmenter = ContextAugmenter(
-            project_path=test_path,
+            project_path=temp_project_dir,
             summary_provider=lambda: None,
             structure_provider=lambda: {},
             git_history_provider=lambda: {},
@@ -47,10 +47,10 @@ class TestContextAugmenterAugment:
     """Tests for prompt augmentation."""
 
     @pytest.mark.unit
-    def test_augment_returns_original_when_not_explored(self, test_path):
+    def test_augment_returns_original_when_not_explored(self, temp_project_dir):
         """Test that augment returns original prompt when not explored."""
         augmenter = ContextAugmenter(
-            project_path=test_path,
+            project_path=temp_project_dir,
             summary_provider=lambda: "Test summary",
             structure_provider=lambda: {"total_files": 10},
             git_history_provider=lambda: {},
@@ -62,10 +62,10 @@ class TestContextAugmenterAugment:
         assert result == prompt
 
     @pytest.mark.unit
-    def test_augment_includes_summary(self, test_path):
+    def test_augment_includes_summary(self, temp_project_dir):
         """Test that augment includes project summary."""
         augmenter = ContextAugmenter(
-            project_path=test_path,
+            project_path=temp_project_dir,
             summary_provider=lambda: "A Python web application",
             structure_provider=lambda: {"total_files": 10, "by_type": {"python": 5}},
             git_history_provider=lambda: {},
@@ -79,10 +79,10 @@ class TestContextAugmenterAugment:
         assert "Fix the bug" in result
 
     @pytest.mark.unit
-    def test_augment_includes_structure(self, test_path):
+    def test_augment_includes_structure(self, temp_project_dir):
         """Test that augment includes structure info."""
         augmenter = ContextAugmenter(
-            project_path=test_path,
+            project_path=temp_project_dir,
             summary_provider=lambda: None,
             structure_provider=lambda: {
                 "total_files": 25,
@@ -97,10 +97,10 @@ class TestContextAugmenterAugment:
         assert "python" in result
 
     @pytest.mark.unit
-    def test_augment_includes_git_history(self, test_path):
+    def test_augment_includes_git_history(self, temp_project_dir):
         """Test that augment includes git history."""
         augmenter = ContextAugmenter(
-            project_path=test_path,
+            project_path=temp_project_dir,
             summary_provider=lambda: None,
             structure_provider=lambda: {"total_files": 10, "by_type": {}},
             git_history_provider=lambda: {
@@ -117,10 +117,10 @@ class TestContextAugmenterAugment:
         assert "Recently changed:" in result
 
     @pytest.mark.unit
-    def test_augment_includes_files_when_requested(self, test_path):
+    def test_augment_includes_files_when_requested(self, temp_project_dir):
         """Test that augment includes file listings when requested."""
         augmenter = ContextAugmenter(
-            project_path=test_path,
+            project_path=temp_project_dir,
             summary_provider=lambda: None,
             structure_provider=lambda: {"total_files": 10, "by_type": {}},
             git_history_provider=lambda: {},
@@ -132,10 +132,10 @@ class TestContextAugmenterAugment:
         assert "main.py" in result
 
     @pytest.mark.unit
-    def test_augment_does_not_include_files_by_default(self, test_path):
+    def test_augment_does_not_include_files_by_default(self, temp_project_dir):
         """Test that augment does not include file listings by default."""
         augmenter = ContextAugmenter(
-            project_path=test_path,
+            project_path=temp_project_dir,
             summary_provider=lambda: None,
             structure_provider=lambda: {"total_files": 10, "by_type": {}},
             git_history_provider=lambda: {},
@@ -150,10 +150,10 @@ class TestContextAugmenterRelevantContext:
     """Tests for getting relevant context."""
 
     @pytest.mark.unit
-    def test_get_relevant_context_empty_when_not_explored(self, test_path):
+    def test_get_relevant_context_empty_when_not_explored(self, temp_project_dir):
         """Test that get_relevant_context returns empty when not explored."""
         augmenter = ContextAugmenter(
-            project_path=test_path,
+            project_path=temp_project_dir,
             summary_provider=lambda: "Test summary",
             structure_provider=lambda: {},
             git_history_provider=lambda: {},
@@ -164,7 +164,7 @@ class TestContextAugmenterRelevantContext:
         assert result == ""
 
     @pytest.mark.unit
-    def test_get_relevant_context_uses_semantic_search(self, test_path):
+    def test_get_relevant_context_uses_semantic_search(self, temp_project_dir):
         """Test that get_relevant_context uses semantic search when available."""
         # Create mock search result
         mock_result = Mock()
@@ -178,7 +178,7 @@ class TestContextAugmenterRelevantContext:
 
         manager = MockSemanticManager(search_result=mock_result)
         augmenter = ContextAugmenter(
-            project_path=test_path,
+            project_path=temp_project_dir,
             summary_provider=lambda: None,
             structure_provider=lambda: {},
             git_history_provider=lambda: {},
@@ -191,10 +191,10 @@ class TestContextAugmenterRelevantContext:
         assert "def main():" in result
 
     @pytest.mark.unit
-    def test_get_relevant_context_fallback_to_keyword(self, test_path):
+    def test_get_relevant_context_fallback_to_keyword(self, temp_project_dir):
         """Test that get_relevant_context falls back to keyword matching."""
         augmenter = ContextAugmenter(
-            project_path=test_path,
+            project_path=temp_project_dir,
             summary_provider=lambda: "A Python CLI tool",
             structure_provider=lambda: {"directories": ["src", "tests", "docs"]},
             git_history_provider=lambda: {},
@@ -207,10 +207,10 @@ class TestContextAugmenterRelevantContext:
         assert "Project directories:" in result
 
     @pytest.mark.unit
-    def test_get_relevant_context_includes_summary(self, test_path):
+    def test_get_relevant_context_includes_summary(self, temp_project_dir):
         """Test that keyword context includes summary."""
         augmenter = ContextAugmenter(
-            project_path=test_path,
+            project_path=temp_project_dir,
             summary_provider=lambda: "A web application for task management",
             structure_provider=lambda: {},
             git_history_provider=lambda: {},
@@ -221,10 +221,10 @@ class TestContextAugmenterRelevantContext:
         assert "A web application for task management" in result
 
     @pytest.mark.unit
-    def test_get_relevant_context_file_keywords(self, test_path):
+    def test_get_relevant_context_file_keywords(self, temp_project_dir):
         """Test that file-related keywords return file listings."""
         augmenter = ContextAugmenter(
-            project_path=test_path,
+            project_path=temp_project_dir,
             summary_provider=lambda: None,
             structure_provider=lambda: {},
             git_history_provider=lambda: {},
