@@ -1,24 +1,7 @@
 ## Issues
 
 
----
- Code Agent - Task: how can we improve this project? it's a mess
- ------------------------------------------------------------
- Preparing agent tools...
- Selecting AI providers...
 
- Agent Configuration:
-   Planner (smart tasks): cerebras
-   Executor (fast tasks): cerebras
-   Project root: C:\Users\anyth\MINE\dev\test_repo
-
- ───────────────────────────────── Agent Task ─────────────────────────────────
- how can we improve this project? it's a mess
- Building context...
- Preparing system prompt...
-
- Agent error: 'CodebaseContext' object has no attribute 'is_ready'
----
 
 ---
 too much agent output? toggle with agent verbose mode?

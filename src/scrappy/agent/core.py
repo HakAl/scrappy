@@ -255,8 +255,8 @@ class CodeAgent:
 
         # Get semantic search manager from orchestrator context for context factory
         semantic_manager = None
-        if hasattr(self._orchestrator, 'context') and hasattr(self._orchestrator.context, 'get_search_provider'):
-            semantic_manager = self._orchestrator.context
+        if hasattr(self._orchestrator, 'context'):
+            semantic_manager = self._orchestrator.context.semantic_manager
 
         # Create context factory for per-iteration context building
         self._context_factory = AgentContextFactory(

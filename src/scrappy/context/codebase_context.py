@@ -169,6 +169,16 @@ class CodebaseContext:
         """
         return self._platform_detector
 
+    @property
+    def semantic_manager(self) -> Optional[SemanticSearchManagerProtocol]:
+        """
+        Get the semantic search manager.
+
+        Returns:
+            Semantic search manager for external use
+        """
+        return self._semantic_manager
+
     def _get_or_create_augmenter(self) -> ContextAugmenter:
         """
         Get or create the context augmenter with proper data providers.
