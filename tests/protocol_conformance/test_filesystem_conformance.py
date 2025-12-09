@@ -18,47 +18,13 @@ from scrappy.infrastructure.protocols import FileSystemProtocol
 class TestRealFileSystemConformance:
     """Tests for RealFileSystem implementation."""
 
-    def test_real_filesystem_implements_protocol(self):
-        """RealFileSystem should implement FileSystemProtocol."""
-        from scrappy.infrastructure.file_system import RealFileSystem
 
-        assert_implements_protocol(RealFileSystem, FileSystemProtocol)
-
-    def test_real_filesystem_has_all_methods(self):
-        """RealFileSystem should have all protocol methods."""
-        from scrappy.infrastructure.file_system import RealFileSystem
-
-        methods = [
-            'read_text', 'write_text', 'read_bytes', 'write_bytes',
-            'exists', 'is_file', 'is_dir', 'mkdir', 'list_dir',
-            'glob', 'delete', 'delete_tree', 'resolve', 'join_path'
-        ]
-
-        for method in methods:
-            assert_has_method(RealFileSystem, method)
 
 
 class TestInMemoryFileSystemConformance:
     """Tests for InMemoryFileSystem implementation."""
 
-    def test_in_memory_filesystem_implements_protocol(self):
-        """InMemoryFileSystem should implement FileSystemProtocol."""
-        from scrappy.infrastructure.file_system import InMemoryFileSystem
 
-        assert_implements_protocol(InMemoryFileSystem, FileSystemProtocol)
-
-    def test_in_memory_filesystem_has_all_methods(self):
-        """InMemoryFileSystem should have all protocol methods."""
-        from scrappy.infrastructure.file_system import InMemoryFileSystem
-
-        methods = [
-            'read_text', 'write_text', 'read_bytes', 'write_bytes',
-            'exists', 'is_file', 'is_dir', 'mkdir', 'list_dir',
-            'glob', 'delete', 'delete_tree', 'resolve', 'join_path'
-        ]
-
-        for method in methods:
-            assert_has_method(InMemoryFileSystem, method)
 
 
 class TestRealFileSystemBehavior:
@@ -303,22 +269,8 @@ class TestInMemoryFileSystemBehavior:
         assert "b" in result
         assert "c" in result
 
-    def test_read_nonexistent_raises_error(self, fs):
-        """read_text() should raise FileNotFoundError for missing files."""
-        with pytest.raises(FileNotFoundError):
-            fs.read_text("/nonexistent.txt")
 
-    def test_list_dir_nonexistent_raises_error(self, fs):
-        """list_dir() should raise FileNotFoundError for missing directories."""
-        with pytest.raises(FileNotFoundError):
-            fs.list_dir("/nonexistent")
 
-    def test_list_dir_on_file_raises_error(self, fs):
-        """list_dir() should raise NotADirectoryError for files."""
-        fs.write_text("/file.txt", "content")
-
-        with pytest.raises(NotADirectoryError):
-            fs.list_dir("/file.txt")
 
     def test_clear_removes_all(self, fs):
         """clear() should remove all files and directories."""

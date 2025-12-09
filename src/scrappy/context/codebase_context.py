@@ -392,6 +392,22 @@ class CodebaseContext:
         """Check if the codebase has been explored."""
         return self.explored_at is not None
 
+    def ensure_file_index(self) -> dict:
+        """
+        Ensure file_index is populated, performing lazy scan if needed.
+
+        This method enables automatic file discovery without requiring explicit
+        explore() calls. The file scan is fast (typically < 50ms) and safe to
+        call on every query.
+
+        Returns:
+            Dict mapping category names to lists of relative file paths
+        """
+        if not self.file_index:
+            logger.debug("file_index empty, performing lazy scan")
+            self.file_index = self._scan_files()
+        return self.file_index
+
     def explore(self, force: bool = False) -> dict:
         """
         Explore the codebase and build context.

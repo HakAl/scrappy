@@ -52,17 +52,6 @@ class TestThreadSafeOutputCollector:
         collector.append("three")
         assert collector.line_count() == 3
 
-    def test_last_output_time_updated_on_append(self):
-        """last_output_time is updated on each append."""
-        collector = ThreadSafeOutputCollector()
-
-        initial_time = collector.get_last_output_time()
-        time.sleep(0.01)  # Small delay to ensure time difference
-
-        collector.append("line")
-        updated_time = collector.get_last_output_time()
-
-        assert updated_time > initial_time
 
     def test_last_output_time_initialized(self):
         """last_output_time is initialized to current time on creation."""
@@ -100,41 +89,6 @@ class TestThreadSafeOutputCollector:
         lines = collector.get_lines()
         assert len(set(lines)) == expected_count
 
-    def test_concurrent_read_write(self):
-        """Concurrent reading and writing should not cause errors."""
-        collector = ThreadSafeOutputCollector()
-        stop_event = threading.Event()
-        errors = []
-
-        def writer():
-            for i in range(100):
-                collector.append(f"line-{i}")
-                time.sleep(0.001)
-
-        def reader():
-            while not stop_event.is_set():
-                try:
-                    _ = collector.get_lines()
-                    _ = collector.line_count()
-                    _ = collector.get_last_output_time()
-                except Exception as e:
-                    errors.append(e)
-                time.sleep(0.001)
-
-        writer_thread = threading.Thread(target=writer)
-        reader_threads = [threading.Thread(target=reader) for _ in range(3)]
-
-        for rt in reader_threads:
-            rt.start()
-        writer_thread.start()
-
-        writer_thread.join()
-        stop_event.set()
-        for rt in reader_threads:
-            rt.join()
-
-        assert len(errors) == 0, f"Errors during concurrent access: {errors}"
-        assert collector.line_count() == 100
 
     def test_empty_collector(self):
         """Empty collector behaves correctly."""

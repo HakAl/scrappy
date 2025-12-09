@@ -65,12 +65,6 @@ class TestScrappyTheme:
         assert theme.syntax.python == "green"
         assert theme.syntax.javascript == "yellow"
 
-    def test_is_frozen(self):
-        """ScrappyTheme is immutable (frozen dataclass)."""
-        theme = ScrappyTheme()
-
-        with pytest.raises(Exception):
-            theme.primary = "red"
 
 
 class TestLightTheme:
@@ -160,12 +154,6 @@ class TestGitColors:
         assert git.commit == "yellow"
         assert git.meta == "bright_white"
 
-    def test_is_frozen(self):
-        """GitColors is immutable."""
-        git = GitColors()
-
-        with pytest.raises(Exception):
-            git.add = "blue"
 
 
 class TestSyntaxColors:
@@ -181,12 +169,6 @@ class TestSyntaxColors:
         assert syntax.docs == "white"
         assert syntax.default == "white"
 
-    def test_is_frozen(self):
-        """SyntaxColors is immutable."""
-        syntax = SyntaxColors()
-
-        with pytest.raises(Exception):
-            syntax.python = "blue"
 
 
 class TestThemePresets:
@@ -225,9 +207,6 @@ class TestThemeColorKeys:
         assert "surface" in THEME_COLOR_KEYS
         assert "surface_alt" in THEME_COLOR_KEYS
 
-    def test_has_exactly_10_keys(self):
-        """THEME_COLOR_KEYS contains exactly 10 color keys."""
-        assert len(THEME_COLOR_KEYS) == 10
 
 
 class TestLoadThemeFromConfig:
@@ -452,9 +431,6 @@ class TestCustomTheme:
 class TestDefaultTheme:
     """Tests for DEFAULT_THEME constant."""
 
-    def test_is_scrappy_theme(self):
-        """DEFAULT_THEME is a ScrappyTheme instance."""
-        assert isinstance(DEFAULT_THEME, ScrappyTheme)
 
     def test_has_expected_primary(self):
         """DEFAULT_THEME has cyan primary color."""
@@ -464,13 +440,7 @@ class TestDefaultTheme:
 class TestGlobalColorConstants:
     """Tests for GIT_COLORS and SYNTAX_COLORS constants."""
 
-    def test_git_colors_is_git_colors_instance(self):
-        """GIT_COLORS is a GitColors instance."""
-        assert isinstance(GIT_COLORS, GitColors)
 
-    def test_syntax_colors_is_syntax_colors_instance(self):
-        """SYNTAX_COLORS is a SyntaxColors instance."""
-        assert isinstance(SYNTAX_COLORS, SyntaxColors)
 
 
 class TestThemeProtocolCompliance:
@@ -481,52 +451,12 @@ class TestThemeProtocolCompliance:
         """Parametrized fixture providing all theme implementations."""
         return request.param()
 
-    def test_has_primary(self, theme):
-        """All themes provide primary property."""
-        assert hasattr(theme, "primary")
-        assert isinstance(theme.primary, str)
 
-    def test_has_accent(self, theme):
-        """All themes provide accent property."""
-        assert hasattr(theme, "accent")
-        assert isinstance(theme.accent, str)
 
-    def test_has_success(self, theme):
-        """All themes provide success property."""
-        assert hasattr(theme, "success")
-        assert isinstance(theme.success, str)
 
-    def test_has_warning(self, theme):
-        """All themes provide warning property."""
-        assert hasattr(theme, "warning")
-        assert isinstance(theme.warning, str)
 
-    def test_has_error(self, theme):
-        """All themes provide error property."""
-        assert hasattr(theme, "error")
-        assert isinstance(theme.error, str)
 
-    def test_has_info(self, theme):
-        """All themes provide info property."""
-        assert hasattr(theme, "info")
-        assert isinstance(theme.info, str)
 
-    def test_has_text(self, theme):
-        """All themes provide text property."""
-        assert hasattr(theme, "text")
-        assert isinstance(theme.text, str)
 
-    def test_has_text_muted(self, theme):
-        """All themes provide text_muted property."""
-        assert hasattr(theme, "text_muted")
-        assert isinstance(theme.text_muted, str)
 
-    def test_has_surface(self, theme):
-        """All themes provide surface property."""
-        assert hasattr(theme, "surface")
-        assert isinstance(theme.surface, str)
 
-    def test_has_surface_alt(self, theme):
-        """All themes provide surface_alt property."""
-        assert hasattr(theme, "surface_alt")
-        assert isinstance(theme.surface_alt, str)

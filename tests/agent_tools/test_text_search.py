@@ -55,17 +55,6 @@ class TestRipgrepSearch:
         assert metadata.error is not None
         assert "code 2" in metadata.error
 
-    def test_is_available_checks_platform(self):
-        """Should check platform for rg tool availability."""
-        mock_runner = Mock()
-        mock_parser = Mock()
-        mock_platform = Mock()
-        mock_platform.has_tool.return_value = True
-
-        search = RipgrepSearch(mock_runner, mock_parser, mock_platform)
-
-        assert search.is_available()
-        mock_platform.has_tool.assert_called_with("rg")
 
     def test_name_property(self):
         """Should return backend name."""

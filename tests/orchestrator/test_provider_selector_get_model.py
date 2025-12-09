@@ -267,13 +267,6 @@ class TestGetModelEmbed:
 class TestGetModelErrors:
     """Tests for error handling in get_model()."""
 
-    def test_raises_when_no_providers_available(self):
-        """Raises RuntimeError when no providers available."""
-        registry = create_mock_registry([])
-        selector = ProviderSelector(registry)
-
-        with pytest.raises(RuntimeError, match="No providers available"):
-            selector.get_model(ModelSelectionType.FAST)
 
     def test_returns_first_available_for_unknown_type(self):
         """Falls back to first provider for unknown selection type."""

@@ -122,7 +122,9 @@ Guidelines:
 
         if config.subtype == ResearchSubtype.CODEBASE:
             hint = codebase_hint_section(
-                config.extracted_files, config.extracted_directories
+                config.extracted_files,
+                config.extracted_directories,
+                config.matched_project_files
             )
             if hint:
                 parts.append(hint)

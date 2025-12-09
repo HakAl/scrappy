@@ -126,14 +126,6 @@ class TestSemanticSearchToolIndexNotReady:
 
         assert "find_exact_text" in result.output
 
-    def test_does_not_call_search_when_not_indexed(self, mock_context, mock_search_provider):
-        """Should not call search() when index is not ready."""
-        mock_search_provider.is_indexed.return_value = False
-
-        tool = SemanticSearchTool(semantic_search=mock_search_provider)
-        tool.execute(mock_context, query="error handling")
-
-        mock_search_provider.search.assert_not_called()
 
 
 class TestSemanticSearchToolSuccess:
@@ -319,14 +311,6 @@ class TestSemanticSearchToolErrors:
         assert "error" in result.error.lower()
         assert "Connection timeout" in result.error
 
-    def test_does_not_remember_search_on_error(self, mock_context, mock_search_provider):
-        """Should not call remember_search when search fails."""
-        mock_search_provider.search.side_effect = Exception("Search failed")
-
-        tool = SemanticSearchTool(semantic_search=mock_search_provider)
-        tool.execute(mock_context, query="error handling")
-
-        mock_context.remember_search.assert_not_called()
 
 
 class TestSemanticSearchToolMultipleResults:

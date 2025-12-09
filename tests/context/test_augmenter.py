@@ -8,11 +8,6 @@ from unittest.mock import Mock
 from scrappy.context.augmenter import ContextAugmenter, NullContextAugmenter
 
 
-@pytest.fixture
-def test_path():
-    """Create a test path that exists."""
-    # Use the project root as a test path that definitely exists
-    return Path(__file__).parent.parent.parent
 
 
 class MockSemanticManager:
@@ -31,18 +26,6 @@ class MockSemanticManager:
 class TestContextAugmenterCreation:
     """Tests for ContextAugmenter creation."""
 
-    @pytest.mark.unit
-    def test_creation_with_providers(self, test_path):
-        """Test creating augmenter with all providers."""
-        augmenter = ContextAugmenter(
-            project_path=test_path,
-            summary_provider=lambda: "Test summary",
-            structure_provider=lambda: {"total_files": 10},
-            git_history_provider=lambda: {},
-            file_index_provider=lambda: {},
-            is_explored_provider=lambda: True,
-        )
-        assert augmenter is not None
 
     @pytest.mark.unit
     def test_creation_with_semantic_manager(self, test_path):

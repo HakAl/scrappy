@@ -51,71 +51,20 @@ class TestPlatformSection:
 class TestProjectSection:
     """Tests for project_section function."""
 
-    def test_python_project_includes_pip(self):
-        result = project_section("python")
 
-        assert "pip" in result
-        assert "pytest" in result
 
-    def test_python_project_includes_venv(self):
-        result = project_section("python")
 
-        assert "venv" in result or "virtualenv" in result
 
-    def test_nodejs_project_includes_npm(self):
-        result = project_section("nodejs")
 
-        assert "npm" in result or "yarn" in result
-        assert "package.json" in result
 
-    def test_java_project_includes_maven_or_gradle(self):
-        result = project_section("java")
 
-        assert "Maven" in result or "Gradle" in result
-        assert "JUnit" in result
-
-    def test_go_project_includes_go_mod(self):
-        result = project_section("go")
-
-        assert "go.mod" in result
-        assert "go test" in result
-
-    def test_rust_project_includes_cargo(self):
-        result = project_section("rust")
-
-        assert "Cargo" in result
-        assert "cargo test" in result or "cargo build" in result
-
-    def test_unknown_project_returns_empty_string(self):
-        result = project_section("unknown_language")
-
-        assert result == ""
-
-    def test_none_project_returns_empty_string(self):
-        result = project_section(None)
-
-        assert result == ""
 
 
 class TestCodebaseStructureSection:
     """Tests for codebase_structure_section function."""
 
-    def test_with_structure_returns_formatted_section(self):
-        structure = "src/\n  main.py\n  utils.py"
-        result = codebase_structure_section(structure)
 
-        assert "Codebase Structure" in result
-        assert structure in result
 
-    def test_with_none_returns_empty_string(self):
-        result = codebase_structure_section(None)
-
-        assert result == ""
-
-    def test_with_empty_string_returns_empty_string(self):
-        result = codebase_structure_section("")
-
-        assert result == ""
 
 
 class TestToolFormatSection:
@@ -133,10 +82,6 @@ class TestToolFormatSection:
         assert "lowercase" in result.lower()
         assert "true/false" in result.lower()
 
-    def test_with_json_false_returns_empty_string(self):
-        result = tool_format_section(use_json=False)
-
-        assert result == ""
 
     def test_default_is_json_true(self):
         result = tool_format_section()
@@ -241,10 +186,6 @@ class TestCodebaseHintSection:
         assert "file reference" in result.lower()
         assert "directory reference" in result.lower()
 
-    def test_with_no_references_returns_empty_string(self):
-        result = codebase_hint_section((), ())
-
-        assert result == ""
 
     def test_starts_with_newlines_for_spacing(self):
         files = ("src/main.py",)

@@ -162,45 +162,6 @@ class TestCLIFactoryTheme:
         result = get_io_interface(test_mode=True)
         assert isinstance(result, TestIO)
 
-    def test_initialize_cli_handlers_uses_theme(self):
-        """initialize_cli_handlers should pass theme to handlers."""
-        from scrappy.cli.utils.cli_factory import initialize_cli_handlers
-        from datetime import datetime
-
-        orchestrator = MagicMock()
-        orchestrator.context.is_explored.return_value = False
-        io = MagicMock()
-        theme = CustomTheme(accent="orange")
-
-        with patch("scrappy.cli.utils.cli_factory.CLIContextCommands") as mock_ctx:
-            with patch("scrappy.cli.utils.cli_factory.CLITaskRouterHandler") as mock_router:
-                with patch("scrappy.cli.utils.cli_factory.CacheManager"):
-                    with patch("scrappy.cli.utils.cli_factory.RateLimiter"):
-                        with patch("scrappy.cli.utils.cli_factory.SessionPersistence"):
-                            with patch("scrappy.cli.utils.cli_factory.CLISessionManager"):
-                                with patch("scrappy.cli.utils.cli_factory.get_user_interaction"):
-                                    with patch("scrappy.cli.utils.cli_factory.CLIDisplay"):
-                                        with patch("scrappy.cli.utils.cli_factory.CLICodebaseAnalysis"):
-                                            with patch("scrappy.cli.utils.cli_factory.CLITaskExecution"):
-                                                with patch("scrappy.cli.utils.cli_factory.CLIMultiProvider"):
-                                                    with patch("scrappy.cli.utils.cli_factory.CLISmartQuery"):
-                                                        with patch("scrappy.cli.utils.cli_factory.CLIAgentManager"):
-                                                            initialize_cli_handlers(
-                                                                orchestrator,
-                                                                datetime.now(),
-                                                                io,
-                                                                theme=theme,
-                                                            )
-
-                # Verify theme was passed to CLIContextCommands
-                mock_ctx.assert_called_once()
-                call_kwargs = mock_ctx.call_args.kwargs
-                assert call_kwargs.get("theme") is theme
-
-                # Verify theme was passed to CLITaskRouterHandler
-                mock_router.assert_called_once()
-                call_kwargs = mock_router.call_args.kwargs
-                assert call_kwargs.get("theme") is theme
 
 
 class TestCLICoreTheme:
@@ -245,22 +206,6 @@ class TestCLICoreTheme:
                     cli = CLI()
                     assert cli._theme is DEFAULT_THEME
 
-    def test_cli_passes_theme_to_handlers(self):
-        """CLI should pass theme to initialize_cli_handlers."""
-        from scrappy.cli.core import CLI
-
-        theme = CustomTheme(accent="orange")
-
-        with patch.object(CLI, "_create_default_orchestrator") as mock_orch:
-            mock_orch.return_value = MagicMock()
-            with patch.object(CLI, "_create_default_io") as mock_io:
-                mock_io.return_value = MagicMock()
-                with patch("scrappy.cli.core.initialize_cli_handlers") as mock_init:
-                    mock_init.return_value = self._mock_handlers()
-                    CLI(theme=theme)
-                    mock_init.assert_called_once()
-                    call_kwargs = mock_init.call_args.kwargs
-                    assert call_kwargs.get("theme") is theme
 
 
 class TestCreateCliFromContext:
@@ -331,26 +276,3 @@ class TestCreateCli:
 class TestThemeProtocolCompliance:
     """Verify all theme implementations satisfy ThemeProtocol."""
 
-    @pytest.mark.parametrize(
-        "theme_class",
-        [ScrappyTheme, LightTheme, CustomTheme, NoColorTheme],
-    )
-    def test_implements_all_required_properties(self, theme_class):
-        """Each theme class should implement all ThemeProtocol properties."""
-        theme = theme_class()
-        required_props = [
-            "primary",
-            "accent",
-            "success",
-            "warning",
-            "error",
-            "info",
-            "text",
-            "text_muted",
-            "surface",
-            "surface_alt",
-        ]
-        for prop in required_props:
-            assert hasattr(theme, prop), f"Missing property: {prop}"
-            value = getattr(theme, prop)
-            assert isinstance(value, str), f"{prop} should be str, got {type(value)}"

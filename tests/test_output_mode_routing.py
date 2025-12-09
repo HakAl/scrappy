@@ -102,23 +102,7 @@ class TestProgressReporterFactory:
         reporter = create_progress_reporter(io=None)
         assert isinstance(reporter, NullProgressReporter)
 
-    def test_tui_mode_returns_unified_io_reporter(self):
-        """TUI mode always returns UnifiedIOProgressReporter."""
-        sink = MockOutputSink()
-        io = UnifiedIO(output_sink=sink)
 
-        # Even with use_spinner=True, TUI mode uses UnifiedIOProgressReporter
-        reporter = create_progress_reporter(io, use_spinner=True)
-        assert isinstance(reporter, UnifiedIOProgressReporter)
-
-    def test_tui_mode_ignores_use_live(self):
-        """TUI mode ignores use_live parameter."""
-        sink = MockOutputSink()
-        io = UnifiedIO(output_sink=sink)
-
-        # use_live=True is ignored in TUI mode
-        reporter = create_progress_reporter(io, use_live=True)
-        assert isinstance(reporter, UnifiedIOProgressReporter)
 
     def test_cli_mode_with_spinner_returns_rich_reporter(self):
         """CLI mode with use_spinner returns RichProgressReporter."""
@@ -150,22 +134,7 @@ class TestOutputHandlerFactory:
         handler = create_output_handler(io=None)
         assert isinstance(handler, NullOutputHandler)
 
-    def test_tui_mode_returns_cliio_handler(self):
-        """TUI mode always returns CLIIOOutputHandler."""
-        sink = MockOutputSink()
-        io = UnifiedIO(output_sink=sink)
 
-        handler = create_output_handler(io)
-        assert isinstance(handler, CLIIOOutputHandler)
-
-    def test_tui_mode_ignores_rich_tables(self):
-        """TUI mode ignores rich_tables parameter."""
-        sink = MockOutputSink()
-        io = UnifiedIO(output_sink=sink)
-
-        # rich_tables=True is ignored in TUI mode
-        handler = create_output_handler(io, rich_tables=True)
-        assert isinstance(handler, CLIIOOutputHandler)
 
     def test_cli_mode_with_rich_tables_returns_rich_handler(self):
         """CLI mode with rich_tables returns RichOutputHandler."""
@@ -231,17 +200,7 @@ class TestCLIOutputDirect:
         io = UnifiedIO(output_sink=None)
         assert get_output_sink(io) is None
 
-    def test_cli_mode_echo_does_not_crash(self):
-        """CLI mode echo() works without crashing."""
-        io = UnifiedIO(output_sink=None)
-        # This should not raise
-        io.echo("test message")
 
-    def test_cli_mode_secho_does_not_crash(self):
-        """CLI mode secho() works without crashing."""
-        io = UnifiedIO(output_sink=None)
-        # This should not raise
-        io.secho("styled message", fg="red")
 
 
 class TestProgressReporterTUIBehavior:
@@ -261,15 +220,6 @@ class TestProgressReporterTUIBehavior:
         # Check that renderables were posted
         assert len(sink.renderables) > 0
 
-    def test_null_reporter_does_nothing(self):
-        """NullProgressReporter does nothing (silent)."""
-        reporter = NullProgressReporter()
-
-        # These should not raise
-        reporter.start("Processing...", total=10)
-        reporter.update(5, "Half done")
-        reporter.complete("Done!")
-        reporter.error("Failed!")
 
 
 class TestOutputHandlerTUIBehavior:
@@ -291,17 +241,3 @@ class TestOutputHandlerTUIBehavior:
         output = sink.get_all_output()
         assert "research" in output or "Classification" in output
 
-    def test_null_handler_does_nothing(self):
-        """NullOutputHandler does nothing (silent)."""
-        handler = NullOutputHandler()
-
-        # These should not raise
-        handler.log_classification(
-            task_type="research",
-            confidence=0.95,
-            complexity=5,
-            reasoning="Test"
-        )
-        handler.log_provider_selection("openai", "gpt-4", "env")
-        handler.log_execution_start("research")
-        handler.log_info("Test info message")

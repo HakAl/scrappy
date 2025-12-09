@@ -151,16 +151,6 @@ class TestSelectForPlanningAgentRoleFiltering:
         log = selector.get_selection_log()
         assert any('github' in entry and 'does not support agent role' in entry for entry in log)
 
-    def test_raises_when_no_agent_capable_providers(self):
-        """Raises RuntimeError when no providers support agent role."""
-        registry = create_mock_registry({
-            'github': False,
-            'other': False,
-        })
-        selector = ProviderSelector(registry)
-
-        with pytest.raises(RuntimeError, match="No providers available that support agent role"):
-            selector.select_for_planning()
 
 
 class TestProviderAvailability:

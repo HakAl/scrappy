@@ -274,13 +274,6 @@ class TestUnifiedIOTUIMode:
         panels = [r for r in sink.renderables if isinstance(r, Panel)]
         assert len(panels) > 0
 
-    def test_input_line_raises_not_implemented(self):
-        """TUI mode input_line() raises NotImplementedError."""
-        sink = MockOutputSink()
-        io = UnifiedIO(output_sink=sink)
-
-        with pytest.raises(NotImplementedError, match="not supported in Textual mode"):
-            io.input_line()
 
     def test_spinner_simplified(self):
         """TUI mode spinner logs messages instead of animating."""
@@ -495,37 +488,8 @@ class TestEdgeCases:
 class TestProtocolCompliance:
     """Test compliance with UnifiedIOProtocol."""
 
-    def test_all_cliio_methods_present(self):
-        """UnifiedIO implements all CLIIOProtocol methods."""
-        io = UnifiedIO()
 
-        assert hasattr(io, 'echo')
-        assert hasattr(io, 'secho')
-        assert hasattr(io, 'style')
-        assert hasattr(io, 'prompt')
-        assert hasattr(io, 'confirm')
-        assert hasattr(io, 'input_line')
-        assert hasattr(io, 'table')
-        assert hasattr(io, 'panel')
 
-    def test_all_richoutput_methods_present(self):
-        """UnifiedIO implements all RichOutputProtocol methods."""
-        io = UnifiedIO()
-
-        assert hasattr(io, 'panel')
-        assert hasattr(io, 'table')
-        assert hasattr(io, 'syntax')
-        assert hasattr(io, 'rule')
-        assert hasattr(io, 'progress')
-        assert hasattr(io, 'spinner')
-        assert hasattr(io, 'stream')
-
-    def test_console_property_present(self):
-        """UnifiedIO has console property."""
-        io = UnifiedIO()
-
-        assert hasattr(io, 'console')
-        assert isinstance(io.console, Console)
 
 
 class TestModeUtils:

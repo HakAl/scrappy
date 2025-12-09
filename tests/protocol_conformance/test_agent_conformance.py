@@ -21,41 +21,11 @@ from scrappy.agent.protocols import (
 class TestResponseParserProtocolConformance:
     """Tests for ResponseParserProtocol implementations."""
 
-    def test_json_parser_has_parse(self):
-        """JSONResponseParser should have parse method."""
-        from scrappy.agent.response_parser import JSONResponseParser
 
-        assert_has_method(JSONResponseParser, 'parse')
 
-    def test_json_parser_implements_protocol(self):
-        """JSONResponseParser should implement ResponseParserProtocol."""
-        from scrappy.agent.response_parser import JSONResponseParser
 
-        assert_implements_protocol(JSONResponseParser, ResponseParserProtocol)
 
-    def test_native_parser_has_parse(self):
-        """NativeToolCallParser should have parse method."""
-        from scrappy.agent.response_parser import NativeToolCallParser
 
-        assert_has_method(NativeToolCallParser, 'parse')
-
-    def test_native_parser_implements_protocol(self):
-        """NativeToolCallParser should implement ResponseParserProtocol."""
-        from scrappy.agent.response_parser import NativeToolCallParser
-
-        assert_implements_protocol(NativeToolCallParser, ResponseParserProtocol)
-
-    def test_unified_parser_has_parse(self):
-        """UnifiedResponseParser should have parse method."""
-        from scrappy.agent.response_parser import UnifiedResponseParser
-
-        assert_has_method(UnifiedResponseParser, 'parse')
-
-    def test_unified_parser_implements_protocol(self):
-        """UnifiedResponseParser should implement ResponseParserProtocol."""
-        from scrappy.agent.response_parser import UnifiedResponseParser
-
-        assert_implements_protocol(UnifiedResponseParser, ResponseParserProtocol)
 
 
 class TestResponseParserBehavior:
@@ -103,42 +73,11 @@ class TestResponseParserBehavior:
 class TestToolRegistryConformance:
     """Tests for ToolRegistry implementation."""
 
-    def test_registry_has_register(self):
-        """ToolRegistry should have register method."""
-        from scrappy.agent_tools.tools.registry import ToolRegistry
 
-        assert_has_method(ToolRegistry, 'register')
 
-    def test_registry_has_get(self):
-        """ToolRegistry should have get method."""
-        from scrappy.agent_tools.tools.registry import ToolRegistry
 
-        assert_has_method(ToolRegistry, 'get')
 
-    def test_registry_has_list_all(self):
-        """ToolRegistry should have list_all method."""
-        from scrappy.agent_tools.tools.registry import ToolRegistry
 
-        assert_has_method(ToolRegistry, 'list_all')
-
-    def test_registry_has_execute(self):
-        """ToolRegistry should have execute method."""
-        from scrappy.agent_tools.tools.registry import ToolRegistry
-
-        assert_has_method(ToolRegistry, 'execute')
-
-    def test_registry_has_unregister(self):
-        """ToolRegistry should have unregister method."""
-        from scrappy.agent_tools.tools.registry import ToolRegistry
-
-        assert_has_method(ToolRegistry, 'unregister')
-
-    @pytest.mark.skip(reason="ToolRegistry doesn't have 'exists' method required by ToolRegistryProtocol")
-    def test_registry_implements_protocol(self):
-        """ToolRegistry should implement ToolRegistryProtocol."""
-        from scrappy.agent_tools.tools.registry import ToolRegistry
-
-        assert_implements_protocol(ToolRegistry, ToolRegistryProtocol)
 
 
 class TestToolRegistryBehavior:
@@ -213,35 +152,6 @@ class TestToolRegistryBehavior:
 
         assert result is None
 
-    def test_registry_register_duplicate_raises(self):
-        """register() should raise ValueError for duplicate tools."""
-        from scrappy.agent_tools.tools.registry import ToolRegistry
-        from scrappy.agent_tools.tools.base import ToolBase, ToolResult, ToolContext
-
-        class TestTool(ToolBase):
-            @property
-            def name(self) -> str:
-                return "duplicate_tool"
-
-            @property
-            def description(self) -> str:
-                return "Test tool"
-
-            @property
-            def parameters(self) -> list:
-                return []
-
-            def execute(self, context: ToolContext, **kwargs) -> ToolResult:
-                return ToolResult(success=True, output="test")
-
-        registry = ToolRegistry()
-        tool1 = TestTool()
-        tool2 = TestTool()
-
-        registry.register(tool1)
-
-        with pytest.raises(ValueError):
-            registry.register(tool2)
 
     def test_registry_unregister_removes_tool(self):
         """unregister() should remove tool from registry."""

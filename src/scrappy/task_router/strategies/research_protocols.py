@@ -162,6 +162,12 @@ class ResponseCleanerProtocol(Protocol):
         ...
 
 
+class SubclassificationResultProtocol(Protocol):
+    """Result of research query subclassification."""
+    subtype: ResearchSubtype
+    matched_files: tuple  # Project files matching query terms
+
+
 class ResearchSubclassifierProtocol(Protocol):
     """
     Defines the contract for sub-classifying research queries.
@@ -174,16 +180,33 @@ class ResearchSubclassifierProtocol(Protocol):
     def classify(
         self,
         query: str,
-        context_summary: Optional[str] = None
+        file_index: Optional[dict] = None
     ) -> ResearchSubtype:
         """
         Classify a research query as codebase or general knowledge.
 
         Args:
             query: The user's research query
-            context_summary: Optional project context summary for better classification
+            file_index: Optional file index mapping categories to file paths
 
         Returns:
             ResearchSubtype.CODEBASE or ResearchSubtype.GENERAL
+        """
+        ...
+
+    def classify_with_matches(
+        self,
+        query: str,
+        file_index: Optional[dict] = None
+    ) -> SubclassificationResultProtocol:
+        """
+        Classify a research query and return matched project files.
+
+        Args:
+            query: The user's research query
+            file_index: Optional file index mapping categories to file paths
+
+        Returns:
+            SubclassificationResult with subtype and matched files
         """
         ...

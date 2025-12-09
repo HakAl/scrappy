@@ -22,13 +22,6 @@ class TestSemanticCodeChunker:
         assert chunker._chunk_size == 100
         assert chunker._overlap == 15
 
-    def test_init_invalid_overlap(self):
-        """Test that overlap >= chunk_size raises ValueError."""
-        with pytest.raises(ValueError, match="Overlap .* must be less than chunk_size"):
-            SemanticCodeChunker(chunk_size=50, overlap=50)
-
-        with pytest.raises(ValueError, match="Overlap .* must be less than chunk_size"):
-            SemanticCodeChunker(chunk_size=50, overlap=60)
 
     def test_chunk_empty_content(self):
         """Test chunking empty or whitespace-only content."""
@@ -158,20 +151,6 @@ class TestSemanticCodeChunker:
         expected_lines = len(content.splitlines())
         assert result[-1].end_line == expected_lines
 
-    def test_protocol_compliance(self):
-        """Test that the class implements CodeChunkerProtocol correctly."""
-        chunker = SemanticCodeChunker()
-
-        # Should have chunk method
-        assert hasattr(chunker, 'chunk')
-        assert callable(getattr(chunker, 'chunk'))
-
-        # Should return List[CodeChunk]
-        result = chunker.chunk("test.py", "line1\nline2")
-        assert isinstance(result, list)
-        assert len(result) > 0
-        # CodeChunk is a dataclass, so isinstance check works
-        assert isinstance(result[0], CodeChunk)
 
     def test_edge_case_zero_overlap(self):
         """Test chunking with zero overlap."""

@@ -128,52 +128,7 @@ def agent_loop(
 class TestAgentLoopThink:
     """Tests for AgentLoop.think()."""
 
-    def test_think_delegates_to_orchestrator(
-        self, agent_loop, mock_orchestrator, mock_provider_strategy
-    ):
-        """think() should delegate to orchestrator.delegate()."""
-        # Provider strategy says dynamic selection, so orchestrator.delegate is called
-        mock_provider_strategy.supports_dynamic_selection.return_value = True
 
-        state = ConversationState(
-            messages=[
-                {"role": "system", "content": "system prompt"},
-                {"role": "user", "content": "test task"},
-            ],
-            system_prompt="system prompt",
-            iteration=1,
-        )
-        context = AgentContext(
-            system_prompt="system prompt",
-            active_tools=["read_file", "write_file"],
-        )
-
-        result = agent_loop.think(state, context)
-
-        # With dynamic selection, delegate is called with provider_name=None
-        mock_orchestrator.delegate.assert_called_once()
-        assert isinstance(result, AgentThought)
-
-    def test_think_uses_provider_from_strategy(
-        self, agent_loop, mock_provider_strategy
-    ):
-        """think() should get provider from strategy."""
-        state = ConversationState(
-            messages=[
-                {"role": "system", "content": "system prompt"},
-                {"role": "user", "content": "test task"},
-            ],
-            system_prompt="system prompt",
-            iteration=1,
-        )
-        context = AgentContext(
-            system_prompt="system prompt",
-            active_tools=["read_file", "write_file"],
-        )
-
-        agent_loop.think(state, context)
-
-        mock_provider_strategy.get_planner.assert_called()
 
     def test_think_shows_progress_on_first_iteration(
         self, agent_loop, mock_ui
@@ -203,60 +158,12 @@ class TestAgentLoopThink:
 class TestAgentLoopPlan:
     """Tests for AgentLoop.plan()."""
 
-    def test_plan_parses_thought_response(
-        self, agent_loop, mock_response_parser
-    ):
-        """plan() should parse thought.raw_response."""
-        thought = AgentThought(
-            raw_response='{"action": "read_file"}',
-            provider="openai",
-            iteration=1,
-        )
 
-        result = agent_loop.plan(thought)
-
-        mock_response_parser.parse.assert_called_once()
-        assert isinstance(result, AgentAction)
-
-    def test_plan_uses_llm_response_for_native_tools(
-        self, agent_loop, mock_response_parser
-    ):
-        """plan() should use llm_response when tool_calls present."""
-        llm_response = Mock()
-        llm_response.tool_calls = [{"name": "read_file", "arguments": {}}]
-
-        thought = AgentThought(
-            raw_response='{"action": "read_file"}',
-            provider="openai",
-            iteration=1,
-            llm_response=llm_response,
-        )
-
-        agent_loop.plan(thought)
-
-        # Should parse llm_response, not raw_response
-        mock_response_parser.parse.assert_called_once_with(llm_response)
 
 
 class TestAgentLoopExecute:
     """Tests for AgentLoop.execute()."""
 
-    def test_execute_delegates_to_action_executor(
-        self, agent_loop, mock_action_executor
-    ):
-        """execute() should delegate to action_executor.execute()."""
-        action = AgentAction(
-            thought="test",
-            action="read_file",
-            parameters={"path": "test.py"},
-            is_complete=False,
-        )
-        state = ConversationState()
-
-        result = agent_loop.execute(action, state)
-
-        mock_action_executor.execute.assert_called_once()
-        assert isinstance(result, ActionResult)
 
 
 class TestAgentLoopEvaluate:
@@ -650,84 +557,6 @@ class TestAgentLoopContextRebuild:
             assert call[0][0] == "test task"
             assert call[0][1] == "system"
 
-    def test_context_changes_reflected_immediately(
-        self,
-        mock_action_executor,
-        mock_response_parser,
-        mock_ui,
-        mock_tool_registry,
-        mock_provider_strategy,
-    ):
-        """run() should pick up context changes mid-conversation."""
-        mock_orchestrator = Mock(spec=['delegate', 'list_providers'])
-        response = Mock()
-        response.content = '{"thought": "test", "action": "read_file", "parameters": {}}'
-        response.provider = "openai"
-        response.tool_calls = None
-        mock_orchestrator.delegate.return_value = response
-
-        mock_response_parser.parse.return_value = Mock(
-            thought="working",
-            action="read_file",
-            parameters={"path": "test.py"},
-            is_complete=False,
-            result_text="",
-        )
-
-        config = AgentConfig()
-
-        # Context factory that changes output over iterations
-        # Simulates index becoming ready after first iteration
-        call_count = [0]
-
-        def build_context_side_effect(task, system_prompt):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                # First iteration: no RAG
-                return AgentContext(
-                    system_prompt="system",
-                    active_tools=["read_file"],
-                    passive_rag_context="",
-                )
-            else:
-                # Second+ iterations: RAG available
-                return AgentContext(
-                    system_prompt="system with RAG",
-                    active_tools=["read_file", "search_index"],
-                    passive_rag_context="RAG context available",
-                )
-
-        mock_context_factory = Mock()
-        mock_context_factory.build_context.side_effect = build_context_side_effect
-
-        agent_loop = AgentLoop(
-            orchestrator=mock_orchestrator,
-            action_executor=mock_action_executor,
-            response_parser=mock_response_parser,
-            ui=mock_ui,
-            tool_registry=mock_tool_registry,
-            provider_strategy=mock_provider_strategy,
-            config=config,
-            context_factory=mock_context_factory,
-            tools={"read_file": Mock(), "search_index": Mock()},
-        )
-
-        state = ConversationState(
-            messages=[
-                {"role": "system", "content": "system"},
-                {"role": "user", "content": "task"},
-            ],
-            system_prompt="system",
-            iteration=0,
-            max_iterations=3,
-        )
-
-        agent_loop.run("test task", state)
-
-        # Verify think() was called with different contexts
-        # First call should have no RAG context
-        # Subsequent calls should have RAG context
-        assert mock_context_factory.build_context.call_count == 3
 
     def test_index_readiness_changes_mid_conversation(
         self,

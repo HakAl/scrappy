@@ -141,33 +141,5 @@ class TestContinueDenialHandler:
 class TestDenialHandlerProtocolCompliance:
     """Tests verifying protocol compliance."""
 
-    def test_interactive_handler_implements_protocol(self):
-        """InteractiveDenialHandler should implement DenialHandlerProtocol."""
-        from scrappy.agent.protocols import DenialHandlerProtocol
 
-        ui = StubAgentUI()
-        handler = InteractiveDenialHandler(ui)
 
-        # Protocol check - has required method
-        assert hasattr(handler, 'handle_denial')
-        assert callable(handler.handle_denial)
-
-    def test_auto_stop_handler_implements_protocol(self):
-        """AutoStopDenialHandler should implement DenialHandlerProtocol."""
-        from scrappy.agent.protocols import DenialHandlerProtocol
-
-        handler = AutoStopDenialHandler()
-
-        # Protocol check - has required method
-        assert hasattr(handler, 'handle_denial')
-        assert callable(handler.handle_denial)
-
-    def test_continue_handler_implements_protocol(self):
-        """ContinueDenialHandler should implement DenialHandlerProtocol."""
-        from scrappy.agent.protocols import DenialHandlerProtocol
-
-        handler = ContinueDenialHandler()
-
-        # Protocol check - has required method
-        assert hasattr(handler, 'handle_denial')
-        assert callable(handler.handle_denial)

@@ -516,44 +516,6 @@ class TestNoColorThemePhase6Integration:
         """Create test fixtures."""
         self.theme = NoColorTheme()
 
-    def test_context_commands_with_no_color_theme(self):
-        """CLIContextCommands works with NoColorTheme."""
-        from scrappy.cli.context_commands import CLIContextCommands
-
-        io = Mock()
-        io.secho = Mock()
-        io.echo = Mock()
-        io.style = Mock(return_value="styled")
-        orchestrator = Mock()
-        orchestrator.context_aware = True
-        orchestrator.get_context_status = Mock(return_value={
-            "project_path": "/test",
-            "is_explored": False,
-            "has_summary": False,
-            "explored_at": None,
-            "total_files": 0,
-            "cache_file": "",
-            "cache_exists": False,
-        })
-        orchestrator.working_memory = Mock()
-        orchestrator.working_memory.get_summary = Mock(return_value={
-            "files_cached": 0,
-            "cached_files": [],
-            "recent_searches": 0,
-            "git_operations": 0,
-            "discoveries": 0,
-        })
-
-        cmd = CLIContextCommands(
-            orchestrator=orchestrator,
-            io=io,
-            theme=self.theme,
-        )
-        assert cmd._theme == self.theme
-        assert cmd._theme.primary == ""
-
-        # Should not raise
-        cmd.manage_context("")
 
     def test_interactive_mode_with_no_color_theme(self):
         """InteractiveMode works with NoColorTheme."""

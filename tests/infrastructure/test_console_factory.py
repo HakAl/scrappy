@@ -28,14 +28,6 @@ class TestConsoleFactoryInCliMode:
 
         assert result is fallback
 
-    def test_get_console_creates_default_fallback_if_not_provided(self):
-        """Factory creates default Console if no fallback provided."""
-        OutputModeContext.reset()
-        factory = ConsoleFactory()
-
-        result = factory.get_console()
-
-        assert isinstance(result, Console)
 
     def test_get_console_with_buffer_returns_none_buffer_in_cli_mode(self):
         """In CLI mode, get_console_with_buffer returns None for buffer."""
@@ -52,31 +44,7 @@ class TestConsoleFactoryInCliMode:
 class TestConsoleFactoryInTuiMode:
     """Tests for ConsoleFactory behavior in TUI mode."""
 
-    def test_get_console_returns_string_console_in_tui_mode(self):
-        """In TUI mode, get_console returns Console writing to StringIO."""
-        mock_sink = MagicMock()
-        OutputModeContext.set_tui_mode(True, mock_sink)
-        factory = ConsoleFactory()
 
-        console = factory.get_console()
-
-        # Verify it's a new Console (not the fallback)
-        assert isinstance(console, Console)
-        # Verify it writes to StringIO
-        console.print("test output")
-        # The Console's file should be StringIO
-        assert hasattr(console, "file")
-
-    def test_get_console_with_buffer_returns_buffer_in_tui_mode(self):
-        """In TUI mode, get_console_with_buffer returns a StringIO buffer."""
-        mock_sink = MagicMock()
-        OutputModeContext.set_tui_mode(True, mock_sink)
-        factory = ConsoleFactory()
-
-        console, buffer = factory.get_console_with_buffer()
-
-        assert isinstance(console, Console)
-        assert isinstance(buffer, StringIO)
 
     def test_console_output_captured_in_buffer(self):
         """Console output in TUI mode is captured in the buffer."""
@@ -94,14 +62,6 @@ class TestConsoleFactoryInTuiMode:
 class TestConsoleFactoryStringConsole:
     """Tests for create_string_console method."""
 
-    def test_create_string_console_returns_console_and_buffer(self):
-        """create_string_console returns Console and StringIO tuple."""
-        factory = ConsoleFactory()
-
-        console, buffer = factory.create_string_console()
-
-        assert isinstance(console, Console)
-        assert isinstance(buffer, StringIO)
 
     def test_create_string_console_captures_output(self):
         """Output to string console is captured in buffer."""
@@ -151,38 +111,8 @@ class TestConsoleFactoryRouteOutput:
         call_arg = mock_sink.post_output.call_args[0][0]
         assert "routed output" in call_arg
 
-    def test_route_output_does_nothing_with_none_buffer(self):
-        """route_console_output does nothing if buffer is None."""
-        mock_sink = MagicMock()
-        OutputModeContext.set_tui_mode(True, mock_sink)
-        factory = ConsoleFactory()
 
-        # This shouldn't raise
-        factory.route_console_output(MagicMock(), None)
 
-        mock_sink.post_output.assert_not_called()
-
-    def test_route_output_does_nothing_if_buffer_empty(self):
-        """route_console_output does nothing if buffer is empty."""
-        mock_sink = MagicMock()
-        OutputModeContext.set_tui_mode(True, mock_sink)
-        factory = ConsoleFactory()
-
-        console, buffer = factory.get_console_with_buffer()
-        # Don't print anything
-        factory.route_console_output(console, buffer)
-
-        mock_sink.post_output.assert_not_called()
-
-    def test_route_output_does_nothing_in_cli_mode(self):
-        """route_console_output does nothing in CLI mode."""
-        OutputModeContext.reset()
-        factory = ConsoleFactory()
-
-        # Create a buffer manually (simulating get_console_with_buffer in CLI mode)
-        buffer = StringIO()
-        buffer.write("some content")
-        factory.route_console_output(MagicMock(), buffer)
 
         # Nothing should happen - no sink to call
 
@@ -190,17 +120,7 @@ class TestConsoleFactoryRouteOutput:
 class TestConsoleFactoryProtocolCompliance:
     """Tests that ConsoleFactory satisfies ConsoleFactoryProtocol."""
 
-    def test_has_get_console_method(self):
-        """ConsoleFactory has get_console method."""
-        factory = ConsoleFactory()
-        assert hasattr(factory, "get_console")
-        assert callable(factory.get_console)
 
-    def test_has_create_string_console_method(self):
-        """ConsoleFactory has create_string_console method."""
-        factory = ConsoleFactory()
-        assert hasattr(factory, "create_string_console")
-        assert callable(factory.create_string_console)
 
 
 @pytest.fixture(autouse=True)

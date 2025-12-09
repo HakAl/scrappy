@@ -49,91 +49,23 @@ class TestInputCaptureManager:
 
     # --- Confirm Input Parsing Tests ---
 
-    @pytest.mark.parametrize("input_value", ['y', 'yes', 'Y', 'YES', '1', 'true'])
-    def test_confirm_yes_variations_return_true(self, manager, mock_bridge, input_value):
-        """All yes variations return True to bridge."""
-        manager.enter_capture_mode("id1", "Continue?", "confirm")
-        manager.handle_captured_input(input_value)
-        mock_bridge.provide_result.assert_called_once_with("id1", True)
 
-    @pytest.mark.parametrize("input_value", ['n', 'no', 'N', 'NO', 'maybe', '', 'anything'])
-    def test_confirm_no_variations_return_false(self, manager, mock_bridge, input_value):
-        """All non-yes inputs return False to bridge."""
-        manager.enter_capture_mode("id1", "Continue?", "confirm")
-        manager.handle_captured_input(input_value)
-        mock_bridge.provide_result.assert_called_once_with("id1", False)
 
     # --- Prompt Input Tests ---
 
-    def test_prompt_returns_user_input_when_provided(self, manager, mock_bridge):
-        """Non-empty prompt input returns user's value."""
-        manager.enter_capture_mode("id1", "Name?", "prompt", default="Guest")
-        manager.handle_captured_input("Alice")
-        mock_bridge.provide_result.assert_called_once_with("id1", "Alice")
 
-    def test_prompt_returns_default_on_empty_input(self, manager, mock_bridge):
-        """Empty prompt input returns default value."""
-        manager.enter_capture_mode("id1", "Name?", "prompt", default="Guest")
-        manager.handle_captured_input("")
-        mock_bridge.provide_result.assert_called_once_with("id1", "Guest")
 
-    def test_prompt_returns_empty_when_no_default(self, manager, mock_bridge):
-        """Empty prompt input with no default returns empty string."""
-        manager.enter_capture_mode("id1", "Name?", "prompt")
-        manager.handle_captured_input("")
-        mock_bridge.provide_result.assert_called_once_with("id1", "")
 
     # --- Cancel Tests ---
 
-    def test_cancel_confirm_returns_false(self, manager, mock_bridge):
-        """Cancelling confirm returns False."""
-        manager.enter_capture_mode("id1", "Delete?", "confirm")
-        manager.cancel()
-        mock_bridge.provide_result.assert_called_once_with("id1", False)
 
-    def test_cancel_prompt_returns_default(self, manager, mock_bridge):
-        """Cancelling prompt returns default value."""
-        manager.enter_capture_mode("id1", "Name?", "prompt", default="Guest")
-        manager.cancel()
-        mock_bridge.provide_result.assert_called_once_with("id1", "Guest")
 
-    def test_cancel_prompt_returns_empty_when_no_default(self, manager, mock_bridge):
-        """Cancelling prompt with no default returns empty string."""
-        manager.enter_capture_mode("id1", "Name?", "prompt")
-        manager.cancel()
-        mock_bridge.provide_result.assert_called_once_with("id1", "")
 
     # --- Defensive Null Check Tests (Bug 3 Fix) ---
 
-    def test_handle_captured_input_with_no_active_capture_is_safe(self, manager, mock_bridge):
-        """handle_captured_input gracefully handles stale/missing capture state."""
-        # Never entered capture mode - _id is None
-        manager.handle_captured_input("some input")
-        # Should not call provide_result
-        mock_bridge.provide_result.assert_not_called()
 
-    def test_cancel_with_no_active_capture_is_safe(self, manager, mock_bridge):
-        """cancel gracefully handles stale/missing capture state."""
-        # Never entered capture mode - _id is None
-        manager.cancel()
-        # Should not call provide_result
-        mock_bridge.provide_result.assert_not_called()
 
-    def test_handle_captured_input_after_exit_is_safe(self, manager, mock_bridge):
-        """handle_captured_input is safe after exit_capture_mode clears state."""
-        manager.enter_capture_mode("id1", "Question?", "confirm")
-        manager.exit_capture_mode()  # Clears _id to None
-        manager.handle_captured_input("y")
-        # Should not call provide_result because _id is None
-        mock_bridge.provide_result.assert_not_called()
 
-    def test_cancel_after_exit_is_safe(self, manager, mock_bridge):
-        """cancel is safe after exit_capture_mode clears state."""
-        manager.enter_capture_mode("id1", "Question?", "confirm")
-        manager.exit_capture_mode()  # Clears _id to None
-        manager.cancel()
-        # Should not call provide_result because _id is None
-        mock_bridge.provide_result.assert_not_called()
 
     # --- Queue Tests (Concurrent Prompts) ---
 

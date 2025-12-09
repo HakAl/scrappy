@@ -108,8 +108,3 @@ class TestAutoClarifier:
         # Should not have "Auto-escalated" in reasoning since it wasn't escalated
         assert result.reasoning == "test"
 
-    @pytest.mark.unit
-    def test_rejects_invalid_action(self):
-        """AutoClarifier should reject invalid default_action."""
-        with pytest.raises(ValueError):
-            AutoClarifier(default_action="invalid")

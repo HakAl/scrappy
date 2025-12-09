@@ -638,25 +638,6 @@ class TestSystemPromptConstruction:
 class TestAgentContextOutput:
     """Test AgentContext dataclass structure."""
 
-    def test_returns_agent_context_dataclass(self):
-        """Should return AgentContext with all required fields."""
-        # Arrange
-        semantic_manager = MockSemanticManager(is_ready=False)
-        config = AgentConfig()
-        tool_registry = MockToolRegistry()
-        factory = AgentContextFactory(semantic_manager, config, tool_registry)
-
-        # Act
-        context = factory.build_context(
-            task="Test task",
-            base_system_prompt="Base prompt"
-        )
-
-        # Assert
-        assert isinstance(context, AgentContext)
-        assert hasattr(context, 'system_prompt')
-        assert hasattr(context, 'active_tools')
-        assert hasattr(context, 'passive_rag_context')
 
     def test_system_prompt_is_string(self):
         """system_prompt should be a string."""

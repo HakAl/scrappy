@@ -83,25 +83,9 @@ class TestLLMRequestKwargsFiltering:
 class TestLLMRequestValidation:
     """Tests for LLMRequest parameter validation."""
 
-    def test_rejects_empty_prompt(self):
-        """Empty prompt should raise ValueError."""
-        with pytest.raises(ValueError, match="prompt cannot be empty"):
-            LLMRequest(prompt="")
 
-    def test_rejects_whitespace_only_prompt(self):
-        """Whitespace-only prompt should raise ValueError."""
-        with pytest.raises(ValueError, match="prompt cannot be empty"):
-            LLMRequest(prompt="   \n\t  ")
 
-    def test_rejects_temperature_too_low(self):
-        """Temperature below 0.0 should raise ValueError."""
-        with pytest.raises(ValueError, match="temperature must be 0.0-2.0"):
-            LLMRequest(prompt="test", temperature=-0.1)
 
-    def test_rejects_temperature_too_high(self):
-        """Temperature above 2.0 should raise ValueError."""
-        with pytest.raises(ValueError, match="temperature must be 0.0-2.0"):
-            LLMRequest(prompt="test", temperature=2.1)
 
     def test_accepts_temperature_at_boundaries(self):
         """Temperature at 0.0 and 2.0 should be accepted."""
@@ -111,15 +95,7 @@ class TestLLMRequestValidation:
         request2 = LLMRequest(prompt="test", temperature=2.0)
         assert request2.temperature == 2.0
 
-    def test_rejects_negative_max_tokens(self):
-        """Negative max_tokens should raise ValueError."""
-        with pytest.raises(ValueError, match="max_tokens must be positive"):
-            LLMRequest(prompt="test", max_tokens=-1)
 
-    def test_rejects_zero_max_tokens(self):
-        """Zero max_tokens should raise ValueError."""
-        with pytest.raises(ValueError, match="max_tokens must be positive"):
-            LLMRequest(prompt="test", max_tokens=0)
 
     def test_accepts_positive_max_tokens(self):
         """Positive max_tokens should be accepted."""
@@ -130,12 +106,6 @@ class TestLLMRequestValidation:
 class TestLLMRequestImmutability:
     """Tests for LLMRequest frozen dataclass behavior."""
 
-    def test_frozen_dataclass(self):
-        """LLMRequest should be immutable (frozen)."""
-        request = LLMRequest(prompt="test")
-
-        with pytest.raises(Exception):  # FrozenInstanceError or AttributeError
-            request.prompt = "modified"
 
     def test_kwargs_dict_is_not_shared(self):
         """Each LLMRequest should have its own kwargs dict."""

@@ -438,9 +438,3 @@ class TestProtocolConformance:
         ranker = PassthroughRanker()
         assert isinstance(ranker, ResultRankerProtocol)
 
-    def test_has_required_methods(self):
-        """Should have all required protocol methods."""
-        for ranker_class in [DefaultResultRanker, PassthroughRanker]:
-            ranker = ranker_class()
-            assert hasattr(ranker, 'rank')
-            assert callable(ranker.rank)

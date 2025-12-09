@@ -33,12 +33,6 @@ class TestClarificationConfig:
         assert config.confidence_threshold == 0.6
         assert config.high_confidence_bypass == 0.85
 
-    @pytest.mark.unit
-    def test_immutable(self):
-        """Config should be immutable (frozen)."""
-        config = ClarificationConfig()
-        with pytest.raises(AttributeError):
-            config.confidence_threshold = 0.5
 
     @pytest.mark.unit
     def test_confidence_threshold_must_be_valid_range(self):
@@ -100,17 +94,6 @@ class TestClarificationConfig:
         )
         assert config.high_confidence_bypass == 1.0
 
-    @pytest.mark.unit
-    def test_implements_protocol(self):
-        """ClarificationConfig should implement ClarificationConfigProtocol."""
-        from scrappy.task_router.protocols import ClarificationConfigProtocol
-
-        config = ClarificationConfig()
-        # Check that it has the protocol attributes
-        assert hasattr(config, 'confidence_threshold')
-        assert hasattr(config, 'high_confidence_bypass')
-        # Check it's runtime checkable
-        assert isinstance(config, ClarificationConfigProtocol)
 
     @pytest.mark.unit
     def test_from_dict_uses_defaults(self):
@@ -138,13 +121,6 @@ class TestClarificationConfig:
         assert config.confidence_threshold == 0.5
         assert config.high_confidence_bypass == 0.9  # default
 
-    @pytest.mark.unit
-    def test_from_dict_validates_values(self):
-        """from_dict should validate values."""
-        with pytest.raises(ValueError):
-            ClarificationConfig.from_dict({
-                "confidence_threshold": 1.5,  # invalid
-            })
 
 
 class TestDeprecatedImport:

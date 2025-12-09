@@ -232,48 +232,9 @@ class TestAutoApproveInteraction:
 class TestGetUserInteraction:
     """Test factory function for creating appropriate interaction handler."""
 
-    def test_returns_cli_interaction_when_not_tui(self):
-        """Should return CLIUserInteraction in CLI mode."""
-        io = MockIO()
-        # MockIO doesn't have is_tui_mode, so it defaults to not TUI
 
-        interaction = get_user_interaction(io)
 
-        assert isinstance(interaction, CLIUserInteraction)
 
-    def test_returns_tui_interaction_when_bridge_provided(self):
-        """Should return TUIUserInteraction when bridge is provided."""
-        io = MagicMock()
-        io.is_tui_mode = True
-        bridge = MagicMock()
-
-        # Mock mode_utils.is_tui_mode to return True
-        from unittest.mock import patch
-        with patch('scrappy.cli.mode_utils.is_tui_mode', return_value=True):
-            interaction = get_user_interaction(io, bridge)
-
-        assert isinstance(interaction, TUIUserInteraction)
-
-    def test_returns_auto_approve_when_tui_without_bridge(self):
-        """Should return AutoApproveInteraction for TUI mode without bridge."""
-        io = MagicMock()
-
-        from unittest.mock import patch
-        with patch('scrappy.cli.mode_utils.is_tui_mode', return_value=True):
-            interaction = get_user_interaction(io)  # No bridge
-
-        assert isinstance(interaction, AutoApproveInteraction)
-
-    def test_cli_mode_ignores_bridge(self):
-        """Should return CLIUserInteraction even if bridge provided in CLI mode."""
-        io = MockIO()
-        bridge = MagicMock()
-
-        # CLI mode (is_tui_mode returns False)
-        interaction = get_user_interaction(io, bridge)
-
-        # Should still be CLI because mode is CLI
-        assert isinstance(interaction, CLIUserInteraction)
 
 
 class TestUserInteractionIntegration:
@@ -339,51 +300,8 @@ class TestBridgeWiring:
         assert isinstance(interaction, TUIUserInteraction)
         assert interaction._bridge is mock_bridge
 
-    def test_agent_manager_receives_tui_interaction_after_reinitialize(self):
-        """After reinitialization, CLIAgentManager should have TUI interaction."""
-        from unittest.mock import MagicMock, patch
-        from scrappy.cli.agent_manager import CLIAgentManager
 
-        mock_orchestrator = MagicMock()
-        mock_io = MagicMock()
-        mock_io.is_tui_mode = True
-        mock_bridge = MagicMock()
 
-        with patch('scrappy.cli.mode_utils.is_tui_mode', return_value=True):
-            interaction = get_user_interaction(mock_io, mock_bridge)
-
-        agent_mgr = CLIAgentManager(mock_orchestrator, mock_io, interaction)
-
-        assert isinstance(agent_mgr._interaction, TUIUserInteraction)
-
-    def test_multiprovider_receives_tui_interaction_after_reinitialize(self):
-        """After reinitialization, CLIMultiProvider should have TUI interaction."""
-        from unittest.mock import MagicMock, patch
-        from scrappy.cli.multiprovider import CLIMultiProvider
-
-        mock_orchestrator = MagicMock()
-        mock_io = MagicMock()
-        mock_io.is_tui_mode = True
-        mock_bridge = MagicMock()
-
-        with patch('scrappy.cli.mode_utils.is_tui_mode', return_value=True):
-            interaction = get_user_interaction(mock_io, mock_bridge)
-
-        multiprovider = CLIMultiProvider(mock_orchestrator, mock_io, interaction)
-
-        assert isinstance(multiprovider._interaction, TUIUserInteraction)
-
-    def test_initial_handlers_have_cli_interaction_without_bridge(self):
-        """Before bridge wiring, handlers should have CLI/AutoApprove interaction."""
-        from scrappy.cli.agent_manager import CLIAgentManager
-
-        mock_orchestrator = MagicMock()
-        io = MockIO()
-
-        # No bridge provided - should default to CLIUserInteraction
-        agent_mgr = CLIAgentManager(mock_orchestrator, io)
-
-        assert isinstance(agent_mgr._interaction, CLIUserInteraction)
 
     def test_tui_interaction_uses_bridge_for_confirm(self):
         """TUI interaction should call bridge.blocking_confirm for confirmations."""

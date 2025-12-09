@@ -17,10 +17,19 @@ from scrappy.task_router.strategies.research_subclassifier import ResearchSubcla
 class TestResearchExecutorSubtypeRouting:
     """Tests that ResearchExecutor respects subclassifier results."""
 
-    def _create_mock_orchestrator(self):
+    def _create_mock_orchestrator(self, file_index=None):
         """Create a mock orchestrator for testing."""
         orchestrator = Mock()
-        orchestrator.context = None
+
+        # Mock context with file_index
+        context = Mock()
+        default_file_index = file_index if file_index is not None else {
+            "codebase": ["src/codebase.py"]  # Default file_index with 'codebase' term
+        }
+        context.file_index = default_file_index
+        context.ensure_file_index.return_value = default_file_index
+        context.is_explored.return_value = False
+        orchestrator.context = context
 
         # Mock providers
         providers = Mock()
@@ -131,7 +140,11 @@ class TestResearchExecutorSubtypeRouting:
 
         # Create a mock subclassifier to capture the input
         mock_subclassifier = Mock()
-        mock_subclassifier.classify.return_value = ResearchSubtype.CODEBASE
+        # Mock classify_with_matches to return a result with subtype and matched_files
+        mock_result = Mock()
+        mock_result.subtype = ResearchSubtype.CODEBASE
+        mock_result.matched_files = ()
+        mock_subclassifier.classify_with_matches.return_value = mock_result
 
         executor = ResearchExecutor(
             orchestrator=orchestrator,
@@ -144,8 +157,8 @@ class TestResearchExecutorSubtypeRouting:
         executor.execute(task)
 
         # Verify subclassifier was called with the exact original input
-        mock_subclassifier.classify.assert_called_once()
-        call_args = mock_subclassifier.classify.call_args
+        mock_subclassifier.classify_with_matches.assert_called_once()
+        call_args = mock_subclassifier.classify_with_matches.call_args
         assert call_args[0][0] == query, (
             f"Expected query '{query}', got '{call_args[0][0]}'"
         )
@@ -156,7 +169,10 @@ class TestResearchExecutorSubtypeRouting:
 
         # Test with subclassifier returning CODEBASE
         mock_subclassifier = Mock()
-        mock_subclassifier.classify.return_value = ResearchSubtype.CODEBASE
+        mock_result = Mock()
+        mock_result.subtype = ResearchSubtype.CODEBASE
+        mock_result.matched_files = ()
+        mock_subclassifier.classify_with_matches.return_value = mock_result
 
         executor = ResearchExecutor(
             orchestrator=orchestrator,
@@ -207,10 +223,19 @@ class TestResearchExecutorSubtypeRouting:
 class TestResearchExecutorEdgeCases:
     """Edge case tests for research executor routing."""
 
-    def _create_mock_orchestrator(self):
+    def _create_mock_orchestrator(self, file_index=None):
         """Create a mock orchestrator for testing."""
         orchestrator = Mock()
-        orchestrator.context = None
+
+        # Mock context with file_index
+        context = Mock()
+        default_file_index = file_index if file_index is not None else {
+            "codebase": ["src/codebase.py"]  # Default file_index with 'codebase' term
+        }
+        context.file_index = default_file_index
+        context.ensure_file_index.return_value = default_file_index
+        context.is_explored.return_value = False
+        orchestrator.context = context
 
         providers = Mock()
         providers.list_available.return_value = ['cerebras']
@@ -253,3 +278,65 @@ class TestResearchExecutorEdgeCases:
         # Should not crash, should return error result
         assert result.success is False
         assert "Subclassifier error" in result.error or "failed" in result.error.lower()
+
+    def test_file_index_populated_lazily_on_first_access(self):
+        """
+        Verify that file_index is populated lazily on first codebase query.
+
+        Tests that:
+        1. Initial context.file_index is empty
+        2. ensure_file_index() is called during codebase classification
+        3. file_index is populated with scan results
+        """
+        orchestrator = Mock()
+
+        # Mock context with EMPTY file_index initially
+        context = Mock()
+        context.file_index = {}  # Start empty
+        context.is_explored.return_value = False
+
+        # Mock ensure_file_index to populate the index
+        def populate_index():
+            context.file_index = {
+                "source": ["src/main.py", "src/utils.py"],
+                "tests": ["tests/test_main.py"]
+            }
+            return context.file_index
+
+        context.ensure_file_index = Mock(side_effect=populate_index)
+        orchestrator.context = context
+
+        # Mock providers
+        providers = Mock()
+        providers.list_available.return_value = ['cerebras']
+        providers.get_provider.return_value = Mock()
+        orchestrator.providers = providers
+
+        # Mock delegate to return response
+        response = Mock()
+        response.content = "Test response"
+        response.tokens_used = 100
+        orchestrator.delegate.return_value = response
+
+        # Create executor
+        executor = ResearchExecutor(
+            orchestrator=orchestrator,
+            preferred_provider="cerebras",
+        )
+
+        # Execute a codebase query
+        task = self._create_research_task("how does the main module work?")
+
+        # Verify file_index starts empty
+        assert context.file_index == {}, "file_index should start empty"
+
+        # Execute the task
+        result = executor.execute(task)
+
+        # Verify ensure_file_index was called
+        context.ensure_file_index.assert_called_once()
+
+        # Verify file_index was populated
+        assert context.file_index != {}, "file_index should be populated after ensure_file_index"
+        assert "source" in context.file_index
+        assert "tests" in context.file_index

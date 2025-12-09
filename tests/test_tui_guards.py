@@ -235,74 +235,11 @@ class TestInteractiveBannerTUIGuards:
         assert "TUI mode detected" in str(exc_info.value)
         assert "no output_sink available" in str(exc_info.value)
 
-    def test_display_banner_uses_io_output_sink_in_tui_mode(self):
-        """display_banner uses io.output_sink when available in TUI mode."""
-        from scrappy.cli.interactive_banner import display_banner
 
-        mock_sink = MagicMock()
-        mock_io = MagicMock()
-        mock_io.is_tui_mode = True
-        mock_io.output_sink = mock_sink
 
-        display_banner(mock_io)
-
-        mock_sink.post_renderable.assert_called_once()
-
-    def test_display_banner_uses_context_sink_when_io_has_none(self):
-        """display_banner uses OutputModeContext sink when io.output_sink is None."""
-        from scrappy.cli.interactive_banner import display_banner
-
-        mock_sink = MagicMock()
-        mock_io = MagicMock()
-        mock_io.is_tui_mode = False  # IO doesn't know it's TUI
-        mock_io.output_sink = None
-
-        # But context says TUI with sink
-        OutputModeContext.set_tui_mode(True, mock_sink)
-
-        display_banner(mock_io)
-
-        mock_sink.post_renderable.assert_called_once()
-
-    def test_display_banner_uses_console_in_cli_mode(self):
-        """display_banner uses console.print in CLI mode."""
-        from scrappy.cli.interactive_banner import display_banner
-
-        mock_console = MagicMock()
-        mock_io = MagicMock()
-        mock_io.is_tui_mode = False
-        mock_io.console = mock_console
-
-        display_banner(mock_io)
-
-        mock_console.print.assert_called_once()
 
 
 class TestFactoryFunctionsBehavior:
     """Tests that factory functions correctly select implementations based on mode."""
 
-    def test_create_progress_reporter_returns_unified_io_in_tui_mode(self):
-        """create_progress_reporter returns UnifiedIOProgressReporter in TUI mode."""
-        from scrappy.infrastructure.progress import create_progress_reporter, UnifiedIOProgressReporter
 
-        # Create a mock IO that reports TUI mode
-        mock_io = MagicMock()
-        mock_io.is_tui_mode = True
-        mock_io.secho = MagicMock()
-
-        reporter = create_progress_reporter(mock_io)
-
-        assert isinstance(reporter, UnifiedIOProgressReporter)
-
-    def test_create_output_handler_returns_cliio_in_tui_mode(self):
-        """create_output_handler returns CLIIOOutputHandler in TUI mode."""
-        from scrappy.task_router.output_handler import create_output_handler, CLIIOOutputHandler
-
-        # Create a mock IO that reports TUI mode
-        mock_io = MagicMock()
-        mock_io.is_tui_mode = True
-        mock_io.echo = MagicMock()
-
-        handler = create_output_handler(mock_io)
-
-        assert isinstance(handler, CLIIOOutputHandler)

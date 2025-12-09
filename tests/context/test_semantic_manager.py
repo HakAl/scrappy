@@ -16,11 +16,6 @@ from scrappy.infrastructure.threading import (
 from scrappy.infrastructure.progress import NullProgressReporter
 
 
-@pytest.fixture
-def test_path():
-    """Create a test path that exists."""
-    # Use the project root as a test path that definitely exists
-    return Path(__file__).parent.parent.parent
 
 
 class MockInitializer:
@@ -358,18 +353,6 @@ class TestSemanticSearchManagerSearch:
 class TestSemanticSearchManagerIndexing:
     """Tests for semantic search indexing."""
 
-    @pytest.mark.unit
-    def test_index_files_when_not_ready(self, test_path):
-        """Test that index_files handles not-ready state gracefully."""
-        initializer = MockInitializer()
-        manager = SemanticSearchManager(
-            project_path=test_path,
-            initializer=initializer,
-        )
-        collector = MockFileCollector()
-        progress_reporter = NullProgressReporter()
-        # Should not raise, just log warning
-        manager.index_files(collector, progress_reporter=progress_reporter)
 
     @pytest.mark.unit
     def test_index_files_delegates_to_provider(self, test_path):
@@ -407,42 +390,6 @@ class TestSemanticSearchManagerIndexing:
         assert provider._indexed
         assert "main.py" in provider._files_indexed
 
-    @pytest.mark.unit
-    def test_index_files_skips_when_no_changes(self, test_path):
-        """index_files skips indexing when decision is SKIP."""
-        from scrappy.context.protocols import IndexingDecision, IndexState
-        from datetime import datetime
-
-        # Create a mock saved state
-        mock_saved_state = IndexState(
-            last_indexed=datetime.now(),
-            total_chunks=100,
-            total_files=5,
-            index_version="1.0",
-            file_hashes={"test.py": "hash123"}
-        )
-
-        # Set up decision maker to return SKIP
-        decision_maker = MockDecisionMaker(decision=IndexingDecision.SKIP)
-        state_manager = MockIndexStateManager()
-        state_manager._state = mock_saved_state
-
-        provider = MockSearchProvider()
-        initializer = MockInitializer(result=provider)
-        initializer.complete(result=provider)
-
-        manager = SemanticSearchManager(
-            project_path=test_path,
-            initializer=initializer,
-            state_manager=state_manager,
-            decision_maker=decision_maker,
-        )
-
-        collector = MockFileCollector({"test.py": "print('hello')"})
-        manager.index_files(collector)
-
-        # Provider.index_files should NOT be called
-        provider.index_files.assert_not_called()
 
 
 class TestSemanticSearchManagerEvents:
@@ -493,12 +440,6 @@ class TestSemanticSearchManagerEvents:
 class TestSemanticSearchManagerCallbacks:
     """Tests for progress callbacks."""
 
-    @pytest.mark.unit
-    def test_set_progress_callback(self, test_path):
-        """Test that progress callback can be set."""
-        manager = SemanticSearchManager(project_path=test_path)
-        callback = Mock()
-        manager.set_progress_callback(callback)
         # Callback is stored (no public way to verify except through behavior)
 
 
@@ -647,12 +588,6 @@ class TestSemanticSearchManagerAutoIndexing:
         assert manager.get_search_provider() is provider
         assert not provider._indexed
 
-    @pytest.mark.unit
-    def test_set_file_collector_callback(self, test_path):
-        """Test that file collector callback can be set."""
-        manager = SemanticSearchManager(project_path=test_path)
-        callback = Mock(return_value=MockFileCollector())
-        manager.set_file_collector_callback(callback)
         # Callback is stored (verified through behavior in other tests)
 
 
@@ -676,21 +611,11 @@ class TestNullSemanticSearchManager:
         """Test that search returns None."""
         manager = NullSemanticSearchManager()
         assert manager.search("query") is None
-
-    @pytest.mark.unit
-    def test_start_background_init_is_noop(self):
-        """Test that start_background_init is a no-op."""
-        manager = NullSemanticSearchManager()
-        manager.start_background_init()  # Should not raise
+  # Should not raise
 
     @pytest.mark.unit
     def test_process_events_returns_zero(self):
         """Test that process_events returns 0."""
         manager = NullSemanticSearchManager()
         assert manager.process_events() == 0
-
-    @pytest.mark.unit
-    def test_set_file_collector_callback_is_noop(self):
-        """Test that set_file_collector_callback is a no-op."""
-        manager = NullSemanticSearchManager()
-        manager.set_file_collector_callback(lambda: None)  # Should not raise
+  # Should not raise

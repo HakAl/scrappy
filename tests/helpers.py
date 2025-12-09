@@ -211,6 +211,10 @@ class ConfigurableTestOrchestrator:
         self.context.is_explored.return_value = context_explored
         self.context.get_summary.return_value = "" if not context_explored else "Test codebase summary"
         self.context.project_path = Path("/test/project")
+        self.context.file_index = {
+            "dummy": ["src/dummy.py"]  # Dummy file_index for classification tests
+        }
+        self.context.ensure_file_index.return_value = self.context.file_index
 
         # Additional attributes for CLI handlers
         self.brain = recommended_provider

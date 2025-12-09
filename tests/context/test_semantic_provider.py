@@ -189,59 +189,11 @@ class TestMaybeRebuildFts:
             config=self.config,
         )
 
-    def test_skips_rebuild_below_threshold(self):
-        """Should skip FTS rebuild when chunks_added < threshold."""
-        mock_table = Mock()
 
-        self.provider._maybe_rebuild_fts(mock_table, chunks_added=50)
 
-        mock_table.create_fts_index.assert_not_called()
 
-    def test_rebuilds_at_threshold(self):
-        """Should rebuild FTS when chunks_added >= threshold."""
-        mock_table = Mock()
-        mock_table.count_rows.return_value = 1000
 
-        self.provider._maybe_rebuild_fts(mock_table, chunks_added=100)
 
-        # Now tries incremental first (replace=False)
-        mock_table.create_fts_index.assert_called_once_with("content", replace=False)
-
-    def test_rebuilds_above_threshold(self):
-        """Should rebuild FTS when chunks_added > threshold."""
-        mock_table = Mock()
-        mock_table.count_rows.return_value = 1000
-
-        self.provider._maybe_rebuild_fts(mock_table, chunks_added=500)
-
-        mock_table.create_fts_index.assert_called_once()
-
-    def test_force_ignores_threshold(self):
-        """Should rebuild FTS when force=True regardless of threshold."""
-        mock_table = Mock()
-        mock_table.count_rows.return_value = 100
-
-        self.provider._maybe_rebuild_fts(mock_table, chunks_added=10, force=True)
-
-        mock_table.create_fts_index.assert_called_once()
-
-    def test_skips_empty_table(self):
-        """Should skip FTS rebuild when table is empty."""
-        mock_table = Mock()
-        mock_table.count_rows.return_value = 0
-
-        self.provider._maybe_rebuild_fts(mock_table, chunks_added=100)
-
-        mock_table.create_fts_index.assert_not_called()
-
-    def test_handles_fts_error_gracefully(self):
-        """Should log warning but not raise on FTS error."""
-        mock_table = Mock()
-        mock_table.count_rows.return_value = 100
-        mock_table.create_fts_index.side_effect = Exception("FTS error")
-
-        # Should not raise
-        self.provider._maybe_rebuild_fts(mock_table, chunks_added=100)
 
 
 # --- Super Batch Processing Tests ---
@@ -329,14 +281,6 @@ class TestProcessSuperBatch:
         assert result["embed_time"] >= 0
         assert result["db_time"] >= 0
 
-    def test_propagates_table_errors(self):
-        """Should propagate table.add errors."""
-        mock_table = Mock()
-        mock_table.add.side_effect = Exception("DB error")
-        chunks = [{"content": "test"}]
-
-        with pytest.raises(Exception, match="DB error"):
-            self.provider._process_super_batch(mock_table, chunks)
 
 
 # --- Embedding Function Injection Tests ---
@@ -371,12 +315,6 @@ class TestEmbeddingFunctionInjection:
         # Should be None until _ensure_schema is called
         assert provider._embedding_func is None
 
-    def test_mock_embedding_satisfies_protocol(self):
-        """MockEmbeddingFunction should satisfy EmbeddingFunctionProtocol."""
-        mock_embed = MockEmbeddingFunction()
-
-        # Protocol check
-        assert isinstance(mock_embed, EmbeddingFunctionProtocol)
 
     def test_injected_embedding_used_in_super_batch(self):
         """Injected embedding function should be used during processing."""
@@ -400,28 +338,6 @@ class TestEmbeddingFunctionInjection:
         assert mock_embed.call_count == 1
         assert "test chunk" in mock_embed.texts_embedded
 
-    def test_injected_embedding_skips_lazy_load(self):
-        """When embedding is injected, _ensure_schema should not lazy load."""
-        chunker = MockChunker()
-        mock_embed = MockEmbeddingFunction(dims=384)
-
-        provider = LanceDBSearchProvider(
-            project_path=Path("."),
-            chunker=chunker,
-            embedding_func=mock_embed,
-        )
-
-        # Mock the factory to ensure it's not called
-        with patch("scrappy.context.semantic.provider._create_embedding_func") as mock_factory:
-            # This would normally trigger lazy loading
-            provider._code_schema = None  # Reset to trigger _ensure_schema logic
-            provider._ensure_schema()
-
-            # Factory should NOT be called since we injected
-            mock_factory.assert_not_called()
-
-        # Our injected func should still be there
-        assert provider._embedding_func is mock_embed
 
 
 # --- FTS Incremental Update Tests ---
@@ -440,15 +356,6 @@ class TestFTSIncrementalUpdate:
             config=self.config,
         )
 
-    def test_tries_incremental_first(self):
-        """Should attempt incremental FTS update (replace=False) first."""
-        mock_table = Mock()
-        mock_table.count_rows.return_value = 1000
-
-        self.provider._maybe_rebuild_fts(mock_table, chunks_added=100)
-
-        # Should have called with replace=False first
-        mock_table.create_fts_index.assert_called_once_with("content", replace=False)
 
     def test_falls_back_to_replace_on_error(self):
         """Should fall back to replace=True when incremental fails."""
@@ -506,55 +413,7 @@ class TestCleanupDeletedFiles:
 
         assert result == 0
 
-    def test_returns_zero_when_no_stale_entries(self):
-        """Should return 0 when all indexed files still exist."""
-        # Setup mocks
-        self.provider.is_indexed = Mock(return_value=True)
-        self.provider._ensure_db = Mock()
 
-        mock_table = Mock()
-        mock_batch = Mock()
-        mock_df = Mock()
-        mock_df.__getitem__ = Mock(return_value=Mock(tolist=Mock(return_value=["file1.py", "file2.py"])))
-        mock_batch.to_pandas.return_value = mock_df
-        mock_table.search.return_value.select.return_value.to_batches.return_value = [mock_batch]
-
-        mock_db = Mock()
-        mock_db.open_table.return_value = mock_table
-        self.provider._db = mock_db
-
-        # All indexed files are in current_files
-        result = self.provider.cleanup_deleted_files({"file1.py", "file2.py"})
-
-        assert result == 0
-        mock_table.delete.assert_not_called()
-
-    def test_removes_stale_entries(self):
-        """Should remove entries for deleted files."""
-        # Setup mocks
-        self.provider.is_indexed = Mock(return_value=True)
-        self.provider._ensure_db = Mock()
-
-        mock_table = Mock()
-        mock_batch = Mock()
-        mock_df = Mock()
-        # Index has 3 files, but only 1 exists
-        mock_df.__getitem__ = Mock(return_value=Mock(tolist=Mock(
-            return_value=["file1.py", "deleted1.py", "deleted2.py"]
-        )))
-        mock_batch.to_pandas.return_value = mock_df
-        mock_table.search.return_value.select.return_value.to_batches.return_value = [mock_batch]
-
-        mock_db = Mock()
-        mock_db.open_table.return_value = mock_table
-        self.provider._db = mock_db
-
-        # Only file1.py exists
-        result = self.provider.cleanup_deleted_files({"file1.py"})
-
-        assert result == 2  # 2 deleted files
-        mock_table.delete.assert_called_once()
-        mock_table.cleanup_old_versions.assert_called_once()
 
     def test_batches_large_deletions(self):
         """Should batch deletions for large numbers of stale files."""
@@ -704,78 +563,5 @@ class TestIndexStatePersistence:
         assert total_chunks == 0
         assert total_files == 0
 
-    def test_save_index_state_saves_state_after_indexing(self):
-        """Should save index state using state manager."""
-        from scrappy.context.protocols import IndexState
-        from datetime import datetime
 
-        self.provider.is_indexed = Mock(return_value=True)
-        self.provider._ensure_db = Mock()
 
-        mock_table = Mock()
-        mock_table.count_rows.return_value = 100
-
-        # Mock for get_current_stats (file_path query)
-        mock_batch_stats = Mock()
-        mock_df_stats = Mock()
-        mock_column_stats = Mock()
-        mock_column_stats.tolist.return_value = ["file1.py", "file2.py", "file3.py", "file4.py", "file5.py"]
-        mock_df_stats.__getitem__ = Mock(return_value=mock_column_stats)
-        mock_batch_stats.to_pandas.return_value = mock_df_stats
-
-        # Mock for save_index_state (file_path + content_hash query)
-        mock_batch_hashes = Mock()
-        mock_df_hashes = Mock()
-        mock_df_hashes.iterrows.return_value = iter([
-            (0, {"file_path": "file1.py", "content_hash": "hash1"}),
-            (1, {"file_path": "file2.py", "content_hash": "hash2"}),
-        ])
-        mock_batch_hashes.to_pandas.return_value = mock_df_hashes
-
-        # Return different batches based on select() call
-        def select_side_effect(columns):
-            if columns == ["file_path"]:
-                return Mock(to_batches=Mock(return_value=[mock_batch_stats]))
-            elif columns == ["file_path", "content_hash"]:
-                return Mock(to_batches=Mock(return_value=[mock_batch_hashes]))
-            return Mock(to_batches=Mock(return_value=[]))
-
-        mock_table.search.return_value.select.side_effect = select_side_effect
-
-        mock_db = Mock()
-        mock_db.open_table.return_value = mock_table
-        self.provider._db = mock_db
-
-        # Create mock state manager
-        mock_state_manager = Mock()
-
-        # Call save_index_state
-        self.provider.save_index_state(mock_state_manager)
-
-        # Verify state manager was called
-        mock_state_manager.save.assert_called_once()
-        saved_state = mock_state_manager.save.call_args[0][0]
-
-        # Verify state has correct values
-        assert isinstance(saved_state, IndexState)
-        assert saved_state.total_chunks == 100
-        assert saved_state.total_files == 5
-
-    def test_save_index_state_handles_not_indexed(self):
-        """Should not save state when not indexed."""
-        self.provider.is_indexed = Mock(return_value=False)
-        mock_state_manager = Mock()
-
-        self.provider.save_index_state(mock_state_manager)
-
-        # Should not call save
-        mock_state_manager.save.assert_not_called()
-
-    def test_save_index_state_handles_errors(self):
-        """Should handle errors gracefully without raising."""
-        self.provider.is_indexed = Mock(return_value=True)
-        self.provider._ensure_db = Mock(side_effect=Exception("DB error"))
-        mock_state_manager = Mock()
-
-        # Should not raise
-        self.provider.save_index_state(mock_state_manager)

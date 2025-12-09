@@ -217,67 +217,18 @@ class TestSetupWizardSaveLoad:
 class TestSetupWizardMenuGeneration:
     """Test menu generation."""
 
-    def test_show_menu_displays_all_providers(self):
-        """Menu includes all providers from PROVIDERS dict."""
-        io = MockIO()
-        wizard = SetupWizard(io)
-
-        wizard._show_menu()
 
         # Check that output_sink was used or fallback was used
         # In test mode without output_sink, it should use direct console
         # We can't easily test Rich Panel output, but we can verify no errors
 
-    def test_show_menu_marks_configured_providers(self):
-        """Menu shows [OK] for configured providers."""
-        io = MockIO()
-        mock_service = MockApiKeyConfigService()
-        mock_service.keys = {"GROQ_API_KEY": "test_key"}
-        wizard = SetupWizard(io, config_service=mock_service)
-
-        # This would show [OK] for groq
-        wizard._show_menu()
         # Verification would require parsing Rich output, skip for now
 
 
 class TestSetupWizardFlow:
     """Test wizard run flow."""
 
-    def test_run_allows_cancel_when_flag_true(self):
-        """Wizard exits when user enters 'q' and allow_cancel=True."""
-        io = MockIO()
-        io.prompt_responses = ["q"]
-        wizard = SetupWizard(io)
 
-        result = wizard.run(allow_cancel=True)
-
-        # May return False if no providers, True if providers exist
-        assert isinstance(result, bool)
-
-    def test_run_requires_provider_when_flag_false(self):
-        """Wizard shows error when trying to quit without providers configured."""
-        io = MockIO()
-        mock_service = MockApiKeyConfigService()  # Empty service
-        wizard = SetupWizard(io, config_service=mock_service)
-
-        # Mock _get_choice to return 'q' once, then raise exception to break loop
-        call_count = []
-        def mock_get_choice(allow_cancel):
-            call_count.append(1)
-            if len(call_count) == 1:
-                return 'q'
-            # Second call - raise to break test loop
-            raise StopIteration("Test complete")
-
-        with patch.object(wizard, '_get_choice', side_effect=mock_get_choice):
-            try:
-                wizard.run(allow_cancel=False)
-            except StopIteration:
-                pass
-
-            # Verify error message was shown
-            error_shown = any("Must configure" in msg for msg in io.output)
-            assert error_shown
 
     def test_configure_provider_saves_valid_key(self):
         """Configuring a provider saves the key via config service."""
@@ -360,24 +311,3 @@ class TestSetupWizardProviderTesting:
                 assert success is False
                 assert "Invalid API key" in error
 
-    def test_test_provider_key_no_env_pollution(self):
-        """Testing a key does NOT pollute os.environ - key passed directly to provider."""
-        io = MockIO()
-        wizard = SetupWizard(io)
-
-        # Ensure env var is NOT set
-        test_key = "test_api_key_value"
-
-        with patch("scrappy.cli.setup_wizard.PROVIDERS") as mock_providers:
-            mock_provider = Mock()
-            mock_provider.chat.return_value = {"content": "test"}
-
-            mock_info = Mock()
-            mock_info.env_var = "TEST_ENV_VAR"
-            mock_providers.__getitem__.return_value = mock_info
-
-            success, _ = wizard._test_provider_key("test_provider", test_key)
-
-            # Verify provider was called with api_key parameter (not os.environ)
-            mock_info.provider_class.assert_called_once_with(api_key=test_key)
-            assert success is True

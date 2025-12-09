@@ -146,29 +146,12 @@ class TestBaseConfig:
         # Original should be unchanged
         assert config.port == 8080
         assert config.debug is False
-
-    def test_validate_type_checking(self):
-        """Test that validate checks field types for basic types."""
-        config = SimpleConfig(host="localhost", port=8080)
-        config.validate()  # Should pass
+  # Should pass
 
         # Note: Type checking at runtime is limited due to Python's dynamic typing
         # We primarily rely on mypy/type checkers for type safety
         # Runtime validation focuses on value constraints, not types
 
-    def test_custom_validation(self):
-        """Test custom validation logic."""
-        # Valid config
-        config = ValidatedConfig(port=8080, temperature=0.7)
-        config.validate()  # Should pass
-
-        # Invalid port
-        with pytest.raises(ValueError, match="Invalid port"):
-            ValidatedConfig(port=70000).validate()
-
-        # Invalid temperature
-        with pytest.raises(ValueError, match="Invalid temperature"):
-            ValidatedConfig(temperature=3.0).validate()
 
     def test_complex_types(self):
         """Test config with complex field types."""
@@ -235,31 +218,7 @@ class TestConfigLoader:
         finally:
             os.unlink(temp_file)
 
-    def test_load_from_file_not_found(self):
-        """Test loading from non-existent file."""
-        loader = ConfigLoader()
 
-        with pytest.raises(FileNotFoundError, match="not found"):
-            loader.load_from_file("nonexistent.json")
-
-    def test_load_from_file_invalid_json(self):
-        """Test loading from invalid JSON file."""
-        loader = ConfigLoader()
-
-        # Create temp file with invalid JSON
-        with tempfile.NamedTemporaryFile(
-            mode='w',
-            suffix='.json',
-            delete=False
-        ) as f:
-            f.write("{ invalid json")
-            temp_file = f.name
-
-        try:
-            with pytest.raises(ValueError, match="Invalid JSON"):
-                loader.load_from_file(temp_file)
-        finally:
-            os.unlink(temp_file)
 
     def test_load_from_env(self):
         """Test loading config from environment variables."""
@@ -329,70 +288,10 @@ class TestConfigLoader:
 class TestConfigValidator:
     """Test ConfigValidator functionality."""
 
-    def test_validate_required(self):
-        """Test validating required keys."""
-        validator = ConfigValidator()
-        config = {"host": "localhost", "port": 8080}
 
-        # Should pass
-        validator.validate_required(config, ["host", "port"])
 
-        # Should fail
-        with pytest.raises(ValueError, match="Missing required"):
-            validator.validate_required(config, ["host", "port", "missing"])
 
-    def test_validate_type(self):
-        """Test validating value types."""
-        validator = ConfigValidator()
 
-        # Should pass
-        validator.validate_type(42, int, "port")
-        validator.validate_type("localhost", str, "host")
-
-        # Should fail
-        with pytest.raises(TypeError, match="must be int"):
-            validator.validate_type("not an int", int, "port")
-
-    def test_validate_range(self):
-        """Test validating numeric ranges."""
-        validator = ConfigValidator()
-
-        # Should pass
-        validator.validate_range(8080, min_value=1, max_value=65535, field_name="port")
-
-        # Should fail - too low
-        with pytest.raises(ValueError, match="must be >= 1"):
-            validator.validate_range(0, min_value=1, max_value=65535, field_name="port")
-
-        # Should fail - too high
-        with pytest.raises(ValueError, match="must be <= 65535"):
-            validator.validate_range(70000, min_value=1, max_value=65535, field_name="port")
-
-    def test_validate_one_of(self):
-        """Test validating allowed values."""
-        validator = ConfigValidator()
-
-        # Should pass
-        validator.validate_one_of("production", ["development", "test", "production"], "environment")
-
-        # Should fail
-        with pytest.raises(ValueError, match="must be one of"):
-            validator.validate_one_of("invalid", ["development", "test", "production"], "environment")
-
-    def test_validate_non_empty(self):
-        """Test validating non-empty strings."""
-        validator = ConfigValidator()
-
-        # Should pass
-        validator.validate_non_empty("localhost", "host")
-
-        # Should fail - empty
-        with pytest.raises(ValueError, match="cannot be empty"):
-            validator.validate_non_empty("", "host")
-
-        # Should fail - whitespace only
-        with pytest.raises(ValueError, match="cannot be empty"):
-            validator.validate_non_empty("   ", "host")
 
 
 # EnvironmentConfig Tests

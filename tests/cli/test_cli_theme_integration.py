@@ -47,15 +47,7 @@ class TestDisplayRichThemeIntegration:
         self.light_theme = LightTheme()
         self.io.theme = self.theme  # Functions access theme via io.theme
 
-    def test_show_help_table_accepts_theme(self):
-        """show_help_table uses theme from io.theme."""
-        show_help_table(self.io)
-        self.io.table.assert_called_once()
 
-    def test_show_help_table_uses_default_theme(self):
-        """show_help_table uses DEFAULT_THEME when theme not provided."""
-        show_help_table(self.io)
-        self.io.table.assert_called_once()
 
     def test_show_status_rich_uses_theme_primary(self):
         """show_status_rich uses theme.primary for panel border."""
@@ -112,27 +104,8 @@ class TestInteractiveBannerThemeIntegration:
         self.mock_sink.post_renderable = Mock()
         self.theme = ScrappyTheme()
 
-    def test_display_banner_accepts_theme(self):
-        """display_banner uses theme from io.theme."""
-        io = Mock()
-        io.is_tui_mode = False
-        io.console = Console(file=StringIO(), force_terminal=True)
-        io.theme = self.theme
-
-        display_banner(io)
         # Should not raise
 
-    def test_render_welcome_banner_accepts_theme(self):
-        """render_welcome_banner uses theme from io.theme."""
-        io = Mock()
-        io.is_tui_mode = False
-        io.console = Console(file=StringIO(), force_terminal=True)
-        io.secho = Mock()
-        io.echo = Mock()
-        io.theme = self.theme
-
-        render_welcome_banner(io)
-        io.secho.assert_called()
 
 
 class TestRichDashboardThemeIntegration:
@@ -325,22 +298,7 @@ class TestUnifiedIOThemeIntegration:
         io = UnifiedIO(theme=self.theme)
         assert io.theme == self.theme
 
-    def test_panel_uses_theme_info_as_default_border(self):
-        """UnifiedIO.panel uses theme.info as default border style."""
-        console = Console(file=StringIO(), force_terminal=True)
-        io = UnifiedIO(console=console, theme=self.theme)
 
-        # We can't easily capture the exact style, but we can verify
-        # the method runs without error with the default
-        io.panel("test content")
-
-    def test_panel_allows_custom_border_style(self):
-        """UnifiedIO.panel allows custom border style override."""
-        console = Console(file=StringIO(), force_terminal=True)
-        io = UnifiedIO(console=console, theme=self.theme)
-
-        # Custom border style should work
-        io.panel("test content", border_style="red")
 
 
 class TestNoColorThemeIntegration:

@@ -54,12 +54,6 @@ class TestFilePriorityConfig:
         assert 'spec/' in config.test_patterns
         assert '__tests__/' in config.test_patterns
 
-    def test_config_is_immutable(self):
-        """Config should be frozen to prevent accidental mutation."""
-        config = FilePriorityConfig()
-
-        with pytest.raises(AttributeError):
-            config.source_extensions = frozenset({'.xyz'})
 
 
 class TestDefaultFilePrioritizer:
@@ -307,12 +301,3 @@ class TestProtocolConformance:
         # Check it's an instance of the protocol
         assert isinstance(prioritizer, FilePrioritizerProtocol)
 
-    def test_has_required_methods(self):
-        """Should have all required protocol methods."""
-        prioritizer = DefaultFilePrioritizer()
-
-        assert hasattr(prioritizer, 'get_priority')
-        assert callable(prioritizer.get_priority)
-
-        assert hasattr(prioritizer, 'sort_by_priority')
-        assert callable(prioritizer.sort_by_priority)

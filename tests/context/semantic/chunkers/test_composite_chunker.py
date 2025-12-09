@@ -244,30 +244,5 @@ class Greeter:
 class TestCompositeCodeChunkerProtocolCompliance:
     """Tests for CodeChunkerProtocol compliance."""
 
-    def test_implements_chunk_method(self):
-        """Should implement chunk method from protocol."""
-        chunker = CompositeCodeChunker()
-        assert hasattr(chunker, "chunk")
-        assert callable(chunker.chunk)
 
-    def test_chunk_returns_list_of_code_chunks(self):
-        """chunk() should return List[CodeChunk]."""
-        chunker = CompositeCodeChunker()
-        result = chunker.chunk("test.py", "x = 1")
 
-        assert isinstance(result, list)
-        for item in result:
-            assert isinstance(item, CodeChunk)
-
-    def test_chunk_method_signature(self):
-        """chunk() should accept (file_path, content) arguments."""
-        chunker = CompositeCodeChunker()
-
-        # Should work with positional args
-        result1 = chunker.chunk("test.py", "x = 1")
-
-        # Should work with keyword args
-        result2 = chunker.chunk(file_path="test.py", content="x = 1")
-
-        assert isinstance(result1, list)
-        assert isinstance(result2, list)

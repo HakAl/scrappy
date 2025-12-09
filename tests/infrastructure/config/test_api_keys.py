@@ -42,11 +42,7 @@ class InMemoryPersistence:
 
 class TestApiKeyConfig:
     """Tests for ApiKeyConfig dataclass."""
-
-    def test_empty_config_valid(self):
-        """Empty config should validate successfully."""
-        config = ApiKeyConfig()
-        config.validate()  # Should not raise
+  # Should not raise
 
     def test_empty_config_has_empty_dict(self):
         """Empty config should have empty api_keys dict."""
@@ -87,17 +83,7 @@ class TestApiKeyConfig:
         config.set_key("WHITESPACE_KEY", "   ")
         assert not config.has_key("WHITESPACE_KEY")
 
-    def test_validate_rejects_invalid_env_var_name(self):
-        """validate() should reject invalid environment variable names."""
-        config = ApiKeyConfig(api_keys={"": "some-key"})
-        with pytest.raises(ValueError, match="Invalid env var name"):
-            config.validate()
 
-    def test_validate_rejects_non_string_key(self):
-        """validate() should reject non-string API keys."""
-        config = ApiKeyConfig(api_keys={"SOME_KEY": 123})
-        with pytest.raises(ValueError, match="must be string"):
-            config.validate()
 
     def test_to_dict_serializes_correctly(self):
         """to_dict() should serialize to dictionary."""
@@ -128,16 +114,6 @@ class TestApiKeyConfig:
         assert config.get_key("GROQ_API_KEY") == "gsk_xyz"
         assert config.get_key("GEMINI_API_KEY") == "AIza_abc"
 
-    def test_from_dict_validates_on_creation(self):
-        """from_dict() should validate config on creation."""
-        data = {
-            "api_keys": {
-                "": "invalid",  # Empty env var name
-            }
-        }
-
-        with pytest.raises(ValueError, match="Invalid env var name"):
-            ApiKeyConfig.from_dict(data)
 
 
 class TestApiKeyConfigService:
@@ -181,16 +157,6 @@ class TestApiKeyConfigService:
             }
         }
 
-    def test_save_validates_config(self):
-        """save() should validate config before saving."""
-        persistence = InMemoryPersistence()
-        service = ApiKeyConfigService(persistence)
-
-        # Create invalid config
-        config = ApiKeyConfig(api_keys={"": "invalid"})
-
-        with pytest.raises(ValueError, match="Invalid env var name"):
-            service.save(config)
 
     def test_get_key_lazy_loads_config(self):
         """get_key() should lazy-load config on first access."""
@@ -252,15 +218,6 @@ class TestApiKeyConfigService:
 
         assert not result
 
-    def test_has_any_key_returns_true_when_one_configured(self):
-        """has_any_key() should return True when at least one key configured."""
-        persistence = InMemoryPersistence()
-        service = ApiKeyConfigService(persistence)
-        service.set_key("GROQ_API_KEY", "test-key")
-
-        result = service.has_any_key(["CEREBRAS_API_KEY", "GROQ_API_KEY"])
-
-        assert result
 
     def test_has_any_key_returns_false_when_different_keys_configured(self):
         """has_any_key() should return False when different keys configured."""

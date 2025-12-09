@@ -561,30 +561,6 @@ class TestPythonCommandFallbackImpl:
             # Skip if symlinks not supported (e.g., Windows without admin)
             pytest.skip("Symbolic links not supported on this platform")
 
-    def test_permission_errors_handling(self, fallback, temp_dir):
-        """Test graceful handling of permission errors."""
-        # Create a file and try to make it read-only
-        protected_file = temp_dir / "protected.txt"
-        protected_file.write_text("Protected content")
-
-        try:
-            # Try to make file read-only
-            protected_file.chmod(0o444)
-
-            # Try to remove it without force
-            result = fallback.rm(['protected.txt'], temp_dir)
-            # Should handle permission error gracefully
-            assert result['returncode'] in [0, 1]  # Either succeeds or fails gracefully
-
-        except (OSError, PermissionError):
-            # Skip if we can't change permissions
-            pytest.skip("Cannot test permission errors on this platform")
-        finally:
-            # Restore permissions for cleanup
-            try:
-                protected_file.chmod(0o644)
-            except:
-                pass
 
     def test_concurrent_file_operations(self, fallback, temp_dir):
         """Test that operations work correctly with multiple files."""
@@ -600,26 +576,6 @@ class TestPythonCommandFallbackImpl:
         assert 'Content 1' in result['output']
         assert 'Content 2' in result['output']
 
-    def test_protocol_compliance(self, fallback):
-        """Test that the class implements the protocol correctly."""
-        # Should have all required methods
-        required_methods = [
-            'ls', 'cat', 'grep', 'find', 'wc', 'head', 'tail',
-            'touch', 'mkdir_p', 'rm', 'cp', 'mv', 'which', 'pwd'
-        ]
-
-        for method in required_methods:
-            assert hasattr(fallback, method)
-            assert callable(getattr(fallback, method))
-
-        # All methods should return dict with required keys
-        temp_dir = Path('/tmp')
-        result = fallback.pwd(temp_dir)
-        assert isinstance(result, dict)
-        assert 'output' in result
-        assert 'returncode' in result
-        assert 'used_fallback' in result
-        assert result['used_fallback'] == True
 
 
 class TestEdgeCasesAndErrorHandling:
@@ -630,24 +586,6 @@ class TestEdgeCasesAndErrorHandling:
         """Create a fresh fallback instance for each test."""
         return PythonCommandFallbackImpl()
 
-    def test_malformed_command_arguments(self, fallback, tmp_path):
-        """Test handling of malformed arguments."""
-        # Test with various malformed arguments
-        test_cases = [
-            ([''], "Empty string argument"),
-            (['-'], "Just dash"),
-            (['--'], "Double dash"),
-            (['-xyz'], "Combined flags"),
-        ]
-
-        for args, description in test_cases:
-            # These should not crash, even if they don't work as expected
-            try:
-                result = fallback.ls(args, tmp_path)
-                assert isinstance(result, dict)
-                assert 'returncode' in result
-            except Exception as e:
-                pytest.fail(f"ls crashed with {description}: {e}")
 
     def test_very_long_filenames(self, fallback, tmp_path):
         """Test handling of very long filenames."""

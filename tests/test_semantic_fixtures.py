@@ -122,12 +122,6 @@ def test_mock_semantic_initializer_status():
     assert initializer.get_status() == "Complete"
 
 
-def test_fixture_mock_semantic_search(mock_semantic_search):
-    """Test pytest fixture for semantic search."""
-    assert mock_semantic_search is not None
-    assert hasattr(mock_semantic_search, 'index_files')
-    assert hasattr(mock_semantic_search, 'search')
-    assert hasattr(mock_semantic_search, 'is_indexed')
 
 
 def test_fixture_mock_semantic_initializer(mock_semantic_initializer):

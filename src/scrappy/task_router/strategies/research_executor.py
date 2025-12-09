@@ -138,18 +138,25 @@ class ResearchExecutor(ProviderAwareStrategy):
         start_time = time.time()
 
         try:
-            # Step 0: Subclassify research type
-            context_summary = self._get_context_summary()
-            research_subtype = self._subclassifier.classify(
+            # Step 0: Subclassify research type and get matched files
+            file_index = self._get_file_index()
+            classification_result = self._subclassifier.classify_with_matches(
                 task.original_input,
-                context_summary
+                file_index
             )
+            research_subtype = classification_result.subtype
+            matched_files = classification_result.matched_files
+
+            # Get context summary for execution
+            context_summary = self._get_context_summary()
 
             # Route to appropriate execution path
             if research_subtype == ResearchSubtype.GENERAL:
                 return self._execute_general_research(task, context_summary, start_time)
             else:
-                return self._execute_codebase_research(task, context_summary, start_time)
+                return self._execute_codebase_research(
+                    task, context_summary, start_time, matched_files
+                )
 
         except Exception as e:
             return ExecutionResult(
@@ -231,12 +238,19 @@ class ResearchExecutor(ProviderAwareStrategy):
         self,
         task: ClassifiedTask,
         context_summary: Optional[str],
-        start_time: float
+        start_time: float,
+        matched_files: tuple = ()
     ) -> ExecutionResult:
         """
         Execute codebase research with full tool access.
 
         This is the original research execution path.
+
+        Args:
+            task: The classified task
+            context_summary: Optional project summary
+            start_time: Execution start time for timing
+            matched_files: Project files matching query terms from file_index
         """
         # Step 1: Auto-explore codebase if needed
         self._path_resolver.auto_explore_if_needed(task)
@@ -250,7 +264,8 @@ class ResearchExecutor(ProviderAwareStrategy):
             tool_descriptions=self._tool_bundle.get_tool_descriptions() if self._tool_bundle.has_tools() else None,
             context_summary=context_summary,
             extracted_files=tuple(task.extracted_files or []),
-            extracted_directories=tuple(task.extracted_directories or [])
+            extracted_directories=tuple(task.extracted_directories or []),
+            matched_project_files=matched_files
         )
         system_prompt = self._prompt_factory.create_research_system_prompt(config)
         initial_prompt = self._prompt_factory.create_research_user_prompt(task.original_input, config)
@@ -288,6 +303,16 @@ class ResearchExecutor(ProviderAwareStrategy):
             context = self.orchestrator.context
             if context and hasattr(context, 'get_summary') and context.is_explored():
                 return context.get_summary()
+        except Exception:
+            pass
+        return None
+
+    def _get_file_index(self) -> Optional[dict]:
+        """Get file_index from orchestrator context, triggering lazy scan if needed."""
+        try:
+            context = self.orchestrator.context
+            if context and hasattr(context, 'ensure_file_index'):
+                return context.ensure_file_index()
         except Exception:
             pass
         return None

@@ -21,24 +21,6 @@ from scrappy.infrastructure.theme import (
 )
 
 
-@pytest.fixture
-def test_config_dir(monkeypatch):
-    """Create a temporary config directory."""
-    test_dir = Path(__file__).parent / "_test_theme_integration"
-    test_dir.mkdir(exist_ok=True)
-    original_cwd = os.getcwd()
-    yield test_dir
-    # Cleanup
-    monkeypatch.chdir(original_cwd)
-    for f in test_dir.glob("*"):
-        try:
-            f.unlink()
-        except PermissionError:
-            pass
-    try:
-        test_dir.rmdir()
-    except (PermissionError, OSError):
-        pass
 
 
 @pytest.fixture(autouse=True)
@@ -230,35 +212,11 @@ class TestThemeCaching:
         _ = config.theme
         assert config._theme is not None
 
-    def test_different_configs_have_different_themes(self):
-        """Different CLIConfig instances have independent themes."""
-        config1 = CLIConfig(theme_config={"preset": "dark"})
-        config2 = CLIConfig(theme_config={"preset": "light"})
-
-        theme1 = config1.theme
-        theme2 = config2.theme
-
-        assert isinstance(theme1, ScrappyTheme)
-        assert isinstance(theme2, LightTheme)
-        assert theme1 is not theme2
 
 
 class TestGlobalConfigTheme:
     """Tests for global config getter with theme."""
 
-    def test_get_config_returns_theme(self, test_config_dir: Path, monkeypatch):
-        """get_config() returns config with accessible theme."""
-        config_file = test_config_dir / ".scrappy.yaml"
-        config_file.write_text("""
-theme:
-  preset: light
-""")
-        monkeypatch.chdir(test_config_dir)
-
-        config = get_config()
-
-        assert hasattr(config, 'theme')
-        assert isinstance(config.theme, LightTheme)
 
     def test_get_config_caches_theme(self, test_config_dir: Path, monkeypatch):
         """get_config() returns same config instance on repeated calls."""

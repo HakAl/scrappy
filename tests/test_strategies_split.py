@@ -242,6 +242,10 @@ class TestResearchExecutorBehavior:
         mock.context = Mock()
         mock.context.is_explored.return_value = False
         mock.context.get_summary.return_value = ""
+        # Set up file_index and ensure_file_index for lazy scanning
+        file_index = {"python": ["src/main.py"]}
+        mock.context.file_index = file_index
+        mock.context.ensure_file_index.return_value = file_index
         mock.brain = "cerebras"
         mock.providers = Mock()
         mock.providers.list_available.return_value = ["cerebras", "groq"]

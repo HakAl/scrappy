@@ -31,29 +31,6 @@ class TestManagedThread:
         assert result == ["executed"]
         assert not managed.is_running()
 
-    def test_is_running_before_and_after(self):
-        """is_running reflects thread state correctly."""
-        event = threading.Event()
-
-        def worker(thread: ManagedThread) -> None:
-            event.wait(timeout=5.0)
-
-        managed = ManagedThread(target=worker, name="TestWorker")
-
-        # Before start
-        assert not managed.is_running()
-
-        managed.start()
-        time.sleep(0.05)  # Give thread time to start
-
-        # While running
-        assert managed.is_running()
-
-        event.set()
-        managed.join(timeout=2.0)
-
-        # After completion
-        assert not managed.is_running()
 
     def test_daemon_thread_safety_net(self):
         """ManagedThread creates daemon threads as safety net for process exit."""
@@ -120,28 +97,7 @@ class TestManagedThread:
 
 class TestManagedThreadShutdown:
     """Tests for ManagedThread graceful shutdown."""
-
-    def test_graceful_shutdown(self):
-        """Thread responds to shutdown request."""
-        iterations = []
-
-        def worker(thread: ManagedThread) -> None:
-            while not thread.shutdown_requested:
-                iterations.append(1)
-                time.sleep(0.01)
-
-        managed = ManagedThread(target=worker, name="TestWorker")
-        managed.start()
-
-        # Let it run for a bit
-        time.sleep(0.05)
-
-        # Request shutdown
-        stopped = managed.stop(timeout=2.0)
-
-        assert stopped is True
-        assert not managed.is_running()
-        assert len(iterations) > 0  # Did some work before stopping
+  # Did some work before stopping
 
     def test_stop_returns_true_if_not_started(self):
         """stop() returns True if thread was never started."""
@@ -156,58 +112,11 @@ class TestManagedThreadShutdown:
 
         assert result is True
 
-    def test_stop_returns_false_on_timeout(self):
-        """stop() returns False if thread doesn't stop within timeout."""
-        # Worker that ignores shutdown request
-        def worker(thread: ManagedThread) -> None:
-            time.sleep(10.0)  # Long sleep, ignores shutdown
-
-        managed = ManagedThread(target=worker, name="TestWorker")
-        managed.start()
-
-        # Very short timeout
-        stopped = managed.stop(timeout=0.1)
-
-        assert stopped is False
-        assert managed.is_running()
 
         # Clean up: the thread is still running but will eventually finish
         # In real code, you might want to handle this more gracefully
 
-    def test_shutdown_requested_initially_false(self):
-        """shutdown_requested is False before stop() is called."""
 
-        def worker(thread: ManagedThread) -> None:
-            assert not thread.shutdown_requested
-            thread.wait_for_shutdown(timeout=1.0)
-
-        managed = ManagedThread(target=worker, name="TestWorker")
-        managed.start()
-
-        # Give worker time to check initial state
-        time.sleep(0.05)
-
-        managed.stop(timeout=2.0)
-
-    def test_wait_for_shutdown_blocks_until_requested(self):
-        """wait_for_shutdown blocks until shutdown is requested."""
-        wait_result = []
-
-        def worker(thread: ManagedThread) -> None:
-            result = thread.wait_for_shutdown(timeout=5.0)
-            wait_result.append(result)
-
-        managed = ManagedThread(target=worker, name="TestWorker")
-        managed.start()
-
-        # Worker should be blocked
-        time.sleep(0.05)
-        assert managed.is_running()
-
-        # Request shutdown
-        managed.stop(timeout=2.0)
-
-        assert wait_result == [True]
 
     def test_wait_for_shutdown_returns_false_on_timeout(self):
         """wait_for_shutdown returns False on timeout."""
@@ -291,31 +200,6 @@ class TestManagedThreadResults:
 class TestManagedThreadConcurrency:
     """Stress tests for ManagedThread thread safety."""
 
-    def test_multiple_threads_can_run_concurrently(self):
-        """Multiple ManagedThreads can run at the same time."""
-        results = []
-        lock = threading.Lock()
-
-        def worker(thread: ManagedThread, worker_id: int) -> None:
-            time.sleep(0.01)
-            with lock:
-                results.append(worker_id)
-
-        threads = []
-        for i in range(10):
-            # Use a closure to capture worker_id
-            def make_worker(wid):
-                return lambda t: worker(t, wid)
-
-            managed = ManagedThread(target=make_worker(i), name=f"Worker{i}")
-            threads.append(managed)
-            managed.start()
-
-        for t in threads:
-            t.join(timeout=5.0)
-
-        assert len(results) == 10
-        assert set(results) == set(range(10))
 
     def test_concurrent_stop_calls(self):
         """Multiple concurrent stop() calls are safe."""

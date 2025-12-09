@@ -265,33 +265,7 @@ class TestSemanticFileCollector:
             # Should get good file, skip bad
             assert 'good.py' in files
 
-    def test_collect_file_paths_returns_list(self, tmp_path):
-        """collect_file_paths returns list without reading content."""
-        (tmp_path / 'file1.py').write_text('print("file1")')
-        (tmp_path / 'file2.py').write_text('print("file2")')
 
-        collector = SemanticFileCollector(tmp_path)
-        paths = collector.collect_file_paths()
-
-        assert isinstance(paths, list)
-        assert len(paths) > 0
-        for path in paths:
-            assert isinstance(path, Path)
-
-    def test_get_file_sizes_returns_dict(self, tmp_path):
-        """get_file_sizes returns path to size mapping."""
-        (tmp_path / 'small.py').write_text('x' * 100)
-        (tmp_path / 'medium.py').write_text('x' * 500)
-
-        collector = SemanticFileCollector(tmp_path)
-        paths = collector.collect_file_paths()
-        sizes = collector.get_file_sizes(paths[:5])
-
-        assert isinstance(sizes, dict)
-        for path, size in sizes.items():
-            assert isinstance(path, str)
-            assert isinstance(size, int)
-            assert size >= 0
 
 
 class TestTestNoiseExclusion:

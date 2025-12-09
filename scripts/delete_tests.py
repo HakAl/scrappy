@@ -2,6 +2,7 @@
 """
 Delete tests listed in the JSON report.
 Requires: pip install asttokens
+Usage: python .\scripts\delete_tests.py --report .\tests.json
 """
 import argparse
 import json

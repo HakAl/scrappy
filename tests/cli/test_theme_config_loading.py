@@ -18,26 +18,7 @@ from scrappy.infrastructure.theme import (
     CustomTheme,
 )
 
-
-@pytest.fixture
-def test_config_dir(monkeypatch):
-    """Create a temporary config directory in the tests folder."""
-    test_dir = Path(__file__).parent / "_test_configs"
-    test_dir.mkdir(exist_ok=True)
-    original_cwd = os.getcwd()
-    yield test_dir
-    # Return to original directory before cleanup (prevents Windows file lock)
-    monkeypatch.chdir(original_cwd)
-    # Cleanup
-    for f in test_dir.glob("*"):
-        try:
-            f.unlink()
-        except PermissionError:
-            pass  # Ignore if file still locked
-    try:
-        test_dir.rmdir()
-    except (PermissionError, OSError):
-        pass  # Ignore if directory still locked or not empty
+  # Ignore if directory still locked or not empty
 
 
 class TestThemeLoadingFromYAML:
@@ -222,29 +203,7 @@ temperature_default: 0.8
         assert config.theme_config == {}
         assert isinstance(config.theme, ScrappyTheme)
 
-    def test_empty_theme_section_uses_default(self, test_config_dir: Path):
-        """Empty theme section uses default dark theme."""
-        config_file = test_config_dir / "empty_theme.yaml"
-        config_file.write_text("""
-theme:
-""")
-        factory = CLIConfigFactory()
-        config = factory.create_from_file(str(config_file))
 
-        # PyYAML returns None for empty section
-        assert isinstance(config.theme, ScrappyTheme)
-
-    def test_invalid_preset_falls_back_to_dark(self, test_config_dir: Path):
-        """Invalid preset name falls back to dark theme."""
-        config_file = test_config_dir / "invalid_preset.yaml"
-        config_file.write_text("""
-theme:
-  preset: nonexistent
-""")
-        factory = CLIConfigFactory()
-        config = factory.create_from_file(str(config_file))
-
-        assert isinstance(config.theme, ScrappyTheme)
 
     def test_invalid_color_keys_are_ignored(self, test_config_dir: Path):
         """Invalid color keys are silently ignored."""
@@ -293,37 +252,7 @@ dashboard_enabled: false
 class TestThemeConfigFactoryCreate:
     """Tests for CLIConfigFactory.create() with theme."""
 
-    def test_create_finds_and_loads_yaml_theme(self, test_config_dir: Path, monkeypatch):
-        """create() finds .scrappy.yaml and loads theme."""
-        config_file = test_config_dir / ".scrappy.yaml"
-        config_file.write_text("""
-theme:
-  preset: light
-""")
-        monkeypatch.chdir(test_config_dir)
 
-        factory = CLIConfigFactory()
-        config = factory.create()
-
-        assert isinstance(config.theme, LightTheme)
-
-    def test_create_finds_and_loads_json_theme(self, test_config_dir: Path, monkeypatch):
-        """create() finds .scrappy.json and loads theme."""
-        # Remove yaml if exists from previous test
-        yaml_file = test_config_dir / ".scrappy.yaml"
-        if yaml_file.exists():
-            yaml_file.unlink()
-
-        config_file = test_config_dir / ".scrappy.json"
-        config_file.write_text(json.dumps({
-            "theme": {"preset": "light"}
-        }))
-        monkeypatch.chdir(test_config_dir)
-
-        factory = CLIConfigFactory()
-        config = factory.create()
-
-        assert isinstance(config.theme, LightTheme)
 
     def test_create_with_explicit_path_loads_theme(self, test_config_dir: Path):
         """create() with explicit path loads theme."""

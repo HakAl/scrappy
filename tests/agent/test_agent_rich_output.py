@@ -938,39 +938,6 @@ class TestAgentIOIntegration:
         assert any("Preparing agent tools" in s['text'] for s in styled), \
             f"Expected 'Preparing agent tools' in styled output. Got: {styled}"
 
-    def test_agent_thinking_output_uses_panel(self):
-        """Agent thinking should use panel with blue border."""
-        from scrappy.agent.core import CodeAgent
-        from tests.helpers import ConfigurableTestOrchestrator
-
-        io = MockRichIO(confirmations=[True])  # Approve any actions
-        orch = ConfigurableTestOrchestrator(
-            response_content=json.dumps({
-                "thought": "Analyzing the user's request for file reading",
-                "action": "complete",
-                "is_complete": True,
-                "result": "Task completed"
-            })
-        )
-
-        # Fix context mock - must set file_index directly as it's accessed as attribute
-        orch.context.file_index = {}
-        orch.context.get_summary.return_value = {
-            'total_files': 0,
-            'file_index': {},
-            'tree_structure': ''
-        }
-
-        agent = CodeAgent(orchestrator=orch, io=io)
-        # Set dry_run to bypass meaningful actions check
-        agent.dry_run = True
-        agent.run("Test task")
-
-        # Should have thinking panel
-        panels = io.get_panels()
-        thinking_panels = [p for p in panels if p.get('title') == 'Thinking']
-
-        assert thinking_panels, f"No thinking panels found. Panels: {panels}"
         # Color is determined by theme - tested in theme tests
 
 

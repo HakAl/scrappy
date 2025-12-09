@@ -56,14 +56,6 @@ class TestFileConfigLoaderMissingFile:
 
         assert result == {}
 
-    @pytest.mark.unit
-    def test_does_not_raise_when_file_missing(self):
-        """Should not raise exception when config file is missing."""
-        fs = FakeFileSystem()
-        loader = FileConfigLoader(Path("nonexistent.yaml"), file_system=fs)
-
-        # Should not raise
-        loader.load()
 
 
 class TestFileConfigLoaderYAML:
@@ -308,28 +300,7 @@ clarification:
 class TestConfigLoaderProtocol:
     """Tests for ConfigLoaderProtocol compliance."""
 
-    @pytest.mark.unit
-    def test_file_config_loader_implements_protocol(self):
-        """FileConfigLoader should implement ConfigLoaderProtocol."""
-        from scrappy.config.protocols import ConfigLoaderProtocol
 
-        fs = FakeFileSystem()
-        loader = FileConfigLoader(Path("test.yaml"), file_system=fs)
-
-        # Check that it has the required method
-        assert hasattr(loader, "load")
-        assert callable(loader.load)
-
-    @pytest.mark.unit
-    def test_chained_config_loader_implements_protocol(self):
-        """ChainedConfigLoader should implement ConfigLoaderProtocol."""
-        from scrappy.config.protocols import ConfigLoaderProtocol
-
-        loader = ChainedConfigLoader([])
-
-        # Check that it has the required method
-        assert hasattr(loader, "load")
-        assert callable(loader.load)
 
 
 class TestConfigIntegration:

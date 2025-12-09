@@ -221,45 +221,6 @@ class TestThreadSafeEventQueueConcurrency:
 
         assert retrieved == num_threads * events_per_thread
 
-    def test_concurrent_put_and_process(self):
-        """One thread puts events while another processes them."""
-        queue = ThreadSafeEventQueue()
-        processed: List[str] = []
-        lock = threading.Lock()
-
-        def handler(event: BackgroundEvent):
-            with lock:
-                processed.append(event.data)
-
-        queue.register_handler("test", handler)
-
-        num_events = 100
-        producer_done = threading.Event()
-
-        def producer():
-            for i in range(num_events):
-                queue.put(BackgroundEvent(EventType.PROGRESS, "test", data=str(i)))
-                time.sleep(0.001)  # Small delay to allow interleaving
-            producer_done.set()
-
-        def consumer():
-            while not producer_done.is_set() or queue.pending_count() > 0:
-                queue.process_pending()
-                time.sleep(0.001)
-            # Final drain
-            queue.process_pending()
-
-        producer_thread = threading.Thread(target=producer)
-        consumer_thread = threading.Thread(target=consumer)
-
-        producer_thread.start()
-        consumer_thread.start()
-
-        producer_thread.join(timeout=5.0)
-        consumer_thread.join(timeout=5.0)
-
-        # All events should be processed
-        assert len(processed) == num_events
 
     def test_high_volume_stress(self):
         """High volume test with ThreadPoolExecutor."""

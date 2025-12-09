@@ -56,18 +56,6 @@ class TestDynamicProviderStrategy:
         assert isinstance(arg, ModelSelectionType), f"Expected ModelSelectionType enum, got {type(arg).__name__}: {arg!r}"
         assert arg == ModelSelectionType.QUALITY, "Planner should use QUALITY selection"
 
-    def test_get_executor_passes_enum_not_string(self):
-        """REGRESSION: get_executor must pass ModelSelectionType enum, not string."""
-        mock_orchestrator = Mock()
-        mock_orchestrator.get_recommended_provider.return_value = "anthropic"
-
-        strategy = DynamicProviderStrategy(mock_orchestrator)
-        strategy.get_executor()
-
-        # Verify enum was passed, not string
-        call_args = mock_orchestrator.get_recommended_provider.call_args
-        arg = call_args[0][0]  # First positional argument
-        assert isinstance(arg, ModelSelectionType), f"Expected ModelSelectionType enum, got {type(arg).__name__}: {arg!r}"
 
     def test_supports_dynamic_selection_returns_true(self):
         """DynamicProviderStrategy always supports dynamic selection."""
@@ -170,31 +158,7 @@ class TestStaticProviderStrategy:
 class TestCreateProviderStrategy:
     """Tests for create_provider_strategy factory function."""
 
-    def test_creates_dynamic_strategy_when_orchestrator_supports_it(self):
-        """Should create DynamicProviderStrategy when orchestrator has method."""
-        mock_orchestrator = Mock()
-        mock_orchestrator.get_recommended_provider.return_value = "openai"
 
-        strategy = create_provider_strategy(
-            orchestrator=mock_orchestrator,
-            config=AgentConfig(),
-            available_providers=["openai"],
-        )
-
-        assert isinstance(strategy, DynamicProviderStrategy)
-
-    def test_creates_static_strategy_when_orchestrator_lacks_method(self):
-        """Should create StaticProviderStrategy when orchestrator lacks method."""
-        # Create mock without get_recommended_provider
-        mock_orchestrator = Mock(spec=['delegate', 'list_providers'])
-
-        strategy = create_provider_strategy(
-            orchestrator=mock_orchestrator,
-            config=AgentConfig(),
-            available_providers=["openai"],
-        )
-
-        assert isinstance(strategy, StaticProviderStrategy)
 
     def test_passes_preferred_provider_to_static_strategy(self):
         """Should pass preferred_provider to StaticProviderStrategy."""

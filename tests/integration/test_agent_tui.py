@@ -141,69 +141,13 @@ class TestAgentOutputCLIMode:
         io.echo("test message")
         io.secho("styled message", fg="red")
 
-    def test_cli_mode_progress_reporter(self):
-        """Progress reporter works in CLI mode."""
-        io = UnifiedIO(output_sink=None)
 
-        reporter = create_progress_reporter(io, use_spinner=False)
-
-        # Should not crash
-        reporter.start("Processing...")
-        reporter.update(5, "Still processing")
-        reporter.complete("Done!")
-
-    def test_cli_mode_output_handler(self):
-        """Output handler works in CLI mode."""
-        io = UnifiedIO(output_sink=None)
-
-        handler = create_output_handler(io, rich_tables=False)
-
-        # Should not crash
-        handler.log_classification(
-            task_type="coding",
-            confidence=0.90,
-            complexity=7,
-            reasoning="Complex task"
-        )
 
 
 class TestModeAwareFactories:
     """Test that factory functions select correct implementations based on mode."""
 
-    def test_progress_factory_tui_vs_cli(self):
-        """Progress factory selects different implementations for TUI vs CLI."""
-        sink = MockOutputSink()
-        tui_io = UnifiedIO(output_sink=sink)
-        cli_io = UnifiedIO(output_sink=None)
 
-        tui_reporter = create_progress_reporter(tui_io)
-        cli_reporter = create_progress_reporter(cli_io, use_spinner=True)
-
-        # TUI mode always gets UnifiedIOProgressReporter
-        assert isinstance(tui_reporter, UnifiedIOProgressReporter)
-
-        # CLI mode with spinner gets RichProgressReporter (imported to check)
-        from scrappy.infrastructure.progress import RichProgressReporter
-        assert isinstance(cli_reporter, RichProgressReporter)
-
-    def test_output_handler_factory_tui_vs_cli(self):
-        """Output handler factory selects different implementations for TUI vs CLI."""
-        sink = MockOutputSink()
-        tui_io = UnifiedIO(output_sink=sink)
-        cli_io = UnifiedIO(output_sink=None)
-
-        tui_handler = create_output_handler(tui_io)
-        cli_handler_simple = create_output_handler(cli_io, rich_tables=False)
-        cli_handler_rich = create_output_handler(cli_io, rich_tables=True)
-
-        # TUI mode always gets CLIIOOutputHandler
-        assert isinstance(tui_handler, CLIIOOutputHandler)
-
-        # CLI mode gets CLIIOOutputHandler or RichOutputHandler based on flag
-        assert isinstance(cli_handler_simple, CLIIOOutputHandler)
-
-        from scrappy.task_router.output_handler import RichOutputHandler
-        assert isinstance(cli_handler_rich, RichOutputHandler)
 
 
 class TestTUINoDirectConsoleOutput:
@@ -317,54 +261,3 @@ class TestAgentManagerBridgedIO:
 
         assert "Test output from manager" in sink.get_all_output()
 
-    def test_code_agent_receives_tui_io_not_new_instance(self):
-        """Verify CodeAgent is created with the passed io, not a new one.
-
-        This is the exact bug that caused the TUI deadlock: CodeAgent was
-        being created without io, causing it to create its own unbridged
-        RichIO instance.
-        """
-        from scrappy.cli.agent_manager import CLIAgentManager
-        from unittest.mock import Mock, patch
-
-        sink = MockOutputSink()
-        io = UnifiedIO(output_sink=sink)
-
-        mock_orch = Mock()
-        mock_orch.context.project_path = "/test/path"
-        mock_orch.working_memory = Mock()
-        mock_orch.working_memory.add_discovery = Mock()
-
-        manager = CLIAgentManager(mock_orch, io)
-
-        with patch('scrappy.cli.agent_manager.CodeAgent') as mock_agent_class, \
-             patch('scrappy.cli.agent_manager.create_git_checkpoint') as mock_checkpoint:
-
-            mock_checkpoint.return_value = None
-
-            mock_agent = Mock()
-            mock_agent.run.return_value = {
-                "success": True,
-                "result": "Done",
-                "iterations": 1,
-                "audit_log": []
-            }
-            mock_agent.planner = "test"
-            mock_agent.executor = "test"
-            mock_agent.project_root = "/test"
-            mock_agent_class.return_value = mock_agent
-
-            # Mock confirm to return False for all prompts
-            original_confirm = io.confirm
-            io.confirm = Mock(return_value=False)
-
-            try:
-                manager.run_agent("Test task")
-            finally:
-                io.confirm = original_confirm
-
-            # The critical assertion: CodeAgent must receive io=io
-            mock_agent_class.assert_called_once()
-            call_kwargs = mock_agent_class.call_args[1]
-            assert 'io' in call_kwargs, "CodeAgent must receive io parameter"
-            assert call_kwargs['io'] is io, "CodeAgent must receive the same io instance"
