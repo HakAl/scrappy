@@ -935,6 +935,58 @@ class LanceDBSearchProvider:
             logger.info(f"Cleaned up {removed} stale file entries")
             return removed
 
+    def remove_files(self, files: set) -> int:
+        """
+        Remove specific files from the index.
+
+        Implements SemanticSearchProtocol.
+
+        More efficient than cleanup_deleted_files when you already know
+        which files were deleted (e.g., from staleness detection).
+
+        Args:
+            files: Set of file paths to remove from index
+
+        Returns:
+            Number of entries removed
+        """
+        if not files:
+            return 0
+
+        if not self.is_indexed():
+            return 0
+
+        self._ensure_db()
+
+        with self._safe_db_context():
+            table = self._db.open_table(TABLE_NAME)
+
+            # Delete in batches to avoid huge SQL statements
+            BATCH_SIZE = 100
+            removed = 0
+            files_list = list(files)
+
+            for i in range(0, len(files_list), BATCH_SIZE):
+                batch = files_list[i:i + BATCH_SIZE]
+                # Escape single quotes in paths for SQL safety
+                paths_sql = ", ".join(f"'{p.replace(chr(39), chr(39)+chr(39))}'" for p in batch)
+                try:
+                    table.delete(f"file_path IN ({paths_sql})")
+                    removed += len(batch)
+                except Exception as e:
+                    logger.warning(f"Failed to delete batch of file entries: {e}")
+
+            # Clean up old versions after deletion
+            try:
+                table.cleanup_old_versions()
+            except Exception as e:
+                logger.debug(f"Cleanup old versions failed: {e}")
+
+            if removed > 0:
+                logger.info(f"Removed {removed} deleted file entries from index")
+
+            return removed
+
     def save_index_state(self, state_manager) -> None:
         """
         Save current index state after successful indexing.

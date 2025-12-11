@@ -61,7 +61,7 @@ Root cause: `file_index` requires manual `explore()` but should be available aut
 
 ---
 
-## Phase 2: Staleness Detection + Blocking Re-index
+## Phase 2: Staleness Detection + Blocking Re-index -- COMPLETE
 
 **Goal:** Detect stale files and re-index them (blocking).
 

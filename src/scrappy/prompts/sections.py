@@ -200,7 +200,8 @@ def quality_section() -> str:
 def codebase_hint_section(
     extracted_files: tuple[str, ...],
     extracted_directories: tuple[str, ...],
-    matched_project_files: tuple[str, ...] = ()
+    matched_project_files: tuple[str, ...] = (),
+    matched_file_contents: tuple[tuple[str, str], ...] = ()
 ) -> str:
     """Generate hints for codebase queries based on extracted references.
 
@@ -208,6 +209,7 @@ def codebase_hint_section(
         extracted_files: File paths mentioned in the query
         extracted_directories: Directory paths mentioned in the query
         matched_project_files: Project files matching query terms from file_index
+        matched_file_contents: (filepath, content_snippet) pairs for matched files
 
     Returns:
         Formatted hints or empty string if no references found
@@ -222,8 +224,13 @@ def codebase_hint_section(
         dir_list = ", ".join(extracted_directories)
         hints.append(f"Detected directory reference(s): {dir_list}")
 
-    if matched_project_files:
-        # Show up to 10 relevant files to avoid prompt bloat
+    # Include actual file contents if available (passive RAG)
+    if matched_file_contents:
+        hints.append("Relevant file contents from your project:")
+        for filepath, content in matched_file_contents:
+            hints.append(f"\n--- {filepath} ---\n{content}")
+    elif matched_project_files:
+        # Fallback to just file names if no content loaded
         files_to_show = matched_project_files[:10]
         file_list = "\n  - ".join(files_to_show)
         hints.append(f"Relevant project files matching your query:\n  - {file_list}")

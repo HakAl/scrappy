@@ -124,7 +124,8 @@ Guidelines:
             hint = codebase_hint_section(
                 config.extracted_files,
                 config.extracted_directories,
-                config.matched_project_files
+                config.matched_project_files,
+                config.matched_file_contents
             )
             if hint:
                 parts.append(hint)

@@ -8,7 +8,7 @@ testability and single responsibility.
 
 import logging
 from pathlib import Path
-from typing import Optional, Callable, TYPE_CHECKING
+from typing import Optional, Callable, Set, TYPE_CHECKING
 
 from ..infrastructure.protocols import (
     BackgroundInitializerProtocol,
@@ -300,6 +300,64 @@ class SemanticSearchManager:
             logger.warning(f"Semantic search failed: {e}")
             return None
 
+    def refresh_files(self, changed: Set[str]) -> None:
+        """
+        Incrementally re-index specific changed files.
+
+        This method enables efficient staleness-driven re-indexing by only
+        processing files that have been added or modified since the last index.
+
+        Args:
+            changed: Set of file paths (relative to project root) that need re-indexing
+
+        Raises:
+            ValueError: If changed is empty
+        """
+        if not changed:
+            raise ValueError("changed must be non-empty")
+
+        logger.info(f"Refreshing {len(changed)} changed files")
+
+        # Create filtered file collector that only collects changed files
+        from .semantic.file_collector import FilteredFileCollector
+        filtered_collector = FilteredFileCollector(
+            self._project_path,
+            allowed_files=changed
+        )
+
+        # Delegate to index_files with filtered collector
+        self.index_files(filtered_collector, progress_reporter=None)
+
+    def remove_deleted_files(self, deleted: Set[str]) -> int:
+        """
+        Remove deleted files from the semantic search index.
+
+        This method enables efficient staleness-driven cleanup by removing
+        specific files that have been deleted since the last index.
+
+        Args:
+            deleted: Set of file paths (relative to project root) to remove
+
+        Returns:
+            Number of entries removed from the index
+        """
+        if not deleted:
+            return 0
+
+        provider = self.get_search_provider()
+        if not provider:
+            logger.warning("Cannot remove deleted files - semantic search not available")
+            return 0
+
+        logger.info(f"Removing {len(deleted)} deleted files from index")
+        try:
+            removed = provider.remove_files(deleted)
+            logger.info(f"Removed {removed} entries from index")
+            return removed
+        except Exception as e:
+            logger.warning(f"Failed to remove deleted files from index: {e}")
+            return 0
+
     def index_files(
         self,
         file_collector: FileCollectorProtocol,
@@ -541,6 +599,14 @@ class NullSemanticSearchManager:
     def index_files(self, file_collector: FileCollectorProtocol) -> None:
         """No-op."""
         pass
+
+    def refresh_files(self, changed: Set[str]) -> None:
+        """No-op."""
+        pass
+
+    def remove_deleted_files(self, deleted: Set[str]) -> int:
+        """No-op, returns 0."""
+        return 0
 
     def process_events(self) -> int:
         """Returns 0."""

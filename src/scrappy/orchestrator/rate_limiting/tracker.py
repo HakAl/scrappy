@@ -410,22 +410,30 @@ class RateLimitTracker:
         success: bool,
         error_message: Optional[str],
     ) -> None:
-        """Update usage counters."""
+        """Update usage counters.
+
+        Only successful requests count against quota. Failed requests
+        (rate limits, errors) were rejected by the API before consuming
+        tokens, so they shouldn't inflate usage metrics. The response
+        object is the source of truth for actual usage.
+        """
         data = self._usage["providers"][provider][model]
-        total_tokens = input_tokens + output_tokens
 
-        data["requests_today"] += 1
-        data["requests_this_month"] += 1
-        data["total_requests"] += 1
+        if success:
+            total_tokens = input_tokens + output_tokens
 
-        data["tokens_today"] += total_tokens
-        data["tokens_this_month"] += total_tokens
-        data["total_tokens"] += total_tokens
+            data["requests_today"] += 1
+            data["requests_this_month"] += 1
+            data["total_requests"] += 1
 
-        data["input_tokens_today"] += input_tokens
-        data["output_tokens_today"] += output_tokens
+            data["tokens_today"] += total_tokens
+            data["tokens_this_month"] += total_tokens
+            data["total_tokens"] += total_tokens
 
-        data["last_request"] = datetime.now().isoformat()
+            data["input_tokens_today"] += input_tokens
+            data["output_tokens_today"] += output_tokens
+
+            data["last_request"] = datetime.now().isoformat()
 
         if not success and error_message:
             data["errors"].append({

@@ -47,6 +47,7 @@ class ResearchPromptConfig:
     extracted_files: tuple[str, ...] = ()
     extracted_directories: tuple[str, ...] = ()
     matched_project_files: tuple[str, ...] = ()  # Files from file_index matching query terms
+    matched_file_contents: tuple[tuple[str, str], ...] = ()  # (filepath, content_snippet) pairs
 
 
 class PromptFactoryProtocol(Protocol):

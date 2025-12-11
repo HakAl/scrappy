@@ -1,7 +1,59 @@
 ## Issues
 
 
+---
+loses conversation context -- we don't persist :
 
+ ### 3. **Scalability Improvements**
+ - Refactor the core agent to support distributed execution
+ - Implement proper resource management for concurrent operations
+ - Add configuration options for resource limits and throttling
+
+ ### 4. **Extensibility**
+ - Create a formal plugin interface for custom action executors
+ - Standardize the context factory pattern across components
+ - Add clear extension points in the agent loop
+
+ ### 5. **Observability**
+ - Enhance the audit module with structured logging
+ - Add metrics collection for key operations and performance indicators
+ - Implement distributed tracing support
+
+ ### 6. **Configuration and Usability**
+ - Create a centralized configuration system
+ - Add validation for configuration parameters
+ - Implement better defaults and documentation
+
+ ### 7. **Testing and Reliability**
+ - Increase test coverage, especially for edge cases
+ - Add integration tests for the complete agent workflow
+ - Implement property-based testing for core algorithms
+
+ Would you like me to focus on any specific area of improvement? I can provide more detailed recommendations based on
+ your priorities (e.g., performance, reliability, ease of use, or extensibility).
+
+ > can you explain what you mean by scalability improvements?
+
+ | Scalability improvements refer to enhancements that allow a system, process, or technology to handle a growing
+ amount of work—or to be expanded to accommodate that growth—efficiently and effectively. In the context of software or
+ AI systems like me, scalability improvements might include:
+
+ - **Handling more users simultaneously** without slowdowns or failures.
+ - **Processing larger volumes of data** quickly and accurately.
+ - **Reducing response time** as demand increases.
+ - **Using resources (like computing power and memory) more efficiently**, so the system can grow without requiring
+ disproportionately more infrastructure.
+ - **Supporting integration with more applications or services** as needs expand.
+
+ These improvements ensure the system remains reliable, fast, and cost-effective as user demand or data complexity
+ increases.
+---
+
+---
+can't scroll to copy test, only what's visible.
+have to hold shift to select.
+on click, background color changes.
+---
 
 ---
 too much agent output? toggle with agent verbose mode?

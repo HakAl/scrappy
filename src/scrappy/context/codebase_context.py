@@ -30,6 +30,7 @@ from .protocols import (
     SemanticSearchManagerProtocol,
     ContextAugmenterProtocol,
     FileCollectorProtocol,
+    StalenessCheckerProtocol,
 )
 
 if TYPE_CHECKING:
@@ -64,6 +65,7 @@ class CodebaseContext:
         event_queue: Optional[EventQueueProtocol] = None,
         semantic_manager: Optional[SemanticSearchManagerProtocol] = None,
         context_augmenter: Optional[ContextAugmenterProtocol] = None,
+        staleness_checker: Optional[StalenessCheckerProtocol] = None,
     ):
         """
         Initialize codebase context (dependencies only - NO file I/O by default).
@@ -84,6 +86,7 @@ class CodebaseContext:
                         If None, creates a default ThreadSafeEventQueue.
             semantic_manager: Injectable semantic search manager (default: creates SemanticSearchManager)
             context_augmenter: Injectable context augmenter (default: creates ContextAugmenter)
+            staleness_checker: Injectable staleness checker for detecting file changes (default: creates StalenessChecker)
         """
         # Store config for factory methods
         self._initial_project_path = project_path
@@ -143,6 +146,10 @@ class CodebaseContext:
         # === Context Augmenter (extracted) ===
         # Defer augmenter creation until first use since it needs data providers
         self._context_augmenter = context_augmenter  # May be None initially
+
+        # === Staleness Checker ===
+        # Use provided staleness checker or create default with factory method
+        self._staleness_checker = staleness_checker or self._create_default_staleness_checker()
 
     @property
     def cache_file(self) -> Path:
@@ -230,6 +237,24 @@ class CodebaseContext:
     def _create_default_project_detector(self) -> ProjectDetector:
         """Create default project detector."""
         return ProjectDetector(self.project_path)
+
+    def _create_default_staleness_checker(self) -> StalenessCheckerProtocol:
+        """
+        Create default staleness checker for file change detection.
+
+        Returns:
+            StalenessChecker with default configuration
+        """
+        from .staleness import StalenessChecker
+        from .semantic.config import SemanticIndexConfig
+
+        # Use default config for staleness settings
+        config = SemanticIndexConfig()
+
+        return StalenessChecker(
+            root_path=self.project_path,
+            config=config,
+        )
 
     def _create_default_file_collector(self) -> 'FileCollectorProtocol':
         """
@@ -392,13 +417,17 @@ class CodebaseContext:
         """Check if the codebase has been explored."""
         return self.explored_at is not None
 
-    def ensure_file_index(self) -> dict:
+    def ensure_file_index(self, force_refresh: bool = False) -> dict:
         """
-        Ensure file_index is populated, performing lazy scan if needed.
+        Ensure file_index is populated, using three-layer staleness detection.
 
-        This method enables automatic file discovery without requiring explicit
-        explore() calls. The file scan is fast (typically < 50ms) and safe to
-        call on every query.
+        Three-layer detection strategy (fast to slow):
+        1. Trust stored fingerprints - no scan if fingerprints exist
+        2. Quick directory mtime check - only scan dirs, not files
+        3. Full file scan - only when directories changed or forced
+
+        Args:
+            force_refresh: If True, skip quick checks and do full scan
 
         Returns:
             Dict mapping category names to lists of relative file paths
@@ -406,6 +435,57 @@ class CodebaseContext:
         if not self.file_index:
             logger.debug("file_index empty, performing lazy scan")
             self.file_index = self._scan_files()
+
+        # Layer 1: Check if we have stored fingerprints
+        if not self._staleness_checker.has_fingerprints():
+            logger.info("First run - establishing fingerprint baseline")
+            self._staleness_checker.update_fingerprints()
+            return self.file_index
+
+        # Layer 2: Quick directory mtime check (skip if forcing refresh)
+        if not force_refresh and not self._staleness_checker.quick_check():
+            # No directory changes detected - skip full scan
+            logger.debug("Quick check passed - skipping full staleness scan")
+            return self.file_index
+
+        # Layer 3: Full scan (directories changed or forced)
+        logger.debug("Directory changes detected or forced - performing full scan")
+        staleness_report = self._staleness_checker.check_staleness(force=force_refresh)
+        if staleness_report.is_stale:
+            logger.info(
+                f"Detected file changes: {staleness_report.total_changes} files "
+                f"(added={len(staleness_report.added)}, "
+                f"modified={len(staleness_report.modified)}, "
+                f"deleted={len(staleness_report.deleted)})"
+            )
+
+            # Re-scan file index to pick up new files
+            logger.debug("Re-scanning file index due to staleness")
+            self.file_index = self._scan_files()
+
+            # Trigger blocking re-index of changed files in semantic search
+            if self._semantic_manager and self._semantic_manager.is_ready():
+                # Handle added/modified files
+                changed_files = staleness_report.added | staleness_report.modified
+                if changed_files:
+                    logger.info(f"Re-indexing {len(changed_files)} changed files")
+                    try:
+                        self._semantic_manager.refresh_files(changed_files)
+                        logger.info("Re-indexing complete")
+                    except Exception as e:
+                        logger.warning(f"Re-indexing failed: {e}")
+
+                # Handle deleted files
+                if staleness_report.deleted:
+                    logger.info(f"Removing {len(staleness_report.deleted)} deleted files from index")
+                    try:
+                        self._semantic_manager.remove_deleted_files(staleness_report.deleted)
+                    except Exception as e:
+                        logger.warning(f"Failed to remove deleted files: {e}")
+
+            # Update fingerprints after successful refresh
+            self._staleness_checker.update_fingerprints()
+
         return self.file_index
 
     def explore(self, force: bool = False) -> dict:
@@ -662,7 +742,7 @@ Be concise and technical. No fluff."""
 
         Uses batched file collection to prevent memory spikes:
         - Processes files in batches of 20
-        - Respects .gitignore via git ls-files
+        - Filters via IndexFilterConfig (skips .git, node_modules, etc.)
         - Enforces file size limits (5MB per file)
         - Skips binary files
         - Gracefully handles errors

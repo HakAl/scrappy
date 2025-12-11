@@ -31,6 +31,8 @@ class SemanticIndexConfig:
         show_progress_chunks: Show progress bar if estimated chunks exceed this
         max_index_age_days: Force full re-index if older than this
         reindex_chunk_change_percent: Force re-index if chunks change by this percent
+        debounce_ms: Minimum milliseconds between staleness checks
+        fingerprint_file: Path to fingerprint storage file
     """
 
     # Embedding settings
@@ -55,6 +57,10 @@ class SemanticIndexConfig:
     show_progress_chunks: int = 20  # Show progress bar if estimated chunks exceed this
     max_index_age_days: int = 7  # Force full re-index if older than this
     reindex_chunk_change_percent: float = 0.25  # Force re-index if chunks change by this %
+
+    # Staleness detection
+    debounce_ms: int = 300  # Minimum milliseconds between staleness checks
+    fingerprint_file: str = ".scrappy/fingerprints.json"  # Path to fingerprint storage
 
     @classmethod
     def from_memory_adaptive(cls) -> "SemanticIndexConfig":

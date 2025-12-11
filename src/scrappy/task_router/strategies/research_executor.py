@@ -255,22 +255,26 @@ class ResearchExecutor(ProviderAwareStrategy):
         # Step 1: Auto-explore codebase if needed
         self._path_resolver.auto_explore_if_needed(task)
 
-        # Step 2: Select provider
+        # Step 2: Load matched file contents (passive RAG to prevent hallucination)
+        matched_file_contents = self._load_file_snippets(matched_files)
+
+        # Step 3: Select provider
         provider_to_use = self._resolve_and_validate_provider(self.preferred_provider)
 
-        # Step 3: Build config and prompts
+        # Step 4: Build config and prompts
         config = ResearchPromptConfig(
             subtype=PromptResearchSubtype.CODEBASE,
             tool_descriptions=self._tool_bundle.get_tool_descriptions() if self._tool_bundle.has_tools() else None,
             context_summary=context_summary,
             extracted_files=tuple(task.extracted_files or []),
             extracted_directories=tuple(task.extracted_directories or []),
-            matched_project_files=matched_files
+            matched_project_files=matched_files,
+            matched_file_contents=matched_file_contents
         )
         system_prompt = self._prompt_factory.create_research_system_prompt(config)
         initial_prompt = self._prompt_factory.create_research_user_prompt(task.original_input, config)
 
-        # Step 4: Run research loop
+        # Step 5: Run research loop
         final_response, tool_calls_made, total_tokens = self._research_loop.run(
             provider=provider_to_use,
             initial_prompt=initial_prompt,
@@ -281,7 +285,7 @@ class ResearchExecutor(ProviderAwareStrategy):
 
         execution_time = time.time() - start_time
 
-        # Step 5: Return result
+        # Step 6: Return result
         return ExecutionResult(
             success=True,
             output=final_response,
@@ -316,3 +320,47 @@ class ResearchExecutor(ProviderAwareStrategy):
         except Exception:
             pass
         return None
+
+    def _load_file_snippets(
+        self,
+        file_paths: tuple,
+        max_files: int = 5,
+        max_lines_per_file: int = 100
+    ) -> tuple[tuple[str, str], ...]:
+        """Load content snippets from matched files for passive RAG.
+
+        Prevents hallucination by injecting actual file content into the prompt
+        instead of just listing file names.
+
+        Args:
+            file_paths: Tuple of file paths to load
+            max_files: Maximum number of files to load (to avoid prompt bloat)
+            max_lines_per_file: Maximum lines to include per file
+
+        Returns:
+            Tuple of (filepath, content_snippet) pairs
+        """
+        if not file_paths:
+            return ()
+
+        snippets = []
+        for filepath in file_paths[:max_files]:
+            try:
+                full_path = self.project_root / filepath
+                if not full_path.exists() or not full_path.is_file():
+                    continue
+
+                content = full_path.read_text(encoding='utf-8', errors='replace')
+                lines = content.splitlines()
+
+                if len(lines) > max_lines_per_file:
+                    truncated_lines = lines[:max_lines_per_file]
+                    truncated_lines.append(f"... ({len(lines) - max_lines_per_file} more lines)")
+                    content = "\n".join(truncated_lines)
+
+                snippets.append((filepath, content))
+            except Exception:
+                # Skip files that can't be read
+                continue
+
+        return tuple(snippets)

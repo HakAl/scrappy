@@ -550,3 +550,255 @@ class SemanticFileCollector:
             except Exception:
                 pass
         return sizes
+
+
+class FilteredFileCollector:
+    """
+    File collector that only collects a specific set of files.
+
+    Used for incremental re-indexing when only specific files have changed.
+    Wraps SemanticFileCollector but filters to only allowed files.
+
+    Architecture:
+    - Single Responsibility: Filter file collection to specific file set
+    - Implements FileCollectorProtocol
+    - Delegates to SemanticFileCollector for actual file reading
+    """
+
+    def __init__(
+        self,
+        project_path: Path,
+        allowed_files: Set[str],
+        filter_config: Optional[IndexFilterConfig] = None,
+        prioritizer: Optional[FilePrioritizerProtocol] = None,
+    ):
+        """
+        Initialize filtered file collector.
+
+        Args:
+            project_path: Project root path
+            allowed_files: Set of relative file paths to collect
+            filter_config: Optional filter configuration
+            prioritizer: Optional file prioritizer
+        """
+        self._project_path = project_path.resolve()
+        self._allowed_files = allowed_files
+        self._filter_config = filter_config or IndexFilterConfig()
+        self._prioritizer = prioritizer or DefaultFilePrioritizer()
+
+    def collect_file_paths(self) -> List[Path]:
+        """
+        Return list of allowed file paths (fast scan for metrics).
+
+        Returns:
+            List of relative file paths (as Path objects)
+        """
+        return [Path(p) for p in self._allowed_files]
+
+    def collect_files(self) -> Dict[str, str]:
+        """
+        Collect only the allowed files.
+
+        Returns:
+            Dict mapping relative file paths to content
+        """
+        logger.info(f"Collecting {len(self._allowed_files)} specific files...")
+
+        # Prioritize files
+        candidate_paths = [Path(p) for p in self._allowed_files]
+        prioritized = self._prioritizer.sort_by_priority(candidate_paths)
+
+        # Read files
+        files = {}
+        stats = {
+            'skipped_size': 0,
+            'skipped_binary': 0,
+            'skipped_read_error': 0,
+            'skipped_test_json': 0,
+            'skipped_not_exist': 0,
+            'collected': 0,
+        }
+
+        for path_obj in prioritized:
+            file_path = str(path_obj)
+            full_path = self._project_path / file_path
+
+            # Skip if file doesn't exist
+            if not full_path.exists():
+                stats['skipped_not_exist'] += 1
+                continue
+
+            # Skip by size
+            if self._filter_config.should_skip_by_size(full_path):
+                stats['skipped_size'] += 1
+                continue
+
+            # Skip large JSON files in test directories
+            if self._filter_config.should_skip_large_json_in_tests(full_path, self._project_path):
+                stats['skipped_test_json'] += 1
+                continue
+
+            # Skip binary files
+            if self._filter_config.is_binary(full_path):
+                stats['skipped_binary'] += 1
+                continue
+
+            # Read file content
+            try:
+                content = full_path.read_text(encoding='utf-8', errors='ignore')
+                files[file_path] = content
+                stats['collected'] += 1
+            except Exception as e:
+                logger.debug(f"Failed to read {file_path}: {e}")
+                stats['skipped_read_error'] += 1
+
+        logger.info(
+            f"Collected {stats['collected']} files for re-indexing "
+            f"(skipped: {stats['skipped_not_exist']} not found, "
+            f"{stats['skipped_size']} too large, "
+            f"{stats['skipped_binary']} binary, "
+            f"{stats['skipped_test_json']} test JSON, "
+            f"{stats['skipped_read_error']} read errors)"
+        )
+
+        return files
+
+    def collect_files_batched(self, batch_size: int = 50):
+        """
+        Collect files in batches (generator).
+
+        Args:
+            batch_size: Maximum number of files per batch
+
+        Yields:
+            Dict[str, str]: Batch of file paths to content
+        """
+        logger.info(f"Collecting {len(self._allowed_files)} specific files in batches of {batch_size}...")
+
+        # Prioritize files
+        candidate_paths = [Path(p) for p in self._allowed_files]
+        prioritized = self._prioritizer.sort_by_priority(candidate_paths)
+
+        # Process files in batches
+        batch = {}
+        stats = {
+            'skipped_size': 0,
+            'skipped_binary': 0,
+            'skipped_read_error': 0,
+            'skipped_test_json': 0,
+            'skipped_not_exist': 0,
+            'collected': 0,
+            'batches': 0,
+        }
+
+        for path_obj in prioritized:
+            file_path = str(path_obj)
+            full_path = self._project_path / file_path
+
+            # Skip if file doesn't exist
+            if not full_path.exists():
+                stats['skipped_not_exist'] += 1
+                continue
+
+            # Skip by size
+            if self._filter_config.should_skip_by_size(full_path):
+                stats['skipped_size'] += 1
+                continue
+
+            # Skip large JSON files in test directories
+            if self._filter_config.should_skip_large_json_in_tests(full_path, self._project_path):
+                stats['skipped_test_json'] += 1
+                continue
+
+            # Skip binary files
+            if self._filter_config.is_binary(full_path):
+                stats['skipped_binary'] += 1
+                continue
+
+            # Read file content
+            try:
+                content = full_path.read_text(encoding='utf-8', errors='ignore')
+                batch[file_path] = content
+                stats['collected'] += 1
+
+                # Yield batch when full
+                if len(batch) >= batch_size:
+                    stats['batches'] += 1
+                    logger.debug(f"Yielding batch {stats['batches']} ({len(batch)} files)")
+                    yield batch
+                    batch = {}
+
+            except Exception as e:
+                logger.debug(f"Failed to read {file_path}: {e}")
+                stats['skipped_read_error'] += 1
+
+        # Yield final partial batch if any
+        if batch:
+            stats['batches'] += 1
+            logger.debug(f"Yielding final batch {stats['batches']} ({len(batch)} files)")
+            yield batch
+
+        logger.info(
+            f"Collected {stats['collected']} files in {stats['batches']} batches "
+            f"(skipped: {stats['skipped_not_exist']} not found, "
+            f"{stats['skipped_size']} too large, "
+            f"{stats['skipped_binary']} binary, "
+            f"{stats['skipped_test_json']} test JSON, "
+            f"{stats['skipped_read_error']} read errors)"
+        )
+
+    def get_file_hashes(self, files: List[Path]) -> Dict[str, str]:
+        """
+        Compute content hashes for files.
+
+        Args:
+            files: List of file paths (relative to project root)
+
+        Returns:
+            Dict mapping path string to MD5 hash
+        """
+        hashes = {}
+
+        for file_path in files:
+            if isinstance(file_path, str):
+                file_path = Path(file_path)
+
+            full_path = self._project_path / file_path
+
+            if not full_path.exists() or not full_path.is_file():
+                continue
+
+            try:
+                md5_hash = hashlib.md5()
+                with open(full_path, 'rb') as f:
+                    for chunk in iter(lambda: f.read(8192), b''):
+                        md5_hash.update(chunk)
+
+                hashes[str(file_path)] = md5_hash.hexdigest()
+
+            except Exception as e:
+                logger.debug(f"Failed to hash file {file_path}: {e}")
+
+        return hashes
+
+    def get_file_sizes(self, files: List[Path]) -> Dict[str, int]:
+        """
+        Return dict mapping path string to file size in bytes.
+
+        Args:
+            files: List of file paths (relative to project root)
+
+        Returns:
+            Dict mapping path string to file size in bytes
+        """
+        sizes = {}
+        for file_path in files:
+            if isinstance(file_path, str):
+                file_path = Path(file_path)
+            full_path = self._project_path / file_path
+            try:
+                if full_path.exists() and full_path.is_file():
+                    sizes[str(file_path)] = full_path.stat().st_size
+            except Exception:
+                pass
+        return sizes

@@ -726,6 +726,21 @@ class SemanticSearchProtocol(Protocol):
         """
         ...
 
+    def remove_files(self, files: Set[str]) -> int:
+        """
+        Remove specific files from the index.
+
+        More efficient than cleanup_deleted_files when you already know
+        which files were deleted (e.g., from staleness detection).
+
+        Args:
+            files: Set of file paths to remove from index
+
+        Returns:
+            Number of entries removed
+        """
+        ...
+
 
 @runtime_checkable
 class EmbeddingFunctionProtocol(Protocol):
@@ -894,6 +909,36 @@ class SemanticSearchManagerProtocol(Protocol):
         """
         ...
 
+    def refresh_files(self, changed: Set[str]) -> None:
+        """
+        Incrementally re-index specific changed files.
+
+        Enables efficient staleness-driven re-indexing by only processing
+        files that have been added or modified since the last index.
+
+        Args:
+            changed: Set of file paths (relative to project root) that need re-indexing
+
+        Raises:
+            ValueError: If changed is empty
+        """
+        ...
+
+    def remove_deleted_files(self, deleted: Set[str]) -> int:
+        """
+        Remove deleted files from the semantic search index.
+
+        Enables efficient staleness-driven cleanup by removing specific
+        files that have been deleted since the last index.
+
+        Args:
+            deleted: Set of file paths (relative to project root) to remove
+
+        Returns:
+            Number of entries removed from the index
+        """
+        ...
+
     def process_events(self) -> int:
         """
         Process pending background events.
@@ -1032,3 +1077,187 @@ class IndexingDecisionProtocol(Protocol):
     ) -> IndexingDecision: ...
 
     def should_show_progress(self, metrics: ChangeMetrics) -> bool: ...
+
+
+# --- Staleness Detection ---
+
+
+class TimeProviderProtocol(Protocol):
+    """
+    Protocol for time operations.
+
+    Abstracts time.time() to enable testing with controlled time values.
+
+    Implementations:
+    - SystemTimeProvider: Uses real system time
+    - FakeTimeProvider: Controllable time for testing
+
+    Example:
+        def check_debounce(provider: TimeProviderProtocol) -> bool:
+            return provider.now_ms() > last_check + debounce_ms
+    """
+
+    def now_ms(self) -> float:
+        """
+        Get current time in milliseconds.
+
+        Returns:
+            Current time in milliseconds since epoch
+        """
+        ...
+
+
+class FingerprintScannerProtocol(Protocol):
+    """
+    Protocol for scanning files for fingerprinting.
+
+    Abstracts file system access to enable testing without real file operations.
+    Used by StalenessChecker to get file metadata (mtime_ns, size) for change detection.
+
+    Note: This is distinct from FileScannerProtocol which handles pattern-based
+    file discovery. This protocol focuses on metadata retrieval for fingerprinting.
+
+    Implementations:
+    - FileSystemScanner: Real file system access
+    - FakeFileScanner: Controllable file state for testing
+    """
+
+    def scan_files(self, root: Path) -> Set[str]:
+        """
+        Scan directory for all files.
+
+        Args:
+            root: Root directory to scan
+
+        Returns:
+            Set of relative file paths (forward-slash normalized)
+        """
+        ...
+
+    def scan_directory_mtimes(self, root: Path) -> Dict[str, float]:
+        """
+        Scan directory mtimes for quick change detection.
+
+        Args:
+            root: Root directory to scan
+
+        Returns:
+            Dict mapping directory relative path to mtime (nanoseconds)
+        """
+        ...
+
+    def get_mtime_ns(self, file_path: Path) -> int:
+        """
+        Get file modification time in nanoseconds.
+
+        Args:
+            file_path: Absolute path to file
+
+        Returns:
+            Modification time in nanoseconds for maximum precision
+        """
+        ...
+
+    def get_size(self, file_path: Path) -> int:
+        """
+        Get file size in bytes.
+
+        Args:
+            file_path: Absolute path to file
+
+        Returns:
+            File size in bytes
+        """
+        ...
+
+    def get_fingerprint(self, file_path: Path) -> tuple:
+        """
+        Get file fingerprint as (mtime_ns, size) tuple.
+
+        Args:
+            file_path: Absolute path to file
+
+        Returns:
+            Tuple of (mtime_ns, size) for change detection
+        """
+        ...
+
+
+@dataclass
+class StalenessReport:
+    """
+    Report of file changes detected by staleness checking.
+
+    Attributes:
+        added: Set of file paths that are new since last check
+        modified: Set of file paths that have changed since last check
+        deleted: Set of file paths that no longer exist
+    """
+    added: Set[str]
+    modified: Set[str]
+    deleted: Set[str]
+
+    @property
+    def is_stale(self) -> bool:
+        """Check if any changes were detected."""
+        return bool(self.added or self.modified or self.deleted)
+
+    @property
+    def total_changes(self) -> int:
+        """Get total number of changed files."""
+        return len(self.added) + len(self.modified) + len(self.deleted)
+
+
+@runtime_checkable
+class StalenessCheckerProtocol(Protocol):
+    """
+    Protocol for detecting file changes via fingerprinting.
+
+    Abstracts staleness detection to enable:
+    - Testing without real file system access
+    - Debounced checking to avoid rapid re-scans
+    - Efficient change detection via mtime + size fingerprints
+
+    Single Responsibility: Detect when files have changed.
+
+    Implementations:
+    - StalenessChecker: mtime + size fingerprinting with debounce
+    - MockStalenessChecker: Preset staleness reports for testing
+    - AlwaysFreshChecker: Always reports no changes
+
+    Example:
+        def check_and_reindex(checker: StalenessCheckerProtocol) -> None:
+            report = checker.check_staleness()
+            if report.is_stale:
+                reindex_files(report.added | report.modified)
+                checker.update_fingerprints()
+    """
+
+    def get_fingerprints(self) -> Dict[str, tuple]:
+        """
+        Get current stored fingerprints.
+
+        Returns:
+            Dict mapping file paths to fingerprint tuples (mtime, size)
+        """
+        ...
+
+    def check_staleness(self) -> StalenessReport:
+        """
+        Check for file changes since last update.
+
+        Compares current file system state against stored fingerprints.
+        Respects debounce timing to avoid rapid re-checks.
+
+        Returns:
+            StalenessReport with sets of added/modified/deleted files
+        """
+        ...
+
+    def update_fingerprints(self) -> None:
+        """
+        Update stored fingerprints to current file system state.
+
+        Should be called after successfully re-indexing changed files.
+        """
+        ...

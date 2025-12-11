@@ -31,12 +31,13 @@ SemanticProvider.index_chunks()
 ```
 
 **Fix Required:**
-- Option A: Create TextualProgressReporter (started in textual_app.py line 492) and inject it into semantic manager
-- Option B: Change callback signature to accept numeric values throughout the chain
-- Option C: Use the ProgressReporterProtocol consistently instead of string callbacks
+- Use the ProgressReporterProtocol consistently instead of string callbacks
 
 **Files Affected:**
 - src/scrappy/cli/textual_app.py (created TextualProgressReporter but not injected)
 - src/scrappy/context/codebase_context.py (string callback)
 - src/scrappy/context/semantic_manager.py (creates own UnifiedIOProgressReporter)
 - src/scrappy/infrastructure/progress.py (UnifiedIOProgressReporter ignores numeric values)
+
+---
+
