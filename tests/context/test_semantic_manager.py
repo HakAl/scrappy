@@ -164,6 +164,8 @@ class MockConfig:
         self.table_name = "code_chunks"
         self.avg_chunk_bytes = 400
         self.show_progress_chunks = 20
+        self.fingerprint_file = ".scrappy/fingerprints.json"
+        self.debounce_ms = 300
 
 
 class TestSemanticSearchManagerCreation:

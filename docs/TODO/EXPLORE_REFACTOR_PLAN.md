@@ -110,7 +110,7 @@ Root cause: `file_index` requires manual `explore()` but should be available aut
 
 ---
 
-## Phase 3: Auto-trigger Semantic Indexing on Startup
+## Phase 3: Auto-trigger Semantic Indexing on Startup -- COMPLETE
 
 **Goal:** Semantic indexing starts automatically, non-blocking.
 

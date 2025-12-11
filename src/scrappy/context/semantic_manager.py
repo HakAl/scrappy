@@ -26,6 +26,7 @@ from .protocols import (
     SearchResult,
     IndexStateProtocol,
     IndexingDecisionProtocol,
+    StalenessCheckerProtocol,
 )
 from .semantic.config import SemanticIndexConfig
 
@@ -66,6 +67,7 @@ class SemanticSearchManager:
         config: Optional[SemanticIndexConfig] = None,
         state_manager: Optional[IndexStateProtocol] = None,
         decision_maker: Optional[IndexingDecisionProtocol] = None,
+        staleness_checker: Optional[StalenessCheckerProtocol] = None,
     ):
         """
         Initialize semantic search manager.
@@ -78,6 +80,7 @@ class SemanticSearchManager:
             config: Semantic index configuration (auto-created if None)
             state_manager: Index state persistence manager (auto-created if None)
             decision_maker: Indexing decision logic (auto-created if None)
+            staleness_checker: Quick staleness checker for early bailout (auto-created if None)
         """
         self._project_path = project_path
         self._event_queue = event_queue or ThreadSafeEventQueue()
@@ -85,6 +88,7 @@ class SemanticSearchManager:
         self._config = config or self._create_default_config()
         self._state_manager = state_manager or self._create_default_state_manager()
         self._decision_maker = decision_maker or self._create_default_decision_maker()
+        self._staleness_checker = staleness_checker or self._create_default_staleness_checker()
 
         # Semantic search state
         self._semantic_search: Optional[SemanticSearchProtocol] = None
@@ -384,7 +388,22 @@ class SemanticSearchManager:
 
             saved_state = self._state_manager.load()
 
-            # Get file paths, hashes, and sizes for metrics
+            # EARLY BAILOUT: If saved state exists, use quick staleness check
+            # This avoids expensive fingerprinting when nothing has changed
+            if saved_state is not None and self._staleness_checker:
+                # Quick check: directory mtimes + sampled file fingerprints
+                # Returns False if no changes detected (fast path)
+                if not self._staleness_checker.quick_check():
+                    logger.info("Quick check passed - no changes detected, skipping indexing")
+                    self._notify_progress("Index up to date - no changes detected")
+                    return
+                # Quick check detected potential changes - continue to full verification
+                logger.debug("Quick check detected changes, proceeding to full verification")
+
+            # EXPENSIVE: Only reach here if:
+            # - No saved state (first run)
+            # - No staleness checker available
+            # - Quick check detected potential changes
             files = file_collector.collect_file_paths()
             hashes = file_collector.get_file_hashes(files)
             sizes = file_collector.get_file_sizes(files)
@@ -399,6 +418,9 @@ class SemanticSearchManager:
             if decision == IndexingDecision.SKIP:
                 logger.info("No changes detected, skipping indexing")
                 self._notify_progress("Index up to date - no changes detected")
+                # Update staleness checker fingerprints for next quick check
+                if self._staleness_checker:
+                    self._staleness_checker.update_fingerprints()
                 return
 
             logger.info(f"Indexing decision: {decision.value} ({metrics.estimated_chunks} estimated chunks)")
@@ -544,6 +566,23 @@ class SemanticSearchManager:
     def _create_default_decision_maker(self) -> Optional[IndexingDecisionProtocol]:
         """Create default decision maker (returns None - factory creates it)."""
         return None
+
+    def _create_default_staleness_checker(self) -> Optional[StalenessCheckerProtocol]:
+        """
+        Create default staleness checker for quick change detection.
+
+        Returns:
+            StalenessChecker if available, None otherwise
+        """
+        try:
+            from .staleness import StalenessChecker
+            return StalenessChecker(
+                root_path=self._project_path,
+                config=self._config,
+            )
+        except ImportError:
+            logger.debug("StalenessChecker not available")
+            return None
 
     def shutdown(self) -> None:
         """Signal background tasks to stop and clean up resources."""
