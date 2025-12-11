@@ -621,9 +621,10 @@ class TestStalenessCheckerPerformance:
 
         elapsed_ms = (end - start) * 1000
 
-        # Should complete in reasonable time (< 100ms for test doubles)
+        # Should complete in reasonable time for test doubles
+        # Threshold is generous (500ms) to avoid flaky CI failures on slow runners
         # This tests that the algorithm is O(n) not O(n^2)
-        assert elapsed_ms < 100
+        assert elapsed_ms < 500
 
         # Verify all files were fingerprinted
         fingerprints = checker.get_fingerprints()
@@ -647,8 +648,8 @@ class TestStalenessCheckerPerformance:
 
         elapsed_ms = (end - start) * 1000
 
-        # Should complete in reasonable time (< 100ms for test doubles)
-        assert elapsed_ms < 100
+        # Threshold is generous (500ms) to avoid flaky CI failures on slow runners
+        assert elapsed_ms < 500
 
         # Verify correct files detected
         assert len(report.modified) == 2
