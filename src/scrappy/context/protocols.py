@@ -1261,3 +1261,75 @@ class StalenessCheckerProtocol(Protocol):
         Should be called after successfully re-indexing changed files.
         """
         ...
+
+
+# --- Re-index Operations ---
+
+
+@dataclass
+class ReindexResult:
+    """
+    Result from a blocking re-index operation.
+
+    Attributes:
+        success: Whether the re-index completed successfully
+        files_processed: Number of files that were processed
+        timed_out: Whether the operation timed out
+        error: Error message if operation failed, None otherwise
+    """
+    success: bool
+    files_processed: int
+    timed_out: bool
+    error: Optional[str] = None
+
+
+@runtime_checkable
+class ReindexCallbackProtocol(Protocol):
+    """
+    Protocol for receiving re-index progress callbacks.
+
+    Enables UI components to track and display re-index progress
+    without coupling to specific UI implementations.
+
+    Single Responsibility: Notify about re-index lifecycle events.
+
+    Implementations:
+    - ReindexActivityCallback: Bridges to ActivityIndicator via messages
+    - MockReindexCallback: No-op for testing
+    - LoggingReindexCallback: Logs progress to console
+
+    Example:
+        def reindex_with_progress(callback: ReindexCallbackProtocol) -> None:
+            callback.on_start()
+            for i, file in enumerate(files):
+                process(file)
+                callback.on_progress(i + 1, len(files))
+            callback.on_complete(ReindexResult(True, len(files), False))
+    """
+
+    def on_start(self) -> None:
+        """Called when re-index operation starts."""
+        ...
+
+    def on_progress(self, files_processed: int, total_files: int) -> None:
+        """
+        Called periodically during re-index.
+
+        Args:
+            files_processed: Number of files processed so far
+            total_files: Total number of files to process
+        """
+        ...
+
+    def on_complete(self, result: ReindexResult) -> None:
+        """
+        Called when re-index operation completes.
+
+        Args:
+            result: Result of the re-index operation
+        """
+        ...
+
+    def on_timeout(self) -> None:
+        """Called when re-index operation times out."""
+        ...

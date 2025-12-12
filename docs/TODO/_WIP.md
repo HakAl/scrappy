@@ -1,39 +1,58 @@
 
-## Phase 4: Blocking Re-index UX
+## Optimization Opportunity: Incremental Fingerprinting
 
-**Goal:** User never sees unexplained hangs during re-indexing.
+**Problem:** `update_fingerprints()` does a FULL rescan of ALL files every time, even when only 1 file changed.
 
-Status -- Fingerprinting / indexing are displayed in status bar, but the UX isn't ideal
-Additionally, we should a loading indicator for Q/A displayed in the chat area.
+**Current implementation** (`staleness.py:345-371`):
+```python
+def update_fingerprints(self) -> None:
+    current_files = self.file_scanner.scan_files(self.root_path)  # Scans ALL files
 
-**Approach:** Progressive micro-copy, time-to-interactive cap, debounce.
+    new_fingerprints: Dict[str, tuple] = {}
+    for file_path in current_files:  # Fingerprints ALL files
+        new_fingerprints[file_path] = self.file_scanner.get_fingerprint(full_path)
 
-**Changes:**
+    self._fingerprints = new_fingerprints  # Replaces everything
+```
 
-1. Add "Syncing" UI state with progressive messages
-   - "Detecting file changes..."
-   - "Refreshing context..."
-   - Messages appear after 500ms threshold
+**Proposed optimization - incremental update:**
+```python
+def update_fingerprints(self, staleness_report: Optional[StalenessReport] = None) -> None:
+    if staleness_report is None:
+        # No report - do full scan (first run)
+        # ... existing full scan logic
+        return
 
-2. Time-to-interactive cap (5 seconds)
-   - If re-indexing exceeds 5s, proceed with warning
-   - "I'm still processing changes, but based on previous state..."
+    # Incremental update - only process changes
+    # Remove deleted files
+    for deleted in staleness_report.deleted:
+        self._fingerprints.pop(deleted, None)
 
-3. Debounce filesystem changes (~300ms)
-   - Wait for file events to settle before triggering re-index
-   - Prevents thundering herd from rapid autosaves
+    # Update added/modified files only
+    for file_path in staleness_report.added | staleness_report.modified:
+        full_path = self.root_path / file_path
+        try:
+            self._fingerprints[file_path] = self.file_scanner.get_fingerprint(full_path)
+        except (OSError, FileNotFoundError):
+            pass
 
-**Files:**
-- `src/scrappy/cli/output.py` or similar - syncing state UI
-- `src/scrappy/context/staleness.py` - debounce logic
-- `src/scrappy/context/codebase_context.py` - timeout + fallback
+    # Update directory mtimes
+    self._dir_mtimes = self.file_scanner.scan_directory_mtimes(self.root_path)
+    self._save_fingerprints()
+```
 
-**Tests:**
-- `test_syncing_message_shown_after_threshold`
-- `test_timeout_proceeds_with_warning`
-- `test_debounce_prevents_rapid_reindex`
+**Benefits:**
+- Updates become O(changed_files) instead of O(all_files)
+- Pass `StalenessReport` from `check_staleness()` to `update_fingerprints()`
+- Only fingerprint added/modified files
+- Remove deleted files from the map
+- Keep existing fingerprints for unchanged files
 
-**Success Criteria:**
-- [ ] User sees "Detecting file changes..." not just spinner
-- [ ] Re-index never blocks longer than 5s without feedback/fallback
-- [ ] Rapid file saves don't trigger multiple re-index calls
+**Files to modify:**
+- `src/scrappy/context/staleness.py` - Add optional `staleness_report` parameter to `update_fingerprints()`
+- `src/scrappy/context/codebase_context.py` - Pass staleness_report to `update_fingerprints()` calls
+- `src/scrappy/context/semantic_manager.py` - Pass staleness_report to `update_fingerprints()` calls
+
+--
+
+

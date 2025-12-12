@@ -45,7 +45,7 @@ class ChatLayout(Widget):
 
     def compose(self) -> ComposeResult:
         """Create the chat layout widgets."""
-        from ..textual_app import StatusBar
+        from ..textual_app import StatusBar, ActivityIndicator
 
         # Scrollable output area
         with Container(id="output_container"):
@@ -56,6 +56,9 @@ class ChatLayout(Widget):
                 auto_scroll=True,
                 wrap=True
             )
+
+        # Activity indicator
+        yield ActivityIndicator()
 
         # Fixed input area at bottom
         with Container(id="input_container"):

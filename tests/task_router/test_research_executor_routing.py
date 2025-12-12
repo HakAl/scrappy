@@ -28,6 +28,7 @@ class TestResearchExecutorSubtypeRouting:
         }
         context.file_index = default_file_index
         context.ensure_file_index.return_value = default_file_index
+        context.ensure_file_index_with_timeout.return_value = default_file_index
         context.is_explored.return_value = False
         orchestrator.context = context
 
@@ -234,6 +235,7 @@ class TestResearchExecutorEdgeCases:
         }
         context.file_index = default_file_index
         context.ensure_file_index.return_value = default_file_index
+        context.ensure_file_index_with_timeout.return_value = default_file_index
         context.is_explored.return_value = False
         orchestrator.context = context
 
@@ -304,6 +306,7 @@ class TestResearchExecutorEdgeCases:
             return context.file_index
 
         context.ensure_file_index = Mock(side_effect=populate_index)
+        context.ensure_file_index_with_timeout = Mock(side_effect=populate_index)
         orchestrator.context = context
 
         # Mock providers
@@ -333,8 +336,8 @@ class TestResearchExecutorEdgeCases:
         # Execute the task
         result = executor.execute(task)
 
-        # Verify ensure_file_index was called
-        context.ensure_file_index.assert_called_once()
+        # Verify ensure_file_index_with_timeout was called (new timeout-protected version)
+        context.ensure_file_index_with_timeout.assert_called_once()
 
         # Verify file_index was populated
         assert context.file_index != {}, "file_index should be populated after ensure_file_index"

@@ -3,6 +3,7 @@
 from typing import TYPE_CHECKING, Any, Optional
 import logging
 import re
+import time
 
 from textual.screen import Screen
 from textual.app import ComposeResult
@@ -13,6 +14,7 @@ from textual import work
 from .chat_layout import ChatLayout
 from ..input_capture import InputCaptureManager, InputRequest
 from ..command_history import CommandHistory, get_default_history_path
+from ...context.protocols import ReindexCallbackProtocol, ReindexResult
 
 if TYPE_CHECKING:
     from ..interactive import InteractiveMode
@@ -21,6 +23,8 @@ if TYPE_CHECKING:
         ThreadSafeAsyncBridge,
         StatusBar,
         SemanticStatusComponent,
+        ActivityStateChange,
+        ScrappyApp,
     )
     from scrappy.infrastructure.theme import ThemeProtocol
 
@@ -82,6 +86,10 @@ class MainAppScreen(Screen):
 
         # Layout component (set on mount)
         self._layout: Optional[ChatLayout] = None
+
+        # Elapsed timer for activity indicator
+        self._elapsed_timer: Optional[Any] = None
+        self._elapsed_start_time: float = 0.0
 
     @property
     def semantic_status(self) -> "SemanticStatusComponent":
@@ -260,7 +268,11 @@ class MainAppScreen(Screen):
     @work(exclusive=True, thread=True)
     def process_command(self, user_input: str) -> None:
         """Process command in worker thread."""
+        from ..textual_app import ActivityStateChange
+        from ..protocols import ActivityState
+
         try:
+            self.app.post_message(ActivityStateChange(ActivityState.THINKING))
             should_continue = self.interactive_mode._process_input(user_input)
             if not should_continue:
                 self.app.exit()
@@ -269,6 +281,8 @@ class MainAppScreen(Screen):
             error_text = Text(f"Error: {str(e)}", style=self._theme.error)
             self.output_adapter.post_renderable(error_text)
             logger.exception("Error processing command")
+        finally:
+            self.app.post_message(ActivityStateChange(ActivityState.IDLE))
 
     def write_output(self, content: str) -> None:
         """Write plain text to output area."""
@@ -389,3 +403,130 @@ class MainAppScreen(Screen):
 
         input_container = self.query_one("#input_container")
         input_container.remove_class("capture-mode")
+
+    def update_activity(self, message: "ActivityStateChange") -> None:
+        """Update activity indicator based on state change message.
+
+        Args:
+            message: ActivityStateChange message with state, message, and elapsed_ms
+        """
+        from ..textual_app import ActivityIndicator
+        from ..protocols import ActivityState
+
+        try:
+            indicator = self.query_one(ActivityIndicator)
+        except Exception:
+            return
+
+        if message.state == ActivityState.IDLE:
+            indicator.hide()
+            self._stop_elapsed_timer()
+        else:
+            if message.elapsed_ms > 0:
+                indicator.update_elapsed(message.elapsed_ms)
+            else:
+                indicator.show(message.state, message.message)
+                self._start_elapsed_timer()
+
+    def _start_elapsed_timer(self) -> None:
+        """Start the elapsed time timer for activity indicator updates."""
+        self._stop_elapsed_timer()
+        self._elapsed_start_time = time.time()
+        self._elapsed_timer = self.set_interval(0.5, self._update_elapsed)
+
+    def _stop_elapsed_timer(self) -> None:
+        """Stop the elapsed time timer."""
+        if self._elapsed_timer is not None:
+            self._elapsed_timer.stop()
+            self._elapsed_timer = None
+        self._elapsed_start_time = 0.0
+
+    def _update_elapsed(self) -> None:
+        """Update elapsed time in the activity indicator."""
+        from ..textual_app import ActivityIndicator, ActivityStateChange
+        from ..protocols import ActivityState
+
+        if self._elapsed_start_time == 0.0:
+            return
+
+        elapsed_ms = int((time.time() - self._elapsed_start_time) * 1000)
+
+        try:
+            indicator = self.query_one(ActivityIndicator)
+            if indicator.is_visible:
+                indicator.update_elapsed(elapsed_ms)
+        except Exception:
+            pass
+
+
+class ReindexActivityCallback(ReindexCallbackProtocol):
+    """Bridges reindex progress to ActivityIndicator via ActivityStateChange messages.
+
+    Implements ReindexCallbackProtocol to provide UI feedback during codebase
+    re-indexing operations. Posts ActivityStateChange messages to update the
+    activity indicator with progress and state transitions.
+
+    Single Responsibility: Bridge reindex events to UI activity indicator.
+
+    Note: Explicitly inherits from ReindexCallbackProtocol for clarity and
+    static type checking, though Python's structural typing works without it.
+    """
+
+    def __init__(self, app: "ScrappyApp"):
+        """Initialize callback with app reference for message posting.
+
+        Args:
+            app: ScrappyApp instance for posting messages
+        """
+        self.app = app
+
+    def on_start(self) -> None:
+        """Called when re-index operation starts."""
+        from ..textual_app import ActivityStateChange
+        from ..protocols import ActivityState
+
+        self.app.post_message(
+            ActivityStateChange(ActivityState.SYNCING, "Indexing codebase...")
+        )
+
+    def on_progress(self, files_processed: int, total_files: int) -> None:
+        """Called periodically during re-index.
+
+        Args:
+            files_processed: Number of files processed so far
+            total_files: Total number of files to process
+        """
+        from ..textual_app import ActivityStateChange
+        from ..protocols import ActivityState
+
+        message = f"Indexing... {files_processed}/{total_files} files"
+        self.app.post_message(
+            ActivityStateChange(ActivityState.SYNCING, message)
+        )
+
+    def on_complete(self, result: ReindexResult) -> None:
+        """Called when re-index operation completes.
+
+        Args:
+            result: Result of the re-index operation
+        """
+        from ..textual_app import ActivityStateChange
+        from ..protocols import ActivityState
+
+        if result.timed_out:
+            message = "Indexing timed out - using stale data"
+        elif result.success:
+            message = f"Indexed {result.files_processed} files"
+        else:
+            message = f"Indexing failed: {result.error or 'Unknown error'}"
+
+        self.app.post_message(ActivityStateChange(ActivityState.IDLE, message))
+
+    def on_timeout(self) -> None:
+        """Called when re-index operation times out."""
+        from ..textual_app import ActivityStateChange
+        from ..protocols import ActivityState
+
+        self.app.post_message(
+            ActivityStateChange(ActivityState.IDLE, "Indexing timed out")
+        )

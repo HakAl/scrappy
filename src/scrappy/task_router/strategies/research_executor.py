@@ -315,8 +315,8 @@ class ResearchExecutor(ProviderAwareStrategy):
         """Get file_index from orchestrator context, triggering lazy scan if needed."""
         try:
             context = self.orchestrator.context
-            if context and hasattr(context, 'ensure_file_index'):
-                return context.ensure_file_index()
+            if context and hasattr(context, 'ensure_file_index_with_timeout'):
+                return context.ensure_file_index_with_timeout()
         except Exception:
             pass
         return None

@@ -26,7 +26,7 @@ from .input_capture import InputCaptureManager, InputRequest
 
 if TYPE_CHECKING:
     from .interactive import InteractiveMode
-    from .protocols import StatusComponentProtocol
+    from .protocols import StatusComponentProtocol, ActivityState
     from ..context.codebase_context import CodebaseContext
 
 logger = logging.getLogger(__name__)
@@ -84,6 +84,31 @@ class IndexingProgress(Message):
         self.progress = progress
         self.total = total
         self.complete = complete
+
+
+class ActivityStateChange(Message):
+    """Message for thread-safe activity indicator updates.
+
+    Used to communicate activity state changes from worker threads to the main
+    thread's ActivityIndicator widget. Supports elapsed time tracking for
+    long-running operations like Q/A processing and codebase re-indexing.
+
+    Args:
+        state: Current activity state (IDLE, THINKING, SYNCING, TOOL_EXECUTION)
+        message: Optional descriptive message for the activity
+        elapsed_ms: Elapsed time in milliseconds (0 for new activities)
+    """
+
+    def __init__(
+        self,
+        state: "ActivityState",
+        message: str = "",
+        elapsed_ms: int = 0
+    ) -> None:
+        super().__init__()
+        self.state = state
+        self.message = message
+        self.elapsed_ms = elapsed_ms
 
 
 # =============================================================================
@@ -392,6 +417,113 @@ class SemanticStatusComponent:
         self.update_widget()
 
 
+class ActivityIndicator(Label):
+    """Activity indicator widget with delayed show to prevent flicker.
+
+    Displays current activity state (THINKING, SYNCING, TOOL_EXECUTION) with
+    elapsed time. Implements a show delay threshold to prevent flicker on
+    quick operations that complete in under 500ms.
+
+    Thread-safe: Updates via ActivityStateChange messages from worker threads.
+    """
+
+    SHOW_DELAY_MS = 500  # Flicker prevention threshold
+
+    def __init__(self) -> None:
+        super().__init__("", id="activity_indicator")
+        self._state: Optional["ActivityState"] = None
+        self._message: str = ""
+        self._elapsed_ms: int = 0
+        self._pending_show: bool = False
+        self._show_start_time: Optional[float] = None
+
+    @property
+    def is_visible(self) -> bool:
+        """Whether indicator is currently visible."""
+        return self._state is not None and not self._pending_show
+
+    def show(self, state: "ActivityState", message: str = "") -> None:
+        """Show the activity indicator with state and message.
+
+        Starts the show delay timer. Actual display happens after SHOW_DELAY_MS
+        to prevent flicker on quick operations.
+
+        Args:
+            state: Current activity state
+            message: Optional descriptive message
+        """
+        from .protocols import ActivityState
+
+        self._state = state
+        self._message = message
+        self._elapsed_ms = 0
+        self._pending_show = True
+        self._show_start_time = time.time()
+
+        # Schedule delayed visibility check after SHOW_DELAY_MS
+        self.set_timer(self.SHOW_DELAY_MS / 1000.0, self.check_pending_show)
+
+    def check_pending_show(self) -> None:
+        """Check if pending show should now be displayed.
+
+        Called after SHOW_DELAY_MS to determine if the operation is still
+        running and indicator should be shown. Quick operations that complete
+        before the delay won't cause visual flicker.
+        """
+        if not self._pending_show or self._state is None:
+            return
+
+        # Timer already enforced delay - just show immediately
+        self._pending_show = False
+        self._update_display()
+        self.add_class("active")
+
+    def update_elapsed(self, elapsed_ms: int) -> None:
+        """Update elapsed time display.
+
+        Args:
+            elapsed_ms: Elapsed time in milliseconds
+        """
+        self._elapsed_ms = elapsed_ms
+        if self.is_visible:
+            self._update_display()
+
+    def hide(self) -> None:
+        """Hide the activity indicator."""
+        self._state = None
+        self._message = ""
+        self._elapsed_ms = 0
+        self._pending_show = False
+        self._show_start_time = None
+        self.remove_class("active")
+        self.update("")
+
+    def _update_display(self) -> None:
+        """Update display text based on current state."""
+        from .protocols import ActivityState
+
+        if self._state is None:
+            return
+
+        state_text = {
+            ActivityState.THINKING: "thinking",
+            ActivityState.SYNCING: "syncing",
+            ActivityState.TOOL_EXECUTION: "executing",
+            ActivityState.IDLE: ""
+        }.get(self._state, "")
+
+        if not state_text:
+            return
+
+        elapsed_sec = self._elapsed_ms / 1000.0
+        text = f"{state_text}... ({elapsed_sec:.1f}s)"
+
+        if self._message:
+            text = f"{state_text}: {self._message} ({elapsed_sec:.1f}s)"
+
+        self.update(text)
+
+
 class StatusBar(Container):
     """Dynamic status bar that shows/hides based on active components."""
 
@@ -514,6 +646,11 @@ class ScrappyApp(App):
                 self.post_message(IndexingProgress(message=message))
 
         context.set_indexing_progress_callback(progress_callback)
+
+        # Wire up reindex activity callback for blocking UX feedback
+        from .screens.main_screen import ReindexActivityCallback
+        reindex_callback = ReindexActivityCallback(self)
+        context.set_reindex_callback(reindex_callback)
 
     def _register_user_theme(self) -> None:
         """Register theme from ThemeProtocol with Textual."""
@@ -674,3 +811,11 @@ class ScrappyApp(App):
                 total=message.total,
                 complete=message.complete
             )
+
+    def on_activity_state_change(self, message: ActivityStateChange) -> None:
+        """Route activity state changes to active screen."""
+        from .screens import MainAppScreen
+
+        screen = self.screen
+        if isinstance(screen, MainAppScreen):
+            screen.update_activity(message)

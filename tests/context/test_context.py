@@ -206,3 +206,70 @@ class TestCaching:
         context.explore()
 
         assert context.cache_file.exists()
+
+
+class TestStalenessCheckerSharing:
+    """Tests for staleness checker sharing between CodebaseContext and SemanticSearchManager.
+
+    These tests verify the fix for the duplicate staleness checker bug where
+    CodebaseContext and SemanticSearchManager each created their own instance,
+    causing fingerprinting to run on every question even when nothing changed.
+    See docs/TODO/AGENT_BUGS.md for details.
+    """
+
+    @pytest.mark.unit
+    def test_staleness_checker_shared_with_semantic_manager(self, temp_project_dir):
+        """CodebaseContext and SemanticSearchManager should share the same staleness checker.
+
+        This prevents the bug where fingerprinting runs twice because each component
+        has its own staleness checker with separate in-memory state.
+        """
+        context = CodebaseContext(str(temp_project_dir))
+
+        # Both should reference the exact same staleness checker instance
+        assert context._staleness_checker is context._semantic_manager._staleness_checker, (
+            "CodebaseContext and SemanticSearchManager must share the same staleness_checker "
+            "instance to prevent duplicate fingerprinting. See AGENT_BUGS.md."
+        )
+
+    @pytest.mark.unit
+    def test_injected_staleness_checker_passed_to_semantic_manager(self, temp_project_dir):
+        """When staleness_checker is injected, it should be passed to SemanticSearchManager."""
+        from unittest.mock import Mock
+
+        mock_staleness_checker = Mock()
+        mock_staleness_checker.has_fingerprints.return_value = True
+        mock_staleness_checker.quick_check.return_value = False
+
+        context = CodebaseContext(
+            str(temp_project_dir),
+            staleness_checker=mock_staleness_checker
+        )
+
+        # The injected staleness checker should be used by both
+        assert context._staleness_checker is mock_staleness_checker
+        assert context._semantic_manager._staleness_checker is mock_staleness_checker
+
+    @pytest.mark.unit
+    def test_fingerprint_update_visible_to_both_components(self, temp_project_dir):
+        """When fingerprints are updated, both components should see the change.
+
+        This test verifies that since they share the same instance, updating
+        fingerprints through one path is visible to the other.
+        """
+        # Create a file so we have something to fingerprint
+        (temp_project_dir / "test.py").write_text("# test file")
+
+        context = CodebaseContext(str(temp_project_dir))
+
+        # Update fingerprints through the staleness checker
+        context._staleness_checker.update_fingerprints()
+
+        # Both should see fingerprints exist (since they share the same instance)
+        assert context._staleness_checker.has_fingerprints()
+        assert context._semantic_manager._staleness_checker.has_fingerprints()
+
+        # Verify they're the same data (same instance means same fingerprints)
+        context_fps = context._staleness_checker.get_fingerprints()
+        manager_fps = context._semantic_manager._staleness_checker.get_fingerprints()
+        assert context_fps == manager_fps

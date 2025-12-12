@@ -145,7 +145,7 @@ Root cause: `file_index` requires manual `explore()` but should be available aut
 
 ---
 
-## Phase 4: Blocking Re-index UX
+## Phase 4: Blocking Re-index UX -- Complete
 
 **Goal:** User never sees unexplained hangs during re-indexing.
 

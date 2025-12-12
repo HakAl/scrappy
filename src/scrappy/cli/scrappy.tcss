@@ -149,3 +149,17 @@ TextArea > .text-area--cursor {
     color: $accent;
     padding: 0 1;
 }
+
+/* Activity indicator - shows thinking/syncing/tool execution state */
+#activity_indicator {
+    width: 100%;
+    height: auto;
+    padding: 0 1;
+    display: none;
+}
+
+#activity_indicator.active {
+    display: block;
+    color: $text-muted;
+    text-style: italic;
+}

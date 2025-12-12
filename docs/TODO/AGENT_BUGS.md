@@ -40,4 +40,3 @@ SemanticProvider.index_chunks()
 - src/scrappy/infrastructure/progress.py (UnifiedIOProgressReporter ignores numeric values)
 
 ---
-

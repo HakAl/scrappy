@@ -31,6 +31,8 @@ from .protocols import (
     ContextAugmenterProtocol,
     FileCollectorProtocol,
     StalenessCheckerProtocol,
+    ReindexCallbackProtocol,
+    ReindexResult,
 )
 
 if TYPE_CHECKING:
@@ -128,8 +130,14 @@ class CodebaseContext:
         # File collector for semantic search
         self._file_collector = file_collector
 
+        # === Staleness Checker ===
+        # Create staleness checker FIRST so it can be shared with SemanticSearchManager
+        # This prevents duplicate instances that get out of sync (see AGENT_BUGS.md)
+        self._staleness_checker = staleness_checker or self._create_default_staleness_checker()
+
         # === Semantic Search Manager (extracted) ===
         # If semantic_manager is provided, use it; otherwise create default
+        # Pass shared staleness_checker to avoid duplicate fingerprinting
         if semantic_manager:
             self._semantic_manager = semantic_manager
         else:
@@ -137,6 +145,7 @@ class CodebaseContext:
                 project_path=self.project_path,
                 event_queue=self._event_queue,
                 io=self._io,
+                staleness_checker=self._staleness_checker,
             )
 
         # Backward compatibility: expose underlying state via manager
@@ -147,9 +156,9 @@ class CodebaseContext:
         # Defer augmenter creation until first use since it needs data providers
         self._context_augmenter = context_augmenter  # May be None initially
 
-        # === Staleness Checker ===
-        # Use provided staleness checker or create default with factory method
-        self._staleness_checker = staleness_checker or self._create_default_staleness_checker()
+        # === Re-index Callback ===
+        # Callback for reporting re-index progress to UI
+        self._reindex_callback: Optional[ReindexCallbackProtocol] = None
 
     @property
     def cache_file(self) -> Path:
@@ -986,6 +995,137 @@ Be concise and technical. No fluff."""
 
         self._project_detector.set_file_index(self.file_index)
         return self._project_detector.get_sub_projects()
+
+    def set_reindex_callback(self, callback: ReindexCallbackProtocol) -> None:
+        """
+        Set callback for re-index progress updates.
+
+        This callback will be invoked during file re-indexing operations
+        to report progress and lifecycle events to the UI layer.
+
+        Args:
+            callback: Callback implementing ReindexCallbackProtocol
+        """
+        self._reindex_callback = callback
+
+    def ensure_file_index_with_timeout(self, force_refresh: bool = False, timeout_ms: int = 5000) -> dict:
+        """
+        Ensure file_index is populated with timeout protection for blocking re-index.
+
+        This is the timeout-protected version of ensure_file_index() that:
+        1. Invokes reindex callbacks for progress reporting
+        2. Returns stale data if re-index exceeds timeout
+        3. Prevents UI blocking during long re-index operations
+
+        Args:
+            force_refresh: If True, skip quick checks and do full scan
+            timeout_ms: Maximum time to wait for re-index (default: 5000ms)
+
+        Returns:
+            Dict mapping category names to lists of relative file paths
+            (may contain stale data if re-index timed out)
+        """
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+
+        # If no callback registered, just use the normal method
+        if not self._reindex_callback:
+            return self.ensure_file_index(force_refresh=force_refresh)
+
+        # Check if re-index is needed - use duck typing for has_fingerprints/quick_check
+        if not self.file_index:
+            logger.debug("file_index empty, performing lazy scan without callback")
+            return self.ensure_file_index(force_refresh=force_refresh)
+
+        # Layer 1: Check if we have stored fingerprints (duck-typed)
+        if hasattr(self._staleness_checker, 'has_fingerprints') and not self._staleness_checker.has_fingerprints():
+            logger.info("First run - establishing fingerprint baseline")
+            self._staleness_checker.update_fingerprints()
+            return self.file_index
+
+        # Layer 2: Quick directory mtime check (skip if forcing refresh, duck-typed)
+        if not force_refresh and hasattr(self._staleness_checker, 'quick_check'):
+            if not self._staleness_checker.quick_check():
+                logger.debug("Quick check passed - skipping full staleness scan")
+                return self.file_index
+
+        # Layer 3: Full scan - this is where blocking re-index can occur
+        logger.debug("Directory changes detected or forced - checking staleness")
+        staleness_report = self._staleness_checker.check_staleness(force=force_refresh)
+
+        if not staleness_report.is_stale:
+            logger.debug("No file changes detected")
+            return self.file_index
+
+        # Changes detected - notify callback and start timeout-protected re-index
+        changed_files = staleness_report.added | staleness_report.modified
+        total_files = len(changed_files) + len(staleness_report.deleted)
+
+        logger.info(
+            f"Detected file changes: {staleness_report.total_changes} files "
+            f"(added={len(staleness_report.added)}, "
+            f"modified={len(staleness_report.modified)}, "
+            f"deleted={len(staleness_report.deleted)})"
+        )
+
+        self._reindex_callback.on_start()
+
+        def perform_reindex() -> ReindexResult:
+            """Perform the blocking re-index operation."""
+            try:
+                # Re-scan file index to pick up new files
+                logger.debug("Re-scanning file index due to staleness")
+                self.file_index = self._scan_files()
+
+                # Trigger blocking re-index of changed files in semantic search
+                if self._semantic_manager and self._semantic_manager.is_ready():
+                    # Handle added/modified files
+                    if changed_files:
+                        logger.info(f"Re-indexing {len(changed_files)} changed files")
+                        self._semantic_manager.refresh_files(changed_files)
+                        self._reindex_callback.on_progress(len(changed_files), total_files)
+                        logger.info("Re-indexing complete")
+
+                    # Handle deleted files
+                    if staleness_report.deleted:
+                        logger.info(f"Removing {len(staleness_report.deleted)} deleted files from index")
+                        self._semantic_manager.remove_deleted_files(staleness_report.deleted)
+                        self._reindex_callback.on_progress(total_files, total_files)
+
+                # Update fingerprints after successful refresh
+                self._staleness_checker.update_fingerprints()
+
+                return ReindexResult(
+                    success=True,
+                    files_processed=total_files,
+                    timed_out=False,
+                )
+            except Exception as e:
+                logger.warning(f"Re-indexing failed: {e}")
+                return ReindexResult(
+                    success=False,
+                    files_processed=0,
+                    timed_out=False,
+                    error=str(e),
+                )
+
+        # Execute re-index with timeout protection
+        executor = ThreadPoolExecutor(max_workers=1)
+        future = executor.submit(perform_reindex)
+        try:
+            result = future.result(timeout=timeout_ms / 1000.0)
+            self._reindex_callback.on_complete(result)
+        except FutureTimeoutError:
+            logger.warning(f"Re-index timed out after {timeout_ms}ms - returning stale data")
+            # Cancel the future to signal termination intent
+            future.cancel()
+            self._reindex_callback.on_timeout()
+            # Return stale file_index - better than blocking
+            return self.file_index
+        finally:
+            # Shutdown executor without waiting for running tasks
+            executor.shutdown(wait=False)
+
+        return self.file_index
 
     def shutdown(self) -> None:
         """Shutdown background tasks and clean up resources."""
