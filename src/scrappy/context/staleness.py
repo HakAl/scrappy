@@ -342,34 +342,89 @@ class StalenessChecker:
 
         return StalenessReport(added=added, modified=modified, deleted=deleted)
 
-    def update_fingerprints(self) -> None:
+    def update_fingerprints(self, staleness_report: Optional[StalenessReport] = None) -> None:
         """
         Update stored fingerprints and directory mtimes to current state.
+
+        Args:
+            staleness_report: Optional report of changes from check_staleness().
+                             If provided, only updates fingerprints for files in the report
+                             (incremental update). If None, scans all files (full update).
 
         Should be called after successfully re-indexing changed files.
         Persists both file fingerprints and directory mtimes to disk.
         Fingerprints use nanosecond precision for maximum change detection.
         """
-        logger.debug("Updating fingerprints...")
-        current_files = self.file_scanner.scan_files(self.root_path)
+        if staleness_report is None:
+            # Full update: scan all files and rebuild fingerprints from scratch
+            logger.debug("Updating fingerprints (full scan)...")
+            current_files = self.file_scanner.scan_files(self.root_path)
 
-        # Build new fingerprint map using nanosecond-precision timestamps
-        new_fingerprints: Dict[str, tuple] = {}
-        for file_path in current_files:
-            full_path = self.root_path / file_path
-            try:
-                new_fingerprints[file_path] = self.file_scanner.get_fingerprint(full_path)
-            except (OSError, FileNotFoundError) as e:
-                logger.warning(f"Could not fingerprint {file_path}: {e}")
-                continue
+            # Build new fingerprint map using nanosecond-precision timestamps
+            new_fingerprints: Dict[str, tuple] = {}
+            for file_path in current_files:
+                full_path = self.root_path / file_path
+                try:
+                    new_fingerprints[file_path] = self.file_scanner.get_fingerprint(full_path)
+                except (OSError, FileNotFoundError) as e:
+                    logger.warning(f"Could not fingerprint {file_path}: {e}")
+                    continue
 
-        self._fingerprints = new_fingerprints
+            self._fingerprints = new_fingerprints
 
-        # Also capture directory mtimes for quick_check()
-        self._dir_mtimes = self.file_scanner.scan_directory_mtimes(self.root_path)
+            # Also capture directory mtimes for quick_check()
+            self._dir_mtimes = self.file_scanner.scan_directory_mtimes(self.root_path)
 
-        self._save_fingerprints()
-        logger.debug(f"Saved {len(self._fingerprints)} file fingerprints, {len(self._dir_mtimes)} directory mtimes")
+            self._save_fingerprints()
+            logger.debug(f"Saved {len(self._fingerprints)} file fingerprints, {len(self._dir_mtimes)} directory mtimes")
+        else:
+            # Incremental update: only update fingerprints for changed files
+            logger.debug(
+                f"Updating fingerprints (incremental): "
+                f"+{len(staleness_report.added)} ~{len(staleness_report.modified)} -{len(staleness_report.deleted)}"
+            )
+
+            # Remove deleted files from fingerprints
+            for file_path in staleness_report.deleted:
+                self._fingerprints.pop(file_path, None)
+
+            # Update fingerprints for added and modified files
+            changed_files = staleness_report.added | staleness_report.modified
+            for file_path in changed_files:
+                full_path = self.root_path / file_path
+                try:
+                    self._fingerprints[file_path] = self.file_scanner.get_fingerprint(full_path)
+                except (OSError, FileNotFoundError) as e:
+                    logger.warning(f"Could not fingerprint {file_path}: {e}")
+                    continue
+
+            # Update directory mtimes incrementally by only scanning affected directories
+            # Extract unique directory paths from changed files
+            affected_dirs = set()
+            for file_path in changed_files | staleness_report.deleted:
+                # Get all parent directories of this file
+                parts = Path(file_path).parts
+                for i in range(len(parts)):
+                    dir_path = str(Path(*parts[:i])).replace('\\', '/') if i > 0 else '.'
+                    affected_dirs.add(dir_path)
+
+            # Update mtimes for affected directories
+            for dir_path in affected_dirs:
+                dir_full_path = self.root_path / dir_path if dir_path != '.' else self.root_path
+                try:
+                    self._dir_mtimes[dir_path] = dir_full_path.stat().st_mtime_ns
+                except (OSError, FileNotFoundError) as e:
+                    logger.warning(f"Could not stat directory {dir_path}: {e}")
+                    # Remove from tracking if directory no longer exists
+                    self._dir_mtimes.pop(dir_path, None)
+                    continue
+
+            self._save_fingerprints()
+            logger.debug(
+                f"Incrementally updated {len(changed_files)} file fingerprints, "
+                f"removed {len(staleness_report.deleted)}, "
+                f"updated {len(affected_dirs)} directory mtimes"
+            )
 
     def _load_fingerprints(self) -> None:
         """Load fingerprints and directory mtimes from disk if available."""

@@ -448,7 +448,7 @@ class CodebaseContext:
         # Layer 1: Check if we have stored fingerprints
         if not self._staleness_checker.has_fingerprints():
             logger.info("First run - establishing fingerprint baseline")
-            self._staleness_checker.update_fingerprints()
+            self._staleness_checker.update_fingerprints(None)
             return self.file_index
 
         # Layer 2: Quick directory mtime check (skip if forcing refresh)
@@ -493,7 +493,7 @@ class CodebaseContext:
                         logger.warning(f"Failed to remove deleted files: {e}")
 
             # Update fingerprints after successful refresh
-            self._staleness_checker.update_fingerprints()
+            self._staleness_checker.update_fingerprints(staleness_report)
 
         return self.file_index
 
@@ -1039,7 +1039,7 @@ Be concise and technical. No fluff."""
         # Layer 1: Check if we have stored fingerprints (duck-typed)
         if hasattr(self._staleness_checker, 'has_fingerprints') and not self._staleness_checker.has_fingerprints():
             logger.info("First run - establishing fingerprint baseline")
-            self._staleness_checker.update_fingerprints()
+            self._staleness_checker.update_fingerprints(None)
             return self.file_index
 
         # Layer 2: Quick directory mtime check (skip if forcing refresh, duck-typed)
@@ -1092,7 +1092,7 @@ Be concise and technical. No fluff."""
                         self._reindex_callback.on_progress(total_files, total_files)
 
                 # Update fingerprints after successful refresh
-                self._staleness_checker.update_fingerprints()
+                self._staleness_checker.update_fingerprints(staleness_report)
 
                 return ReindexResult(
                     success=True,

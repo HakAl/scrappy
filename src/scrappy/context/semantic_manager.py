@@ -420,7 +420,7 @@ class SemanticSearchManager:
                 self._notify_progress("Index up to date - no changes detected")
                 # Update staleness checker fingerprints for next quick check
                 if self._staleness_checker:
-                    self._staleness_checker.update_fingerprints()
+                    self._staleness_checker.update_fingerprints(None)
                 return
 
             logger.info(f"Indexing decision: {decision.value} ({metrics.estimated_chunks} estimated chunks)")

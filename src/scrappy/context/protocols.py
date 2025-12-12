@@ -1254,9 +1254,14 @@ class StalenessCheckerProtocol(Protocol):
         """
         ...
 
-    def update_fingerprints(self) -> None:
+    def update_fingerprints(self, staleness_report: Optional[StalenessReport] = None) -> None:
         """
         Update stored fingerprints to current file system state.
+
+        Args:
+            staleness_report: Optional report of changes from check_staleness().
+                             If provided, only updates fingerprints for files in the report
+                             (incremental update). If None, scans all files (full update).
 
         Should be called after successfully re-indexing changed files.
         """

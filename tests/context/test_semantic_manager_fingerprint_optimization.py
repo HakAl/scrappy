@@ -155,7 +155,7 @@ class MockStalenessChecker:
         self.has_fingerprints_called = True
         return True
 
-    def update_fingerprints(self) -> None:
+    def update_fingerprints(self, staleness_report=None) -> None:
         """Update stored fingerprints."""
         self.update_fingerprints_called = True
 

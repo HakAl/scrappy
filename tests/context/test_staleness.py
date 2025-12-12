@@ -759,6 +759,358 @@ class TestStalenessIntegration:
         assert not report2.is_stale
 
 
+class SpyFileScanner(FakeFileScanner):
+    """
+    File scanner that tracks which files were fingerprinted.
+
+    Extends FakeFileScanner to spy on get_fingerprint() calls,
+    allowing tests to verify incremental updates only touch changed files.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.fingerprinted_files: list[str] = []
+
+    def get_fingerprint(self, file_path: Path) -> tuple:
+        """Track fingerprint call and delegate to parent."""
+        path_str = str(file_path).replace('\\', '/')
+        for rel_path in self._files.keys():
+            if path_str.endswith(rel_path):
+                self.fingerprinted_files.append(rel_path)
+                break
+        return super().get_fingerprint(file_path)
+
+    def reset_spy(self) -> None:
+        """Clear fingerprint call tracking."""
+        self.fingerprinted_files = []
+
+
+class TestStalenessCheckerIncrementalUpdate:
+    """
+    Tests for incremental fingerprint updates.
+
+    When update_fingerprints() receives a StalenessReport, it should:
+    - Only fingerprint added/modified files (not all files)
+    - Remove deleted files from fingerprints
+    - Preserve fingerprints for unchanged files
+    """
+
+    @pytest.fixture
+    def time_provider(self):
+        """Create fake time provider."""
+        return FakeTimeProvider(initial_time=1000.0)
+
+    @pytest.fixture
+    def spy_scanner(self):
+        """Create spy file scanner with initial files."""
+        scanner = SpyFileScanner()
+        scanner.add_file('src/unchanged1.py', mtime=1000.0, size=100)
+        scanner.add_file('src/unchanged2.py', mtime=1000.0, size=200)
+        scanner.add_file('src/will_modify.py', mtime=1000.0, size=300)
+        scanner.add_file('src/will_delete.py', mtime=1000.0, size=400)
+        return scanner
+
+    @pytest.fixture
+    def config(self, tmp_path):
+        """Create test config."""
+        fingerprint_file = str(tmp_path / "fingerprints.json")
+        return SemanticIndexConfig(debounce_ms=0, fingerprint_file=fingerprint_file)
+
+    @pytest.fixture
+    def checker(self, time_provider, spy_scanner, config, tmp_path):
+        """Create staleness checker with baseline established."""
+        checker = StalenessChecker(
+            root_path=tmp_path,
+            config=config,
+            time_provider=time_provider,
+            file_scanner=spy_scanner,
+        )
+        # Establish baseline via full scan
+        checker.update_fingerprints(None)
+        spy_scanner.reset_spy()  # Clear initial fingerprint calls
+        return checker
+
+    @pytest.mark.unit
+    def test_incremental_update_only_fingerprints_changed_files(
+        self, checker, spy_scanner
+    ):
+        """
+        Incremental update should only fingerprint added/modified files.
+
+        This is the key optimization: O(changed_files) instead of O(all_files).
+        """
+        # Modify one file
+        spy_scanner.modify_file('src/will_modify.py', mtime=2000.0, size=350)
+
+        # Add a new file
+        spy_scanner.add_file('src/new_file.py', mtime=2000.0, size=500)
+
+        # Create a staleness report with specific changes
+        report = StalenessReport(
+            added={'src/new_file.py'},
+            modified={'src/will_modify.py'},
+            deleted=set(),
+        )
+
+        # Perform incremental update
+        spy_scanner.reset_spy()
+        checker.update_fingerprints(report)
+
+        # Only the changed files should be fingerprinted
+        assert len(spy_scanner.fingerprinted_files) == 2
+        assert 'src/new_file.py' in spy_scanner.fingerprinted_files
+        assert 'src/will_modify.py' in spy_scanner.fingerprinted_files
+
+        # Unchanged files should NOT be fingerprinted
+        assert 'src/unchanged1.py' not in spy_scanner.fingerprinted_files
+        assert 'src/unchanged2.py' not in spy_scanner.fingerprinted_files
+
+    @pytest.mark.unit
+    def test_incremental_update_removes_deleted_files(self, checker, spy_scanner):
+        """
+        Incremental update should remove deleted files from fingerprints.
+        """
+        # Verify file exists in fingerprints before deletion
+        fingerprints_before = checker.get_fingerprints()
+        assert 'src/will_delete.py' in fingerprints_before
+
+        # Remove file from scanner state
+        spy_scanner.remove_file('src/will_delete.py')
+
+        # Create report with deletion
+        report = StalenessReport(
+            added=set(),
+            modified=set(),
+            deleted={'src/will_delete.py'},
+        )
+
+        # Perform incremental update
+        checker.update_fingerprints(report)
+
+        # Deleted file should be removed from fingerprints
+        fingerprints_after = checker.get_fingerprints()
+        assert 'src/will_delete.py' not in fingerprints_after
+
+        # Other files should still be present
+        assert 'src/unchanged1.py' in fingerprints_after
+        assert 'src/unchanged2.py' in fingerprints_after
+        assert 'src/will_modify.py' in fingerprints_after
+
+    @pytest.mark.unit
+    def test_incremental_update_preserves_unchanged_fingerprints(
+        self, checker, spy_scanner
+    ):
+        """
+        Incremental update should preserve fingerprints for unchanged files.
+        """
+        # Capture original fingerprints
+        original_fingerprints = checker.get_fingerprints()
+        original_unchanged1 = original_fingerprints['src/unchanged1.py']
+        original_unchanged2 = original_fingerprints['src/unchanged2.py']
+
+        # Modify one file
+        spy_scanner.modify_file('src/will_modify.py', mtime=2000.0, size=350)
+
+        # Create report with only the modification
+        report = StalenessReport(
+            added=set(),
+            modified={'src/will_modify.py'},
+            deleted=set(),
+        )
+
+        # Perform incremental update
+        checker.update_fingerprints(report)
+
+        # Unchanged files should have exact same fingerprints
+        updated_fingerprints = checker.get_fingerprints()
+        assert updated_fingerprints['src/unchanged1.py'] == original_unchanged1
+        assert updated_fingerprints['src/unchanged2.py'] == original_unchanged2
+
+    @pytest.mark.unit
+    def test_incremental_update_updates_modified_fingerprints(
+        self, checker, spy_scanner
+    ):
+        """
+        Incremental update should update fingerprints for modified files.
+        """
+        # Capture original fingerprint
+        original_fingerprints = checker.get_fingerprints()
+        original_modified = original_fingerprints['src/will_modify.py']
+
+        # Modify the file
+        spy_scanner.modify_file('src/will_modify.py', mtime=2000.0, size=350)
+
+        # Create report with modification
+        report = StalenessReport(
+            added=set(),
+            modified={'src/will_modify.py'},
+            deleted=set(),
+        )
+
+        # Perform incremental update
+        checker.update_fingerprints(report)
+
+        # Modified file should have new fingerprint
+        updated_fingerprints = checker.get_fingerprints()
+        new_modified = updated_fingerprints['src/will_modify.py']
+
+        assert new_modified != original_modified
+        # New fingerprint should reflect new mtime and size
+        assert new_modified == (2_000_000_000_000, 350)  # 2000.0 sec in ns
+
+    @pytest.mark.unit
+    def test_incremental_update_adds_new_file_fingerprints(
+        self, checker, spy_scanner
+    ):
+        """
+        Incremental update should add fingerprints for new files.
+        """
+        # Verify new file not in fingerprints yet
+        original_fingerprints = checker.get_fingerprints()
+        assert 'src/new_file.py' not in original_fingerprints
+
+        # Add new file to scanner
+        spy_scanner.add_file('src/new_file.py', mtime=2000.0, size=500)
+
+        # Create report with addition
+        report = StalenessReport(
+            added={'src/new_file.py'},
+            modified=set(),
+            deleted=set(),
+        )
+
+        # Perform incremental update
+        checker.update_fingerprints(report)
+
+        # New file should now be in fingerprints
+        updated_fingerprints = checker.get_fingerprints()
+        assert 'src/new_file.py' in updated_fingerprints
+        assert updated_fingerprints['src/new_file.py'] == (2_000_000_000_000, 500)
+
+    @pytest.mark.unit
+    def test_incremental_update_handles_mixed_changes(self, checker, spy_scanner):
+        """
+        Incremental update should correctly handle adds, mods, and deletes together.
+        """
+        # Setup: add new file, modify existing, prepare for delete
+        spy_scanner.add_file('src/new_file.py', mtime=2000.0, size=500)
+        spy_scanner.modify_file('src/will_modify.py', mtime=2000.0, size=350)
+        spy_scanner.remove_file('src/will_delete.py')
+
+        # Create report with all change types
+        report = StalenessReport(
+            added={'src/new_file.py'},
+            modified={'src/will_modify.py'},
+            deleted={'src/will_delete.py'},
+        )
+
+        # Perform incremental update
+        spy_scanner.reset_spy()
+        checker.update_fingerprints(report)
+
+        # Verify fingerprint state
+        fingerprints = checker.get_fingerprints()
+
+        # New file added
+        assert 'src/new_file.py' in fingerprints
+        assert fingerprints['src/new_file.py'] == (2_000_000_000_000, 500)
+
+        # Modified file updated
+        assert fingerprints['src/will_modify.py'] == (2_000_000_000_000, 350)
+
+        # Deleted file removed
+        assert 'src/will_delete.py' not in fingerprints
+
+        # Unchanged files preserved
+        assert 'src/unchanged1.py' in fingerprints
+        assert 'src/unchanged2.py' in fingerprints
+
+        # Only changed files were fingerprinted (not unchanged)
+        assert 'src/unchanged1.py' not in spy_scanner.fingerprinted_files
+        assert 'src/unchanged2.py' not in spy_scanner.fingerprinted_files
+
+    @pytest.mark.unit
+    def test_full_update_when_no_report_provided(self, checker, spy_scanner):
+        """
+        When staleness_report is None, should do full scan (existing behavior).
+        """
+        # Reset spy and do full update
+        spy_scanner.reset_spy()
+        checker.update_fingerprints(None)
+
+        # All files should be fingerprinted in full update
+        assert len(spy_scanner.fingerprinted_files) == 4
+        assert 'src/unchanged1.py' in spy_scanner.fingerprinted_files
+        assert 'src/unchanged2.py' in spy_scanner.fingerprinted_files
+        assert 'src/will_modify.py' in spy_scanner.fingerprinted_files
+        assert 'src/will_delete.py' in spy_scanner.fingerprinted_files
+
+    @pytest.mark.unit
+    def test_incremental_update_handles_empty_report(self, checker, spy_scanner):
+        """
+        Incremental update with empty report should not fingerprint any files.
+        """
+        report = StalenessReport(
+            added=set(),
+            modified=set(),
+            deleted=set(),
+        )
+
+        spy_scanner.reset_spy()
+        checker.update_fingerprints(report)
+
+        # No files should be fingerprinted
+        assert len(spy_scanner.fingerprinted_files) == 0
+
+        # All original fingerprints should be preserved
+        fingerprints = checker.get_fingerprints()
+        assert len(fingerprints) == 4
+
+    @pytest.mark.unit
+    def test_incremental_update_performance_with_many_unchanged(
+        self, time_provider, config, tmp_path
+    ):
+        """
+        Incremental update should be fast even with many unchanged files.
+
+        This proves O(changed_files) vs O(all_files).
+        """
+        import time
+
+        # Create scanner with 1000 files
+        scanner = SpyFileScanner()
+        for i in range(1000):
+            scanner.add_file(f'src/file_{i}.py', mtime=1000.0, size=100)
+
+        checker = StalenessChecker(
+            root_path=tmp_path,
+            config=config,
+            time_provider=time_provider,
+            file_scanner=scanner,
+        )
+        checker.update_fingerprints(None)  # Full initial scan
+        scanner.reset_spy()
+
+        # Modify just 2 files
+        scanner.modify_file('src/file_100.py', mtime=2000.0, size=200)
+        scanner.modify_file('src/file_500.py', mtime=2000.0, size=200)
+
+        report = StalenessReport(
+            added=set(),
+            modified={'src/file_100.py', 'src/file_500.py'},
+            deleted=set(),
+        )
+
+        # Time the incremental update
+        start = time.perf_counter()
+        checker.update_fingerprints(report)
+        elapsed_ms = (time.perf_counter() - start) * 1000
+
+        # Should be very fast - only 2 files fingerprinted
+        assert len(scanner.fingerprinted_files) == 2
+        assert elapsed_ms < 50  # Should be < 50ms for just 2 files
+
+
 class TestStalenessReport:
     """Test StalenessReport dataclass behavior."""
 
