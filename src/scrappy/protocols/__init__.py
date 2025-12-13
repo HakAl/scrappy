@@ -25,6 +25,16 @@ from .output import (
     RichRenderableProtocol,
 )
 
+from .progress import (
+    ProgressReporterProtocol,
+    StatusBarUpdaterProtocol,
+)
+
+from .activity import (
+    ActivityState,
+    ActivityIndicatorProtocol,
+)
+
 __all__ = [
     # Delegation protocols
     'LLMRequest',
@@ -42,4 +52,10 @@ __all__ = [
     'BaseOutputProtocol',
     'FormattedOutputProtocol',
     'RichRenderableProtocol',
+    # Progress protocols
+    'ProgressReporterProtocol',
+    'StatusBarUpdaterProtocol',
+    # Activity protocols
+    'ActivityState',
+    'ActivityIndicatorProtocol',
 ]

@@ -2,22 +2,20 @@
 Textual-based progress reporter implementation.
 
 Provides progress reporting for Textual TUI applications by updating
-the status bar widget directly.
+the status bar widget through the StatusBarUpdaterProtocol.
 """
 
-from typing import Optional, TYPE_CHECKING
+from typing import Optional
 
 from scrappy.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
-
-if TYPE_CHECKING:
-    from scrappy.cli.textual_app import ScrappyApp
+from scrappy.protocols.progress import StatusBarUpdaterProtocol
 
 
 class TextualProgressReporter:
     """Progress reporter for Textual apps.
 
-    Implements ProgressReporterProtocol by updating the status bar widget
-    directly instead of using Rich's Live() context manager.
+    Implements ProgressReporterProtocol by updating the status bar through
+    the StatusBarUpdaterProtocol instead of using Rich's Live() context manager.
 
     The status bar shows progress updates with appropriate styling:
     - In-progress: theme.primary color
@@ -25,14 +23,14 @@ class TextualProgressReporter:
     - Error: theme.error color
     """
 
-    def __init__(self, app: "ScrappyApp", theme: Optional[ThemeProtocol] = None):
+    def __init__(self, status_updater: StatusBarUpdaterProtocol, theme: Optional[ThemeProtocol] = None):
         """Initialize the progress reporter.
 
         Args:
-            app: The ScrappyApp instance to update
+            status_updater: The status bar updater to send updates to
             theme: Optional theme for color styling. Uses DEFAULT_THEME if not provided.
         """
-        self._app = app
+        self._status_updater = status_updater
         self._theme = theme or DEFAULT_THEME
         self._current_description: Optional[str] = None
         self._total: Optional[int] = None
@@ -108,17 +106,14 @@ class TextualProgressReporter:
         self._current = None
 
     def _update_status(self, content: str) -> None:
-        """Update the status bar widget.
+        """Update the status bar through the protocol.
 
         Args:
             content: The status message with Rich markup
         """
-        from textual.widgets import Static
-
         try:
-            status_widget = self._app.query_one("#status", Static)
-            status_widget.update(content)
+            self._status_updater.update_status(content)
         except Exception:
-            # If we can't update the status (e.g., app not fully initialized),
+            # If we can't update the status (e.g., widget not fully initialized),
             # fail silently to avoid breaking the operation
             pass

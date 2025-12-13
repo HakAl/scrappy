@@ -21,8 +21,9 @@ from textual import work
 
 from scrappy.infrastructure.output_mode import OutputModeContext
 from scrappy.infrastructure.theme import DEFAULT_THEME, ThemeProtocol
+from scrappy.protocols.activity import ActivityState
 from .input_capture import InputCaptureManager, InputRequest
-from .protocols import StatusComponentProtocol, ActivityState
+from .protocols import StatusComponentProtocol
 
 if TYPE_CHECKING:
     from .interactive import InteractiveMode
@@ -498,8 +499,6 @@ class ActivityIndicator(Label):
 
     def _update_display(self) -> None:
         """Update display text based on current state."""
-        from .protocols import ActivityState
-
         if self._state is None:
             return
 
@@ -688,6 +687,25 @@ class ScrappyApp(App):
 
         if self._codebase_context is not None:
             self._codebase_context.shutdown()
+
+    def update_status(self, content: str) -> None:
+        """Update the status bar widget.
+
+        Implements StatusBarUpdaterProtocol to allow infrastructure components
+        to update the status without depending on the concrete ScrappyApp class.
+
+        Args:
+            content: The status message with Rich markup
+        """
+        from textual.widgets import Static
+
+        try:
+            status_widget = self.query_one("#status", Static)
+            status_widget.update(content)
+        except Exception:
+            # If we can't update the status (e.g., app not fully initialized),
+            # fail silently to avoid breaking the operation
+            pass
 
     def _has_any_provider(self) -> bool:
         """Check if any provider is configured."""

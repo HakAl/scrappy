@@ -16,6 +16,7 @@ from ..input_capture import InputCaptureManager, InputRequest
 from ..command_history import CommandHistory, get_default_history_path
 
 from scrappy.infrastructure.theme import ThemeProtocol
+from scrappy.protocols.activity import ActivityState
 
 if TYPE_CHECKING:
     from ..interactive import InteractiveMode
@@ -278,7 +279,6 @@ class MainAppScreen(Screen):
     def process_command(self, user_input: str) -> None:
         """Process command in worker thread."""
         from ..textual_app import ActivityStateChange
-        from ..protocols import ActivityState
 
         try:
             self.app.post_message(ActivityStateChange(ActivityState.THINKING))
@@ -420,7 +420,6 @@ class MainAppScreen(Screen):
             message: ActivityStateChange message with state, message, and elapsed_ms
         """
         from ..textual_app import ActivityIndicator
-        from ..protocols import ActivityState
 
         try:
             indicator = self.query_one(ActivityIndicator)
@@ -453,7 +452,6 @@ class MainAppScreen(Screen):
     def _update_elapsed(self) -> None:
         """Update elapsed time in the activity indicator."""
         from ..textual_app import ActivityIndicator, ActivityStateChange
-        from ..protocols import ActivityState
 
         if self._elapsed_start_time == 0.0:
             return
