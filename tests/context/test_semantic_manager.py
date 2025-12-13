@@ -7,6 +7,8 @@ from pathlib import Path
 from unittest.mock import Mock, MagicMock
 
 from scrappy.context.semantic_manager import SemanticSearchManager, NullSemanticSearchManager
+from scrappy.context.semantic.decision import ThresholdDecisionMaker
+from scrappy.context.semantic.state import LanceDBIndexStateManager
 from scrappy.infrastructure.threading import (
     EventQueueProtocol,
     ThreadSafeEventQueue,
@@ -460,13 +462,13 @@ class TestSemanticSearchManagerDecisionMaker:
         assert manager._decision_maker is decision_maker
 
     @pytest.mark.unit
-    def test_decision_maker_defaults_to_none(self, temp_project_dir):
-        """Test that decision maker defaults to None when not provided."""
+    def test_decision_maker_defaults_to_threshold(self, temp_project_dir):
+        """Test that decision maker defaults to ThresholdDecisionMaker."""
         manager = SemanticSearchManager(
             project_path=temp_project_dir,
         )
-        # Default factory returns None
-        assert manager._decision_maker is None
+        # Default factory returns ThresholdDecisionMaker
+        assert isinstance(manager._decision_maker, ThresholdDecisionMaker)
 
     @pytest.mark.unit
     def test_state_manager_is_stored(self, temp_project_dir):
@@ -480,13 +482,13 @@ class TestSemanticSearchManagerDecisionMaker:
         assert manager._state_manager is state_manager
 
     @pytest.mark.unit
-    def test_state_manager_defaults_to_none(self, temp_project_dir):
-        """Test that state manager defaults to None when not provided."""
+    def test_state_manager_defaults_to_lancedb(self, temp_project_dir):
+        """Test that state manager defaults to LanceDBIndexStateManager."""
         manager = SemanticSearchManager(
             project_path=temp_project_dir,
         )
-        # Default factory returns None
-        assert manager._state_manager is None
+        # Default factory returns LanceDBIndexStateManager
+        assert isinstance(manager._state_manager, LanceDBIndexStateManager)
 
 
 class TestSemanticSearchManagerAutoIndexing:

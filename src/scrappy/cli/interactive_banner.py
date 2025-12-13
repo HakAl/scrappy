@@ -26,7 +26,6 @@ def display_banner(
     io.secho("Welcome to Scrappy!", fg=theme.primary, bold=True)
     io.echo(f"  {io.style('/help', fg=theme.accent)}   - Show all commands")
     io.echo(f"  {io.style('/agent', fg=theme.accent)}  - Run code agent")
-    io.echo("Type a message to chat, or use a slash command.")
 
 
 def display_disclaimer(io: "UnifiedIOProtocol") -> None:

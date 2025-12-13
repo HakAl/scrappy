@@ -335,8 +335,7 @@ class MainAppScreen(Screen):
         )
 
         if is_complete:
-            self.progress_indicator.complete()
-            # Update semantic status to ready
+            # Update semantic status to ready (no separate progress indicator)
             if hasattr(self, '_semantic_status'):
                 # Extract chunk count from message if present
                 chunks = total
@@ -348,15 +347,33 @@ class MainAppScreen(Screen):
                         chunks = int(match.group(1))
                 self._semantic_status.set_ready(chunks=chunks)
         else:
-            effective_total = total if total > 0 else 100
-            self.progress_indicator.update(
-                progress=progress,
-                total=effective_total,
-                message=message
-            )
-            # Update semantic status to indexing
+            # Update semantic status with progress info on same line
             if hasattr(self, '_semantic_status'):
-                self._semantic_status.set_indexing()
+                # Format progress info for right side
+                progress_info = ""
+                if progress > 0 and total > 0:
+                    progress_info = f"{progress}/{total} files"
+                elif "batch" in message.lower():
+                    # Extract batch info from message format:
+                    # "Indexing batch {batch_count} ({batch_size} files, {total_indexed} total)..."
+                    import re
+                    match = re.search(
+                        r'batch\s+(\d+)\s+\(\d+\s+files?,\s+(\d+)\s+total\)',
+                        message,
+                        re.IGNORECASE
+                    )
+                    if match:
+                        batch_num = int(match.group(1))
+                        total_files = int(match.group(2))
+                        # Fixed-width format to prevent layout shift
+                        progress_info = f"batch {batch_num:>3} | {total_files:>5} files"
+                    else:
+                        # Fallback: just extract batch number
+                        match = re.search(r'batch\s+(\d+)', message, re.IGNORECASE)
+                        if match:
+                            batch_num = int(match.group(1))
+                            progress_info = f"batch {batch_num:>3}"
+                self._semantic_status.set_indexing(progress_info)
 
         status_bar = self.query_one(StatusBar)
         status_bar.refresh_display()

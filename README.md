@@ -32,14 +32,16 @@ Scrappy exists to make powerful AI coding assistance accessible to anyone, anywh
 Get up and running with Scrappy in your terminal.
 
 **1. Install the Tool**
-Clone the repository and install the command-line tool.
 ```bash
-git clone https://github.com/HakAl/scrappy
-cd scrappy
-# Recommended: Create a virtual environment first
-python -m venv venv
-source venv/bin/activate  # On Windows: .\venv\Scripts\activate
-pip install -e .
+# Mac/Linux
+python3 -m venv venv
+source venv/bin/activate
+
+# Windows (PowerShell)
+# python -m venv venv
+# .\venv\Scripts\activate
+
+pip install scrappy-ai
 ```
 
 **2. Get Your Free API Keys**
@@ -51,39 +53,25 @@ You need at least **one** of the following (getting all three is recommended for
 | **Groq**     | [console.groq.com](https://console.groq.com) → Sign up → API Keys | 7,000+ requests |
 | **Gemini**   | [aistudio.google.com](https://aistudio.google.com) → Get API Key      | 1,650 requests  |
 
-**3. Set Your API Keys**
-You can set them as environment variables or place them in a `.env` file in the project root.
+**3. Run the Setup Wizard**
+Scrappy comes with an interactive setup wizard to get you started in seconds.
 
 ```bash
-# Option A: Environment Variables (Recommended)
-export CEREBRAS_API_KEY=your_key_here
-export GROQ_API_KEY=your_key_here
-export GEMINI_API_KEY=your_key_here
-# Windows PowerShell
-$env:CEREBRAS_API_KEY="your_key_here"
-$env:GROQ_API_KEY="your_key_here"
-$env:GEMINI_API_KEY="your_key_here"
-
-# Option B: Create a .env file in the scrappy directory
-# CEREBRAS_API_KEY=your_key_here
-# GROQ_API_KEY=your_key_here
-```
-
-**4. Start Coding with AI!**
-Navigate to any of your coding projects and run the assistant. It will automatically learn about your codebase.
-
-```bash
-cd ~/path/to/your-project
-
-# Option A: Explore from command line
-scrappy --auto-explore
-
-# Option B: Explore from interactive mode
 scrappy
-> /explore
 ```
 
-You can now ask questions, plan features, or even have the AI write code for you.
+The wizard will:
+1.  Prompt you to paste your free API keys (saved securely locally).
+2.  **Automatically download** the embedding model (BGE-Small) in the background.
+3.  **Index your codebase** using LanceDB for ultra-fast retrieval.
+
+*Note: You'll see a progress bar at the bottom of the screen. You can start chatting immediately while Scrappy indexes your code in the background!*
+
+**4. Instant Coding**
+Once configured, Scrappy will immediately start **auto-exploring** your directory.
+
+*   **Zero-Wait:** You can start chatting right away.
+*   **Background Indexing:** Scrappy uses `FastEmbed` and `LanceDB` to index your code on a background thread. Watch the status bar at the bottom for real-time progress.
 
 ---
 
@@ -161,6 +149,7 @@ This isn't just a simple wrapper around APIs. It's a smart, resilient system.
 *   **23,000+ Free Requests/Day**: Combines multiple providers for a massive daily quota.
 *   **Conversation Memory**: Automatically remembers conversations across sessions. Just run `scrappy` and pick up where you left off.
 *   **Semantic Code Search**: Find code by meaning, not just text. Ask "where is authentication handled?" and get relevant results.
+*   **Local & Fast Indexing**: Uses **LanceDB** and **FastEmbed** to index your code locally. No vector databases to manage, no heavy PyTorch dependencies, and your code structure never leaves your machine. 
 *   **Codebase Context**: Explores your project to provide context-aware answers.
 *   **Task-Aware Routing**: Intelligently routes simple tasks to fast models (Cerebras) and complex tasks to quality models (Gemini, Llama-3 70B).
 *   **Code Agent**: AI writes and modifies code with a human-in-the-loop for approval, ensuring safety.
@@ -250,10 +239,13 @@ To customize themes, display settings, and behavior, see the [Customization Guid
     *   **A:** The system is designed to be modular. It's easy to add new providers as they become available. As long as *any* free tier exists, this tool will work.
 
 *   **Q: Will my code be kept private?**
-    *   **A:** Your code never leaves your machine. Only the prompts (which may include snippets of your code for context) are sent to the AI providers. Please review the privacy policies of the providers you use.
+    *   **A:** Scrappy has no servers. However, necessary code snippets are sent to the third-party LLM providers (Cerebras/Groq/Google, etc.) to generate answers. Check their privacy policies regarding data training.
 
 *   **Q: What languages does it support?**
     *   **A:** It is language-agnostic and works with any codebase: Python, JavaScript, Java, Go, Rust, etc.
+
+*   **Q: Does Scrappy work offline?**
+    *   **A:** The chat requires an internet connection to reach the LLM providers. However, the code indexing and search happen entirely **offline** on your device after the initial 20MB model download.
 
 ---
 

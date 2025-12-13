@@ -180,3 +180,19 @@ These items separate "beta" from "release candidate." A buggy-feeling UI undermi
 16. Proactive rate limiting
 
 Estimated effort to Release Candidate: 5-7 days of focused work.
+
+
+#### 1. The "Visual Proof" (Missing GIF/Screenshot)
+Text is abstract. Users need to see what the CLI looks like.
+*   **Action:** Add an ASCII cinema recording (using a tool like `asciinema` or `vhs`) or a high-quality GIF right after the "Quick Start" header. Show the tool answering a question or performing a simple refactor.
+
+Add this section after **"Key Features"** or replace the existing **"Requirements"** section with a broader **"Providers & Architecture"** section.
+
+Since you mentioned a **"clear progress indicator at the bottom status bar,"** this is the **perfect** image to put at the top of your README.
+
+**Why?**
+*   It proves the tool has a robust UI (TUI), not just a basic `input()` loop.
+*   It shows "liveness" and polish.
+
+**Recommendation:**
+Take a screenshot capturing the setup wizard or the main chat window with the status bar visible at the bottom showing `Indexing: [====..] 45%`.

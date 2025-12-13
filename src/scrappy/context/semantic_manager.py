@@ -29,6 +29,8 @@ from .protocols import (
     StalenessCheckerProtocol,
 )
 from .semantic.config import SemanticIndexConfig
+from .semantic.state import LanceDBIndexStateManager
+from .semantic.decision import ThresholdDecisionMaker
 from ..protocols.io import CLIIOProtocol
 
 logger = logging.getLogger(__name__)
@@ -175,7 +177,6 @@ class SemanticSearchManager:
         """
         if event.event_type == EventType.INIT_COMPLETE:
             logger.info("Semantic search model ready (via event)")
-            self._notify_progress("Semantic search ready")
 
             # Cache the result
             self._semantic_search = event.data
@@ -183,7 +184,6 @@ class SemanticSearchManager:
             # Trigger auto-indexing if file collector callback is set
             if self._file_collector_callback:
                 logger.info("Triggering auto-indexing...")
-                self._notify_progress("Starting file indexing...")
                 try:
                     file_collector = self._file_collector_callback()
                     if file_collector:
@@ -207,14 +207,12 @@ class SemanticSearchManager:
         """
         logger.info("Semantic search model ready (via callback)")
         self._semantic_search = search_provider
-        self._notify_progress("Semantic search ready")
 
         # Wire up cancellation before indexing
         self._set_cancellation_from_initializer()
 
         # Trigger indexing (runs on background thread)
         if self._file_collector_callback:
-            self._notify_progress("Starting file indexing...")
             try:
                 file_collector = self._file_collector_callback()
                 if file_collector:
@@ -423,13 +421,40 @@ class SemanticSearchManager:
 
             logger.info(f"Indexing decision: {decision.value} ({metrics.estimated_chunks} estimated chunks)")
 
+            # INCREMENTAL_UPDATE: Only process changed files
+            if decision == IndexingDecision.INCREMENTAL_UPDATE:
+                changed_files = metrics.added_paths | metrics.modified_paths
+                deleted_files = metrics.deleted_paths
+
+                if changed_files:
+                    logger.info(f"Incremental update: {len(changed_files)} files to re-index")
+                    self._notify_progress(f"Re-indexing {len(changed_files)} changed files...")
+                    self.refresh_files(changed_files)
+
+                if deleted_files:
+                    logger.info(f"Removing {len(deleted_files)} deleted files from index")
+                    self._notify_progress(f"Removing {len(deleted_files)} deleted files...")
+                    self.remove_deleted_files(deleted_files)
+
+                # Save updated state
+                if self._state_manager:
+                    provider.save_index_state(self._state_manager)
+
+                # Update staleness checker fingerprints
+                if self._staleness_checker:
+                    self._staleness_checker.update_fingerprints(None)
+
+                self._notify_progress("Incremental update complete")
+                return
+
+        # FULL_INDEX: Use full batch indexing below
         # Use provided progress reporter or default to NullProgressReporter
         from ..infrastructure.progress import NullProgressReporter
         progress = progress_reporter or NullProgressReporter()
         progress_started = False
 
         try:
-            logger.info("Starting semantic search indexing (batched)...")
+            logger.info("Starting full semantic search indexing (batched)...")
             self._notify_progress("Preparing file collector...")
 
             if file_collector is None:
@@ -483,6 +508,10 @@ class SemanticSearchManager:
             # Save state for future decision-making
             if self._state_manager:
                 provider.save_index_state(self._state_manager)
+
+            # Update fingerprints so next quick_check() passes
+            if self._staleness_checker:
+                self._staleness_checker.update_fingerprints(None)
 
         except Exception as e:
             logger.error(f"Semantic indexing failed: {e}")
@@ -558,12 +587,12 @@ class SemanticSearchManager:
         return SemanticIndexConfig()
 
     def _create_default_state_manager(self) -> Optional[IndexStateProtocol]:
-        """Create default state manager (returns None - factory creates it)."""
-        return None
+        """Create default state manager for index persistence."""
+        return LanceDBIndexStateManager(self._project_path / self._config.db_dir_name)
 
     def _create_default_decision_maker(self) -> Optional[IndexingDecisionProtocol]:
-        """Create default decision maker (returns None - factory creates it)."""
-        return None
+        """Create default decision maker for indexing decisions."""
+        return ThresholdDecisionMaker(self._config)
 
     def _create_default_staleness_checker(self) -> Optional[StalenessCheckerProtocol]:
         """

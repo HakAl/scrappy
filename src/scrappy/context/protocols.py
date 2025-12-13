@@ -1049,6 +1049,10 @@ class ChangeMetrics:
     deleted_files: int
     estimated_chunks: int
     total_bytes_changed: int
+    # Actual paths for incremental updates
+    added_paths: Set[str]
+    modified_paths: Set[str]
+    deleted_paths: Set[str]
 
 
 class IndexingDecision(Enum):

@@ -661,6 +661,9 @@ Be concise and technical. No fluff."""
         Returns:
             Relevant context string
         """
+        # Check for file changes and refresh index if needed
+        self.ensure_file_index()
+
         # Check for lazy indexing (for backward compatibility)
         if self.is_explored():
             semantic_search = self.get_search_provider()

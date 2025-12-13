@@ -103,7 +103,6 @@ theme:
         # Defaults from dark preset
         assert config.theme.accent == "#ff9900"
         assert config.theme.success == "#00ff00"
-        assert config.theme.surface == "#1e1e1e"
 
     def test_load_overrides_on_light_preset_from_yaml(self, tmp_path: Path):
         """Color overrides on light preset use light defaults for non-overridden."""

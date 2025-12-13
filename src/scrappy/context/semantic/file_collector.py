@@ -20,6 +20,28 @@ from scrappy.context.semantic.file_prioritizer import DefaultFilePrioritizer
 logger = logging.getLogger(__name__)
 
 
+def compute_file_hash(file_path: Path) -> Optional[str]:
+    """
+    Compute MD5 hash of file content as text.
+
+    Must match the content reading in collect_files_batched() which uses
+    errors='ignore'. This ensures consistent change detection.
+
+    Args:
+        file_path: Absolute path to the file
+
+    Returns:
+        MD5 hex digest or None if file cannot be read
+    """
+    try:
+        # IMPORTANT: Must use errors='ignore' to match collect_files_batched()
+        content = file_path.read_text(encoding='utf-8', errors='ignore')
+        return hashlib.md5(content.encode('utf-8')).hexdigest()
+    except Exception as e:
+        logger.debug(f"Failed to hash file {file_path}: {e}")
+        return None
+
+
 class FileCollectionError(Exception):
     """Exception raised when file collection fails."""
     pass
@@ -510,19 +532,9 @@ class SemanticFileCollector:
                 logger.debug(f"Skipping non-existent file for hashing: {file_path}")
                 continue
 
-            # Compute MD5 hash
-            try:
-                md5_hash = hashlib.md5()
-                with open(full_path, 'rb') as f:
-                    # Read in chunks to handle large files efficiently
-                    for chunk in iter(lambda: f.read(8192), b''):
-                        md5_hash.update(chunk)
-
-                hashes[str(file_path)] = md5_hash.hexdigest()
-
-            except Exception as e:
-                logger.debug(f"Failed to hash file {file_path}: {e}")
-                # Continue processing other files even if one fails
+            file_hash = compute_file_hash(full_path)
+            if file_hash:
+                hashes[str(file_path)] = file_hash
 
         logger.debug(f"Computed hashes for {len(hashes)}/{len(files)} files")
         return hashes
@@ -768,16 +780,9 @@ class FilteredFileCollector:
             if not full_path.exists() or not full_path.is_file():
                 continue
 
-            try:
-                md5_hash = hashlib.md5()
-                with open(full_path, 'rb') as f:
-                    for chunk in iter(lambda: f.read(8192), b''):
-                        md5_hash.update(chunk)
-
-                hashes[str(file_path)] = md5_hash.hexdigest()
-
-            except Exception as e:
-                logger.debug(f"Failed to hash file {file_path}: {e}")
+            file_hash = compute_file_hash(full_path)
+            if file_hash:
+                hashes[str(file_path)] = file_hash
 
         return hashes
 

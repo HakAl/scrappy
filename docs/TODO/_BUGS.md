@@ -84,14 +84,6 @@ EG:  Available Providers:
 ---
 
 
----
-shift selection is messed up, can't 'unselect' once a point is selected.
-can't use mouse scroll during selection.  shift + scrolling
----
-
----
-code search tool is completely useless (command tool has grep)-- more logical as a hybrid with grep/rg + semantic search?
----
 
 ===
 

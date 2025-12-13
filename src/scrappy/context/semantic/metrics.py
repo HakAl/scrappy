@@ -57,12 +57,16 @@ class ChangeMetricsCalculator:
             # First run - all files are new
             total_bytes = sum(current_sizes.values())
             estimated_chunks = self._estimate_chunks(total_bytes)
+            all_paths = {str(f) for f in current_files}
             return ChangeMetrics(
                 new_files=len(current_files),
                 modified_files=0,
                 deleted_files=0,
                 estimated_chunks=estimated_chunks,
                 total_bytes_changed=total_bytes,
+                added_paths=all_paths,
+                modified_paths=set(),
+                deleted_paths=set(),
             )
 
         # Compare current state to saved state
@@ -110,6 +114,9 @@ class ChangeMetricsCalculator:
             deleted_files=deleted_files_count,
             estimated_chunks=estimated_chunks,
             total_bytes_changed=total_bytes_changed,
+            added_paths=new_paths,
+            modified_paths=modified_paths,
+            deleted_paths=deleted_paths,
         )
 
     def _estimate_chunks(self, total_bytes: int) -> int:

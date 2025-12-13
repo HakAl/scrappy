@@ -68,6 +68,9 @@ def no_changes() -> ChangeMetrics:
         deleted_files=0,
         estimated_chunks=0,
         total_bytes_changed=0,
+        added_paths=set(),
+        modified_paths=set(),
+        deleted_paths=set(),
     )
 
 
@@ -80,6 +83,9 @@ def small_changes() -> ChangeMetrics:
         deleted_files=0,
         estimated_chunks=10,
         total_bytes_changed=4000,
+        added_paths={"new_file.py"},
+        modified_paths=set(),
+        deleted_paths=set(),
     )
 
 
@@ -92,6 +98,9 @@ def major_changes() -> ChangeMetrics:
         deleted_files=0,
         estimated_chunks=30,
         total_bytes_changed=12000,
+        added_paths={"a.py", "b.py", "c.py", "d.py", "e.py"},
+        modified_paths={"x.py", "y.py"},
+        deleted_paths=set(),
     )
 
 
@@ -152,6 +161,9 @@ def test_full_index_when_chunk_change_at_threshold_boundary(
         deleted_files=0,
         estimated_chunks=26,
         total_bytes_changed=10400,
+        added_paths={"a.py", "b.py"},
+        modified_paths={"c.py"},
+        deleted_paths=set(),
     )
 
     decision = decision_maker.decide(
@@ -215,6 +227,9 @@ def test_incremental_when_just_below_threshold(
         deleted_files=0,
         estimated_chunks=24,
         total_bytes_changed=9600,
+        added_paths={"a.py", "b.py"},
+        modified_paths={"c.py"},
+        deleted_paths=set(),
     )
 
     decision = decision_maker.decide(
@@ -235,6 +250,9 @@ def test_incremental_with_one_chunk_change(
         deleted_files=0,
         estimated_chunks=1,
         total_bytes_changed=400,
+        added_paths={"a.py"},
+        modified_paths=set(),
+        deleted_paths=set(),
     )
 
     decision = decision_maker.decide(
@@ -273,6 +291,9 @@ def test_skip_when_zero_estimated_chunks(
         deleted_files=0,
         estimated_chunks=0,  # Key: no chunk changes
         total_bytes_changed=0,
+        added_paths=set(),
+        modified_paths={"a.py"},
+        deleted_paths=set(),
     )
 
     decision = decision_maker.decide(
@@ -298,6 +319,9 @@ def test_should_show_progress_above_threshold(
         deleted_files=0,
         estimated_chunks=21,
         total_bytes_changed=8400,
+        added_paths={"a.py", "b.py", "c.py", "d.py", "e.py"},
+        modified_paths=set(),
+        deleted_paths=set(),
     )
 
     assert decision_maker.should_show_progress(metrics) is True
@@ -316,6 +340,9 @@ def test_should_not_show_progress_below_threshold(
         deleted_files=0,
         estimated_chunks=19,
         total_bytes_changed=7600,
+        added_paths={"a.py", "b.py"},
+        modified_paths=set(),
+        deleted_paths=set(),
     )
 
     assert decision_maker.should_show_progress(metrics) is False
@@ -334,6 +361,9 @@ def test_should_not_show_progress_at_threshold(
         deleted_files=0,
         estimated_chunks=20,  # Exactly at threshold
         total_bytes_changed=8000,
+        added_paths={"a.py", "b.py"},
+        modified_paths=set(),
+        deleted_paths=set(),
     )
 
     assert decision_maker.should_show_progress(metrics) is False
@@ -357,6 +387,9 @@ def test_should_show_progress_large_workload(
         deleted_files=5,
         estimated_chunks=500,
         total_bytes_changed=200000,
+        added_paths={f"new{i}.py" for i in range(50)},
+        modified_paths={f"mod{i}.py" for i in range(20)},
+        deleted_paths={f"del{i}.py" for i in range(5)},
     )
 
     assert decision_maker.should_show_progress(large_metrics) is True
@@ -434,6 +467,9 @@ def test_custom_config_thresholds() -> None:
         deleted_files=0,
         estimated_chunks=10,
         total_bytes_changed=4000,
+        added_paths={"new.py"},
+        modified_paths=set(),
+        deleted_paths=set(),
     )
 
     decision = decision_maker.decide(state_1_day_old, small_change)
@@ -447,6 +483,9 @@ def test_custom_config_thresholds() -> None:
             deleted_files=0,
             estimated_chunks=99,
             total_bytes_changed=0,
+            added_paths=set(),
+            modified_paths=set(),
+            deleted_paths=set(),
         )
     ) is False
 
@@ -458,5 +497,8 @@ def test_custom_config_thresholds() -> None:
             deleted_files=0,
             estimated_chunks=101,
             total_bytes_changed=0,
+            added_paths=set(),
+            modified_paths=set(),
+            deleted_paths=set(),
         )
     ) is True

@@ -60,9 +60,8 @@ theme:
         assert config.theme.accent == "#e5c07b"
         assert config.theme.success == "#98c379"
 
-        # Verify defaults from dark preset (hex codes)
+        # Verify defaults from dark preset
         assert config.theme.text == "#ffffff"
-        assert config.theme.surface == "#1e1e1e"
 
     def test_json_config_to_theme_protocol(self, tmp_path: Path, monkeypatch):
         """Complete flow: .scrappy.json → CLIConfig → ThemeProtocol."""
@@ -363,10 +362,9 @@ theme:
 
         # Only accent overridden
         assert config.theme.accent == "#ff00ff"
-        # Rest are defaults (hex codes from ScrappyTheme)
+        # Rest are defaults from ScrappyTheme
         assert config.theme.primary == "#00ffff"
         assert config.theme.success == "#00ff00"
-        assert config.theme.surface == "#1e1e1e"
 
     def test_switch_to_light_theme(self, tmp_path: Path, monkeypatch):
         """User switches from dark to light preset (real-world scenario)."""

@@ -95,10 +95,10 @@ TextArea > .text-area--cursor {
 
 #status_bar.show {
     display: block;
-    height: auto;
+    height: 4;  /* Fixed 2-line height to prevent jank */
+    min-height: 4;
     padding: 1;
-    overflow-x: auto;
-    overflow-y: auto;
+    overflow: hidden;
 }
 
 #status_content {
@@ -115,9 +115,9 @@ TextArea > .text-area--cursor {
     color: $text-muted;
 }
 
-/* Semantic status styling */
+/* Semantic status styling - horizontal layout with left/right labels */
 #semantic_status {
-    width: auto;
+    width: 100%;
     height: auto;
     padding: 0 1;
     color: $text-muted;
@@ -129,6 +129,15 @@ TextArea > .text-area--cursor {
 
 #semantic_status.ready {
     color: $success;
+}
+
+#semantic_status_left {
+    width: auto;
+}
+
+#semantic_status_right {
+    width: 1fr;
+    content-align: right middle;
 }
 
 /* Token counter styling */

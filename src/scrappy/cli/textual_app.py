@@ -15,7 +15,7 @@ from textual.app import App, ComposeResult
 from textual.message import Message
 from textual.theme import Theme
 from textual.widgets import Label
-from textual.containers import Container, Vertical
+from textual.containers import Container, Vertical, Horizontal
 from textual.reactive import reactive
 from textual import work
 
@@ -366,7 +366,11 @@ class SemanticStatusComponent:
         self._state: str = "initializing"  # initializing, indexing, ready, error
         self._chunks: int = 0
         self._files: int = 0
-        self._widget: Optional[Label] = None
+        self._progress_info: str = ""  # Right-aligned progress details
+        self._start_time: Optional[float] = None
+        self._widget: Optional[Horizontal] = None
+        self._left_label: Optional[Label] = None
+        self._right_label: Optional[Label] = None
 
     @property
     def component_id(self) -> str:
@@ -377,27 +381,48 @@ class SemanticStatusComponent:
         return True  # Always visible unlike ProgressIndicator
 
     @property
-    def widget(self) -> Label:
+    def widget(self) -> Horizontal:
         if self._widget is None:
-            self._widget = Label(self._format_status(), id=self.component_id)
+            self._left_label = Label(self._format_left(), id="semantic_status_left")
+            self._right_label = Label(self._format_right(), id="semantic_status_right")
+            self._widget = Horizontal(
+                self._left_label,
+                self._right_label,
+                id=self.component_id
+            )
         return self._widget
 
-    def _format_status(self) -> str:
+    def _format_left(self) -> str:
         if self._state == "ready":
             return "Search: ready"
         elif self._state == "indexing":
-            return "Search: indexing..."
+            return "Search: indexing"
         elif self._state == "error":
             return "Search: unavailable"
         else:
             return "Search: initializing..."
 
-    def update_widget(self) -> None:
-        if self._widget is not None:
-            self._widget.update(self._format_status())
+    def _format_right(self) -> str:
+        if self._state == "indexing" and self._progress_info:
+            elapsed = ""
+            if self._start_time is not None:
+                elapsed_secs = time.time() - self._start_time
+                # Fixed-width format to prevent layout shift (handles 0.0 to 999.9)
+                elapsed = f" ({elapsed_secs:>5.1f}s)"
+            return f"{self._progress_info}{elapsed}"
+        return ""
 
-    def set_indexing(self) -> None:
+    def update_widget(self) -> None:
+        if self._left_label is not None:
+            self._left_label.update(self._format_left())
+        if self._right_label is not None:
+            self._right_label.update(self._format_right())
+
+    def set_indexing(self, progress_info: str = "") -> None:
+        if self._state != "indexing":
+            self._start_time = time.time()
         self._state = "indexing"
+        self._progress_info = progress_info
         if self._widget is not None:
             self._widget.remove_class("ready")
             self._widget.add_class("indexing")
@@ -407,6 +432,8 @@ class SemanticStatusComponent:
         self._state = "ready"
         self._chunks = chunks
         self._files = files
+        self._progress_info = ""
+        self._start_time = None
         if self._widget is not None:
             self._widget.remove_class("indexing")
             self._widget.add_class("ready")
@@ -414,6 +441,8 @@ class SemanticStatusComponent:
 
     def set_error(self) -> None:
         self._state = "error"
+        self._progress_info = ""
+        self._start_time = None
         self.update_widget()
 
 

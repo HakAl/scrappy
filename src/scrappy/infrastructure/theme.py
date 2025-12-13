@@ -101,7 +101,7 @@ class SyntaxColors:
 
 @dataclass(frozen=True)
 class ScrappyTheme:
-    """Default dark theme."""
+    """Default dark theme - terminal black background."""
 
     # Metadata
     preset: str = "dark"
@@ -114,9 +114,9 @@ class ScrappyTheme:
     info: str = "#0077ff"
     text: str = "#ffffff"
     text_muted: str = "#808080"
-    # Background
-    surface: str = "#1e1e1e"
-    surface_alt: str = "#2d2d2d"
+    # Background - solid black for terminal look
+    surface: str = "#0c0c0c"
+    surface_alt: str = "#0c0c0c"
     # Fixed
     git: GitColors = field(default_factory=GitColors)
     syntax: SyntaxColors = field(default_factory=SyntaxColors)
@@ -198,8 +198,8 @@ class CustomTheme:
     info: str = "#0077ff"
     text: str = "#ffffff"
     text_muted: str = "#808080"
-    surface: str = "#1e1e1e"
-    surface_alt: str = "#2d2d2d"
+    surface: str = "#0c0c0c"
+    surface_alt: str = "#0c0c0c"
     git: GitColors = field(default_factory=GitColors)
     syntax: SyntaxColors = field(default_factory=SyntaxColors)
 
