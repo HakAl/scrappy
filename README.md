@@ -86,135 +86,38 @@ scrappy
 You can now ask questions, plan features, or even have the AI write code for you.
 
 ---
-## 2. Model Transparency
-You mention providers (Groq, Cerebras), but developers care about the **models**.
-*   **Action:** Briefly mention which models are powering this.
-    *   *Add:* "Powered by Llama 3 (via Groq/Cerebras) and Gemini Pro."
-    *   *Why:* Users want to know if they are getting GPT-3.5 level or GPT-4 level intelligence.
 
-    MODELS = {
-        'gemini-2.5-flash-lite': {
-            'rpm': 15, 'rpd': 1000, 'tpd': 250000,
-            'quality': QualityRank.GOOD, 'speed': SpeedRank.FAST, 'priority': 1,
-            'type': ModelType.CHAT
-        },
-        'gemini-2.0-flash-lite': {
-            'rpm': 30, 'rpd': 200, 'tpd': 1000000,
-            'quality': QualityRank.MODERATE, 'speed': SpeedRank.VERY_FAST, 'priority': 2,
-            'type': ModelType.CHAT
-        },
-        'gemini-2.0-flash': {
-            'rpm': 15, 'rpd': 200, 'tpd': 1000000,
-            'quality': QualityRank.GOOD, 'speed': SpeedRank.FAST, 'priority': 3,
-            'type': ModelType.CHAT
-        },
-        'gemini-2.5-flash': {
-            'rpm': 10, 'rpd': 250, 'tpd': 250000,
-            'quality': QualityRank.VERY_GOOD, 'speed': SpeedRank.MODERATE, 'priority': 4,
-            'type': ModelType.CHAT
-        },
-        'gemini-2.0-flash-exp': {
-            'rpm': 10, 'rpd': 50, 'tpd': None,
-            'quality': QualityRank.MODERATE, 'speed': SpeedRank.FAST, 'priority': 5,
-            'type': ModelType.CHAT
-        },
-    }
-* GROQ
-* {
-        'llama-3.1-8b-instant': {
-            'rpm': 30, 'rpd': 7000, 'tpm': 20000, 'tpd': 200000,
-            'context': 131072, 'speed': SpeedRank.VERY_FAST, 'quality': QualityRank.GOOD,
-            'type': ModelType.CHAT
-        },
-        'llama-3.3-70b-versatile': {
-            'rpm': 30, 'rpd': 1000, 'tpm': 12000, 'tpd': 100000,
-            'context': 32768, 'speed': SpeedRank.FAST, 'quality': QualityRank.EXCELLENT,
-            'type': ModelType.CHAT
-        },
-        'llama-3.1-70b-versatile': {
-            'rpm': 30, 'rpd': 1000, 'tpm': 12000, 'tpd': 100000,
-            'context': 32768, 'speed': SpeedRank.FAST, 'quality': QualityRank.EXCELLENT,
-            'type': ModelType.CHAT
-        },
-        'mixtral-8x7b-32768': {
-            'rpm': 30, 'rpd': 14400, 'tpm': 5000, 'tpd': None,
-            'context': 32768, 'speed': SpeedRank.FAST, 'quality': QualityRank.VERY_GOOD,
-            'type': ModelType.CHAT
-        },
-        # New instruction-tuned models (added 2025-11)
-        'meta-llama/llama-4-scout-17b-16e-instruct': {
-            'rpm': 30, 'rpd': 7000, 'tpm': 20000, 'tpd': 200000,
-            'context': 16384, 'speed': SpeedRank.ULTRA_FAST, 'quality': QualityRank.EXCELLENT,
-            'type': ModelType.INSTRUCT
-        },
-        'moonshotai/kimi-k2-instruct': {
-            'rpm': 30, 'rpd': 7000, 'tpm': 20000, 'tpd': 200000,
-            'context': 131072, 'speed': SpeedRank.ULTRA_FAST, 'quality': QualityRank.EXCELLENT,
-            'type': ModelType.INSTRUCT
-        },
-cerebras
-{
-        'llama3.1-8b': {
-            'rpd': 14400, 'tpm': 60000,
-            'context': 8192, 'speed': SpeedRank.ULTRA_FAST, 'quality': QualityRank.GOOD,
-            'type': ModelType.CHAT
-        },
-        'llama-3.3-70b': {
-            'rpd': 14400, 'tpm': 60000,
-            'context': 8192, 'speed': SpeedRank.VERY_FAST, 'quality': QualityRank.EXCELLENT,
-            'type': ModelType.CHAT
-        },
-        'qwen-3-32b': {
-            'rpd': 14400, 'tpm': 60000,
-            'context': 8192, 'speed': SpeedRank.VERY_FAST, 'quality': QualityRank.VERY_GOOD,
-            'type': ModelType.CHAT
-        },
-        # New instruction-tuned model (added 2025-11) - excellent JSON compliance
-        'qwen-3-235b-a22b-instruct-2507': {
-            'rpd': 14400, 'tpm': 60000,
-            'context': 8192, 'speed': SpeedRank.FAST, 'quality': QualityRank.EXCELLENT,
-            'type': ModelType.INSTRUCT
-        },
-GITHUB CANNOT BE USED FOR AGENT BC OF RATE LIMITING
-* {
-        'gpt-4o': {
-            'rpd': 10000, 'tpd': 10000000,
-            'context': 128000, 'speed': SpeedRank.MODERATE, 'quality': QualityRank.EXCELLENT
-        },
-        'gpt-4o-mini': {
-            'rpd': 20000, 'tpd': 2000000,
-            'context': 128000, 'speed': SpeedRank.FAST, 'quality': QualityRank.VERY_GOOD
-        },
-        'deepseek-r1': {
-            'rpd': None, 'tpd': None,  # Unknown - no headers returned
-            'context': 64000, 'speed': SpeedRank.MODERATE, 'quality': QualityRank.EXCELLENT,
-            'reasoning': True
-        },
-        'grok-3-mini': {
-            'rpd': None, 'tpd': None,
-            'context': 131072, 'speed': SpeedRank.FAST, 'quality': QualityRank.VERY_GOOD
-        },
-        'meta-llama-3.1-8b-instruct': {
-            'rpd': None, 'tpd': None,
-            'context': 128000, 'speed': SpeedRank.VERY_FAST, 'quality': QualityRank.GOOD
-        },
-        'llama-4-scout-17b-16e-instruct': {
-            'rpd': None, 'tpd': None,
-            'context': 10000000, 'speed': SpeedRank.FAST, 'quality': QualityRank.VERY_GOOD
-        },
-        'phi-4': {
-            'rpd': None, 'tpd': None,
-            'context': 16384, 'speed': SpeedRank.VERY_FAST, 'quality': QualityRank.GOOD
-        },
-        'mistral-small-2503': {
-            'rpd': None, 'tpd': None,
-            'context': 32768, 'speed': SpeedRank.FAST, 'quality': QualityRank.GOOD
-        },
-        'cohere-command-a': {
-            'rpd': None, 'tpd': None,
-            'context': 256000, 'speed': SpeedRank.MODERATE, 'quality': QualityRank.VERY_GOOD
-        },
-    }
+## Supported Models & Architecture
+
+Scrappy uses a "Mixture of Providers" strategy. Instead of relying on one expensive model, it dynamically routes tasks to the best free-tier model for the job.
+
+### 1. The Heavy Lifters (High Volume & Speed)
+These providers power the core of Scrappy, handling the bulk of agent loops, refactoring, and general chat.
+
+| Provider | Key Models | Why we use it |
+| :--- | :--- | :--- |
+| **Cerebras** | **Llama 3.3 70B**, **Qwen 3 32B**, **Llama 3.1 8B**<br>*(Plus Qwen-3-235B Instruct)* | **Incredible Speed.** With ~14,400 requests/day and ultra-fast inference, this is the default engine for the "Agent" loop, allowing it to iterate on code rapidly without hitting limits. |
+| **Groq** | **Llama 3.3 70B**, **Mixtral 8x7B**, **Llama 4 Scout**<br>*(Plus Kimi-k2-instruct)* | **Low Latency.** Groq provides near-instant responses. We use the 70B Versatile models for complex reasoning tasks that require more intelligence than the 8B models can provide. |
+| **Google** | **Gemini 2.5 Flash**, **Gemini 2.0 Flash-Exp** | **Huge Context.** When you need to analyze multiple files or large documentation, Scrappy routes to Gemini. It handles large context windows better than Llama-based models. |
+
+### 2. The Specialists (High Intelligence / Specific Tasks)
+Scrappy also integrates specialized providers for hard reasoning problems or "second opinions."
+
+*   **GitHub Models:** Includes access to **GPT-4o**, **DeepSeek-R1** (Reasoning), and **Phi-4**.
+    *   *Limitation:* These are strictly for **Chat/Query** mode. Due to strict Rate Limits (TPM/RPM), they cannot be used for the autonomous `agent` loop.
+*   **Cohere:** Integrated but currently inactive by default due to low free-tier quotas.
+
+### 3. Model Routing Logic
+You don't need to manually switch models (though you can). Scrappy classifies your intent:
+
+1.  **"Fix this function"** $\rightarrow$ **Cerebras (Llama 3.1 8B)**
+    *   *Reason:* Fast, cheap, and capable enough for small logic changes.
+2.  **"Plan a new architecture for my app"** $\rightarrow$ **Groq (Llama 3.3 70B)** or **Gemini 2.5**
+    *   *Reason:* Requires high-level reasoning and instruction following.
+3.  **"Explain how this entire module works"** $\rightarrow$ **Gemini 2.0 Flash**
+    *   *Reason:* Needs a massive context window to read all the files.
+4.  **"Why is this logic failing?" (Hard Logic)** $\rightarrow$ **DeepSeek-R1 (via GitHub)**
+    *   *Reason:* Specialized reasoning model required.
 
 ---
 
