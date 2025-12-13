@@ -2,6 +2,7 @@
 
 from .protocols import AgentPromptConfig, ResearchPromptConfig, ResearchSubtype
 from .sections import (
+    DEGRADED_MODE_SECTION,
     codebase_hint_section,
     codebase_structure_section,
     completion_section,
@@ -172,6 +173,10 @@ Guidelines:
 
 {tool_format_section()}"""
 
+        degraded_mode = ""
+        if not config.semantic_available:
+            degraded_mode = f"\n\n{DEGRADED_MODE_SECTION}"
+
         return f"""You are a codebase research assistant with access to file system tools.
 
 Your role:
@@ -180,7 +185,7 @@ Your role:
 - Cite specific files and line numbers when referencing code
 - If information isn't found, say so clearly
 
-{tool_section}
+{tool_section}{degraded_mode}
 
 Strategy:
 1. CAST A WIDE NET: Use search_code for keywords first

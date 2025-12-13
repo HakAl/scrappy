@@ -269,7 +269,8 @@ class ResearchExecutor(ProviderAwareStrategy):
             extracted_files=tuple(task.extracted_files or []),
             extracted_directories=tuple(task.extracted_directories or []),
             matched_project_files=matched_files,
-            matched_file_contents=matched_file_contents
+            matched_file_contents=matched_file_contents,
+            semantic_available=self._is_semantic_ready()
         )
         system_prompt = self._prompt_factory.create_research_system_prompt(config)
         initial_prompt = self._prompt_factory.create_research_user_prompt(task.original_input, config)
@@ -327,6 +328,20 @@ class ResearchExecutor(ProviderAwareStrategy):
         except Exception:
             pass
         return None
+
+    def _is_semantic_ready(self) -> bool:
+        """Check if semantic search is ready for use.
+
+        Returns:
+            True if semantic search is initialized and ready, False otherwise.
+        """
+        try:
+            context = self.orchestrator.context
+            if context and hasattr(context, 'is_semantic_search_ready'):
+                return context.is_semantic_search_ready()
+        except Exception:
+            pass
+        return False
 
     def _load_file_snippets(
         self,

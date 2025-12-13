@@ -5,6 +5,30 @@ from typing import Optional
 from .protocols import Platform
 
 
+DEGRADED_MODE_SECTION = """## IMPORTANT: Degraded Mode - Semantic Search Unavailable
+
+The codebase has not been indexed yet. You are operating in degraded mode with limited search capabilities.
+
+LIMITATIONS:
+- No semantic code search available
+- Cannot find functions/classes by description
+- File content search is limited to grep/text matching only
+
+WHAT YOU CAN DO:
+- List directory contents
+- Read specific files by path
+- Search for exact text/strings using grep
+- Navigate the codebase manually
+
+RECOMMENDED APPROACH:
+1. Start with directory listings to understand structure
+2. Read key files (README, main entry points)
+3. Use grep for exact string searches
+4. Build mental map of codebase through exploration
+
+Ask the user to run indexing if you need semantic search capabilities."""
+
+
 def platform_section(platform: Platform) -> str:
     """Generate platform-specific shell instructions.
 

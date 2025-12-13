@@ -221,6 +221,85 @@ class TestResearchExecutorSubtypeRouting:
         )
 
 
+class TestResearchExecutorSemanticReadiness:
+    """Tests for semantic search readiness detection."""
+
+    def _create_mock_orchestrator(self, semantic_ready=True):
+        """Create a mock orchestrator with configurable semantic readiness."""
+        orchestrator = Mock()
+
+        context = Mock()
+        context.file_index = {"codebase": ["src/codebase.py"]}
+        context.get_cached_file_index.return_value = context.file_index
+        context.is_explored.return_value = False
+        context.is_semantic_search_ready.return_value = semantic_ready
+        orchestrator.context = context
+
+        providers = Mock()
+        providers.list_available.return_value = ['cerebras']
+        providers.get_provider.return_value = Mock()
+        orchestrator.providers = providers
+
+        response = Mock()
+        response.content = "Test response"
+        response.tokens_used = 100
+        orchestrator.delegate.return_value = response
+
+        return orchestrator
+
+    def _create_research_task(self, query: str) -> ClassifiedTask:
+        """Create a ClassifiedTask for testing."""
+        return ClassifiedTask(
+            original_input=query,
+            task_type=TaskType.RESEARCH,
+            confidence=0.9,
+            reasoning="Test task",
+            complexity_score=2,
+        )
+
+    def test_degraded_mode_detected_during_indexing(self):
+        """Config has semantic_available=False when not ready."""
+        orchestrator = self._create_mock_orchestrator(semantic_ready=False)
+
+        executor = ResearchExecutor(
+            orchestrator=orchestrator,
+            preferred_provider="cerebras",
+        )
+
+        # Verify _is_semantic_ready returns False
+        assert executor._is_semantic_ready() is False
+
+    def test_semantic_ready_when_indexing_complete(self):
+        """Config has semantic_available=True when ready."""
+        orchestrator = self._create_mock_orchestrator(semantic_ready=True)
+
+        executor = ResearchExecutor(
+            orchestrator=orchestrator,
+            preferred_provider="cerebras",
+        )
+
+        # Verify _is_semantic_ready returns True
+        assert executor._is_semantic_ready() is True
+
+    def test_semantic_ready_handles_missing_method(self):
+        """Gracefully handles context without is_semantic_search_ready method."""
+        orchestrator = Mock()
+        context = Mock(spec=[])  # No methods
+        orchestrator.context = context
+
+        providers = Mock()
+        providers.list_available.return_value = ['cerebras']
+        orchestrator.providers = providers
+
+        executor = ResearchExecutor(
+            orchestrator=orchestrator,
+            preferred_provider="cerebras",
+        )
+
+        # Should return False when method doesn't exist
+        assert executor._is_semantic_ready() is False
+
+
 class TestResearchExecutorEdgeCases:
     """Edge case tests for research executor routing."""
 

@@ -336,6 +336,44 @@ class TestFactoryIsStateless:
         assert len(agent_prompt) > len(research_prompt)
 
 
+class TestDegradedMode:
+    """Tests for degraded mode awareness when semantic search unavailable."""
+
+    def test_prompt_includes_degraded_caveat(self):
+        """System prompt includes limitation warning when degraded."""
+        factory = PromptFactory()
+        config = ResearchPromptConfig(
+            subtype=ResearchSubtype.CODEBASE,
+            semantic_available=False,
+        )
+        prompt = factory.create_research_system_prompt(config)
+
+        assert "degraded mode" in prompt.lower()
+        assert "semantic" in prompt.lower()
+
+    def test_no_caveat_when_semantic_ready(self):
+        """No warning when semantic search is ready."""
+        factory = PromptFactory()
+        config = ResearchPromptConfig(
+            subtype=ResearchSubtype.CODEBASE,
+            semantic_available=True,
+        )
+        prompt = factory.create_research_system_prompt(config)
+
+        assert "degraded mode" not in prompt.lower()
+
+    def test_degraded_mode_only_affects_codebase_research(self):
+        """General research should not include degraded mode warning."""
+        factory = PromptFactory()
+        config = ResearchPromptConfig(
+            subtype=ResearchSubtype.GENERAL,
+            semantic_available=False,
+        )
+        prompt = factory.create_research_system_prompt(config)
+
+        assert "degraded mode" not in prompt.lower()
+
+
 class TestEdgeCases:
     """Tests for edge cases and error conditions."""
 
