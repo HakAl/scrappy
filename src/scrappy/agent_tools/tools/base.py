@@ -49,6 +49,9 @@ class ToolContext:
     and memory access.
     """
 
+    # Paths that are blocked from agent access (security)
+    BLOCKED_PATHS = [".git", ".git/", ".git\\"]
+
     project_root: Path
     dry_run: bool = False
     config: Optional["AgentConfig"] = None
@@ -56,13 +59,23 @@ class ToolContext:
     semantic_search: Optional["SemanticSearchProtocol"] = None
 
     def is_safe_path(self, path: str) -> bool:
-        """Check if path is within project sandbox.
+        """Check if path is within project sandbox and not in blocked paths.
 
         Uses Path.relative_to() for robust checking that:
         - Handles Windows case-insensitivity correctly
         - Cannot be fooled by sibling directories with similar names
         - Properly resolves symlinks and relative paths
+        - Blocks access to sensitive directories like .git/
         """
+        # Normalize path for comparison
+        normalized = path.replace("\\", "/").lower()
+
+        # Block access to sensitive directories
+        for blocked in self.BLOCKED_PATHS:
+            blocked_norm = blocked.replace("\\", "/").lower()
+            if normalized == blocked_norm or normalized.startswith(blocked_norm.rstrip("/") + "/"):
+                return False
+
         try:
             target = (self.project_root / path).resolve()
             project_abs = self.project_root.resolve()

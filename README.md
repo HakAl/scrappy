@@ -86,6 +86,137 @@ scrappy
 You can now ask questions, plan features, or even have the AI write code for you.
 
 ---
+## 2. Model Transparency
+You mention providers (Groq, Cerebras), but developers care about the **models**.
+*   **Action:** Briefly mention which models are powering this.
+    *   *Add:* "Powered by Llama 3 (via Groq/Cerebras) and Gemini Pro."
+    *   *Why:* Users want to know if they are getting GPT-3.5 level or GPT-4 level intelligence.
+
+    MODELS = {
+        'gemini-2.5-flash-lite': {
+            'rpm': 15, 'rpd': 1000, 'tpd': 250000,
+            'quality': QualityRank.GOOD, 'speed': SpeedRank.FAST, 'priority': 1,
+            'type': ModelType.CHAT
+        },
+        'gemini-2.0-flash-lite': {
+            'rpm': 30, 'rpd': 200, 'tpd': 1000000,
+            'quality': QualityRank.MODERATE, 'speed': SpeedRank.VERY_FAST, 'priority': 2,
+            'type': ModelType.CHAT
+        },
+        'gemini-2.0-flash': {
+            'rpm': 15, 'rpd': 200, 'tpd': 1000000,
+            'quality': QualityRank.GOOD, 'speed': SpeedRank.FAST, 'priority': 3,
+            'type': ModelType.CHAT
+        },
+        'gemini-2.5-flash': {
+            'rpm': 10, 'rpd': 250, 'tpd': 250000,
+            'quality': QualityRank.VERY_GOOD, 'speed': SpeedRank.MODERATE, 'priority': 4,
+            'type': ModelType.CHAT
+        },
+        'gemini-2.0-flash-exp': {
+            'rpm': 10, 'rpd': 50, 'tpd': None,
+            'quality': QualityRank.MODERATE, 'speed': SpeedRank.FAST, 'priority': 5,
+            'type': ModelType.CHAT
+        },
+    }
+* GROQ
+* {
+        'llama-3.1-8b-instant': {
+            'rpm': 30, 'rpd': 7000, 'tpm': 20000, 'tpd': 200000,
+            'context': 131072, 'speed': SpeedRank.VERY_FAST, 'quality': QualityRank.GOOD,
+            'type': ModelType.CHAT
+        },
+        'llama-3.3-70b-versatile': {
+            'rpm': 30, 'rpd': 1000, 'tpm': 12000, 'tpd': 100000,
+            'context': 32768, 'speed': SpeedRank.FAST, 'quality': QualityRank.EXCELLENT,
+            'type': ModelType.CHAT
+        },
+        'llama-3.1-70b-versatile': {
+            'rpm': 30, 'rpd': 1000, 'tpm': 12000, 'tpd': 100000,
+            'context': 32768, 'speed': SpeedRank.FAST, 'quality': QualityRank.EXCELLENT,
+            'type': ModelType.CHAT
+        },
+        'mixtral-8x7b-32768': {
+            'rpm': 30, 'rpd': 14400, 'tpm': 5000, 'tpd': None,
+            'context': 32768, 'speed': SpeedRank.FAST, 'quality': QualityRank.VERY_GOOD,
+            'type': ModelType.CHAT
+        },
+        # New instruction-tuned models (added 2025-11)
+        'meta-llama/llama-4-scout-17b-16e-instruct': {
+            'rpm': 30, 'rpd': 7000, 'tpm': 20000, 'tpd': 200000,
+            'context': 16384, 'speed': SpeedRank.ULTRA_FAST, 'quality': QualityRank.EXCELLENT,
+            'type': ModelType.INSTRUCT
+        },
+        'moonshotai/kimi-k2-instruct': {
+            'rpm': 30, 'rpd': 7000, 'tpm': 20000, 'tpd': 200000,
+            'context': 131072, 'speed': SpeedRank.ULTRA_FAST, 'quality': QualityRank.EXCELLENT,
+            'type': ModelType.INSTRUCT
+        },
+cerebras
+{
+        'llama3.1-8b': {
+            'rpd': 14400, 'tpm': 60000,
+            'context': 8192, 'speed': SpeedRank.ULTRA_FAST, 'quality': QualityRank.GOOD,
+            'type': ModelType.CHAT
+        },
+        'llama-3.3-70b': {
+            'rpd': 14400, 'tpm': 60000,
+            'context': 8192, 'speed': SpeedRank.VERY_FAST, 'quality': QualityRank.EXCELLENT,
+            'type': ModelType.CHAT
+        },
+        'qwen-3-32b': {
+            'rpd': 14400, 'tpm': 60000,
+            'context': 8192, 'speed': SpeedRank.VERY_FAST, 'quality': QualityRank.VERY_GOOD,
+            'type': ModelType.CHAT
+        },
+        # New instruction-tuned model (added 2025-11) - excellent JSON compliance
+        'qwen-3-235b-a22b-instruct-2507': {
+            'rpd': 14400, 'tpm': 60000,
+            'context': 8192, 'speed': SpeedRank.FAST, 'quality': QualityRank.EXCELLENT,
+            'type': ModelType.INSTRUCT
+        },
+GITHUB CANNOT BE USED FOR AGENT BC OF RATE LIMITING
+* {
+        'gpt-4o': {
+            'rpd': 10000, 'tpd': 10000000,
+            'context': 128000, 'speed': SpeedRank.MODERATE, 'quality': QualityRank.EXCELLENT
+        },
+        'gpt-4o-mini': {
+            'rpd': 20000, 'tpd': 2000000,
+            'context': 128000, 'speed': SpeedRank.FAST, 'quality': QualityRank.VERY_GOOD
+        },
+        'deepseek-r1': {
+            'rpd': None, 'tpd': None,  # Unknown - no headers returned
+            'context': 64000, 'speed': SpeedRank.MODERATE, 'quality': QualityRank.EXCELLENT,
+            'reasoning': True
+        },
+        'grok-3-mini': {
+            'rpd': None, 'tpd': None,
+            'context': 131072, 'speed': SpeedRank.FAST, 'quality': QualityRank.VERY_GOOD
+        },
+        'meta-llama-3.1-8b-instruct': {
+            'rpd': None, 'tpd': None,
+            'context': 128000, 'speed': SpeedRank.VERY_FAST, 'quality': QualityRank.GOOD
+        },
+        'llama-4-scout-17b-16e-instruct': {
+            'rpd': None, 'tpd': None,
+            'context': 10000000, 'speed': SpeedRank.FAST, 'quality': QualityRank.VERY_GOOD
+        },
+        'phi-4': {
+            'rpd': None, 'tpd': None,
+            'context': 16384, 'speed': SpeedRank.VERY_FAST, 'quality': QualityRank.GOOD
+        },
+        'mistral-small-2503': {
+            'rpd': None, 'tpd': None,
+            'context': 32768, 'speed': SpeedRank.FAST, 'quality': QualityRank.GOOD
+        },
+        'cohere-command-a': {
+            'rpd': None, 'tpd': None,
+            'context': 256000, 'speed': SpeedRank.MODERATE, 'quality': QualityRank.VERY_GOOD
+        },
+    }
+
+---
 
 ## Real-World Examples
 

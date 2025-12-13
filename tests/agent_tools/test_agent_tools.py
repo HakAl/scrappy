@@ -50,7 +50,41 @@ class TestToolContext:
         assert context.is_safe_path("../../etc/passwd") is False
         assert context.is_safe_path("/etc/passwd") is False
 
+    @pytest.mark.unit
+    def test_is_safe_path_blocks_git_directory(self, context):
+        """Test that .git directory and its contents are blocked."""
+        # Direct .git access should be blocked
+        assert context.is_safe_path(".git") is False
+        assert context.is_safe_path(".git/") is False
 
+        # Files within .git should be blocked
+        assert context.is_safe_path(".git/config") is False
+        assert context.is_safe_path(".git/objects/pack") is False
+        assert context.is_safe_path(".git/HEAD") is False
+
+    @pytest.mark.unit
+    def test_is_safe_path_git_blocking_case_insensitive(self, context):
+        """Test that .git blocking is case insensitive."""
+        assert context.is_safe_path(".GIT") is False
+        assert context.is_safe_path(".Git") is False
+        assert context.is_safe_path(".GIT/config") is False
+
+    @pytest.mark.unit
+    def test_is_safe_path_git_blocking_windows_style(self, context):
+        """Test that .git blocking works with Windows-style paths."""
+        assert context.is_safe_path(".git\\config") is False
+        assert context.is_safe_path(".git\\objects\\pack") is False
+
+    @pytest.mark.unit
+    def test_is_safe_path_allows_similar_names(self, context):
+        """Test that files with 'git' in the name are not blocked."""
+        # .gitignore is a separate file, not .git directory
+        assert context.is_safe_path(".gitignore") is True
+
+        # Files with .git in the name but not the directory
+        assert context.is_safe_path("some/.git_file") is True
+        assert context.is_safe_path("git-config.txt") is True
+        assert context.is_safe_path(".github/workflows/ci.yml") is True
 
 
 

@@ -77,3 +77,41 @@ SemanticProvider.index_chunks()
 - Current approach is idiomatic Python but less explicit than Java-style interfaces
 
 ---
+
+### Error Message Improvements - Remaining Work
+(Discovered during release readiness review)
+
+**Issue:** Rich exception infrastructure exists but is underutilized.
+
+**Current State:**
+- `cli/exceptions.py` defines rich exceptions: ProviderError, FileOperationError, ValidationError, etc.
+- `cli/utils/error_handler.py` provides format_error(), get_error_suggestion(), api_delegation_error()
+- Most code bypasses this with raw: `except Exception as e: click.secho(f"Error: {e}")`
+
+**Scoped Fix (Done):**
+- commands.py: 5 handlers updated (query, plan, reason, smart, models) to use display_command_error()
+- session_utils.py: display_session_save_error() improved with type-specific suggestions
+- command_router.py: Reviewed - handlers already use dedicated display functions or are non-blocking warnings
+
+**Remaining Work (50+ handlers):**
+
+| File | Count | Notes |
+|------|-------|-------|
+| cli/tasks.py | 2 | Task execution errors |
+| cli/multiprovider.py | 2 | Provider selection errors |
+| cli/codebase.py | 3 | Context exploration errors |
+| cli/persistence.py | 1 | Session save/load errors |
+| cli/setup_wizard.py | 1 | Setup errors |
+| cli/screens/main_screen.py | 4 | TUI errors (may need different handling) |
+| cli/textual_app.py | 4 | TUI-specific errors |
+| cli/error_recovery/*.py | 6 | Recovery mechanism errors |
+| cli/research_handlers/base.py | 1 | Research errors |
+
+**Recommendation:**
+- Low priority - current scoped fix covers main user-facing paths
+- Consider batch update when touching these files for other reasons
+- TUI errors may need special handling (toast notifications vs inline)
+
+**Priority:** LOW - Main paths fixed, remaining are edge cases
+
+---

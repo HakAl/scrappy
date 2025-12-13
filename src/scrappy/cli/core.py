@@ -85,29 +85,24 @@ class CLI:
         # Load previous conversation history from store (token-budgeted)
         loaded_history = []
         self._session_is_stale = False
-        self._stale_separator = None
 
         if conversation_store:
             loaded_history = conversation_store.get_recent(token_budget=8000)
 
-            # Check staleness for UI separator and context injection
+            # Check staleness for LLM context injection (helps LLM know context may be outdated)
             if loaded_history:
-                from .conversation_store import (
-                    check_session_staleness,
-                    format_stale_separator,
-                    get_stale_context_message
-                )
+                from .conversation_store import check_session_staleness, get_stale_context_message
                 last_time = conversation_store.get_last_message_time()
                 if check_session_staleness(last_time):
                     self._session_is_stale = True
-                    self._stale_separator = format_stale_separator(last_time)
                     # Inject system message to inform LLM about stale context
                     loaded_history = [get_stale_context_message()] + loaded_history
 
         # Create session context for shared state management with loaded history
         self.session_context = SessionContext(
             conversation_history=loaded_history,
-            conversation_store=conversation_store
+            conversation_store=conversation_store,
+            was_stale_at_load=self._session_is_stale
         )
 
         # Initialize component handlers using factory (pass theme)
@@ -133,61 +128,28 @@ class CLI:
 
     def initialize(self, offer_session_restore: bool = True):
         """
-        Initialize CLI with display messages and optional session restore.
+        Initialize CLI with minimal display messages.
 
         Call this after construction to perform I/O operations.
 
         Args:
-            offer_session_restore: If True, check for and offer to restore previous session
+            offer_session_restore: If True, silently restore previous session if available
 
         Returns:
             self (for method chaining)
         """
         self.io.secho("Initializing Scrappy...", fg=self.io.theme.primary)
 
-        # Show verbose selection info if requested
-        if self._verbose_selection:
-            self.io.secho("Verbose provider selection enabled", fg=self.io.theme.warning)
+        # Display available providers
+        providers_list = ', '.join(self.orchestrator.providers.list_available())
+        if providers_list:
+            self.io.echo(f"Available providers: {self.io.style(providers_list, fg=self.io.theme.primary)}")
+        else:
+            self.io.secho("No providers available - check API keys", fg=self.io.theme.warning)
 
-        # Log initialization (outputs to IO)
-        self.logger.info("CLI initialized", extra={
-            "brain": self.orchestrator.brain,
-            "auto_explore": self._auto_explore,
-            "context_aware": self._context_aware,
-        })
-
-        # Display initialization info (unless show_provider_status already did)
-        if not self._show_provider_status:
-            brain_name = self.orchestrator.brain
-            if brain_name:
-                self.io.echo(f"Brain: {self.io.style(brain_name, fg=self.io.theme.success, bold=True)}")
-            else:
-                self.io.secho("Brain: None (no providers available)", fg=self.io.theme.warning)
-            providers_list = ', '.join(self.orchestrator.providers.list_available())
-            if providers_list:
-                self.io.echo(f"Available providers: {self.io.style(providers_list, fg=self.io.theme.primary)}")
-            else:
-                self.io.secho("No providers available - check API keys", fg=self.io.theme.warning)
-
-        # Show context status
-        if self.orchestrator.context.is_explored():
-            self.io.secho(f"Context: {self.orchestrator.context.project_path.name} (cached)", fg=self.io.theme.primary)
-        elif self._context_aware:
-            self.io.secho("Context: Not explored (use /context to explore)", fg=self.io.theme.warning)
-
-        # Show semantic search initialization progress if in progress
-        self._show_semantic_search_progress()
-
-        # Show conversation history restoration status
-        history_count = len(self.session_context.conversation_history)
-        if history_count > 0:
-            if self._session_is_stale and self._stale_separator:
-                self.io.secho(self._stale_separator, fg=self.io.theme.warning)
-            self.io.echo(f"Restored {history_count} messages from previous conversation")
-
-        # Auto-detect and offer to load previous session (working memory: files, searches, etc.)
+        # Silently restore previous session (working memory: files, searches, etc.)
         if offer_session_restore:
-            self._check_and_offer_session_restore(io=self.io)
+            self._silent_session_restore()
 
         self.io.echo()
 
@@ -323,6 +285,31 @@ class CLI:
                 status = self.orchestrator.context.get_semantic_initialization_status()
                 if status:
                     self.io.secho(f"Semantic search: {status}", fg="cyan")
+
+    def _silent_session_restore(self):
+        """
+        Silently restore previous session without user prompts.
+
+        Loads session working memory (files, searches, git ops, discoveries)
+        automatically if a previous session exists.
+        """
+        session_info = self.orchestrator.session_manager.get_session_info()
+
+        if not session_info.get('exists', False):
+            return
+
+        if 'error' in session_info:
+            return
+
+        # Silently load session
+        try:
+            result = self.orchestrator.load_session()
+            if result.get('status') != 'loaded':
+                self.logger.warning("Session restore failed", extra={
+                    "error": result.get('message', 'unknown')
+                })
+        except Exception as e:
+            self.logger.warning("Session restore error", extra={"error": str(e)})
 
     def _check_and_offer_session_restore(self, io: Optional[CLIIOProtocol] = None):
         """

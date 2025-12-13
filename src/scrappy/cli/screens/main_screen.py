@@ -127,15 +127,6 @@ class MainAppScreen(Screen):
         from scrappy.cli.interactive_banner import display_banner
         display_banner(self.interactive_mode.io)
 
-        # Display stale separator if session is stale
-        if self.interactive_mode.session_context.is_stale:
-            from rich.text import Text
-            separator = Text()
-            separator.append("\n" + "=" * 60 + "\n", style="dim")
-            separator.append("Session resumed (stale - last activity > 4 hours ago)", style=self._theme.warning)
-            separator.append("\n" + "=" * 60 + "\n", style="dim")
-            self.output_adapter.post_renderable(separator)
-
     def on_click(self, event) -> None:
         """Refocus input when clicking anywhere except input field."""
         import pyperclip

@@ -50,17 +50,34 @@ def create_orchestrator_for_command(ctx):
     return orchestrator
 from .utils.session_utils import restore_session_to_cli
 from .utils.error_utils import run_with_error_handling, run_with_recovery
+from .utils.error_handler import format_error, get_error_suggestion
 from .validators import validate_path, validate_provider
 from .exceptions import (
     CLIError,
     ValidationError,
     TaskExecutionError,
     FileOperationError,
+    ProviderError,
 )
 from .logging import get_logger
 from ..agent import CodeAgent, create_git_checkpoint, rollback_to_checkpoint
 from .config_factory import get_config
 from scrappy.infrastructure.output_mode import OutputModeContext
+
+
+def display_command_error(e: Exception, operation: str) -> None:
+    """Display a user-friendly error message for CLI commands.
+
+    Args:
+        e: The exception that occurred
+        operation: Description of the operation that failed (e.g., "query", "plan")
+    """
+    error_msg = format_error(e)
+    suggestion = get_error_suggestion(e, operation)
+
+    click.secho(f"Error during {operation}: {error_msg}", fg="red")
+    if suggestion:
+        click.secho(f"Suggestion: {suggestion}", fg="yellow")
 
 
 @click.group(invoke_without_command=True)
@@ -112,6 +129,13 @@ def cli(ctx, brain, auto_explore, no_context, resume, no_save, show_providers, v
             restore_session_to_cli(cli_instance, cli_instance.io)
 
         cli_instance.interactive_mode()
+
+
+@cli.command()
+def version():
+    """Show scrappy version."""
+    from scrappy import __version__
+    click.echo(f"scrappy v{__version__}")
 
 
 @cli.command()
@@ -173,7 +197,7 @@ def query(ctx, prompt, provider, model, temperature, max_tokens, with_context, b
             fg="cyan"
         )
     except Exception as e:
-        click.secho(f"Error: {e}", fg="red")
+        display_command_error(e, "query")
         sys.exit(1)
 
 
@@ -195,7 +219,7 @@ def plan(ctx, task, max_steps):
         )
         click.echo(plan_result.content)
     except Exception as e:
-        click.secho(f"Error: {e}", fg="red")
+        display_command_error(e, "plan")
         sys.exit(1)
 
 
@@ -226,7 +250,7 @@ def reason(ctx, question, context, evidence):
         else:
             click.echo(response)
     except Exception as e:
-        click.secho(f"Error: {e}", fg="red")
+        display_command_error(e, "reasoning")
         sys.exit(1)
 
 
@@ -244,7 +268,7 @@ def smart(ctx, query):
         response = orchestrator.delegate(orchestrator.brain, query, use_context=True)
         click.echo(response.content)
     except Exception as e:
-        click.secho(f"Error: {e}", fg="red")
+        display_command_error(e, "smart query")
         sys.exit(1)
 
 
@@ -331,7 +355,7 @@ def models(ctx, provider):
         for model in models_list:
             click.echo(f"  - {model}")
     except Exception as e:
-        click.secho(f"Error: {e}", fg="red")
+        display_command_error(e, f"listing models for {target_provider}")
         sys.exit(1)
 
 

@@ -104,13 +104,19 @@ def display_session_saved(
 
 def display_session_save_error(io: "CLIIOProtocol", error: Exception) -> None:
     """
-    Display session save error warning.
+    Display session save error warning with helpful suggestion.
 
     Args:
         io: IO interface for output
         error: The exception that occurred
     """
     io.secho(f"Warning: Could not save session: {error}", fg=io.theme.warning)
+
+    # Provide helpful suggestion based on error type
+    if isinstance(error, PermissionError):
+        io.echo("  Suggestion: Check write permissions for the session directory.")
+    elif isinstance(error, OSError):
+        io.echo("  Suggestion: Check disk space and directory permissions.")
 
 
 def display_previous_session_detected(io: "CLIIOProtocol", session_info: Dict[str, Any]) -> None:

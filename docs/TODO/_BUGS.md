@@ -31,23 +31,8 @@
 ---
 
 ---
-can't scroll to copy test, only what's visible.
-have to hold shift to select.
-on click, background color changes.
----
-
----
-too much agent output? toggle with agent verbose mode?
----
-
----
-is max steps 10 for agent good? are existing safeguards good enough? 
----
----
 why python tools? what's the purpose?? generalize to dependencies tool? is that useful?
 ---
-
-
 
 ---
 src/agent/core.py -- _format_codebase_structure -- does this belong here?

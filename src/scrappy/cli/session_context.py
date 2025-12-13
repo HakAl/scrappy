@@ -68,6 +68,11 @@ class SessionContextProtocol(Protocol):
         """Check if session is stale (> 4 hours since last message)."""
         ...
 
+    @property
+    def was_stale_at_load(self) -> bool:
+        """Check if session was stale when initially loaded (one-time snapshot)."""
+        ...
+
     def add_message(self, message: Dict[str, Any]) -> None:
         """Persist message to conversation store.
 
@@ -93,7 +98,8 @@ class SessionContext:
         smart_mode: bool = False,
         auto_save: bool = True,
         verbose_mode: bool = False,
-        conversation_store: Optional["ConversationStoreProtocol"] = None
+        conversation_store: Optional["ConversationStoreProtocol"] = None,
+        was_stale_at_load: bool = False
     ) -> None:
         """
         Initialize SessionContext with default settings.
@@ -104,12 +110,14 @@ class SessionContext:
             auto_save: Enable auto-save on exit. Defaults to True.
             verbose_mode: Show detailed metadata (provider, tokens, time). Defaults to False.
             conversation_store: Optional conversation persistence store.
+            was_stale_at_load: True if session was stale when loaded. Defaults to False.
         """
         self._conversation_history = conversation_history or []
         self._smart_mode = smart_mode
         self._auto_save = auto_save
         self._verbose_mode = verbose_mode
         self._conversation_store = conversation_store
+        self._was_stale_at_load = was_stale_at_load
 
     @property
     def conversation_history(self) -> List[Dict[str, str]]:
@@ -166,6 +174,11 @@ class SessionContext:
 
         last_time = self._conversation_store.get_last_message_time()
         return check_session_staleness(last_time)
+
+    @property
+    def was_stale_at_load(self) -> bool:
+        """Check if session was stale when initially loaded (one-time snapshot)."""
+        return self._was_stale_at_load
 
     def add_message(self, message: Dict[str, Any]) -> None:
         """
