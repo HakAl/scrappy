@@ -37,6 +37,7 @@ def show_help_table(
             ('/help', 'Show all commands'),
             ('/ml', 'Toggle multiline input mode'),
             ('/clear', 'Clear conversation history'),
+            ('/history [n]', 'Show last n messages'),
         ],
         'Task Operations': [
             ('/plan <task>', 'Break down task into steps'),

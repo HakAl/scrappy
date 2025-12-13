@@ -50,6 +50,7 @@ class CLIDisplay:
             self.io.echo(f"  {self.io.style('(text)', fg=self.io.theme.warning)}           - Send message to current brain")
             self.io.echo(f"  {self.io.style('/ml', fg=self.io.theme.warning)}              - Toggle multiline input mode")
             self.io.echo(f"  {self.io.style('/clear', fg=self.io.theme.warning)}           - Clear conversation history")
+            self.io.echo(f"  {self.io.style('/history', fg=self.io.theme.warning)} [n]     - Show last n messages (default: 10)")
             self.io.echo()
             self.io.secho("Task Operations:", bold=True)
             self.io.echo(f"  {self.io.style('/plan', fg=self.io.theme.warning)} <task>     - Break down task into steps")

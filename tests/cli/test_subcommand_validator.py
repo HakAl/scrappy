@@ -66,29 +66,11 @@ class TestValidateSubcommand:
         assert result.subcommand == "add"
 
     # Valid subcommands for session command
-    def test_session_save_valid(self):
-        """Should accept 'save' as valid session subcommand."""
-        result = validate_subcommand("session", "save")
-        assert result.is_valid
-        assert result.subcommand == "save"
-
-    def test_session_load_valid(self):
-        """Should accept 'load' as valid session subcommand."""
-        result = validate_subcommand("session", "load")
-        assert result.is_valid
-        assert result.subcommand == "load"
-
     def test_session_clear_valid(self):
         """Should accept 'clear' as valid session subcommand."""
         result = validate_subcommand("session", "clear")
         assert result.is_valid
         assert result.subcommand == "clear"
-
-    def test_session_toggle_valid(self):
-        """Should accept 'toggle' as valid session subcommand."""
-        result = validate_subcommand("session", "toggle")
-        assert result.is_valid
-        assert result.subcommand == "toggle"
 
     # Valid subcommands for limits command (rate limiter)
     def test_limits_reset_valid(self):
@@ -125,11 +107,11 @@ class TestValidateSubcommand:
         assert result.is_valid
         assert result.subcommand == "refresh"
 
-    def test_session_save_mixed_case_valid(self):
+    def test_session_clear_mixed_case_valid(self):
         """Should normalize mixed case to lowercase."""
-        result = validate_subcommand("session", "SAVE")
+        result = validate_subcommand("session", "CLEAR")
         assert result.is_valid
-        assert result.subcommand == "save"
+        assert result.subcommand == "clear"
 
     # Invalid subcommands
     def test_cache_invalid_subcommand_fails(self):
@@ -177,10 +159,10 @@ class TestValidateSubcommand:
     # Edge cases
     def test_subcommand_with_extra_args(self):
         """Should extract subcommand and preserve remaining args."""
-        result = validate_subcommand("session", "save my_session_name")
+        result = validate_subcommand("context", "add my_file.py")
         assert result.is_valid
-        assert result.subcommand == "save"
-        assert result.args == "my_session_name"
+        assert result.subcommand == "add"
+        assert result.args == "my_file.py"
 
     def test_context_add_with_path_arg(self):
         """Should preserve path argument for context add."""
@@ -197,9 +179,9 @@ class TestValidateSubcommand:
 
     def test_command_with_extra_whitespace(self):
         """Should handle command with leading/trailing whitespace."""
-        result = validate_subcommand("  session  ", "save")
+        result = validate_subcommand("  session  ", "clear")
         assert result.is_valid
-        assert result.subcommand == "save"
+        assert result.subcommand == "clear"
 
 
 class TestSubcommandValidatorIntegration:

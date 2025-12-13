@@ -109,6 +109,7 @@ class CommandRouter:
             "/classify": self._handle_classify,
             # State commands
             "/clear": self._handle_clear,
+            "/history": self._handle_history,
             "/autoexec": self._handle_autoexec,
             "/verbose": self._handle_verbose,
             "/v": self._handle_verbose,
@@ -127,7 +128,7 @@ class CommandRouter:
         io = self.io
         if self.session_context.auto_save:
             try:
-                session_file = self.orchestrator.save_session(self.session_context.conversation_history)
+                session_file = self.orchestrator.save_session()
                 display_session_saved(io, session_file, len(self.session_context.conversation_history), with_help=True)
             except Exception as e:
                 display_session_save_error(io, e)
@@ -222,11 +223,7 @@ class CommandRouter:
 
     def _handle_session(self, args: str) -> bool:
         """Handle /session command."""
-        result = self.session_mgr.manage_session(args, self.session_context.conversation_history, self.session_context.auto_save)
-        if result.get('conversation_history') is not None:
-            self.session_context.conversation_history = result['conversation_history']
-        if result.get('auto_save') is not None:
-            self.session_context.auto_save = result['auto_save']
+        self.session_mgr.manage_session(args)
         return True
 
     def _handle_limits(self, args: str) -> bool:
@@ -314,6 +311,58 @@ class CommandRouter:
         """Handle /clear command."""
         self.session_context.conversation_history.clear()
         self.io.secho("Conversation history cleared.", fg=self.io.theme.success)
+        return True
+
+    def _handle_history(self, args: str) -> bool:
+        """Handle /history command to show conversation history."""
+        io = self.io
+        history = self.session_context.conversation_history
+
+        if not history:
+            io.secho("No conversation history.", fg=io.theme.warning)
+            return True
+
+        # Parse optional count argument
+        count = 10  # Default to last 10 messages
+        if args.strip():
+            try:
+                count = int(args.strip())
+                if count <= 0:
+                    io.secho("Count must be a positive number.", fg=io.theme.error)
+                    return True
+            except ValueError:
+                io.secho(f"Invalid count: {args}. Usage: /history [n]", fg=io.theme.error)
+                return True
+
+        # Get the last n messages
+        messages_to_show = history[-count:] if count < len(history) else history
+        total = len(history)
+        showing = len(messages_to_show)
+
+        io.secho(f"\nConversation History ({showing} of {total} messages):", fg=io.theme.accent, bold=True)
+        io.secho("-" * 50, fg=io.theme.accent)
+
+        for i, msg in enumerate(messages_to_show):
+            role = msg.get("role", "unknown")
+            content = msg.get("content", "")
+
+            # Truncate long messages for display
+            max_len = 200
+            if len(content) > max_len:
+                content = content[:max_len] + "..."
+
+            # Style based on role
+            if role == "user":
+                role_style = io.style("You:", fg=io.theme.primary, bold=True)
+            elif role == "assistant":
+                role_style = io.style("Assistant:", fg=io.theme.success, bold=True)
+            else:
+                role_style = io.style(f"{role}:", fg=io.theme.warning)
+
+            io.echo(f"{role_style} {content}")
+
+        io.echo()
+        io.echo(f"Use /history [n] to show last n messages (default: 10)")
         return True
 
     def _handle_autoexec(self, args: str) -> bool:

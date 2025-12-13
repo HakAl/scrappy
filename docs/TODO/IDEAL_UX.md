@@ -1,3 +1,106 @@
+# PLAN REVIEW
+
+This plan solves the single biggest friction point in local RAG: **The Indexing Latency vs. Freshness Trade-off.**
+
+By moving from "Eager Consistency" (Index everything now) to "Lazy/Just-in-Time Consistency" (Index what I need now), 
+you are aligning system resources with user intent.
+
+Here is my architectural review of your **Smart Staleness Detection** plan, with a few "Senior Engineer"
+optimizations to make the implementation easier and more robust.
+
+---
+
+### ⚠️ The Weak Link: `FileReferenceExtractor`
+
+Phase 1 is the trickiest part. Users are lazy. They rarely type full paths.
+*   *User Input:* "Why is the auth handler failing?"
+*   *Actual File:* `src/users/authentication/handler.py`
+
+**Regex won't catch that.**
+
+#### Optimization: The "Fuzzy Path Matcher"
+Instead of simple regex, load your file tree into a lightweight **Trie** or just a list of paths in memory (it's cheap).
+
+When extracting:
+1.  **Tokenize** the user query: `["why", "is", "auth", "handler", "failing"]`
+2.  **Score** against paths:
+    *   `src/users/authentication/handler.py` gets hits for "auth" (partial) and "handler" (exact).
+    *   **Score:** High.
+3.  **Threshold:** If score > X, add to `referenced_files`.
+
+This solves Open Question #1 (Fuzzy Matching) by biasing towards "leaf nodes" (filenames) but allowing directory matches.
+
+---
+
+### ⚡ Optimization: The "Live Read" Bypass
+
+You have an opportunity to make this even faster and smarter for the **Happy Path**.
+
+If `FileReferenceExtractor` identifies `core.py`, and `core.py` is small (< 10kb):
+**DO NOT RE-INDEX IT.**
+
+**Just read it.**
+
+Vector Search is a compression technique. It is lossy.
+If you know exactly what file the user wants, and it fits in the context window:
+1.  Read `core.py` from disk (0ms).
+2.  Inject it directly into the System Prompt or Context.
+3.  Skip the Vector DB entirely for that file.
+
+**Revised Flow:**
+```python
+if file in referenced_files:
+    if file_size < SMALL_FILE_THRESHOLD:
+        # 1. LIVE CONTEXT INJECTION (The "God Mode")
+        # Freshest possible data. No embedding latency. Perfect fidelity.
+        context.add_file_content(file, read_from_disk(file))
+    else:
+        # 2. JIT RE-INDEXING (Your Plan)
+        # File too big for raw context, need semantic search.
+        if is_stale(file):
+            reindex(file)
+```
+
+---
+
+### 🛑 Answers to Open Questions
+
+#### 1. Fuzzy matching: How aggressive?
+**Start Conservative.**
+*   Match exact filenames (`auth.py`) and exact directory names (`auth/`).
+*   Do *not* match partial substrings yet (`aut` -> `auth.py`). False positives will trigger unnecessary re-indexing, killing your latency wins.
+*   *UX Fix:* If the user asks "How do I fix it?", prompt the bot to ask: *"Which file are you referring to?"* if it can't detect one.
+
+#### 2. Threshold: How many files before we skip?
+**Time-based, not count-based.**
+*   Calculate `budget = 500ms`.
+*   Estimate `cost_per_file = 100ms`.
+*   `max_files = 5`.
+*   If `referenced_files > 5`, trigger a **Background Re-index** and warn the user: *"Updating knowledge base for 12 files, this might take a moment..."*
+
+#### 3. Background sync: Trigger after responding?
+**YES.** absolutely.
+*   The "General Question" scenario (Story 3) relies on the index being generally up-to-date.
+*   Fire-and-forget a background thread *after* the LLM starts generating tokens (or after response completes).
+*   Use a "debounce" (e.g., only sync if idle for 60s) to avoid eating CPU while the user is typing.
+
+#### 4. Conversation memory: Track referenced files?
+**Yes.** (Phase 4 item).
+*   Add a `active_context_files` set to your `SessionContext`.
+*   If User says "fix `core.py`", add `core.py` to the set.
+*   Next prompt: "make it faster".
+*   System checks `core.py` (from context) for staleness automatically.
+
+---
+
+### Summary
+This is a sophisticated, high-value feature.
+Implementing **Phase 1 (Extraction)** and **Phase 2 (Check)** is low risk.
+
+I recommend implementing the **"Live Read Bypass"** immediately alongside this. It saves you from writing complex re-indexing logic for 80% of use cases (small, specific files).
+
+---
+
 # Ideal UX: Smart Staleness Detection
 
 ## Vision

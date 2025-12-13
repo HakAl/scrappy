@@ -124,6 +124,9 @@ class InteractiveMode:
             "content": user_input
         })
 
+        # Persist user message
+        self.session_context.add_message("user", user_input)
+
         # Echo user query
         io.secho(f"> {user_input}", fg=self._theme.text)
 
@@ -155,6 +158,9 @@ class InteractiveMode:
             "role": "assistant",
             "content": response_content
         })
+
+        # Persist assistant message
+        self.session_context.add_message("assistant", response_content)
 
         # Prompt for task progression if plan is active
         if self.state_manager.plan_active:

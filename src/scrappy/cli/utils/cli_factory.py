@@ -6,6 +6,7 @@ extracting configuration from Click contexts.
 """
 
 from datetime import datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Dict
 
 from ..io_interface import CLIIOProtocol, TestIO
@@ -24,12 +25,35 @@ from ..rate_limiter import RateLimiter
 from ..persistence import SessionPersistence
 from ..user_interaction import get_user_interaction
 from ..protocols import UserInteractionProtocol
+from ..conversation_store import ConversationStore
 from scrappy.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
 
 if TYPE_CHECKING:
     from ..core import CLI
     from ...orchestrator.protocols import Orchestrator
     from ..textual_app import ThreadSafeAsyncBridge
+
+
+def create_conversation_store(orchestrator: "Orchestrator") -> Optional[ConversationStore]:
+    """
+    Create ConversationStore from orchestrator's project path.
+
+    Args:
+        orchestrator: AgentOrchestrator instance with context
+
+    Returns:
+        Initialized ConversationStore or None if creation fails
+    """
+    try:
+        # Get .scrappy directory from project path
+        project_path = orchestrator.context.project_path
+        scrappy_dir = project_path / ".scrappy"
+
+        # Use factory method for initialization
+        return ConversationStore.create(scrappy_dir)
+    except Exception:
+        # Graceful degradation - conversation persistence is optional
+        return None
 
 
 def get_io_interface(

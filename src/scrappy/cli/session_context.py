@@ -5,7 +5,10 @@ Centralizes shared session state to eliminate fragile synchronization
 between CLI, CommandRouter, and InteractiveMode components.
 """
 
-from typing import Dict, List, Protocol
+from typing import Dict, List, Optional, Protocol, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from scrappy.cli.conversation_store import ConversationStoreProtocol
 
 
 class SessionContextProtocol(Protocol):
@@ -60,6 +63,15 @@ class SessionContextProtocol(Protocol):
         """Set verbose output mode."""
         ...
 
+    @property
+    def is_stale(self) -> bool:
+        """Check if session is stale (> 4 hours since last message)."""
+        ...
+
+    def add_message(self, role: str, content: str) -> None:
+        """Persist message to conversation store."""
+        ...
+
 
 class SessionContext:
     """
@@ -75,7 +87,8 @@ class SessionContext:
         conversation_history: List[Dict[str, str]] | None = None,
         smart_mode: bool = False,
         auto_save: bool = True,
-        verbose_mode: bool = False
+        verbose_mode: bool = False,
+        conversation_store: Optional["ConversationStoreProtocol"] = None
     ) -> None:
         """
         Initialize SessionContext with default settings.
@@ -85,11 +98,13 @@ class SessionContext:
             smart_mode: Enable smart query mode. Defaults to False.
             auto_save: Enable auto-save on exit. Defaults to True.
             verbose_mode: Show detailed metadata (provider, tokens, time). Defaults to False.
+            conversation_store: Optional conversation persistence store.
         """
         self._conversation_history = conversation_history or []
         self._smart_mode = smart_mode
         self._auto_save = auto_save
         self._verbose_mode = verbose_mode
+        self._conversation_store = conversation_store
 
     @property
     def conversation_history(self) -> List[Dict[str, str]]:
@@ -130,3 +145,30 @@ class SessionContext:
     def verbose_mode(self, value: bool) -> None:
         """Set verbose output mode."""
         self._verbose_mode = value
+
+    @property
+    def is_stale(self) -> bool:
+        """
+        Check if session is stale (> 4 hours since last message).
+
+        Returns:
+            True if session is stale or no store available
+        """
+        if self._conversation_store is None:
+            return False
+
+        from scrappy.cli.conversation_store import check_session_staleness
+
+        last_time = self._conversation_store.get_last_message_time()
+        return check_session_staleness(last_time)
+
+    def add_message(self, role: str, content: str) -> None:
+        """
+        Persist message to conversation store.
+
+        Args:
+            role: Message role ('user', 'assistant', 'system', 'tool')
+            content: Message content
+        """
+        if self._conversation_store is not None:
+            self._conversation_store.add_message(role, content)

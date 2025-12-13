@@ -519,37 +519,21 @@ class TestSessionManagementFlow:
         from scrappy.cli.command_router import CommandRouter
         self.CommandRouter = CommandRouter
 
-    def test_session_load_restores_conversation(self):
-        """Session load should restore conversation history."""
+    def test_session_clear_clears_memory(self):
+        """Session clear should clear session memory."""
         io = MockIO()
         orchestrator = ConfigurableTestOrchestrator()
         router = create_test_command_router(io, orchestrator)
-        router.session_mgr = MagicMock()
-        router.session_mgr.manage_session.return_value = {
-            'conversation_history': [
-                {'role': 'user', 'content': 'previous'},
-                {'role': 'assistant', 'content': 'response'}
-            ]
-        }
 
-        router.route("/session", "load")
+        # Mock the clear_session method
+        clear_called = []
+        orchestrator.clear_session = lambda: clear_called.append(True)
 
-        assert router.session_context.conversation_history[0]['content'] == 'previous'
+        router.route("/session", "clear")
 
-    def test_session_toggle_auto_save(self):
-        """Session toggle should toggle auto-save setting."""
-        io = MockIO()
-        orchestrator = ConfigurableTestOrchestrator()
-        router = create_test_command_router(io, orchestrator)
-        initial = router.session_context.auto_save
-        router.session_mgr = MagicMock()
-        router.session_mgr.manage_session.return_value = {
-            'auto_save': not initial
-        }
-
-        router.route("/session", "toggle")
-
-        assert router.session_context.auto_save != initial
+        assert clear_called == [True]
+        output = io.get_all_output()
+        assert "clear" in output.lower() or "reset" in output.lower()
 
 
 # =============================================================================

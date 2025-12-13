@@ -3,7 +3,7 @@ Session management functionality for the CLI.
 Handles context, cache, rate limits, and session persistence.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .context_commands import CLIContextCommands
 from .cache_manager import CacheManager
@@ -103,22 +103,22 @@ class CLISessionManager:
         """
         self._rate_limiter.show_rate_limits(args)
 
-    def manage_session(
-        self,
-        args: str = "",
-        conversation_history: Optional[List[Dict[str, str]]] = None,
-        auto_save: bool = True
-    ) -> Dict[str, Any]:
+    def manage_session(self, args: str = "") -> None:
         """Manage session persistence.
 
+        Delegates to SessionPersistence to handle session operations like showing
+        session statistics and clearing session state.
+
         Args:
-            args: Command arguments
-            conversation_history: Current conversation history
-            auto_save: Current auto-save setting
+            args: Command arguments (clear). Empty string shows session info.
+
+        State Changes:
+            - May delete session file (clear)
+
+        Side Effects:
+            - Writes session statistics or confirmation to stdout
 
         Returns:
-            dict with keys:
-                - conversation_history: Updated conversation history (if loaded)
-                - auto_save: Updated auto-save setting (if toggled)
+            None
         """
-        return self._session_persistence.manage_session(args, conversation_history, auto_save)
+        self._session_persistence.manage_session(args)

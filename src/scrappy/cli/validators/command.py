@@ -43,7 +43,7 @@ class CommandValidationResult:
 # Valid commands for the CLI
 VALID_COMMANDS = {
     # Core commands
-    "help", "status", "quit", "exit", "q", "clear",
+    "help", "status", "quit", "exit", "q", "clear", "history",
     # Task commands
     "plan", "reason", "agent", "smart", "tasks", "classify",
     # Provider commands

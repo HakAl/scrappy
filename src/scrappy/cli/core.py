@@ -22,7 +22,7 @@ from .command_router import CommandRouter
 from .textual_interactive import TextualInteractiveMode
 from .command_history import CommandHistory, get_default_history_path
 from .utils.session_utils import display_previous_session_detected
-from .utils.cli_factory import initialize_cli_handlers
+from .utils.cli_factory import initialize_cli_handlers, create_conversation_store
 from .error_recovery import graceful_degrade
 from .logging import get_logger
 from scrappy.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
@@ -79,8 +79,30 @@ class CLI:
         # Initialize state manager for plan tracking
         self.state_manager = state_manager or self._create_default_state_manager()
 
-        # Create session context for shared state management
-        self.session_context = SessionContext()
+        # Create conversation store for persistence
+        conversation_store = create_conversation_store(self.orchestrator)
+
+        # Load previous conversation history from store (token-budgeted)
+        loaded_history = []
+        self._session_is_stale = False
+        self._stale_separator = None
+
+        if conversation_store:
+            loaded_history = conversation_store.get_recent(token_budget=8000)
+
+            # Check staleness for UI separator
+            if loaded_history:
+                from .conversation_store import check_session_staleness, format_stale_separator
+                last_time = conversation_store.get_last_message_time()
+                if check_session_staleness(last_time):
+                    self._session_is_stale = True
+                    self._stale_separator = format_stale_separator(last_time)
+
+        # Create session context for shared state management with loaded history
+        self.session_context = SessionContext(
+            conversation_history=loaded_history,
+            conversation_store=conversation_store
+        )
 
         # Initialize component handlers using factory (pass theme)
         handlers = initialize_cli_handlers(
@@ -150,7 +172,14 @@ class CLI:
         # Show semantic search initialization progress if in progress
         self._show_semantic_search_progress()
 
-        # Auto-detect and offer to load previous session
+        # Show conversation history restoration status
+        history_count = len(self.session_context.conversation_history)
+        if history_count > 0:
+            if self._session_is_stale and self._stale_separator:
+                self.io.secho(self._stale_separator, fg=self.io.theme.warning)
+            self.io.echo(f"Restored {history_count} messages from previous conversation")
+
+        # Auto-detect and offer to load previous session (working memory: files, searches, etc.)
         if offer_session_restore:
             self._check_and_offer_session_restore(io=self.io)
 

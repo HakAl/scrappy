@@ -397,6 +397,10 @@ class ConfigurableTestOrchestrator:
             'conversation_history': []
         }
 
+    def clear_session(self):
+        """Clear the current session."""
+        pass
+
 
 class MockIO:
     """

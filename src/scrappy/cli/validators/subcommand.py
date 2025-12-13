@@ -1,7 +1,7 @@
 """Subcommand validation for CLI.
 
 Provides validation for command subarguments like 'cache clear',
-'context explore', 'session save', etc.
+'context refresh', 'session clear', etc.
 """
 
 from dataclasses import dataclass
@@ -39,7 +39,7 @@ class SubcommandValidationResult:
 COMMAND_SUBCOMMANDS: Dict[str, Set[str]] = {
     "cache": {"clear", "toggle"},
     "context": {"refresh", "clear", "clearmem", "toggle", "add"},  # "explore" removed - use /explore instead
-    "session": {"save", "load", "clear", "toggle"},
+    "session": {"clear"},
     "limits": {"reset"},  # Special handling for provider filter
 }
 
@@ -88,9 +88,9 @@ def validate_subcommand(command: str, args_input: Optional[str]) -> SubcommandVa
         ...     print(f"Subcommand: {result.subcommand}")
         Subcommand: clear
 
-        >>> result = validate_subcommand("session", "save my_file")
+        >>> result = validate_subcommand("context", "add my_file")
         >>> result.subcommand
-        'save'
+        'add'
         >>> result.args
         'my_file'
     """

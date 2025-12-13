@@ -1,14 +1,14 @@
 # Conversation Persistence
 
 ## Problem
-Users have amnesia between sessions. Scrappy forgets everything when closed.
+Scrappy have amnesia between chats. Scrappy forgets everything.
 
 ## Solution Overview
 SQLite-backed conversation storage with transparent persistence.
 
 ---
 
-## Phase 1: MVP (Implement Now)
+## Phase 1: MVP (Implement Now) -- COMPLETE
 
 ### Goal
 "Scrappy remembers" - automatic, transparent persistence.
@@ -16,7 +16,7 @@ SQLite-backed conversation storage with transparent persistence.
 ### Scope Decisions
 | Item | Decision | Rationale |
 |------|----------|-----------|
-| Tool calls | Skip (user/assistant text only) | Simplicity; LLM can re-run tools if needed |
+| Tool calls | Schema ready, usage deferred to Phase 1.5 | Avoids migrations; Phase 1 stores user/assistant only |
 | Token budget | Yes (not message count) | Prevents context stuffing with large outputs |
 | Stale separator | Yes (UI only) | Simple UX improvement |
 | ANSI stripping | Yes | Prevent garbage in history |
@@ -50,14 +50,97 @@ SessionContext._conversation_history = loaded_messages
 
 Location: `src/scrappy/cli/conversation_store.py`
 
-```python
-class ConversationStore:
-    """SQLite-backed conversation persistence."""
+Database Location: `{project_root}/.scrappy/conversations.db`
+Config Location: `{project_root}/.scrappy/config.json`
 
-    def __init__(self, db_path: Path, project_path: Path):
-        self._conn = sqlite3.connect(db_path)
-        self._project_path = str(project_path)
-        self._init_schema()
+### Project Identity
+
+Projects are identified by UUID, not path. This survives renames, moves, and symlink variations.
+
+```python
+# .scrappy/config.json
+{
+    "project_id": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+```python
+def get_or_create_project_id(scrappy_dir: Path) -> str:
+    """Load existing project ID or generate new one.
+
+    Args:
+        scrappy_dir: Path to .scrappy/ directory
+
+    Returns:
+        UUID string for this project
+    """
+    config_file = scrappy_dir / "config.json"
+
+    if config_file.exists():
+        with open(config_file) as f:
+            return json.load(f)["project_id"]
+
+    # First run - generate new UUID
+    project_id = str(uuid.uuid4())
+    scrappy_dir.mkdir(parents=True, exist_ok=True)
+    with open(config_file, "w") as f:
+        json.dump({"project_id": project_id}, f)
+
+    return project_id
+```
+
+```python
+class ConversationStoreProtocol(Protocol):
+    """Protocol for conversation persistence."""
+
+    def add_message(self, role: str, content: str) -> int: ...
+    def get_recent(self, token_budget: int = 8000) -> List[Dict[str, str]]: ...
+    def get_last_message_time(self) -> Optional[datetime]: ...
+    def clear(self) -> None: ...
+    def get_stats(self) -> Dict[str, Any]: ...
+    def close(self) -> None: ...
+
+
+class ConversationStore:
+    """SQLite-backed conversation persistence.
+
+    IMPORTANT: Use the create() factory method, not __init__ directly.
+    """
+
+    def __init__(self, conn: sqlite3.Connection, project_id: str):
+        """Assign dependencies only. No I/O here.
+
+        Args:
+            conn: Already-opened SQLite connection.
+            project_id: UUID string identifying this project.
+        """
+        self._conn = conn
+        self._project_id = project_id
+
+    @classmethod
+    def create(cls, scrappy_dir: Path) -> "ConversationStore":
+        """Factory method that handles I/O and initialization.
+
+        Args:
+            scrappy_dir: Path to .scrappy/ directory in project root.
+
+        Returns:
+            Initialized ConversationStore ready for use.
+        """
+        # Ensure .scrappy directory exists
+        scrappy_dir.mkdir(parents=True, exist_ok=True)
+
+        # Get or create project UUID
+        project_id = get_or_create_project_id(scrappy_dir)
+
+        # Open database with WAL mode for crash safety
+        db_path = scrappy_dir / "conversations.db"
+        conn = sqlite3.connect(db_path)
+        conn.execute("PRAGMA journal_mode=WAL;")
+
+        store = cls(conn, project_id)
+        store._init_schema()
+        return store
 
     def add_message(self, role: str, content: str) -> int:
         """Insert message immediately. Returns message ID.
@@ -66,66 +149,122 @@ class ConversationStore:
         Only stores 'user' and 'assistant' roles.
         Skips 'system' (app state, not conversation state).
         Skips 'tool' (deferred to Phase 1.5).
+
+        Phase 1 implementation (explicit NULLs for future columns):
+            cursor = self._conn.execute('''
+                INSERT INTO messages (project_id, role, content, tool_calls, tool_call_id)
+                VALUES (?, ?, ?, NULL, NULL)
+            ''', (self._project_id, role, strip_ansi(content)))
+            self._conn.commit()
+            return cursor.lastrowid
         """
 
     def get_recent(self, token_budget: int = 8000) -> List[Dict[str, str]]:
         """Load messages up to token budget for current project.
 
         Works backwards from newest, accumulating until budget hit.
-        Uses len(content) // 4 as token estimate.
-        Always includes at least the most recent user/assistant pair.
+        Uses len(content) // 3 as token estimate (conservative for code).
+        Always includes at least the most recent message, even if it
+        exceeds the budget.
+
+        IMPORTANT: Never split atomic turn boundaries.
+        - Phase 1: User/assistant pairs are atomic (can split between pairs)
+        - Phase 1.5: Tool call sequences are atomic:
+            [assistant w/tool_calls] -> [tool results...] -> [assistant response]
+          Must include all or none of a tool call sequence.
+
+        Edge cases:
+        - If only a user message exists (no assistant response), include it.
+        - If conversation is empty, return empty list.
+        - If budget would split a tool sequence, exclude the entire sequence.
         """
 
     def get_last_message_time(self) -> Optional[datetime]:
-        """Get timestamp of most recent message (for staleness check)."""
+        """Get timestamp of most recent message (for staleness check).
+
+        Returns UTC datetime for consistent timezone handling.
+        """
 
     def clear(self) -> None:
         """Clear all messages for current project."""
 
     def get_stats(self) -> Dict[str, Any]:
         """Return message count, token estimate, oldest/newest timestamps."""
+
+    def close(self) -> None:
+        """Close the database connection. Call on shutdown."""
+        self._conn.close()
 ```
+
+### Known Limitations
+
+- **Token estimation is approximate**: `len(content) // 3` is conservative for code-heavy content (code has more small tokens than prose). Better to load slightly less context than overflow. Consider `tiktoken` for accuracy in future.
+- **Atomic turn boundaries** (Phase 1.5): Token budget must respect tool call sequences. A tool call and its results are atomic - cutting between them confuses the LLM. This may result in loading slightly under budget to avoid splitting sequences.
 
 ### Schema
 ```sql
 CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    project_path TEXT NOT NULL,
-    role TEXT NOT NULL,           -- 'user', 'assistant'
-    content TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    project_id TEXT NOT NULL,     -- UUID from .scrappy/config.json
+    role TEXT NOT NULL,           -- 'user', 'assistant', 'tool' (Phase 1.5)
+    content TEXT,                 -- Nullable for tool-call-only messages
+    tool_calls TEXT,              -- JSON string, Phase 1.5 (nullable)
+    tool_call_id TEXT,            -- For role='tool' messages, Phase 1.5 (nullable)
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP  -- UTC (SQLite default)
 );
 
 CREATE INDEX IF NOT EXISTS idx_messages_project_time
-    ON messages(project_path, created_at DESC);
+    ON messages(project_id, created_at DESC);
+
+-- Schema versioning for future migrations
+CREATE TABLE IF NOT EXISTS schema_version (
+    version INTEGER PRIMARY KEY
+);
+INSERT OR IGNORE INTO schema_version (version) VALUES (1);
 ```
+
+**Design choice:** Schema includes Phase 1.5 columns upfront (nullable) to avoid migrations. Phase 1 ignores them; Phase 1.5 starts populating them.
+
+**Note:** `CURRENT_TIMESTAMP` in SQLite is always UTC, which matches our timezone handling strategy.
 
 ### ANSI Stripping Utility
 ```python
 import re
 
-ANSI_PATTERN = re.compile(r'\x1b\[[0-9;]*m')
+# Handles SGR (colors/styles), cursor movement, and OSC sequences
+ANSI_PATTERN = re.compile(r'\x1b\[[0-9;?]*[a-zA-Z]|\x1b\].*?\x07|\x1b[PX^_].*?\x1b\\')
 
 def strip_ansi(text: str) -> str:
-    """Remove ANSI color codes from text before storage."""
+    """Remove ANSI escape codes from text before storage."""
     return ANSI_PATTERN.sub('', text)
 ```
 
 ### Stale Session Detection
 ```python
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 STALE_THRESHOLD = timedelta(hours=4)
 
 def check_session_staleness(last_message_time: datetime) -> bool:
-    """Returns True if session is stale (> 4 hours since last message)."""
+    """Returns True if session is stale (> 4 hours since last message).
+
+    IMPORTANT: last_message_time must be UTC (as returned by get_last_message_time).
+    """
     if last_message_time is None:
         return False
-    return datetime.now() - last_message_time > STALE_THRESHOLD
+    now_utc = datetime.now(timezone.utc)
+    # Ensure last_message_time is timezone-aware
+    if last_message_time.tzinfo is None:
+        last_message_time = last_message_time.replace(tzinfo=timezone.utc)
+    return now_utc - last_message_time > STALE_THRESHOLD
 
 def format_stale_separator(last_time: datetime) -> str:
-    """Format the visual separator for stale sessions."""
-    return f"--- Previous session ({last_time.strftime('%b %d, %I:%M %p')}) ---"
+    """Format the visual separator for stale sessions.
+
+    Converts UTC time to local time for display.
+    """
+    local_time = last_time.replace(tzinfo=timezone.utc).astimezone()
+    return f"--- Previous session ({local_time.strftime('%b %d, %I:%M %p')}) ---"
 ```
 
 ### Integration Points
@@ -147,13 +286,40 @@ def format_stale_separator(last_time: datetime) -> str:
    - KEEP: `/session` (show stats), `/session clear` (wipe history)
    - ADD: `/history [n]` (show last n messages)
 
+### Error Handling
+
+**Database Errors:**
+- **Corrupted database**: Log warning, create fresh database, continue (lose history but don't crash)
+- **Disk full on write**: Log error, skip persistence, continue with in-memory only
+- **Permission denied**: Log error at startup, disable persistence for session
+
+**Graceful Degradation:**
+```python
+class ConversationStore:
+    def add_message(self, role: str, content: str) -> int:
+        try:
+            # ... insert logic ...
+        except sqlite3.Error as e:
+            logger.warning(f"Failed to persist message: {e}")
+            return -1  # Indicate failure but don't crash
+
+    @classmethod
+    def create(cls, db_path: Path, project_path: Path) -> Optional["ConversationStore"]:
+        try:
+            # ... creation logic ...
+        except (sqlite3.Error, OSError) as e:
+            logger.warning(f"Could not initialize conversation store: {e}")
+            return None  # Caller handles None (no persistence)
+```
+
 ### Files to Modify
-- [ ] NEW: `src/scrappy/cli/conversation_store.py`
+- [ ] NEW: `src/scrappy/cli/conversation_store.py` (includes `get_or_create_project_id`)
 - [ ] NEW: `tests/cli/test_conversation_store.py`
 - [ ] `src/scrappy/cli/session_context.py` - inject store, load on init
 - [ ] `src/scrappy/cli/interactive.py` - add_message after each turn, stale separator
 - [ ] `src/scrappy/cli/persistence.py` - remove save/load/toggle, simplify
 - [ ] `src/scrappy/cli/session.py` - update CLISessionManager
+- [ ] `.gitignore` - add `.scrappy/` directory
 
 ### Migration
 - Existing `.session.json` conversation_history: ignore (start fresh)
@@ -172,13 +338,9 @@ If we flatten to plain text, LLM loses chain-of-thought connection and may:
 - Hallucinate that it hasn't run the tool yet
 - Get confused by formatting
 
-### Schema Update
-```sql
--- Add columns to existing messages table
-ALTER TABLE messages ADD COLUMN tool_calls TEXT;      -- JSON string (if assistant)
-ALTER TABLE messages ADD COLUMN tool_call_id TEXT;    -- String (if role is 'tool')
-ALTER TABLE messages ALTER COLUMN content DROP NOT NULL;  -- Can be null for tool-only
-```
+### Schema
+
+No schema changes needed - Phase 1 schema already includes `tool_calls`, `tool_call_id`, and nullable `content`.
 
 ### Updated add_message
 ```python
@@ -196,9 +358,9 @@ def add_message(self, message: Dict[str, Any]) -> int:
     tool_call_id = message.get("tool_call_id")
 
     self._conn.execute("""
-        INSERT INTO messages (project_path, role, content, tool_calls, tool_call_id)
+        INSERT INTO messages (project_id, role, content, tool_calls, tool_call_id)
         VALUES (?, ?, ?, ?, ?)
-    """, (self._project_path, role, content, tool_calls, tool_call_id))
+    """, (self._project_id, role, content, tool_calls, tool_call_id))
     self._conn.commit()
 ```
 
@@ -301,14 +463,22 @@ END;
 |----------|--------|-----------|
 | Storage | SQLite | Built-in, ACID, queryable, single file |
 | Persistence | Immediate write | No data loss on crash |
+| Journal mode | WAL | Better crash safety and concurrent reads |
 | Startup load | Token budget (8k) | Prevents context stuffing |
 | Message types (MVP) | User/assistant only | Simplicity; tool calls in Phase 1.5 |
 | System prompts | Never store | App state changes between versions; inject live |
 | Stale detection | 4 hour threshold | Balance between continuity and fresh starts |
+| Timezone handling | UTC everywhere | Consistent staleness checks across timezones |
+| Project identity | UUID in .scrappy/config.json | Survives renames/moves; no path edge cases |
+| Constructor pattern | Factory method | No I/O in __init__ per CLAUDE.md; DI-friendly |
+| Protocol-first | Yes | Enables testing with doubles; per CLAUDE.md |
 | UI separator | Yes (MVP) | Simple, good UX |
 | System message | Phase 1.5 | Adds complexity |
 | ANSI stripping | Yes (MVP) | Prevent garbage in LLM context |
-| Tool call fidelity | Phase 1.5 | Important but adds schema complexity |
+| Error handling | Graceful degradation | DB errors log warning, don't crash |
+| Tool call columns | Include in Phase 1 schema | Avoids migrations; Phase 1 ignores, Phase 1.5 uses |
+| Tool call fidelity | Phase 1.5 | Important but adds code complexity |
+| Atomic turn boundaries | Yes (Phase 1.5) | Never split tool call sequences; LLM needs complete context |
 | Episodic memory | Phase 2 | Cool but rabbit hole for MVP |
 | Vector namespace | Phase 2 | Prevents pollution of codebase RAG |
 | Hybrid search | Phase 2 | Best of both worlds |
@@ -318,25 +488,34 @@ END;
 ## Implementation Checklist
 
 ### Phase 1 (MVP)
-- [ ] Create `ConversationStore` class with SQLite backend
-- [ ] Implement token-budgeted `get_recent()`
-- [ ] Implement ANSI stripping utility
-- [ ] Implement stale session detection
+- [ ] Create `ConversationStoreProtocol` and `ConversationStore` class
+- [ ] Implement `create()` factory method with WAL mode
+- [ ] Implement `get_or_create_project_id()` for UUID-based project identity
+- [ ] Implement token-budgeted `get_recent()` with edge case handling
+- [ ] Implement ANSI stripping utility (full escape sequence coverage)
+- [ ] Implement stale session detection with UTC timezone handling
+- [ ] Implement graceful error handling (degraded mode on DB errors)
 - [ ] Inject `ConversationStore` into `SessionContext`
 - [ ] Wire `add_message()` into interactive loop
 - [ ] Add stale separator to CLI startup
 - [ ] Remove `/session save|load|toggle` commands
 - [ ] Update `/session` to show SQLite stats
 - [ ] Add `/history [n]` command
+- [ ] Add `.scrappy/` to `.gitignore`
 - [ ] Write tests for `ConversationStore`
+- [ ] Write tests for `get_or_create_project_id()`
+- [ ] Write tests for ANSI stripping utility
+- [ ] Write tests for staleness detection
+- [ ] Test project rename preserves history (UUID survives move)
 - [ ] Manual testing of full flow
 
 ### Phase 1.5 (Tool Fidelity)
-- [ ] Add `tool_calls`, `tool_call_id` columns
-- [ ] Update `add_message()` for complex message types
+- [ ] Update `add_message()` to populate `tool_calls`, `tool_call_id` columns
 - [ ] Update `get_recent()` to reconstruct tool call structure
+- [ ] Implement atomic turn boundaries (never split tool call sequences)
 - [ ] Add system message injection for stale sessions
 - [ ] Test with actual tool-using conversations
+- [ ] Test token budget edge case: budget lands mid-tool-sequence
 
 ### Phase 2 (Episodic Memory)
 - [ ] Create `episodic_memory` namespace in vector DB
