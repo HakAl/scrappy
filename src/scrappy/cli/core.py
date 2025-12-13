@@ -90,13 +90,19 @@ class CLI:
         if conversation_store:
             loaded_history = conversation_store.get_recent(token_budget=8000)
 
-            # Check staleness for UI separator
+            # Check staleness for UI separator and context injection
             if loaded_history:
-                from .conversation_store import check_session_staleness, format_stale_separator
+                from .conversation_store import (
+                    check_session_staleness,
+                    format_stale_separator,
+                    get_stale_context_message
+                )
                 last_time = conversation_store.get_last_message_time()
                 if check_session_staleness(last_time):
                     self._session_is_stale = True
                     self._stale_separator = format_stale_separator(last_time)
+                    # Inject system message to inform LLM about stale context
+                    loaded_history = [get_stale_context_message()] + loaded_history
 
         # Create session context for shared state management with loaded history
         self.session_context = SessionContext(

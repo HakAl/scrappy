@@ -272,7 +272,7 @@ class TestConversationStoreAddMessage:
             scrappy_dir = Path(tmpdir) / ".scrappy"
             store = ConversationStore.create(scrappy_dir)
 
-            msg_id = store.add_message("user", "Hello")
+            msg_id = store.add_message({"role": "user", "content": "Hello"})
             assert msg_id > 0
 
             store.close()
@@ -283,7 +283,7 @@ class TestConversationStoreAddMessage:
             scrappy_dir = Path(tmpdir) / ".scrappy"
             store = ConversationStore.create(scrappy_dir)
 
-            store.add_message("user", "Test message")
+            store.add_message({"role": "user", "content": "Test message"})
 
             # Verify message is in database
             cursor = store._conn.execute(
@@ -303,7 +303,7 @@ class TestConversationStoreAddMessage:
             scrappy_dir = Path(tmpdir) / ".scrappy"
             store = ConversationStore.create(scrappy_dir)
 
-            store.add_message("assistant", "\x1b[32mGreen text\x1b[0m")
+            store.add_message({"role": "assistant", "content": "\x1b[32mGreen text\x1b[0m"})
 
             # Verify ANSI codes are stripped
             cursor = store._conn.execute(
@@ -321,7 +321,7 @@ class TestConversationStoreAddMessage:
             scrappy_dir = Path(tmpdir) / ".scrappy"
             store = ConversationStore.create(scrappy_dir)
 
-            msg_id = store.add_message("user", "User input")
+            msg_id = store.add_message({"role": "user", "content": "User input"})
             assert msg_id > 0
 
             store.close()
@@ -332,7 +332,7 @@ class TestConversationStoreAddMessage:
             scrappy_dir = Path(tmpdir) / ".scrappy"
             store = ConversationStore.create(scrappy_dir)
 
-            msg_id = store.add_message("assistant", "Assistant response")
+            msg_id = store.add_message({"role": "assistant", "content": "Assistant response"})
             assert msg_id > 0
 
             store.close()
@@ -343,7 +343,7 @@ class TestConversationStoreAddMessage:
             scrappy_dir = Path(tmpdir) / ".scrappy"
             store = ConversationStore.create(scrappy_dir)
 
-            msg_id = store.add_message("system", "System message")
+            msg_id = store.add_message({"role": "system", "content": "System message"})
             assert msg_id == -1
 
             # Verify no message was stored
@@ -356,14 +356,14 @@ class TestConversationStoreAddMessage:
 
             store.close()
 
-    def test_add_message_skips_tool_role(self):
-        """Should skip tool role messages and return -1."""
+    def test_add_message_stores_tool_role(self):
+        """Should store tool role messages (Phase 1.5)."""
         with tempfile.TemporaryDirectory() as tmpdir:
             scrappy_dir = Path(tmpdir) / ".scrappy"
             store = ConversationStore.create(scrappy_dir)
 
-            msg_id = store.add_message("tool", "Tool result")
-            assert msg_id == -1
+            msg_id = store.add_message({"role": "tool", "content": "Tool result"})
+            assert msg_id > 0  # Should be stored in Phase 1.5
 
             store.close()
 
@@ -373,7 +373,7 @@ class TestConversationStoreAddMessage:
             scrappy_dir = Path(tmpdir) / ".scrappy"
             store = ConversationStore.create(scrappy_dir)
 
-            msg_id = store.add_message("user", "")
+            msg_id = store.add_message({"role": "user", "content": ""})
             assert msg_id > 0
 
             store.close()
@@ -384,9 +384,9 @@ class TestConversationStoreAddMessage:
             scrappy_dir = Path(tmpdir) / ".scrappy"
             store = ConversationStore.create(scrappy_dir)
 
-            id1 = store.add_message("user", "First")
-            id2 = store.add_message("assistant", "Second")
-            id3 = store.add_message("user", "Third")
+            id1 = store.add_message({"role": "user", "content": "First"})
+            id2 = store.add_message({"role": "assistant", "content": "Second"})
+            id3 = store.add_message({"role": "user", "content": "Third"})
 
             assert id2 > id1
             assert id3 > id2
@@ -414,9 +414,9 @@ class TestConversationStoreGetRecent:
             scrappy_dir = Path(tmpdir) / ".scrappy"
             store = ConversationStore.create(scrappy_dir)
 
-            store.add_message("user", "Hello")
-            store.add_message("assistant", "Hi there")
-            store.add_message("user", "How are you?")
+            store.add_message({"role": "user", "content": "Hello"})
+            store.add_message({"role": "assistant", "content": "Hi there"})
+            store.add_message({"role": "user", "content": "How are you?"})
 
             messages = store.get_recent(token_budget=8000)
             store.close()
@@ -436,7 +436,7 @@ class TestConversationStoreGetRecent:
             # Add messages with known sizes
             # Each message ~10 chars = ~3 tokens
             for i in range(10):
-                store.add_message("user", f"Message {i}")
+                store.add_message({"role": "user", "content": f"Message {i}"})
 
             # Very small budget - should only get most recent
             messages = store.get_recent(token_budget=5)
@@ -456,7 +456,7 @@ class TestConversationStoreGetRecent:
 
             # Add a very large message
             large_message = "x" * 10000  # ~3333 tokens
-            store.add_message("user", large_message)
+            store.add_message({"role": "user", "content": large_message})
 
             # Budget smaller than message
             messages = store.get_recent(token_budget=100)
@@ -473,9 +473,9 @@ class TestConversationStoreGetRecent:
             scrappy_dir = Path(tmpdir) / ".scrappy"
             store = ConversationStore.create(scrappy_dir)
 
-            store.add_message("user", "First")
-            store.add_message("assistant", "Second")
-            store.add_message("user", "Third")
+            store.add_message({"role": "user", "content": "First"})
+            store.add_message({"role": "assistant", "content": "Second"})
+            store.add_message({"role": "user", "content": "Third"})
 
             messages = store.get_recent()
             store.close()
@@ -498,8 +498,8 @@ class TestConversationStoreGetRecent:
             # 600 chars = ~200 tokens
             msg2 = "y" * 600
 
-            store.add_message("user", msg1)
-            store.add_message("user", msg2)
+            store.add_message({"role": "user", "content": msg1})
+            store.add_message({"role": "user", "content": msg2})
 
             # Budget of 250 tokens should fit one message but not both
             messages = store.get_recent(token_budget=250)
@@ -518,7 +518,7 @@ class TestConversationStoreGetRecent:
             store = ConversationStore.create(scrappy_dir)
 
             # Add message for current project
-            store.add_message("user", "My message")
+            store.add_message({"role": "user", "content": "My message"})
 
             # Manually add message for different project
             store._conn.execute(
@@ -556,7 +556,7 @@ class TestConversationStoreGetLastMessageTime:
             scrappy_dir = Path(tmpdir) / ".scrappy"
             store = ConversationStore.create(scrappy_dir)
 
-            store.add_message("user", "Test")
+            store.add_message({"role": "user", "content": "Test"})
 
             last_time = store.get_last_message_time()
             assert isinstance(last_time, datetime)
@@ -569,7 +569,7 @@ class TestConversationStoreGetLastMessageTime:
             scrappy_dir = Path(tmpdir) / ".scrappy"
             store = ConversationStore.create(scrappy_dir)
 
-            store.add_message("user", "Test")
+            store.add_message({"role": "user", "content": "Test"})
 
             last_time = store.get_last_message_time()
             assert last_time.tzinfo is not None
@@ -585,9 +585,9 @@ class TestConversationStoreGetLastMessageTime:
 
             import time
 
-            store.add_message("user", "First")
+            store.add_message({"role": "user", "content": "First"})
             time.sleep(0.01)  # Small delay to ensure different timestamps
-            store.add_message("user", "Second")
+            store.add_message({"role": "user", "content": "Second"})
 
             last_time = store.get_last_message_time()
 
@@ -608,9 +608,9 @@ class TestConversationStoreClear:
             scrappy_dir = Path(tmpdir) / ".scrappy"
             store = ConversationStore.create(scrappy_dir)
 
-            store.add_message("user", "Message 1")
-            store.add_message("assistant", "Message 2")
-            store.add_message("user", "Message 3")
+            store.add_message({"role": "user", "content": "Message 1"})
+            store.add_message({"role": "assistant", "content": "Message 2"})
+            store.add_message({"role": "user", "content": "Message 3"})
 
             store.clear()
 
@@ -626,7 +626,7 @@ class TestConversationStoreClear:
             store = ConversationStore.create(scrappy_dir)
 
             # Add message for current project
-            store.add_message("user", "My message")
+            store.add_message({"role": "user", "content": "My message"})
 
             # Add message for different project
             store._conn.execute(
@@ -657,9 +657,9 @@ class TestConversationStoreClear:
             scrappy_dir = Path(tmpdir) / ".scrappy"
             store = ConversationStore.create(scrappy_dir)
 
-            store.add_message("user", "Before clear")
+            store.add_message({"role": "user", "content": "Before clear"})
             store.clear()
-            store.add_message("user", "After clear")
+            store.add_message({"role": "user", "content": "After clear"})
 
             messages = store.get_recent()
             assert len(messages) == 1
@@ -692,9 +692,9 @@ class TestConversationStoreGetStats:
             scrappy_dir = Path(tmpdir) / ".scrappy"
             store = ConversationStore.create(scrappy_dir)
 
-            store.add_message("user", "Message 1")
-            store.add_message("assistant", "Message 2")
-            store.add_message("user", "Message 3")
+            store.add_message({"role": "user", "content": "Message 1"})
+            store.add_message({"role": "assistant", "content": "Message 2"})
+            store.add_message({"role": "user", "content": "Message 3"})
 
             stats = store.get_stats()
             assert stats["message_count"] == 3
@@ -708,9 +708,9 @@ class TestConversationStoreGetStats:
             store = ConversationStore.create(scrappy_dir)
 
             # 300 chars = ~100 tokens
-            store.add_message("user", "x" * 300)
+            store.add_message({"role": "user", "content": "x" * 300})
             # 600 chars = ~200 tokens
-            store.add_message("assistant", "y" * 600)
+            store.add_message({"role": "assistant", "content": "y" * 600})
 
             stats = store.get_stats()
             # Total = 900 chars = ~300 tokens
@@ -726,9 +726,9 @@ class TestConversationStoreGetStats:
 
             import time
 
-            store.add_message("user", "First")
+            store.add_message({"role": "user", "content": "First"})
             time.sleep(0.01)
-            store.add_message("user", "Second")
+            store.add_message({"role": "user", "content": "Second"})
 
             stats = store.get_stats()
             assert stats["oldest"] is not None
@@ -741,7 +741,7 @@ class TestConversationStoreGetStats:
             scrappy_dir = Path(tmpdir) / ".scrappy"
             store = ConversationStore.create(scrappy_dir)
 
-            store.add_message("user", "Test")
+            store.add_message({"role": "user", "content": "Test"})
 
             stats = store.get_stats()
             assert stats["newest"] is not None
@@ -761,7 +761,7 @@ class TestConversationStoreErrorHandling:
             # Close connection to trigger error
             store._conn.close()
 
-            msg_id = store.add_message("user", "This will fail")
+            msg_id = store.add_message({"role": "user", "content": "This will fail"})
             assert msg_id == -1
 
     def test_get_recent_returns_empty_on_error(self):
@@ -961,14 +961,14 @@ class TestConversationStoreMultipleProjects:
             # Create two stores pointing to same database
             store1 = ConversationStore.create(scrappy_dir)
             project_id_1 = store1._project_id
-            store1.add_message("user", "Project 1 message")
+            store1.add_message({"role": "user", "content": "Project 1 message"})
             store1.close()
 
             # Create new store with different project ID
             # (Simulate by directly creating with different project_id)
             conn = sqlite3.connect(str(scrappy_dir / "conversations.db"))
             store2 = ConversationStore(conn, "different-project-id")
-            store2.add_message("user", "Project 2 message")
+            store2.add_message({"role": "user", "content": "Project 2 message"})
 
             # Each should only see their own messages
             messages1_conn = sqlite3.connect(str(scrappy_dir / "conversations.db"))
@@ -1005,9 +1005,9 @@ class TestConversationHistoryRestoration:
 
             # First session: add messages
             store1 = ConversationStore.create(scrappy_dir)
-            store1.add_message("user", "Hello from first session")
-            store1.add_message("assistant", "Hi there!")
-            store1.add_message("user", "How are you?")
+            store1.add_message({"role": "user", "content": "Hello from first session"})
+            store1.add_message({"role": "assistant", "content": "Hi there!"})
+            store1.add_message({"role": "user", "content": "How are you?"})
             store1.close()
 
             # Second session: load history (simulates app restart)
@@ -1034,7 +1034,7 @@ class TestConversationHistoryRestoration:
             store1 = ConversationStore.create(scrappy_dir)
             for i in range(20):
                 # Each message ~100 chars = ~33 tokens
-                store1.add_message("user", f"Message {i}: " + "x" * 90)
+                store1.add_message({"role": "user", "content": f"Message {i}: " + "x" * 90})
             store1.close()
 
             # Second session: load with small budget
@@ -1060,7 +1060,7 @@ class TestConversationHistoryRestoration:
 
             # First session
             store1 = ConversationStore.create(scrappy_dir)
-            store1.add_message("user", "First session message")
+            store1.add_message({"role": "user", "content": "First session message"})
             store1.close()
 
             # Second session: load and add more
@@ -1069,7 +1069,7 @@ class TestConversationHistoryRestoration:
             assert len(loaded) == 1
 
             # Add new message in second session
-            store2.add_message("user", "Second session message")
+            store2.add_message({"role": "user", "content": "Second session message"})
             store2.close()
 
             # Third session: should see both
@@ -1080,3 +1080,389 @@ class TestConversationHistoryRestoration:
             assert len(all_messages) == 2
             assert all_messages[0]["content"] == "First session message"
             assert all_messages[1]["content"] == "Second session message"
+
+
+class TestPhase15ToolCallPersistence:
+    """
+    Tests for Phase 1.5: Tool Call Fidelity.
+
+    Verifies that tool call messages are persisted and retrieved correctly.
+    """
+
+    def test_add_message_accepts_dict_format(self):
+        """Should accept message as dict instead of role+content params."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            scrappy_dir = Path(tmpdir) / ".scrappy"
+            store = ConversationStore.create(scrappy_dir)
+
+            message = {
+                "role": "user",
+                "content": "Hello"
+            }
+            msg_id = store.add_message(message)
+
+            assert msg_id > 0
+            store.close()
+
+    def test_add_message_persists_tool_calls(self):
+        """Should persist tool_calls as JSON for assistant messages."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            scrappy_dir = Path(tmpdir) / ".scrappy"
+            store = ConversationStore.create(scrappy_dir)
+
+            message = {
+                "role": "assistant",
+                "content": "Let me search for that",
+                "tool_calls": [
+                    {
+                        "id": "call_123",
+                        "function": {
+                            "name": "search",
+                            "arguments": '{"query": "test"}'
+                        }
+                    }
+                ]
+            }
+            store.add_message(message)
+
+            # Verify tool_calls stored as JSON
+            cursor = store._conn.execute(
+                "SELECT tool_calls FROM messages WHERE project_id = ?",
+                (store._project_id,)
+            )
+            row = cursor.fetchone()
+            assert row[0] is not None
+            import json
+            tool_calls = json.loads(row[0])
+            assert len(tool_calls) == 1
+            assert tool_calls[0]["id"] == "call_123"
+
+            store.close()
+
+    def test_add_message_persists_tool_call_id(self):
+        """Should persist tool_call_id for tool result messages."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            scrappy_dir = Path(tmpdir) / ".scrappy"
+            store = ConversationStore.create(scrappy_dir)
+
+            message = {
+                "role": "tool",
+                "content": "Search results: ...",
+                "tool_call_id": "call_123"
+            }
+            store.add_message(message)
+
+            # Verify tool_call_id stored
+            cursor = store._conn.execute(
+                "SELECT tool_call_id FROM messages WHERE project_id = ?",
+                (store._project_id,)
+            )
+            row = cursor.fetchone()
+            assert row[0] == "call_123"
+
+            store.close()
+
+    def test_add_message_handles_none_content_with_tool_calls(self):
+        """Should handle assistant message with tool_calls but no content."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            scrappy_dir = Path(tmpdir) / ".scrappy"
+            store = ConversationStore.create(scrappy_dir)
+
+            message = {
+                "role": "assistant",
+                "content": None,  # Content can be None when tool_calls present
+                "tool_calls": [
+                    {
+                        "id": "call_456",
+                        "function": {
+                            "name": "execute",
+                            "arguments": '{}'
+                        }
+                    }
+                ]
+            }
+            msg_id = store.add_message(message)
+
+            assert msg_id > 0
+            store.close()
+
+    def test_get_recent_reconstructs_tool_calls(self):
+        """Should reconstruct tool_calls from JSON when loading messages."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            scrappy_dir = Path(tmpdir) / ".scrappy"
+            store = ConversationStore.create(scrappy_dir)
+
+            # Add message with tool_calls
+            original_message = {
+                "role": "assistant",
+                "content": "Searching...",
+                "tool_calls": [
+                    {
+                        "id": "call_789",
+                        "function": {
+                            "name": "search",
+                            "arguments": '{"query": "python"}'
+                        }
+                    }
+                ]
+            }
+            store.add_message(original_message)
+
+            # Retrieve and verify reconstruction
+            messages = store.get_recent()
+            store.close()
+
+            assert len(messages) == 1
+            assert messages[0]["role"] == "assistant"
+            assert messages[0]["content"] == "Searching..."
+            assert "tool_calls" in messages[0]
+            assert len(messages[0]["tool_calls"]) == 1
+            assert messages[0]["tool_calls"][0]["id"] == "call_789"
+
+    def test_get_recent_reconstructs_tool_call_id(self):
+        """Should include tool_call_id in reconstructed tool messages."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            scrappy_dir = Path(tmpdir) / ".scrappy"
+            store = ConversationStore.create(scrappy_dir)
+
+            # Add tool result message
+            message = {
+                "role": "tool",
+                "content": "Result data",
+                "tool_call_id": "call_abc"
+            }
+            store.add_message(message)
+
+            # Retrieve and verify
+            messages = store.get_recent()
+            store.close()
+
+            assert len(messages) == 1
+            assert messages[0]["role"] == "tool"
+            assert messages[0]["content"] == "Result data"
+            assert messages[0]["tool_call_id"] == "call_abc"
+
+    def test_full_tool_call_sequence(self):
+        """Should persist and retrieve complete tool call sequence."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            scrappy_dir = Path(tmpdir) / ".scrappy"
+            store = ConversationStore.create(scrappy_dir)
+
+            # Full sequence:
+            # 1. User query
+            store.add_message({"role": "user", "content": "Search for Python docs"})
+
+            # 2. Assistant with tool calls
+            store.add_message({
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {"id": "call_1", "function": {"name": "search", "arguments": '{"query": "python docs"}'}}
+                ]
+            })
+
+            # 3. Tool result
+            store.add_message({
+                "role": "tool",
+                "content": "Found documentation...",
+                "tool_call_id": "call_1"
+            })
+
+            # 4. Assistant final response
+            store.add_message({
+                "role": "assistant",
+                "content": "Here's what I found..."
+            })
+
+            # Retrieve and verify complete sequence
+            messages = store.get_recent()
+            store.close()
+
+            assert len(messages) == 4
+            assert messages[0]["role"] == "user"
+            assert messages[1]["role"] == "assistant"
+            assert "tool_calls" in messages[1]
+            assert messages[2]["role"] == "tool"
+            assert messages[2]["tool_call_id"] == "call_1"
+            assert messages[3]["role"] == "assistant"
+            assert "tool_calls" not in messages[3]
+
+
+class TestPhase15AtomicTurnBoundaries:
+    """
+    Tests for Phase 1.5: Atomic Turn Boundaries.
+
+    Verifies that tool call sequences are never split when applying
+    token budget limits.
+    """
+
+    def test_atomic_boundary_excludes_incomplete_tool_sequence(self):
+        """Should exclude entire tool sequence if budget can't fit it."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            scrappy_dir = Path(tmpdir) / ".scrappy"
+            store = ConversationStore.create(scrappy_dir)
+
+            # Scenario: Tool sequence followed by final response
+            # Chronological order:
+            # 1. assistant w/tool_calls + content (~100 tokens)
+            # 2. tool result (~100 tokens)
+            # 3. final assistant response (~10 tokens)
+            store.add_message({
+                "role": "assistant",
+                "content": "X" * 300,  # ~100 tokens
+                "tool_calls": [{"id": "call_1", "function": {"name": "search", "arguments": '{}'}}]
+            })
+            store.add_message({
+                "role": "tool",
+                "content": "Y" * 300,  # ~100 tokens
+                "tool_call_id": "call_1"
+            })
+            store.add_message({
+                "role": "assistant",
+                "content": "Z" * 30  # ~10 tokens - final response
+            })
+
+            # Budget of 50 can only fit the final response (10 tokens)
+            # Tool sequence would be 200+ tokens - can't fit, so exclude it entirely
+            messages = store.get_recent(token_budget=50)
+            store.close()
+
+            # Should only get the final response, not any part of the tool sequence
+            assert len(messages) == 1
+            assert messages[0]["role"] == "assistant"
+            assert messages[0]["content"].startswith("Z")
+            assert "tool_calls" not in messages[0]
+
+    def test_atomic_boundary_includes_complete_sequence_when_fits(self):
+        """Should include complete tool sequence when budget allows."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            scrappy_dir = Path(tmpdir) / ".scrappy"
+            store = ConversationStore.create(scrappy_dir)
+
+            # Same scenario as above but with larger budget
+            store.add_message({
+                "role": "assistant",
+                "content": "X" * 300,  # ~100 tokens
+                "tool_calls": [{"id": "call_1", "function": {"name": "search", "arguments": '{}'}}]
+            })
+            store.add_message({
+                "role": "tool",
+                "content": "Y" * 300,  # ~100 tokens
+                "tool_call_id": "call_1"
+            })
+            store.add_message({
+                "role": "assistant",
+                "content": "Z" * 30  # ~10 tokens
+            })
+
+            # Budget of 500 can fit everything
+            messages = store.get_recent(token_budget=500)
+            store.close()
+
+            # Should get all 3 messages in chronological order
+            assert len(messages) == 3
+            assert messages[0]["role"] == "assistant"
+            assert "tool_calls" in messages[0]
+            assert messages[1]["role"] == "tool"
+            assert messages[2]["role"] == "assistant"
+            assert "tool_calls" not in messages[2]
+
+    def test_atomic_boundary_includes_complete_tool_sequence_within_budget(self):
+        """Should include complete tool sequence if it fits within budget."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            scrappy_dir = Path(tmpdir) / ".scrappy"
+            store = ConversationStore.create(scrappy_dir)
+
+            # Add tool call sequence (small messages)
+            store.add_message({"role": "user", "content": "Query"})
+            store.add_message({
+                "role": "assistant",
+                "tool_calls": [{"id": "call_1", "function": {"name": "tool", "arguments": '{}'}}]
+            })
+            store.add_message({
+                "role": "tool",
+                "content": "Result",
+                "tool_call_id": "call_1"
+            })
+            store.add_message({
+                "role": "assistant",
+                "content": "Done"
+            })
+
+            # Large budget should include everything
+            messages = store.get_recent(token_budget=5000)
+            store.close()
+
+            assert len(messages) == 4
+            assert messages[0]["role"] == "user"
+            assert messages[1]["role"] == "assistant"
+            assert messages[2]["role"] == "tool"
+            assert messages[3]["role"] == "assistant"
+
+    def test_atomic_boundary_with_multiple_tool_calls(self):
+        """Should handle sequence with multiple tool calls atomically."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            scrappy_dir = Path(tmpdir) / ".scrappy"
+            store = ConversationStore.create(scrappy_dir)
+
+            # Sequence with multiple tool calls
+            store.add_message({"role": "user", "content": "Do multiple things"})
+            store.add_message({
+                "role": "assistant",
+                "tool_calls": [
+                    {"id": "call_1", "function": {"name": "tool1", "arguments": '{}'}},
+                    {"id": "call_2", "function": {"name": "tool2", "arguments": '{}'}}
+                ]
+            })
+            store.add_message({"role": "tool", "content": "Result 1", "tool_call_id": "call_1"})
+            store.add_message({"role": "tool", "content": "Result 2", "tool_call_id": "call_2"})
+            store.add_message({"role": "assistant", "content": "All done"})
+
+            # Should retrieve complete sequence
+            messages = store.get_recent(token_budget=5000)
+            store.close()
+
+            assert len(messages) == 5
+            assert messages[1]["role"] == "assistant"
+            assert len(messages[1]["tool_calls"]) == 2
+            assert messages[2]["role"] == "tool"
+            assert messages[3]["role"] == "tool"
+            assert messages[4]["role"] == "assistant"
+
+
+class TestPhase15StaleSessionMessage:
+    """
+    Tests for Phase 1.5: Stale Session System Message.
+
+    Verifies that system message is injected for stale sessions.
+    """
+
+    def test_get_stale_context_message(self):
+        """Should return system message dict."""
+        from src.scrappy.cli.conversation_store import get_stale_context_message
+
+        message = get_stale_context_message()
+
+        assert message["role"] == "system"
+        assert "previous session" in message["content"].lower()
+
+    def test_stale_message_structure(self):
+        """System message should have correct structure."""
+        from src.scrappy.cli.conversation_store import get_stale_context_message
+
+        message = get_stale_context_message()
+
+        assert isinstance(message, dict)
+        assert "role" in message
+        assert "content" in message
+        assert message["role"] == "system"
+        assert isinstance(message["content"], str)
+        assert len(message["content"]) > 0
+
+    def test_stale_message_mentions_new_workflow(self):
+        """System message should hint that user may be starting new workflow."""
+        from src.scrappy.cli.conversation_store import get_stale_context_message
+
+        message = get_stale_context_message()
+
+        assert "new workflow" in message["content"].lower()

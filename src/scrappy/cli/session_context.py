@@ -5,7 +5,7 @@ Centralizes shared session state to eliminate fragile synchronization
 between CLI, CommandRouter, and InteractiveMode components.
 """
 
-from typing import Dict, List, Optional, Protocol, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Protocol, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from scrappy.cli.conversation_store import ConversationStoreProtocol
@@ -68,8 +68,13 @@ class SessionContextProtocol(Protocol):
         """Check if session is stale (> 4 hours since last message)."""
         ...
 
-    def add_message(self, role: str, content: str) -> None:
-        """Persist message to conversation store."""
+    def add_message(self, message: Dict[str, Any]) -> None:
+        """Persist message to conversation store.
+
+        Args:
+            message: Full message dict with 'role', 'content', and optionally
+                    'tool_calls' or 'tool_call_id'
+        """
         ...
 
 
@@ -162,13 +167,15 @@ class SessionContext:
         last_time = self._conversation_store.get_last_message_time()
         return check_session_staleness(last_time)
 
-    def add_message(self, role: str, content: str) -> None:
+    def add_message(self, message: Dict[str, Any]) -> None:
         """
         Persist message to conversation store.
 
+        Accepts full message dict to support Phase 1.5 tool call fidelity.
+
         Args:
-            role: Message role ('user', 'assistant', 'system', 'tool')
-            content: Message content
+            message: Full message dict with 'role', 'content', and optionally
+                    'tool_calls' (for assistant) or 'tool_call_id' (for tool role)
         """
         if self._conversation_store is not None:
-            self._conversation_store.add_message(role, content)
+            self._conversation_store.add_message(message)

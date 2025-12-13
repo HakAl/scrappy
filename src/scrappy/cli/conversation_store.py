@@ -113,15 +113,46 @@ def format_stale_separator(last_time: datetime) -> str:
     return f"--- Previous session ({local_time.strftime('%b %d, %I:%M %p')}) ---"
 
 
+def get_stale_context_message() -> Dict[str, str]:
+    """
+    Get system message for stale session context.
+
+    Used to inject context when loading conversation history from
+    a previous session (>4 hours ago). Helps LLM understand that
+    the user may be starting a new workflow.
+
+    Returns:
+        System message dict
+    """
+    return {
+        "role": "system",
+        "content": "Note: The following conversation happened in a previous session. The user may be starting a new workflow."
+    }
+
+
 class ConversationStoreProtocol(Protocol):
     """Protocol for conversation persistence."""
 
-    def add_message(self, role: str, content: str) -> int:
-        """Add a message to the conversation. Returns message ID."""
+    def add_message(self, message: Dict[str, Any]) -> int:
+        """
+        Add a message to the conversation. Returns message ID.
+
+        Args:
+            message: Full message dict with 'role', 'content', and optionally
+                    'tool_calls' (for assistant) or 'tool_call_id' (for tool role)
+
+        Returns:
+            Message ID (rowid) or -1 on failure
+        """
         ...
 
-    def get_recent(self, token_budget: int = 8000) -> List[Dict[str, str]]:
-        """Load recent messages up to token budget."""
+    def get_recent(self, token_budget: int = 8000) -> List[Dict[str, Any]]:
+        """
+        Load recent messages up to token budget.
+
+        Returns:
+            List of message dicts with full structure (role, content, tool_calls, etc)
+        """
         ...
 
     def get_last_message_time(self) -> Optional[datetime]:
@@ -235,35 +266,53 @@ class ConversationStore:
             logger.warning(f"Schema initialization failed: {e}")
             # Don't raise - graceful degradation
 
-    def add_message(self, role: str, content: str) -> int:
+    def add_message(self, message: Dict[str, Any]) -> int:
         """
         Insert message immediately. Returns message ID.
 
-        Content is stripped of ANSI codes before storage.
-        Only stores 'user' and 'assistant' roles.
-        Skips 'system' (app state, not conversation state).
-        Skips 'tool' (deferred to Phase 1.5).
+        Accepts full message dict (standard LLM format) and extracts:
+        - role: 'user', 'assistant', 'tool', or 'system'
+        - content: Message text (ANSI codes stripped before storage)
+        - tool_calls: For assistant messages (JSON-serialized)
+        - tool_call_id: For tool result messages
+
+        System messages are skipped (app state, not conversation state).
 
         Args:
-            role: Message role ('user', 'assistant', 'system', 'tool')
-            content: Message content (may contain ANSI codes)
+            message: Full message dict with 'role', 'content', and optionally
+                    'tool_calls' (for assistant) or 'tool_call_id' (for tool role)
 
         Returns:
             Message ID (rowid) or -1 on failure
         """
-        # Skip system and tool messages in Phase 1
-        if role not in ('user', 'assistant'):
-            return -1
-
         try:
-            # Strip ANSI codes before storage
-            clean_content = strip_ansi(content)
+            role = message.get("role")
+            content = message.get("content")
 
-            # Phase 1 implementation: explicit NULLs for future columns
+            # Skip system messages (app state, not conversation state)
+            if role == "system":
+                return -1
+
+            # Skip messages without a role
+            if not role:
+                logger.warning("Message missing 'role' field, skipping")
+                return -1
+
+            # Strip ANSI codes from content if present
+            clean_content = strip_ansi(content) if content else None
+
+            # Extract tool_calls and serialize to JSON (for assistant messages)
+            tool_calls = message.get("tool_calls")
+            tool_calls_json = json.dumps(tool_calls) if tool_calls else None
+
+            # Extract tool_call_id (for tool result messages)
+            tool_call_id = message.get("tool_call_id")
+
+            # Insert with all fields
             cursor = self._conn.execute("""
                 INSERT INTO messages (project_id, role, content, tool_calls, tool_call_id)
-                VALUES (?, ?, ?, NULL, NULL)
-            """, (self._project_id, role, clean_content))
+                VALUES (?, ?, ?, ?, ?)
+            """, (self._project_id, role, clean_content, tool_calls_json, tool_call_id))
 
             self._conn.commit()
             return cursor.lastrowid
@@ -272,7 +321,7 @@ class ConversationStore:
             logger.warning(f"Failed to persist message: {e}")
             return -1
 
-    def get_recent(self, token_budget: int = 8000) -> List[Dict[str, str]]:
+    def get_recent(self, token_budget: int = 8000) -> List[Dict[str, Any]]:
         """
         Load messages up to token budget for current project.
 
@@ -281,15 +330,21 @@ class ConversationStore:
         Always includes at least the most recent message, even if it
         exceeds the budget.
 
+        IMPORTANT: Atomic turn boundaries (Phase 1.5)
+        Never splits tool call sequences. A sequence is:
+        [assistant w/tool_calls] -> [tool result(s)...] -> [assistant response]
+
+        If budget would split a sequence, excludes the entire sequence.
+
         Args:
             token_budget: Maximum tokens to load (default: 8000)
 
         Returns:
-            List of message dicts with 'role' and 'content' keys
+            List of message dicts with full structure (role, content, tool_calls, etc)
         """
         try:
             cursor = self._conn.execute("""
-                SELECT role, content, created_at
+                SELECT id, role, content, tool_calls, tool_call_id, created_at
                 FROM messages
                 WHERE project_id = ?
                 ORDER BY created_at DESC, id DESC
@@ -298,25 +353,106 @@ class ConversationStore:
             rows = cursor.fetchall()
 
             # Work backwards, accumulating messages until budget hit
+            # Track tool call sequences for atomic boundaries
             messages = []
             tokens_used = 0
+            in_tool_sequence = False
+            tool_sequence_start_idx = None
+            hit_budget_limit = False
 
-            for i, (role, content, created_at) in enumerate(rows):
+            for i, (msg_id, role, content, tool_calls_json, tool_call_id, created_at) in enumerate(rows):
                 # Estimate tokens (conservative for code-heavy content)
                 message_tokens = len(content or '') // 3
 
+                # Reconstruct full message dict
+                message = {'role': role}
+
+                # Add content if present
+                if content:
+                    message['content'] = content
+
+                # Reconstruct tool_calls from JSON (for assistant messages)
+                if tool_calls_json:
+                    try:
+                        message['tool_calls'] = json.loads(tool_calls_json)
+                    except json.JSONDecodeError:
+                        logger.warning(f"Failed to parse tool_calls JSON for message {msg_id}")
+
+                # Add tool_call_id (for tool result messages)
+                if tool_call_id:
+                    message['tool_call_id'] = tool_call_id
+
                 # Always include the most recent message
                 if i == 0:
-                    messages.append({'role': role, 'content': content or ''})
+                    messages.append(message)
                     tokens_used += message_tokens
+
+                    # Check if we're starting inside a tool sequence
+                    # If most recent message is a tool result or assistant with tool_calls, we're in a sequence
+                    if role == 'tool' or (role == 'assistant' and tool_calls_json):
+                        in_tool_sequence = True
+                        tool_sequence_start_idx = 0
+
                     continue
 
-                # Check budget for subsequent messages
-                if tokens_used + message_tokens > token_budget:
-                    break
+                # Atomic turn boundary logic (Phase 1.5)
+                # Track tool call sequences:
+                # - tool result messages (role='tool') are part of a sequence
+                # - assistant messages with tool_calls start a sequence
+                # - assistant messages without tool_calls end a sequence
 
-                messages.append({'role': role, 'content': content or ''})
-                tokens_used += message_tokens
+                if in_tool_sequence:
+                    # We're in a tool sequence, must include this message
+                    messages.append(message)
+                    tokens_used += message_tokens
+
+                    # Check if this message ends the sequence
+                    if role == 'assistant' and tool_calls_json:
+                        # This is the assistant message that initiated the tool calls
+                        # Sequence is complete
+                        in_tool_sequence = False
+                        tool_sequence_start_idx = None
+                    # If role is 'tool', continue the sequence (more tool results)
+                    # If role is 'assistant' without tool_calls, this shouldn't happen
+                    # (would mean incomplete sequence, but include it anyway)
+                    elif role == 'assistant' and not tool_calls_json:
+                        # Unexpected: assistant response without tool_calls inside sequence
+                        # End sequence here
+                        in_tool_sequence = False
+                        tool_sequence_start_idx = None
+                else:
+                    # Not in a sequence, check budget
+                    if tokens_used + message_tokens > token_budget:
+                        # Would exceed budget
+                        hit_budget_limit = True
+
+                        # If this message starts a tool sequence, we can't include it
+                        # Check if next messages (earlier in time) are tool results
+                        if role == 'tool' or (role == 'assistant' and tool_calls_json):
+                            # This is a tool result or tool call initiation, which means we're about to enter
+                            # a sequence. We must exclude this and all following messages
+                            # to maintain atomic boundary
+                            break
+
+                        # Otherwise, just stop here
+                        break
+
+                    # Add message
+                    messages.append(message)
+                    tokens_used += message_tokens
+
+                    # Check if this message starts a new tool sequence
+                    # (going backwards in time)
+                    if role == 'tool' or (role == 'assistant' and tool_calls_json):
+                        in_tool_sequence = True
+                        tool_sequence_start_idx = len(messages) - 1
+
+            # If we ended while in a tool sequence AND we hit the budget limit,
+            # remove the partial sequence. If we just ran out of messages
+            # (reached the oldest message), keep the partial sequence.
+            if in_tool_sequence and tool_sequence_start_idx is not None and hit_budget_limit:
+                # Remove all messages from sequence start to end
+                messages = messages[:tool_sequence_start_idx]
 
             # Reverse to chronological order
             return list(reversed(messages))
