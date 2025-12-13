@@ -418,65 +418,61 @@ class SemanticStatusComponent:
 
 
 class ActivityIndicator(Label):
-    """Activity indicator widget with delayed show to prevent flicker.
+    """Activity indicator widget for showing activity state.
 
     Displays current activity state (THINKING, SYNCING, TOOL_EXECUTION) with
-    elapsed time. Implements a show delay threshold to prevent flicker on
-    quick operations that complete in under 500ms.
+    elapsed time. Flicker prevention via 500ms timer delay - if operation
+    completes before delay, the indicator never becomes visible.
 
     Thread-safe: Updates via ActivityStateChange messages from worker threads.
     """
 
-    SHOW_DELAY_MS = 500  # Flicker prevention threshold
+    # Delay before showing indicator (flicker prevention)
+    SHOW_DELAY_SECONDS = 0.5
 
     def __init__(self) -> None:
         super().__init__("", id="activity_indicator")
         self._state: Optional["ActivityState"] = None
         self._message: str = ""
         self._elapsed_ms: int = 0
-        self._pending_show: bool = False
-        self._show_start_time: Optional[float] = None
+        self._show_timer: Optional[Any] = None
 
     @property
     def is_visible(self) -> bool:
-        """Whether indicator is currently visible."""
-        return self._state is not None and not self._pending_show
+        """Whether indicator is currently active (has 'active' class)."""
+        return self._state is not None
 
     def show(self, state: "ActivityState", message: str = "") -> None:
-        """Show the activity indicator with state and message.
+        """Schedule showing the activity indicator after delay.
 
-        Starts the show delay timer. Actual display happens after SHOW_DELAY_MS
-        to prevent flicker on quick operations.
+        Uses timer-based delay for flicker prevention - if hide() is called
+        before the timer fires, the indicator never becomes visible.
 
         Args:
             state: Current activity state
             message: Optional descriptive message
         """
-        from .protocols import ActivityState
+        # Cancel any pending show timer
+        if self._show_timer is not None:
+            self._show_timer.stop()
+            self._show_timer = None
 
         self._state = state
         self._message = message
         self._elapsed_ms = 0
-        self._pending_show = True
-        self._show_start_time = time.time()
-
-        # Schedule delayed visibility check after SHOW_DELAY_MS
-        self.set_timer(self.SHOW_DELAY_MS / 1000.0, self.check_pending_show)
-
-    def check_pending_show(self) -> None:
-        """Check if pending show should now be displayed.
-
-        Called after SHOW_DELAY_MS to determine if the operation is still
-        running and indicator should be shown. Quick operations that complete
-        before the delay won't cause visual flicker.
-        """
-        if not self._pending_show or self._state is None:
-            return
-
-        # Timer already enforced delay - just show immediately
-        self._pending_show = False
         self._update_display()
-        self.add_class("active")
+
+        # Schedule showing after delay (flicker prevention)
+        self._show_timer = self.set_timer(
+            self.SHOW_DELAY_SECONDS,
+            self._reveal
+        )
+
+    def _reveal(self) -> None:
+        """Actually show the indicator (called after delay)."""
+        self._show_timer = None
+        if self._state is not None:
+            self.add_class("active")
 
     def update_elapsed(self, elapsed_ms: int) -> None:
         """Update elapsed time display.
@@ -489,12 +485,15 @@ class ActivityIndicator(Label):
             self._update_display()
 
     def hide(self) -> None:
-        """Hide the activity indicator."""
+        """Hide the activity indicator immediately."""
+        # Cancel pending show timer (prevents flicker)
+        if self._show_timer is not None:
+            self._show_timer.stop()
+            self._show_timer = None
+
         self._state = None
         self._message = ""
         self._elapsed_ms = 0
-        self._pending_show = False
-        self._show_start_time = None
         self.remove_class("active")
         self.update("")
 
@@ -646,11 +645,6 @@ class ScrappyApp(App):
                 self.post_message(IndexingProgress(message=message))
 
         context.set_indexing_progress_callback(progress_callback)
-
-        # Wire up reindex activity callback for blocking UX feedback
-        from .screens.main_screen import ReindexActivityCallback
-        reindex_callback = ReindexActivityCallback(self)
-        context.set_reindex_callback(reindex_callback)
 
     def _register_user_theme(self) -> None:
         """Register theme from ThemeProtocol with Textual."""

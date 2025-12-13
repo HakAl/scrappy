@@ -150,7 +150,9 @@ TextArea > .text-area--cursor {
     padding: 0 1;
 }
 
-/* Activity indicator - shows thinking/syncing/tool execution state */
+/* Activity indicator - shows thinking/syncing/tool execution state
+ * Flicker prevention handled in Python via set_timer() - indicator only
+ * becomes visible after 500ms delay. Quick operations never show it. */
 #activity_indicator {
     width: 100%;
     height: auto;

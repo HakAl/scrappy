@@ -215,7 +215,7 @@ class ConfigurableTestOrchestrator:
             "dummy": ["src/dummy.py"]  # Dummy file_index for classification tests
         }
         self.context.ensure_file_index.return_value = self.context.file_index
-        self.context.ensure_file_index_with_timeout.return_value = self.context.file_index
+        self.context.get_cached_file_index.return_value = self.context.file_index
 
         # Additional attributes for CLI handlers
         self.brain = recommended_provider

@@ -14,7 +14,6 @@ from textual import work
 from .chat_layout import ChatLayout
 from ..input_capture import InputCaptureManager, InputRequest
 from ..command_history import CommandHistory, get_default_history_path
-from ...context.protocols import ReindexCallbackProtocol, ReindexResult
 
 if TYPE_CHECKING:
     from ..interactive import InteractiveMode
@@ -459,74 +458,3 @@ class MainAppScreen(Screen):
             pass
 
 
-class ReindexActivityCallback(ReindexCallbackProtocol):
-    """Bridges reindex progress to ActivityIndicator via ActivityStateChange messages.
-
-    Implements ReindexCallbackProtocol to provide UI feedback during codebase
-    re-indexing operations. Posts ActivityStateChange messages to update the
-    activity indicator with progress and state transitions.
-
-    Single Responsibility: Bridge reindex events to UI activity indicator.
-
-    Note: Explicitly inherits from ReindexCallbackProtocol for clarity and
-    static type checking, though Python's structural typing works without it.
-    """
-
-    def __init__(self, app: "ScrappyApp"):
-        """Initialize callback with app reference for message posting.
-
-        Args:
-            app: ScrappyApp instance for posting messages
-        """
-        self.app = app
-
-    def on_start(self) -> None:
-        """Called when re-index operation starts."""
-        from ..textual_app import ActivityStateChange
-        from ..protocols import ActivityState
-
-        self.app.post_message(
-            ActivityStateChange(ActivityState.SYNCING, "Indexing codebase...")
-        )
-
-    def on_progress(self, files_processed: int, total_files: int) -> None:
-        """Called periodically during re-index.
-
-        Args:
-            files_processed: Number of files processed so far
-            total_files: Total number of files to process
-        """
-        from ..textual_app import ActivityStateChange
-        from ..protocols import ActivityState
-
-        message = f"Indexing... {files_processed}/{total_files} files"
-        self.app.post_message(
-            ActivityStateChange(ActivityState.SYNCING, message)
-        )
-
-    def on_complete(self, result: ReindexResult) -> None:
-        """Called when re-index operation completes.
-
-        Args:
-            result: Result of the re-index operation
-        """
-        from ..textual_app import ActivityStateChange
-        from ..protocols import ActivityState
-
-        if result.timed_out:
-            message = "Indexing timed out - using stale data"
-        elif result.success:
-            message = f"Indexed {result.files_processed} files"
-        else:
-            message = f"Indexing failed: {result.error or 'Unknown error'}"
-
-        self.app.post_message(ActivityStateChange(ActivityState.IDLE, message))
-
-    def on_timeout(self) -> None:
-        """Called when re-index operation times out."""
-        from ..textual_app import ActivityStateChange
-        from ..protocols import ActivityState
-
-        self.app.post_message(
-            ActivityStateChange(ActivityState.IDLE, "Indexing timed out")
-        )

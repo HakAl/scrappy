@@ -312,11 +312,18 @@ class ResearchExecutor(ProviderAwareStrategy):
         return None
 
     def _get_file_index(self) -> Optional[dict]:
-        """Get file_index from orchestrator context, triggering lazy scan if needed."""
+        """Get cached file_index from orchestrator context (never blocks).
+
+        Uses cached data to avoid blocking on staleness checks during requests.
+        See docs/TODO/IDEAL_UX.md for future optimization strategy.
+        """
         try:
             context = self.orchestrator.context
-            if context and hasattr(context, 'ensure_file_index_with_timeout'):
-                return context.ensure_file_index_with_timeout()
+            if context and hasattr(context, 'get_cached_file_index'):
+                return context.get_cached_file_index()
+            # Fallback: direct attribute access
+            if context and hasattr(context, 'file_index'):
+                return context.file_index or None
         except Exception:
             pass
         return None

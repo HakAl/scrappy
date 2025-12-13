@@ -242,7 +242,7 @@ class TestResearchExecutorBehavior:
         file_index = {"python": ["src/main.py"]}
         mock.context.file_index = file_index
         mock.context.ensure_file_index.return_value = file_index
-        mock.context.ensure_file_index_with_timeout.return_value = file_index
+        mock.context.get_cached_file_index.return_value = file_index
         mock.brain = "cerebras"
         mock.providers = Mock()
         mock.providers.list_available.return_value = ["cerebras", "groq"]
