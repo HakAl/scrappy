@@ -6,29 +6,6 @@ After reviewing all TODO documents, here is my analysis organized by **impact vs
 
 ---
 
-## Tier 1: High Priority (Do First)
-
-### 1. God Class Refactoring (GOD_CLASS_ALERT.md)
-
-**Why First:** This is foundational. The current god classes will make ALL other features harder to implement cleanly.
-
-| File | Lines | Problem |
-|------|-------|---------|
-| `src/agent/core.py` | 1107 | Massive, multiple responsibilities |
-| `src/context/codebase_context.py` | 960 | Context management sprawl |
-| `src/orchestrator/core.py` | 779 | Orchestration + caching + rate limiting mixed |
-| `src/task_router/router.py` | 581 | Routing logic bloat |
-
-**Recommendation:** Start here. Extract protocols, apply SOLID principles. This enables:
-- Easier testing for future features
-- Cleaner integration points for Judge, LiteLLM, etc.
-- Reduced cognitive load when adding tools
-
-**Effort:** Medium-High (but pays dividends)
-**Impact:** High (unblocks everything else)
-
----
-
 ### 2. New Tools (NEW_TOOLS.md)
 
 **Why High Priority:** Immediate user-facing value. Tools are the "hands" of your agent.
@@ -178,21 +155,10 @@ Phase 4: Polish
 
 ---
 
-## What NOT to Implement
-
-**Dependency Analysis Tool** - Users can run `pip-audit` or `npm audit` themselves. Low value for effort.
-
-**Database Query Tool** - Niche use case. Most projects don't need SQL introspection from an AI agent.
-
-**File Watching** - Complexity explosion. Real-time monitoring is a different product category.
-
----
-
 ## Summary Table
 
 | Feature | Priority | Effort | Impact | Dependencies |
 |---------|----------|--------|--------|--------------|
-| God Class Refactor | 1 | High | High | None |
 | Test Runner Tool | 1 | Low | High | None |
 | TODO Tool | 1 | Low | High | None |
 | LiteLLM Integration | 2 | Medium | Medium | Refactor |
@@ -207,13 +173,10 @@ Phase 4: Polish
 
 ## Final Thoughts
 
-Your instinct is correct: **tools are valuable** and **splitting god classes is foundational**.
-
 The Judge/TDD Loop is the most exciting feature but needs foundation work first. LiteLLM is good infrastructure but not urgent.
 
 Start with:
-1. Pick ONE god class (I suggest `orchestrator/core.py`) and refactor it
-2. Build Test Runner Tool
-3. Build TODO Tool
+- Build Test Runner Tool
+- Build TODO Tool
 
 These three unlock everything else.

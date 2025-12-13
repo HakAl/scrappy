@@ -19,13 +19,10 @@ Usage:
             io.echo("CLI mode output")
 """
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from .io_interface import CLIIOProtocol
+from .io_interface import CLIIOProtocol
 
 
-def is_tui_mode(io: "CLIIOProtocol") -> bool:
+def is_tui_mode(io: CLIIOProtocol) -> bool:
     """Check if the IO interface is in TUI mode.
 
     This function safely checks whether the provided IO interface is

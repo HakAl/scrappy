@@ -4,7 +4,7 @@ Interactive mode module for CLI.
 Handles input processing for the interactive chat.
 """
 
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 
 from .io_interface import CLIIOProtocol
 from .state_manager import PlanStateManager
@@ -19,9 +19,7 @@ from .exceptions import CLIError, ProviderError
 from .error_recovery import graceful_degrade
 from .logging import CLILogger
 from ..orchestrator.protocols import Orchestrator
-
-if TYPE_CHECKING:
-    from scrappy.infrastructure.theme import ThemeProtocol
+from scrappy.infrastructure.theme import ThemeProtocol
 
 
 class InteractiveMode:
@@ -40,7 +38,7 @@ class InteractiveMode:
         task_router: CLITaskRouterHandler,
         tasks: CLITaskExecution,
         logger: CLILogger,
-        theme: Optional["ThemeProtocol"] = None,
+        theme: Optional[ThemeProtocol] = None,
     ) -> None:
         """
         Initialize InteractiveMode.

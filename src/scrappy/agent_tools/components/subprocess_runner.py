@@ -9,13 +9,11 @@ import os
 import subprocess
 import threading
 import time
-from typing import Optional, List, TYPE_CHECKING
+from typing import Optional, List
 
 from ..protocols import ExecutionResult
 from .output_collector import ThreadSafeOutputCollector
-
-if TYPE_CHECKING:
-    from scrappy.protocols.io import CLIIOProtocol
+from scrappy.protocols.io import CLIIOProtocol
 
 
 class SubprocessRunner:
@@ -29,7 +27,7 @@ class SubprocessRunner:
     for progress output. If not provided, progress messages are suppressed.
     """
 
-    def __init__(self, io: Optional["CLIIOProtocol"] = None):
+    def __init__(self, io: Optional[CLIIOProtocol] = None):
         """Initialize subprocess runner.
 
         Args:

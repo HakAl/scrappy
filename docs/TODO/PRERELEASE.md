@@ -166,16 +166,12 @@ With the **Todo Tool** running, the agent has invisible state. Users will get co
 **Release with the Test Runner.** It closes the loop.
 
 ### Final Pre Release Checklist
-You start next week. Don't burn out trying to make it perfect.
 1.  **Todo Tool:** Working + saves to `.md` file.
 2.  **Semantic Search:** Working (using your Priority Queue / Background indexing).
 3.  **Test Runner:** Keep it simple. Just run a shell command and capture `stdout/stderr`. Don't try to parse XML reports yet.
 4.  **README:** Write 3 sentences on how to use the "Agent" mode.
 
-Good luck! Shipping a working agent CLI is a massive achievement.
-
 ---
-
 
 Including Test Runner with the TODO feature, here is a specific piece of advice on how to make those two work 
 together to actually "close the loop."

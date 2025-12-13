@@ -5,15 +5,12 @@ Handles all user interaction and console output formatting for the agent.
 Wraps CLIIOProtocol to provide agent-specific display operations.
 """
 
-from typing import Optional, Dict, Any, TYPE_CHECKING
+from typing import Optional, Dict, Any
 import json
 
-if TYPE_CHECKING:
-    from ..protocols.io import CLIIOProtocol
-    from ..infrastructure.theme import ThemeProtocol
-
+from ..protocols.io import CLIIOProtocol
 from .protocols import AgentUIProtocol
-from ..infrastructure.theme import DEFAULT_THEME
+from ..infrastructure.theme import ThemeProtocol, DEFAULT_THEME
 
 
 class AgentUI:
@@ -29,8 +26,8 @@ class AgentUI:
 
     def __init__(
         self,
-        io: "CLIIOProtocol",
-        theme: Optional["ThemeProtocol"] = None,
+        io: CLIIOProtocol,
+        theme: Optional[ThemeProtocol] = None,
     ):
         """
         Initialize agent UI.

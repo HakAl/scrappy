@@ -97,7 +97,8 @@ if file in referenced_files:
 This is a sophisticated, high-value feature.
 Implementing **Phase 1 (Extraction)** and **Phase 2 (Check)** is low risk.
 
-I recommend implementing the **"Live Read Bypass"** immediately alongside this. It saves you from writing complex re-indexing logic for 80% of use cases (small, specific files).
+I recommend implementing the **"Live Read Bypass"** immediately alongside this.
+It saves you from writing complex re-indexing logic for 80% of use cases (small, specific files).
 
 ---
 

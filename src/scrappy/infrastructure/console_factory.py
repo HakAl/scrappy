@@ -7,15 +7,12 @@ Console that captures output to StringIO for routing through the
 Textual output queue.
 """
 
-from typing import TYPE_CHECKING, Optional, Protocol, Tuple
+from typing import Optional, Protocol, Tuple
 from io import StringIO
 
 from rich.console import Console
 
 from scrappy.infrastructure.output_mode import OutputModeContext
-
-if TYPE_CHECKING:
-    pass
 
 
 class ConsoleFactoryProtocol(Protocol):

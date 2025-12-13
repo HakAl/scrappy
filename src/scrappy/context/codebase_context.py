@@ -32,9 +32,9 @@ from .protocols import (
     FileCollectorProtocol,
     StalenessCheckerProtocol,
 )
+from ..protocols.io import CLIIOProtocol
 
 if TYPE_CHECKING:
-    from ..protocols.io import CLIIOProtocol
     from .semantic.config import SemanticIndexConfig
     from .protocols import IndexStateProtocol, IndexingDecisionProtocol
 
@@ -61,7 +61,7 @@ class CodebaseContext:
         project_detector: Optional[ProjectDetector] = None,
         path_provider: Optional[PathProviderProtocol] = None,
         file_collector: Optional[FileCollectorProtocol] = None,
-        io: Optional['CLIIOProtocol'] = None,
+        io: Optional[CLIIOProtocol] = None,
         event_queue: Optional[EventQueueProtocol] = None,
         semantic_manager: Optional[SemanticSearchManagerProtocol] = None,
         context_augmenter: Optional[ContextAugmenterProtocol] = None,

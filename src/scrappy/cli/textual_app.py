@@ -22,11 +22,10 @@ from textual import work
 from scrappy.infrastructure.output_mode import OutputModeContext
 from scrappy.infrastructure.theme import DEFAULT_THEME, ThemeProtocol
 from .input_capture import InputCaptureManager, InputRequest
-
+from .protocols import StatusComponentProtocol, ActivityState
 
 if TYPE_CHECKING:
     from .interactive import InteractiveMode
-    from .protocols import StatusComponentProtocol, ActivityState
     from ..context.codebase_context import CodebaseContext
 
 logger = logging.getLogger(__name__)
@@ -101,7 +100,7 @@ class ActivityStateChange(Message):
 
     def __init__(
         self,
-        state: "ActivityState",
+        state: ActivityState,
         message: str = "",
         elapsed_ms: int = 0
     ) -> None:
@@ -432,7 +431,7 @@ class ActivityIndicator(Label):
 
     def __init__(self) -> None:
         super().__init__("", id="activity_indicator")
-        self._state: Optional["ActivityState"] = None
+        self._state: Optional[ActivityState] = None
         self._message: str = ""
         self._elapsed_ms: int = 0
         self._show_timer: Optional[Any] = None
@@ -442,7 +441,7 @@ class ActivityIndicator(Label):
         """Whether indicator is currently active (has 'active' class)."""
         return self._state is not None
 
-    def show(self, state: "ActivityState", message: str = "") -> None:
+    def show(self, state: ActivityState, message: str = "") -> None:
         """Schedule showing the activity indicator after delay.
 
         Uses timer-based delay for flicker prevention - if hide() is called
@@ -530,13 +529,13 @@ class StatusBar(Container):
 
     def __init__(self) -> None:
         super().__init__(id="status_bar")
-        self.components: Dict[str, "StatusComponentProtocol"] = {}
+        self.components: Dict[str, StatusComponentProtocol] = {}
         self._mounted_ids: set[str] = set()
 
     def compose(self) -> ComposeResult:
         yield Vertical(id="status_content")
 
-    def register_component(self, component: "StatusComponentProtocol") -> None:
+    def register_component(self, component: StatusComponentProtocol) -> None:
         self.components[component.component_id] = component
         self.refresh_display()
 
@@ -546,7 +545,7 @@ class StatusBar(Container):
             self._mounted_ids.discard(component_id)
             self.refresh_display()
 
-    def _get_visible_components(self) -> List["StatusComponentProtocol"]:
+    def _get_visible_components(self) -> List[StatusComponentProtocol]:
         return [c for c in self.components.values() if c.is_visible]
 
     def _update_visibility(self, has_visible: bool) -> None:
@@ -556,7 +555,7 @@ class StatusBar(Container):
         else:
             self.remove_class("show")
 
-    def _mount_components(self, visible: List["StatusComponentProtocol"]) -> None:
+    def _mount_components(self, visible: List[StatusComponentProtocol]) -> None:
         try:
             content = self.query_one("#status_content", Vertical)
         except Exception:

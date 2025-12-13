@@ -15,6 +15,8 @@ from .chat_layout import ChatLayout
 from ..input_capture import InputCaptureManager, InputRequest
 from ..command_history import CommandHistory, get_default_history_path
 
+from scrappy.infrastructure.theme import ThemeProtocol
+
 if TYPE_CHECKING:
     from ..interactive import InteractiveMode
     from ..textual_app import (
@@ -25,7 +27,6 @@ if TYPE_CHECKING:
         ActivityStateChange,
         ScrappyApp,
     )
-    from scrappy.infrastructure.theme import ThemeProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,7 @@ class MainAppScreen(Screen):
         interactive_mode: "InteractiveMode",
         output_adapter: "TextualOutputAdapter",
         bridge: "ThreadSafeAsyncBridge",
-        theme: "ThemeProtocol",
+        theme: ThemeProtocol,
     ):
         """Initialize main screen with dependencies.
 

@@ -5,10 +5,9 @@ Defines minimal interfaces that formatters need for styling output,
 avoiding direct dependencies on higher-level CLI modules.
 """
 
-from typing import Protocol, runtime_checkable, TYPE_CHECKING
+from typing import Protocol, runtime_checkable
 
-if TYPE_CHECKING:
-    from scrappy.infrastructure.theme import ThemeProtocol
+from scrappy.infrastructure.theme import ThemeProtocol
 
 
 @runtime_checkable
@@ -28,7 +27,7 @@ class FormatterOutputProtocol(Protocol):
     """
 
     @property
-    def theme(self) -> "ThemeProtocol":
+    def theme(self) -> ThemeProtocol:
         """Get the theme for color access.
 
         Returns:

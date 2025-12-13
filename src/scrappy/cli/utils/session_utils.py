@@ -5,13 +5,12 @@ Shared utilities for displaying session-related information across CLI modules.
 Eliminates duplication in session restoration, save, and detection display code.
 """
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
-if TYPE_CHECKING:
-    from ..io_interface import CLIIOProtocol
+from ..io_interface import CLIIOProtocol
 
 
-def restore_session_to_cli(cli_instance: Any, io: "CLIIOProtocol") -> bool:
+def restore_session_to_cli(cli_instance: Any, io: CLIIOProtocol) -> bool:
     """
     Restore a saved session to a CLI instance.
 

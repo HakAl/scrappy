@@ -7,13 +7,11 @@ progress display strategies (Rich, logging, callbacks, silent).
 
 import logging
 import time
-from typing import Optional, Callable, TYPE_CHECKING
+from typing import Optional, Callable
 
 from scrappy.infrastructure.output_mode import OutputModeContext
 from scrappy.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
-
-if TYPE_CHECKING:
-    from ..protocols.io import CLIIOProtocol
+from scrappy.protocols.io import CLIIOProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -409,7 +407,7 @@ class UnifiedIOProgressReporter:
     Implements ProgressReporterProtocol.
     """
 
-    def __init__(self, io: "CLIIOProtocol", theme: Optional[ThemeProtocol] = None):
+    def __init__(self, io: CLIIOProtocol, theme: Optional[ThemeProtocol] = None):
         """
         Initialize progress reporter with IO interface.
 
@@ -467,7 +465,7 @@ class UnifiedIOProgressReporter:
 
 
 def create_progress_reporter(
-    io: Optional["CLIIOProtocol"] = None,
+    io: Optional[CLIIOProtocol] = None,
     use_live: bool = False,
     use_spinner: bool = True,
     theme: Optional[ThemeProtocol] = None,

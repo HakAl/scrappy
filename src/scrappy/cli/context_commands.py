@@ -3,13 +3,11 @@ Context management functionality for the CLI.
 Handles project context, exploration, and working memory commands.
 """
 
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 
 from .io_interface import CLIIOProtocol
 from .validators import validate_subcommand
-
-if TYPE_CHECKING:
-    from scrappy.infrastructure.theme import ThemeProtocol
+from scrappy.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
 
 
 class CLIContextCommands:
@@ -19,7 +17,7 @@ class CLIContextCommands:
         self,
         orchestrator,
         io: CLIIOProtocol,
-        theme: Optional["ThemeProtocol"] = None,
+        theme: Optional[ThemeProtocol] = None,
     ):
         """Initialize context command handler.
 
@@ -28,8 +26,6 @@ class CLIContextCommands:
             io: I/O interface for output
             theme: Optional theme for consistent styling
         """
-        from scrappy.infrastructure.theme import DEFAULT_THEME
-
         self.orchestrator = orchestrator
         self.io = io
         self._theme = theme or DEFAULT_THEME

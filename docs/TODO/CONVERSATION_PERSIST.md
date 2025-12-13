@@ -1,7 +1,7 @@
 # Conversation Persistence
 
 ## Problem
-Scrappy have amnesia between chats. Scrappy forgets everything.
+Scrappy has amnesia between chats. Scrappy forgets everything.
 
 ## Solution Overview
 SQLite-backed conversation storage with transparent persistence.
