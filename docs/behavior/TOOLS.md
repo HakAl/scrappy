@@ -7,14 +7,15 @@ The agent uses tools to interact with the file system, execute commands, search 
 ```
 src/agent_tools/
   tools/
-    base.py           # ToolProtocol, ToolBase, ToolResult, ToolContext
-    registry.py       # ToolRegistry - central tool management
-    file_tools.py     # File operations
-    git_tools.py      # Git operations
-    search_tools.py   # Code search
-    web_tools.py      # Web fetch/search
-    python_tools.py   # Python-specific tools
-    command_tool.py   # Shell command execution
+    base.py               # ToolProtocol, ToolBase, ToolResult, ToolContext
+    registry.py           # ToolRegistry - central tool management
+    file_tools.py         # File operations
+    git_tools.py          # Git operations
+    search_tools.py       # Code search (pattern-based)
+    semantic_search_tool.py # Semantic code search (embeddings)
+    web_tools.py          # Web fetch/search
+    python_tools.py       # Python-specific tools
+    command_tool.py       # Shell command execution
   components/
     command_advisor.py    # Command safety advice
     command_security.py   # Security validation
@@ -63,6 +64,20 @@ class ToolProtocol(Protocol):
 | Tool | Purpose | Parameters |
 |------|---------|------------|
 | `SearchCodeTool` | Search code by pattern | `pattern`, `file_type` (optional) |
+
+### Semantic Search Tools (`semantic_search_tool.py`)
+
+| Tool | Purpose | Parameters |
+|------|---------|------------|
+| `SemanticSearchTool` | Semantic code search using embeddings | `query`, `max_tokens` (optional, default: 4000) |
+
+The semantic search tool (`codebase_search`) finds code based on meaning, not exact text. Use it for conceptual queries like "how does authentication work?" or "find error handling code".
+
+- Requires codebase to be indexed (happens automatically in background on startup)
+- Returns relevant code chunks with file paths and line numbers
+- Falls back gracefully when index is not ready
+
+See [SEMANTIC_FILE_SEARCH.md](SEMANTIC_FILE_SEARCH.md) for details on the indexing system.
 
 ### Web Tools (`web_tools.py`)
 

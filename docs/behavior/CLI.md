@@ -79,6 +79,7 @@ Start with `scrappy` (no arguments) or `scrappy interactive`.
 
 **State Commands**
 - `/clear` - Clear conversation history
+- `/history [n]` - Show last n messages (default: 10)
 - `/verbose`, `/v` - Toggle verbose output mode
 
 ## Architecture

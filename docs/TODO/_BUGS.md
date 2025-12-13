@@ -2,7 +2,6 @@
 
 
 ---
-loses conversation context -- we don't persist :
 
  ### 3. **Scalability Improvements**
  - Refactor the core agent to support distributed execution
@@ -29,24 +28,6 @@ loses conversation context -- we don't persist :
  - Add integration tests for the complete agent workflow
  - Implement property-based testing for core algorithms
 
- Would you like me to focus on any specific area of improvement? I can provide more detailed recommendations based on
- your priorities (e.g., performance, reliability, ease of use, or extensibility).
-
- > can you explain what you mean by scalability improvements?
-
- | Scalability improvements refer to enhancements that allow a system, process, or technology to handle a growing
- amount of work—or to be expanded to accommodate that growth—efficiently and effectively. In the context of software or
- AI systems like me, scalability improvements might include:
-
- - **Handling more users simultaneously** without slowdowns or failures.
- - **Processing larger volumes of data** quickly and accurately.
- - **Reducing response time** as demand increases.
- - **Using resources (like computing power and memory) more efficiently**, so the system can grow without requiring
- disproportionately more infrastructure.
- - **Supporting integration with more applications or services** as needs expand.
-
- These improvements ensure the system remains reliable, fast, and cost-effective as user demand or data complexity
- increases.
 ---
 
 ---
@@ -60,16 +41,13 @@ too much agent output? toggle with agent verbose mode?
 ---
 
 ---
+is max steps 10 for agent good? are existing safeguards good enough? 
+---
+---
 why python tools? what's the purpose?? generalize to dependencies tool? is that useful?
 ---
 
----
-is max steps 10 for agent good? are existing safeguards good enough? 
----
 
----
-automatically explore?
----
 
 ---
 src/agent/core.py -- _format_codebase_structure -- does this belong here?

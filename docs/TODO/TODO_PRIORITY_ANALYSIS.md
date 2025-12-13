@@ -17,9 +17,6 @@ After reviewing all TODO documents, here is my analysis organized by **impact vs
 | Test Runner Tool | Very High | Low | YES - core loop needs this |
 | TODO Tool | High | Low | YES - task tracking essential |
 | Parallel tool execution | High | Medium | YES - perf multiplier |
-| Semantic Code Search | Medium | High | MAYBE - nice but not blocking |
-| Database Query Tool | Medium | Medium | DEFER - niche use case |
-| Dependency Analysis | Low | Medium | DEFER - can use CLI tools |
 
 **Start with:** Test Runner + TODO Tool. These directly enable the TDD Loop feature.
 

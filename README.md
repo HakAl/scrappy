@@ -125,6 +125,8 @@ Task completed in 3 iterations!
 This isn't just a simple wrapper around APIs. It's a smart, resilient system.
 
 *   **23,000+ Free Requests/Day**: Combines multiple providers for a massive daily quota.
+*   **Conversation Memory**: Automatically remembers conversations across sessions. Just run `scrappy` and pick up where you left off.
+*   **Semantic Code Search**: Find code by meaning, not just text. Ask "where is authentication handled?" and get relevant results.
 *   **Codebase Context**: Explores your project to provide context-aware answers.
 *   **Task-Aware Routing**: Intelligently routes simple tasks to fast models (Cerebras) and complex tasks to quality models (Gemini, Llama-3 70B).
 *   **Code Agent**: AI writes and modifies code with a human-in-the-loop for approval, ensuring safety.
@@ -132,12 +134,12 @@ This isn't just a simple wrapper around APIs. It's a smart, resilient system.
 *   **Swappable "Brain"**: You can choose which LLM acts as the primary orchestrator (no Claude subscription required).
 *   **Resilient & Redundant**: Automatically falls back to other providers if one hits a rate limit or fails.
 *   **Response Caching**: Saves your quota and provides instant responses for repeated queries.
-*   **Session Persistence**: Resume your conversations and context exactly where you left off.
 
-### Planned Features
+### Roadmap
 
-* Semantic search for prompt augmentation / better code base understanding
-* TDD Loop `Write Test (Fail) -> Implement (Pass) -> Refactor`
+* Todo/Planning tool for structured task management
+* Test runner integration with verification loop
+* Episodic memory for long conversation recall
 
 ---
 
@@ -158,31 +160,30 @@ You can use `scrappy` for quick, one-shot commands or in a persistent, interacti
 
 #### **Starting an Interactive Session**
 ```bash
-# Start interactive mode and auto-explore the current directory
-scrappy --auto-explore
-
-# Start interactive mode without exploring
+# Start interactive mode (conversations auto-load from previous sessions)
 scrappy
 
-# Resume your last session (history and context are saved)
-scrappy --resume
-scrappy -r
+# Start and auto-explore the current directory
+scrappy --auto-explore
 
 # Start with a specific provider as the main "brain"
 scrappy --brain groq
 ```
 
+> **Note:** Conversations are automatically saved and restored. Just run `scrappy` in any project directory and your previous context loads automatically.
+
 #### **Interactive Commands**
 Once inside a session, use these commands:
 ```
 You: /help              # Show all commands
-You: /agent <task>       # Run the code agent with human approval
-You: /plan <task>        # Create a structured, step-by-step plan for a task
-You: /reason <question>  # Get a deep analysis of a technical question
-You: /explore [path]     # Explore and learn a codebase
-You: /context            # View what the AI knows about your project
-You: /status             # Check provider status and usage stats
-You: /quit               # Exit the session
+You: /agent <task>      # Run the code agent with human approval
+You: /plan <task>       # Create a structured, step-by-step plan
+You: /explore [path]    # Explore and learn a codebase
+You: /history [n]       # Show last n messages (default: 10)
+You: /limits            # Check rate limit status across providers
+You: /context           # View what the AI knows about your project
+You: /clear             # Clear conversation history
+You: /quit              # Exit the session
 ```
 
 #### **One-Shot Commands**

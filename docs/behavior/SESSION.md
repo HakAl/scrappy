@@ -17,7 +17,7 @@ src/cli/
 
 ## Session Data
 
-A session contains:
+A session contains **working memory** (cached context, not conversation):
 
 ```python
 {
@@ -31,15 +31,13 @@ A session contains:
     "search_results": [...],      # Recent code searches (last 10)
     "git_operations": [...],      # Recent git commands (last 10)
     "discoveries": [...],         # Key findings
-    "conversation_history": [     # Chat messages
-        {"role": "user", "content": "..."},
-        {"role": "assistant", "content": "..."}
-    ],
     "task_history": [...],        # Task execution history
     "saved_at": "2025-11-15T10:35:00",
     "session_start": "2025-11-15T10:00:00"
 }
 ```
+
+Note: **Conversation history is stored separately** in SQLite (`conversations.db`), not in the session file. See [CONVERSATION_HISTORY.md](CONVERSATION_HISTORY.md).
 
 ## Session Storage
 
@@ -82,43 +80,25 @@ orch.clear_session()
 
 ## CLI Integration
 
-### Auto-save on Exit
+### Automatic Persistence
 
-By default, sessions are saved when exiting with `/quit`:
+Conversation history is now **automatically persisted** via `ConversationStore` (SQLite):
+- Every message is saved immediately (no manual save needed)
+- On startup, recent history is loaded automatically (token-budgeted)
+- Survives crashes and Ctrl+C (unlike the old session.json approach)
 
-```bash
-scrappy  # Start interactive mode
-# ... conversation ...
-/quit    # Session auto-saved
-```
+See [CONVERSATION_HISTORY.md](CONVERSATION_HISTORY.md) for details on conversation persistence.
 
-Disable with `--no-save`:
+### Working Memory Session
 
-```bash
-scrappy --no-save
-```
-
-Note: Ctrl+C does NOT trigger auto-save. Use `/quit` to save.
-
-### Resume Session
-
-Resume from last session:
-
-```bash
-scrappy --resume
-# or
-scrappy -r
-```
-
-### Interactive Commands
+The `/session` command manages **working memory** (file cache, searches, git ops), not conversation history:
 
 ```
-/session            # Show session info and status
-/session save       # Save current session
-/session load       # Load saved session
-/session clear      # Delete saved session file
-/session toggle     # Toggle auto-save on/off
+/session            # Show working memory stats
+/session clear      # Clear working memory cache
 ```
+
+Note: `/session clear` clears the working memory cache, not conversation history. Use `/clear` to clear conversation history.
 
 ## Working Memory
 
@@ -174,5 +154,6 @@ def test_session_roundtrip():
 
 - **Single session per project** - No multi-session support or session IDs
 - **No encryption** - Session data stored in plaintext JSON
-- **Ephemeral on interrupt** - Ctrl+C doesn't save (must use `/quit`)
-- **LRU eviction** - Only recent files/searches/git ops are kept
+- **LRU eviction** - Only recent files/searches/git ops are kept in working memory
+
+Note: Conversation history is now persisted separately via SQLite and survives Ctrl+C. See [CONVERSATION_HISTORY.md](CONVERSATION_HISTORY.md).
