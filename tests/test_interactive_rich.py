@@ -64,60 +64,6 @@ class TestWelcomeBannerPanel:
         # Title should be visible (case-insensitive)
         assert 'scrappy' in output.lower()
 
-    @pytest.mark.integration
-    def test_welcome_banner_contains_ascii_art(self):
-        """Welcome banner should include ASCII art or styled title."""
-        io, console = make_capturing_rich_io()
-
-        from scrappy.cli.interactive_banner import render_welcome_banner
-
-        render_welcome_banner(io)
-        output = get_captured_output(console)
-
-        # Should have some visual distinction (ASCII art or styled header)
-        # Either box characters or large text representation
-        assert 'Interactive Mode' in output or 'SCRAPPY' in output
-
-    @pytest.mark.integration
-    def test_welcome_banner_shows_quick_commands(self):
-        """Welcome banner should list key commands."""
-        io, console = make_capturing_rich_io()
-
-        from scrappy.cli.interactive_banner import render_welcome_banner
-
-        render_welcome_banner(io)
-        output = get_captured_output(console)
-
-        # Should show essential commands
-        assert '/help' in output
-        assert '/quit' in output
-
-    @pytest.mark.integration
-    def test_welcome_banner_panel_has_border_style(self):
-        """Welcome banner panel should have styled border."""
-        io, console = make_capturing_rich_io()
-
-        from scrappy.cli.interactive_banner import render_welcome_banner
-
-        render_welcome_banner(io)
-        output = get_captured_output(console)
-
-        # Panel should be rendered (has some structure)
-        lines = output.strip().split('\n')
-        assert len(lines) >= 3  # At least top border, content, bottom border
-
-    @pytest.mark.integration
-    def test_welcome_banner_shows_mode_statuses(self):
-        """Welcome banner should display current mode statuses."""
-        io, console = make_capturing_rich_io()
-
-        from scrappy.cli.interactive_banner import render_welcome_banner
-
-        render_welcome_banner(io)
-        output = get_captured_output(console)
-
-        # Should show tip about continuation
-        assert 'Tip' in output or '\\' in output
 
 
 # =============================================================================

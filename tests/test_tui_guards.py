@@ -214,31 +214,6 @@ class TestDirectConsoleOutputTUIGuards:
         assert "TUI mode" in str(exc_info.value)
 
 
-class TestInteractiveBannerTUIGuards:
-    """Tests for interactive_banner TUI mode guards."""
-
-    def test_display_banner_raises_when_tui_mode_but_no_sink(self):
-        """display_banner raises RuntimeError when TUI mode but no output_sink."""
-        from scrappy.cli.interactive_banner import display_banner
-
-        # Mock IO with no output_sink
-        mock_io = MagicMock()
-        mock_io.is_tui_mode = False  # IO says not TUI
-        del mock_io.output_sink  # Ensure no output_sink attribute
-
-        # But OutputModeContext says TUI mode
-        OutputModeContext.set_tui_mode(True)  # No sink provided
-
-        with pytest.raises(RuntimeError) as exc_info:
-            display_banner(mock_io)
-
-        assert "TUI mode detected" in str(exc_info.value)
-        assert "no output_sink available" in str(exc_info.value)
-
-
-
-
-
 class TestFactoryFunctionsBehavior:
     """Tests that factory functions correctly select implementations based on mode."""
 

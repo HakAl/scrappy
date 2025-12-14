@@ -1,3 +1,57 @@
+## ARCHITECTURE GOAL
+
+LiteLLM acts as our bridge to providers. We still decide taskrouting, but delegate to LiteLLM for:
+requests
+retries
+rate limit
+fallbacks
+Enables easier streaming integration 
+Potentially some classification  
+
+## CODE RESEARCH
+
+### INTEGRATION DESIGN
+
+New client: LiteLLMClient(litellm, logging, config)
+Integration: ProviderService(LiteLLMClient)
+Orch/Task Router/Agent/etc: Orch(ProviderService)
+
+### PROVIDER INTEGRATION POINTS
+Orchestrator 
+Task Router
+Agent?
+
+docs/PROVIDERS.md
+
+LiteLLM RESEARCH
+Response format
+```
+{
+    "id": "chatcmpl-fe575c37-5004-4926-ae5e-bfbc31f356ca",
+    "created": 1751494808,
+    "model": "claude-sonnet-4-20250514",
+    "object": "chat.completion.chunk",
+    "system_fingerprint": null,
+    "choices": [
+        {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+                "provider_specific_fields": null,
+                "content": "Hello",
+                "role": "assistant",
+                "function_call": null,
+                "tool_calls": null,
+                "audio": null
+            },
+            "logprobs": null
+        }
+    ],
+    "provider_specific_fields": null,
+    "stream_options": null,
+    "citations": null
+}
+```
 
 **LiteLLM Integration**
 

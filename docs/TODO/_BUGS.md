@@ -2,6 +2,25 @@
 
 
 ---
+(src\scrappy\task_router\classifier.py)
+  ⎿  Read 150 lines
+
+● Search(pattern: "_extract_file_references", path: "src\scrappy\task_router\classifier.py", output_mode: "content")
+  ⎿  Found 83 lines (ctrl+o to expand)
+
+● Found the bug! Look at line 300:
+
+  file_ext_pattern = r'\b([\w\-.\]+\.(?:js|jsx|ts|tsx|py|...md...))\b'
+
+  The character class [\w\-.\] doesn't include /, so paths like docs/TODO/SELECTABLE_LOG.md won't match as a full path - it only extracts SELECTABLE_LOG.md (the filename part).
+
+  When you say "review docs/TODO/SELECTABLE_LOG.md", the system:
+  1. Extracts just SELECTABLE_LOG.md (missing the directory path)
+  2. The file doesn't exist at the root, so it falls back to semantic search
+  3. Semantic search finds "RichLog" as related content
+
+  The fix needs to include path separators in the regex. But more importantly - if a user provides an explicit path, the system should check if that file exists and read it directly before falling back to searc
+---
 
  ### 3. **Scalability Improvements**
  - Refactor the core agent to support distributed execution
