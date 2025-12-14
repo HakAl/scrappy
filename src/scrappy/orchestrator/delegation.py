@@ -2,9 +2,14 @@
 DelegationManager - Handles LLM delegation with caching and prompt augmentation.
 
 Refactored to follow SOLID principles:
-- Single Responsibility: Coordinates delegation flow, delegates retry logic to RetryOrchestrator
+- Single Responsibility: Coordinates delegation flow, delegates LLM calls to LLMService
 - Open/Closed: Can extend by swapping protocol implementations
 - Dependency Inversion: Depends on protocols, not concretions
+
+After LiteLLM integration (Phase 3):
+- Uses LLMServiceProtocol instead of RetryOrchestratorProtocol
+- LiteLLM handles retry/fallback internally via Router configuration
+- provider_name is now a model GROUP name ("fast" or "quality")
 """
 
 from typing import Optional, Callable
@@ -15,17 +20,13 @@ try:
     from ..providers import LLMResponse
     from ..protocols.delegation import (
         LLMRequest,
-        RetryOrchestratorProtocol,
-        ProviderRegistryProtocol,
         CacheProtocol,
-        RateLimitTrackerProtocol,
-        ProviderSelectorProtocol,
         OutputInterfaceProtocol,
-        ContextProviderProtocol,
-        WorkingMemoryProtocol,
         PromptAugmenterProtocol,
         BatchSchedulerProtocol,
+        INTERNAL_KWARGS,
     )
+    from ..orchestrator.protocols import LLMServiceProtocol
     from ..config import (
         DEFAULT_MAX_TOKENS,
         DEFAULT_TEMPERATURE,
@@ -37,17 +38,12 @@ except ImportError:
     from providers import LLMResponse
     from protocols.delegation import (
         LLMRequest,
-        RetryOrchestratorProtocol,
-        ProviderRegistryProtocol,
         CacheProtocol,
-        RateLimitTrackerProtocol,
-        ProviderSelectorProtocol,
         OutputInterfaceProtocol,
-        ContextProviderProtocol,
-        WorkingMemoryProtocol,
         PromptAugmenterProtocol,
         BatchSchedulerProtocol,
     )
+    from orchestrator.protocols import LLMServiceProtocol
     from config import (
         DEFAULT_MAX_TOKENS,
         DEFAULT_TEMPERATURE,
@@ -57,36 +53,70 @@ except ImportError:
     )
 
 
+# Model groups for LiteLLM Router
+MODEL_GROUPS = {"fast", "quality"}
+
+# Map legacy provider names to model groups
+PROVIDER_TO_GROUP = {
+    "groq": "fast",
+    "cerebras": "fast",
+    "gemini": "quality",
+    "auto": "fast",
+}
+
+
+def _resolve_model_group(provider_name: str) -> str:
+    """
+    Resolve a provider name to a model group for LiteLLM Router.
+
+    Args:
+        provider_name: Provider name (could be legacy name like "groq" or group like "fast")
+
+    Returns:
+        Model group name ("fast" or "quality")
+    """
+    # If it's already a valid model group, return as-is
+    if provider_name in MODEL_GROUPS:
+        return provider_name
+
+    # Map legacy provider names to groups
+    if provider_name in PROVIDER_TO_GROUP:
+        return PROVIDER_TO_GROUP[provider_name]
+
+    # Default to "fast" for unknown providers
+    return "fast"
+
+
 class DelegationManager:
     """
-    Coordinates LLM delegation with caching, prompt augmentation, and retry logic.
+    Coordinates LLM delegation with caching, prompt augmentation, and LLM service calls.
 
     Follows SOLID principles:
-    - Single Responsibility: Coordinates delegation flow (caching, augmentation, retry)
+    - Single Responsibility: Coordinates delegation flow (caching, augmentation, LLM calls)
     - Open/Closed: Extensible via protocol implementations
     - Dependency Inversion: Depends on protocols, not concretions
 
     Responsibilities:
-    - Coordinate delegation flow (caching, augmentation, retry)
+    - Coordinate delegation flow (caching, augmentation, LLM calls)
     - Check cache before making requests
     - Delegate prompt augmentation to PromptAugmenter
-    - Delegate retry/fallback logic to RetryOrchestrator
+    - Delegate LLM calls to LLMService (which uses LiteLLM Router for retry/fallback)
     - Delegate batch/parallel execution to BatchScheduler
     - Store successful responses in cache
     - Return response with metadata
 
     Does NOT:
     - Implement prompt augmentation logic (delegates to PromptAugmenter)
-    - Implement retry logic (delegates to RetryOrchestrator)
+    - Implement retry logic (handled by LiteLLM Router via LLMService)
     - Implement batch scheduling logic (delegates to BatchScheduler)
-    - Implement provider selection (delegates to ProviderSelector)
-    - Implement rate limit tracking (delegates to RateLimitTracker)
+    - Implement provider selection (handled by LiteLLM Router)
+    - Implement rate limit tracking (handled by LiteLLM callbacks)
     """
 
     def __init__(
         self,
         *,
-        retry_orchestrator: RetryOrchestratorProtocol,
+        llm_service: LLMServiceProtocol,
         cache: CacheProtocol,
         output: OutputInterfaceProtocol,
         prompt_augmenter: PromptAugmenterProtocol,
@@ -99,14 +129,14 @@ class DelegationManager:
         All dependencies are injected - NO instantiation inside constructor.
 
         Args:
-            retry_orchestrator: Retry orchestrator for handling retries/fallbacks
+            llm_service: LLM service for making completion calls (uses LiteLLM Router)
             cache: Response cache for caching LLM responses
             output: Output interface for logging messages
             prompt_augmenter: Prompt augmenter for adding context and working memory
             batch_scheduler: Batch scheduler for parallel execution
             context_aware: Whether to augment prompts with context
         """
-        self._retry_orchestrator = retry_orchestrator
+        self._llm_service = llm_service
         self._cache = cache
         self._output = output
         self._prompt_augmenter = prompt_augmenter
@@ -200,28 +230,25 @@ class DelegationManager:
             }
             return cached_response, task_record
 
-        # Step 3: Create LLMRequest object (validates inputs)
-        request = LLMRequest(
-            prompt=final_prompt,
-            provider=provider_name,
-            model=model,
-            system_prompt=system_prompt,
+        # Step 3: Resolve model group and build messages
+        model_group = _resolve_model_group(provider_name)
+
+        # Build messages list for LiteLLM
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": final_prompt})
+
+        # Filter out internal kwargs that should NOT be passed to provider API
+        filtered_kwargs = {k: v for k, v in kwargs.items() if k not in INTERNAL_KWARGS}
+
+        # Step 4: Execute via LLMService (LiteLLM Router handles retry/fallback)
+        response, task_record = self._llm_service.completion_sync(
+            model=model_group,
+            messages=messages,
             max_tokens=max_tokens,
             temperature=temperature,
-            use_context=use_context,
-            use_cache=use_cache,
-            intent_classification=intent_classification,
-            auto_fallback=auto_fallback,
-            selection_type=selection_type,
-            min_context=min_context,
-            kwargs=kwargs,
-        )
-
-        # Step 4: Execute with retry/fallback using SYNC method
-        response, retry_metadata = self._retry_orchestrator.execute_with_retry_sync(
-            request=request,
-            excluded_providers=set(),
-            max_retries=max_retries,
+            **filtered_kwargs,
         )
 
         # Step 5: Store in cache
@@ -235,19 +262,10 @@ class DelegationManager:
                     intent_classification.get('keywords', [])
                 )
 
-        # Step 6: Create final task record
-        task_record = {
-            'timestamp': datetime.now().isoformat(),
-            'provider': retry_metadata['provider'],
-            'model': retry_metadata['model'],
-            'tokens_used': retry_metadata['tokens_used'],
-            'latency_ms': retry_metadata['latency_ms'],
-            'context_augmented': should_use_context,
-            'cached': False,
-            'async': False,
-            'fallback': retry_metadata['fallback'],
-            'attempts': retry_metadata['attempts'],
-        }
+        # Step 6: Add context info to task record
+        task_record['context_augmented'] = should_use_context
+        task_record['cached'] = False
+        task_record['async'] = False
 
         return response, task_record
 
@@ -336,28 +354,25 @@ class DelegationManager:
             }
             return cached_response, task_record
 
-        # Step 3: Create LLMRequest object (validates inputs)
-        request = LLMRequest(
-            prompt=final_prompt,
-            provider=provider_name,
-            model=model,
-            system_prompt=system_prompt,
+        # Step 3: Resolve model group and build messages
+        model_group = _resolve_model_group(provider_name)
+
+        # Build messages list for LiteLLM
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": final_prompt})
+
+        # Filter out internal kwargs that should NOT be passed to provider API
+        filtered_kwargs = {k: v for k, v in kwargs.items() if k not in INTERNAL_KWARGS}
+
+        # Step 4: Execute via LLMService (LiteLLM Router handles retry/fallback)
+        response, task_record = await self._llm_service.completion(
+            model=model_group,
+            messages=messages,
             max_tokens=max_tokens,
             temperature=temperature,
-            use_context=use_context,
-            use_cache=use_cache,
-            intent_classification=intent_classification,
-            auto_fallback=auto_fallback,
-            selection_type=selection_type,
-            min_context=min_context,
-            kwargs=kwargs,
-        )
-
-        # Step 4: Execute with retry/fallback (delegate to RetryOrchestrator)
-        response, retry_metadata = await self._retry_orchestrator.execute_with_retry(
-            request=request,
-            excluded_providers=set(),
-            max_retries=max_retries,
+            **filtered_kwargs,
         )
 
         # Step 5: Store in cache
@@ -371,19 +386,10 @@ class DelegationManager:
                     intent_classification.get('keywords', [])
                 )
 
-        # Step 6: Create final task record
-        task_record = {
-            'timestamp': datetime.now().isoformat(),
-            'provider': retry_metadata['provider'],
-            'model': retry_metadata['model'],
-            'tokens_used': retry_metadata['tokens_used'],
-            'latency_ms': retry_metadata['latency_ms'],
-            'context_augmented': should_use_context,
-            'cached': False,
-            'async': True,
-            'fallback': retry_metadata['fallback'],
-            'attempts': retry_metadata['attempts'],
-        }
+        # Step 6: Add context info to task record
+        task_record['context_augmented'] = should_use_context
+        task_record['cached'] = False
+        task_record['async'] = True
 
         return response, task_record
 

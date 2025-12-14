@@ -53,6 +53,7 @@ class SetupWizardScreen(Screen):
     def __init__(
         self,
         io: "UnifiedIO",
+        llm_service,
         allow_cancel: bool = True,
         on_complete: Optional[Callable[[bool], None]] = None,
     ):
@@ -60,11 +61,13 @@ class SetupWizardScreen(Screen):
 
         Args:
             io: UnifiedIO for output routing
+            llm_service: LLM service for key validation
             allow_cancel: If False, user must configure at least one provider
             on_complete: Callback when wizard completes (receives has_provider bool)
         """
         super().__init__()
         self._io = io
+        self._llm_service = llm_service
         self._allow_cancel = allow_cancel
         self._on_complete = on_complete
 
@@ -94,11 +97,11 @@ class SetupWizardScreen(Screen):
         self._layout.focus_input()
 
         # Swap output sink to write directly to our layout
-        self._original_output_sink = self._io._output_sink
-        self._io._output_sink = WizardOutputSink(self._layout)
+        self._original_output_sink = self._io.output_sink
+        self._io.output_sink = WizardOutputSink(self._layout)
 
         # Create and start wizard
-        self._wizard = SetupWizard(self._io)
+        self._wizard = SetupWizard(self._io, self._llm_service)
         self._wizard.start(
             allow_cancel=self._allow_cancel,
             on_complete=self._handle_wizard_complete
@@ -110,7 +113,7 @@ class SetupWizardScreen(Screen):
     def on_unmount(self) -> None:
         """Restore original output sink on unmount."""
         if self._original_output_sink is not None:
-            self._io._output_sink = self._original_output_sink
+            self._io.output_sink = self._original_output_sink
 
     def _handle_wizard_complete(self, has_provider: bool) -> None:
         """Handle wizard completion."""

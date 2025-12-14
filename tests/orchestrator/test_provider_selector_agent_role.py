@@ -1,219 +1,172 @@
 """
-Tests for ProviderSelector handling of supports_agent_role capability.
+Tests for ProviderSelector after LiteLLM integration.
 
-Tests that providers with supports_agent_role=False are:
-- Skipped during brain selection
-- Skipped during planning selection
-- Warned about when explicitly requested
-- Still available in general provider list
+After LiteLLM integration, ProviderSelector returns model groups ("fast", "quality")
+instead of provider names. Agent role filtering is now handled by the LiteLLM
+Router configuration - providers without agent role support are simply not
+included in the quality tier.
+
+Tests:
+- setup_brain() returns "quality" group by default
+- setup_brain() maps legacy provider names to groups
+- select_for_planning() returns "quality" group
 """
 
 import pytest
-from unittest.mock import Mock
 
 from scrappy.orchestrator.provider_selector import ProviderSelector
-from scrappy.orchestrator.config import OrchestratorConfig
-from scrappy.providers.base import ModelInfo, ModelType, SpeedRank, QualityRank
 
 
-def create_mock_provider(name: str, supports_agent_role: bool = True, models: list = None):
-    """Create a mock provider with specified agent role support."""
-    provider = Mock()
-    provider.name = name
-    provider.supports_agent_role = supports_agent_role
-    provider.available_models = models or ['default-model']
-    provider.default_model = provider.available_models[0]
+class TestSetupBrainModelGroup:
+    """Tests for setup_brain() returning model groups."""
 
-    def get_model_info(model_id):
-        return ModelInfo(
-            id=model_id,
-            model_type=ModelType.CHAT,
-            context_length=8192,
-            rpd=1000,
-            speed=SpeedRank.FAST,
-            quality=QualityRank.GOOD
+    def test_setup_brain_returns_quality_group_by_default(self):
+        """setup_brain() returns 'quality' group for brain/reasoning tasks."""
+        selector = ProviderSelector()
+
+        group, model = selector.setup_brain()
+
+        assert group == "quality"
+        assert model is None  # Router picks actual model
+
+    def test_setup_brain_with_quality_group(self):
+        """setup_brain() accepts 'quality' as preferred provider."""
+        selector = ProviderSelector()
+
+        group, model = selector.setup_brain(preferred_provider="quality")
+
+        assert group == "quality"
+        assert model is None
+
+    def test_setup_brain_with_fast_group(self):
+        """setup_brain() accepts 'fast' as preferred provider."""
+        selector = ProviderSelector()
+
+        group, model = selector.setup_brain(preferred_provider="fast")
+
+        assert group == "fast"
+        assert model is None
+
+    def test_setup_brain_maps_legacy_provider_to_quality(self):
+        """setup_brain() maps legacy provider names to 'quality' group."""
+        selector = ProviderSelector()
+
+        # Legacy provider names should map to quality for brain tasks
+        group, model = selector.setup_brain(preferred_provider="gemini")
+
+        assert group == "quality"
+        assert model is None
+
+    def test_setup_brain_maps_cerebras_to_quality(self):
+        """setup_brain() maps 'cerebras' to 'quality' group."""
+        selector = ProviderSelector()
+
+        group, model = selector.setup_brain(preferred_provider="cerebras")
+
+        assert group == "quality"
+        assert model is None
+
+    def test_setup_brain_logs_selection(self):
+        """setup_brain() logs the selection decision."""
+        selector = ProviderSelector(verbose=True)
+
+        selector.setup_brain()
+
+        log = selector.get_selection_log()
+        assert len(log) > 0
+        assert any("brain" in entry.lower() for entry in log)
+
+
+class TestSelectForPlanningModelGroup:
+    """Tests for select_for_planning() returning model groups."""
+
+    def test_select_for_planning_returns_quality_group(self):
+        """select_for_planning() returns 'quality' group."""
+        selector = ProviderSelector()
+
+        group, model = selector.select_for_planning()
+
+        assert group == "quality"
+        assert model is None  # Router picks actual model
+
+    def test_select_for_planning_logs_selection(self):
+        """select_for_planning() logs the selection decision."""
+        selector = ProviderSelector(verbose=True)
+
+        selector.select_for_planning()
+
+        log = selector.get_selection_log()
+        assert len(log) > 0
+        assert any("planning" in entry.lower() or "quality" in entry.lower() for entry in log)
+
+
+class TestGetProviderForFallbackModelGroup:
+    """Tests for get_provider_for_fallback() returning model groups."""
+
+    def test_fallback_returns_fast_by_default(self):
+        """get_provider_for_fallback() returns 'fast' by default."""
+        selector = ProviderSelector()
+
+        result = selector.get_provider_for_fallback()
+
+        assert result == "fast"
+
+    def test_fallback_returns_quality_for_quality_selection(self):
+        """get_provider_for_fallback() returns 'quality' for quality selection type."""
+        from scrappy.orchestrator.model_selection import ModelSelectionType
+
+        selector = ProviderSelector()
+
+        result = selector.get_provider_for_fallback(
+            selection_type=ModelSelectionType.QUALITY
         )
 
-    provider.get_model_info = get_model_info
-    provider.get_instruction_tuned_models = Mock(return_value=[])
-    return provider
+        assert result == "quality"
+
+    def test_fallback_ignores_exclude_list(self):
+        """get_provider_for_fallback() ignores exclude list (LiteLLM handles fallback)."""
+        selector = ProviderSelector()
+
+        # Exclude list should be ignored - LiteLLM Router handles fallback
+        result = selector.get_provider_for_fallback(
+            exclude=["cerebras", "groq", "gemini"]
+        )
+
+        # Should still return a valid group
+        assert result in ("fast", "quality")
 
 
-def create_mock_registry(providers: dict):
-    """
-    Create a mock registry with specified providers.
+class TestRecommendModelGroup:
+    """Tests for recommend() returning model groups."""
 
-    Args:
-        providers: Dict mapping provider_name to supports_agent_role bool
-    """
-    registry = Mock()
-    provider_objects = {
-        name: create_mock_provider(name, supports_agent)
-        for name, supports_agent in providers.items()
-    }
-    registry.list_available.return_value = list(providers.keys())
-    registry.get = lambda name: provider_objects.get(name)
-    return registry
+    def test_recommend_returns_fast_for_speed_priority(self):
+        """recommend() returns 'fast' for speed priority."""
+        selector = ProviderSelector()
 
+        result = selector.recommend({"speed": "fast"})
 
-class TestSetupBrainAgentRoleFiltering:
-    """Tests for setup_brain() respecting supports_agent_role."""
+        assert result == "fast"
 
-    def test_skips_provider_that_does_not_support_agent_role(self):
-        """Provider with supports_agent_role=False is skipped during auto-selection."""
-        registry = create_mock_registry({
-            'github': False,  # Does not support agent role
-            'cerebras': True,
-        })
-        config = OrchestratorConfig(brain_priority=['github', 'cerebras'])
-        selector = ProviderSelector(registry, config=config)
+    def test_recommend_returns_quality_for_excellent_quality(self):
+        """recommend() returns 'quality' for excellent quality requirement."""
+        selector = ProviderSelector()
 
-        provider_name, provider = selector.setup_brain()
+        result = selector.recommend({"quality": "excellent"})
 
-        assert provider_name == 'cerebras'
-        log = selector.get_selection_log()
-        assert any('github' in entry and 'does not support agent role' in entry for entry in log)
+        assert result == "quality"
 
-    def test_warns_when_user_requests_unsupported_provider(self):
-        """Warns user and falls back when they request a provider that doesn't support agent role."""
-        registry = create_mock_registry({
-            'github': False,
-            'cerebras': True,
-        })
-        config = OrchestratorConfig(brain_priority=['cerebras'])
-        selector = ProviderSelector(registry, config=config)
+    def test_recommend_returns_fast_for_budget_sensitive(self):
+        """recommend() returns 'fast' for budget-sensitive tasks."""
+        selector = ProviderSelector()
 
-        provider_name, provider = selector.setup_brain(preferred_provider='github')
+        result = selector.recommend({"budget_sensitive": True})
 
-        assert provider_name == 'cerebras'
-        log = selector.get_selection_log()
-        assert any('github' in entry and 'does not support agent/brain roles' in entry for entry in log)
-        assert any('Falling back' in entry for entry in log)
+        assert result == "fast"
 
-    def test_accepts_provider_with_agent_role_support(self):
-        """Provider with supports_agent_role=True is accepted."""
-        registry = create_mock_registry({
-            'cerebras': True,
-            'groq': True,
-        })
-        config = OrchestratorConfig(brain_priority=['cerebras', 'groq'])
-        selector = ProviderSelector(registry, config=config)
+    def test_recommend_returns_fast_by_default(self):
+        """recommend() returns 'fast' by default."""
+        selector = ProviderSelector()
 
-        provider_name, provider = selector.setup_brain()
+        result = selector.recommend({})
 
-        assert provider_name == 'cerebras'
-
-    def test_explicit_request_for_supported_provider_works(self):
-        """User can explicitly request a provider that supports agent role."""
-        registry = create_mock_registry({
-            'cerebras': True,
-            'groq': True,
-        })
-        config = OrchestratorConfig(brain_priority=['cerebras', 'groq'])
-        selector = ProviderSelector(registry, config=config)
-
-        provider_name, provider = selector.setup_brain(preferred_provider='groq')
-
-        assert provider_name == 'groq'
-
-    def test_all_providers_unsupported_uses_fallback(self):
-        """Falls back to first available when all priority providers don't support agent role."""
-        registry = create_mock_registry({
-            'github': False,
-            'other': False,
-            'fallback': True,
-        })
-        config = OrchestratorConfig(brain_priority=['github', 'other'])
-        selector = ProviderSelector(registry, config=config)
-
-        provider_name, provider = selector.setup_brain()
-
-        assert provider_name == 'fallback'
-
-
-class TestSelectForPlanningAgentRoleFiltering:
-    """Tests for select_for_planning() respecting supports_agent_role."""
-
-    def test_skips_provider_without_agent_role_support(self):
-        """Providers without agent role support are excluded from planning selection."""
-        github_provider = create_mock_provider('github', supports_agent_role=False)
-        cerebras_provider = create_mock_provider('cerebras', supports_agent_role=True)
-
-        registry = Mock()
-        registry.list_available.return_value = ['github', 'cerebras']
-        registry.get = lambda name: {'github': github_provider, 'cerebras': cerebras_provider}[name]
-
-        selector = ProviderSelector(registry)
-
-        provider_name, model = selector.select_for_planning()
-
-        assert provider_name == 'cerebras'
-        log = selector.get_selection_log()
-        assert any('github' in entry and 'does not support agent role' in entry for entry in log)
-
-
-
-class TestProviderAvailability:
-    """Tests that unsupported providers remain in general availability."""
-
-    def test_unsupported_provider_in_available_list(self):
-        """Provider with supports_agent_role=False is still in list_available()."""
-        registry = create_mock_registry({
-            'github': False,
-            'cerebras': True,
-        })
-
-        available = registry.list_available()
-
-        assert 'github' in available
-        assert 'cerebras' in available
-
-    def test_can_get_unsupported_provider_directly(self):
-        """Can retrieve unsupported provider directly from registry."""
-        registry = create_mock_registry({
-            'github': False,
-        })
-
-        provider = registry.get('github')
-
-        assert provider is not None
-        assert provider.supports_agent_role is False
-
-
-class TestBrainSetterAgentRoleFiltering:
-    """Tests for orchestrator brain setter respecting supports_agent_role."""
-
-    def test_brain_setter_rejects_unsupported_provider(self):
-        """Brain setter raises ValueError for provider that doesn't support agent role."""
-        from unittest.mock import Mock, PropertyMock
-
-        # Create a mock orchestrator with registry
-        orchestrator = Mock()
-        registry = create_mock_registry({
-            'github_models': False,
-            'cerebras': True,
-        })
-        orchestrator.registry = registry
-
-        # Import and test the actual setter logic
-        provider = registry.get('github_models')
-        assert provider.supports_agent_role is False
-
-        # Simulate what the setter does
-        if hasattr(provider, 'supports_agent_role') and not provider.supports_agent_role:
-            with pytest.raises(ValueError, match="does not support agent/brain roles"):
-                raise ValueError(
-                    f"Provider 'github_models' does not support agent/brain roles (aggressive rate limiting). "
-                    f"Use for general tasks only."
-                )
-
-    def test_brain_setter_accepts_supported_provider(self):
-        """Brain setter accepts provider that supports agent role."""
-        registry = create_mock_registry({
-            'cerebras': True,
-        })
-
-        provider = registry.get('cerebras')
-
-        # Should not raise - provider supports agent role
-        assert provider.supports_agent_role is True
+        assert result == "fast"

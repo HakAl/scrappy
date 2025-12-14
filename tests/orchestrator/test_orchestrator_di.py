@@ -2,10 +2,15 @@
 Tests for AgentOrchestrator dependency injection.
 
 Verifies that all major dependencies can be injected for testability.
+
+After LiteLLM integration (Phase 3):
+- Factory now creates LiteLLMService which requires API keys
+- Tests must inject delegation_manager or mock API keys
+- Tests use mock delegation_manager to avoid API key requirements
 """
 
 import pytest
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock, MagicMock, patch
 from pathlib import Path
 
 from scrappy.orchestrator.core import AgentOrchestrator
@@ -16,6 +21,34 @@ from scrappy.orchestrator.session import SessionManager
 from scrappy.orchestrator.provider_selector import ProviderSelector
 from scrappy.orchestrator.protocols import BaseOutputProtocol
 from scrappy.orchestrator.output import NullOutput
+from scrappy.orchestrator.manager_protocols import DelegationManagerProtocol
+
+
+class MockDelegationManager:
+    """Mock delegation manager for tests that don't need API keys."""
+
+    async def delegate_async(self, provider, prompt, **kwargs):
+        from scrappy.providers.base import LLMResponse
+        response = LLMResponse(
+            content="mock response",
+            model="mock-model",
+            provider="mock",
+            tokens_used=10
+        )
+        return response, {"provider": "mock", "model": "mock-model"}
+
+    def delegate(self, provider, prompt, **kwargs):
+        import asyncio
+        return asyncio.run(self.delegate_async(provider, prompt, **kwargs))
+
+
+@pytest.fixture
+def mock_api_key_service():
+    """Fixture that mocks API key service to return fake keys."""
+    mock_service = Mock()
+    mock_service.get_key = Mock(side_effect=lambda k: f"fake-{k}")
+    mock_service.has_any_key = Mock(return_value=True)
+    return mock_service
 
 
 class TestDependencyInjection:
@@ -24,10 +57,12 @@ class TestDependencyInjection:
     def test_uses_injected_cache(self, tmp_path):
         """Injected cache should be used instead of creating default."""
         mock_cache = Mock(spec=ResponseCache)
+        mock_delegation = MockDelegationManager()
 
         orch = AgentOrchestrator(
             project_path=str(tmp_path),
             cache=mock_cache,
+            delegation_manager=mock_delegation,
             output=NullOutput()
         )
 
@@ -36,10 +71,12 @@ class TestDependencyInjection:
     def test_uses_injected_rate_tracker(self, tmp_path):
         """Injected rate tracker should be used instead of creating default."""
         mock_tracker = Mock(spec=RateLimitTracker)
+        mock_delegation = MockDelegationManager()
 
         orch = AgentOrchestrator(
             project_path=str(tmp_path),
             rate_tracker=mock_tracker,
+            delegation_manager=mock_delegation,
             output=NullOutput()
         )
 
@@ -48,10 +85,12 @@ class TestDependencyInjection:
     def test_uses_injected_working_memory(self, tmp_path):
         """Injected working memory should be used instead of creating default."""
         mock_memory = Mock(spec=WorkingMemory)
+        mock_delegation = MockDelegationManager()
 
         orch = AgentOrchestrator(
             project_path=str(tmp_path),
             working_memory=mock_memory,
+            delegation_manager=mock_delegation,
             output=NullOutput()
         )
 
@@ -60,10 +99,12 @@ class TestDependencyInjection:
     def test_uses_injected_session_manager(self, tmp_path):
         """Injected session manager should be used instead of creating default."""
         mock_session = Mock(spec=SessionManager)
+        mock_delegation = MockDelegationManager()
 
         orch = AgentOrchestrator(
             project_path=str(tmp_path),
             session_manager=mock_session,
+            delegation_manager=mock_delegation,
             output=NullOutput()
         )
 
@@ -72,10 +113,12 @@ class TestDependencyInjection:
     def test_uses_injected_provider_selector(self, tmp_path):
         """Injected provider selector should be used instead of creating default."""
         mock_selector = Mock(spec=ProviderSelector)
+        mock_delegation = MockDelegationManager()
 
         orch = AgentOrchestrator(
             project_path=str(tmp_path),
             provider_selector=mock_selector,
+            delegation_manager=mock_delegation,
             output=NullOutput()
         )
 
@@ -86,16 +129,16 @@ class TestDependencyInjection:
         from scrappy.orchestrator.manager_protocols import BackgroundTaskManagerProtocol
 
         mock_manager = Mock(spec=BackgroundTaskManagerProtocol)
+        mock_delegation = MockDelegationManager()
 
         orch = AgentOrchestrator(
             project_path=str(tmp_path),
             background_manager=mock_manager,
+            delegation_manager=mock_delegation,
             output=NullOutput()
         )
 
         assert orch.background_manager is mock_manager
-
-
 
     def test_injection_enables_mock_testing(self, tmp_path):
         """Demonstrates using injection for unit testing with mocks."""
@@ -118,6 +161,8 @@ class TestDependencyInjection:
 
         mock_selector = Mock(spec=ProviderSelector)
 
+        mock_delegation = MockDelegationManager()
+
         # Create orchestrator with all mocks
         orch = AgentOrchestrator(
             project_path=str(tmp_path),
@@ -126,6 +171,7 @@ class TestDependencyInjection:
             working_memory=mock_memory,
             session_manager=mock_session,
             provider_selector=mock_selector,
+            delegation_manager=mock_delegation,
             output=NullOutput()
         )
 
@@ -153,10 +199,13 @@ class TestDependencyInjection:
             created_at=None
         )
 
+        mock_delegation = MockDelegationManager()
+
         orch = AgentOrchestrator(
             project_path=str(tmp_path),
             cache=mock_cache,
             usage_reporter=usage_reporter,
+            delegation_manager=mock_delegation,
             output=NullOutput()
         )
 
@@ -170,9 +219,12 @@ class TestDependencyInjection:
         mock_memory = Mock(spec=WorkingMemory)
         mock_memory.get_summary.return_value = {'files_cached': 5}
 
+        mock_delegation = MockDelegationManager()
+
         orch = AgentOrchestrator(
             project_path=str(tmp_path),
             working_memory=mock_memory,
+            delegation_manager=mock_delegation,
             output=NullOutput()
         )
 
@@ -198,9 +250,12 @@ class TestDependencyInjection:
             'conversation_history': []
         }
 
+        mock_delegation = MockDelegationManager()
+
         orch = AgentOrchestrator(
             project_path=str(tmp_path),
             session_manager=mock_session,
+            delegation_manager=mock_delegation,
             output=NullOutput()
         )
 
@@ -213,13 +268,14 @@ class TestDependencyInjection:
 class TestDependencyInjectionEdgeCases:
     """Edge case tests for dependency injection."""
 
-
     def test_output_already_injectable(self, tmp_path):
         """Output interface was already injectable - verify still works."""
         mock_output = Mock(spec=BaseOutputProtocol)
+        mock_delegation = MockDelegationManager()
 
         orch = AgentOrchestrator(
             project_path=str(tmp_path),
+            delegation_manager=mock_delegation,
             output=mock_output
         )
 

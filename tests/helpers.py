@@ -2502,3 +2502,373 @@ class MockIO:
     def supports_color(self) -> bool:
         """Return True for mock (allows color-based formatting in tests)."""
         return True
+
+
+# =============================================================================
+# LiteLLM Test Doubles
+# =============================================================================
+
+class MockLiteLLMRouter:
+    """
+    Test double for litellm.Router.
+
+    Provides controllable responses and exception behavior for testing
+    LiteLLMService without hitting real APIs.
+
+    Usage:
+        router = MockLiteLLMRouter(
+            response=make_mock_litellm_response(content="Hello!")
+        )
+        service = LiteLLMService(router=router, output=MockOutput())
+        response, task = service.completion_sync("fast", messages)
+        assert router.calls[0]['model'] == "fast"
+    """
+
+    def __init__(
+        self,
+        response: Optional[Any] = None,
+        responses: Optional[List[Any]] = None,
+        exception: Optional[Exception] = None,
+    ):
+        """
+        Initialize mock router.
+
+        Args:
+            response: Single response to return for all calls
+            responses: List of responses to return in sequence (for multi-call tests)
+            exception: Exception to raise instead of returning response
+        """
+        self._response = response
+        self._responses = list(responses) if responses else []
+        self._exception = exception
+        self._call_index = 0
+        self.calls: List[Dict[str, Any]] = []
+
+    def completion(self, model: str, messages: list, **kwargs) -> Any:
+        """
+        Sync completion (mock).
+
+        Records the call and returns configured response or raises exception.
+        """
+        self.calls.append({
+            'model': model,
+            'messages': messages,
+            **kwargs
+        })
+
+        if self._exception:
+            raise self._exception
+
+        if self._responses:
+            if self._call_index < len(self._responses):
+                response = self._responses[self._call_index]
+                self._call_index += 1
+                if isinstance(response, Exception):
+                    raise response
+                return response
+            # If we've exhausted responses, return the last one
+            return self._responses[-1]
+
+        return self._response
+
+    async def acompletion(self, model: str, messages: list, **kwargs) -> Any:
+        """
+        Async completion (mock).
+
+        Delegates to sync completion for simplicity.
+        """
+        return self.completion(model, messages, **kwargs)
+
+
+class MockLiteLLMMessage:
+    """Mock for LiteLLM message object."""
+
+    def __init__(
+        self,
+        content: str = "test response",
+        tool_calls: Optional[List[Any]] = None
+    ):
+        self.content = content
+        self.tool_calls = tool_calls
+
+
+class MockLiteLLMChoice:
+    """Mock for LiteLLM choice object."""
+
+    def __init__(
+        self,
+        message: Optional[MockLiteLLMMessage] = None,
+        finish_reason: str = "stop"
+    ):
+        self.message = message or MockLiteLLMMessage()
+        self.finish_reason = finish_reason
+
+
+class MockLiteLLMUsage:
+    """Mock for LiteLLM usage object."""
+
+    def __init__(
+        self,
+        prompt_tokens: int = 10,
+        completion_tokens: int = 20
+    ):
+        self.prompt_tokens = prompt_tokens
+        self.completion_tokens = completion_tokens
+
+
+class MockLiteLLMResponse:
+    """Mock for LiteLLM ModelResponse object."""
+
+    def __init__(
+        self,
+        content: str = "test response",
+        model: str = "groq/llama-3.1-8b-instant",
+        prompt_tokens: int = 10,
+        completion_tokens: int = 20,
+        finish_reason: str = "stop",
+        tool_calls: Optional[List[Any]] = None,
+    ):
+        self.choices = [
+            MockLiteLLMChoice(
+                message=MockLiteLLMMessage(content=content, tool_calls=tool_calls),
+                finish_reason=finish_reason
+            )
+        ]
+        self.model = model
+        self.usage = MockLiteLLMUsage(
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens
+        )
+
+
+def make_mock_litellm_response(
+    content: str = "test response",
+    model: str = "groq/llama-3.1-8b-instant",
+    prompt_tokens: int = 10,
+    completion_tokens: int = 20,
+    finish_reason: str = "stop",
+    tool_calls: Optional[List[Any]] = None,
+) -> MockLiteLLMResponse:
+    """
+    Factory function to create mock LiteLLM responses.
+
+    Args:
+        content: Response content
+        model: Model identifier (e.g., "groq/llama-3.1-8b-instant")
+        prompt_tokens: Number of input tokens
+        completion_tokens: Number of output tokens
+        finish_reason: Completion finish reason
+        tool_calls: Optional list of tool calls
+
+    Returns:
+        MockLiteLLMResponse instance
+    """
+    return MockLiteLLMResponse(
+        content=content,
+        model=model,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        finish_reason=finish_reason,
+        tool_calls=tool_calls,
+    )
+
+
+class MockLiteLLMToolCall:
+    """Mock for LiteLLM tool call object."""
+
+    def __init__(self, id: str, name: str, arguments: str):
+        self.id = id
+        self.function = MockLiteLLMFunction(name=name, arguments=arguments)
+
+
+class MockLiteLLMFunction:
+    """Mock for LiteLLM function object in tool calls."""
+
+    def __init__(self, name: str, arguments: str):
+        self.name = name
+        self.arguments = arguments
+
+
+def make_mock_tool_call(
+    id: str = "call_123",
+    name: str = "test_tool",
+    arguments: Optional[Dict[str, Any]] = None,
+) -> MockLiteLLMToolCall:
+    """
+    Factory function to create mock LiteLLM tool calls.
+
+    Args:
+        id: Tool call ID
+        name: Tool/function name
+        arguments: Arguments as dictionary (will be JSON-encoded)
+
+    Returns:
+        MockLiteLLMToolCall instance
+    """
+    import json
+    args_str = json.dumps(arguments or {})
+    return MockLiteLLMToolCall(id=id, name=name, arguments=args_str)
+
+
+class MockOutputForLiteLLM:
+    """
+    Mock output for testing LiteLLMService.
+
+    Implements BaseOutputProtocol with message capture.
+    """
+
+    def __init__(self):
+        self.messages: List[Dict[str, Any]] = []
+
+    def info(self, message: str) -> None:
+        self.messages.append({'level': 'info', 'message': message})
+
+    def warn(self, message: str) -> None:
+        self.messages.append({'level': 'warn', 'message': message})
+
+    def error(self, message: str) -> None:
+        self.messages.append({'level': 'error', 'message': message})
+
+    def success(self, message: str) -> None:
+        self.messages.append({'level': 'success', 'message': message})
+
+    def get_warnings(self) -> List[str]:
+        """Get all warning messages."""
+        return [m['message'] for m in self.messages if m['level'] == 'warn']
+
+    def get_errors(self) -> List[str]:
+        """Get all error messages."""
+        return [m['message'] for m in self.messages if m['level'] == 'error']
+
+
+class MockRateLimitTracker:
+    """
+    Test double for RateLimitTrackerProtocol.
+
+    Records all rate tracking calls for verification.
+    """
+
+    def __init__(self):
+        self.recorded_requests: List[Dict[str, Any]] = []
+
+    def record_request(
+        self,
+        provider: str,
+        tokens_used: int = 0,
+        timestamp: Any = None,
+        **kwargs
+    ) -> None:
+        """Record a request."""
+        self.recorded_requests.append({
+            'provider': provider,
+            'tokens_used': tokens_used,
+            'timestamp': timestamp,
+            **kwargs
+        })
+
+    def can_make_request(self, provider: str) -> bool:
+        """Always allow requests in test."""
+        return True
+
+    def get_remaining(self, provider: str) -> Dict[str, int]:
+        """Return unlimited remaining."""
+        return {
+            'requests_remaining': 1000,
+            'tokens_remaining': 100000,
+            'window_reset': 60
+        }
+
+    def get_limits(self, provider: str) -> Any:
+        """Return None (no limits in test)."""
+        return None
+
+    def reset(self, provider: Optional[str] = None) -> None:
+        """Reset recorded requests."""
+        self.recorded_requests = []
+
+    def get_status(self) -> Dict[str, Any]:
+        """Return empty status."""
+        return {}
+
+    @property
+    def last_recorded(self) -> Optional[Dict[str, Any]]:
+        """Get the last recorded request."""
+        return self.recorded_requests[-1] if self.recorded_requests else None
+
+
+class MockApiKeyService:
+    """
+    Test double for ApiKeyConfigServiceProtocol.
+
+    Returns configured API keys for testing router creation.
+    """
+
+    def __init__(self, keys: Optional[Dict[str, Optional[str]]] = None):
+        """
+        Initialize with preset keys.
+
+        Args:
+            keys: Dictionary mapping key names to values (None = not configured)
+        """
+        self._keys = keys or {}
+
+    def get_key(self, name: str) -> Optional[str]:
+        """Get API key by name."""
+        return self._keys.get(name)
+
+    def set_key(self, name: str, value: Optional[str]) -> None:
+        """Set API key for testing."""
+        self._keys[name] = value
+
+
+class MockProviderStatusTracker:
+    """
+    Test double for ProviderStatusTracker.
+
+    Records all status updates for verification.
+    """
+
+    def __init__(self):
+        self.successes: List[Dict[str, Any]] = []
+        self.failures: List[Dict[str, Any]] = []
+
+    def on_success(self, provider: str, model: str, latency_ms: float) -> None:
+        """Record a success event."""
+        self.successes.append({
+            'provider': provider,
+            'model': model,
+            'latency_ms': latency_ms,
+        })
+
+    def on_failure(self, provider: str, error: str) -> None:
+        """Record a failure event."""
+        self.failures.append({
+            'provider': provider,
+            'error': error,
+        })
+
+    def get_status(self, provider: str) -> Optional[Dict[str, Any]]:
+        """Get mock status for a provider."""
+        # Return last success or failure for provider
+        for s in reversed(self.successes):
+            if s['provider'] == provider:
+                return {'healthy': True, **s}
+        for f in reversed(self.failures):
+            if f['provider'] == provider:
+                return {'healthy': False, **f}
+        return None
+
+    def is_healthy(self, provider: str) -> bool:
+        """Check if provider is healthy."""
+        status = self.get_status(provider)
+        return status['healthy'] if status else True
+
+    @property
+    def last_success(self) -> Optional[Dict[str, Any]]:
+        """Get last recorded success."""
+        return self.successes[-1] if self.successes else None
+
+    @property
+    def last_failure(self) -> Optional[Dict[str, Any]]:
+        """Get last recorded failure."""
+        return self.failures[-1] if self.failures else None

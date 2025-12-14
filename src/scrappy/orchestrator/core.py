@@ -28,7 +28,6 @@ from .task_executor import TaskExecutor
 from .provider_selector import ProviderSelector
 from .output import BaseOutputProtocol, ConsoleOutput
 from .delegation import DelegationManager
-from .retry_orchestrator import RetryOrchestrator
 from .prompt_augmenter import PromptAugmenter
 from .batch_scheduler import BatchScheduler
 from .background import BackgroundTaskManager
@@ -56,6 +55,8 @@ from .protocols import (
     ProviderSelectorProtocol,
     ProviderRegistryProtocol,
     ContextProvider,
+    LLMServiceProtocol,
+    ProviderStatusTrackerProtocol,
 )
 
 
@@ -94,6 +95,8 @@ class AgentOrchestrator:
         context_manager: Optional[ContextManagerProtocol] = None,
         delegation_manager: Optional[DelegationManagerProtocol] = None,
         background_manager: Optional[BackgroundTaskManagerProtocol] = None,
+        llm_service: Optional[LLMServiceProtocol] = None,
+        provider_status_tracker: Optional[ProviderStatusTrackerProtocol] = None,
     ):
         """
         Initialize orchestrator (dependencies only - NO side effects).
@@ -134,6 +137,8 @@ class AgentOrchestrator:
             self.context_manager = context_manager
             self.delegation_manager = delegation_manager
             self.background_manager = background_manager
+            self.llm_service = llm_service
+            self.provider_status_tracker = provider_status_tracker
         else:
             # Create missing components via factory
             factory = OrchestratorFactory(
@@ -165,6 +170,8 @@ class AgentOrchestrator:
             self.task_executor = task_executor or components.task_executor
             self.context_manager = context_manager or components.context_manager
             self.delegation_manager = delegation_manager or components.delegation_manager
+            self.llm_service = llm_service or components.llm_service
+            self.provider_status_tracker = provider_status_tracker or components.provider_status_tracker
 
     def initialize(
         self,
@@ -298,14 +305,50 @@ class AgentOrchestrator:
         return self._brain
 
     def status(self) -> dict:
-        """Get current status of all providers."""
+        """Get current status of all providers and model groups."""
+        from .litellm_config import get_configured_models, get_available_groups
+        from ..infrastructure.config.api_keys import create_api_key_service
+
+        # Get LiteLLM model group info
+        api_key_service = create_api_key_service()
+        configured_models = get_configured_models(api_key_service)
+        available_groups = get_available_groups(api_key_service)
+
+        # Get provider health status if tracker available
+        provider_health = {}
+        if self.provider_status_tracker:
+            provider_health = {
+                name: {
+                    'healthy': status.healthy,
+                    'last_latency_ms': status.last_latency_ms,
+                    'request_count': status.request_count,
+                    'error_count': status.error_count,
+                    'last_error': status.last_error,
+                }
+                for name, status in self.provider_status_tracker.get_all_status().items()
+            }
+
         return {
+            # LiteLLM model groups (new)
+            'model_groups': list(available_groups),
+            'configured_models': [
+                {
+                    'model_id': m.model_id,
+                    'provider': m.provider,
+                    'group': m.group,
+                    'context_length': m.context_length,
+                }
+                for m in configured_models
+            ],
+            'provider_health': provider_health,
+            # Legacy fields (for backward compat)
             'available_providers': self.registry.list_available(),
             'all_providers': self.registry.list_all(),
             'provider_details': self.registry.get_provider_info(),
             'orchestrator_brain': self._brain_name,
             'tasks_executed': len(self.task_history),
             'session_start': self.created_at.isoformat(),
+            'quality_mode': self.quality_mode,
         }
 
     def print_provider_status(self):

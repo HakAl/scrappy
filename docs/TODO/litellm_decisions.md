@@ -191,7 +191,38 @@ response = router.completion(
 
 **Note:** Not all providers support tool calling equally. Groq and Gemini support it; Cerebras support varies by model.
 
+  3. Duplicate Mapping Constants
+
+  SELECTION_TO_GROUP is defined in three places:
+  - provider_resolver.py
+  - provider_selector.py
+  - litellm_config.py
+
+  This violates DRY and risks inconsistency.
+
+RESOLUTION
+ The mapping belongs in model_selection.py alongside the enum it maps from.
+
+● Update(src\scrappy\orchestrator\model_selection.py)
+  ⎿  Updated src\scrappy\orchestrator\model_selection.py with 10 additions
+        7        QUALITY = "quality"  # Best output quality
+        8        INSTRUCT = "instruct"  # Instruction-tuned for JSON/structured output
+        9        EMBED = "embed"      # Embeddings
+       10 +
+       11 +
+       12 +  # Canonical mapping from ModelSelectionType to LiteLLM model groups.
+       13 +  # Single source of truth - import this instead of defining your own.
+       14 +  SELECTION_TYPE_TO_GROUP: dict[ModelSelectionType, str] = {
+       15 +      ModelSelectionType.FAST: "fast",
+       16 +      ModelSelectionType.QUALITY: "quality",
+       17 +      ModelSelectionType.INSTRUCT: "quality",  # Instruct maps to quality tier
+       18 +      ModelSelectionType.EMBED: "fast",        # Embeddings use fast tier
+       19 +  }
+
+
+
 ---
+DECISION: Add SambaNova because great models. Note only 40 RPD
 
 ## NOTES
 

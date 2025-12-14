@@ -17,9 +17,11 @@ logger = logging.getLogger(__name__)
 try:
     from ..providers import ProviderRegistry
     from ..context import CodebaseContext
+    from ..infrastructure.config.api_keys import create_api_key_service
 except ImportError:
     from providers import ProviderRegistry
     from context import CodebaseContext
+    from infrastructure.config.api_keys import create_api_key_service
 
 from .cache import ResponseCache
 from .rate_limiting import create_rate_limit_tracker, RateLimitTracker
@@ -30,7 +32,6 @@ from .provider_selector import ProviderSelector
 from .output import BaseOutputProtocol, ConsoleOutput
 
 from .delegation import DelegationManager
-from .retry_orchestrator import RetryOrchestrator
 from .prompt_augmenter import PromptAugmenter
 from .batch_scheduler import BatchScheduler
 from .background import BackgroundTaskManager
@@ -38,6 +39,10 @@ from .status_reporter import ProviderStatusReporter
 from .usage_reporter import UsageReporter
 from .context_coordinator import ContextCoordinator
 from .config import OrchestratorConfig
+from .litellm_service import LiteLLMService
+from .litellm_config import create_litellm_router
+from .litellm_callbacks import RateTrackingCallback
+from .provider_status import ProviderStatusTracker
 from .manager_protocols import (
     ContextManagerProtocol,
     BackgroundTaskManagerProtocol,
@@ -56,6 +61,8 @@ from .protocols import (
     ProviderSelectorProtocol,
     ProviderRegistryProtocol,
     ContextProvider,
+    LLMServiceProtocol,
+    ProviderStatusTrackerProtocol,
 )
 from ..infrastructure.protocols import PathProviderProtocol
 from ..infrastructure.paths import ScrappyPathProvider
@@ -84,6 +91,8 @@ class OrchestratorComponents:
         self.task_executor: Optional[TaskExecutorProtocol] = None
         self.context_manager: Optional[ContextManagerProtocol] = None
         self.delegation_manager: Optional[DelegationManagerProtocol] = None
+        self.llm_service: Optional[LLMServiceProtocol] = None
+        self.provider_status_tracker: Optional[ProviderStatusTrackerProtocol] = None
 
 
 class OrchestratorFactory:
@@ -174,6 +183,17 @@ class OrchestratorFactory:
             self.config
         )
 
+        # Provider status tracker for LiteLLM callbacks
+        components.provider_status_tracker = self.create_provider_status_tracker()
+
+        # LLM Service (uses LiteLLM Router)
+        # Always created - configures itself when API keys are available
+        components.llm_service = self.create_llm_service(
+            components.output,
+            components.rate_tracker,
+            components.provider_status_tracker
+        )
+
         # Usage reporter
         components.usage_reporter = self.create_usage_reporter(components.cache)
 
@@ -192,12 +212,11 @@ class OrchestratorFactory:
         )
 
         # Delegation manager (needs many dependencies)
+        # Always created - llm_service handles NotConfiguredError if no keys
         components.delegation_manager = self.create_delegation_manager(
-            components.registry,
+            components.llm_service,
             components.cache,
             components.output,
-            components.rate_tracker,
-            components.provider_selector,
             components.working_memory,
             components.context_manager
         )
@@ -357,13 +376,60 @@ class OrchestratorFactory:
             generate_summary_func=task_executor.generate_context_summary
         )
 
-    def create_delegation_manager(
+    def create_provider_status_tracker(self) -> ProviderStatusTrackerProtocol:
+        """Create default provider status tracker for health monitoring."""
+        return ProviderStatusTracker()
+
+    def create_llm_service(
         self,
-        registry: ProviderRegistryProtocol,
-        cache: CacheProtocol,
         output: BaseOutputProtocol,
         rate_tracker: RateLimitTrackerProtocol,
-        provider_selector: ProviderSelectorProtocol,
+        status_tracker: ProviderStatusTrackerProtocol
+    ) -> LLMServiceProtocol:
+        """
+        Create default LLM service using LiteLLM Router.
+
+        Following SOLID principles - wires up all LiteLLM dependencies.
+
+        Creates:
+        1. RateTrackingCallback - for usage and status tracking
+        2. Empty LiteLLM Router - configured later via service.configure()
+        3. LiteLLMService - wrapping router for completion calls
+
+        Service is always created. If API keys exist, router is configured
+        immediately. Otherwise, configure() must be called after wizard
+        saves keys.
+        """
+        # Create callback for usage tracking (D9) and status display (D10)
+        callback = RateTrackingCallback(
+            rate_tracker=rate_tracker,
+            status_tracker=status_tracker,
+        )
+
+        # Get api key service - passed to LiteLLMService for configure()
+        api_key_service = create_api_key_service()
+
+        # Create empty router - will be configured via service.configure()
+        router = create_litellm_router(callbacks=[callback])
+
+        # Create service with all dependencies
+        service = LiteLLMService(
+            router=router,
+            api_key_service=api_key_service,
+            output=output,
+            callback=callback,
+        )
+
+        # Try to configure if keys already exist
+        service.configure()
+
+        return service
+
+    def create_delegation_manager(
+        self,
+        llm_service: LLMServiceProtocol,
+        cache: CacheProtocol,
+        output: BaseOutputProtocol,
         working_memory: WorkingMemoryProtocol,
         context_manager: ContextManagerProtocol
     ) -> DelegationManagerProtocol:
@@ -371,30 +437,23 @@ class OrchestratorFactory:
         Create default delegation manager with all collaborators.
 
         Following SOLID principles - wires up all dependencies.
+        Uses LiteLLMService for LLM calls (LiteLLM Router handles retry/fallback).
         """
-        # Create RetryOrchestrator
-        retry_orchestrator = RetryOrchestrator(
-            registry=registry,
-            rate_tracker=rate_tracker,
-            provider_selector=provider_selector,
-            output=output,
-        )
-
         # Create PromptAugmenter
         prompt_augmenter = PromptAugmenter(
             context=context_manager.context,
             working_memory=working_memory,
         )
 
-        # Create BatchScheduler
+        # Create BatchScheduler (uses LLMService)
         batch_scheduler = BatchScheduler(
-            retry_orchestrator=retry_orchestrator,
+            llm_service=llm_service,
             output=output,
         )
 
         # Create DelegationManager with all dependencies
         return DelegationManager(
-            retry_orchestrator=retry_orchestrator,
+            llm_service=llm_service,
             cache=cache,
             output=output,
             prompt_augmenter=prompt_augmenter,

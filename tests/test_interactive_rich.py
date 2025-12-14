@@ -186,22 +186,22 @@ class TestStatusDisplayComponents:
         show_status_rich(io, orch, datetime.now())
         output = get_captured_output(console)
 
-        # Should have status information
-        assert 'brain' in output.lower() or 'provider' in output.lower()
+        # Should have model groups information (LiteLLM format)
+        assert 'model' in output.lower() or 'groups' in output.lower()
 
     @pytest.mark.integration
-    def test_status_shows_provider_with_styling(self):
-        """Current brain provider should be prominently styled."""
+    def test_status_shows_model_groups(self):
+        """Status should show model groups (fast/quality)."""
         io, console = make_capturing_rich_io()
-        orch = ConfigurableTestOrchestrator(recommended_provider='cerebras')
+        orch = ConfigurableTestOrchestrator()
 
         from scrappy.cli.display_rich import show_status_rich
 
         show_status_rich(io, orch, datetime.now())
         output = get_captured_output(console)
 
-        # Provider name should appear
-        assert 'cerebras' in output.lower()
+        # Should show model groups (fast and quality)
+        assert 'fast' in output.lower() and 'quality' in output.lower()
 
     @pytest.mark.integration
     def test_status_shows_session_duration(self):

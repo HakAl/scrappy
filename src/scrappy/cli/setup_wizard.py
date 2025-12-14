@@ -10,9 +10,20 @@ from scrappy.infrastructure.config.api_keys import (
     ApiKeyConfigServiceProtocol,
     create_api_key_service,
 )
+from scrappy.orchestrator.protocols import LLMServiceProtocol
 
 if TYPE_CHECKING:
     from .unified_io import UnifiedIO
+
+
+# Map provider names to LiteLLM model IDs for validation
+PROVIDER_TO_MODEL = {
+    "groq": "groq/llama-3.1-8b-instant",
+    "cerebras": "cerebras/llama-3.3-70b",
+    "gemini": "gemini/gemini-2.0-flash-lite",
+    "openrouter": "openrouter/meta-llama/llama-3.1-8b-instruct:free",
+    "github_models": "azure/gpt-4o-mini",  # GitHub models uses Azure
+}
 
 
 @contextmanager
@@ -61,7 +72,7 @@ class SetupWizard:
     - Display provider menu
     - Collect user input
     - Validate API key format (basic)
-    - Test provider connectivity
+    - Test provider connectivity via LLMService
 
     NOT responsible for:
     - File I/O (delegated to ApiKeyConfigService)
@@ -70,13 +81,14 @@ class SetupWizard:
 
     Design Principles:
     - Single Responsibility: Only handles UI/UX for setup
-    - Dependency Injection: Takes ApiKeyConfigService via constructor
-    - Testable: Can inject mock service for testing
+    - Dependency Injection: Takes LLMService and ApiKeyConfigService via constructor
+    - Testable: Can inject mock services for testing
     """
 
     def __init__(
         self,
         io: "UnifiedIO",
+        llm_service: LLMServiceProtocol,
         config_service: Optional[ApiKeyConfigServiceProtocol] = None,
     ):
         """
@@ -84,9 +96,11 @@ class SetupWizard:
 
         Args:
             io: Output interface for TUI
+            llm_service: LLM service for key validation
             config_service: API key config service (uses default if None)
         """
         self.io = io
+        self._llm_service = llm_service
         self._config_service = config_service or create_api_key_service()
 
         # State machine for non-blocking TUI operation
@@ -320,9 +334,10 @@ class SetupWizard:
 
     def _test_provider_key(self, name: str, key: str) -> Tuple[bool, str]:
         """
-        Test if a key works by making a simple API call.
+        Test if a key works by using LLMService.validate_key().
 
-        Passes key directly to provider constructor - NO os.environ manipulation.
+        Uses LLMService for validation to ensure all LiteLLM interaction
+        goes through the service layer.
 
         Args:
             name: Provider name
@@ -331,26 +346,19 @@ class SetupWizard:
         Returns:
             Tuple of (success, error_message)
         """
-        info = PROVIDERS[name]
+        model = PROVIDER_TO_MODEL.get(name)
+        if not model:
+            return False, f"Unknown provider: {name}"
+
         try:
             with suppress_native_stderr():
-                # Pass key directly to provider constructor - NO os.environ pollution
-                provider = info.provider_class(api_key=key)
-                # Make a minimal test call
-                provider.chat([{"role": "user", "content": "test"}], max_tokens=5)
-            return True, ""
+                is_valid, error_msg = self._llm_service.validate_key(model, key, timeout=10.0)
+
+            if is_valid:
+                return True, ""
+            return False, error_msg or "Validation failed"
         except Exception as e:
-            error_msg = str(e)
-            # Try to extract useful error message
-            if "401" in error_msg or "unauthorized" in error_msg.lower():
-                error_msg = "Invalid API key"
-            elif "403" in error_msg or "forbidden" in error_msg.lower():
-                error_msg = "API key does not have required permissions"
-            elif "429" in error_msg or "rate limit" in error_msg.lower():
-                error_msg = "Rate limit exceeded"
-            elif "connection" in error_msg.lower() or "timeout" in error_msg.lower():
-                error_msg = "Network error - check your connection"
-            return False, self._format_error(error_msg)
+            return False, self._format_error(str(e))
 
     def _format_error(self, error_msg: str) -> str:
         """

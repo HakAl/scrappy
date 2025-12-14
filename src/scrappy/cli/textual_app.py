@@ -763,6 +763,7 @@ class ScrappyApp(App):
 
         screen = SetupWizardScreen(
             io=self.interactive_mode.io,
+            llm_service=self.interactive_mode.orchestrator.llm_service,
             allow_cancel=allow_cancel,
             on_complete=self._on_wizard_complete,
         )
@@ -776,6 +777,8 @@ class ScrappyApp(App):
         """
         if has_provider:
             self.interactive_mode.orchestrator._auto_register_providers()
+            # Configure LLM service now that API keys are saved
+            self.interactive_mode.orchestrator.llm_service.configure()
             # Show main screen after wizard
             self.call_later(self._show_main_screen)
         else:

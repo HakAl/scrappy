@@ -3,6 +3,11 @@ Minimal orchestrator adapter implementation for the CodeAgent.
 
 This provides adapter implementations that wrap the full orchestrator.
 The ContextProvider and OrchestratorAdapter protocols are defined in orchestrator/protocols.py.
+
+After LiteLLM integration:
+- Legacy provider names ("groq", "cerebras") map to model groups ("fast", "quality")
+- Model groups are handled by LiteLLM Router with automatic fallback
+- Tool calling is passed through to LiteLLM
 """
 
 from typing import List, Optional
@@ -12,6 +17,18 @@ from .orchestrator.protocols import ContextProvider, OrchestratorAdapter
 
 # Import LLMResponse from providers to get full feature set including tool_calls
 from .providers.base import LLMResponse, ToolCall
+
+
+# Model groups used by LiteLLM Router
+MODEL_GROUPS = {"fast", "quality"}
+
+# Map legacy provider names to model groups
+PROVIDER_TO_GROUP = {
+    "groq": "fast",       # Default to fast for Groq (has both fast and quality models)
+    "cerebras": "fast",   # Cerebras only has 8k context, always fast tier
+    "gemini": "quality",  # Gemini is quality tier (large context)
+    "auto": "fast",       # Auto-select defaults to fast
+}
 
 
 class NullContext:
@@ -149,8 +166,13 @@ class AgentOrchestratorAdapter:
         """
         Delegate to provider with native tool calling support.
 
+        After LiteLLM integration:
+        - No longer checks provider.supports_tool_calling
+        - LiteLLM handles tool calling natively via kwargs
+        - Defaults to "quality" tier for tool calling (smarter models)
+
         Args:
-            provider_name: Provider name (can be None for auto-selection)
+            provider_name: Provider name or model group (defaults to "quality")
             prompt: The prompt to send
             tools: List of OpenAI-compatible tool schemas
             system_prompt: Optional system prompt
@@ -165,35 +187,20 @@ class AgentOrchestratorAdapter:
         if tools is None:
             tools = []
 
-        # Get the provider instance from registry
-        provider_obj = self._orch._registry.get(provider_name)
-        if provider_obj is None:
-            raise ValueError(f"Provider {provider_name} not found in registry")
+        # Resolve provider name to model group (default to quality for tool calling)
+        model_group = self._resolve_model_group(provider_name or "quality")
 
-        # Check if provider supports native tool calling
-        if not provider_obj.supports_tool_calling:
-            raise ValueError(
-                f"Provider {provider_name} does not support native tool calling. "
-                "Use regular delegate() with JSON parsing instead."
-            )
-
-        # Build messages array with system prompt if provided
-        messages = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": prompt})
-
-        # Call provider's chat_with_tools method
-        response = provider_obj.chat_with_tools(
-            messages=messages,
-            tools=tools,
-            tool_choice=tool_choice,
+        # Delegate through normal path - tools passed as kwargs
+        return self._orch.delegate(
+            provider_name=model_group,
+            prompt=prompt,
+            system_prompt=system_prompt,
             max_tokens=max_tokens,
             temperature=temperature,
+            tools=tools,
+            tool_choice=tool_choice,
             **kwargs
         )
-
-        return response
 
     # Proxy methods for working memory
     def remember_file_read(self, path: str, content: str, lines: int = 0):
@@ -210,3 +217,28 @@ class AgentOrchestratorAdapter:
         """Proxy to orchestrator's working memory."""
         if hasattr(self._orch, 'working_memory'):
             self._orch.working_memory.remember_git_operation(operation, result)
+
+    def _resolve_model_group(self, provider_or_group: Optional[str]) -> str:
+        """
+        Resolve provider name or group to a model group.
+
+        After LiteLLM integration:
+        - If already a model group ("fast", "quality"), return as-is
+        - If legacy provider name ("groq", "cerebras"), map to appropriate group
+        - If None or "auto", default to "fast"
+
+        Args:
+            provider_or_group: Provider name, model group, or None
+
+        Returns:
+            Model group name ("fast" or "quality")
+        """
+        if provider_or_group is None:
+            return "fast"
+
+        # Already a model group
+        if provider_or_group in MODEL_GROUPS:
+            return provider_or_group
+
+        # Legacy provider name -> map to group
+        return PROVIDER_TO_GROUP.get(provider_or_group, "fast")

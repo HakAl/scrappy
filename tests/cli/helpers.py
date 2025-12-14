@@ -45,3 +45,25 @@ class MockApiKeyConfigService:
     def has_any_key(self, env_vars: list[str]) -> bool:
         """Check if any of the env vars have keys configured."""
         return any(env_var in self.keys and self.keys[env_var] for env_var in env_vars)
+
+
+class MockLLMService:
+    """
+    Mock implementation of LLMServiceProtocol for testing.
+
+    Provides configurable validate_key behavior for wizard testing.
+    """
+
+    def __init__(self, validate_key_result: tuple[bool, Optional[str]] = (True, None)):
+        """Initialize with default validate_key result."""
+        self._validate_key_result = validate_key_result
+        self.validate_key_calls: list[tuple[str, str]] = []
+
+    def validate_key(self, model: str, api_key: str, timeout: float = 10.0) -> tuple[bool, Optional[str]]:
+        """Mock validate_key - returns configured result."""
+        self.validate_key_calls.append((model, api_key))
+        return self._validate_key_result
+
+    def set_validate_key_result(self, success: bool, error: Optional[str] = None) -> None:
+        """Configure what validate_key should return."""
+        self._validate_key_result = (success, error)

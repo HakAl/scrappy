@@ -5,11 +5,12 @@ Focuses on proving BEHAVIOR works, not structure.
 Following CLAUDE.md guidelines:
 - Tests prove features work, not just that code runs
 - Edge cases covered (cache hits/misses, context augmentation, errors)
-- Minimal mocking (only external dependencies: cache, retry orchestrator, etc.)
+- Minimal mocking (only external dependencies: cache, llm_service, etc.)
 - Tests would fail if feature breaks
 
-Note: These are UNIT tests testing the delegation coordination flow.
-Integration tests with real providers are in other test files.
+After LiteLLM integration (Phase 3):
+- Uses LLMServiceProtocol instead of RetryOrchestratorProtocol
+- LLM calls go through LLMService.completion()
 """
 
 import pytest
@@ -81,8 +82,8 @@ class MockPromptAugmenter:
         return prompt
 
 
-class MockRetryOrchestrator:
-    """Test double for RetryOrchestratorProtocol."""
+class MockLLMService:
+    """Test double for LLMServiceProtocol."""
 
     def __init__(self, response=None):
         self.response = response or LLMResponse(
@@ -91,34 +92,46 @@ class MockRetryOrchestrator:
             provider="test-provider",
             tokens_used=100
         )
-        self.execute_calls = []
+        self.completion_calls = []
 
-    async def execute_with_retry(
+    async def completion(
         self,
-        request,
-        excluded_providers=None,
-        max_retries=3,
-        auto_fallback=True
+        model: str,
+        messages: list[dict],
+        **kwargs
     ):
-        self.execute_calls.append({
-            'provider': getattr(request, 'provider', getattr(request, 'provider_name', 'unknown')),
-            'prompt': getattr(request, 'prompt', ''),
-            'max_retries': max_retries,
-            'auto_fallback': auto_fallback,
-            'excluded_providers': excluded_providers or set()
+        """Async completion method."""
+        prompt = messages[-1].get("content", "") if messages else ""
+        self.completion_calls.append({
+            'model': model,
+            'messages': messages,
+            'prompt': prompt,
+            'kwargs': kwargs
         })
-        # Return tuple: (response, metadata)
-        # Match all fields expected by delegation.py:289-305
+        # Return tuple: (response, task_record)
         return (self.response, {
-            'retries': 0,
+            'timestamp': '2024-01-01T00:00:00',
             'provider': 'test-provider',
             'model': 'test-model',
             'tokens_used': 100,
             'latency_ms': 50.0,
             'fallback': False,
             'attempts': 1,
-            'cache_hit': False
         })
+
+    def completion_sync(
+        self,
+        model: str,
+        messages: list[dict],
+        **kwargs
+    ):
+        """Sync completion method."""
+        import asyncio
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(self.completion(model, messages, **kwargs))
+        finally:
+            loop.close()
 
 
 class MockOutput:
@@ -153,15 +166,15 @@ class TestCachingBehavior:
 
     @pytest.mark.asyncio
     async def test_checks_cache_before_executing_request(self):
-        """Should check cache before delegating to retry orchestrator."""
+        """Should check cache before delegating to LLM service."""
         cache = MockCache()
         augmenter = MockPromptAugmenter()
-        retry_orch = MockRetryOrchestrator()
+        llm_service = MockLLMService()
         output = MockOutput()
         scheduler = MockBatchScheduler()
 
         manager = DelegationManager(
-            retry_orchestrator=retry_orch,
+            llm_service=llm_service,
             cache=cache,
             output=output,
             prompt_augmenter=augmenter,
@@ -169,31 +182,31 @@ class TestCachingBehavior:
             context_aware=False
         )
 
-        await manager.delegate_async("cerebras", "test prompt")
+        await manager.delegate_async("fast", "test prompt")
 
         # Should have checked cache
         assert len(cache.get_calls) > 0
 
     @pytest.mark.asyncio
     async def test_returns_cached_response_when_available(self):
-        """Should return cached response without calling retry orchestrator."""
+        """Should return cached response without calling LLM service."""
         cache = MockCache()
         cached_response = LLMResponse(
             content="cached content",
             model="cached-model",
-            provider="cerebras",
+            provider="fast",
             tokens_used=50
         )
         # Pre-populate cache
-        cache.set("cerebras", "test prompt", cached_response)
+        cache.set("fast", "test prompt", cached_response)
 
         augmenter = MockPromptAugmenter()
-        retry_orch = MockRetryOrchestrator()
+        llm_service = MockLLMService()
         output = MockOutput()
         scheduler = MockBatchScheduler()
 
         manager = DelegationManager(
-            retry_orchestrator=retry_orch,
+            llm_service=llm_service,
             cache=cache,
             output=output,
             prompt_augmenter=augmenter,
@@ -201,24 +214,24 @@ class TestCachingBehavior:
             context_aware=False
         )
 
-        response, task_record = await manager.delegate_async("cerebras", "test prompt")
+        response, task_record = await manager.delegate_async("fast", "test prompt")
 
         # Should return cached response
         assert response.content == "cached content"
-        # Should NOT have called retry orchestrator
-        assert len(retry_orch.execute_calls) == 0
+        # Should NOT have called LLM service
+        assert len(llm_service.completion_calls) == 0
 
     @pytest.mark.asyncio
     async def test_stores_response_in_cache_after_success(self):
         """Should store successful response in cache."""
         cache = MockCache()
         augmenter = MockPromptAugmenter()
-        retry_orch = MockRetryOrchestrator()
+        llm_service = MockLLMService()
         output = MockOutput()
         scheduler = MockBatchScheduler()
 
         manager = DelegationManager(
-            retry_orchestrator=retry_orch,
+            llm_service=llm_service,
             cache=cache,
             output=output,
             prompt_augmenter=augmenter,
@@ -226,7 +239,7 @@ class TestCachingBehavior:
             context_aware=False
         )
 
-        await manager.delegate_async("cerebras", "test prompt")
+        await manager.delegate_async("fast", "test prompt")
 
         # Should have stored in cache
         assert len(cache.set_calls) > 0
@@ -236,17 +249,17 @@ class TestCachingBehavior:
         """Should not use cache when use_cache=False."""
         cache = MockCache()
         # Pre-populate cache
-        cache.set("cerebras", "test prompt", LLMResponse(
-            content="cached", model="m", provider="cerebras", tokens_used=10
+        cache.set("fast", "test prompt", LLMResponse(
+            content="cached", model="m", provider="fast", tokens_used=10
         ))
 
         augmenter = MockPromptAugmenter()
-        retry_orch = MockRetryOrchestrator()
+        llm_service = MockLLMService()
         output = MockOutput()
         scheduler = MockBatchScheduler()
 
         manager = DelegationManager(
-            retry_orchestrator=retry_orch,
+            llm_service=llm_service,
             cache=cache,
             output=output,
             prompt_augmenter=augmenter,
@@ -255,13 +268,13 @@ class TestCachingBehavior:
         )
 
         response, _ = await manager.delegate_async(
-            "cerebras",
+            "fast",
             "test prompt",
             use_cache=False
         )
 
-        # Should have called retry orchestrator (not used cache)
-        assert len(retry_orch.execute_calls) > 0
+        # Should have called LLM service (not used cache)
+        assert len(llm_service.completion_calls) > 0
         # Should get fresh response, not cached
         assert response.content == "test response"
 
@@ -274,12 +287,12 @@ class TestPromptAugmentation:
         """Should augment prompt when context_aware=True."""
         cache = MockCache()
         augmenter = MockPromptAugmenter(augmented_suffix=" [augmented]")
-        retry_orch = MockRetryOrchestrator()
+        llm_service = MockLLMService()
         output = MockOutput()
         scheduler = MockBatchScheduler()
 
         manager = DelegationManager(
-            retry_orchestrator=retry_orch,
+            llm_service=llm_service,
             cache=cache,
             output=output,
             prompt_augmenter=augmenter,
@@ -287,7 +300,7 @@ class TestPromptAugmentation:
             context_aware=True  # Enable context
         )
 
-        await manager.delegate_async("cerebras", "test prompt")
+        await manager.delegate_async("fast", "test prompt")
 
         # Should have called augmenter with use_context=True
         assert len(augmenter.augment_calls) > 0
@@ -298,12 +311,12 @@ class TestPromptAugmentation:
         """Should not augment prompt when context_aware=False."""
         cache = MockCache()
         augmenter = MockPromptAugmenter()
-        retry_orch = MockRetryOrchestrator()
+        llm_service = MockLLMService()
         output = MockOutput()
         scheduler = MockBatchScheduler()
 
         manager = DelegationManager(
-            retry_orchestrator=retry_orch,
+            llm_service=llm_service,
             cache=cache,
             output=output,
             prompt_augmenter=augmenter,
@@ -311,7 +324,7 @@ class TestPromptAugmentation:
             context_aware=False  # Disable context
         )
 
-        await manager.delegate_async("cerebras", "test prompt")
+        await manager.delegate_async("fast", "test prompt")
 
         # Should have called augmenter with use_context=False
         assert len(augmenter.augment_calls) > 0
@@ -322,12 +335,12 @@ class TestPromptAugmentation:
         """use_context parameter should override context_aware setting."""
         cache = MockCache()
         augmenter = MockPromptAugmenter()
-        retry_orch = MockRetryOrchestrator()
+        llm_service = MockLLMService()
         output = MockOutput()
         scheduler = MockBatchScheduler()
 
         manager = DelegationManager(
-            retry_orchestrator=retry_orch,
+            llm_service=llm_service,
             cache=cache,
             output=output,
             prompt_augmenter=augmenter,
@@ -336,7 +349,7 @@ class TestPromptAugmentation:
         )
 
         # Override to False
-        await manager.delegate_async("cerebras", "test prompt", use_context=False)
+        await manager.delegate_async("fast", "test prompt", use_context=False)
 
         # Should respect override
         assert augmenter.augment_calls[0]['use_context'] is False
@@ -346,46 +359,46 @@ class TestDelegationFlow:
     """Test the overall delegation coordination."""
 
     @pytest.mark.asyncio
-    async def test_delegates_to_retry_orchestrator_for_execution(self):
-        """Should delegate actual execution to retry orchestrator."""
+    async def test_delegates_to_llm_service_for_execution(self):
+        """Should delegate actual execution to LLM service."""
         cache = MockCache()
         augmenter = MockPromptAugmenter()
-        retry_orch = MockRetryOrchestrator()
+        llm_service = MockLLMService()
         output = MockOutput()
         scheduler = MockBatchScheduler()
 
         manager = DelegationManager(
-            retry_orchestrator=retry_orch,
+            llm_service=llm_service,
             cache=cache,
             output=output,
             prompt_augmenter=augmenter,
             batch_scheduler=scheduler
         )
 
-        await manager.delegate_async("cerebras", "test prompt")
+        await manager.delegate_async("fast", "test prompt")
 
-        # Should have called retry orchestrator
-        assert len(retry_orch.execute_calls) == 1
-        assert retry_orch.execute_calls[0]['provider'] == 'cerebras'
+        # Should have called LLM service
+        assert len(llm_service.completion_calls) == 1
+        assert llm_service.completion_calls[0]['model'] == 'fast'
 
     @pytest.mark.asyncio
     async def test_returns_response_and_task_record(self):
         """Should return both response and task record."""
         cache = MockCache()
         augmenter = MockPromptAugmenter()
-        retry_orch = MockRetryOrchestrator()
+        llm_service = MockLLMService()
         output = MockOutput()
         scheduler = MockBatchScheduler()
 
         manager = DelegationManager(
-            retry_orchestrator=retry_orch,
+            llm_service=llm_service,
             cache=cache,
             output=output,
             prompt_augmenter=augmenter,
             batch_scheduler=scheduler
         )
 
-        response, task_record = await manager.delegate_async("cerebras", "test prompt")
+        response, task_record = await manager.delegate_async("fast", "test prompt")
 
         assert isinstance(response, LLMResponse)
         assert isinstance(task_record, dict)
@@ -400,12 +413,12 @@ class TestEdgeCases:
         """Should handle None system_prompt correctly."""
         cache = MockCache()
         augmenter = MockPromptAugmenter()
-        retry_orch = MockRetryOrchestrator()
+        llm_service = MockLLMService()
         output = MockOutput()
         scheduler = MockBatchScheduler()
 
         manager = DelegationManager(
-            retry_orchestrator=retry_orch,
+            llm_service=llm_service,
             cache=cache,
             output=output,
             prompt_augmenter=augmenter,
@@ -414,30 +427,12 @@ class TestEdgeCases:
 
         # Should not crash
         response, _ = await manager.delegate_async(
-            "cerebras",
+            "fast",
             "test prompt",
             system_prompt=None
         )
 
         assert response is not None
 
-    @pytest.mark.asyncio
-    async def test_rejects_empty_prompt(self):
-        """Should reject empty prompt with ValueError."""
-        cache = MockCache()
-        augmenter = MockPromptAugmenter()
-        retry_orch = MockRetryOrchestrator()
-        output = MockOutput()
-        scheduler = MockBatchScheduler()
-
-        manager = DelegationManager(
-            retry_orchestrator=retry_orch,
-            cache=cache,
-            output=output,
-            prompt_augmenter=augmenter,
-            batch_scheduler=scheduler
-        )
-
-        # Should raise ValueError for empty prompt
-        with pytest.raises(ValueError, match="prompt cannot be empty"):
-            await manager.delegate_async("cerebras", "")
+    # NOTE: Empty prompt validation removed in Phase 3.
+    # LiteLLM handles validation internally.

@@ -5,6 +5,10 @@ Follows SOLID principles:
 - Single Responsibility: Manages parallel execution of multiple requests
 - Open/Closed: Extensible via protocol implementations
 - Dependency Inversion: Depends on protocols, not concretions
+
+After LiteLLM integration (Phase 3):
+- Uses LLMServiceProtocol instead of RetryOrchestratorProtocol
+- LiteLLM Router handles retry/fallback internally
 """
 
 import asyncio
@@ -13,10 +17,10 @@ from typing import Any
 try:
     from ..protocols.delegation import (
         BatchSchedulerProtocol,
-        RetryOrchestratorProtocol,
         LLMRequest,
         OutputInterfaceProtocol,
     )
+    from ..orchestrator.protocols import LLMServiceProtocol
     from ..config import (
         DEFAULT_MAX_CONCURRENT,
         DEFAULT_MAX_RETRIES,
@@ -24,14 +28,44 @@ try:
 except ImportError:
     from protocols.delegation import (
         BatchSchedulerProtocol,
-        RetryOrchestratorProtocol,
         LLMRequest,
         OutputInterfaceProtocol,
     )
+    from orchestrator.protocols import LLMServiceProtocol
     from config import (
         DEFAULT_MAX_CONCURRENT,
         DEFAULT_MAX_RETRIES,
     )
+
+
+# Model groups for LiteLLM Router
+MODEL_GROUPS = {"fast", "quality"}
+
+# Map legacy provider names to model groups
+PROVIDER_TO_GROUP = {
+    "groq": "fast",
+    "cerebras": "fast",
+    "gemini": "quality",
+    "auto": "fast",
+}
+
+
+def _resolve_model_group(provider_name: str) -> str:
+    """Resolve a provider name to a model group for LiteLLM Router."""
+    if provider_name in MODEL_GROUPS:
+        return provider_name
+    if provider_name in PROVIDER_TO_GROUP:
+        return PROVIDER_TO_GROUP[provider_name]
+    return "fast"
+
+
+def _request_to_messages(request: LLMRequest) -> list[dict]:
+    """Convert an LLMRequest to LiteLLM messages format."""
+    messages = []
+    if request.system_prompt:
+        messages.append({"role": "system", "content": request.system_prompt})
+    messages.append({"role": "user", "content": request.prompt})
+    return messages
 
 
 class BatchScheduler:
@@ -40,7 +74,7 @@ class BatchScheduler:
 
     Follows SOLID principles:
     - Single Responsibility: Manages parallel execution only
-    - Dependency Inversion: Depends on RetryOrchestratorProtocol for execution
+    - Dependency Inversion: Depends on LLMServiceProtocol for execution
 
     Responsibilities:
     - Execute multiple requests in parallel with concurrency control
@@ -49,16 +83,16 @@ class BatchScheduler:
     - Handle execution errors gracefully
 
     Does NOT:
-    - Implement retry logic (delegates to RetryOrchestrator)
+    - Implement retry logic (handled by LiteLLM Router via LLMService)
     - Cache responses (delegates to Cache)
     - Augment prompts (delegates to PromptAugmenter)
-    - Select providers (delegates to ProviderSelector)
+    - Select providers (handled by LiteLLM Router)
     """
 
     def __init__(
         self,
         *,
-        retry_orchestrator: RetryOrchestratorProtocol,
+        llm_service: LLMServiceProtocol,
         output: OutputInterfaceProtocol,
     ):
         """
@@ -67,10 +101,10 @@ class BatchScheduler:
         All dependencies are injected - NO instantiation inside constructor.
 
         Args:
-            retry_orchestrator: Handles execution of individual requests with retries
+            llm_service: LLM service for making completion calls (uses LiteLLM Router)
             output: Output interface for logging messages
         """
-        self._retry_orchestrator = retry_orchestrator
+        self._llm_service = llm_service
         self._output = output
 
     async def execute_batch(
@@ -106,19 +140,24 @@ class BatchScheduler:
             """Execute a single request with concurrency control."""
             async with semaphore:
                 try:
-                    response, metadata = await self._retry_orchestrator.execute_with_retry(
-                        request=request,
-                        excluded_providers=set(),
-                        max_retries=DEFAULT_MAX_RETRIES,
+                    model_group = _resolve_model_group(request.provider or "fast")
+                    messages = _request_to_messages(request)
+
+                    response, metadata = await self._llm_service.completion(
+                        model=model_group,
+                        messages=messages,
+                        max_tokens=request.max_tokens,
+                        temperature=request.temperature,
+                        **(request.kwargs or {}),
                     )
                     return response, metadata
                 except Exception as e:
                     # Log error but don't fail entire batch
-                    self._output.print_error(
-                        f"Request failed for provider {request.provider}: {e}"
+                    self._output.error(
+                        f"Request failed for model group {request.provider}: {e}"
                     )
                     # Return None to indicate failure but preserve order
-                    return None, {"error": str(e), "provider": request.provider}
+                    return None, {"error": str(e), "model_group": request.provider}
 
         # Execute all requests in parallel and preserve order
         results = await asyncio.gather(
@@ -131,62 +170,53 @@ class BatchScheduler:
     async def execute_multi_provider(
         self,
         request: LLMRequest,
-        providers: list[str],
+        model_groups: list[str],
     ) -> dict[str, tuple[Any, dict]]:
         """
-        Execute same request across multiple providers in parallel.
+        Execute same request across multiple model groups in parallel.
 
         Useful for comparing outputs or getting different perspectives.
 
         Args:
             request: The LLM request to execute
-            providers: List of provider names to query
+            model_groups: List of model group names to query (e.g., ["fast", "quality"])
 
         Returns:
-            Dict mapping provider name to (LLMResponse, task_record) tuple.
-            Failed providers are excluded from results.
+            Dict mapping model group name to (LLMResponse, task_record) tuple.
+            Failed groups are excluded from results.
 
         Raises:
-            ValueError: If providers list is empty
+            ValueError: If model_groups list is empty
         """
-        if not providers:
-            raise ValueError("Cannot execute multi-provider with empty providers list")
+        if not model_groups:
+            raise ValueError("Cannot execute multi-provider with empty model_groups list")
 
-        async def execute_for_provider(provider_name: str) -> tuple[str, tuple[Any, dict] | None]:
-            """Execute request for a specific provider."""
+        messages = _request_to_messages(request)
+
+        async def execute_for_group(model_group: str) -> tuple[str, tuple[Any, dict] | None]:
+            """Execute request for a specific model group."""
             try:
-                # Create new request with specific provider
-                provider_request = LLMRequest(
-                    prompt=request.prompt,
-                    provider=provider_name,
-                    model=request.model,
-                    system_prompt=request.system_prompt,
+                resolved_group = _resolve_model_group(model_group)
+
+                response, metadata = await self._llm_service.completion(
+                    model=resolved_group,
+                    messages=messages,
                     max_tokens=request.max_tokens,
                     temperature=request.temperature,
-                    use_context=request.use_context,
-                    use_cache=request.use_cache,
-                    intent_classification=request.intent_classification,
-                    auto_fallback=False,  # Don't fallback in multi-provider mode
-                    kwargs=request.kwargs,
+                    **(request.kwargs or {}),
                 )
-
-                response, metadata = await self._retry_orchestrator.execute_with_retry(
-                    request=provider_request,
-                    excluded_providers=set(),
-                    max_retries=DEFAULT_MAX_RETRIES,
-                )
-                return provider_name, (response, metadata)
+                return model_group, (response, metadata)
             except Exception as e:
-                self._output.print_error(f"Provider {provider_name} failed: {e}")
-                return provider_name, None
+                self._output.error(f"Model group {model_group} failed: {e}")
+                return model_group, None
 
-        # Execute all providers in parallel
+        # Execute all groups in parallel
         results = await asyncio.gather(
-            *[execute_for_provider(p) for p in providers],
+            *[execute_for_group(g) for g in model_groups],
             return_exceptions=False
         )
 
-        # Filter out failed providers and return as dict
+        # Filter out failed groups and return as dict
         return {
             name: response
             for name, response in results

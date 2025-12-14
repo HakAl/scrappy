@@ -210,6 +210,10 @@ class RetryOrchestratorProtocol(Protocol):
     """
     Orchestrates retry logic with provider fallbacks.
 
+    DEPRECATED: Use LLMServiceProtocol instead. LiteLLM Router handles
+    retry and fallback logic internally. This protocol is kept for
+    backward compatibility during migration.
+
     Responsibilities:
     - Execute requests with exponential backoff retries
     - Handle rate limit errors
@@ -287,7 +291,7 @@ class BatchSchedulerProtocol(Protocol):
     - Preserve request order in results
 
     Does NOT:
-    - Handle single request retries (delegates to RetryOrchestrator)
+    - Handle single request retries (handled by LLMService via LiteLLM Router)
     - Cache responses (delegates to CacheProtocol)
     - Augment prompts (delegates to PromptAugmenter)
     """

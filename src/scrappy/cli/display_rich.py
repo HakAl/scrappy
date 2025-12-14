@@ -120,17 +120,66 @@ def show_status_rich(
     status = orchestrator.status()
 
     # Build status content
-    brain = status.get('orchestrator_brain', status.get('brain', 'unknown'))
-    providers = status.get('available_providers', [])
     tasks = status.get('tasks_executed', 0)
     duration = datetime.now() - session_start
+    quality_mode = status.get('quality_mode', True)
+    mode_str = "QUALITY" if quality_mode else "FAST"
 
-    content = f"""Current Brain: {brain}
-Total Providers: {len(providers)}
-Available: {', '.join(providers)}
-Tasks Completed: {tasks}
-Session Duration: {str(duration).split('.')[0]}"""
+    # Model groups info (LiteLLM)
+    model_groups = status.get('model_groups', [])
+    configured_models = status.get('configured_models', [])
+    provider_health = status.get('provider_health', {})
 
+    # Build models by group
+    fast_models = [m for m in configured_models if m.get('group') == 'fast']
+    quality_models = [m for m in configured_models if m.get('group') == 'quality']
+
+    # Format model list with health indicators
+    def format_model(m: dict) -> str:
+        provider = m.get('provider', 'unknown')
+        model_id = m.get('model_id', 'unknown')
+        health = provider_health.get(provider, {})
+        if health:
+            healthy = health.get('healthy', True)
+            indicator = "[OK]" if healthy else "[!!]"
+            return f"  {indicator} {model_id}"
+        return f"  [--] {model_id}"
+
+    # Build content sections
+    lines = [
+        f"Mode: {mode_str}",
+        f"Tasks Completed: {tasks}",
+        f"Session Duration: {str(duration).split('.')[0]}",
+        "",
+        "Model Groups:",
+    ]
+
+    if fast_models:
+        lines.append("  FAST (speed priority):")
+        for m in fast_models:
+            lines.append(format_model(m))
+    else:
+        lines.append("  FAST: No models configured")
+
+    if quality_models:
+        lines.append("  QUALITY (reasoning priority):")
+        for m in quality_models:
+            lines.append(format_model(m))
+    else:
+        lines.append("  QUALITY: No models configured")
+
+    # Add health summary if any requests have been made
+    if provider_health:
+        lines.append("")
+        lines.append("Provider Health:")
+        for provider, health in provider_health.items():
+            healthy = health.get('healthy', True)
+            requests = health.get('request_count', 0)
+            errors = health.get('error_count', 0)
+            indicator = "[OK]" if healthy else "[!!]"
+            lines.append(f"  {indicator} {provider}: {requests} requests, {errors} errors")
+
+    content = "\n".join(lines)
     io.panel(content, title="System Status", border_style=io.theme.primary)
 
 

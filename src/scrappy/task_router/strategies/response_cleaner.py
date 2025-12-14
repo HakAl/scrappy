@@ -54,6 +54,16 @@ class ResponseCleaner:
                 filtered_lines.append(line)
         cleaned = '\n'.join(filtered_lines)
 
+        # Remove Llama-style special tool call tokens
+        # These appear when model tries to use fine-tuned tool calling via text
+        cleaned = re.sub(r'<\|tool_calls_section_begin\|>.*?<\|tool_calls_section_end\|>', '', cleaned, flags=re.DOTALL)
+        cleaned = re.sub(r'<\|tool_call_begin\|>.*?<\|tool_call_end\|>', '', cleaned, flags=re.DOTALL)
+        cleaned = re.sub(r'<\|tool_call_argument_begin\|>.*?<\|tool_call_argument_end\|>', '', cleaned, flags=re.DOTALL)
+        # Also handle partial/malformed tokens
+        cleaned = re.sub(r'<\|tool_call[^>]*\|>', '', cleaned)
+        cleaned = re.sub(r'<\|/tool_call[^>]*\|>', '', cleaned)
+        cleaned = re.sub(r'functions\.[a-z_]+:\d+', '', cleaned)  # Remove function refs like functions.search_code:0
+
         # Remove common artifacts
         cleaned = re.sub(r'Please wait for the result\.\.\.', '', cleaned)
         cleaned = re.sub(r'Tool Result:\s*\n*', '', cleaned)

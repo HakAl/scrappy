@@ -755,3 +755,132 @@ class OrchestratorAdapter(Protocol):
             LLMResponse with tool_calls field populated if model decided to call tools
         """
         ...
+
+
+@runtime_checkable
+class LLMServiceProtocol(Protocol):
+    """
+    Simple LLM completion interface.
+
+    After LiteLLM integration, this replaces RetryOrchestratorProtocol.
+    LiteLLM handles retry/fallback internally via Router configuration.
+
+    Usage:
+    - model parameter is a model GROUP name ("fast" or "quality")
+    - LiteLLM Router selects actual model within the group
+    - Returns (LLMResponse, task_record dict) tuple
+
+    Implementations:
+    - LiteLLMService: Production implementation using LiteLLM Router
+    - MockLLMService: Test double for unit tests
+
+    Example:
+        service: LLMServiceProtocol = ...
+        response, task_record = service.completion_sync(
+            model="fast",
+            messages=[{"role": "user", "content": "Hello"}],
+            max_tokens=100
+        )
+    """
+
+    async def completion(
+        self,
+        model: str,
+        messages: list[dict],
+        **kwargs
+    ) -> tuple[LLMResponse, dict]:
+        """
+        Execute async completion via LiteLLM Router.
+
+        Args:
+            model: Model group name ("fast" or "quality")
+            messages: Chat messages [{"role": "user", "content": "..."}]
+            **kwargs: Additional params (max_tokens, temperature, tools, tool_choice, etc.)
+
+        Returns:
+            Tuple of (LLMResponse, task_record dict)
+
+        Raises:
+            AllProvidersRateLimitedError: When all providers exhausted
+            ContextWindowExceededError: When quality tier also exceeds context (fatal)
+        """
+        ...
+
+    def completion_sync(
+        self,
+        model: str,
+        messages: list[dict],
+        **kwargs
+    ) -> tuple[LLMResponse, dict]:
+        """
+        Sync version for non-async contexts (Textual workers).
+
+        Args:
+            model: Model group name ("fast" or "quality")
+            messages: Chat messages [{"role": "user", "content": "..."}]
+            **kwargs: Additional params (max_tokens, temperature, tools, tool_choice, etc.)
+
+        Returns:
+            Tuple of (LLMResponse, task_record dict)
+
+        Raises:
+            AllProvidersRateLimitedError: When all providers exhausted
+            ContextWindowExceededError: When quality tier also exceeds context (fatal)
+        """
+        ...
+
+
+@runtime_checkable
+class ProviderStatusTrackerProtocol(Protocol):
+    """
+    Tracks provider health from callbacks and health checks.
+
+    Used by:
+    - RateTrackingCallback: Records success/failure events
+    - /status command: Displays provider health
+
+    Implementations:
+    - ProviderStatusTracker: Production implementation
+    """
+
+    def on_success(self, provider: str, model: str, latency_ms: float) -> None:
+        """
+        Record a successful request.
+
+        Args:
+            provider: Provider name (e.g., "groq")
+            model: Full model ID (e.g., "groq/llama-3.1-8b-instant")
+            latency_ms: Request latency in milliseconds
+        """
+        ...
+
+    def on_failure(self, provider: str, error: str) -> None:
+        """
+        Record a failed request.
+
+        Args:
+            provider: Provider name (e.g., "groq")
+            error: Error message
+        """
+        ...
+
+    def get_status(self, provider: str) -> Optional[Any]:
+        """
+        Get status for a provider.
+
+        Args:
+            provider: Provider name
+
+        Returns:
+            ProviderStatus or None if no data
+        """
+        ...
+
+    def get_all_status(self) -> dict[str, Any]:
+        """
+        Get status for all providers.
+
+        Returns:
+            Dict mapping provider name to ProviderStatus
+        """
+        ...

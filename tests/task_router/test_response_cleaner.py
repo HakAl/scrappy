@@ -328,6 +328,60 @@ class TestFallbackResponseGeneration:
         assert "Result 0:" not in result
 
 
+class TestLlamaToolCallTokenCleaning:
+    """Test cleanup of Llama-style tool call special tokens."""
+
+    def test_removes_llama_tool_call_section(self):
+        """Removes complete Llama tool call section."""
+        cleaner = ResponseCleaner()
+        response = """I'll help with that.<|tool_calls_section_begin|><|tool_call_begin|>functions.search_code:0<|tool_call_argument_begin|>{"query": "test"}<|tool_call_end|><|tool_calls_section_end|>"""
+
+        result = cleaner.clean_response(response)
+
+        assert "<|tool_calls_section_begin|>" not in result
+        assert "<|tool_calls_section_end|>" not in result
+        assert "<|tool_call_begin|>" not in result
+        assert "I'll help with that" in result
+
+    def test_removes_partial_llama_tokens(self):
+        """Removes partial/malformed Llama tokens."""
+        cleaner = ResponseCleaner()
+        response = """Some text <|tool_call_begin|> more text <|tool_call_end|> final text"""
+
+        result = cleaner.clean_response(response)
+
+        assert "<|tool_call" not in result
+        assert "Some text" in result
+        assert "final text" in result
+
+    def test_removes_function_references(self):
+        """Removes function references like functions.search_code:0."""
+        cleaner = ResponseCleaner()
+        response = """Let me search functions.search_code:0 for that."""
+
+        result = cleaner.clean_response(response)
+
+        assert "functions.search_code:0" not in result
+        assert "Let me search" in result
+
+    def test_handles_multiline_llama_tool_calls(self):
+        """Handles Llama tool calls spanning multiple lines."""
+        cleaner = ResponseCleaner()
+        response = """I'll examine the code.
+<|tool_calls_section_begin|>
+<|tool_call_begin|>functions.read_file:0
+<|tool_call_argument_begin|>{"path": "test.py"}
+<|tool_call_end|>
+<|tool_calls_section_end|>
+Here's what I found."""
+
+        result = cleaner.clean_response(response)
+
+        assert "<|tool" not in result
+        assert "I'll examine the code" in result
+        assert "Here's what I found" in result
+
+
 class TestResponseCleanerComplexScenarios:
     """Test complex real-world scenarios."""
 

@@ -8,6 +8,7 @@ from typing import Optional
 from ..agent import CodeAgent
 from scrappy.task_router.intent import RegexIntentClassifier, RegexEntityExtractor
 from scrappy.task_router.protocols import IntentResult
+from scrappy.task_router.strategies.response_cleaner import ResponseCleaner
 from .io_interface import CLIIOProtocol
 from .research_prompt_builder import ResearchPromptBuilder
 from .research_handlers import create_default_registry
@@ -43,6 +44,7 @@ class CLISmartQuery:
         self.entity_extractor = entity_extractor or self._create_default_extractor()
         self.prompt_builder = prompt_builder or self._create_default_prompt_builder()
         self.handler_registry = handler_registry or self._create_default_handler_registry()
+        self._response_cleaner = ResponseCleaner()
 
     def _create_default_classifier(self) -> RegexIntentClassifier:
         """Create default intent classifier."""
@@ -163,7 +165,9 @@ class CLISmartQuery:
             system_prompt=self.prompt_builder.get_system_prompt()
         )
 
-        io.echo(response.content)
+        # Clean response before displaying (removes tool call artifacts)
+        cleaned_content = self._response_cleaner.clean_response(response.content)
+        io.echo(cleaned_content)
         io.secho(
             f"[{response.provider}/{response.model} | {response.tokens_used} tokens | {response.latency_ms:.0f}ms | {tools_used} tools used]",
             fg=io.theme.primary
