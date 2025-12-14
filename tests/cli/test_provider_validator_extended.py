@@ -89,7 +89,7 @@ class TestProviderValidatorEdgeCases:
 
     def test_all_providers_available(self):
         """Should work when all valid providers are available."""
-        available = ["cerebras", "groq", "gemini", "cohere", "github_models"]
+        available = ["cerebras", "groq", "gemini", "sambanova"]
 
         for provider in available:
             result = validate_provider(provider, available_providers=available)

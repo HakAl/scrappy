@@ -37,9 +37,9 @@ class ProviderValidationResult:
     warnings: Optional[List[str]] = None
 
 
-# Valid providers
+# Valid providers (must match provider_definitions.py PROVIDERS dict)
 VALID_PROVIDERS = {
-    "cerebras", "groq", "gemini", "cohere", "github_models"
+    "cerebras", "groq", "gemini", "sambanova"
 }
 
 # Limits

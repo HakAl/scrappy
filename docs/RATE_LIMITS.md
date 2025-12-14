@@ -33,13 +33,13 @@ Last updated: 2025-11-16
 
 **Best for**: Backup to Cerebras, model variety, **agent planning** (instruction-tuned models)
 
-### GitHub Models (NEW - ⚠️ NOT RECOMMENDED FOR AGENT USE)
+### GitHub Models (NEW - NOT RECOMMENDED FOR AGENT USE)
 - **API Key**: GITHUB_API_KEY (Personal Access Token with `models` scope)
 - **Dashboard**: https://github.com/settings/tokens
 - **Endpoint**: `https://models.github.ai/inference`
 - **Special feature**: OpenAI-compatible API, access to GPT-4o and 40+ models
 
-**🚨 CRITICAL FINDING (2025-11-16 Agent Testing):**
+** CRITICAL FINDING (2025-11-16 Agent Testing):**
 
 Despite headers showing 10,000+ request limits, GitHub Models **crashes the agent after ~10 LLM calls** with:
 ```
@@ -103,31 +103,23 @@ Agent error: Too many requests. For more on scraping GitHub...
 
 **Best for**: Additional capacity, auto-fallback when other providers limited
 
-### Cohere (USE SPARINGLY)
-- **API Key**: COHERE_API_KEY
-- **Dashboard**: https://dashboard.cohere.com
-
-| Endpoint | Trial RPM | Production RPM | Monthly Limit |
-|----------|-----------|----------------|---------------|
-| Chat | 20 | 500 | **1,000 total** |
-| Embed | 100 | 2,000 | **1,000 total** |
-| Rerank | 10 | 1,000 | **1,000 total** |
-
-**CRITICAL**: Trial key is limited to **1,000 API calls PER MONTH** across ALL endpoints!
-
-**Best for**: Embeddings (if you have prod key), one-off reasoning tasks
+### SambaNova (USE SPARINGLY)
+- **URL**: https://sambanova.ai
+- **Free tier**: **40 requests/day** only
+- **Models**: Meta-Llama-3.1-8B-Instruct works
+- **Verdict**: Too limited. Skip.
 
 ---
 
 ## Providers to Investigate
 
-### OpenRouter ⚠️ UNRELIABLE
+### OpenRouter UNRELIABLE
 - **URL**: https://openrouter.ai
 - **Free models**: 45+ models marked as free
 - **Issue**: Free models frequently rate-limited upstream or have data policy restrictions
 - **Verdict**: Not reliable for production use. Skip for now.
 
-### HuggingFace Inference API ❌ NOT VIABLE
+### HuggingFace Inference API NOT VIABLE
 - **URL**: https://huggingface.co/inference-api
 - **Free tier**: $0.10/month credits only (~100-1000 requests)
 - **Models**: Llama-3.2-3B, Qwen2.5-72B, Gemma-2-2b work
@@ -145,13 +137,7 @@ Agent error: Too many requests. For more on scraping GitHub...
 - **Speed**: Very fast inference
 - **Potential**: Good for latency-sensitive tasks
 
-### SambaNova ❌ NOT VIABLE
-- **URL**: https://sambanova.ai
-- **Free tier**: **40 requests/day** only
-- **Models**: Meta-Llama-3.1-8B-Instruct works
-- **Verdict**: Too limited. Skip.
-
-### Cloudflare Workers AI 🔄 FUTURE CONSIDERATION
+### Cloudflare Workers AI FUTURE CONSIDERATION -- NOT VIABLE REQUIRED ID + API KEY
 - **URL**: https://developers.cloudflare.com/workers-ai/platform/pricing/#free-allocation
 - **Free tier**: **10,000 neurons/day** (token-based budgeting)
 - **Unique model**: Neuron cost varies by model size
@@ -173,7 +159,7 @@ Agent error: Too many requests. For more on scraping GitHub...
 
 ### Daily Budget (with current providers)
 
-**GitHub Models GPT-4o** (⚠️ NOT FOR AGENT USE):
+**GitHub Models GPT-4o** ( NOT FOR AGENT USE):
 - Headers show: 10,000 requests BUT crashes after ~10 rapid calls
 - Use for: **Simple chat/one-off queries ONLY**
 - **DO NOT USE as agent planner** - Will crash mid-task
@@ -190,10 +176,9 @@ Agent error: Too many requests. For more on scraping GitHub...
 - Use for: Backup when Cerebras limits hit, model variety
 - Reserve llama-3.3-70b (1000/day) for quality-critical tasks
 
-**Cohere** (emergency only):
-- 1,000 requests/month = ~33/day
-- Use for: Embeddings only (if needed)
-- Avoid using for chat - too expensive
+**SambaNova** (additional capacity):
+- Limited requests/day
+- Use for: Fast tier overflow
 
 **Gemini** (additional capacity):
 - ~1,650 requests/day across models (with fallback)
@@ -214,7 +199,6 @@ Agent error: Too many requests. For more on scraping GitHub...
 Morning (light usage):
 - 50 Cerebras calls for routine tasks
 - 20 Groq calls for variety
-- 0 Cohere calls
 
 Afternoon (heavy development):
 - 200 Cerebras calls for code generation
@@ -322,18 +306,14 @@ orch.reset_rate_tracking('groq')  # Reset specific provider
 Auto-tracked internally:
 - `provider.get_usage_summary()` - shows model usage and limited models
 
-**Cohere:**
-- `x-endpoint-monthly-call-limit`
-- `x-trial-endpoint-call-remaining`
-
-### Legacy Monitoring
+### Programmatic Monitoring
 
 Monitor in code:
 ```python
-from src.orchestrator import AgentOrchestrator
+from scrappy.orchestrator import AgentOrchestrator
 
 orch = AgentOrchestrator()
-print(orch.status())          # Shows brain, available providers
+print(orch.status())          # Shows mode, configured providers
 print(orch.get_usage_report()) # Shows session usage by provider
 ```
 
@@ -350,7 +330,6 @@ print(orch.get_usage_report()) # Shows session usage by provider
 3. **Groq daily limit**: Switch to Gemini (auto-fallback)
 4. **Gemini limit**: Auto-fallback tries other Gemini models (graceful)
 5. **All limits hit**: Wait for midnight reset (very rare with 23K combined)
-6. **Cohere monthly limit**: Stop using Cohere entirely
 
 ---
 
@@ -361,6 +340,5 @@ print(orch.get_usage_report()) # Shows session usage by provider
 If you need more:
 1. **Cerebras paid tier** - Contact for enterprise pricing
 2. **Groq Developer tier** - $20/month for 500x limits
-3. **Cohere production key** - Apply with use case
-4. **Add more providers** - Fireworks ($1 credit), Together ($25 credit)
+3. **Add more providers** - Fireworks ($1 credit), Together ($25 credit)
 5. **Response caching** - Reduce duplicate calls (TODO: implement)

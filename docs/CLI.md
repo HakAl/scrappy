@@ -15,7 +15,6 @@ Complete reference for the Scrappy command-line interface.
 | `scrappy explore` | Analyze codebase structure | [explore](#explore---codebase-analysis) |
 | `scrappy context` | View context status | [context](#context---view-context-status) |
 | `scrappy status` | System status | [status](#status---system-status) |
-| `scrappy providers` | List available providers | [providers](#providers---list-providers) |
 | `scrappy models` | List available models | [models](#models---list-models) |
 | `scrappy usage` | Show usage statistics | [usage](#usage---usage-statistics) |
 
@@ -27,10 +26,10 @@ Complete reference for the Scrappy command-line interface.
 
 **Get API Keys**
 
-[Cerebras](https://cloud.cerebras.ai/platform), 
-[Groq](https://console.groq.com/), 
-[Gemini](https://aistudio.google.com/), 
-[Cohere](https://dashboard.cohere.com/)
+[Cerebras](https://cloud.cerebras.ai/platform),
+[Groq](https://console.groq.com/),
+[Gemini](https://aistudio.google.com/),
+[SambaNova](https://cloud.sambanova.ai/)
 
 
 ```bash
@@ -66,7 +65,6 @@ python scrappy.py [OPTIONS] [COMMAND]
 
 | Option | Short | Description |
 |--------|-------|-------------|
-| `--brain` | `-b` | Set orchestrator brain provider (cerebras, groq, gemini) |
 | `--auto-explore` | `-a` | Automatically explore codebase on startup |
 | `--no-context` | | Disable context-aware prompts |
 | `--resume` | `-r` | Resume from last saved session |
@@ -74,9 +72,6 @@ python scrappy.py [OPTIONS] [COMMAND]
 
 **Examples:**
 ```bash
-# Use Groq as brain
-python scrappy.py --brain groq
-
 # Auto-explore and use context
 python scrappy.py --auto-explore
 
@@ -92,7 +87,7 @@ scrappy -r
 python scrappy.py --no-save
 
 # Combine options
-python scrappy.py -b groq -a -r
+python scrappy.py -a -r
 ```
 
 ## Commands
@@ -110,11 +105,8 @@ python scrappy.py interactive
 **Startup Output:**
 ```
 Initializing Scrappy...
-[OK] Cerebras provider registered (14,400 RPD)
-[OK] Groq provider registered (7,000 RPD)
-[BRAIN] Using cerebras as orchestrator brain
-Brain: cerebras
-Available providers: cerebras, groq
+Mode: QUALITY
+Configured providers: cerebras, groq, gemini
 Context: Not explored (use /context to explore)
 
 ============================================================
@@ -456,23 +448,19 @@ Show orchestrator status:
 python scrappy.py status
 ```
 
-#### `providers` - List Providers
-
-Show all available providers with details:
-
-```bash
-python scrappy.py providers
-```
-
 #### `models` - List Models
 
-Show available models:
+Show available models grouped by tier (fast/quality):
 
 ```bash
-# All models
+# All configured models
 python scrappy.py models
 
-# Specific provider
+# Filter by tier
+python scrappy.py models fast
+python scrappy.py models quality
+
+# Filter by provider
 python scrappy.py models cerebras
 ```
 
@@ -515,10 +503,9 @@ When in interactive mode, use slash commands:
 
 | Command | Description |
 |---------|-------------|
-| `/providers` | List all providers with details |
-| `/brain [name]` | Show/switch brain provider |
-| `/models [provider]` | List available models |
-| `/status` | Show system status |
+| `/models [filter]` | List available models (filter: fast, quality, or provider name) |
+| `/model [mode]` | Show or switch mode (fast/quality) |
+| `/status` | Show system status and configured providers |
 | `/usage` | Show usage statistics |
 | `/limits [provider]` | Show rate limit usage (or filter by provider) |
 | `/limits reset` | Reset rate limit tracking |
@@ -789,26 +776,32 @@ orch.toggle_cache()
 
 | Provider | Daily Quota | Best For |
 |----------|------------|----------|
-| **Cerebras** | 14,400 RPD | Primary brain, fastest inference |
-| **Groq** | 7,000 RPD | Secondary, model variety |
-| **Gemini** | 1,650 RPD | Auto-fallback between models |
-| **Cohere** | 33 RPD (~1K/month) | Embeddings only |
+| **Cerebras** | 14,400 RPD | Fast tier, highest quota |
+| **Groq** | 7,000 RPD | Fast and quality tiers |
+| **Gemini** | varies | Quality tier, large context |
+| **SambaNova** | varies | Fast tier alternative |
 
-### Brain Selection
+### Model Groups
 
-The orchestrator "brain" handles complex operations:
-- Task planning
-- Complex reasoning
-- Result synthesis
+Models are organized into two tiers with automatic fallback:
 
-Default priority: Cerebras > Groq > Gemini
+**FAST** (speed priority):
+- 8B class models
+- High throughput, low latency
+- Best for quick tasks and high volume
+
+**QUALITY** (reasoning priority):
+- 70B+ class models
+- Complex reasoning, larger context
+- Best for planning and analysis
 
 ```bash
-# Specify brain
-python scrappy.py --brain groq
+# Switch modes in interactive mode
+You: /model fast
+You: /model quality
 
-# Switch brain in interactive mode
-You: /brain gemini
+# Check current mode
+You: /status
 ```
 
 ## Usage Patterns
@@ -964,10 +957,10 @@ You: /usage
 ```
 Track token consumption across providers.
 
-### 5. Switch Brains for Different Tasks
+### 5. Switch Modes for Different Tasks
 ```
-You: /brain groq  # For variety
-You: /brain cerebras  # For speed
+You: /model fast     # For quick tasks
+You: /model quality  # For complex reasoning
 ```
 
 ### 6. Refresh Context After Major Changes
@@ -1003,10 +996,9 @@ You: /agent Add rate limiting middleware
 
 **Provider Not Available:**
 ```
-Provider 'cohere' not available.
-Available: cerebras, groq
+No models configured.
 ```
-→ Check API key configuration in `.env`
+→ Check API key configuration in `.env` and run `/setup`
 
 **Context Not Explored:**
 ```
@@ -1018,14 +1010,14 @@ Context: Not explored (use /context to explore)
 ```
 Error: Rate limit exceeded
 ```
-→ Switch providers with `/brain` or wait for quota reset
+→ Switch to fast mode with `/model fast` or wait for quota reset
 
 ### Debug Mode
 
 Check system status:
 ```
 You: /status
-You: /providers
+You: /models
 You: /usage
 ```
 
@@ -1040,7 +1032,7 @@ GROQ_API_KEY=your_key
 
 # Optional
 GEMINI_API_KEY=your_key
-COHERE_API_KEY=your_key  # Limited to 1K/month
+SAMBANOVA_API_KEY=your_key
 ```
 
 ### Cache Management
@@ -1061,14 +1053,11 @@ rm .scrappy/context.json
 $ python scrappy.py --auto-explore
 
 Initializing Scrappy...
-[OK] Cerebras provider registered (14,400 RPD)
-[OK] Groq provider registered (7,000 RPD)
-[BRAIN] Using cerebras as orchestrator brain
+Mode: QUALITY
+Configured providers: cerebras, groq, gemini
 [CONTEXT] Exploring codebase: /path/to/project
 [CONTEXT] Found 25 files
 [CONTEXT] Generated project summary
-Brain: cerebras
-Available providers: cerebras, groq
 Context: scrappy (cached)
 
 ============================================================
@@ -1137,7 +1126,7 @@ python scrappy.py reason "pytest vs unittest?" \
 | Conversation history | Yes | No |
 | Quick iterations | Better | Slower |
 | Scripting/automation | Limited | Better |
-| Context switching | Easy (`/brain`) | Per-command |
+| Context switching | Easy (`/model`) | Per-command |
 | Usage tracking | Cumulative | Per-command |
 
 Choose interactive for development sessions, one-shot for automation and scripts.

@@ -199,13 +199,19 @@ Based on the agent interaction analysis:
    - Action selection accuracy
 3. Update provider configurations based on results
 
-### Provider Configuration Updates Needed
+### Adding New Models
 
-To use discovered models, update:
+To add discovered models, update `src/scrappy/orchestrator/litellm_config.py`:
 
-- `src/providers/cerebras_provider.py` - Add `qwen-3-235b-a22b-instruct-2507`
-- `src/providers/groq_provider.py` - Add Llama 4 and Kimi K2 models
-- `src/providers/gemini_provider.py` - Add Gemma instruction-tuned models
+```python
+ModelDefinition(
+    model_id="provider/model-name",
+    provider="provider",
+    group="fast",  # or "quality"
+    context_length=8192,
+    rpd=14400,
+),
+```
 
 ---
 

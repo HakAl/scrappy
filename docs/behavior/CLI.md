@@ -16,14 +16,12 @@ Run a single command and exit:
 
 | Command | Purpose | Key Options |
 |---------|---------|-------------|
-| `query` | Send a query to the orchestrator | `--provider`, `--model`, `--temperature`, `--max-tokens`, `--with-context`, `--brain` |
+| `query` | Send a query to the orchestrator | `--provider`, `--model`, `--temperature`, `--max-tokens`, `--with-context` |
 | `plan` | Create a task plan | `--max-steps` (default: 5) |
 | `reason` | Reason about a question with evidence | `--context`, `--evidence` (multiple) |
 | `smart` | Research-first query using tools | None |
 | `status` | Show system status | None |
-| `providers` | List available providers | None |
-| `provider_info` | Show detailed provider selection info | `--verbose` |
-| `models` | List available models | provider (optional) |
+| `models` | List available models | filter (optional: fast, quality, or provider name) |
 | `usage` | Show usage statistics | None |
 | `interactive` | Start interactive chat mode | `--resume` |
 | `context` | Show and manage codebase context | `--clear`, `--refresh` |
@@ -33,13 +31,10 @@ Run a single command and exit:
 ## Global Options
 
 ```
---brain, -b           Orchestrator brain provider (cerebras, groq, gemini)
 --auto-explore, -a    Automatically explore codebase on startup
 --no-context          Disable context-aware prompts
 --resume, -r          Resume from last saved session
 --no-save             Disable auto-save on exit
---show-providers, -p  Show detailed provider status on startup
---verbose-selection   Show verbose provider selection logic
 ```
 
 ## Interactive Mode
@@ -58,10 +53,9 @@ Start with `scrappy` (no arguments) or `scrappy interactive`.
 **Display Commands**
 - `/help` - Show available commands
 - `/status` - Show system status
-- `/providers` - List providers
-- `/brain` - Show current brain provider
 - `/usage` - Show usage statistics
 - `/models` - List available models
+- `/model` - Show/switch mode (fast/quality)
 
 **Task Commands**
 - `/plan` - Create a task plan

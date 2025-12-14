@@ -387,17 +387,11 @@ class TestValidateProvider:
         assert result.is_valid
         assert result.provider == "gemini"
 
-    def test_valid_cohere_provider(self):
-        """Should accept cohere provider."""
-        result = validate_provider("cohere")
+    def test_valid_sambanova_provider(self):
+        """Should accept sambanova provider."""
+        result = validate_provider("sambanova")
         assert result.is_valid
-        assert result.provider == "cohere"
-
-    def test_valid_github_models_provider(self):
-        """Should accept github_models provider."""
-        result = validate_provider("github_models")
-        assert result.is_valid
-        assert result.provider == "github_models"
+        assert result.provider == "sambanova"
 
     # Empty and whitespace checks
     def test_empty_provider_fails(self):
@@ -482,10 +476,12 @@ class TestValidateProvider:
         if result.is_valid:
             assert result.provider == "groq"
 
-    def test_provider_with_underscore_valid(self):
-        """Should accept providers with underscores."""
-        result = validate_provider("github_models")
-        assert result.is_valid
+    def test_provider_with_underscore_format_valid(self):
+        """Should accept underscore format (fails on unknown provider, not format)."""
+        result = validate_provider("some_provider")
+        # Format is valid (has underscore) but rejected because not in VALID_PROVIDERS
+        assert not result.is_valid
+        assert "unknown provider" in result.error.lower()
 
     def test_numeric_provider_fails(self):
         """Should reject purely numeric providers."""

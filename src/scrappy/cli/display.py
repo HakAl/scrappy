@@ -7,7 +7,6 @@ from datetime import datetime
 
 from .io_interface import CLIIOProtocol
 from .unified_io import UnifiedIO
-from .validators import validate_provider
 from .display_rich import show_help_table, show_status_rich, show_usage_rich
 
 
@@ -59,8 +58,7 @@ class CLIDisplay:
             self.io.echo(f"  {self.io.style('/smart', fg=self.io.theme.warning)} <query>   - Research-first query")
             self.io.echo()
             self.io.secho("Provider Management:", bold=True)
-            self.io.echo(f"  {self.io.style('/providers', fg=self.io.theme.warning)}       - List all providers")
-            self.io.echo(f"  {self.io.style('/brain', fg=self.io.theme.warning)} <name>    - Switch brain")
+            self.io.echo(f"  {self.io.style('/models', fg=self.io.theme.warning)} [filter] - List models")
             self.io.echo(f"  {self.io.style('/model', fg=self.io.theme.warning)} [mode]    - Toggle quality/fast mode")
             self.io.echo(f"  {self.io.style('/status', fg=self.io.theme.warning)}          - Show status")
             self.io.echo(f"  {self.io.style('/usage', fg=self.io.theme.warning)}           - Show usage")
@@ -99,79 +97,6 @@ class CLIDisplay:
             self.io.echo(f"Available: {self.io.style(', '.join(status['available_providers']), fg=self.io.theme.primary)}")
             self.io.echo(f"Tasks Completed: {status.get('tasks_executed', 0)}")
             self.io.echo(f"Session Duration: {datetime.now() - self.session_start}")
-
-    def list_providers(self):
-        """List all providers with their configuration and rate limit details.
-
-        Displays each provider's availability status, default model, rate limits
-        (requests/day, tokens/minute, tokens/day), and available models.
-
-        Side Effects:
-            - Writes formatted provider list to stdout via self.io
-
-        Returns:
-            None
-        """
-        self.io.secho("\nAvailable Providers:", fg=self.io.theme.primary, bold=True)
-        self.io.secho("-" * 50, fg=self.io.theme.primary)
-
-        info = self.orchestrator.providers.get_provider_info()
-
-        for name, details in info.items():
-            if details['available']:
-                limits = details['limits']
-                self.io.secho(f"\n{name.upper()} ", fg=self.io.theme.success, bold=True, nl=False)
-                self.io.secho("(Active)", fg=self.io.theme.success)
-                self.io.echo(f"  Default Model: {details['default_model']}")
-                if limits.requests_per_day:
-                    self.io.echo(f"  Daily Quota: {limits.requests_per_day:,} requests")
-                if limits.tokens_per_minute and limits.tokens_per_minute > 0:
-                    self.io.echo(f"  Token Limit: {limits.tokens_per_minute:,} TPM")
-                if limits.tokens_per_day:
-                    self.io.echo(f"  Daily Tokens: {limits.tokens_per_day:,} TPD")
-                self.io.echo(f"  Models: {', '.join(details['models'][:3])}")
-                if len(details['models']) > 3:
-                    self.io.echo(f"           ... and {len(details['models']) - 3} more")
-            else:
-                self.io.secho(f"\n{name.upper()} ", fg=self.io.theme.error, bold=True, nl=False)
-                self.io.secho("(Not Configured)", fg=self.io.theme.error)
-
-    def switch_brain(self, provider_name: str):
-        """Switch the orchestrator's primary brain to a different provider.
-
-        Args:
-            provider_name: Name of the provider to switch to. If empty, displays
-                current brain and available providers.
-
-        State Changes:
-            - Sets orchestrator.brain to the new provider name
-
-        Side Effects:
-            - Writes confirmation or error message to stdout via self.io
-
-        Returns:
-            None
-        """
-        if not provider_name:
-            self.io.echo(f"Current brain: {self.io.style(self.orchestrator.brain, fg=self.io.theme.success, bold=True)}")
-            self.io.echo(f"Available: {', '.join(self.orchestrator.providers.list_available())}")
-            self.io.echo("Usage: /brain <provider_name>")
-            return
-
-        # Validate provider with availability check
-        available = self.orchestrator.providers.list_available()
-        validation = validate_provider(provider_name, available_providers=available)
-
-        if not validation.is_valid:
-            self.io.secho(f"{validation.error}", fg=self.io.theme.error)
-            return
-
-        old_brain = self.orchestrator.brain
-        try:
-            self.orchestrator.brain = validation.provider
-            self.io.secho(f"Brain switched: {old_brain} -> {validation.provider}", fg=self.io.theme.success)
-        except ValueError as e:
-            self.io.secho(str(e), fg=self.io.theme.error)
 
     def show_usage(self):
         """Display usage statistics for the current session.
@@ -224,11 +149,13 @@ class CLIDisplay:
                 self.io.echo(f"  Entries: {total_entries}")
 
     def list_models(self, provider_name: str = ""):
-        """List available models for one or all providers.
+        """List available models by group (fast/quality).
+
+        With LiteLLM integration, models are organized into groups rather than
+        by individual providers.
 
         Args:
-            provider_name: Specific provider to list models for. If empty,
-                lists models for all available providers.
+            provider_name: Optional filter - 'fast', 'quality', or provider name.
 
         Side Effects:
             - Writes formatted model list to stdout via self.io
@@ -236,34 +163,49 @@ class CLIDisplay:
         Returns:
             None
         """
-        if provider_name:
-            # Validate provider with availability check
-            available = self.orchestrator.providers.list_available()
-            validation = validate_provider(provider_name, available_providers=available)
+        from scrappy.orchestrator.litellm_config import get_configured_models
+        from scrappy.infrastructure.config.api_keys import create_api_key_service
 
-            if not validation.is_valid:
-                self.io.secho(f"{validation.error}", fg=self.io.theme.error)
+        api_key_service = create_api_key_service()
+        configured_models = get_configured_models(api_key_service)
+
+        if not configured_models:
+            self.io.secho("No models configured. Run /setup to configure API keys.", fg=self.io.theme.warning)
+            return
+
+        # Filter by group or provider if specified
+        filter_arg = provider_name.strip().lower() if provider_name else ""
+
+        if filter_arg in ("fast", "quality"):
+            filtered = [m for m in configured_models if m.group == filter_arg]
+            self.io.secho(f"\n{filter_arg.upper()} Models:", bold=True)
+            self.io.echo("-" * 50)
+            for m in filtered:
+                self.io.echo(f"  {m.model_id} ({m.context_length:,} ctx, {m.rpd:,} RPD)")
+        elif filter_arg:
+            # Filter by provider name
+            filtered = [m for m in configured_models if m.provider == filter_arg]
+            if not filtered:
+                self.io.secho(f"No models found for provider: {filter_arg}", fg=self.io.theme.warning)
                 return
-
-            provider = self.orchestrator.providers.get(validation.provider)
-            self.io.secho(f"\n{validation.provider.upper()} Models:", bold=True)
+            self.io.secho(f"\n{filter_arg.upper()} Models:", bold=True)
             self.io.echo("-" * 50)
-            for model in provider.available_models:
-                if model == provider.default_model:
-                    self.io.echo(f"  - {model} ", nl=False)
-                    self.io.secho("(default)", fg=self.io.theme.success)
-                else:
-                    self.io.echo(f"  - {model}")
+            for m in filtered:
+                self.io.echo(f"  {m.model_id} [{m.group}] ({m.context_length:,} ctx)")
         else:
-            self.io.secho("\nAll Available Models:", bold=True)
+            # Show all models grouped by tier
+            self.io.secho("\nConfigured Models:", bold=True)
             self.io.echo("-" * 50)
 
-            for name in self.orchestrator.providers.list_available():
-                provider = self.orchestrator.providers.get(name)
-                self.io.secho(f"\n{name.upper()}:", bold=True)
-                for model in provider.available_models:
-                    if model == provider.default_model:
-                        self.io.echo(f"  - {model} ", nl=False)
-                        self.io.secho("(default)", fg=self.io.theme.success)
-                    else:
-                        self.io.echo(f"  - {model}")
+            fast_models = [m for m in configured_models if m.group == "fast"]
+            quality_models = [m for m in configured_models if m.group == "quality"]
+
+            if fast_models:
+                self.io.secho("\nFAST (speed priority):", fg=self.io.theme.primary)
+                for m in fast_models:
+                    self.io.echo(f"  {m.model_id} ({m.context_length:,} ctx, {m.rpd:,} RPD)")
+
+            if quality_models:
+                self.io.secho("\nQUALITY (reasoning priority):", fg=self.io.theme.primary)
+                for m in quality_models:
+                    self.io.echo(f"  {m.model_id} ({m.context_length:,} ctx, {m.rpd:,} RPD)")

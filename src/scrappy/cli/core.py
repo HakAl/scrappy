@@ -140,13 +140,6 @@ class CLI:
         """
         self.io.secho("Initializing Scrappy...", fg=self.io.theme.primary)
 
-        # Display available providers
-        providers_list = ', '.join(self.orchestrator.providers.list_available())
-        if providers_list:
-            self.io.echo(f"Available providers: {self.io.style(providers_list, fg=self.io.theme.primary)}")
-        else:
-            self.io.secho("No providers available - check API keys", fg=self.io.theme.warning)
-
         # Silently restore previous session (working memory: files, searches, etc.)
         if offer_session_restore:
             self._silent_session_restore()

@@ -4,6 +4,29 @@
 NEXT UP
 ---
 
+---
+/setup isn't listed in help
+instructions aren't clear to dismiss wizard
+VALID_COMMANDS = {
+    # Core commands
+    "help", "status", "quit", "exit", "q", "clear", "history",
+    # Task commands
+    "plan", "reason", "agent", "smart", "tasks", "classify",
+    # Provider commands
+    "usage", "models", "model", "setup",
+    # Session commands
+    "context", "cache", "session", "limits",
+    # Multi-provider commands
+    "synthesize", "delegate",
+    # Codebase commands
+    "explore",
+    # Mode toggles
+    "ml", "multiline", "paste", "autoexec", "verbose", "v"
+}
+---
+
+
+---
 # 2. Dependency Check on Startup
 
 ```python

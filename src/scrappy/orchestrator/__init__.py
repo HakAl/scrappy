@@ -49,7 +49,6 @@ from .manager_protocols import (
     BackgroundTaskManagerProtocol,
     UsageReporterProtocol,
     StatusReporterProtocol,
-    ProviderRegistrarProtocol,
     ContextManagerProtocol,
 )
 
@@ -80,6 +79,5 @@ __all__ = [
     'BackgroundTaskManagerProtocol',
     'UsageReporterProtocol',
     'StatusReporterProtocol',
-    'ProviderRegistrarProtocol',
     'ContextManagerProtocol',
 ]

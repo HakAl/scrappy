@@ -197,7 +197,7 @@ class TestProviderValidationIntegration:
         """Valid provider names should be accepted."""
         from scrappy.cli.validators import validate_provider
 
-        for provider in ["cerebras", "groq", "gemini", "cohere", "github_models"]:
+        for provider in ["cerebras", "groq", "gemini", "sambanova"]:
             result = validate_provider(provider)
             assert result.is_valid, f"Provider {provider} should be valid"
 

@@ -1,18 +1,20 @@
 # Orchestrator
 
-Allows any registered provider to act as the orchestrator brain. The orchestrator can automatically learn about your codebase and inject relevant context into prompts.
+Manages LLM interactions through LiteLLM Router with automatic model selection based on task complexity.
 
-## Dependency Injection Pattern
-
-The orchestrator uses constructor injection throughout, enabling testability and loose coupling.
+## Architecture
 
 ```
 AgentOrchestrator
     |
-    +-- ProviderRegistry (injected)
+    +-- LiteLLMService (injected)
+    |       |
+    |       +-- LiteLLM Router
+    |       +-- Model Groups (fast/quality)
+    |       +-- Automatic Fallback
+    |
     +-- ResponseCache (injected)
     +-- RateLimitTracker (injected)
-    +-- ProviderSelector (injected)
     +-- OutputInterface (injected)
     +-- CodebaseContext (injected)
     |       |
@@ -20,19 +22,50 @@ AgentOrchestrator
     |
     +-- DelegationManager (composed internally)
     +-- UsageReporter (composed internally)
-    +-- ProviderStatusReporter (composed internally)
 ```
 
 ## Core Components
 
 | Component | Responsibility |
 |-----------|----------------|
-| `DelegationManager` | LLM calls, retry/fallback logic, caching |
-| `ProviderSelector` | Provider routing, brain selection |
+| `LiteLLMService` | LLM calls via LiteLLM Router, model selection |
+| `DelegationManager` | Orchestrates LLM calls, caching |
 | `UsageReporter` | Usage stats, cache management |
-| `ProviderStatusReporter` | Status display, selection info |
 | `OutputInterface` | Abstracted logging (Console/Null/Capturing) |
 | `CodebaseContext` | Codebase exploration, semantic search |
+
+## Model Groups
+
+Instead of individual providers, models are organized into two tiers:
+
+| Group | Model Class | Use Case |
+|-------|-------------|----------|
+| **fast** | 8B models | Quick tasks, high throughput |
+| **quality** | 70B+ models | Complex reasoning, planning |
+
+The orchestrator automatically selects the appropriate group based on task complexity.
+
+## LiteLLM Integration
+
+All LLM calls go through LiteLLM Router which handles:
+- Provider abstraction (Cerebras, Groq, Gemini, SambaNova)
+- Automatic failover between providers
+- Context window escalation (fast -> quality when needed)
+- Rate limit handling
+
+```python
+# Delegation with automatic model selection
+response = orchestrator.delegate(
+    prompt="explain authentication",
+    use_context=True,
+)
+
+# Force quality tier for complex tasks
+response = orchestrator.delegate(
+    prompt="design the architecture",
+    model_group="quality",
+)
+```
 
 ## Semantic Search Integration
 
@@ -49,7 +82,6 @@ When `use_context=True` in delegate calls:
 
 ```python
 response = orchestrator.delegate(
-    provider_name=None,
     prompt="explain authentication",
     use_context=True,  # Triggers semantic search
 )
@@ -80,13 +112,14 @@ orchestrator = AgentOrchestrator(
 - `OutputInterface` - Swappable output (production vs test)
 - `Orchestrator` - Type hints for any orchestrator implementation
 - `SemanticSearchManagerProtocol` - Semantic search abstraction
+- `LiteLLMServiceProtocol` - LLM service abstraction
 
 ## Testing
 
 Inject test doubles via constructors:
 ```python
 orchestrator = AgentOrchestrator(
-    registry=mock_registry,
+    litellm_service=mock_litellm_service,
     output=CapturingOutput(),  # Capture instead of print
     enable_semantic_search=False,  # Disable for tests
     ...

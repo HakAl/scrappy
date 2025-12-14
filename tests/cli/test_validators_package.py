@@ -318,9 +318,9 @@ class TestExistingTestsStillWork:
         from scrappy.cli.validators import VALID_COMMANDS
 
         expected_commands = {
-            "help", "status", "quit", "exit", "q", "clear",
+            "help", "status", "quit", "exit", "q", "clear", "history",
             "plan", "reason", "agent", "smart", "tasks", "classify",
-            "providers", "brain", "usage", "models",
+            "usage", "models", "model", "setup",
             "context", "cache", "session", "limits",
             "synthesize", "delegate",
             "explore",
@@ -335,7 +335,7 @@ class TestExistingTestsStillWork:
         from scrappy.cli.validators import VALID_PROVIDERS
 
         expected_providers = {
-            "cerebras", "groq", "gemini", "cohere", "github_models"
+            "cerebras", "groq", "gemini", "sambanova"
         }
 
         for provider in expected_providers:

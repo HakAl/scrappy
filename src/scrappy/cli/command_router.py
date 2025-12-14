@@ -84,8 +84,6 @@ class CommandRouter:
             # Display commands
             "/help": self._handle_help,
             "/status": self._handle_status,
-            "/providers": self._handle_providers,
-            "/brain": self._handle_brain,
             "/usage": self._handle_usage,
             "/models": self._handle_models,
             "/model": self._handle_model,
@@ -147,16 +145,6 @@ class CommandRouter:
     def _handle_status(self, args: str) -> bool:
         """Handle /status command."""
         self.display.show_status()
-        return True
-
-    def _handle_providers(self, args: str) -> bool:
-        """Handle /providers command."""
-        self.display.list_providers()
-        return True
-
-    def _handle_brain(self, args: str) -> bool:
-        """Handle /brain command."""
-        self.display.switch_brain(args)
         return True
 
     def _handle_usage(self, args: str) -> bool:

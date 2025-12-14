@@ -100,7 +100,7 @@ class TestHelpCommandsTable:
         output = get_captured_output(console)
 
         # Commands should be listed
-        commands = ['/help', '/status', '/quit', '/providers']
+        commands = ['/help', '/status', '/quit', '/model']
         found_commands = sum(1 for cmd in commands if cmd in output)
         assert found_commands >= 3  # At least some commands present
 
@@ -163,7 +163,7 @@ class TestHelpCommandsTable:
         output = get_captured_output(console)
 
         # Should show provider commands
-        assert '/providers' in output or '/brain' in output
+        assert '/model' in output or '/status' in output
         # Should not show unrelated commands (unless they're also provider-related)
 
 

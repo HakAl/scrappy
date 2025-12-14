@@ -1,189 +1,168 @@
 # LLM Providers
 
- ## Provider Configuration 
- **- src/providers/base.py**
+Scrappy uses LiteLLM Router to access multiple LLM providers through a unified interface.
 
-```  
-class ModelType(Enum):
-    """Classification of model training/tuning."""
-    BASE = "base"           # Raw pretrained, no instruction tuning
-    CHAT = "chat"           # Chat-tuned (conversational)
-    INSTRUCT = "instruct"   # Instruction-tuned (follows structured commands)
-    CODE = "code"           # Code-specialized
-    REASONING = "reasoning" # Chain-of-thought / reasoning specialized
-    UNKNOWN = "unknown"
-
-
-  @dataclass
-  class ModelInfo:
-      """Metadata about a specific model."""
-      id: str
-      model_type: ModelType
-      context_length: int
-      rpd: Optional[int] = None  # Requests per day
-      tpm: Optional[int] = None  # Tokens per minute
-      quality: str = "good"      # good, very_good, excellent
-      speed: str = "fast"        # fast, very_fast, moderate
-
-      @property
-      def is_instruction_tuned(self) -> bool:
-          """Check if model is instruction-tuned (best for JSON compliance)."""
-          return self.model_type == ModelType.INSTRUCT
-```
+## Architecture
 
 ```
-class LLMProvider(ABC):
-    # ... existing methods ...
-
-    @abstractmethod
-    def get_model_info(self, model_id: str) -> ModelInfo:
-        """Get detailed information about a specific model."""
-        pass
-
-    def get_instruction_tuned_models(self) -> list[str]:
-        """Get all instruction-tuned models from this provider."""
-        return [
-            model_id for model_id in self.available_models
-            if self.get_model_info(model_id).is_instruction_tuned
-        ]
+LiteLLMService
+    |
+    +-- LiteLLM Router
+    |       +-- Model Groups (fast/quality)
+    |       +-- Automatic Failover
+    |       +-- Rate Limit Handling
+    |
+    +-- Model Definitions (litellm_config.py)
 ```
 
-Then in providers:
+## Model Groups
 
-```
-# In groq_provider.py
-  MODELS = {
-      'gemma2-9b-it': {
-          'type': ModelType.INSTRUCT,  # NEW
-          'rpm': 30, 'rpd': 14400, ...
-      },
-      'llama-3.3-70b-versatile': {
-          'type': ModelType.CHAT,  # NEW
-          'rpm': 30, 'rpd': 1000, ...
-      },
-  }
-```
+Models are organized into two tiers with automatic selection based on task complexity:
 
-And orchestrator use:
+### FAST (speed priority)
+- 8B class models
+- High throughput, low latency
+- Best for quick tasks and high volume
 
-```
-def select_model_for_task(self, task_type: str) -> tuple[str, str]:
-    """Select best provider/model for task type."""
-    if task_type == "planning":
-        # Prefer instruction-tuned for JSON compliance
-        for provider in self.providers:
-            instruct_models = provider.get_instruction_tuned_models()
-            if instruct_models:
-                # Pick highest RPD instruction-tuned model
-                best = max(instruct_models, key=lambda m: provider.get_model_info(m).rpd or 0)
-                return provider.name, best
-```
+### QUALITY (reasoning priority)
+- 70B+ class models
+- Complex reasoning, larger context
+- Best for planning and analysis
 
-Benefits:
-  1. Automatic selection of instruction-tuned models for agent planning
-  2. Self-documenting model capabilities
-  3. Smarter fallback logic
-  4. Easy to extend with new model types
+## Available Providers
 
----
+| Provider | Environment Variable | Models |
+|----------|---------------------|--------|
+| **Cerebras** | `CEREBRAS_API_KEY` | llama3.1-8b, llama-3.3-70b |
+| **Groq** | `GROQ_API_KEY` | llama-3.1-8b-instant, llama-3.3-70b-versatile |
+| **Gemini** | `GEMINI_API_KEY` | gemini-2.5-flash, gemini-2.0-flash |
+| **SambaNova** | `SAMBANOVA_API_KEY` | Meta-Llama-3.1-8B-Instruct |
 
-### Native tool calling implementation -- tests/test_native_tool_calling.py
+## Configuration
 
-providers have supports_tool_calling() to check support
+Set API keys as environment variables:
 
-- Tool Schema Support in Base Provider
+```bash
+# Required (at least one)
+export CEREBRAS_API_KEY=your_key
+export GROQ_API_KEY=your_key
 
-```
-# src/providers/base.py
-  from dataclasses import dataclass
-  from typing import List, Dict, Any
-
-  @dataclass
-  class ToolCall:
-      """Structured tool call from LLM."""
-      id: str
-      name: str
-      arguments: Dict[str, Any]
-
-  @dataclass
-  class LLMResponse:
-      # ... existing fields ...
-      tool_calls: List[ToolCall] = None  # NEW
-
-  class LLMProvider(ABC):
-      def chat_with_tools(
-          self,
-          messages: list[dict],
-          tools: list[dict],  # OpenAI-compatible tool schemas
-          tool_choice: str = "auto",
-          **kwargs
-      ) -> LLMResponse:
-          """Chat with native tool calling support."""
-          pass
+# Optional
+export GEMINI_API_KEY=your_key
+export SAMBANOVA_API_KEY=your_key
 ```
 
-**- Provider implementations**
+Or use a `.env` file:
 
-```
-# src/providers/groq_provider.py
-  def chat_with_tools(self, messages, tools, tool_choice="auto", **kwargs):
-      response = self._client.chat.completions.create(
-          messages=messages,
-          tools=tools,
-          tool_choice=tool_choice,
-          **kwargs
-      )
-
-      tool_calls = []
-      if response.choices[0].message.tool_calls:
-          for tc in response.choices[0].message.tool_calls:
-              tool_calls.append(ToolCall(
-                  id=tc.id,
-                  name=tc.function.name,
-                  arguments=json.loads(tc.function.arguments)
-              ))
-
-      return LLMResponse(
-          content=response.choices[0].message.content or "",
-          tool_calls=tool_calls,
-          # ...
-      )
+```bash
+CEREBRAS_API_KEY=your_key
+GROQ_API_KEY=your_key
+GEMINI_API_KEY=your_key
+SAMBANOVA_API_KEY=your_key
 ```
 
-** Agent Core**
+## LLMResponse Format
 
-```
- # src/agent/core.py - SIMPLIFIED
-  def _think(self, state):
-      # Convert tool registry to OpenAI schema
-      tools = self.tool_registry.to_openai_schema()
+All providers return a standard response:
 
-      response = self.provider.chat_with_tools(
-          messages=state.messages,
-          tools=tools,
-          tool_choice="auto"
-      )
-
-      # No JSON parsing needed!
-      if response.tool_calls:
-          tool_call = response.tool_calls[0]
-          return AgentAction(
-              thought=response.content,
-              action=tool_call.name,
-              parameters=tool_call.arguments,
-              is_complete=False
-          )
-      else:
-          # Model decided not to call a tool
-          return AgentAction(
-              thought=response.content,
-              action="complete",
-              result=response.content,
-              is_complete=True
-          )
+```python
+@dataclass
+class LLMResponse:
+    content: str
+    model: str
+    provider: str
+    tokens_used: int
+    finish_reason: Optional[str] = None
+    tool_calls: Optional[List[ToolCall]] = None
 ```
 
+## Tool Calling
 
-  1. Implement chat_with_tools() in specific providers (e.g., groq_provider.py)
-  2. Update CodeAgent._think() to optionally use native tool calling
-  3. Add provider capability detection for graceful fallback
+Tool calling is supported through LiteLLM's native tool calling:
+
+```python
+response = service.chat_with_tools(
+    messages=messages,
+    tools=tool_definitions,
+    model_group="quality",
+)
+
+if response.tool_calls:
+    for tool_call in response.tool_calls:
+        print(f"Tool: {tool_call.name}")
+        print(f"Args: {tool_call.arguments}")
+```
+
+## Automatic Fallback
+
+LiteLLM Router handles failover automatically:
+
+1. **Within group**: If primary model fails, tries next model in same group
+2. **Escalation**: If context window exceeded in fast tier, escalates to quality
+3. **Rate limits**: Automatically rotates to available providers
+
+## Rate Limits
+
+See [RATE_LIMITS.md](RATE_LIMITS.md) for detailed rate limit information per provider.
+
+| Provider | Daily Quota | Best For |
+|----------|------------|----------|
+| Cerebras | 14,400 RPD | Fast tier, highest quota |
+| Groq | 7,000 RPD | Fast and quality tiers |
+| Gemini | varies | Quality tier, large context |
+| SambaNova | varies | Fast tier alternative |
+
+## Adding a New Provider
+
+1. Add model definition in `src/scrappy/orchestrator/litellm_config.py`:
+
+```python
+ModelDefinition(
+    model_id="newprovider/model-name",
+    provider="newprovider",
+    group="fast",  # or "quality"
+    context_length=8192,
+    rpd=10000,
+),
+```
+
+2. Ensure LiteLLM supports the provider (check [LiteLLM docs](https://docs.litellm.ai/docs/providers))
+
+3. Set the API key environment variable
+
+## Testing
+
+Use mock service for testing without API calls:
+
+```python
+from tests.helpers import create_mock_litellm_service
+
+mock_service = create_mock_litellm_service(
+    responses=["mocked response"]
+)
+orchestrator = AgentOrchestrator(litellm_service=mock_service)
+```
+
+## CLI Commands
+
+```bash
+# List configured models
+/models
+
+# Filter by tier
+/models fast
+/models quality
+
+# Filter by provider
+/models cerebras
+
+# Show current mode
+/model
+
+# Switch mode
+/model fast
+/model quality
+
+# Show status including providers
+/status
+```

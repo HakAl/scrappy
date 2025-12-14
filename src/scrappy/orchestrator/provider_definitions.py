@@ -2,40 +2,37 @@
 Single source of truth for provider definitions.
 
 This module centralizes all provider configuration in one place.
-Adding or removing a provider only requires updating the PROVIDERS dict below.
+Used for setup wizard display and status reporting.
+
+NOTE: Concrete provider classes have been removed in favor of LiteLLM integration.
+Routing is now handled by LiteLLM Router with model groups ("fast", "quality").
+See orchestrator/litellm_config.py for model group definitions.
 """
 
-from typing import Type, Dict, List, Optional
+from typing import Dict, List, Optional
 from dataclasses import dataclass, field
-
-from scrappy.providers.base import LLMProviderBase
-from scrappy.providers.groq_provider import GroqProvider
-from scrappy.providers.cerebras_provider import CerebrasProvider
-from scrappy.providers.gemini_provider import GeminiProvider
-from scrappy.providers.cohere_provider import CohereProvider
-from scrappy.providers.github_models_provider import GitHubModelsProvider
 
 
 @dataclass
 class ProviderDefinition:
-    """Complete provider definition - single source of truth."""
+    """Provider definition for display and configuration purposes."""
     quota: str
     description: str
     env_var: str
     console_url: str
-    provider_class: Type[LLMProviderBase]
     priority: int = 0
     supports_brain: bool = True
     task_types: List[str] = field(default_factory=list)
 
 
+# Provider metadata for setup wizard and status display
+# NOTE: Actual routing is handled by LiteLLM Router (see litellm_config.py)
 PROVIDERS: Dict[str, ProviderDefinition] = {
     'cerebras': ProviderDefinition(
         quota='14,400 RPD',
         description='highest daily quota',
         env_var='CEREBRAS_API_KEY',
         console_url='cloud.cerebras.ai',
-        provider_class=CerebrasProvider,
         priority=1,
         supports_brain=True,
         task_types=['planning', 'execution', 'quick', 'general'],
@@ -45,7 +42,6 @@ PROVIDERS: Dict[str, ProviderDefinition] = {
         description='fast and reliable',
         env_var='GROQ_API_KEY',
         console_url='console.groq.com/keys',
-        provider_class=GroqProvider,
         priority=2,
         supports_brain=True,
         task_types=['planning', 'execution', 'quick', 'general'],
@@ -55,30 +51,18 @@ PROVIDERS: Dict[str, ProviderDefinition] = {
         description='auto-fallback enabled',
         env_var='GEMINI_API_KEY',
         console_url='aistudio.google.com/apikey',
-        provider_class=GeminiProvider,
         priority=3,
         supports_brain=True,
         task_types=['planning', 'execution', 'quick', 'general'],
     ),
-    'github_models': ProviderDefinition(
-        quota='10K RPD',
-        description='general use only - not for agent/brain roles',
-        env_var='GITHUB_API_KEY',
-        console_url='github.com/settings/tokens',
-        provider_class=GitHubModelsProvider,
+    'sambanova': ProviderDefinition(
+        quota='varies',
+        description='high-speed inference',
+        env_var='SAMBANOVA_API_KEY',
+        console_url='cloud.sambanova.ai',
         priority=4,
-        supports_brain=False,
-        task_types=['general'],
-    ),
-    'cohere': ProviderDefinition(
-        quota='1,000/month',
-        description='limited quota - embeddings only',
-        env_var='COHERE_API_KEY',
-        console_url='dashboard.cohere.com/api-keys',
-        provider_class=CohereProvider,
-        priority=99,
-        supports_brain=False,
-        task_types=[],
+        supports_brain=True,
+        task_types=['planning', 'execution', 'quick', 'general'],
     ),
 }
 
@@ -102,13 +86,6 @@ def get_task_providers(task_type: str) -> List[str]:
     """Get providers for a task type, sorted by priority."""
     return [k for k in get_provider_priority()
             if task_type in PROVIDERS[k].task_types]
-
-
-def get_provider_class(name: str) -> Optional[Type[LLMProviderBase]]:
-    """Get provider class by name."""
-    if name in PROVIDERS:
-        return PROVIDERS[name].provider_class
-    return None
 
 
 def get_env_var(name: str) -> Optional[str]:

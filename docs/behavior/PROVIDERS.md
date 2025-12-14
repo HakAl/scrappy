@@ -1,42 +1,65 @@
 # Providers
 
-Providers are adapters for different LLM APIs. Each provider implements a common interface, allowing the orchestrator to swap between them transparently.
+LLM providers are accessed through LiteLLM Router, which provides unified access to multiple providers with automatic failover.
 
 ## Architecture
 
 ```
-src/providers/
-  base.py                   # BaseProvider, LLMResponse
-  cerebras_provider.py      # Cerebras API
-  groq_provider.py          # Groq API
-  gemini_provider.py        # Google Gemini API
-  github_models_provider.py # GitHub Models API
-  cohere_provider.py        # Cohere API
+src/scrappy/orchestrator/
+  litellm_service.py      # LiteLLMService - main interface
+  litellm_config.py       # Model definitions, groups
+  litellm_router.py       # Router initialization
+
+src/scrappy/providers/
+  base.py                 # LLMResponse, ToolCall, enums
 ```
 
-## Provider Protocol
+## LiteLLM Router
 
-All providers implement the base interface:
+All LLM calls go through LiteLLM Router which handles:
+- Provider abstraction
+- Automatic failover between providers
+- Rate limit handling
+- Unified response format
 
 ```python
-class BaseProvider:
-    name: str
-    models: List[str]
+from scrappy.orchestrator.litellm_service import LiteLLMService
 
-    def chat(
-        self,
-        messages: List[Dict],
-        model: Optional[str] = None,
-        temperature: float = 0.7,
-        max_tokens: int = 1024,
-    ) -> LLMResponse: ...
-
-    def is_available(self) -> bool: ...
+service = LiteLLMService()
+response = service.chat(
+    messages=[{"role": "user", "content": "Hello"}],
+    model_group="fast",  # or "quality"
+)
 ```
+
+## Model Groups
+
+Models are organized into two tiers:
+
+### FAST (speed priority)
+- 8B class models
+- High throughput, low latency
+- Best for quick tasks and high volume
+- Providers: Cerebras, Groq, SambaNova
+
+### QUALITY (reasoning priority)
+- 70B+ class models
+- Complex reasoning, larger context
+- Best for planning and analysis
+- Providers: Cerebras, Groq, Gemini
+
+## Available Providers
+
+| Provider | API | Models |
+|----------|-----|--------|
+| Cerebras | Cerebras Cloud | llama3.1-8b, llama-3.3-70b |
+| Groq | Groq Cloud | llama-3.1-8b-instant, llama-3.3-70b-versatile |
+| Gemini | Google AI | gemini-2.5-flash, gemini-2.0-flash |
+| SambaNova | SambaNova Cloud | Meta-Llama-3.1-8B-Instruct |
 
 ## LLMResponse
 
-Standard response format from all providers:
+Standard response format:
 
 ```python
 @dataclass
@@ -49,141 +72,61 @@ class LLMResponse:
     tool_calls: Optional[List[ToolCall]] = None
 ```
 
-## Available Providers
-
-| Provider | API | Tool Calling | Streaming |
-|----------|-----|--------------|-----------|
-| Cerebras | Cerebras Cloud | No | Yes |
-| Groq | Groq Cloud | Yes | Yes |
-| Gemini | Google AI | No | Yes |
-| GitHub Models | Azure OpenAI | No | Yes |
-| Cohere | Cohere API | Yes | Yes |
-
-## Tool Calling
-
-Providers supporting native tool calling implement additional methods:
-
-```python
-class ToolCapableProvider(BaseProvider):
-    def chat_with_tools(
-        self,
-        messages: List[Dict],
-        tools: List[ToolDefinition],
-        model: Optional[str] = None,
-    ) -> LLMResponse: ...
-```
-
-Currently supported:
-- `groq_provider.py`
-- `cohere_provider.py`
-
-## Provider Registration
-
-Providers are registered with the `ProviderRegistry`:
-
-```python
-from src.providers import ProviderRegistry
-
-registry = ProviderRegistry()
-registry.register("cerebras", CerebrasProvider(api_key=key))
-registry.register("groq", GroqProvider(api_key=key))
-
-# Get provider by name
-provider = registry.get("cerebras")
-
-# List all providers
-providers = registry.list_providers()
-```
-
 ## Configuration
 
-Providers are configured via environment variables or config files:
+Providers are configured via environment variables:
 
 ```bash
-# Environment variables
+# Required (at least one)
 CEREBRAS_API_KEY=...
 GROQ_API_KEY=...
+
+# Optional
 GEMINI_API_KEY=...
-GITHUB_TOKEN=...
-COHERE_API_KEY=...
+SAMBANOVA_API_KEY=...
 ```
 
-```json
-// .scrappy/config.json
-{
-  "providers": {
-    "cerebras": {"enabled": true},
-    "groq": {"enabled": true, "default_model": "llama-3.1-70b-versatile"}
-  }
-}
-```
+## Automatic Fallback
 
-## Rate Limiting
+LiteLLM Router handles failover automatically:
 
-Each provider tracks its own rate limits:
+1. Primary model in group fails -> try next model in group
+2. Context window exceeded -> escalate to quality tier
+3. Rate limit hit -> try alternate provider
 
 ```python
-provider = registry.get("groq")
-
-# Check if rate limited
-if provider.is_rate_limited():
-    # Use fallback provider
-    provider = registry.get("cerebras")
+# Example: fast tier with automatic escalation
+response = service.chat(
+    messages=messages,
+    model_group="fast",
+    # If context too large, automatically uses quality tier
+)
 ```
 
-The orchestrator handles rate limit rotation automatically.
+## Adding Models
 
-## Adding a New Provider
-
-1. Create a new file in `src/providers/`
-2. Inherit from `BaseProvider`
-3. Implement required methods
-4. Register with the `ProviderRegistry`
+Models are defined in `litellm_config.py`:
 
 ```python
-class MyProvider(BaseProvider):
-    name = "my_provider"
-    models = ["model-a", "model-b"]
-
-    def __init__(self, api_key: str):
-        self.api_key = api_key
-        self.client = MyAPIClient(api_key)
-
-    def chat(self, messages, model=None, **kwargs) -> LLMResponse:
-        response = self.client.generate(messages, model or self.models[0])
-        return LLMResponse(
-            content=response.text,
-            model=model,
-            provider=self.name,
-            tokens_used=response.usage.total_tokens,
-        )
-
-    def is_available(self) -> bool:
-        return bool(self.api_key)
+MODEL_DEFINITIONS = [
+    ModelDefinition(
+        model_id="cerebras/llama3.1-8b",
+        provider="cerebras",
+        group="fast",
+        context_length=8192,
+        rpd=14400,
+    ),
+    # ... more models
+]
 ```
 
-## Testing Providers
+## Testing
 
-Use mock providers for testing:
+Use mock service for testing:
 
 ```python
-class MockProvider(BaseProvider):
-    name = "mock"
-    models = ["mock-model"]
+from tests.helpers import create_mock_litellm_service
 
-    def __init__(self, responses: List[str]):
-        self.responses = responses
-        self.call_count = 0
-
-    def chat(self, messages, **kwargs) -> LLMResponse:
-        response = self.responses[self.call_count % len(self.responses)]
-        self.call_count += 1
-        return LLMResponse(
-            content=response,
-            model="mock-model",
-            provider="mock",
-            tokens_used=10,
-        )
+mock_service = create_mock_litellm_service(responses=["test response"])
+orchestrator = AgentOrchestrator(litellm_service=mock_service)
 ```
-
-See `tests/helpers.py` for test utilities.

@@ -50,9 +50,7 @@ def show_help_table(
             ('/explore [path]', 'Explore codebase'),
         ],
         'Provider Management': [
-            ('/providers', 'List all providers'),
-            ('/brain <name>', 'Switch brain provider'),
-            ('/models [prov]', 'List available models'),
+            ('/models [filter]', 'List available models'),
             ('/model [mode]', 'Toggle quality/fast mode'),
             ('/status', 'Show system status'),
             ('/usage', 'Show usage statistics'),
@@ -145,11 +143,15 @@ def show_status_rich(
             return f"  {indicator} {model_id}"
         return f"  [--] {model_id}"
 
+    # Get unique configured providers
+    configured_providers = sorted(set(m.get('provider', '') for m in configured_models))
+
     # Build content sections
     lines = [
         f"Mode: {mode_str}",
         f"Tasks Completed: {tasks}",
         f"Session Duration: {str(duration).split('.')[0]}",
+        f"Providers: {', '.join(configured_providers) if configured_providers else 'None configured'}",
         "",
         "Model Groups:",
     ]

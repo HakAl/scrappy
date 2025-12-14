@@ -56,14 +56,14 @@ ExecutionResult
 | **CODE_GENERATION** | Writing/modifying code | Fast or Quality | Yes | `implement login function` |
 | **CONVERSATION** | Simple interactions | None | No | `hello`, `thanks` |
 
-## Provider Selection
+## Model Group Selection
 
 ### Automatic Selection Based on Complexity
 
-The classifier suggests a provider hint based on task complexity:
+The classifier suggests a model group based on task complexity:
 
 ```python
-def _suggest_provider(task_type, complexity):
+def _suggest_model_group(task_type, complexity):
     if task_type == TaskType.DIRECT_COMMAND:
         return None  # No LLM needed
 
@@ -80,26 +80,26 @@ def _suggest_provider(task_type, complexity):
             return "fast"     # 8B model for simpler code
 ```
 
-### Provider Resolution
+### Model Group Resolution
 
-The router resolves hints to actual providers via the orchestrator's `provider_selector`:
+The router resolves hints to model groups via LiteLLM Router:
 
-| Hint | Selection Type | Model Category |
-|------|----------------|----------------|
-| `"fast"` | ModelSelectionType.FAST | 8B models |
-| `"quality"` | ModelSelectionType.QUALITY | 70B models |
+| Hint | Model Group | Model Class |
+|------|-------------|-------------|
+| `"fast"` | fast | 8B models (Cerebras, Groq, SambaNova) |
+| `"quality"` | quality | 70B+ models (Cerebras, Groq, Gemini) |
 
-Note: The actual provider selection is handled by the orchestrator's provider selector, which considers availability and rate limits.
+LiteLLM Router handles provider selection automatically, considering availability and rate limits.
 
 ```python
-def _resolve_provider(hint):
+def _resolve_model_group(hint):
     if hint == "fast":
-        return ("cerebras", None)  # Uses default 8B model
+        return "fast"  # LiteLLM selects best available 8B model
 
     if hint == "quality":
-        return ("cerebras", "llama-3.3-70b")  # Uses 70B model
+        return "quality"  # LiteLLM selects best available 70B+ model
 
-    return (None, None)
+    return None
 ```
 
 ### Override Support
@@ -488,7 +488,7 @@ result = router.route("git status")
 ```python
 result = router.route("explain how the auth module works")
 # → ResearchExecutor
-# → Uses Cerebras (fast)
+# → Uses fast tier (8B model)
 # → Context-aware response
 # → No approval needed
 ```
@@ -499,19 +499,19 @@ result = router.route("explain how the auth module works")
 result = router.route("implement OAuth2 authentication with refresh tokens")
 # → AgentExecutor
 # → Complexity: 9/10
-# → Uses Gemini 70B (quality)
+# → Uses quality tier (70B+ model)
 # → Requires human approval
 ```
 
-### Provider Override
+### Model Group Override
 
 ```python
-# Force quality provider for important task
+# Force quality tier for important task
 result = router.route(
     "fix critical security bug",
-    provider="quality"
+    model_group="quality"
 )
-# → Uses 70B model regardless of complexity
+# → Uses 70B+ model regardless of complexity
 ```
 
 ## Metadata and Debugging
@@ -527,10 +527,9 @@ print(result.metadata["classification"])
 #   "confidence": 0.95,
 #   "complexity": 8,
 #   "reasoning": "Code generation task with high complexity",
-#   "suggested_provider": "quality",
-#   "override_provider": None,
-#   "resolved_provider": "gemini",
-#   "resolved_model": "gemini-pro"
+#   "suggested_model_group": "quality",
+#   "override_model_group": None,
+#   "resolved_model_group": "quality"
 # }
 ```
 

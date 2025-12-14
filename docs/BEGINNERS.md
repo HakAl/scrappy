@@ -1,5 +1,5 @@
 # Getting Started: The Complete Beginner's Guide
-
+                           
 Welcome! We're excited to have you. This guide is for anyone who is new to command-line tools or setting up development software. We'll walk you through every single step—no experience required.
 
 Our goal is to get your computer ready so you can use the main **[5-Minute Quickstart](QUICKSTART.md)**. By the end of this guide, you will have:

@@ -104,59 +104,6 @@ class TestDisplayIOInjection:
         output = self.io.get_output()
         assert "Session Duration" in output
 
-    def test_list_providers_accepts_io_parameter(self):
-        """list_providers() should accept an io parameter."""
-        # Mock provider info
-        self.orchestrator.providers = MagicMock()
-        self.orchestrator.providers.get_provider_info.return_value = {
-            'openai': {
-                'available': True,
-                'default_model': 'gpt-4',
-                'models': ['gpt-4', 'gpt-3.5-turbo'],
-                'limits': MagicMock(
-                    requests_per_day=1000,
-                    tokens_per_minute=60000,
-                    tokens_per_day=1000000
-                )
-            }
-        }
-
-        self.display.list_providers()
-
-        output = self.io.get_output()
-        assert "Available Providers" in output
-
-
-
-
-    def test_switch_brain_accepts_io_parameter(self):
-        """switch_brain() should use injected io from constructor."""
-        io = MockIO()
-        # Create a new display instance with the test io
-        from scrappy.cli.display import CLIDisplay
-        display = CLIDisplay(self.orchestrator, self.session_start, io)
-
-        display.switch_brain("")
-
-        output = io.get_output()
-        assert "Current brain" in output or "Usage" in output
-
-    def test_switch_brain_no_args_shows_current(self):
-        """switch_brain() with no args should show current brain through io."""
-        io = MockIO()
-        # Create a new display instance with the test io
-        from scrappy.cli.display import CLIDisplay
-        display = CLIDisplay(self.orchestrator, self.session_start, io)
-        self.orchestrator.brain = 'anthropic'
-
-        display.switch_brain("")
-
-        output = io.get_output()
-        assert "Current brain" in output
-        assert "anthropic" in output
-
-
-
     def test_show_usage_accepts_io_parameter(self):
         """show_usage() should use injected io from constructor."""
         io = MockIO()
@@ -223,24 +170,17 @@ class TestDisplayIOInjection:
         assert "Models" in output
 
     def test_list_models_all_providers(self):
-        """list_models() with no args should list all providers through io."""
+        """list_models() with no args should list configured models through io."""
         io = MockIO()
         # Create a new display instance with the test io
         from scrappy.cli.display import CLIDisplay
         display = CLIDisplay(self.orchestrator, self.session_start, io)
 
-        # Mock providers
-        mock_provider = MagicMock()
-        mock_provider.available_models = ['model1', 'model2']
-        mock_provider.default_model = 'model1'
-        self.orchestrator.providers = MagicMock()
-        self.orchestrator.providers.list_available.return_value = ['openai']
-        self.orchestrator.providers.get.return_value = mock_provider
-
         display.list_models("")
 
         output = io.get_output()
-        assert "All Available Models" in output
+        # New implementation shows "Configured Models" grouped by fast/quality
+        assert "Configured Models" in output or "FAST" in output or "QUALITY" in output
 
     def test_list_models_specific_provider(self):
         """list_models() with provider name should list that provider through io."""
@@ -249,37 +189,23 @@ class TestDisplayIOInjection:
         from scrappy.cli.display import CLIDisplay
         display = CLIDisplay(self.orchestrator, self.session_start, io)
 
-        mock_provider = MagicMock()
-        mock_provider.available_models = ['model1', 'model2']
-        mock_provider.default_model = 'model1'
-        self.orchestrator.providers = MagicMock()
-        self.orchestrator.providers.list_available.return_value = ['openai']
-        self.orchestrator.providers.get.return_value = mock_provider
-
-        display.list_models("openai")
+        display.list_models("cerebras")
 
         output = io.get_output()
-        assert "OPENAI Models" in output or "openai" in output.lower()
+        assert "CEREBRAS" in output or "cerebras" in output.lower()
 
 
-    def test_list_models_default_indicator(self):
-        """list_models() should indicate default model through io."""
+    def test_list_models_by_group(self):
+        """list_models() with group name should filter by group."""
         io = MockIO()
         # Create a new display instance with the test io
         from scrappy.cli.display import CLIDisplay
         display = CLIDisplay(self.orchestrator, self.session_start, io)
 
-        mock_provider = MagicMock()
-        mock_provider.available_models = ['model1', 'model2']
-        mock_provider.default_model = 'model1'
-        self.orchestrator.providers = MagicMock()
-        self.orchestrator.providers.list_available.return_value = ['cerebras']
-        self.orchestrator.providers.get.return_value = mock_provider
-
-        display.list_models("cerebras")
+        display.list_models("fast")
 
         output = io.get_output()
-        assert "default" in output.lower()
+        assert "FAST" in output
 
 
 # =============================================================================
@@ -599,32 +525,6 @@ class TestDisplayTasksSmartDefaultIO:
         params = sig.parameters
 
         assert 'io' not in params, "show_status should NOT have an 'io' parameter (uses self.io)"
-
-    def test_display_list_providers_uses_constructor_io(self):
-        """CLIDisplay.list_providers should use constructor-injected IO (no io parameter)."""
-        orchestrator = ConfigurableTestOrchestrator()
-        io = MockIO()
-        from scrappy.cli.display import CLIDisplay
-        display = CLIDisplay(orchestrator, datetime.now(), io)
-
-        import inspect
-        sig = inspect.signature(display.list_providers)
-        params = sig.parameters
-
-        assert 'io' not in params, "list_providers should NOT have an 'io' parameter (uses self.io)"
-
-    def test_display_switch_brain_uses_constructor_io(self):
-        """CLIDisplay.switch_brain should use constructor-injected IO (no io parameter)."""
-        orchestrator = ConfigurableTestOrchestrator()
-        io = MockIO()
-        from scrappy.cli.display import CLIDisplay
-        display = CLIDisplay(orchestrator, datetime.now(), io)
-
-        import inspect
-        sig = inspect.signature(display.switch_brain)
-        params = sig.parameters
-
-        assert 'io' not in params, "switch_brain should NOT have an 'io' parameter (uses self.io)"
 
     def test_display_show_usage_uses_constructor_io(self):
         """CLIDisplay.show_usage should use constructor-injected IO (no io parameter)."""

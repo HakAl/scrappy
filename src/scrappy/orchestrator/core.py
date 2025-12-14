@@ -31,7 +31,6 @@ from .delegation import DelegationManager
 from .prompt_augmenter import PromptAugmenter
 from .batch_scheduler import BatchScheduler
 from .background import BackgroundTaskManager
-from .registration import ProviderRegistrar
 from .status_reporter import ProviderStatusReporter
 from .usage_reporter import UsageReporter
 from .context_coordinator import ContextCoordinator
@@ -210,9 +209,14 @@ class AgentOrchestrator:
         return self
 
     def _auto_register_providers(self):
-        """Attempt to register all known providers."""
-        registrar = ProviderRegistrar(self.registry, self.output)
-        registrar.auto_register_all()
+        """
+        Auto-register providers (no-op after LiteLLM migration).
+
+        NOTE: Provider registration is no longer needed. LiteLLM Router handles
+        all provider routing internally based on configured API keys.
+        This method is kept for backward compatibility with initialize() interface.
+        """
+        pass
 
     def _setup_brain(self, preferred_provider: Optional[str] = None):
         """Set up the orchestrator's reasoning brain."""
