@@ -1,0 +1,885 @@
+/completions
+
+
+Input Params
+Common Params
+LiteLLM accepts and translates the OpenAI Chat Completion params across all providers.
+
+Usage
+import litellm
+
+# set env variables
+os.environ["OPENAI_API_KEY"] = "your-openai-key"
+
+## SET MAX TOKENS - via completion() 
+response = litellm.completion(
+            model="gpt-3.5-turbo",
+            messages=[{ "content": "Hello, how are you?","role": "user"}],
+            max_tokens=10
+        )
+
+print(response)
+
+Translated OpenAI params
+Use this function to get an up-to-date list of supported openai params for any model + provider.
+
+from litellm import get_supported_openai_params
+
+response = get_supported_openai_params(model="anthropic.claude-3", custom_llm_provider="bedrock")
+
+print(response) # ["max_tokens", "tools", "tool_choice", "stream"]
+
+
+This is a list of openai params we translate across providers.
+
+Use litellm.get_supported_openai_params() for an updated list of params for each model + provider
+
+Provider	temperature	max_completion_tokens	max_tokens	top_p	stream	stream_options	stop	n	presence_penalty	frequency_penalty	functions	function_call	logit_bias	user	response_format	seed	tools	tool_choice	logprobs	top_logprobs	extra_headers
+Anthropic	✅	✅	✅	✅	✅	✅	✅							✅	✅		✅	✅			✅
+OpenAI	✅	✅	✅	✅	✅	✅	✅	✅	✅	✅	✅	✅	✅	✅	✅	✅	✅	✅	✅	✅	✅
+Azure OpenAI	✅	✅	✅	✅	✅	✅	✅	✅	✅	✅	✅	✅	✅	✅	✅	✅	✅	✅	✅	✅	✅
+xAI	✅		✅	✅	✅	✅	✅	✅	✅	✅			✅	✅	✅	✅	✅	✅	✅	✅	
+Replicate	✅	✅	✅	✅	✅	✅															
+Anyscale	✅	✅	✅	✅	✅	✅															
+Cohere	✅	✅	✅	✅	✅	✅	✅	✅													
+Huggingface	✅	✅	✅	✅	✅	✅	✅														
+Openrouter	✅	✅	✅	✅	✅	✅	✅	✅	✅	✅	✅					✅	✅				
+AI21	✅	✅	✅	✅	✅	✅	✅	✅													
+VertexAI	✅	✅	✅		✅	✅									✅	✅					
+Bedrock	✅	✅	✅	✅	✅	✅									✅ (model dependent)						
+Sagemaker	✅	✅	✅	✅	✅	✅	✅														
+TogetherAI	✅	✅	✅	✅	✅	✅					✅				✅		✅	✅			
+Sambanova	✅	✅	✅	✅	✅	✅	✅								✅		✅	✅			
+AlephAlpha	✅	✅	✅	✅	✅	✅	✅														
+NLP Cloud	✅	✅	✅	✅	✅	✅															
+Petals	✅	✅		✅	✅																
+Ollama	✅	✅	✅	✅	✅	✅		✅					✅				✅				
+Databricks	✅	✅	✅	✅	✅	✅															
+ClarifAI	✅	✅	✅		✅	✅															
+Github	✅	✅	✅	✅	✅	✅	✅	✅	✅	✅	✅				✅	✅ (model dependent)	✅ (model dependent)				
+Novita AI	✅	✅		✅	✅	✅	✅	✅	✅	✅			✅								
+Bytez	✅	✅		✅	✅			✅													
+OVHCloud AI Endpoints	✅		✅	✅	✅	✅	✅								✅	✅	✅	✅	✅	✅	
+note
+By default, LiteLLM raises an exception if the openai param being passed in isn't supported.
+
+To drop the param instead, set litellm.drop_params = True or completion(..drop_params=True).
+
+This ONLY DROPS UNSUPPORTED OPENAI PARAMS.
+
+LiteLLM assumes any non-openai param is provider specific and passes it in as a kwarg in the request body
+
+Input Params
+def completion(
+    model: str,
+    messages: List = [],
+    # Optional OpenAI params
+    timeout: Optional[Union[float, int]] = None,
+    temperature: Optional[float] = None,
+    top_p: Optional[float] = None,
+    n: Optional[int] = None,
+    stream: Optional[bool] = None,
+    stream_options: Optional[dict] = None,
+    stop=None,
+    max_completion_tokens: Optional[int] = None,
+    max_tokens: Optional[int] = None,
+    presence_penalty: Optional[float] = None,
+    frequency_penalty: Optional[float] = None,
+    logit_bias: Optional[dict] = None,
+    user: Optional[str] = None,
+    # openai v1.0+ new params
+    response_format: Optional[dict] = None,
+    seed: Optional[int] = None,
+    tools: Optional[List] = None,
+    tool_choice: Optional[str] = None,
+    parallel_tool_calls: Optional[bool] = None,
+    logprobs: Optional[bool] = None,
+    top_logprobs: Optional[int] = None,
+    safety_identifier: Optional[str] = None,
+    deployment_id=None,
+    # soon to be deprecated params by OpenAI
+    functions: Optional[List] = None,
+    function_call: Optional[str] = None,
+    # set api_base, api_version, api_key
+    base_url: Optional[str] = None,
+    api_version: Optional[str] = None,
+    api_key: Optional[str] = None,
+    model_list: Optional[list] = None,  # pass in a list of api_base,keys, etc.
+    # Optional liteLLM function params
+    **kwargs,
+
+) -> ModelResponse:
+
+Required Fields
+model: string - ID of the model to use. Refer to the model endpoint compatibility table for details on which models work with the Chat API.
+
+messages: array - A list of messages comprising the conversation so far.
+
+Properties of messages
+Note - Each message in the array contains the following properties:
+
+role: string - The role of the message's author. Roles can be: system, user, assistant, function or tool.
+
+content: string or list[dict] or null - The contents of the message. It is required for all messages, but may be null for assistant messages with function calls.
+
+name: string (optional) - The name of the author of the message. It is required if the role is "function". The name should match the name of the function represented in the content. It can contain characters (a-z, A-Z, 0-9), and underscores, with a maximum length of 64 characters.
+
+function_call: object (optional) - The name and arguments of a function that should be called, as generated by the model.
+
+tool_call_id: str (optional) - Tool call that this message is responding to.
+
+See All Message Values
+
+Optional Fields
+temperature: number or null (optional) - The sampling temperature to be used, between 0 and 2. Higher values like 0.8 produce more random outputs, while lower values like 0.2 make outputs more focused and deterministic.
+
+top_p: number or null (optional) - An alternative to sampling with temperature. It instructs the model to consider the results of the tokens with top_p probability. For example, 0.1 means only the tokens comprising the top 10% probability mass are considered.
+
+n: integer or null (optional) - The number of chat completion choices to generate for each input message.
+
+stream: boolean or null (optional) - If set to true, it sends partial message deltas. Tokens will be sent as they become available, with the stream terminated by a [DONE] message.
+
+stream_options dict or null (optional) - Options for streaming response. Only set this when you set stream: true
+
+include_usage boolean (optional) - If set, an additional chunk will be streamed before the data: [DONE] message. The usage field on this chunk shows the token usage statistics for the entire request, and the choices field will always be an empty array. All other chunks will also include a usage field, but with a null value.
+stop: string/ array/ null (optional) - Up to 4 sequences where the API will stop generating further tokens.
+
+max_completion_tokens: integer (optional) - An upper bound for the number of tokens that can be generated for a completion, including visible output tokens and reasoning tokens.
+
+max_tokens: integer (optional) - The maximum number of tokens to generate in the chat completion.
+
+presence_penalty: number or null (optional) - It is used to penalize new tokens based on their existence in the text so far.
+
+response_format: object (optional) - An object specifying the format that the model must output.
+
+Setting to { "type": "json_object" } enables JSON mode, which guarantees the message the model generates is valid JSON.
+
+Important: when using JSON mode, you must also instruct the model to produce JSON yourself via a system or user message. Without this, the model may generate an unending stream of whitespace until the generation reaches the token limit, resulting in a long-running and seemingly "stuck" request. Also note that the message content may be partially cut off if finish_reason="length", which indicates the generation exceeded max_tokens or the conversation exceeded the max context length.
+
+seed: integer or null (optional) - This feature is in Beta. If specified, our system will make a best effort to sample deterministically, such that repeated requests with the same seed and parameters should return the same result. Determinism is not guaranteed, and you should refer to the system_fingerprint response parameter to monitor changes in the backend.
+
+tools: array (optional) - A list of tools the model may call. Use this to provide a list of functions the model may generate JSON inputs for.
+
+type: string - The type of the tool. You can set this to "function" or "mcp" (matching the /responses schema) to call LiteLLM-registered MCP servers directly from /chat/completions.
+
+function: object - Required for function tools.
+
+tool_choice: string or object (optional) - Controls which (if any) function is called by the model. none means the model will not call a function and instead generates a message. auto means the model can pick between generating a message or calling a function. Specifying a particular function via {"type": "function", "function": {"name": "my_function"}} forces the model to call that function.
+
+none is the default when no functions are present. auto is the default if functions are present.
+parallel_tool_calls: boolean (optional) - Whether to enable parallel function calling during tool use. OpenAI default is true.
+
+frequency_penalty: number or null (optional) - It is used to penalize new tokens based on their frequency in the text so far.
+
+logit_bias: map (optional) - Used to modify the probability of specific tokens appearing in the completion.
+
+user: string (optional) - A unique identifier representing your end-user. This can help OpenAI to monitor and detect abuse.
+
+timeout: int (optional) - Timeout in seconds for completion requests (Defaults to 600 seconds)
+
+logprobs: * bool (optional)* - Whether to return log probabilities of the output tokens or not. If true returns the log probabilities of each output token returned in the content of message
+
+top_logprobs: int (optional) - An integer between 0 and 5 specifying the number of most likely tokens to return at each token position, each with an associated log probability. logprobs must be set to true if this parameter is used.
+
+safety_identifier: string (optional) - A unique identifier for tracking and managing safety-related requests. This parameter helps with safety monitoring and compliance tracking.
+
+headers: dict (optional) - A dictionary of headers to be sent with the request.
+
+extra_headers: dict (optional) - Alternative to headers, used to send extra headers in LLM API request.
+
+Deprecated Params
+functions: array - A list of functions that the model may use to generate JSON inputs. Each function should have the following properties:
+
+name: string - The name of the function to be called. It should contain a-z, A-Z, 0-9, underscores and dashes, with a maximum length of 64 characters.
+
+description: string (optional) - A description explaining what the function does. It helps the model to decide when and how to call the function.
+
+parameters: object - The parameters that the function accepts, described as a JSON Schema object.
+
+function_call: string or object (optional) - Controls how the model responds to function calls.
+
+litellm-specific params
+api_base: string (optional) - The api endpoint you want to call the model with
+
+api_version: string (optional) - (Azure-specific) the api version for the call
+
+num_retries: int (optional) - The number of times to retry the API call if an APIError, TimeoutError or ServiceUnavailableError occurs
+
+context_window_fallback_dict: dict (optional) - A mapping of model to use if call fails due to context window error
+
+fallbacks: list (optional) - A list of model names + params to be used, in case the initial call fails
+
+metadata: dict (optional) - Any additional data you want to be logged when the call is made (sent to logging integrations, eg. promptlayer and accessible via custom callback function)
+
+CUSTOM MODEL COST
+
+input_cost_per_token: float (optional) - The cost per input token for the completion call
+
+output_cost_per_token: float (optional) - The cost per output token for the completion call
+
+CUSTOM PROMPT TEMPLATE (See prompt formatting for more info)
+
+initial_prompt_value: string (optional) - Initial string applied at the start of the input messages
+
+roles: dict (optional) - Dictionary specifying how to format the prompt based on the role + message passed in via messages.
+
+final_prompt_value: string (optional) - Final string applied at the end of the input messages
+
+bos_token: string (optional) - Initial string applied at the start of a sequence
+
+eos_token: string (optional) - Initial string applied at the end of a sequence
+
+hf_model_name: string (optional) - [Sagemaker Only] The corresponding huggingface name of the model, used to pull the right chat template for the model.
+
+
+---
+
+/responses
+
+/responses
+LiteLLM provides a BETA endpoint in the spec of OpenAI's /responses API
+
+Requests to /chat/completions may be bridged here automatically when the provider lacks support for that endpoint. The model’s default mode determines how bridging works.(see model_prices_and_context_window)
+
+Feature	Supported	Notes
+Cost Tracking	✅	Works with all supported models
+Logging	✅	Works across all integrations
+End-user Tracking	✅	
+Streaming	✅	
+Image Generation Streaming	✅	Progressive image generation with partial images (1-3)
+Fallbacks	✅	Works between supported models
+Loadbalancing	✅	Works between supported models
+Guardrails	✅	Applies to input and output text (non-streaming only)
+Supported operations	Create a response, Get a response, Delete a response	
+Supported LiteLLM Versions	1.63.8+	
+Supported LLM providers	All LiteLLM supported providers	openai, anthropic, bedrock, vertex_ai, gemini, azure, azure_ai etc.
+Usage
+LiteLLM Python SDK
+OpenAI
+Anthropic
+Vertex AI
+AWS Bedrock
+Google AI Studio
+Non-streaming
+OpenAI Non-streaming Response
+import litellm
+
+# Non-streaming response
+response = litellm.responses(
+    model="openai/o1-pro",
+    input="Tell me a three sentence bedtime story about a unicorn.",
+    max_output_tokens=100
+)
+
+print(response)
+
+
+Response Format (OpenAI Responses API Format)
+{
+    "id": "resp_abc123",
+    "object": "response",
+    "created_at": 1734366691,
+    "status": "completed",
+    "model": "o1-pro-2025-01-30",
+    "output": [
+        {
+            "type": "message",
+            "id": "msg_abc123",
+            "status": "completed",
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "output_text",
+                    "text": "Once upon a time, a little unicorn named Stardust lived in a magical meadow where flowers sang lullabies. One night, she discovered that her horn could paint dreams across the sky, and she spent the evening creating the most beautiful aurora for all the forest creatures to enjoy. As the animals drifted off to sleep beneath her shimmering lights, Stardust curled up on a cloud of moonbeams, happy to have shared her magic with her friends.",
+                    "annotations": []
+                }
+            ]
+        }
+    ],
+    "usage": {
+        "input_tokens": 18,
+        "output_tokens": 98,
+        "total_tokens": 116
+    }
+}
+
+
+Streaming
+OpenAI Streaming Response
+import litellm
+
+# Streaming response
+response = litellm.responses(
+    model="openai/o1-pro",
+    input="Tell me a three sentence bedtime story about a unicorn.",
+    stream=True
+)
+
+for event in response:
+    print(event)
+
+
+Image Generation with Streaming
+OpenAI Streaming Image Generation
+import litellm
+import base64
+
+# Streaming image generation with partial images
+stream = litellm.responses(
+    model="gpt-4.1",  # Use an actual image generation model
+    input="Generate a gorgeous image of a river made of white owl feathers",
+    stream=True,
+    tools=[{"type": "image_generation", "partial_images": 2}],
+
+)
+
+for event in stream:
+    if event.type == "response.image_generation_call.partial_image":
+        idx = event.partial_image_index
+        image_base64 = event.partial_image_b64
+        image_bytes = base64.b64decode(image_base64)
+        with open(f"river{idx}.png", "wb") as f:
+            f.write(image_bytes)
+
+
+Image Generation (Non-streaming)
+Image generation is supported for models that generate images. Generated images are returned in the output array with type: "image_generation_call".
+
+Gemini (Google AI Studio):
+
+Gemini Image Generation
+import litellm
+import base64
+
+# Gemini image generation models don't require tools parameter
+response = litellm.responses(
+    model="gemini/gemini-2.5-flash-image",
+    input="Generate a cute cat playing with yarn"
+)
+
+# Access generated images from output
+for item in response.output:
+    if item.type == "image_generation_call":
+        # item.result contains pure base64 (no data: prefix)
+        image_bytes = base64.b64decode(item.result)
+
+        # Save the image
+        with open(f"generated_{item.id}.png", "wb") as f:
+            f.write(image_bytes)
+
+print(f"Image saved: generated_{response.output[0].id}.png")
+
+
+OpenAI:
+
+OpenAI Image Generation
+import litellm
+import base64
+
+# OpenAI models require tools parameter for image generation
+response = litellm.responses(
+    model="openai/gpt-4o",
+    input="Generate a futuristic city at sunset",
+    tools=[{"type": "image_generation"}]
+)
+
+# Access generated images from output
+for item in response.output:
+    if item.type == "image_generation_call":
+        image_bytes = base64.b64decode(item.result)
+        with open(f"generated_{item.id}.png", "wb") as f:
+            f.write(image_bytes)
+
+
+Response Format:
+
+When image generation is successful, the response contains:
+
+{
+  "id": "resp_abc123",
+  "status": "completed",
+  "output": [
+    {
+      "type": "image_generation_call",
+      "id": "resp_abc123_img_0",
+      "status": "completed",
+      "result": "iVBORw0KGgo..."  // Pure base64 string (no data: prefix)
+    }
+  ]
+}
+
+Supported Models:
+
+Provider	Models	Requires tools Parameter
+Google AI Studio	gemini/gemini-2.5-flash-image	❌ No
+Vertex AI	vertex_ai/gemini-2.5-flash-image-preview	❌ No
+OpenAI	gpt-4o, gpt-4o-mini, gpt-4.1, gpt-4.1-mini, gpt-4.1-nano, o3	✅ Yes
+AWS Bedrock	Stability AI, Amazon Nova Canvas models	Model-specific
+Fal AI	Various image generation models	Check model docs
+Note: The result field contains pure base64-encoded image data without the data:image/png;base64, prefix. You must decode it with base64.b64decode() before saving.
+
+GET a Response
+Get Response by ID
+import litellm
+
+# First, create a response
+response = litellm.responses(
+    model="openai/o1-pro",
+    input="Tell me a three sentence bedtime story about a unicorn.",
+    max_output_tokens=100
+)
+
+# Get the response ID
+response_id = response.id
+
+# Retrieve the response by ID
+retrieved_response = litellm.get_responses(
+    response_id=response_id
+)
+
+print(retrieved_response)
+
+# For async usage
+# retrieved_response = await litellm.aget_responses(response_id=response_id)
+
+
+CANCEL a Response
+You can cancel an in-progress response (if supported by the provider):
+
+Cancel Response by ID
+import litellm
+
+# First, create a response
+response = litellm.responses(
+    model="openai/o1-pro",
+    input="Tell me a three sentence bedtime story about a unicorn.",
+    max_output_tokens=100
+)
+
+# Get the response ID
+response_id = response.id
+
+# Cancel the response by ID
+cancel_response = litellm.cancel_responses(
+    response_id=response_id
+)
+
+print(cancel_response)
+
+# For async usage
+# cancel_response = await litellm.acancel_responses(response_id=response_id)
+
+
+REST API:
+
+curl -X POST http://localhost:4000/v1/responses/response_id/cancel \
+    -H "Authorization: Bearer sk-1234"
+
+This will attempt to cancel the in-progress response with the given ID. Note: Not all providers support response cancellation. If unsupported, an error will be raised.
+
+DELETE a Response
+Delete Response by ID
+import litellm
+
+# First, create a response
+response = litellm.responses(
+    model="openai/o1-pro",
+    input="Tell me a three sentence bedtime story about a unicorn.",
+    max_output_tokens=100
+)
+
+# Get the response ID
+response_id = response.id
+
+# Delete the response by ID
+delete_response = litellm.delete_responses(
+    response_id=response_id
+)
+
+print(delete_response)
+
+# For async usage
+# delete_response = await litellm.adelete_responses(response_id=response_id)
+
+
+LiteLLM Proxy with OpenAI SDK
+First, set up and start your LiteLLM proxy server.
+
+Start LiteLLM Proxy Server
+litellm --config /path/to/config.yaml
+
+# RUNNING on http://0.0.0.0:4000
+
+OpenAI
+Anthropic
+Vertex AI
+AWS Bedrock
+Google AI Studio
+First, add this to your litellm proxy config.yaml:
+
+OpenAI Proxy Configuration
+model_list:
+  - model_name: openai/o1-pro
+    litellm_params:
+      model: openai/o1-pro
+      api_key: os.environ/OPENAI_API_KEY
+
+
+Non-streaming
+OpenAI Proxy Non-streaming Response
+from openai import OpenAI
+
+# Initialize client with your proxy URL
+client = OpenAI(
+    base_url="http://localhost:4000",  # Your proxy URL
+    api_key="your-api-key"             # Your proxy API key
+)
+
+# Non-streaming response
+response = client.responses.create(
+    model="openai/o1-pro",
+    input="Tell me a three sentence bedtime story about a unicorn."
+)
+
+print(response)
+
+
+Streaming
+OpenAI Proxy Streaming Response
+from openai import OpenAI
+
+# Initialize client with your proxy URL
+client = OpenAI(
+    base_url="http://localhost:4000",  # Your proxy URL
+    api_key="your-api-key"             # Your proxy API key
+)
+
+# Streaming response
+response = client.responses.create(
+    model="openai/o1-pro",
+    input="Tell me a three sentence bedtime story about a unicorn.",
+    stream=True
+)
+
+for event in response:
+    print(event)
+
+
+Image Generation with Streaming
+OpenAI Proxy Streaming Image Generation
+from openai import OpenAI
+import base64
+
+client = OpenAI(api_key="sk-1234", base_url="http://localhost:4000")
+
+stream = client.responses.create(
+    model="gpt-4.1",
+    input="Draw a gorgeous image of a river made of white owl feathers, snaking its way through a serene winter landscape",
+    stream=True,
+    tools=[{"type": "image_generation", "partial_images": 2}],
+)
+
+
+for event in stream:
+    print(f"event: {event}")
+    if event.type == "response.image_generation_call.partial_image":
+        idx = event.partial_image_index
+        image_base64 = event.partial_image_b64
+        image_bytes = base64.b64decode(image_base64)
+        with open(f"river{idx}.png", "wb") as f:
+            f.write(image_bytes)
+
+
+
+GET a Response
+Get Response by ID with OpenAI SDK
+from openai import OpenAI
+
+# Initialize client with your proxy URL
+client = OpenAI(
+    base_url="http://localhost:4000",  # Your proxy URL
+    api_key="your-api-key"             # Your proxy API key
+)
+
+# First, create a response
+response = client.responses.create(
+    model="openai/o1-pro",
+    input="Tell me a three sentence bedtime story about a unicorn."
+)
+
+# Get the response ID
+response_id = response.id
+
+# Retrieve the response by ID
+retrieved_response = client.responses.retrieve(response_id)
+
+print(retrieved_response)
+
+
+DELETE a Response
+Delete Response by ID with OpenAI SDK
+from openai import OpenAI
+
+# Initialize client with your proxy URL
+client = OpenAI(
+    base_url="http://localhost:4000",  # Your proxy URL
+    api_key="your-api-key"             # Your proxy API key
+)
+
+# First, create a response
+response = client.responses.create(
+    model="openai/o1-pro",
+    input="Tell me a three sentence bedtime story about a unicorn."
+)
+
+# Get the response ID
+response_id = response.id
+
+# Delete the response by ID
+delete_response = client.responses.delete(response_id)
+
+print(delete_response)
+
+
+Response ID Security
+By default, LiteLLM Proxy prevents users from accessing other users' response IDs.
+
+This is done by encrypting the response ID with the user ID, enabling users to only access their own response IDs.
+
+Trying to access someone else's response ID returns 403:
+
+{
+  "error": {
+    "message": "Forbidden. The response id is not associated with the user, who this key belongs to.",
+    "code": 403
+  }
+}
+
+
+To disable this, set disable_responses_id_security: true:
+
+general_settings:
+  disable_responses_id_security: true
+
+This allows any user to access any response ID.
+
+Supported Responses API Parameters
+Provider	Supported Parameters
+openai	All Responses API parameters are supported
+azure	All Responses API parameters are supported
+anthropic	See supported parameters here
+bedrock	See supported parameters here
+gemini	See supported parameters here
+vertex_ai	See supported parameters here
+azure_ai	See supported parameters here
+All other llm api providers	See supported parameters here
+Load Balancing with Session Continuity.
+When using the Responses API with multiple deployments of the same model (e.g., multiple Azure OpenAI endpoints), LiteLLM provides session continuity. This ensures that follow-up requests using a previous_response_id are routed to the same deployment that generated the original response.
+
+Example Usage
+Python SDK
+Proxy Server
+Python SDK with Session Continuity
+import litellm
+
+# Set up router with multiple deployments of the same model
+router = litellm.Router(
+    model_list=[
+        {
+            "model_name": "azure-gpt4-turbo",
+            "litellm_params": {
+                "model": "azure/gpt-4-turbo",
+                "api_key": "your-api-key-1",
+                "api_version": "2024-06-01",
+                "api_base": "https://endpoint1.openai.azure.com",
+            },
+        },
+        {
+            "model_name": "azure-gpt4-turbo",
+            "litellm_params": {
+                "model": "azure/gpt-4-turbo",
+                "api_key": "your-api-key-2",
+                "api_version": "2024-06-01",
+                "api_base": "https://endpoint2.openai.azure.com",
+            },
+        },
+    ],
+    optional_pre_call_checks=["responses_api_deployment_check"],
+)
+
+# Initial request
+response = await router.aresponses(
+    model="azure-gpt4-turbo",
+    input="Hello, who are you?",
+    truncation="auto",
+)
+
+# Store the response ID
+response_id = response.id
+
+# Follow-up request - will be automatically routed to the same deployment
+follow_up = await router.aresponses(
+    model="azure-gpt4-turbo",
+    input="Tell me more about yourself",
+    truncation="auto",
+    previous_response_id=response_id  # This ensures routing to the same deployment
+)
+
+
+Calling non-Responses API endpoints (/responses to /chat/completions Bridge)
+LiteLLM allows you to call non-Responses API models via a bridge to LiteLLM's /chat/completions endpoint. This is useful for calling Anthropic, Gemini and even non-Responses API OpenAI models.
+
+Python SDK Usage
+SDK Usage
+import litellm
+import os
+
+# Set API key
+os.environ["ANTHROPIC_API_KEY"] = "your-anthropic-api-key"
+
+# Non-streaming response
+response = litellm.responses(
+    model="anthropic/claude-3-5-sonnet-20240620",
+    input="Tell me a three sentence bedtime story about a unicorn.",
+    max_output_tokens=100
+)
+
+print(response)
+
+
+LiteLLM Proxy Usage
+Setup Config:
+
+Example Configuration
+model_list:
+- model_name: anthropic-model
+  litellm_params:
+    model: anthropic/claude-3-5-sonnet-20240620
+    api_key: os.environ/ANTHROPIC_API_KEY
+
+
+Start Proxy:
+
+Start LiteLLM Proxy
+litellm --config /path/to/config.yaml
+
+# RUNNING on http://0.0.0.0:4000
+
+
+Make Request:
+
+non-Responses API Model Request
+curl http://localhost:4000/v1/responses \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer sk-1234" \
+  -d '{
+    "model": "anthropic-model",
+    "input": "who is Michael Jordan"
+  }'
+
+
+Session Management
+LiteLLM Proxy supports session management for all supported models. This allows you to store and fetch conversation history (state) in LiteLLM Proxy.
+
+Usage
+Enable storing request / response content in the database
+Set store_prompts_in_cold_storage: true in your proxy config.yaml. When this is enabled, LiteLLM will store the request and response content in the s3 bucket you specify.
+
+config.yaml with Session Continuity
+litellm_settings:
+  callbacks: ["s3_v2"]
+  cold_storage_custom_logger: s3_v2
+  s3_callback_params: # learn more https://docs.litellm.ai/docs/proxy/logging#s3-buckets
+    s3_bucket_name: litellm-logs   # AWS Bucket Name for S3
+    s3_region_name: us-west-2      
+
+general_settings:
+  store_prompts_in_cold_storage: true
+  store_prompts_in_spend_logs: true
+
+
+Make request 1 with no previous_response_id (new session)
+Start a new conversation by making a request without specifying a previous response ID.
+
+Curl
+OpenAI Python SDK
+curl http://localhost:4000/v1/responses \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer sk-1234" \
+  -d '{
+    "model": "anthropic/claude-3-5-sonnet-latest",
+    "input": "who is Michael Jordan"
+  }'
+
+Response:
+
+{
+  "id":"resp_123abc",
+  "model":"claude-3-5-sonnet-20241022",
+  "output":[{
+    "type":"message",
+    "content":[{
+      "type":"output_text",
+      "text":"Michael Jordan is widely considered one of the greatest basketball players of all time. He played for the Chicago Bulls (1984-1993, 1995-1998) and Washington Wizards (2001-2003), winning 6 NBA Championships with the Bulls."
+    }]
+  }]
+}
+
+
+Make request 2 with previous_response_id (same session)
+Continue the conversation by referencing the previous response ID to maintain conversation context.
+
+Curl
+OpenAI Python SDK
+curl http://localhost:4000/v1/responses \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer sk-1234" \
+  -d '{
+    "model": "anthropic/claude-3-5-sonnet-latest",
+    "input": "can you tell me more about him",
+    "previous_response_id": "resp_123abc"
+  }'
+
+Response:
+
+{
+  "id":"resp_456def",
+  "model":"claude-3-5-sonnet-20241022",
+  "output":[{
+    "type":"message",
+    "content":[{
+      "type":"output_text",
+      "text":"Michael Jordan was born February 17, 1963. He attended University of North Carolina before being drafted 3rd overall by the Bulls in 1984. Beyond basketball, he built the Air Jordan brand with Nike and later became owner of the Charlotte Hornets."
+    }]
+  }]
+}
+
+
+Make request 3 with no previous_response_id (new session)
+Start a brand new conversation without referencing previous context to demonstrate how context is not maintained between sessions.
+
+Curl
+OpenAI Python SDK
+curl http://localhost:4000/v1/responses \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer sk-1234" \
+  -d '{
+    "model": "anthropic/claude-3-5-sonnet-latest",
+    "input": "can you tell me more about him"
+  }'
+
+Response:
+
+{
+  "id":"resp_789ghi",
+  "model":"claude-3-5-sonnet-20241022",
+  "output":[{
+    "type":"message",
+    "content":[{
+      "type":"output_text",
+      "text":"I don't see who you're referring to in our conversation. Could you let me know which person you'd like to learn more about?"
+    }]
+  }]
+}
+
+

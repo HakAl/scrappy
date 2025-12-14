@@ -1,57 +1,68 @@
-## ARCHITECTURE GOAL
+# TODO
 
-LiteLLM acts as our bridge to providers. We still decide taskrouting, but delegate to LiteLLM for:
-requests
-retries
-rate limit
-fallbacks
-Enables easier streaming integration 
-Potentially some classification  
 
-## CODE RESEARCH
+## === MVP COMPLETE ===
 
-### INTEGRATION DESIGN
+System works. LiteLLM handles retry/fallback/rate-limits internally.
 
-New client: LiteLLMClient(litellm, logging, config)
-Integration: ProviderService(LiteLLMClient)
-Orch/Task Router/Agent/etc: Orch(ProviderService)
+---
 
-### PROVIDER INTEGRATION POINTS
-Orchestrator 
-Task Router
-Agent?
+## Post-MVP / Future
 
-docs/PROVIDERS.md
 
-LiteLLM RESEARCH
-Response format
+### Streaming
+
+```python
+async def stream_completion(
+    self,
+    model: str,
+    messages: list[dict],
+    **kwargs
+) -> AsyncIterator[str]:
+    response = await self._router.acompletion(
+        model=model,
+        messages=messages,
+        stream=True,
+        **kwargs
+    )
+    async for chunk in response:
+        if chunk.choices[0].delta.content:
+            yield chunk.choices[0].delta.content
 ```
-{
-    "id": "chatcmpl-fe575c37-5004-4926-ae5e-bfbc31f356ca",
-    "created": 1751494808,
-    "model": "claude-sonnet-4-20250514",
-    "object": "chat.completion.chunk",
-    "system_fingerprint": null,
-    "choices": [
-        {
-            "finish_reason": null,
-            "index": 0,
-            "delta": {
-                "provider_specific_fields": null,
-                "content": "Hello",
-                "role": "assistant",
-                "function_call": null,
-                "tool_calls": null,
-                "audio": null
-            },
-            "logprobs": null
-        }
-    ],
-    "provider_specific_fields": null,
-    "stream_options": null,
-    "citations": null
-}
+
+---
+
+## Reference: Dependency Audit
+
+| File                     | Current Dependency                          | Action                        |
+|--------------------------|---------------------------------------------|-------------------------------|
+| `provider_definitions.py`| `provider_class` imports                    | Phase 1: Remove class refs    |
+| `provider_selector.py`   | `provider.get_model_info()`, etc.           | Phase 1: Use model_registry   |
+| `registration.py`        | Instantiates provider classes               | Phase 2c: Delete              |
+| `retry_orchestrator.py`  | `provider.chat()`, `provider.chat_async()`  | Phase 2c: Delete              |
+| `core.py`                | `registry.get()` for brain setup            | Phase 1: Minimal changes      |
+| `status_reporter.py`     | Provider info display                       | Phase 1: Use config           |
+
+---
+
+## Reference: The Core Problem
+
+`ProviderSelector` is tightly coupled to provider instances:
+
+```python
+# Current: Fetches metadata from live provider objects
+for provider_name in available:
+    provider = self.registry.get(provider_name)
+    for model_id in provider.available_models:          # <-- instance property
+        info = provider.get_model_info(model_id)        # <-- instance method
+        # Uses info.speed, info.quality, info.context_length, info.rpd
 ```
+
+With LiteLLM, we don't have provider instances. Phase 1 extracts this metadata
+to static config so cognitive routing works without live providers.
+
+
+---
 
 **LiteLLM Integration**
 
