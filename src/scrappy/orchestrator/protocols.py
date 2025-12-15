@@ -5,10 +5,11 @@ Defines abstract interfaces (Protocols) for orchestrator implementations,
 enabling loose coupling and better testability throughout the codebase.
 """
 
-from typing import Protocol, Optional, Dict, Any, List, runtime_checkable
+from typing import Protocol, Optional, Dict, Any, List, runtime_checkable, AsyncIterator
 from datetime import datetime
 
 from ..providers.base import LLMResponse, LLMProviderBase, ProviderLimits
+from .types import StreamChunk
 
 
 @runtime_checkable
@@ -230,16 +231,22 @@ class RateLimitTrackerProtocol(Protocol):
     def record_request(
         self,
         provider: str,
-        tokens_used: int = 0,
-        timestamp: Optional[datetime] = None,
+        model: str,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        success: bool = True,
+        error_message: Optional[str] = None,
     ) -> None:
         """
         Record a request for rate limiting.
 
         Args:
             provider: Provider name
-            tokens_used: Number of tokens used
-            timestamp: Request timestamp (None for now)
+            model: Model name
+            input_tokens: Input token count
+            output_tokens: Output token count
+            success: Whether request succeeded
+            error_message: Optional error message
         """
         ...
 
@@ -882,5 +889,57 @@ class ProviderStatusTrackerProtocol(Protocol):
 
         Returns:
             Dict mapping provider name to ProviderStatus
+        """
+        ...
+
+
+@runtime_checkable
+class StreamingCompletionProtocol(Protocol):
+    """
+    Protocol for streaming LLM completions.
+
+    Extends LLMServiceProtocol with streaming capabilities that yield
+    incremental chunks as they arrive from the provider.
+
+    Usage:
+    - model parameter is a model GROUP name ("fast" or "quality")
+    - Yields StreamChunk objects as they arrive
+    - Returns final (LLMResponse, task_record dict) tuple after streaming completes
+
+    Implementations:
+    - LiteLLMService: Production streaming via LiteLLM Router
+    - MockStreamingRouter: Test double for unit tests
+
+    Example:
+        service: StreamingCompletionProtocol = ...
+        async for chunk in service.stream_completion(
+            model="fast",
+            messages=[{"role": "user", "content": "Hello"}],
+            max_tokens=100
+        ):
+            print(chunk.content, end="", flush=True)
+    """
+
+    async def stream_completion(
+        self,
+        model: str,
+        messages: list[dict],
+        **kwargs
+    ) -> AsyncIterator[StreamChunk]:
+        """
+        Execute streaming completion via LiteLLM Router.
+
+        Args:
+            model: Model group name ("fast" or "quality")
+            messages: Chat messages [{"role": "user", "content": "..."}]
+            **kwargs: Additional params (max_tokens, temperature, tools, tool_choice, etc.)
+
+        Yields:
+            StreamChunk objects as they arrive from the provider
+
+        Raises:
+            AllProvidersRateLimitedError: When all providers exhausted
+            ContextWindowExceededError: When quality tier also exceeds context (fatal)
+            StreamStuckError: When stream stalls or times out
         """
         ...

@@ -1,0 +1,86 @@
+{
+  "provider": "test",
+  "model": "test/model",
+  "scenario": "basic",
+  "recorded_at": "2025-12-14T00:00:00+00:00",
+  "total_chunks": 3,
+  "total_duration_ms": 100.0,
+  "prompt": [
+    {
+      "role": "user",
+      "content": "Say hello"
+    }
+  ],
+  "tools": null,
+  "chunks": [
+    {
+      "index": 0,
+      "timestamp_ms": 10.0,
+      "delta_content": "Hello",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "test-1",
+        "object": "chat.completion.chunk",
+        "created": 1234567890,
+        "model": "test/model",
+        "choices": [
+          {
+            "index": 0,
+            "finish_reason": null,
+            "delta": {
+              "content": "Hello",
+              "role": "assistant"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "index": 1,
+      "timestamp_ms": 50.0,
+      "delta_content": " world",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "test-1",
+        "object": "chat.completion.chunk",
+        "created": 1234567890,
+        "model": "test/model",
+        "choices": [
+          {
+            "index": 0,
+            "finish_reason": null,
+            "delta": {
+              "content": " world",
+              "role": null
+            }
+          }
+        ]
+      }
+    },
+    {
+      "index": 2,
+      "timestamp_ms": 100.0,
+      "delta_content": "",
+      "delta_tool_calls": null,
+      "finish_reason": "stop",
+      "raw_chunk": {
+        "id": "test-1",
+        "object": "chat.completion.chunk",
+        "created": 1234567890,
+        "model": "test/model",
+        "choices": [
+          {
+            "index": 0,
+            "finish_reason": "stop",
+            "delta": {
+              "content": null,
+              "role": null
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,415 @@
+interactions:
+- request:
+    body: '{"model": "llama-3.1-8b-instant", "messages": [{"role": "user", "content":
+      "Say ''test'' and nothing else."}], "stream": false, "max_tokens": 10}'
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '143'
+      content-type:
+      - application/json
+      host:
+      - api.groq.com
+      user-agent:
+      - litellm/1.78.2
+    method: POST
+    uri: https://api.groq.com/openai/v1/chat/completions
+  response:
+    body:
+      string: '{"id":"chatcmpl-e1dacbe7-64a0-498a-9a23-8d3990aa3a33","object":"chat.completion","created":1765761685,"model":"llama-3.1-8b-instant","choices":[{"index":0,"message":{"role":"assistant","content":"test"},"logprobs":null,"finish_reason":"stop"}],"usage":{"queue_time":0.036613923,"prompt_tokens":43,"prompt_time":0.003167666,"completion_tokens":2,"completion_time":0.004406939,"total_tokens":45,"total_time":0.007574605},"usage_breakdown":null,"system_fingerprint":"fp_020e283281","x_groq":{"id":"req_01kcfsj5t0f4kbdjrw1a9pc2gx","seed":832431793},"service_tier":"on_demand"}
+
+        '
+    headers:
+      CF-RAY:
+      - 9ae21fc4fc0d192d-PIT
+      Cache-Control:
+      - private, max-age=0, no-store, no-cache, must-revalidate
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      Date:
+      - Mon, 15 Dec 2025 01:21:25 GMT
+      Server:
+      - cloudflare
+      Set-Cookie:
+      - __cf_bm=D3Z7nbiBWIOXIdqt1PDvb_KUTFGbXd_nkhx2m6BtJnE-1765761685.2785096-1.0.1.1-nu2iNfNJT4jUfi_DXbqje4cDFzd13LULIumXUlkQI6h4dsYTCydRyq8drJdLoQD4zh8zmvdLZUlyd1u6aJlBlbetX9BXH9ievvpTfjfM8Ka0XYDD8HH4IXdv_FHjICiY;
+        HttpOnly; Secure; Path=/; Domain=groq.com; Expires=Mon, 15 Dec 2025 01:51:25
+        GMT
+      Strict-Transport-Security:
+      - max-age=2592000
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Origin
+      alt-svc:
+      - h3=":443"; ma=86400
+      cf-cache-status:
+      - DYNAMIC
+      content-length:
+      - '573'
+      x-groq-region:
+      - yul
+      x-ratelimit-limit-requests:
+      - '14400'
+      x-ratelimit-limit-tokens:
+      - '6000'
+      x-ratelimit-remaining-requests:
+      - '14399'
+      x-ratelimit-remaining-tokens:
+      - '5956'
+      x-ratelimit-reset-requests:
+      - 6s
+      x-ratelimit-reset-tokens:
+      - 440ms
+      x-request-id:
+      - req_01kcfsj5t0f4kbdjrw1a9pc2gx
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"messages":[{"role":"user","content":"Say ''test'' and nothing else."}],"model":"llama3.1-8b","max_tokens":10}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '109'
+      content-type:
+      - application/json
+      host:
+      - api.cerebras.ai
+      user-agent:
+      - AsyncOpenAI/Python 2.3.0
+      x-stainless-arch:
+      - other:amd64
+      x-stainless-async:
+      - async:asyncio
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Windows
+      x-stainless-package-version:
+      - 2.3.0
+      x-stainless-raw-response:
+      - 'true'
+      x-stainless-read-timeout:
+      - '60.0'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.13.1
+    method: POST
+    uri: https://api.cerebras.ai/v1/chat/completions
+  response:
+    body:
+      string: '{"id":"chatcmpl-916929e1-5c44-4aca-a0e6-4aa8ed9e8bab","choices":[{"finish_reason":"stop","index":0,"message":{"content":"test","role":"assistant"}}],"created":1765761687,"model":"llama3.1-8b","system_fingerprint":"fp_2df2c50ce520692a7dce","object":"chat.completion","usage":{"total_tokens":45,"completion_tokens":2,"prompt_tokens":43,"prompt_tokens_details":{"cached_tokens":0}},"time_info":{"queue_time":0.053056874,"prompt_time":0.00341333,"completion_time":0.000777482,"total_time":0.05836987495422363,"created":1765761687.1618521}}'
+    headers:
+      CF-RAY:
+      - 9ae21fc97e38c947-IAD
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      Date:
+      - Mon, 15 Dec 2025 01:21:26 GMT
+      Server:
+      - cloudflare
+      Set-Cookie:
+      - __cf_bm=qTGhv.PDO.KCZroMvJ3Xqro17tfsscPDVwx0eYOePiE-1765761685.9967122-1.0.1.1-mFNNYWe8uShwMt5IkwgrDccpECtY2vcjTKP40S3aEgZyNo9qrRQwZQVtUwkG0Pd50yxU8XAHqGn6ee0br2FvEhCRtcqwy7JtDi8oTAQPn6pSgLLBb16Fyw5.CigAw1YV;
+        HttpOnly; Secure; Path=/; Domain=cerebras-sandbox.net; Expires=Mon, 15 Dec
+        2025 01:51:26 GMT
+      Transfer-Encoding:
+      - chunked
+      alt-svc:
+      - h3=":443"; ma=86400
+      cf-cache-status:
+      - DYNAMIC
+      content-length:
+      - '535'
+      inference-id:
+      - chatcmpl-916929e1-5c44-4aca-a0e6-4aa8ed9e8bab
+      referrer-policy:
+      - strict-origin-when-cross-origin
+      strict-transport-security:
+      - max-age=3600; includeSubDomains
+      x-content-type-options:
+      - nosniff
+      x-ratelimit-remaining-requests-day:
+      - '14375'
+      x-ratelimit-remaining-requests-hour:
+      - '875'
+      x-ratelimit-remaining-requests-minute:
+      - '21'
+      x-ratelimit-remaining-tokens-day:
+      - '988171'
+      x-ratelimit-remaining-tokens-hour:
+      - '988171'
+      x-ratelimit-remaining-tokens-minute:
+      - '48171'
+      x-request-id:
+      - 9ae21fc97e38c947-IAD
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"model": "llama-3.1-8b-instant", "messages": [{"role": "user", "content":
+      "Say ''test'' and nothing else."}], "stream": false, "max_tokens": 10}'
+    headers:
+      Cookie:
+      - __cf_bm=D3Z7nbiBWIOXIdqt1PDvb_KUTFGbXd_nkhx2m6BtJnE-1765761685.2785096-1.0.1.1-nu2iNfNJT4jUfi_DXbqje4cDFzd13LULIumXUlkQI6h4dsYTCydRyq8drJdLoQD4zh8zmvdLZUlyd1u6aJlBlbetX9BXH9ievvpTfjfM8Ka0XYDD8HH4IXdv_FHjICiY
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '143'
+      content-type:
+      - application/json
+      host:
+      - api.groq.com
+      user-agent:
+      - litellm/1.78.2
+    method: POST
+    uri: https://api.groq.com/openai/v1/chat/completions
+  response:
+    body:
+      string: '{"id":"chatcmpl-d1347207-7f96-4c8b-986c-1e5a28c7cafd","object":"chat.completion","created":1765761686,"model":"llama-3.1-8b-instant","choices":[{"index":0,"message":{"role":"assistant","content":"test"},"logprobs":null,"finish_reason":"stop"}],"usage":{"queue_time":0.079879027,"prompt_tokens":43,"prompt_time":0.00411424,"completion_tokens":2,"completion_time":0.004877492,"total_tokens":45,"total_time":0.008991732},"usage_breakdown":null,"system_fingerprint":"fp_9ca2574dca","x_groq":{"id":"req_01kcfsj6v6eg2barb3dwz3555k","seed":1037151582},"service_tier":"on_demand"}
+
+        '
+    headers:
+      CF-RAY:
+      - 9ae21fcbaa95192d-PIT
+      Cache-Control:
+      - private, max-age=0, no-store, no-cache, must-revalidate
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      Date:
+      - Mon, 15 Dec 2025 01:21:26 GMT
+      Server:
+      - cloudflare
+      Set-Cookie:
+      - __cf_bm=MwQN7vgg_eXgasrXWDz5fVpc0145Rrh1U6ranGqBA14-1765761686.3442407-1.0.1.1-ucnhT9MObIVwmZ..9HLvEwzp0vrKovPcZZN1gW8zenkQL2JBa_HoQWQPsUKvu4xXQS3AujtLCGm4D3_5Qsel2NpzSwIBduXW5I0u0lxh3GtuuUieoMPA8.gYS0I.4kjd;
+        HttpOnly; Secure; Path=/; Domain=groq.com; Expires=Mon, 15 Dec 2025 01:51:26
+        GMT
+      Strict-Transport-Security:
+      - max-age=2592000
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Origin
+      alt-svc:
+      - h3=":443"; ma=86400
+      cf-cache-status:
+      - DYNAMIC
+      content-length:
+      - '573'
+      x-groq-region:
+      - yul
+      x-ratelimit-limit-requests:
+      - '14400'
+      x-ratelimit-limit-tokens:
+      - '6000'
+      x-ratelimit-remaining-requests:
+      - '14398'
+      x-ratelimit-remaining-tokens:
+      - '5956'
+      x-ratelimit-reset-requests:
+      - 12s
+      x-ratelimit-reset-tokens:
+      - 440ms
+      x-request-id:
+      - req_01kcfsj6v6eg2barb3dwz3555k
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"model": "llama-3.1-8b-instant", "messages": [{"role": "user", "content":
+      "Say ''test'' and nothing else."}], "stream": false, "max_tokens": 10}'
+    headers:
+      Cookie:
+      - __cf_bm=MwQN7vgg_eXgasrXWDz5fVpc0145Rrh1U6ranGqBA14-1765761686.3442407-1.0.1.1-ucnhT9MObIVwmZ..9HLvEwzp0vrKovPcZZN1gW8zenkQL2JBa_HoQWQPsUKvu4xXQS3AujtLCGm4D3_5Qsel2NpzSwIBduXW5I0u0lxh3GtuuUieoMPA8.gYS0I.4kjd
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '143'
+      content-type:
+      - application/json
+      host:
+      - api.groq.com
+      user-agent:
+      - litellm/1.78.2
+    method: POST
+    uri: https://api.groq.com/openai/v1/chat/completions
+  response:
+    body:
+      string: '{"id":"chatcmpl-244d3754-c5f7-4af3-a342-d97eae6ccb70","object":"chat.completion","created":1765761686,"model":"llama-3.1-8b-instant","choices":[{"index":0,"message":{"role":"assistant","content":"test"},"logprobs":null,"finish_reason":"stop"}],"usage":{"queue_time":0.07816118,"prompt_tokens":43,"prompt_time":0.003527099,"completion_tokens":3,"completion_time":0.004647735,"total_tokens":46,"total_time":0.008174834},"usage_breakdown":null,"system_fingerprint":"fp_6c980774ec","x_groq":{"id":"req_01kcfsj70weg2arq1mtq0gjk2h","seed":1808786319},"service_tier":"on_demand"}
+
+        '
+    headers:
+      CF-RAY:
+      - 9ae21fcccbb5192d-PIT
+      Cache-Control:
+      - private, max-age=0, no-store, no-cache, must-revalidate
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      Date:
+      - Mon, 15 Dec 2025 01:21:26 GMT
+      Server:
+      - cloudflare
+      Set-Cookie:
+      - __cf_bm=OGMke.qWx9f4Lidp3Hu6M0lanM1WQzRvXDY0CA1MXi4-1765761686.5277526-1.0.1.1-z6O0xYZuvvq6ptn0pLieBjilh1oCCZt29hNHIew8GiF7gl3Jeg.agUNC3N6PqkjEEZeANPsuFsF1SLuuSmyGuZFW97_DATwOB6n6asTbJMbWd.eQsX8DaliSRw3fyd3L;
+        HttpOnly; Secure; Path=/; Domain=groq.com; Expires=Mon, 15 Dec 2025 01:51:26
+        GMT
+      Strict-Transport-Security:
+      - max-age=2592000
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Origin
+      alt-svc:
+      - h3=":443"; ma=86400
+      cf-cache-status:
+      - DYNAMIC
+      content-length:
+      - '573'
+      x-groq-region:
+      - yul
+      x-ratelimit-limit-requests:
+      - '14400'
+      x-ratelimit-limit-tokens:
+      - '6000'
+      x-ratelimit-remaining-requests:
+      - '14397'
+      x-ratelimit-remaining-tokens:
+      - '5928'
+      x-ratelimit-reset-requests:
+      - 18s
+      x-ratelimit-reset-tokens:
+      - 720ms
+      x-request-id:
+      - req_01kcfsj70weg2arq1mtq0gjk2h
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"messages":[{"role":"user","content":"Say ''test'' and nothing else."}],"model":"llama3.1-8b","max_tokens":10}'
+    headers:
+      Accept:
+      - application/json
+      Accept-Encoding:
+      - gzip, deflate, zstd
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '109'
+      Content-Type:
+      - application/json
+      Host:
+      - api.cerebras.ai
+      User-Agent:
+      - AsyncOpenAI/Python 2.3.0
+      X-Stainless-Arch:
+      - other:amd64
+      X-Stainless-Async:
+      - async:asyncio
+      X-Stainless-Lang:
+      - python
+      X-Stainless-OS:
+      - Windows
+      X-Stainless-Package-Version:
+      - 2.3.0
+      X-Stainless-Raw-Response:
+      - 'true'
+      X-Stainless-Runtime:
+      - CPython
+      X-Stainless-Runtime-Version:
+      - 3.13.1
+      authorization:
+      - REDACTED
+      x-stainless-read-timeout:
+      - '60.0'
+      x-stainless-retry-count:
+      - '0'
+    method: POST
+    uri: https://api.cerebras.ai/v1/chat/completions
+  response:
+    body:
+      string: '{"id":"chatcmpl-30c4c9b4-e68f-498e-b856-8bfbe5b4df3c","choices":[{"finish_reason":"stop","index":0,"message":{"content":"test","role":"assistant"}}],"created":1765799550,"model":"llama3.1-8b","system_fingerprint":"fp_2df2c50ce520692a7dce","object":"chat.completion","usage":{"total_tokens":45,"completion_tokens":2,"prompt_tokens":43,"prompt_tokens_details":{"cached_tokens":0}},"time_info":{"queue_time":0.013035262,"prompt_time":0.002497059,"completion_time":0.000822462,"total_time":0.0184476375579834,"created":1765799550.6492536}}'
+    headers:
+      CF-RAY:
+      - 9ae5bc371b9bb06c-IAD
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      Date:
+      - Mon, 15 Dec 2025 11:52:30 GMT
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      alt-svc:
+      - h3=":443"; ma=86400
+      cf-cache-status:
+      - DYNAMIC
+      content-length:
+      - '535'
+      inference-id:
+      - chatcmpl-30c4c9b4-e68f-498e-b856-8bfbe5b4df3c
+      referrer-policy:
+      - strict-origin-when-cross-origin
+      set-cookie:
+      - __cf_bm=WwHDdAAAXwwddY0IA067ZnqoccKFgFgHlvyFK2WvP.k-1765799550.5775049-1.0.1.1-yEkY46aN8mLA2bY111CsD16B63CpbSoWAKnhEpbLObEYOvws1vw4oz.iRS88D_0tO.BjTp7WhdCQ890EzdLXaEEPcSy2sOtbpr.2rgW0.JkqM0KqaFeh_h2zqLLBnhyG;
+        HttpOnly; Secure; Path=/; Domain=cerebras-sandbox.net; Expires=Mon, 15 Dec
+        2025 12:22:30 GMT
+      strict-transport-security:
+      - max-age=3600; includeSubDomains
+      x-content-type-options:
+      - nosniff
+      x-ratelimit-remaining-requests-day:
+      - '14371'
+      x-ratelimit-remaining-requests-hour:
+      - '871'
+      x-ratelimit-remaining-requests-minute:
+      - '17'
+      x-ratelimit-remaining-tokens-day:
+      - '987451'
+      x-ratelimit-remaining-tokens-hour:
+      - '987451'
+      x-ratelimit-remaining-tokens-minute:
+      - '47451'
+      x-request-id:
+      - 9ae5bc371b9bb06c-IAD
+    status:
+      code: 200
+      message: OK
+version: 1

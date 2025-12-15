@@ -4,7 +4,7 @@ Full agent loop with planning and tool use.
 
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, AsyncIterator
 
 from ..classifier import ClassifiedTask, TaskType
 from .base import ExecutionResult, ProviderAwareStrategy, OrchestratorLike
@@ -149,6 +149,106 @@ class AgentExecutor(ProviderAwareStrategy):
                 output="",
                 error=f"Agent execution failed: {str(e)}",
                 execution_time=time.time() - start_time
+            )
+
+    async def execute_streaming(
+        self,
+        task: ClassifiedTask
+    ) -> AsyncIterator['AgentEvent']:
+        """
+        Execute code generation task with streaming agent events.
+
+        Unlike execute() which returns a final ExecutionResult, this method
+        yields AgentEvent objects in real-time as the agent works, enabling
+        live display of thinking, actions, and results.
+
+        Event flow:
+        1. thought_start -> thought_token (multiple) -> thought_end
+        2. action_start -> action_end
+        3. evaluation_start -> evaluation_end
+        4. Repeat until complete or error
+
+        Args:
+            task: Classified task to execute
+
+        Yields:
+            AgentEvent objects representing execution phases
+
+        Example:
+            async for event in executor.execute_streaming(task):
+                if event.event_type == "thought_token":
+                    print(event.content, end="", flush=True)
+                elif event.event_type == "complete":
+                    print(f"\\nDone: {event.content}")
+        """
+        # Import AgentEvent here to avoid circular imports
+        from ...agent.types import AgentEvent
+
+        try:
+            # Import CodeAgent here to avoid circular imports
+            from ...agent import CodeAgent, ConversationState
+            from ...orchestrator_adapter import AgentOrchestratorAdapter
+
+            # Create adapter for CodeAgent with provider hint
+            adapter = AgentOrchestratorAdapter(self.orchestrator)
+
+            # Override adapter's provider if we have a resolved one
+            if self._resolved_provider:
+                adapter.set_preferred_provider(self._resolved_provider, self._resolved_model)
+
+            # Initialize CodeAgent
+            agent = CodeAgent(
+                orchestrator=adapter,
+                project_path=str(self.project_root),
+                io=self.io,
+            )
+            # Configure agent settings
+            agent.config.max_iterations = self.max_iterations
+            agent.require_approval = self.require_approval
+
+            # Clear resolved provider after use
+            self._resolved_provider = None
+            self._resolved_model = None
+
+            # Run planning phase if needed
+            if task.requires_planning:
+                plan_result = self._run_planning(task)
+                if plan_result:
+                    task_with_plan = f"{task.original_input}\n\nPlan:\n{plan_result}"
+                else:
+                    task_with_plan = task.original_input
+            else:
+                task_with_plan = task.original_input
+
+            # Add task-specific guidance
+            guidance = self._get_task_specific_guidance(task)
+            if guidance:
+                task_with_guidance = f"{task_with_plan}\n{guidance}"
+            else:
+                task_with_guidance = task_with_plan
+
+            # Execute with streaming agent loop
+            async for event in agent.run_streaming(
+                task=task_with_guidance,
+                max_iterations=self.max_iterations,
+                auto_confirm=not self.require_approval,
+            ):
+                yield event
+
+        except ImportError as e:
+            # Fallback: yield error event if CodeAgent not available
+            yield AgentEvent(
+                event_type="error",
+                content=f"CodeAgent not available: {str(e)}",
+                iteration=0,
+                metadata={"error": "import_error", "details": str(e)}
+            )
+        except Exception as e:
+            yield AgentEvent(
+                event_type="error",
+                content=f"Agent execution failed: {str(e)}",
+                iteration=0,
+                metadata={"error": "execution_error", "details": str(e)}
             )
 
     def _run_planning(self, task: ClassifiedTask) -> Optional[str]:

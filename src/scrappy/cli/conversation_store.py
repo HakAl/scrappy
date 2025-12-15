@@ -216,8 +216,9 @@ class ConversationStore:
             project_id = get_or_create_project_id(scrappy_dir)
 
             # Open database with WAL mode for crash safety
+            # check_same_thread=False allows async/threaded access (CLI uses asyncio for streaming)
             db_path = scrappy_dir / "conversations.db"
-            conn = sqlite3.connect(str(db_path))
+            conn = sqlite3.connect(str(db_path), check_same_thread=False)
             conn.execute("PRAGMA journal_mode=WAL;")
 
             store = cls(conn, project_id)

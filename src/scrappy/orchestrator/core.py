@@ -4,7 +4,7 @@ Core AgentOrchestrator implementation.
 Central coordinator for multi-provider LLM agent team using composition.
 """
 
-from typing import Optional
+from typing import Optional, AsyncIterator
 from datetime import datetime
 import asyncio
 import time
@@ -28,6 +28,7 @@ from .task_executor import TaskExecutor
 from .provider_selector import ProviderSelector
 from .output import BaseOutputProtocol, ConsoleOutput
 from .delegation import DelegationManager
+from .types import StreamChunk
 from .prompt_augmenter import PromptAugmenter
 from .batch_scheduler import BatchScheduler
 from .background import BackgroundTaskManager
@@ -556,6 +557,83 @@ class AgentOrchestrator:
         self._record_task_completion(task_record, is_async=False)
 
         return response
+
+    async def stream_delegate(
+        self,
+        provider_name: Optional[str] = None,
+        prompt: str = "",
+        model: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        max_tokens: int = 1000,
+        temperature: float = 0.7,
+        use_context: Optional[bool] = None,
+        use_cache: Optional[bool] = None,
+        selection_type: Optional[ModelSelectionType] = None,
+        **kwargs
+    ) -> AsyncIterator[StreamChunk]:
+        """
+        Stream a delegation with real-time token delivery.
+
+        Unlike delegate() which returns a complete response, this method
+        yields StreamChunk objects as they arrive from the provider,
+        enabling real-time display of generated text.
+
+        Args:
+            provider_name: Initial provider to try (None for auto-selection)
+            prompt: The prompt to send
+            model: Specific model (optional)
+            system_prompt: System prompt (optional)
+            max_tokens: Maximum tokens in response
+            temperature: Sampling temperature
+            use_context: Override context augmentation setting
+            use_cache: Override cache setting
+            selection_type: What kind of model to use for auto-selection
+            **kwargs: Additional provider-specific arguments
+
+        Yields:
+            StreamChunk objects as they arrive from the provider
+
+        Raises:
+            AllProvidersRateLimitedError: If all providers are rate limited
+            ProviderNotFoundError: If no providers are available
+
+        Example:
+            async for chunk in orchestrator.stream_delegate(
+                prompt="Write a story about a robot",
+                max_tokens=500
+            ):
+                print(chunk.content, end="", flush=True)
+        """
+        # Determine selection type based on quality_mode if not explicitly provided
+        if selection_type is None:
+            selection_type = ModelSelectionType.QUALITY if self.quality_mode else ModelSelectionType.FAST
+
+        # Auto-select provider if not specified
+        if provider_name is None:
+            provider_name = self.get_recommended_provider(selection_type)
+            if provider_name is None:
+                available = list(self.providers.list_available())
+                raise ProviderNotFoundError(
+                    provider_name="<auto-select>",
+                    available_providers=available
+                )
+
+        # Determine cache setting
+        should_use_cache = use_cache if use_cache is not None else self.caching_enabled
+
+        # Delegate to DelegationManager's stream_delegate
+        async for chunk in self.delegation_manager.stream_delegate(
+            provider_name=provider_name,
+            prompt=prompt,
+            model=model,
+            system_prompt=system_prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            use_context=use_context,
+            use_cache=should_use_cache,
+            **kwargs
+        ):
+            yield chunk
 
     def delegate_with_intent(
         self,

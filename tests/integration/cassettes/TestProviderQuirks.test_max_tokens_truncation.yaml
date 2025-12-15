@@ -1,0 +1,327 @@
+interactions:
+- request:
+    body: '{"messages":[{"role":"user","content":"Write a very long story"}],"model":"llama3.1-8b","max_tokens":5}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '103'
+      content-type:
+      - application/json
+      host:
+      - api.cerebras.ai
+      user-agent:
+      - AsyncOpenAI/Python 2.3.0
+      x-stainless-arch:
+      - other:amd64
+      x-stainless-async:
+      - async:asyncio
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Windows
+      x-stainless-package-version:
+      - 2.3.0
+      x-stainless-raw-response:
+      - 'true'
+      x-stainless-read-timeout:
+      - '60.0'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.13.1
+    method: POST
+    uri: https://api.cerebras.ai/v1/chat/completions
+  response:
+    body:
+      string: '{"id":"chatcmpl-ec80e115-81f6-423a-8cd3-74610847c001","choices":[{"finish_reason":"length","index":0,"message":{"content":"In
+        the quaint town of","role":"assistant"}}],"created":1765798611,"model":"llama3.1-8b","system_fingerprint":"fp_2df2c50ce520692a7dce","object":"chat.completion","usage":{"total_tokens":45,"completion_tokens":5,"prompt_tokens":40,"prompt_tokens_details":{"cached_tokens":0}},"time_info":{"queue_time":0.000390591,"prompt_time":0.002275983,"completion_time":0.002057887,"total_time":0.01760387420654297,"created":1765798611.082576}}'
+    headers:
+      CF-RAY:
+      - 9ae5a546a8978846-IAD
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      Date:
+      - Mon, 15 Dec 2025 11:36:51 GMT
+      Server:
+      - cloudflare
+      Set-Cookie:
+      - __cf_bm=s5ramh.f9LLUN2FUIiTqWU5UgqH67Yz_s6XLHN.68dA-1765798610.9914289-1.0.1.1-vFQlr__t2hyIAoSUYMVnXpEcV_1CWL_UhZD2XN3XAik3CbT_oDaLuKHWEZCmoOzZvz6HKaq9JF6U.2Nm8O18HOqhybgmY1EMDNTZiMvES..nvvks2kCSODkybRlQyhQt;
+        HttpOnly; Secure; Path=/; Domain=cerebras-sandbox.net; Expires=Mon, 15 Dec
+        2025 12:06:51 GMT
+      Transfer-Encoding:
+      - chunked
+      alt-svc:
+      - h3=":443"; ma=86400
+      cf-cache-status:
+      - DYNAMIC
+      content-length:
+      - '554'
+      inference-id:
+      - chatcmpl-ec80e115-81f6-423a-8cd3-74610847c001
+      referrer-policy:
+      - strict-origin-when-cross-origin
+      strict-transport-security:
+      - max-age=3600; includeSubDomains
+      x-content-type-options:
+      - nosniff
+      x-ratelimit-remaining-requests-day:
+      - '14372'
+      x-ratelimit-remaining-requests-hour:
+      - '872'
+      x-ratelimit-remaining-requests-minute:
+      - '18'
+      x-ratelimit-remaining-tokens-day:
+      - '987498'
+      x-ratelimit-remaining-tokens-hour:
+      - '987498'
+      x-ratelimit-remaining-tokens-minute:
+      - '47498'
+      x-request-id:
+      - 9ae5a546a8978846-IAD
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"model": "llama-3.1-8b-instant", "messages": [{"role": "user", "content":
+      "Write a very long story"}], "stream": false, "max_tokens": 5}'
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '137'
+      content-type:
+      - application/json
+      host:
+      - api.groq.com
+      user-agent:
+      - litellm/1.78.2
+    method: POST
+    uri: https://api.groq.com/openai/v1/chat/completions
+  response:
+    body:
+      string: '{"id":"chatcmpl-7555d627-83b4-4e4b-9192-10b0beab5d68","object":"chat.completion","created":1765798611,"model":"llama-3.1-8b-instant","choices":[{"index":0,"message":{"role":"assistant","content":"Once
+        upon a time,"},"logprobs":null,"finish_reason":"length"}],"usage":{"queue_time":0.038058964,"prompt_tokens":40,"prompt_time":0.006601929,"completion_tokens":5,"completion_time":0.009897822,"total_tokens":45,"total_time":0.016499751},"usage_breakdown":null,"system_fingerprint":"fp_020e283281","x_groq":{"id":"req_01kcgws2j6e0y880vtt7e60hek","seed":1146820521},"service_tier":"on_demand"}
+
+        '
+    headers:
+      CF-RAY:
+      - 9ae5a549da3d710f-PIT
+      Cache-Control:
+      - private, max-age=0, no-store, no-cache, must-revalidate
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      Date:
+      - Mon, 15 Dec 2025 11:36:51 GMT
+      Server:
+      - cloudflare
+      Set-Cookie:
+      - __cf_bm=1xFAqbzMQa1UwUrO_HgfTHl4q8hNjGTTrKCQ92ObD7Y-1765798611.4964802-1.0.1.1-KU9z13aDs9oWU4Hxtq.4.p74oyzfb9cpgX9Om7UGAvf9gLCbCaTLa.26lYcD0i.k2n9Hvi_.OlNQ6VL.g9NKmjxQkizbk_eu8v3CwEu.Q8WxM2_HCg3_BCpP49cMKssR;
+        HttpOnly; Secure; Path=/; Domain=groq.com; Expires=Mon, 15 Dec 2025 12:06:51
+        GMT
+      Strict-Transport-Security:
+      - max-age=2592000
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Origin
+      alt-svc:
+      - h3=":443"; ma=86400
+      cf-cache-status:
+      - DYNAMIC
+      content-length:
+      - '589'
+      x-groq-region:
+      - yul
+      x-ratelimit-limit-requests:
+      - '14400'
+      x-ratelimit-limit-tokens:
+      - '6000'
+      x-ratelimit-remaining-requests:
+      - '14393'
+      x-ratelimit-remaining-tokens:
+      - '5385'
+      x-ratelimit-reset-requests:
+      - 42s
+      x-ratelimit-reset-tokens:
+      - 6.149s
+      x-request-id:
+      - req_01kcgws2j6e0y880vtt7e60hek
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"model": "llama-3.1-8b-instant", "messages": [{"role": "user", "content":
+      "Write a very long story"}], "stream": false, "max_tokens": 5}'
+    headers:
+      Cookie:
+      - __cf_bm=1xFAqbzMQa1UwUrO_HgfTHl4q8hNjGTTrKCQ92ObD7Y-1765798611.4964802-1.0.1.1-KU9z13aDs9oWU4Hxtq.4.p74oyzfb9cpgX9Om7UGAvf9gLCbCaTLa.26lYcD0i.k2n9Hvi_.OlNQ6VL.g9NKmjxQkizbk_eu8v3CwEu.Q8WxM2_HCg3_BCpP49cMKssR
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '137'
+      content-type:
+      - application/json
+      host:
+      - api.groq.com
+      user-agent:
+      - litellm/1.78.2
+    method: POST
+    uri: https://api.groq.com/openai/v1/chat/completions
+  response:
+    body:
+      string: '{"id":"chatcmpl-e9380544-65b7-49ed-aef5-a9987a69381e","object":"chat.completion","created":1765798611,"model":"llama-3.1-8b-instant","choices":[{"index":0,"message":{"role":"assistant","content":"Once
+        upon a time"},"logprobs":null,"finish_reason":"length"}],"usage":{"queue_time":0.08501056,"prompt_tokens":40,"prompt_time":0.004258079,"completion_tokens":5,"completion_time":0.01129322,"total_tokens":45,"total_time":0.015551299},"usage_breakdown":null,"system_fingerprint":"fp_6c980774ec","x_groq":{"id":"req_01kcgws2pgf2yvawmpgqzwntjb","seed":110835376},"service_tier":"on_demand"}
+
+        '
+    headers:
+      CF-RAY:
+      - 9ae5a54abb1c710f-PIT
+      Cache-Control:
+      - private, max-age=0, no-store, no-cache, must-revalidate
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      Date:
+      - Mon, 15 Dec 2025 11:36:51 GMT
+      Server:
+      - cloudflare
+      Set-Cookie:
+      - __cf_bm=F0DB86QViHrlcKXzYGg_ITRQCAInhQrP_tqeRoIHyKg-1765798611.6362557-1.0.1.1-.qxIpiF34n4.nK4T6P3qvjiWDx.nuJvMWWhovOauAyU9Xl0UHtEp.BKoXdtOzd.Mz1Tb3VP5TK_bQQzg0NffhaQJJ0bPYP5koXRQL.aS3OGMtcja1kZVM.lLeJKlmI9b;
+        HttpOnly; Secure; Path=/; Domain=groq.com; Expires=Mon, 15 Dec 2025 12:06:51
+        GMT
+      Strict-Transport-Security:
+      - max-age=2592000
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Origin
+      alt-svc:
+      - h3=":443"; ma=86400
+      cf-cache-status:
+      - DYNAMIC
+      content-length:
+      - '585'
+      x-groq-region:
+      - yul
+      x-ratelimit-limit-requests:
+      - '14400'
+      x-ratelimit-limit-tokens:
+      - '6000'
+      x-ratelimit-remaining-requests:
+      - '14392'
+      x-ratelimit-remaining-tokens:
+      - '5354'
+      x-ratelimit-reset-requests:
+      - 48s
+      x-ratelimit-reset-tokens:
+      - 6.46s
+      x-request-id:
+      - req_01kcgws2pgf2yvawmpgqzwntjb
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"model": "llama-3.1-8b-instant", "messages": [{"role": "user", "content":
+      "Write a very long story"}], "stream": false, "max_tokens": 5}'
+    headers:
+      Cookie:
+      - __cf_bm=F0DB86QViHrlcKXzYGg_ITRQCAInhQrP_tqeRoIHyKg-1765798611.6362557-1.0.1.1-.qxIpiF34n4.nK4T6P3qvjiWDx.nuJvMWWhovOauAyU9Xl0UHtEp.BKoXdtOzd.Mz1Tb3VP5TK_bQQzg0NffhaQJJ0bPYP5koXRQL.aS3OGMtcja1kZVM.lLeJKlmI9b
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '137'
+      content-type:
+      - application/json
+      host:
+      - api.groq.com
+      user-agent:
+      - litellm/1.78.2
+    method: POST
+    uri: https://api.groq.com/openai/v1/chat/completions
+  response:
+    body:
+      string: '{"id":"chatcmpl-bf76b6e9-cf07-425e-8c10-2b1dea6277ca","object":"chat.completion","created":1765798611,"model":"llama-3.1-8b-instant","choices":[{"index":0,"message":{"role":"assistant","content":"It
+        was a crisp spring"},"logprobs":null,"finish_reason":"length"}],"usage":{"queue_time":0.036858203,"prompt_tokens":40,"prompt_time":0.003107237,"completion_tokens":5,"completion_time":0.01367853,"total_tokens":45,"total_time":0.016785767},"usage_breakdown":null,"system_fingerprint":"fp_020e283281","x_groq":{"id":"req_01kcgws2yne0yb8rwmz57wrcas","seed":628869840},"service_tier":"on_demand"}
+
+        '
+    headers:
+      CF-RAY:
+      - 9ae5a54bdc3a710f-PIT
+      Cache-Control:
+      - private, max-age=0, no-store, no-cache, must-revalidate
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      Date:
+      - Mon, 15 Dec 2025 11:36:51 GMT
+      Server:
+      - cloudflare
+      Set-Cookie:
+      - __cf_bm=Phqlm1MGfw2tN5ynRB6sd32FPreq7t4ylrZCFcWYyI0-1765798611.817327-1.0.1.1-djh1z_fa03jqf_NkCpe_NRy1N_u59H9gaWdplIukpNMCPkUfL8herBVM3NjqGeBiu_Nwsse92a1ZTUYVMKD752tR8fEBEQi6LdBO8SnyDS9xUX._L9Bs56Ehw.2rzvCn;
+        HttpOnly; Secure; Path=/; Domain=groq.com; Expires=Mon, 15 Dec 2025 12:06:51
+        GMT
+      Strict-Transport-Security:
+      - max-age=2592000
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Origin
+      alt-svc:
+      - h3=":443"; ma=86400
+      cf-cache-status:
+      - DYNAMIC
+      content-length:
+      - '591'
+      x-groq-region:
+      - yul
+      x-ratelimit-limit-requests:
+      - '14400'
+      x-ratelimit-limit-tokens:
+      - '6000'
+      x-ratelimit-remaining-requests:
+      - '14391'
+      x-ratelimit-remaining-tokens:
+      - '5334'
+      x-ratelimit-reset-requests:
+      - 54s
+      x-ratelimit-reset-tokens:
+      - 6.66s
+      x-request-id:
+      - req_01kcgws2yne0yb8rwmz57wrcas
+    status:
+      code: 200
+      message: OK
+version: 1

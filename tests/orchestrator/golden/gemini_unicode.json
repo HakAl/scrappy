@@ -1,0 +1,82 @@
+{
+  "provider": "gemini",
+  "model": "gemini/gemini-2.5-flash",
+  "scenario": "unicode",
+  "recorded_at": "2025-12-15T22:56:46.316266+00:00",
+  "total_chunks": 2,
+  "total_duration_ms": 755.0654999213293,
+  "prompt": [
+    {
+      "role": "user",
+      "content": "Respond with these unicode characters: emoji, chinese, math symbols."
+    }
+  ],
+  "tools": null,
+  "chunks": [
+    {
+      "index": 0,
+      "timestamp_ms": 735.7844999060035,
+      "delta_content": "Here are your requested Unicode characters:\n\n😄 (emoji)\n你好 (Chinese)\n∑∫π (math symbols)",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "L5JAacKwA-CajMcPgrTh-AU",
+        "created": 1765839406,
+        "model": "gemini-2.5-flash",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": null,
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "content": "Here are your requested Unicode characters:\n\n😄 (emoji)\n你好 (Chinese)\n∑∫π (math symbols)",
+              "role": "assistant",
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "vertex_ai_grounding_metadata": [],
+        "vertex_ai_url_context_metadata": [],
+        "vertex_ai_safety_ratings": [],
+        "vertex_ai_citation_metadata": []
+      }
+    },
+    {
+      "index": 1,
+      "timestamp_ms": 754.5311999274418,
+      "delta_content": null,
+      "delta_tool_calls": null,
+      "finish_reason": "stop",
+      "raw_chunk": {
+        "id": "L5JAacKwA-CajMcPgrTh-AU",
+        "created": 1765839406,
+        "model": "gemini-2.5-flash",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": null,
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "content": null,
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null
+      }
+    }
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "provider": "gemini",
+  "model": "gemini/gemini-2.5-flash",
+  "scenario": "basic",
+  "recorded_at": "2025-12-15T22:56:43.448292+00:00",
+  "total_chunks": 2,
+  "total_duration_ms": 1520.7238000584766,
+  "prompt": [
+    {
+      "role": "user",
+      "content": "Say hello in exactly 5 words."
+    }
+  ],
+  "tools": null,
+  "chunks": [
+    {
+      "index": 0,
+      "timestamp_ms": 1519.8464000131935,
+      "delta_content": "Hello, how are you today?",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "K5JAaf-JK4DpjMcPg7ep8AM",
+        "created": 1765839403,
+        "model": "gemini-2.5-flash",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": null,
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "content": "Hello, how are you today?",
+              "role": "assistant",
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "vertex_ai_grounding_metadata": [],
+        "vertex_ai_url_context_metadata": [],
+        "vertex_ai_safety_ratings": [],
+        "vertex_ai_citation_metadata": []
+      }
+    },
+    {
+      "index": 1,
+      "timestamp_ms": 1520.3850000398234,
+      "delta_content": null,
+      "delta_tool_calls": null,
+      "finish_reason": "stop",
+      "raw_chunk": {
+        "id": "K5JAaf-JK4DpjMcPg7ep8AM",
+        "created": 1765839403,
+        "model": "gemini-2.5-flash",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": null,
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "content": null,
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null
+      }
+    }
+  ]
+}

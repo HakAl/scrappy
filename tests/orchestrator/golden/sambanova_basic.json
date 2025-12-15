@@ -1,0 +1,113 @@
+{
+  "provider": "sambanova",
+  "model": "sambanova/Meta-Llama-3.1-8B-Instruct",
+  "scenario": "basic",
+  "recorded_at": "2025-12-15T22:56:48.887490+00:00",
+  "total_chunks": 3,
+  "total_duration_ms": 2144.5166000630707,
+  "prompt": [
+    {
+      "role": "user",
+      "content": "Say hello in exactly 5 words."
+    }
+  ],
+  "tools": null,
+  "chunks": [
+    {
+      "index": 0,
+      "timestamp_ms": 1717.931600054726,
+      "delta_content": "Hello",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "a999cee8-6a85-46e4-9a02-071d6dec9656",
+        "created": 1765839408,
+        "model": "Meta-Llama-3.1-8B-Instruct",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fastcoe",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": "Hello",
+              "role": "assistant",
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 1,
+      "timestamp_ms": 1718.4492000378668,
+      "delta_content": ", how are you today?",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "a999cee8-6a85-46e4-9a02-071d6dec9656",
+        "created": 1765839408,
+        "model": "Meta-Llama-3.1-8B-Instruct",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fastcoe",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": ", how are you today?",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 2,
+      "timestamp_ms": 1718.8352000666782,
+      "delta_content": null,
+      "delta_tool_calls": null,
+      "finish_reason": "stop",
+      "raw_chunk": {
+        "id": "a999cee8-6a85-46e4-9a02-071d6dec9656",
+        "created": 1765839408,
+        "model": "Meta-Llama-3.1-8B-Instruct",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fastcoe",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "content": null,
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null
+      }
+    }
+  ]
+}

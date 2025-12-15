@@ -2754,15 +2754,21 @@ class MockRateLimitTracker:
     def record_request(
         self,
         provider: str,
-        tokens_used: int = 0,
-        timestamp: Any = None,
+        model: str = "",
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        success: bool = True,
+        error_message: Optional[str] = None,
         **kwargs
     ) -> None:
         """Record a request."""
         self.recorded_requests.append({
             'provider': provider,
-            'tokens_used': tokens_used,
-            'timestamp': timestamp,
+            'model': model,
+            'input_tokens': input_tokens,
+            'output_tokens': output_tokens,
+            'success': success,
+            'error_message': error_message,
             **kwargs
         })
 
@@ -2872,3 +2878,214 @@ class MockProviderStatusTracker:
     def last_failure(self) -> Optional[Dict[str, Any]]:
         """Get last recorded failure."""
         return self.failures[-1] if self.failures else None
+
+
+# =============================================================================
+# Streaming Test Doubles
+# =============================================================================
+
+class MockStreamingRouter:
+    """
+    Test double for streaming LiteLLM Router.
+
+    Provides controllable streaming responses for testing streaming
+    functionality without hitting real APIs.
+
+    Usage:
+        chunks = [
+            make_stream_chunk(content="Hello"),
+            make_stream_chunk(content=" world", finish_reason="stop")
+        ]
+        router = MockStreamingRouter(stream_chunks=chunks)
+
+        async for chunk in router.acompletion(model="fast", messages=[], stream=True):
+            print(chunk.content)
+    """
+
+    def __init__(
+        self,
+        stream_chunks: Optional[List[Any]] = None,
+        exception: Optional[Exception] = None,
+    ):
+        """
+        Initialize mock streaming router.
+
+        Args:
+            stream_chunks: List of chunk objects to yield
+            exception: Exception to raise during streaming
+        """
+        self._stream_chunks = stream_chunks or []
+        self._exception = exception
+        self.calls: List[Dict[str, Any]] = []
+
+    async def acompletion(self, model: str, messages: list, **kwargs):
+        """
+        Async completion that yields chunks if stream=True.
+
+        Args:
+            model: Model group name
+            messages: Chat messages
+            **kwargs: Additional params including stream flag
+
+        Yields:
+            Mock chunk objects if stream=True
+
+        Returns:
+            Single response if stream=False
+
+        Raises:
+            Configured exception if set
+        """
+        self.calls.append({
+            'model': model,
+            'messages': messages,
+            **kwargs
+        })
+
+        if self._exception:
+            raise self._exception
+
+        if kwargs.get('stream', False):
+            # Streaming mode - yield chunks
+            async def _stream_generator():
+                for chunk in self._stream_chunks:
+                    yield chunk
+            return _stream_generator()
+        else:
+            # Non-streaming mode - return single response
+            return make_mock_litellm_response(content="test response")
+
+
+def make_stream_chunk(
+    content: str = "",
+    tool_call_fragments: Optional[List[Any]] = None,
+    finish_reason: Optional[str] = None,
+    model: str = "",
+    provider: str = "",
+    metadata: Optional[Dict[str, Any]] = None
+):
+    """
+    Factory function to create StreamChunk objects for testing.
+
+    Args:
+        content: Text content in this chunk
+        tool_call_fragments: List of ToolCallFragment objects
+        finish_reason: Reason streaming ended (None if still streaming)
+        model: Model identifier
+        provider: Provider name
+        metadata: Additional chunk-specific metadata
+
+    Returns:
+        StreamChunk instance
+    """
+    from scrappy.orchestrator.types import StreamChunk
+
+    return StreamChunk(
+        content=content,
+        tool_call_fragments=tool_call_fragments or [],
+        finish_reason=finish_reason,
+        model=model,
+        provider=provider,
+        metadata=metadata or {}
+    )
+
+
+class CapturingStreamOutput:
+    """
+    Test output that captures streaming events.
+
+    Implements BaseOutputProtocol and records all streaming method calls
+    for verification in tests.
+
+    Usage:
+        output = CapturingStreamOutput()
+        await output.stream_start("Processing...")
+        await output.stream_token("Hello")
+        await output.stream_token(" world")
+        await output.stream_end()
+
+        assert output.started
+        assert output.get_streamed_text() == "Hello world"
+        assert output.ended
+    """
+
+    def __init__(self):
+        """Initialize capturing stream output."""
+        self.messages: List[Dict[str, Any]] = []
+        self.stream_events: List[Dict[str, Any]] = []
+        self.streamed_tokens: List[str] = []
+        self.started = False
+        self.ended = False
+        self.start_message: Optional[str] = None
+        self.end_message: Optional[str] = None
+
+    # BaseOutputProtocol methods
+    def info(self, message: str) -> None:
+        """Record info message."""
+        self.messages.append({'level': 'info', 'message': message})
+
+    def warn(self, message: str) -> None:
+        """Record warning message."""
+        self.messages.append({'level': 'warn', 'message': message})
+
+    def error(self, message: str) -> None:
+        """Record error message."""
+        self.messages.append({'level': 'error', 'message': message})
+
+    def success(self, message: str) -> None:
+        """Record success message."""
+        self.messages.append({'level': 'success', 'message': message})
+
+    # Streaming methods (StreamingOutputProtocol)
+    async def stream_start(self, metadata: Optional[Dict[str, Any]] = None) -> None:
+        """Record stream start event."""
+        self.started = True
+        self.start_message = metadata
+        self.stream_events.append({
+            'event': 'start',
+            'metadata': metadata or {}
+        })
+
+    async def stream_token(self, token: str) -> None:
+        """Record stream token event."""
+        self.streamed_tokens.append(token)
+        self.stream_events.append({
+            'event': 'token',
+            'token': token
+        })
+
+    async def stream_end(self, metadata: Optional[Dict[str, Any]] = None) -> None:
+        """Record stream end event."""
+        self.ended = True
+        self.end_message = metadata
+        self.stream_events.append({
+            'event': 'end',
+            'metadata': metadata or {}
+        })
+
+    # Verification helpers
+    def get_streamed_text(self) -> str:
+        """Get all streamed tokens concatenated."""
+        return "".join(self.streamed_tokens)
+
+    def get_stream_events(self) -> List[Dict[str, Any]]:
+        """Get all stream events for verification."""
+        return self.stream_events
+
+    def get_warnings(self) -> List[str]:
+        """Get all warning messages."""
+        return [m['message'] for m in self.messages if m['level'] == 'warn']
+
+    def get_errors(self) -> List[str]:
+        """Get all error messages."""
+        return [m['message'] for m in self.messages if m['level'] == 'error']
+
+    def reset(self) -> None:
+        """Reset all captured state."""
+        self.messages = []
+        self.stream_events = []
+        self.streamed_tokens = []
+        self.started = False
+        self.ended = False
+        self.start_message = None
+        self.end_message = None

@@ -20,16 +20,34 @@ Architecture:
 
 import json
 import time
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING, AsyncIterator
 
 from ..providers.base import LLMResponse, ToolCall
 from ..infrastructure.exceptions.provider_errors import AllProvidersRateLimitedError
 from ..protocols.output import BaseOutputProtocol
 from ..infrastructure.config.api_keys import ApiKeyConfigServiceProtocol
+from .types import StreamChunk, ToolCallFragment
 
 if TYPE_CHECKING:
     import litellm
     from .litellm_callbacks import RateTrackingCallback
+
+# Force httpx transport for LiteLLM streaming
+# aiohttp has issues with session lifecycle that cause incomplete streams
+# and "unclosed client session" warnings on exit
+def _configure_litellm_transport():
+    """Configure LiteLLM to use httpx instead of aiohttp."""
+    try:
+        import litellm
+        import httpx
+        litellm.disable_aiohttp_transport = True
+        litellm.use_aiohttp_transport = False
+        litellm.client_session = httpx.Client()
+        litellm.aclient_session = httpx.AsyncClient()
+    except ImportError:
+        pass  # litellm or httpx not installed, skip
+
+_configure_litellm_transport()
 
 
 # Maximum escalation depth to prevent infinite recursion
@@ -40,10 +58,30 @@ ESCALATION_PATH = {
     "fast": "quality",
 }
 
+# Default timeout for stuck stream detection (ms)
+DEFAULT_STREAM_TIMEOUT_MS = 30000  # 30 seconds
+
 
 class NotConfiguredError(Exception):
     """Raised when LLM service is used before API keys are configured."""
     pass
+
+
+class StreamStuckError(Exception):
+    """Raised when streaming stalls with no content received within timeout."""
+
+    def __init__(self, message: str, partial_content: str = "", timeout_ms: int = 0):
+        super().__init__(message)
+        self.partial_content = partial_content
+        self.timeout_ms = timeout_ms
+
+
+class StreamCancelledError(Exception):
+    """Raised when streaming is cancelled by user (e.g., Ctrl-C)."""
+
+    def __init__(self, message: str = "Stream cancelled", partial_content: str = ""):
+        super().__init__(message)
+        self.partial_content = partial_content
 
 
 class LiteLLMService:
@@ -330,6 +368,198 @@ class LiteLLMService:
             )
         # NOTE: AuthenticationError is NOT caught here. See async version for rationale.
 
+    async def stream_completion(
+        self,
+        model: str,
+        messages: list[dict],
+        _escalation_depth: int = 0,
+        _escalated_from: Optional[str] = None,
+        timeout_ms: int = DEFAULT_STREAM_TIMEOUT_MS,
+        cancellation_token: Optional["asyncio.Event"] = None,
+        **kwargs
+    ) -> AsyncIterator[StreamChunk]:
+        """
+        Execute streaming completion via LiteLLM Router.
+
+        Args:
+            model: Model group name ("fast" or "quality")
+            messages: Chat messages
+            _escalation_depth: Internal counter to prevent infinite recursion (do not set)
+            _escalated_from: Internal tracking of original tier (do not set)
+            timeout_ms: Max time to wait for next chunk (default 30s). Raises StreamStuckError if exceeded.
+            cancellation_token: Optional asyncio.Event to cancel stream. Set event to cancel.
+            **kwargs: Additional params (max_tokens, temperature, tools, tool_choice, etc.)
+
+        Yields:
+            StreamChunk objects as they arrive from the provider
+
+        Raises:
+            NotConfiguredError: When service not configured with API keys
+            AllProvidersRateLimitedError: When all providers exhausted
+            ContextWindowExceededError: When quality tier also exceeds context (fatal)
+            RuntimeError: When max escalation depth exceeded (safety guard)
+            StreamStuckError: When no chunk received within timeout_ms
+            StreamCancelledError: When cancellation_token is set
+        """
+        import asyncio
+
+        if not self._configured:
+            raise NotConfiguredError("LLM service not configured. Run setup wizard first.")
+
+        # Import here to avoid import errors if litellm not installed
+        from litellm import ContextWindowExceededError
+        from litellm import RateLimitError as LiteLLMRateLimitError
+
+        # Safety guard against infinite recursion
+        if _escalation_depth >= MAX_ESCALATION_DEPTH:
+            raise RuntimeError(
+                f"Max escalation depth ({MAX_ESCALATION_DEPTH}) exceeded. "
+                "Context window too small for all available model tiers."
+            )
+
+        # Track partial content for error recovery
+        partial_content = ""
+        seen_final = False  # For Groq double-final chunk dedup
+        timeout_seconds = timeout_ms / 1000.0
+
+        try:
+            # Call LiteLLM Router's async streaming method
+            stream = await self._router.acompletion(
+                model=model,
+                messages=messages,
+                stream=True,
+                num_retries=3,
+                **kwargs
+            )
+
+            # Stream chunks with timeout and cancellation support
+            stream_iter = stream.__aiter__()
+            while True:
+                # Check cancellation token before waiting for next chunk
+                if cancellation_token and cancellation_token.is_set():
+                    raise StreamCancelledError(
+                        "Stream cancelled by user",
+                        partial_content=partial_content
+                    )
+
+                try:
+                    # Wait for next chunk with timeout (stuck stream detection)
+                    chunk = await asyncio.wait_for(
+                        stream_iter.__anext__(),
+                        timeout=timeout_seconds
+                    )
+                except StopAsyncIteration:
+                    # Stream completed normally
+                    break
+                except asyncio.TimeoutError:
+                    raise StreamStuckError(
+                        f"Stream stalled: no chunk received in {timeout_ms}ms",
+                        partial_content=partial_content,
+                        timeout_ms=timeout_ms
+                    )
+
+                converted = self._convert_chunk(chunk)
+
+                # Groq double-final chunk dedup (5b)
+                # Some providers send finish_reason twice - skip duplicates
+                if converted.finish_reason:
+                    if seen_final:
+                        continue  # Skip duplicate final chunk
+                    seen_final = True
+
+                # Accumulate content for error recovery
+                if converted.content:
+                    partial_content += converted.content
+
+                yield converted
+
+        except ContextWindowExceededError as e:
+            # Smart recovery: fast tier -> try quality tier (has larger context models)
+            next_tier = ESCALATION_PATH.get(model)
+            if next_tier:
+                self._output.warn(
+                    f"Context window exceeded on {model} tier, retrying with {next_tier} tier..."
+                )
+                # Track escalation for monitoring
+                if self._callback:
+                    self._callback.record_escalation(model, next_tier)
+                # Recursively call with next tier (preserve timeout and cancellation settings)
+                async for chunk in self.stream_completion(
+                    next_tier,
+                    messages,
+                    _escalation_depth=_escalation_depth + 1,
+                    _escalated_from=model,
+                    timeout_ms=timeout_ms,
+                    cancellation_token=cancellation_token,
+                    **kwargs
+                ):
+                    yield chunk
+                return
+            # No escalation path available - fatal, re-raise
+            raise
+
+        except LiteLLMRateLimitError as e:
+            provider = getattr(e, 'llm_provider', None)
+            raise AllProvidersRateLimitedError(
+                message=str(e),
+                attempted_providers=[provider] if provider else [],
+            )
+
+        except (StreamStuckError, StreamCancelledError):
+            # Re-raise our custom exceptions unchanged
+            raise
+
+        except Exception as e:
+            # Mid-stream error handling (5e): preserve partial content
+            if partial_content:
+                # Wrap exception with partial content info
+                raise type(e)(
+                    f"{str(e)} (partial content available: {len(partial_content)} chars)"
+                ) from e
+            raise
+        # NOTE: AuthenticationError is NOT caught here.
+        # LiteLLM Router handles auth failures internally by trying next provider in group.
+        # If all providers in group fail auth, Router raises the error which propagates up.
+
+    def _convert_chunk(self, chunk) -> StreamChunk:
+        """
+        Convert LiteLLM streaming chunk to our StreamChunk format.
+
+        Args:
+            chunk: LiteLLM streaming chunk object
+
+        Returns:
+            StreamChunk with normalized data
+        """
+        # Extract content delta if present
+        choice = chunk.choices[0] if chunk.choices else None
+        content = ""
+        if choice and hasattr(choice, 'delta') and choice.delta:
+            content = getattr(choice.delta, 'content', None) or ""
+
+        # Extract finish reason
+        finish_reason = None
+        if choice:
+            finish_reason = getattr(choice, 'finish_reason', None)
+
+        # Extract model and provider
+        model_str = getattr(chunk, 'model', "") or ""
+        provider = model_str.split("/")[0] if "/" in model_str else ""
+
+        # Extract tool call fragments using helper method
+        tool_call_fragments = []
+        if choice and hasattr(choice, 'delta') and choice.delta:
+            tool_call_fragments = self._extract_tool_fragments(choice.delta)
+
+        return StreamChunk(
+            content=content,
+            tool_call_fragments=tool_call_fragments,
+            finish_reason=finish_reason,
+            model=model_str,
+            provider=provider,
+            metadata={}
+        )
+
     def _convert_response(
         self,
         response,
@@ -418,3 +648,121 @@ class LiteLLMService:
             )
 
         return tool_calls if tool_calls else None
+
+    def _extract_tool_fragments(self, delta) -> list[ToolCallFragment]:
+        """
+        Extract tool call fragments from a streaming delta.
+
+        During streaming, tool calls arrive incrementally across multiple chunks.
+        This method extracts the fragments from a single chunk's delta.
+
+        Args:
+            delta: Delta object from LiteLLM streaming chunk
+
+        Returns:
+            List of ToolCallFragment objects (empty if no tool calls in delta)
+        """
+        if not hasattr(delta, 'tool_calls') or not delta.tool_calls:
+            return []
+
+        fragments = []
+        for tc in delta.tool_calls:
+            fragment = ToolCallFragment(
+                id=getattr(tc, 'id', '') or '',
+                type=getattr(tc, 'type', 'function'),
+                name=getattr(tc.function, 'name', '') if hasattr(tc, 'function') else '',
+                arguments=getattr(tc.function, 'arguments', '') if hasattr(tc, 'function') else '',
+                index=getattr(tc, 'index', 0),
+                complete=False
+            )
+            fragments.append(fragment)
+
+        return fragments
+
+    async def _escalate_and_stream(
+        self,
+        model: str,
+        messages: list[dict],
+        _escalation_depth: int = 0,
+        _escalated_from: Optional[str] = None,
+        **kwargs
+    ) -> AsyncIterator[StreamChunk]:
+        """
+        Handle context window escalation for streaming before first chunk.
+
+        This method wraps stream_completion to detect context window errors
+        that occur BEFORE the first chunk arrives (during request initiation).
+        If detected, it escalates to the next tier transparently.
+
+        This is critical because context window errors can happen in two phases:
+        1. Pre-stream: LiteLLM rejects request before streaming starts
+        2. Mid-stream: Provider rejects after streaming starts (rare)
+
+        This method handles phase 1. The stream_completion method handles phase 2
+        by catching errors during chunk iteration.
+
+        Args:
+            model: Model group name ("fast" or "quality")
+            messages: Chat messages
+            _escalation_depth: Internal counter to prevent infinite recursion
+            _escalated_from: Internal tracking of original tier
+            **kwargs: Additional params passed to stream_completion
+
+        Yields:
+            StreamChunk objects from the (possibly escalated) stream
+
+        Raises:
+            ContextWindowExceededError: When quality tier also exceeds context (fatal)
+            RuntimeError: When max escalation depth exceeded (safety guard)
+            AllProvidersRateLimitedError: When all providers exhausted
+
+        Note:
+            This method does NOT replace stream_completion - it wraps it to add
+            pre-stream escalation detection. The stream_completion method still
+            handles mid-stream errors and normal streaming logic.
+        """
+        from litellm import ContextWindowExceededError
+
+        # Safety guard against infinite recursion
+        if _escalation_depth >= MAX_ESCALATION_DEPTH:
+            raise RuntimeError(
+                f"Max escalation depth ({MAX_ESCALATION_DEPTH}) exceeded. "
+                "Context window too small for all available model tiers."
+            )
+
+        try:
+            # Attempt to start streaming
+            async for chunk in self.stream_completion(
+                model=model,
+                messages=messages,
+                _escalation_depth=_escalation_depth,
+                _escalated_from=_escalated_from,
+                **kwargs
+            ):
+                yield chunk
+
+        except ContextWindowExceededError as e:
+            # Context window exceeded before first chunk
+            next_tier = ESCALATION_PATH.get(model)
+            if next_tier:
+                self._output.warn(
+                    f"Context window exceeded on {model} tier (pre-stream), "
+                    f"retrying with {next_tier} tier..."
+                )
+                # Track escalation for monitoring
+                if self._callback:
+                    self._callback.record_escalation(model, next_tier)
+
+                # Recursively try next tier
+                async for chunk in self._escalate_and_stream(
+                    next_tier,
+                    messages,
+                    _escalation_depth=_escalation_depth + 1,
+                    _escalated_from=model,
+                    **kwargs
+                ):
+                    yield chunk
+                return
+
+            # No escalation path available - fatal, re-raise
+            raise

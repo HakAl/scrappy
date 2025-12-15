@@ -6,7 +6,8 @@ The BaseOutputProtocol protocol is defined in protocols.py.
 """
 
 import logging
-from typing import List, Tuple
+import sys
+from typing import Any, List, Optional, Tuple
 
 # Import protocol from centralized location
 from .protocols import BaseOutputProtocol
@@ -16,7 +17,10 @@ logger = logging.getLogger(__name__)
 
 
 class ConsoleOutput:
-    """Standard console output implementation using Python logging."""
+    """Standard console output implementation using Python logging.
+
+    Implements both BaseOutputProtocol and StreamingOutputProtocol.
+    """
 
     def info(self, message: str) -> None:
         """Log informational message."""
@@ -34,11 +38,42 @@ class ConsoleOutput:
         """Log success message."""
         logger.info(f"[OK] {message}")
 
+    async def stream_start(self, metadata: Optional[dict[str, Any]] = None) -> None:
+        """Signal the start of a streaming response.
+
+        Args:
+            metadata: Optional metadata about the stream (model name, task type, etc.)
+        """
+        pass
+
+    async def stream_token(self, token: str) -> None:
+        """Output a single token from the stream to stdout.
+
+        Prints the token immediately without buffering or newline.
+
+        Args:
+            token: A single token/chunk of text from the streaming response
+        """
+        sys.stdout.write(token)
+        sys.stdout.flush()
+
+    async def stream_end(self, metadata: Optional[dict[str, Any]] = None) -> None:
+        """Signal the end of a streaming response.
+
+        Prints a newline to finalize the output.
+
+        Args:
+            metadata: Optional metadata about the completed stream (total tokens, duration, etc.)
+        """
+        sys.stdout.write("\n")
+        sys.stdout.flush()
+
 
 class NullOutput:
     """Silent output implementation - captures nothing, outputs nothing.
 
     Useful for running operations silently or in quiet mode.
+    Implements both BaseOutputProtocol and StreamingOutputProtocol.
     """
 
     def info(self, message: str) -> None:
@@ -55,6 +90,30 @@ class NullOutput:
 
     def success(self, message: str) -> None:
         """Discard success message."""
+        pass
+
+    async def stream_start(self, metadata: Optional[dict[str, Any]] = None) -> None:
+        """Discard stream start signal.
+
+        Args:
+            metadata: Optional metadata about the stream (model name, task type, etc.)
+        """
+        pass
+
+    async def stream_token(self, token: str) -> None:
+        """Discard streaming token.
+
+        Args:
+            token: A single token/chunk of text from the streaming response
+        """
+        pass
+
+    async def stream_end(self, metadata: Optional[dict[str, Any]] = None) -> None:
+        """Discard stream end signal.
+
+        Args:
+            metadata: Optional metadata about the completed stream (total tokens, duration, etc.)
+        """
         pass
 
 

@@ -1,0 +1,80 @@
+{
+  "provider": "cerebras",
+  "model": "cerebras/llama3.1-8b",
+  "scenario": "empty",
+  "recorded_at": "2025-12-15T22:56:41.925729+00:00",
+  "total_chunks": 2,
+  "total_duration_ms": 381.95860001724213,
+  "prompt": [
+    {
+      "role": "user",
+      "content": "Say 'OK'"
+    }
+  ],
+  "tools": null,
+  "chunks": [
+    {
+      "index": 0,
+      "timestamp_ms": 379.8745999811217,
+      "delta_content": "OK",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "chatcmpl-b3b951b7-5a2c-4bc6-aa81-59b7de706a28",
+        "created": 1765839401,
+        "model": "llama3.1-8b",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fp_2df2c50ce520692a7dce",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": "OK",
+              "role": "assistant",
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 1,
+      "timestamp_ms": 381.14549999590963,
+      "delta_content": null,
+      "delta_tool_calls": null,
+      "finish_reason": "stop",
+      "raw_chunk": {
+        "id": "chatcmpl-b3b951b7-5a2c-4bc6-aa81-59b7de706a28",
+        "created": 1765839401,
+        "model": "cerebras/llama3.1-8b",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fp_2df2c50ce520692a7dce",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "content": null,
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null
+      }
+    }
+  ]
+}

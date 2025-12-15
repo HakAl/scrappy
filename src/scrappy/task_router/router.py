@@ -7,7 +7,7 @@ import time
 import warnings
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Tuple, Union
 
 from .classifier import ClassifiedTask, TaskClassifier, TaskType
 from .intent_clarifier import (
@@ -48,6 +48,7 @@ from .strategies import (
 )
 from .protocols import ExecutionStrategyProtocol
 from .validator import InputValidator
+from ..protocols.output import StreamingOutputProtocol
 
 
 class TaskRouter:
@@ -507,6 +508,244 @@ What is the user's PRIMARY intent? Respond with JSON only."""
         )
 
         return result
+
+    def _prepare_for_execution(
+        self,
+        user_input: str,
+        provider: Optional[str] = None
+    ) -> Tuple[Optional[ClassifiedTask], Optional[ExecutionStrategyProtocol], Optional[str], Optional[str], Optional[ExecutionResult]]:
+        """
+        Prepare task for execution - shared logic between route() and route_streaming().
+
+        Performs validation, classification, provider resolution, and strategy selection.
+
+        Args:
+            user_input: User's task/query
+            provider: Optional provider hint
+
+        Returns:
+            Tuple of (classified_task, strategy, provider_name, model_name, error_result)
+            If error_result is not None, the other values should be ignored.
+        """
+        start_time = time.time()
+
+        # 0. Validate input at boundary
+        is_valid, error_message = self.validator.validate_user_input(user_input)
+        if not is_valid:
+            return (None, None, None, None, ExecutionResult(
+                success=False,
+                output="",
+                error=f"Invalid input: {error_message}",
+                execution_time=time.time() - start_time
+            ))
+
+        # 1. Classify the task
+        classified = self.classifier.classify(user_input)
+
+        # 2. Apply provider override if specified
+        if provider:
+            classified = replace(classified, override_provider=provider)
+
+        if self.verbose:
+            self._log_classification(classified)
+
+        # 3. Apply confidence escalation (auto-upgrade low-confidence tasks)
+        classified = self._apply_confidence_escalation(classified)
+
+        # 4. LLM fallback for low-confidence classifications
+        if self.use_llm_classification and classified.confidence < self.confidence_threshold:
+            if self.verbose:
+                self.output_handler.log_info(f"Low confidence ({classified.confidence:.0%}) - trying LLM classification")
+            classified = self._classify_with_llm(classified)
+
+        # 5. Clarify intent if still needed (ask user when ambiguous)
+        if self.clarify_on_low_confidence and self._needs_intent_clarification(classified):
+            classified = self._clarify_intent(classified)
+
+        # 6. Resolve provider (override takes precedence over suggestion)
+        provider_hint = classified.override_provider or classified.suggested_provider
+        provider_name, model_name = self._resolve_provider(provider_hint)
+
+        if self.verbose and provider_name:
+            model_info = f" ({model_name})" if model_name else ""
+            source = "override" if classified.override_provider else "hint"
+            self.output_handler.log_provider_selection(
+                provider=provider_name,
+                model=model_name,
+                source=f"{source}: {provider_hint}"
+            )
+
+        # 7. Apply pre-execution hooks
+        for hook in self._pre_hooks:
+            classified = hook(classified)
+
+        # 8. Get appropriate strategy
+        strategy = self._get_strategy(classified)
+
+        if not strategy:
+            return (None, None, None, None, ExecutionResult(
+                success=False,
+                output="",
+                error=f"No strategy available for task type: {classified.task_type}",
+                execution_time=time.time() - start_time
+            ))
+
+        return (classified, strategy, provider_name, model_name, None)
+
+    async def route_streaming(
+        self,
+        user_input: str,
+        output: StreamingOutputProtocol,
+        *,
+        provider: Optional[str] = None
+    ) -> ExecutionResult:
+        """
+        Route user input with streaming output.
+
+        Like route(), but streams response tokens/events to the output protocol
+        as they arrive, enabling real-time display.
+
+        Supports two strategy patterns:
+        - ResearchExecutor: execute_streaming(task, output) -> ExecutionResult
+        - AgentExecutor: execute_streaming(task) -> AsyncIterator[AgentEvent]
+
+        Args:
+            user_input: User's task/query
+            output: Streaming output protocol for real-time display
+            provider: Optional provider hint ("fast", "quality") or specific provider name
+
+        Returns:
+            ExecutionResult with output and metadata
+        """
+        start_time = time.time()
+
+        # Prepare task (shared with route())
+        classified, strategy, provider_name, model_name, error_result = self._prepare_for_execution(
+            user_input, provider
+        )
+
+        if error_result:
+            return error_result
+
+        # Confirm execution if needed
+        if not self._should_execute(classified, strategy):
+            return ExecutionResult(
+                success=False,
+                output="",
+                error="Execution cancelled by user",
+                execution_time=time.time() - start_time
+            )
+
+        # Execute with streaming
+        if self.verbose:
+            self.output_handler.log_execution_start(strategy.name)
+
+        # Pass resolved provider info to strategy if it supports it
+        if hasattr(strategy, 'set_provider'):
+            strategy.set_provider(provider_name, model_name)
+
+        # Check if strategy supports streaming
+        if hasattr(strategy, 'execute_streaming'):
+            result = await self._execute_streaming(strategy, classified, output)
+        else:
+            # Fallback to non-streaming execution
+            if self.verbose:
+                self.output_handler.log_info(f"Strategy {strategy.name} does not support streaming, falling back to sync")
+            result = strategy.execute(classified)
+
+        # Apply post-execution hooks
+        for hook in self._post_hooks:
+            result = hook(result)
+
+        # Update metrics
+        self._update_metrics(classified, result)
+
+        # Add classification info to result
+        result.metadata["classification"] = build_classification_metadata(
+            classified, provider_name, model_name
+        )
+
+        return result
+
+    async def _execute_streaming(
+        self,
+        strategy: ExecutionStrategyProtocol,
+        task: ClassifiedTask,
+        output: StreamingOutputProtocol
+    ) -> ExecutionResult:
+        """
+        Execute strategy with streaming, handling different strategy patterns.
+
+        Adapts to two patterns:
+        - Pattern A (ResearchExecutor): execute_streaming(task, output) -> ExecutionResult
+        - Pattern B (AgentExecutor): execute_streaming(task) -> AsyncIterator[AgentEvent]
+        """
+        import inspect
+
+        execute_streaming = getattr(strategy, 'execute_streaming')
+        sig = inspect.signature(execute_streaming)
+        params = list(sig.parameters.keys())
+
+        # Pattern A: Takes output protocol, returns result
+        if 'output' in params:
+            return await execute_streaming(task, output)
+
+        # Pattern B: Yields events (AgentExecutor pattern)
+        # Iterate events, write to output, collect final result
+        await output.stream_start(metadata={"task_type": task.task_type.value, "strategy": strategy.name})
+
+        start_time = time.time()
+        accumulated_content = []
+        final_result = None
+        tokens_used = 0
+        success = True  # Default to success
+
+        try:
+            async for event in execute_streaming(task):
+                # Handle different event types
+                if event.event_type == "thought_token":
+                    await output.stream_token(event.content)
+                    accumulated_content.append(event.content)
+                elif event.event_type == "thought_start":
+                    pass  # Could add visual indicator
+                elif event.event_type == "thought_end":
+                    await output.stream_token("\n")
+                    accumulated_content.append("\n")
+                elif event.event_type == "action_start":
+                    action_name = event.metadata.get("action", "unknown")
+                    await output.stream_token(f"\n[Action: {action_name}]\n")
+                    accumulated_content.append(f"\n[Action: {action_name}]\n")
+                elif event.event_type == "action_end":
+                    action_name = event.metadata.get("action", "unknown")
+                    action_success = event.metadata.get("success", True)
+                    status = "done" if action_success else "failed"
+                    await output.stream_token(f"[{action_name}: {status}]\n")
+                    accumulated_content.append(f"[{action_name}: {status}]\n")
+                elif event.event_type == "complete":
+                    final_result = event.content
+                    success = event.metadata.get("success", True)
+                elif event.event_type == "error":
+                    from ..orchestrator.streaming_util import format_stream_error
+                    error_display = format_stream_error(
+                        error=event.content,
+                        chunks_received=len(accumulated_content),
+                        metadata=event.metadata
+                    )
+                    await output.stream_token(error_display)
+                    accumulated_content.append(error_display)
+                    final_result = event.content
+                    success = False
+        finally:
+            await output.stream_end(metadata={"tokens": tokens_used})
+
+        return ExecutionResult(
+            success=success,
+            output=final_result or "".join(accumulated_content),
+            execution_time=time.time() - start_time,
+            tokens_used=tokens_used,
+            provider_used=strategy.name,
+            metadata={"streaming": True, "event_count": len(accumulated_content)}
+        )
 
     def _get_strategy(self, task: ClassifiedTask) -> Optional[ExecutionStrategyProtocol]:
         """Get the execution strategy for a task type."""

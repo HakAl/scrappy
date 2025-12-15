@@ -1,0 +1,202 @@
+{
+  "provider": "groq",
+  "model": "groq/llama-3.1-8b-instant",
+  "scenario": "unicode",
+  "recorded_at": "2025-12-15T22:56:38.782835+00:00",
+  "total_chunks": 6,
+  "total_duration_ms": 100.60290002729744,
+  "prompt": [
+    {
+      "role": "user",
+      "content": "Respond with these unicode characters: emoji, chinese, math symbols."
+    }
+  ],
+  "tools": null,
+  "chunks": [
+    {
+      "index": 0,
+      "timestamp_ms": 81.51419996283948,
+      "delta_content": "🎉",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "chatcmpl-6e513930-9347-4bba-8d07-d5cf1cebcf06",
+        "created": 1765839398,
+        "model": "llama-3.1-8b-instant",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": null,
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "content": "🎉",
+              "role": "assistant",
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null
+      }
+    },
+    {
+      "index": 1,
+      "timestamp_ms": 82.05179998185486,
+      "delta_content": "\n",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "chatcmpl-6e513930-9347-4bba-8d07-d5cf1cebcf06",
+        "created": 1765839398,
+        "model": "llama-3.1-8b-instant",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": null,
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "content": "\n",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null
+      }
+    },
+    {
+      "index": 2,
+      "timestamp_ms": 86.61550004035234,
+      "delta_content": ",",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "chatcmpl-6e513930-9347-4bba-8d07-d5cf1cebcf06",
+        "created": 1765839398,
+        "model": "llama-3.1-8b-instant",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": null,
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "content": ",",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null
+      }
+    },
+    {
+      "index": 3,
+      "timestamp_ms": 90.68310004658997,
+      "delta_content": " \n",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "chatcmpl-6e513930-9347-4bba-8d07-d5cf1cebcf06",
+        "created": 1765839398,
+        "model": "llama-3.1-8b-instant",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": null,
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "content": " \n",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null
+      }
+    },
+    {
+      "index": 4,
+      "timestamp_ms": 96.35570005048066,
+      "delta_content": "∞",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "chatcmpl-6e513930-9347-4bba-8d07-d5cf1cebcf06",
+        "created": 1765839398,
+        "model": "llama-3.1-8b-instant",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": null,
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "content": "∞",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null
+      }
+    },
+    {
+      "index": 5,
+      "timestamp_ms": 100.0167999882251,
+      "delta_content": null,
+      "delta_tool_calls": null,
+      "finish_reason": "stop",
+      "raw_chunk": {
+        "id": "chatcmpl-6e513930-9347-4bba-8d07-d5cf1cebcf06",
+        "created": 1765839398,
+        "model": "llama-3.1-8b-instant",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": null,
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "content": null,
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null
+      }
+    }
+  ]
+}

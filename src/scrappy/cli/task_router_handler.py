@@ -2,19 +2,129 @@
 CLI handler for task-type aware routing.
 """
 
+import asyncio
 import click
 from pathlib import Path
-from typing import Optional, TYPE_CHECKING
+from typing import Any, Optional, TYPE_CHECKING
 
 from ..task_router import TaskRouter, ClassifiedTask
 from ..task_router.config import ClarificationConfig
 from ..task_router.protocols import TaskRouterInputProtocol
 from ..orchestrator.protocols import Orchestrator
+from ..orchestrator.types import StreamingConfig, DEFAULT_STREAMING_CONFIG
+from ..protocols.output import StreamingOutputProtocol
 from .io_interface import CLIIOProtocol
 from scrappy.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
 
 if TYPE_CHECKING:
     from .session_context import SessionContextProtocol
+
+
+class CLIStreamingOutput:
+    """
+    CLI implementation of StreamingOutputProtocol.
+
+    Writes streaming tokens directly to the CLI IO layer, enabling real-time
+    display of LLM responses in the terminal.
+
+    This implementation:
+    - Buffers tokens based on StreamingConfig.buffer_threshold
+    - Applies optional delay between tokens for readability (token_delay_ms)
+    - Tracks streaming state for proper lifecycle management
+    - Optionally shows metadata on stream start/end
+    - Works in both CLI and TUI modes via CLIIOProtocol abstraction
+    """
+
+    def __init__(
+        self,
+        io: CLIIOProtocol,
+        config: Optional[StreamingConfig] = None,
+        theme: Optional[ThemeProtocol] = None
+    ):
+        """
+        Initialize CLI streaming output.
+
+        Args:
+            io: CLI IO protocol for output
+            config: Streaming configuration (buffer threshold, delay, etc.)
+                   Defaults to DEFAULT_STREAMING_CONFIG.
+            theme: Optional theme for styling
+        """
+        self._io = io
+        self._config = config or DEFAULT_STREAMING_CONFIG
+        self._theme = theme or DEFAULT_THEME
+        self._streaming = False
+        self._token_count = 0
+        self._buffer = ""  # Buffer for line-based output
+
+    async def stream_start(self, metadata: Optional[dict[str, Any]] = None) -> None:
+        """Signal start of streaming output."""
+        self._streaming = True
+        self._token_count = 0
+        self._buffer = ""
+
+        if self._config.show_metadata and metadata:
+            task_type = metadata.get("task_type", "unknown")
+            strategy = metadata.get("strategy", "unknown")
+            self._io.secho(
+                f"\n[Streaming: {task_type} via {strategy}]",
+                fg=self._theme.info,
+                nl=True
+            )
+
+    async def stream_token(self, token: str) -> None:
+        """Output a single token with configurable buffering and pacing.
+
+        Buffering behavior (controlled by StreamingConfig):
+        - line_buffer=True: Always flush on newlines
+        - buffer_threshold>0: Flush when buffer exceeds threshold
+        - token_delay_ms>0: Wait between tokens for readability
+
+        This ensures proper display in both CLI mode and TUI mode.
+        """
+        if not self._streaming:
+            return
+
+        self._token_count += 1
+        self._buffer += token
+
+        # Flush complete lines if line buffering enabled
+        if self._config.line_buffer:
+            while '\n' in self._buffer:
+                line, self._buffer = self._buffer.split('\n', 1)
+                self._io.echo(line)
+
+        # Flush if buffer exceeds threshold
+        if self._config.buffer_threshold > 0 and len(self._buffer) >= self._config.buffer_threshold:
+            self._io.echo(self._buffer)
+            self._buffer = ""
+
+        # Apply token delay for readability if configured
+        if self._config.token_delay_ms > 0:
+            await asyncio.sleep(self._config.token_delay_ms / 1000.0)
+
+    async def stream_end(self, metadata: Optional[dict[str, Any]] = None) -> None:
+        """Signal end of streaming output."""
+        if not self._streaming:
+            return
+
+        self._streaming = False
+
+        # Flush any remaining buffered content
+        if self._buffer:
+            self._io.echo(self._buffer)
+            self._buffer = ""
+        else:
+            # Ensure final newline if buffer was empty
+            self._io.echo("")
+
+        if self._config.show_metadata and metadata:
+            tokens = metadata.get("tokens", self._token_count)
+            self._io.secho(
+                f"[Stream complete: {tokens} tokens]",
+                fg=self._theme.info,
+                nl=True
+            )
 
 
 class CLIIOInputAdapter:
@@ -186,6 +296,86 @@ class CLITaskRouterHandler:
         })
 
         return result
+
+    async def handle_auto_route_streaming(
+        self,
+        user_input: str,
+        output: Optional[StreamingOutputProtocol] = None,
+        streaming_config: Optional[StreamingConfig] = None
+    ):
+        """Automatically route and execute user input with streaming output.
+
+        Like handle_auto_route(), but streams response tokens in real-time
+        as they arrive from the LLM, enabling a more responsive user experience.
+
+        Args:
+            user_input: The user's task description or command to execute.
+            output: Optional custom streaming output. If not provided, uses
+                   CLIStreamingOutput with self.io.
+            streaming_config: Optional streaming configuration for buffer/delay.
+                             Defaults to DEFAULT_STREAMING_CONFIG.
+                             Use StreamingConfig.readable() for comfortable reading.
+
+        Returns:
+            TaskResult object containing:
+                - success: Whether execution succeeded
+                - output: The accumulated result output text
+                - error: Error message if failed
+                - execution_time: Time taken in seconds
+                - tokens_used: Number of tokens consumed
+                - provider_used: Which provider handled the task
+                - metadata: Additional info including classification and streaming flag
+
+        Side Effects:
+            - Streams tokens to terminal in real-time via output protocol
+            - Executes the task via router.route_streaming() which may call
+              external APIs, run shell commands, or perform other operations
+            - Appends entry to self.history with input, result, and classification
+        """
+        # Set router verbose based on session context
+        verbose = self.session_context.verbose_mode if self.session_context else False
+        self.router.verbose = verbose
+
+        # Create default streaming output if not provided
+        if output is None:
+            output = CLIStreamingOutput(
+                io=self.io,
+                config=streaming_config,
+                theme=self._theme
+            )
+
+        result = await self.router.route_streaming(user_input, output)
+
+        # Track in history
+        self.history.append({
+            "input": user_input,
+            "result": result,
+            "classification": result.metadata.get("classification", {})
+        })
+
+        return result
+
+    def handle_auto_route_streaming_sync(
+        self,
+        user_input: str,
+        streaming_config: Optional[StreamingConfig] = None
+    ):
+        """Synchronous wrapper for handle_auto_route_streaming.
+
+        Bridges sync entry points (like interactive.py) to the async streaming
+        implementation using asyncio.run().
+
+        Args:
+            user_input: The user's task description or command to execute.
+            streaming_config: Optional streaming configuration.
+                             Use StreamingConfig.readable() for comfortable reading.
+
+        Returns:
+            TaskResult from handle_auto_route_streaming().
+        """
+        return asyncio.run(
+            self.handle_auto_route_streaming(user_input, streaming_config=streaming_config)
+        )
 
     def handle_classify_only(self, user_input: str, io: Optional[CLIIOProtocol] = None):
         """Classify task without executing (preview mode).

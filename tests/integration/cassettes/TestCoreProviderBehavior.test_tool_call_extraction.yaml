@@ -1,0 +1,335 @@
+interactions:
+- request:
+    body: '{"messages":[{"role":"user","content":"What is 15 + 27? Use the calculate
+      tool."}],"model":"llama3.1-8b","max_tokens":100,"tools":[{"type":"function","function":{"name":"calculate","description":"Add
+      two numbers","parameters":{"type":"object","properties":{"a":{"type":"number"},"b":{"type":"number"}},"required":["a","b"]}}}]}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '327'
+      content-type:
+      - application/json
+      host:
+      - api.cerebras.ai
+      user-agent:
+      - AsyncOpenAI/Python 2.3.0
+      x-stainless-arch:
+      - other:amd64
+      x-stainless-async:
+      - async:asyncio
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Windows
+      x-stainless-package-version:
+      - 2.3.0
+      x-stainless-raw-response:
+      - 'true'
+      x-stainless-read-timeout:
+      - '60.0'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.13.1
+    method: POST
+    uri: https://api.cerebras.ai/v1/chat/completions
+  response:
+    body:
+      string: '{"id":"chatcmpl-feaef233-1441-4303-9390-c9002cc23f72","choices":[{"finish_reason":"tool_calls","index":0,"message":{"tool_calls":[{"id":"e14fac8df","type":"function","function":{"name":"calculate","arguments":"{\"a\":
+        15, \"b\": 27}"}}],"role":"assistant"}}],"created":1765798605,"model":"llama3.1-8b","system_fingerprint":"fp_2df2c50ce520692a7dce","object":"chat.completion","usage":{"total_tokens":555,"completion_tokens":23,"prompt_tokens":532,"prompt_tokens_details":{"cached_tokens":0}},"time_info":{"queue_time":0.805648757,"prompt_time":0.032646566,"completion_time":0.00959351,"total_time":0.9354009628295898,"created":1765798605.0067594}}'
+    headers:
+      CF-RAY:
+      - 9ae5a520b89cef61-IAD
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      Date:
+      - Mon, 15 Dec 2025 11:36:46 GMT
+      Server:
+      - cloudflare
+      Set-Cookie:
+      - __cf_bm=_tau90y09_dRqgQbV3vfMDb_JRfWf.i6RTi_03SJ0O8-1765798604.9133363-1.0.1.1-HuBnMpCT6bzDVDPaILlRxVCeuB0PpCUuR7be91CFtcen0O027pvjCakvnO_ojNpF9o4nDuoU6d3VT6Bt.BvOpwBfBLoAvy67zQmC9UhqdcOItKLN3FRfksgh1G0I.LuH;
+        HttpOnly; Secure; Path=/; Domain=cerebras-sandbox.net; Expires=Mon, 15 Dec
+        2025 12:06:46 GMT
+      Transfer-Encoding:
+      - chunked
+      alt-svc:
+      - h3=":443"; ma=86400
+      cf-cache-status:
+      - DYNAMIC
+      content-length:
+      - '647'
+      inference-id:
+      - chatcmpl-feaef233-1441-4303-9390-c9002cc23f72
+      referrer-policy:
+      - strict-origin-when-cross-origin
+      strict-transport-security:
+      - max-age=3600; includeSubDomains
+      x-content-type-options:
+      - nosniff
+      x-ratelimit-remaining-requests-day:
+      - '14373'
+      x-ratelimit-remaining-requests-hour:
+      - '873'
+      x-ratelimit-remaining-requests-minute:
+      - '19'
+      x-ratelimit-remaining-tokens-day:
+      - '988048'
+      x-ratelimit-remaining-tokens-hour:
+      - '988048'
+      x-ratelimit-remaining-tokens-minute:
+      - '48048'
+      x-request-id:
+      - 9ae5a520b89cef61-IAD
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"model": "llama-3.1-8b-instant", "messages": [{"role": "user", "content":
+      "What is 15 + 27? Use the calculate tool."}], "stream": false, "max_tokens":
+      100, "tools": [{"type": "function", "function": {"name": "calculate", "description":
+      "Add two numbers", "parameters": {"type": "object", "properties": {"a": {"type":
+      "number"}, "b": {"type": "number"}}, "required": ["a", "b"]}}}]}'
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '382'
+      content-type:
+      - application/json
+      host:
+      - api.groq.com
+      user-agent:
+      - litellm/1.78.2
+    method: POST
+    uri: https://api.groq.com/openai/v1/chat/completions
+  response:
+    body:
+      string: '{"id":"chatcmpl-318e1a12-1c3e-456b-9e75-22cb1709904f","object":"chat.completion","created":1765798606,"model":"llama-3.1-8b-instant","choices":[{"index":0,"message":{"role":"assistant","tool_calls":[{"id":"nrdssjbc8","type":"function","function":{"name":"calculate","arguments":"{\"a\":15,\"b\":27}"}}]},"logprobs":null,"finish_reason":"tool_calls"}],"usage":{"queue_time":0.077538061,"prompt_tokens":225,"prompt_time":0.021743354,"completion_tokens":20,"completion_time":0.035587137,"total_tokens":245,"total_time":0.057330491},"usage_breakdown":null,"system_fingerprint":"fp_6c980774ec","x_groq":{"id":"req_01kcgwrxqje0xafbv17y1pyvd5","seed":2064840067},"service_tier":"on_demand"}
+
+        '
+    headers:
+      CF-RAY:
+      - 9ae5a52aece8862d-PIT
+      Cache-Control:
+      - private, max-age=0, no-store, no-cache, must-revalidate
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      Date:
+      - Mon, 15 Dec 2025 11:36:46 GMT
+      Server:
+      - cloudflare
+      Set-Cookie:
+      - __cf_bm=kc0BVv7MeNIfn_otsF.Ikext8Sf8wU_fAQE0v_IqX_U-1765798606.5478816-1.0.1.1-7B.nzxfe8BrrXRosmMShRbBkcrpmV.HSC7rU.OFFtholwIIrzek7FDr83qvKxVLkV1wC6dgmhyEdDLNLvyOHlHzdg.NNdxEEbzbM4C.wdqPweEyjHSUXCLLqH.BJEK_T;
+        HttpOnly; Secure; Path=/; Domain=groq.com; Expires=Mon, 15 Dec 2025 12:06:46
+        GMT
+      Strict-Transport-Security:
+      - max-age=2592000
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Origin
+      alt-svc:
+      - h3=":443"; ma=86400
+      cf-cache-status:
+      - DYNAMIC
+      content-length:
+      - '684'
+      x-groq-region:
+      - yul
+      x-ratelimit-limit-requests:
+      - '14400'
+      x-ratelimit-limit-tokens:
+      - '6000'
+      x-ratelimit-remaining-requests:
+      - '14399'
+      x-ratelimit-remaining-tokens:
+      - '5774'
+      x-ratelimit-reset-requests:
+      - 6s
+      x-ratelimit-reset-tokens:
+      - 2.26s
+      x-request-id:
+      - req_01kcgwrxqje0xafbv17y1pyvd5
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"model": "llama-3.1-8b-instant", "messages": [{"role": "user", "content":
+      "What is 15 + 27? Use the calculate tool."}], "stream": false, "max_tokens":
+      100, "tools": [{"type": "function", "function": {"name": "calculate", "description":
+      "Add two numbers", "parameters": {"type": "object", "properties": {"a": {"type":
+      "number"}, "b": {"type": "number"}}, "required": ["a", "b"]}}}]}'
+    headers:
+      Cookie:
+      - __cf_bm=kc0BVv7MeNIfn_otsF.Ikext8Sf8wU_fAQE0v_IqX_U-1765798606.5478816-1.0.1.1-7B.nzxfe8BrrXRosmMShRbBkcrpmV.HSC7rU.OFFtholwIIrzek7FDr83qvKxVLkV1wC6dgmhyEdDLNLvyOHlHzdg.NNdxEEbzbM4C.wdqPweEyjHSUXCLLqH.BJEK_T
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '382'
+      content-type:
+      - application/json
+      host:
+      - api.groq.com
+      user-agent:
+      - litellm/1.78.2
+    method: POST
+    uri: https://api.groq.com/openai/v1/chat/completions
+  response:
+    body:
+      string: '{"id":"chatcmpl-7b72961a-8675-41ef-8ea4-6653a137ba36","object":"chat.completion","created":1765798606,"model":"llama-3.1-8b-instant","choices":[{"index":0,"message":{"role":"assistant","tool_calls":[{"id":"xdsdnwgnc","type":"function","function":{"name":"calculate","arguments":"{\"a\":15,\"b\":27}"}}]},"logprobs":null,"finish_reason":"tool_calls"}],"usage":{"queue_time":0.076685799,"prompt_tokens":225,"prompt_time":0.013778042,"completion_tokens":19,"completion_time":0.028802652,"total_tokens":244,"total_time":0.042580694},"usage_breakdown":null,"system_fingerprint":"fp_9ca2574dca","x_groq":{"id":"req_01kcgwrxzre6rsswgjdm47h4he","seed":261658549},"service_tier":"on_demand"}
+
+        '
+    headers:
+      CF-RAY:
+      - 9ae5a52c9ec8862d-PIT
+      Cache-Control:
+      - private, max-age=0, no-store, no-cache, must-revalidate
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      Date:
+      - Mon, 15 Dec 2025 11:36:47 GMT
+      Server:
+      - cloudflare
+      Set-Cookie:
+      - __cf_bm=8kbEDWqtZ_0sTLRPIR0w0FzQf6ZjxygvaJMYSuqW6Vw-1765798606.8131537-1.0.1.1-UNS31D_s0YUamR1fzDrCVdXXReo7kO79OCsf91.cGUSt8o64SmCBtxnO9oDaY38erBld7B5HueBGTnMzXiiio4mZ1PmOGKkSa5mRc_J4P2PuCtg_25Psc056.gICH5h0;
+        HttpOnly; Secure; Path=/; Domain=groq.com; Expires=Mon, 15 Dec 2025 12:06:47
+        GMT
+      Strict-Transport-Security:
+      - max-age=2592000
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Origin
+      alt-svc:
+      - h3=":443"; ma=86400
+      cf-cache-status:
+      - DYNAMIC
+      content-length:
+      - '683'
+      x-groq-region:
+      - yul
+      x-ratelimit-limit-requests:
+      - '14400'
+      x-ratelimit-limit-tokens:
+      - '6000'
+      x-ratelimit-remaining-requests:
+      - '14398'
+      x-ratelimit-remaining-tokens:
+      - '5555'
+      x-ratelimit-reset-requests:
+      - 12s
+      x-ratelimit-reset-tokens:
+      - 4.45s
+      x-request-id:
+      - req_01kcgwrxzre6rsswgjdm47h4he
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"model": "llama-3.1-8b-instant", "messages": [{"role": "user", "content":
+      "What is 15 + 27? Use the calculate tool."}], "stream": false, "max_tokens":
+      100, "tools": [{"type": "function", "function": {"name": "calculate", "description":
+      "Add two numbers", "parameters": {"type": "object", "properties": {"a": {"type":
+      "number"}, "b": {"type": "number"}}, "required": ["a", "b"]}}}]}'
+    headers:
+      Cookie:
+      - __cf_bm=8kbEDWqtZ_0sTLRPIR0w0FzQf6ZjxygvaJMYSuqW6Vw-1765798606.8131537-1.0.1.1-UNS31D_s0YUamR1fzDrCVdXXReo7kO79OCsf91.cGUSt8o64SmCBtxnO9oDaY38erBld7B5HueBGTnMzXiiio4mZ1PmOGKkSa5mRc_J4P2PuCtg_25Psc056.gICH5h0
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '382'
+      content-type:
+      - application/json
+      host:
+      - api.groq.com
+      user-agent:
+      - litellm/1.78.2
+    method: POST
+    uri: https://api.groq.com/openai/v1/chat/completions
+  response:
+    body:
+      string: '{"id":"chatcmpl-9379ea1d-4157-408e-8470-67e94bcde55c","object":"chat.completion","created":1765798607,"model":"llama-3.1-8b-instant","choices":[{"index":0,"message":{"role":"assistant","tool_calls":[{"id":"0k2ckvwtt","type":"function","function":{"name":"calculate","arguments":"{\"a\":15,\"b\":27}"}}]},"logprobs":null,"finish_reason":"tool_calls"}],"usage":{"queue_time":0.077258334,"prompt_tokens":225,"prompt_time":0.012530895,"completion_tokens":19,"completion_time":0.027848561,"total_tokens":244,"total_time":0.040379456},"usage_breakdown":null,"system_fingerprint":"fp_9ca2574dca","x_groq":{"id":"req_01kcgwrybne6rr7321ad3m9fmn","seed":1872449721},"service_tier":"on_demand"}
+
+        '
+    headers:
+      CF-RAY:
+      - 9ae5a52ef9e0862d-PIT
+      Cache-Control:
+      - private, max-age=0, no-store, no-cache, must-revalidate
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      Date:
+      - Mon, 15 Dec 2025 11:36:47 GMT
+      Server:
+      - cloudflare
+      Set-Cookie:
+      - __cf_bm=6EoIqXB5srMQYZVZpnTPuadp71mde8ptEGhJGmV1xoI-1765798607.1926005-1.0.1.1-Rk.cuywhks848FkHya_CrE3SV6kge1n7PNN6NhoX4R4WX12Hi4.x9Ix0KD3COpbkhiXYRUE4tOUJSTMAR13.rIeu_zgC43rmeeVyP9Ecl.Q.e1u81tcFABumpGG9ytjI;
+        HttpOnly; Secure; Path=/; Domain=groq.com; Expires=Mon, 15 Dec 2025 12:06:47
+        GMT
+      Strict-Transport-Security:
+      - max-age=2592000
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Origin
+      alt-svc:
+      - h3=":443"; ma=86400
+      cf-cache-status:
+      - DYNAMIC
+      content-length:
+      - '684'
+      x-groq-region:
+      - yul
+      x-ratelimit-limit-requests:
+      - '14400'
+      x-ratelimit-limit-tokens:
+      - '6000'
+      x-ratelimit-remaining-requests:
+      - '14397'
+      x-ratelimit-remaining-tokens:
+      - '5348'
+      x-ratelimit-reset-requests:
+      - 18s
+      x-ratelimit-reset-tokens:
+      - 6.52s
+      x-request-id:
+      - req_01kcgwrybne6rr7321ad3m9fmn
+    status:
+      code: 200
+      message: OK
+version: 1

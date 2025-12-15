@@ -81,3 +81,35 @@ class AgentContext:
     system_prompt: str
     active_tools: List[str]
     passive_rag_context: Optional[str] = None
+
+
+@dataclass
+class AgentEvent:
+    """
+    Streaming event from agent execution.
+
+    During streaming agent execution, various events are emitted to provide
+    real-time visibility into the agent's operation: thinking (LLM streaming),
+    action execution, evaluation, and completion.
+
+    Event types:
+        - "thought_start": Agent begins thinking phase
+        - "thought_token": Streaming token from LLM during thinking
+        - "thought_end": Agent completes thinking phase
+        - "action_start": Agent begins executing an action
+        - "action_end": Agent completes action execution
+        - "evaluation_start": Agent begins evaluating task completion
+        - "evaluation_end": Agent completes evaluation
+        - "complete": Agent task is complete
+        - "error": Error occurred during execution
+
+    Attributes:
+        event_type: Type of event (see above)
+        content: Text content for this event (tokens, messages, results)
+        iteration: Current iteration number
+        metadata: Additional event-specific data (action names, success flags, etc.)
+    """
+    event_type: str
+    content: str = ""
+    iteration: int = 0
+    metadata: Dict[str, Any] = field(default_factory=dict)

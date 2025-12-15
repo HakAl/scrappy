@@ -5,7 +5,7 @@ All strategies implement the ExecutionStrategyProtocol from protocols.py.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
+from typing import Any, Dict, List, Optional, Protocol, runtime_checkable, AsyncIterator
 
 from ..classifier import ClassifiedTask
 
@@ -65,6 +65,20 @@ class LLMResponseLike(Protocol):
         ...
 
 
+class StreamChunkLike(Protocol):
+    """Protocol for streaming chunks."""
+
+    @property
+    def content(self) -> str:
+        """Get chunk content."""
+        ...
+
+    @property
+    def finish_reason(self) -> Optional[str]:
+        """Get finish reason."""
+        ...
+
+
 class OrchestratorLike(Protocol):
     """Protocol for orchestrator dependency."""
 
@@ -78,6 +92,21 @@ class OrchestratorLike(Protocol):
         use_context: bool = False
     ) -> LLMResponseLike:
         """Delegate prompt to a provider."""
+        ...
+
+    async def stream_delegate(
+        self,
+        provider_name: str,
+        prompt: str,
+        model: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        max_tokens: int = 1500,
+        temperature: float = 0.3,
+        use_context: Optional[bool] = None,
+        use_cache: Optional[bool] = None,
+        **kwargs
+    ) -> AsyncIterator[StreamChunkLike]:
+        """Stream delegation with real-time token output."""
         ...
 
     @property

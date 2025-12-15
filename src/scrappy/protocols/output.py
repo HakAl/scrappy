@@ -8,6 +8,7 @@ Protocol Hierarchy:
 - BaseOutputProtocol: Core message-level logging (info, warn, error, success)
 - FormattedOutputProtocol: Extends BaseOutputProtocol with styled output and user interaction
 - RichRenderableProtocol: Rich-specific rendering for TUI mode
+- StreamingOutputProtocol: Async streaming output for token-by-token rendering
 
 Following SOLID principles:
 - Interface Segregation: Each protocol is focused and minimal
@@ -15,7 +16,7 @@ Following SOLID principles:
 - Open/Closed: New implementations can be added without modifying existing code
 """
 
-from typing import Protocol, Optional, runtime_checkable
+from typing import Protocol, Optional, runtime_checkable, Any
 
 # TYPE_CHECKING import for RenderableType
 from typing import TYPE_CHECKING
@@ -209,5 +210,64 @@ class RichRenderableProtocol(Protocol):
 
         Args:
             obj: Rich renderable object (Panel, Table, Text, etc.)
+        """
+        ...
+
+
+@runtime_checkable
+class StreamingOutputProtocol(Protocol):
+    """Protocol for async streaming output with token-by-token rendering.
+
+    This protocol enables real-time streaming of LLM responses, allowing
+    implementations to display tokens as they arrive from the model.
+
+    The streaming lifecycle:
+    1. stream_start: Called once at the beginning of a stream
+    2. stream_token: Called for each token/chunk received
+    3. stream_end: Called once when the stream completes
+
+    Implementations:
+    - ConsoleOutput: Prints tokens to stdout in real-time
+    - NullOutput: Discards streaming output
+    - CapturingStreamOutput: Captures tokens for testing
+
+    Example:
+        async def stream_response(output: StreamingOutputProtocol, tokens: AsyncIterator[str]) -> None:
+            await output.stream_start()
+            async for token in tokens:
+                await output.stream_token(token)
+            await output.stream_end()
+    """
+
+    async def stream_start(self, metadata: Optional[dict[str, Any]] = None) -> None:
+        """Signal the start of a streaming response.
+
+        Called once before any tokens are streamed. Implementations can use
+        this to prepare for streaming (e.g., print a prefix, start a spinner).
+
+        Args:
+            metadata: Optional metadata about the stream (model name, task type, etc.)
+        """
+        ...
+
+    async def stream_token(self, token: str) -> None:
+        """Output a single token from the stream.
+
+        Called repeatedly for each token/chunk received from the LLM.
+        Implementations should display the token immediately without buffering.
+
+        Args:
+            token: A single token/chunk of text from the streaming response
+        """
+        ...
+
+    async def stream_end(self, metadata: Optional[dict[str, Any]] = None) -> None:
+        """Signal the end of a streaming response.
+
+        Called once after all tokens have been streamed. Implementations can use
+        this to finalize output (e.g., print a newline, stop a spinner, show stats).
+
+        Args:
+            metadata: Optional metadata about the completed stream (total tokens, duration, etc.)
         """
         ...

@@ -149,8 +149,10 @@ class RateTrackingCallback(CustomLogger):
         if self._rate_tracker:
             self._rate_tracker.record_request(
                 provider=provider,
-                tokens_used=input_tokens + output_tokens,
-                timestamp=end_time,
+                model=model_str,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                success=True,
             )
 
         # Record to status tracker (D10)
@@ -185,8 +187,11 @@ class RateTrackingCallback(CustomLogger):
         if self._rate_tracker:
             self._rate_tracker.record_request(
                 provider=provider,
-                tokens_used=0,
-                timestamp=end_time,
+                model=model,
+                input_tokens=0,
+                output_tokens=0,
+                success=False,
+                error_message=error_msg,
             )
 
         # Record failure to status tracker (D10)

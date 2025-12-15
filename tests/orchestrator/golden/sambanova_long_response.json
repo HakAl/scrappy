@@ -1,0 +1,410 @@
+{
+  "provider": "sambanova",
+  "model": "sambanova/Meta-Llama-3.1-8B-Instruct",
+  "scenario": "long_response",
+  "recorded_at": "2025-12-15T22:56:49.634565+00:00",
+  "total_chunks": 12,
+  "total_duration_ms": 433.8249999564141,
+  "prompt": [
+    {
+      "role": "user",
+      "content": "Write a 3-paragraph explanation of recursion in programming. Keep it concise."
+    }
+  ],
+  "tools": null,
+  "chunks": [
+    {
+      "index": 0,
+      "timestamp_ms": 302.9956999234855,
+      "delta_content": "**",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "47dbdf0d-e6ce-465d-af7f-0068b480c848",
+        "created": 1765839409,
+        "model": "Meta-Llama-3.1-8B-Instruct",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fastcoe",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": "**",
+              "role": "assistant",
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 1,
+      "timestamp_ms": 304.1209999937564,
+      "delta_content": "Recursion in Programming**\n\nRecursion is a programming technique where a function calls itself repeatedly until it reaches",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "47dbdf0d-e6ce-465d-af7f-0068b480c848",
+        "created": 1765839409,
+        "model": "Meta-Llama-3.1-8B-Instruct",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fastcoe",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": "Recursion in Programming**\n\nRecursion is a programming technique where a function calls itself repeatedly until it reaches",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 2,
+      "timestamp_ms": 305.17239996697754,
+      "delta_content": " a base case that stops the recursion. This allows the function to solve a problem by breaking it down",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "47dbdf0d-e6ce-465d-af7f-0068b480c848",
+        "created": 1765839409,
+        "model": "Meta-Llama-3.1-8B-Instruct",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fastcoe",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": " a base case that stops the recursion. This allows the function to solve a problem by breaking it down",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 3,
+      "timestamp_ms": 313.26259998604655,
+      "delta_content": " into smaller instances of the same problem, which are then solved by the same function. Recursion is",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "47dbdf0d-e6ce-465d-af7f-0068b480c848",
+        "created": 1765839409,
+        "model": "Meta-Llama-3.1-8B-Instruct",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fastcoe",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": " into smaller instances of the same problem, which are then solved by the same function. Recursion is",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 4,
+      "timestamp_ms": 370.1941999606788,
+      "delta_content": " often used to solve problems that have a recursive structure, such as tree traversals, factorial calculations,",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "47dbdf0d-e6ce-465d-af7f-0068b480c848",
+        "created": 1765839409,
+        "model": "Meta-Llama-3.1-8B-Instruct",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fastcoe",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": " often used to solve problems that have a recursive structure, such as tree traversals, factorial calculations,",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 5,
+      "timestamp_ms": 371.33100000210106,
+      "delta_content": " and recursive data structures like linked lists.\n\n**How Recursion Works**\n\nThe process of recursion involves two",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "47dbdf0d-e6ce-465d-af7f-0068b480c848",
+        "created": 1765839409,
+        "model": "Meta-Llama-3.1-8B-Instruct",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fastcoe",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": " and recursive data structures like linked lists.\n\n**How Recursion Works**\n\nThe process of recursion involves two",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 6,
+      "timestamp_ms": 372.45939997956157,
+      "delta_content": " key components: the recursive call and the base case. The recursive call is where the function calls itself",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "47dbdf0d-e6ce-465d-af7f-0068b480c848",
+        "created": 1765839409,
+        "model": "Meta-Llama-3.1-8B-Instruct",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fastcoe",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": " key components: the recursive call and the base case. The recursive call is where the function calls itself",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 7,
+      "timestamp_ms": 381.0075999936089,
+      "delta_content": ", passing in a smaller instance of the problem to be solved. The base case is the condition that",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "47dbdf0d-e6ce-465d-af7f-0068b480c848",
+        "created": 1765839409,
+        "model": "Meta-Llama-3.1-8B-Instruct",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fastcoe",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": ", passing in a smaller instance of the problem to be solved. The base case is the condition that",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 8,
+      "timestamp_ms": 422.4689999828115,
+      "delta_content": " stops the recursion, typically when the problem has been reduced to a trivial case that can be solved directly",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "47dbdf0d-e6ce-465d-af7f-0068b480c848",
+        "created": 1765839409,
+        "model": "Meta-Llama-3.1-8B-Instruct",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fastcoe",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": " stops the recursion, typically when the problem has been reduced to a trivial case that can be solved directly",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 9,
+      "timestamp_ms": 423.4373999061063,
+      "delta_content": ". When the base case is reached, the function returns a solution to the problem, which is then",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "47dbdf0d-e6ce-465d-af7f-0068b480c848",
+        "created": 1765839409,
+        "model": "Meta-Llama-3.1-8B-Instruct",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fastcoe",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": ". When the base case is reached, the function returns a solution to the problem, which is then",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 10,
+      "timestamp_ms": 424.1925999522209,
+      "delta_content": " propagated back up the call stack to the original caller.\n\n**Advantages and Disadvantages**\n\n",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "47dbdf0d-e6ce-465d-af7f-0068b480c848",
+        "created": 1765839409,
+        "model": "Meta-Llama-3.1-8B-Instruct",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fastcoe",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": " propagated back up the call stack to the original caller.\n\n**Advantages and Disadvantages**\n\n",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 11,
+      "timestamp_ms": 431.99599999934435,
+      "delta_content": null,
+      "delta_tool_calls": null,
+      "finish_reason": "length",
+      "raw_chunk": {
+        "id": "47dbdf0d-e6ce-465d-af7f-0068b480c848",
+        "created": 1765839409,
+        "model": "Meta-Llama-3.1-8B-Instruct",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fastcoe",
+        "choices": [
+          {
+            "finish_reason": "length",
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "content": null,
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null
+      }
+    }
+  ]
+}

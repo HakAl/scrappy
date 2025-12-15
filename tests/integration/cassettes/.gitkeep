@@ -1,0 +1,2 @@
+# This directory stores VCR cassettes for integration tests
+# Cassettes are JSON files containing recorded HTTP interactions

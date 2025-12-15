@@ -4,10 +4,12 @@ Fast research and information gathering with tool support.
 
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Optional, AsyncIterator
 
 from ..classifier import ClassifiedTask, TaskType
 from .base import ExecutionResult, ProviderAwareStrategy, OrchestratorLike
+from ...orchestrator.types import StreamChunk
+from ...protocols.output import StreamingOutputProtocol
 from .research_protocols import (
     PathResolverProtocol,
     ToolBundleProtocol,
@@ -386,3 +388,151 @@ class ResearchExecutor(ProviderAwareStrategy):
                 continue
 
         return tuple(snippets)
+
+    async def execute_streaming(
+        self,
+        task: ClassifiedTask,
+        output: StreamingOutputProtocol
+    ) -> ExecutionResult:
+        """
+        Execute research task with streaming output.
+
+        This method mirrors execute() but streams responses in real-time
+        through the provided output protocol.
+
+        Args:
+            task: The classified research task
+            output: StreamingOutputProtocol for real-time token output
+
+        Returns:
+            ExecutionResult with final response and metadata
+        """
+        start_time = time.time()
+
+        try:
+            # Step 0: Subclassify research type and get matched files
+            file_index = self._get_file_index()
+            classification_result = self._subclassifier.classify_with_matches(
+                task.original_input,
+                file_index
+            )
+            research_subtype = classification_result.subtype
+            matched_files = classification_result.matched_files
+
+            # Get context summary for execution
+            context_summary = self._get_context_summary()
+
+            # Route to appropriate execution path
+            if research_subtype == ResearchSubtype.GENERAL:
+                return await self._execute_general_research_streaming(
+                    task, context_summary, start_time, output
+                )
+            else:
+                return await self._execute_codebase_research_streaming(
+                    task, context_summary, start_time, matched_files, output
+                )
+
+        except Exception as e:
+            return ExecutionResult(
+                success=False,
+                output="",
+                error=f"Research streaming execution failed: {str(e)}",
+                execution_time=time.time() - start_time,
+                metadata={"tool_calls": []}
+            )
+
+    async def _execute_general_research_streaming(
+        self,
+        task: ClassifiedTask,
+        context_summary: Optional[str],
+        start_time: float,
+        output: StreamingOutputProtocol
+    ) -> ExecutionResult:
+        """
+        Execute general knowledge research with streaming output.
+
+        For general research without tools, we can stream the direct LLM response.
+        """
+        provider_to_use = self._resolve_and_validate_provider(self.preferred_provider)
+
+        # Build config and prompts - general research doesn't use codebase tools
+        config = ResearchPromptConfig(
+            subtype=PromptResearchSubtype.GENERAL,
+            tool_descriptions=None,
+            context_summary=context_summary
+        )
+        system_prompt = self._prompt_factory.create_research_system_prompt(config)
+
+        # Check if orchestrator supports streaming
+        if not hasattr(self.orchestrator, 'stream_delegate'):
+            # Fallback to non-streaming execution
+            return self._execute_general_research(task, context_summary, start_time)
+
+        # Stream the response
+        full_content = ""
+        total_tokens = 0
+
+        await output.stream_start(metadata={"provider": provider_to_use, "task_type": "research"})
+
+        try:
+            async for chunk in self.orchestrator.stream_delegate(
+                provider_name=provider_to_use,
+                prompt=task.original_input,
+                system_prompt=system_prompt,
+                max_tokens=2000,
+                temperature=0.3
+            ):
+                if chunk.content:
+                    full_content += chunk.content
+                    await output.stream_token(chunk.content)
+
+                # Update metadata from final chunk
+                if chunk.finish_reason:
+                    total_tokens = chunk.metadata.get("tokens_used", 0)
+
+        finally:
+            await output.stream_end(metadata={"tokens": total_tokens})
+
+        execution_time = time.time() - start_time
+
+        return ExecutionResult(
+            success=True,
+            output=full_content,
+            execution_time=execution_time,
+            tokens_used=total_tokens,
+            provider_used=provider_to_use,
+            metadata={
+                "task_type": "research",
+                "research_subtype": "general",
+                "complexity": task.complexity_score,
+                "tool_calls": [],
+                "iterations": 1,
+                "streaming": True
+            }
+        )
+
+    async def _execute_codebase_research_streaming(
+        self,
+        task: ClassifiedTask,
+        context_summary: Optional[str],
+        start_time: float,
+        matched_files: tuple,
+        output: StreamingOutputProtocol
+    ) -> ExecutionResult:
+        """
+        Execute codebase research with streaming output.
+
+        NOTE: Tool-based research with streaming is complex because:
+        - We need to make multiple LLM calls (for tool iterations)
+        - Each iteration may invoke tools
+        - Only the final response should be streamed to the user
+
+        For now, we fallback to non-streaming execution when tools are involved.
+        Future enhancement: Stream final response after tool calls complete.
+        """
+        # For codebase research with tools, fallback to non-streaming
+        # This is acceptable because:
+        # 1. Tool execution takes time anyway
+        # 2. Users want accuracy over speed for codebase queries
+        # 3. Proper streaming with tools requires refactoring ResearchLoop
+        return self._execute_codebase_research(task, context_summary, start_time, matched_files)

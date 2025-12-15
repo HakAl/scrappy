@@ -1,13 +1,53 @@
 # Lite LLM Phase 2
 
+## Implementation Progress
+
+### Streaming Wiring Status
+
+| Layer | Component | Status | Tests |
+|-------|-----------|--------|-------|
+| 0 | VCR Integration | DONE | 7 cassettes recorded |
+| 1 | LiteLLMService.stream_completion() | DONE | test_litellm_streaming.py |
+| 1 | DelegationManager.stream_delegate() | DONE | test_delegation_streaming.py |
+| 1 | AgentOrchestrator.stream_delegate() | DONE | test_orchestrator_streaming.py (9 tests) |
+| 1b | AgentExecutor.execute_streaming() | DONE | test_agent_executor_streaming.py (13 tests) |
+| 1b | ResearchExecutor.execute_streaming() | DONE | test_streaming_executor.py |
+| 2 | TaskRouter.route_streaming() | DONE | test_router_streaming.py (13 tests) |
+| 3 | CLI handler (handle_auto_route_streaming) | DONE | test_streaming_handler.py (19 tests) |
+| 4 | interactive.py wiring | DONE | - |
+
+**STREAMING IS NOW FULLY WIRED!** User queries stream responses in real-time.
+
+### VCR Cassettes (tests/integration/cassettes/)
+
+Recorded cassettes for replay-based testing (no API keys needed):
+- `test_basic_completion.yaml` - Basic non-streaming completion
+- `test_streaming_completion.yaml` - Streaming completion
+- `test_streaming_with_tool_calls.yaml` - Streaming with tool calls
+- `test_tool_call_extraction.yaml` - Tool call parsing
+- `test_empty_chunks_handled.yaml` - Provider quirk handling
+- `test_max_tokens_truncation.yaml` - Token limit behavior
+- `test_unicode_content.yaml` - Unicode handling
+
+**Usage:**
+```bash
+# Default: replay from cassettes (no API keys)
+pytest tests/integration/
+
+# Record new cassettes (needs API keys in .env)
+pytest tests/integration/ --vcr-record=all
+```
+
+---
+
 ## Current State
 
 **Main Service:** `src/scrappy/orchestrator/litellm_service.py`
 - `LiteLLMService` with `completion()` (async) and `completion_sync()`
+- `stream_completion()` for streaming responses
 - Response normalization to `LLMResponse`
 - Exception mapping (ContextWindowExceededError, RateLimitError)
 - Smart escalation: fast -> quality tier on context overflow
-- No streaming support yet
 
 **Config:** `src/scrappy/orchestrator/litellm_config.py`
 - `MODEL_METADATA` for groq, cerebras, gemini, sambanova

@@ -1,0 +1,377 @@
+{
+  "provider": "sambanova",
+  "model": "sambanova/Meta-Llama-3.1-8B-Instruct",
+  "scenario": "unicode",
+  "recorded_at": "2025-12-15T22:56:50.053113+00:00",
+  "total_chunks": 11,
+  "total_duration_ms": 416.67690000031143,
+  "prompt": [
+    {
+      "role": "user",
+      "content": "Respond with these unicode characters: emoji, chinese, math symbols."
+    }
+  ],
+  "tools": null,
+  "chunks": [
+    {
+      "index": 0,
+      "timestamp_ms": 295.66139995586127,
+      "delta_content": "🎉 🐲 🐶 🎊 🐱 🐔 🐷",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "9d2f1dfd-f4d6-4324-a7d3-e44069355def",
+        "created": 1765839409,
+        "model": "Meta-Llama-3.1-8B-Instruct",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fastcoe",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": "🎉 🐲 🐶 🎊 🐱 🐔 🐷",
+              "role": "assistant",
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 1,
+      "timestamp_ms": 297.09829995408654,
+      "delta_content": " 🐴 🐲 🐸 🐳 🐋 🐊",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "9d2f1dfd-f4d6-4324-a7d3-e44069355def",
+        "created": 1765839409,
+        "model": "Meta-Llama-3.1-8B-Instruct",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fastcoe",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": " 🐴 🐲 🐸 🐳 🐋 🐊",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 2,
+      "timestamp_ms": 298.4166999813169,
+      "delta_content": " 🐆 🐈 🐉 🐌 🐚 🐛 🐜",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "9d2f1dfd-f4d6-4324-a7d3-e44069355def",
+        "created": 1765839409,
+        "model": "Meta-Llama-3.1-8B-Instruct",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fastcoe",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": " 🐆 🐈 🐉 🐌 🐚 🐛 🐜",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 3,
+      "timestamp_ms": 363.9074999373406,
+      "delta_content": " 🐝 🐞 🐟 🐠 🐡 🐢 🐣",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "9d2f1dfd-f4d6-4324-a7d3-e44069355def",
+        "created": 1765839409,
+        "model": "Meta-Llama-3.1-8B-Instruct",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fastcoe",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": " 🐝 🐞 🐟 🐠 🐡 🐢 🐣",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 4,
+      "timestamp_ms": 364.8349998984486,
+      "delta_content": " 🐤 🐥 🐦 🐧 🐨 🐩 🐪",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "9d2f1dfd-f4d6-4324-a7d3-e44069355def",
+        "created": 1765839409,
+        "model": "Meta-Llama-3.1-8B-Instruct",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fastcoe",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": " 🐤 🐥 🐦 🐧 🐨 🐩 🐪",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 5,
+      "timestamp_ms": 365.7263999339193,
+      "delta_content": " 🐫 🐬 🐭 🐮 🐯 🐰",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "9d2f1dfd-f4d6-4324-a7d3-e44069355def",
+        "created": 1765839409,
+        "model": "Meta-Llama-3.1-8B-Instruct",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fastcoe",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": " 🐫 🐬 🐭 🐮 🐯 🐰",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 6,
+      "timestamp_ms": 366.6776999598369,
+      "delta_content": " 🐱 🐲 🐳 🐴 🐵 🐶 🐷",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "9d2f1dfd-f4d6-4324-a7d3-e44069355def",
+        "created": 1765839409,
+        "model": "Meta-Llama-3.1-8B-Instruct",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fastcoe",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": " 🐱 🐲 🐳 🐴 🐵 🐶 🐷",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 7,
+      "timestamp_ms": 414.45329994894564,
+      "delta_content": " 🐸 🐹 🐺 🐻 🐼 🐽 🐾",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "9d2f1dfd-f4d6-4324-a7d3-e44069355def",
+        "created": 1765839409,
+        "model": "Meta-Llama-3.1-8B-Instruct",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fastcoe",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": " 🐸 🐹 🐺 🐻 🐼 🐽 🐾",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 8,
+      "timestamp_ms": 414.9827999062836,
+      "delta_content": " 🐿 🦀 🦁 🦂 🦃 🦄 🦅",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "9d2f1dfd-f4d6-4324-a7d3-e44069355def",
+        "created": 1765839409,
+        "model": "Meta-Llama-3.1-8B-Instruct",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fastcoe",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": " 🐿 🦀 🦁 🦂 🦃 🦄 🦅",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 9,
+      "timestamp_ms": 415.4457999393344,
+      "delta_content": " 🦆 🦇 🦈 🦉 🦊 🦋",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "9d2f1dfd-f4d6-4324-a7d3-e44069355def",
+        "created": 1765839409,
+        "model": "Meta-Llama-3.1-8B-Instruct",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fastcoe",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": " 🦆 🦇 🦈 🦉 🦊 🦋",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 10,
+      "timestamp_ms": 415.82949995063245,
+      "delta_content": null,
+      "delta_tool_calls": null,
+      "finish_reason": "length",
+      "raw_chunk": {
+        "id": "9d2f1dfd-f4d6-4324-a7d3-e44069355def",
+        "created": 1765839409,
+        "model": "Meta-Llama-3.1-8B-Instruct",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fastcoe",
+        "choices": [
+          {
+            "finish_reason": "length",
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "content": null,
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null
+      }
+    }
+  ]
+}

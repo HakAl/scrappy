@@ -1,0 +1,264 @@
+{
+  "provider": "groq",
+  "model": "groq/llama-3.1-8b-instant",
+  "scenario": "basic",
+  "recorded_at": "2025-12-15T22:56:37.838181+00:00",
+  "total_chunks": 8,
+  "total_duration_ms": 1975.5257000215352,
+  "prompt": [
+    {
+      "role": "user",
+      "content": "Say hello in exactly 5 words."
+    }
+  ],
+  "tools": null,
+  "chunks": [
+    {
+      "index": 0,
+      "timestamp_ms": 1511.1657000379637,
+      "delta_content": "Hello",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "chatcmpl-bb0b45b3-2d40-470f-b127-dc79f4d073aa",
+        "created": 1765839397,
+        "model": "llama-3.1-8b-instant",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": null,
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "content": "Hello",
+              "role": "assistant",
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null
+      }
+    },
+    {
+      "index": 1,
+      "timestamp_ms": 1512.0412999531254,
+      "delta_content": ",",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "chatcmpl-bb0b45b3-2d40-470f-b127-dc79f4d073aa",
+        "created": 1765839397,
+        "model": "llama-3.1-8b-instant",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": null,
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "content": ",",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null
+      }
+    },
+    {
+      "index": 2,
+      "timestamp_ms": 1512.518799980171,
+      "delta_content": " it",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "chatcmpl-bb0b45b3-2d40-470f-b127-dc79f4d073aa",
+        "created": 1765839397,
+        "model": "llama-3.1-8b-instant",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": null,
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "content": " it",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null
+      }
+    },
+    {
+      "index": 3,
+      "timestamp_ms": 1512.9788999911398,
+      "delta_content": " is",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "chatcmpl-bb0b45b3-2d40-470f-b127-dc79f4d073aa",
+        "created": 1765839397,
+        "model": "llama-3.1-8b-instant",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": null,
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "content": " is",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null
+      }
+    },
+    {
+      "index": 4,
+      "timestamp_ms": 1513.4258000180125,
+      "delta_content": " a",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "chatcmpl-bb0b45b3-2d40-470f-b127-dc79f4d073aa",
+        "created": 1765839397,
+        "model": "llama-3.1-8b-instant",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": null,
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "content": " a",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null
+      }
+    },
+    {
+      "index": 5,
+      "timestamp_ms": 1513.850299990736,
+      "delta_content": " pleasure",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "chatcmpl-bb0b45b3-2d40-470f-b127-dc79f4d073aa",
+        "created": 1765839397,
+        "model": "llama-3.1-8b-instant",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": null,
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "content": " pleasure",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null
+      }
+    },
+    {
+      "index": 6,
+      "timestamp_ms": 1514.2706000478938,
+      "delta_content": ".",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "chatcmpl-bb0b45b3-2d40-470f-b127-dc79f4d073aa",
+        "created": 1765839397,
+        "model": "llama-3.1-8b-instant",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": null,
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "content": ".",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null
+      }
+    },
+    {
+      "index": 7,
+      "timestamp_ms": 1514.6933000069112,
+      "delta_content": null,
+      "delta_tool_calls": null,
+      "finish_reason": "stop",
+      "raw_chunk": {
+        "id": "chatcmpl-bb0b45b3-2d40-470f-b127-dc79f4d073aa",
+        "created": 1765839397,
+        "model": "llama-3.1-8b-instant",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": null,
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "content": null,
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null
+      }
+    }
+  ]
+}

@@ -1,0 +1,126 @@
+{
+  "provider": "cerebras",
+  "model": "cerebras/llama3.1-8b",
+  "scenario": "tool_call",
+  "recorded_at": "2025-12-15T22:56:40.930148+00:00",
+  "total_chunks": 2,
+  "total_duration_ms": 1125.5015999777243,
+  "prompt": [
+    {
+      "role": "user",
+      "content": "What is the weather in San Francisco? Use the get_weather tool."
+    }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Get the current weather in a location",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": {
+              "type": "string",
+              "description": "The city and state, e.g. San Francisco, CA"
+            },
+            "unit": {
+              "type": "string",
+              "enum": [
+                "celsius",
+                "fahrenheit"
+              ],
+              "description": "Temperature unit"
+            }
+          },
+          "required": [
+            "location"
+          ]
+        }
+      }
+    }
+  ],
+  "chunks": [
+    {
+      "index": 0,
+      "timestamp_ms": 1123.4782000537962,
+      "delta_content": null,
+      "delta_tool_calls": [
+        {
+          "index": 0,
+          "id": "24ec57c8d",
+          "type": "function",
+          "function": {
+            "name": "get_weather",
+            "arguments": "{\"location\": \"San Francisco\", \"unit\": \"fahrenheit\"}"
+          }
+        }
+      ],
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "chatcmpl-af9feb7d-c689-4df2-bbd5-e95225fea0ff",
+        "created": 1765839400,
+        "model": "llama3.1-8b",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fp_2df2c50ce520692a7dce",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": null,
+              "role": "assistant",
+              "function_call": null,
+              "tool_calls": [
+                {
+                  "id": "24ec57c8d",
+                  "function": {
+                    "arguments": "{\"location\": \"San Francisco\", \"unit\": \"fahrenheit\"}",
+                    "name": "get_weather"
+                  },
+                  "type": "function",
+                  "index": 0
+                }
+              ],
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null
+      }
+    },
+    {
+      "index": 1,
+      "timestamp_ms": 1124.730100040324,
+      "delta_content": null,
+      "delta_tool_calls": null,
+      "finish_reason": "tool_calls",
+      "raw_chunk": {
+        "id": "chatcmpl-af9feb7d-c689-4df2-bbd5-e95225fea0ff",
+        "created": 1765839400,
+        "model": "cerebras/llama3.1-8b",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fp_2df2c50ce520692a7dce",
+        "choices": [
+          {
+            "finish_reason": "tool_calls",
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "content": null,
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null
+      }
+    }
+  ]
+}

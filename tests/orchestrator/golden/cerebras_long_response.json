@@ -1,0 +1,641 @@
+{
+  "provider": "cerebras",
+  "model": "cerebras/llama3.1-8b",
+  "scenario": "long_response",
+  "recorded_at": "2025-12-15T22:56:41.243813+00:00",
+  "total_chunks": 19,
+  "total_duration_ms": 312.30009999126196,
+  "prompt": [
+    {
+      "role": "user",
+      "content": "Write a 3-paragraph explanation of recursion in programming. Keep it concise."
+    }
+  ],
+  "tools": null,
+  "chunks": [
+    {
+      "index": 0,
+      "timestamp_ms": 224.8690000269562,
+      "delta_content": "Rec",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "chatcmpl-c8059e98-736d-40de-b4ae-cfd9952b2523",
+        "created": 1765839401,
+        "model": "llama3.1-8b",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fp_2df2c50ce520692a7dce",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": "Rec",
+              "role": "assistant",
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 1,
+      "timestamp_ms": 232.00960003305227,
+      "delta_content": "ursion is a problem-solving technique in programming where a function calls",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "chatcmpl-c8059e98-736d-40de-b4ae-cfd9952b2523",
+        "created": 1765839401,
+        "model": "llama3.1-8b",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fp_2df2c50ce520692a7dce",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": "ursion is a problem-solving technique in programming where a function calls",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 2,
+      "timestamp_ms": 238.86809998657554,
+      "delta_content": " itself repeatedly until it reaches a base case that stops the",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "chatcmpl-c8059e98-736d-40de-b4ae-cfd9952b2523",
+        "created": 1765839401,
+        "model": "llama3.1-8b",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fp_2df2c50ce520692a7dce",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": " itself repeatedly until it reaches a base case that stops the",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 3,
+      "timestamp_ms": 241.57690000720322,
+      "delta_content": " recursion.",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "chatcmpl-c8059e98-736d-40de-b4ae-cfd9952b2523",
+        "created": 1765839401,
+        "model": "llama3.1-8b",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fp_2df2c50ce520692a7dce",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": " recursion.",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 4,
+      "timestamp_ms": 244.6384000359103,
+      "delta_content": " This process allows the function to",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "chatcmpl-c8059e98-736d-40de-b4ae-cfd9952b2523",
+        "created": 1765839401,
+        "model": "llama3.1-8b",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fp_2df2c50ce520692a7dce",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": " This process allows the function to",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 5,
+      "timestamp_ms": 249.6404000557959,
+      "delta_content": " break down complex problems into smaller sub-pro",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "chatcmpl-c8059e98-736d-40de-b4ae-cfd9952b2523",
+        "created": 1765839401,
+        "model": "llama3.1-8b",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fp_2df2c50ce520692a7dce",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": " break down complex problems into smaller sub-pro",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 6,
+      "timestamp_ms": 254.79639996774495,
+      "delta_content": "blems that can be solved more easily.\n\nIn",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "chatcmpl-c8059e98-736d-40de-b4ae-cfd9952b2523",
+        "created": 1765839401,
+        "model": "llama3.1-8b",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fp_2df2c50ce520692a7dce",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": "blems that can be solved more easily.\n\nIn",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 7,
+      "timestamp_ms": 259.9997000070289,
+      "delta_content": " a recursive function, each call to the function creates",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "chatcmpl-c8059e98-736d-40de-b4ae-cfd9952b2523",
+        "created": 1765839401,
+        "model": "llama3.1-8b",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fp_2df2c50ce520692a7dce",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": " a recursive function, each call to the function creates",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 8,
+      "timestamp_ms": 265.54050005506724,
+      "delta_content": " a new instance of the function, which in turn",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "chatcmpl-c8059e98-736d-40de-b4ae-cfd9952b2523",
+        "created": 1765839401,
+        "model": "llama3.1-8b",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fp_2df2c50ce520692a7dce",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": " a new instance of the function, which in turn",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 9,
+      "timestamp_ms": 274.7323999647051,
+      "delta_content": " calls the function again. This process continues until the base",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "chatcmpl-c8059e98-736d-40de-b4ae-cfd9952b2523",
+        "created": 1765839401,
+        "model": "llama3.1-8b",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fp_2df2c50ce520692a7dce",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": " calls the function again. This process continues until the base",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 10,
+      "timestamp_ms": 277.74439996574074,
+      "delta_content": " case is met, at which point the",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "chatcmpl-c8059e98-736d-40de-b4ae-cfd9952b2523",
+        "created": 1765839401,
+        "model": "llama3.1-8b",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fp_2df2c50ce520692a7dce",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": " case is met, at which point the",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 11,
+      "timestamp_ms": 281.2047000043094,
+      "delta_content": " recursion stops, and the function starts",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "chatcmpl-c8059e98-736d-40de-b4ae-cfd9952b2523",
+        "created": 1765839401,
+        "model": "llama3.1-8b",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fp_2df2c50ce520692a7dce",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": " recursion stops, and the function starts",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 12,
+      "timestamp_ms": 284.35390000231564,
+      "delta_content": " returning values back up the call stack. Recursive functions are often used to solve",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "chatcmpl-c8059e98-736d-40de-b4ae-cfd9952b2523",
+        "created": 1765839401,
+        "model": "llama3.1-8b",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fp_2df2c50ce520692a7dce",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": " returning values back up the call stack. Recursive functions are often used to solve",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 13,
+      "timestamp_ms": 289.3135000485927,
+      "delta_content": " problems that have a recursive pattern, such as tree traversals, factorial calculations,",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "chatcmpl-c8059e98-736d-40de-b4ae-cfd9952b2523",
+        "created": 1765839401,
+        "model": "llama3.1-8b",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fp_2df2c50ce520692a7dce",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": " problems that have a recursive pattern, such as tree traversals, factorial calculations,",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 14,
+      "timestamp_ms": 294.0904999850318,
+      "delta_content": " and sorting algorithms.\n\nTo avoid infinite recursion, the base case must be carefully",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "chatcmpl-c8059e98-736d-40de-b4ae-cfd9952b2523",
+        "created": 1765839401,
+        "model": "llama3.1-8b",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fp_2df2c50ce520692a7dce",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": " and sorting algorithms.\n\nTo avoid infinite recursion, the base case must be carefully",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 15,
+      "timestamp_ms": 301.8062000628561,
+      "delta_content": " defined and tested. A well-written recursive function will always have a clear base case that",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "chatcmpl-c8059e98-736d-40de-b4ae-cfd9952b2523",
+        "created": 1765839401,
+        "model": "llama3.1-8b",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fp_2df2c50ce520692a7dce",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": " defined and tested. A well-written recursive function will always have a clear base case that",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 16,
+      "timestamp_ms": 304.86729997210205,
+      "delta_content": " stops the recursion, and will gradually build up the solution to the problem as the",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "chatcmpl-c8059e98-736d-40de-b4ae-cfd9952b2523",
+        "created": 1765839401,
+        "model": "llama3.1-8b",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fp_2df2c50ce520692a7dce",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": " stops the recursion, and will gradually build up the solution to the problem as the",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 17,
+      "timestamp_ms": 309.9044000264257,
+      "delta_content": " function calls itself. With practice and experience, developers can master the art of recursion and use it to solve complex problems in an elegant",
+      "delta_tool_calls": null,
+      "finish_reason": null,
+      "raw_chunk": {
+        "id": "chatcmpl-c8059e98-736d-40de-b4ae-cfd9952b2523",
+        "created": 1765839401,
+        "model": "llama3.1-8b",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fp_2df2c50ce520692a7dce",
+        "choices": [
+          {
+            "finish_reason": null,
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "refusal": null,
+              "content": " function calls itself. With practice and experience, developers can master the art of recursion and use it to solve complex problems in an elegant",
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null,
+        "citations": null,
+        "service_tier": null
+      }
+    },
+    {
+      "index": 18,
+      "timestamp_ms": 310.56390004232526,
+      "delta_content": null,
+      "delta_tool_calls": null,
+      "finish_reason": "length",
+      "raw_chunk": {
+        "id": "chatcmpl-c8059e98-736d-40de-b4ae-cfd9952b2523",
+        "created": 1765839401,
+        "model": "cerebras/llama3.1-8b",
+        "object": "chat.completion.chunk",
+        "system_fingerprint": "fp_2df2c50ce520692a7dce",
+        "choices": [
+          {
+            "finish_reason": "length",
+            "index": 0,
+            "delta": {
+              "provider_specific_fields": null,
+              "content": null,
+              "role": null,
+              "function_call": null,
+              "tool_calls": null,
+              "audio": null
+            },
+            "logprobs": null
+          }
+        ],
+        "provider_specific_fields": null
+      }
+    }
+  ]
+}

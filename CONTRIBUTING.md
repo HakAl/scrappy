@@ -171,6 +171,9 @@ python -m pytest tests/test_<module>.py -v
 
 # Run tests with a coverage report (use as a guide, not a target)
 python -m pytest tests/ --cov=src --cov-report=term-missing
+
+# Record new cassettes (needs API keys in .env)
+pytest tests/integration/ --vcr-record=all
 ```
 
 ### A Note on Coverage

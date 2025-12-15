@@ -10,7 +10,7 @@ as part of the god class refactoring effort.
 
 import subprocess
 from pathlib import Path
-from typing import Optional, Union, Any
+from typing import Optional, Union, Any, AsyncIterator
 
 from ..agent_config import AgentConfig
 from ..agent_tools.tools import ToolRegistry, ToolContext
@@ -33,6 +33,7 @@ from .types import (
     EvaluationResult,
     ConversationState,
     AgentContext,
+    AgentEvent,
 )
 from .audit import AuditLogger
 from .response_parser import UnifiedResponseParser
@@ -684,6 +685,172 @@ class CodeAgent:
             self.ui.show_error(f"Agent error: {str(e)}\nSaving audit log...")
             self._audit_logger.mark_complete(False, f"Error: {str(e)}")
             raise  # Re-raise to let caller handle
+
+    async def run_streaming(
+        self,
+        task: str,
+        max_iterations: int = 10,
+        auto_confirm: bool = False
+    ) -> AsyncIterator[AgentEvent]:
+        """
+        Run the agent on a task with streaming event output.
+
+        This method provides real-time visibility into agent execution by yielding
+        AgentEvent objects for each phase: thinking, action execution, evaluation,
+        and completion.
+
+        Event sequence per iteration:
+        1. thought_start - Agent begins thinking
+        2. thought_token (multiple) - Streaming tokens from LLM
+        3. thought_end - Agent completes thinking
+        4. action_start - Agent begins executing action
+        5. action_end - Agent completes action
+        6. evaluation_start - Agent begins evaluation
+        7. evaluation_end - Agent completes evaluation
+        8. complete - Task finished (success or max iterations)
+        9. error - Error occurred (if applicable)
+
+        Args:
+            task: The task to accomplish
+            max_iterations: Maximum number of tool uses
+            auto_confirm: Skip user confirmation (use with caution)
+
+        Yields:
+            AgentEvent objects representing execution phases
+
+        Example:
+            async for event in agent.run_streaming("Fix the bug"):
+                if event.event_type == "thought_token":
+                    print(event.content, end="", flush=True)
+                elif event.event_type == "action_end":
+                    print(f"Action: {event.metadata['action']}")
+        """
+        # Update tool context dry_run state
+        self.tool_context.dry_run = self.dry_run
+
+        # Enable auto-save for crash safety
+        self._audit_logger.enable_auto_save()
+        self._audit_logger.set_task_info(task, max_iterations, auto_confirm)
+
+        try:
+            # Build initial context (same as run method)
+            self.ui.show_progress("Building context...")
+
+            # Ensure context is explored
+            if not self.orch.context.is_explored():
+                self.orch.context.explore()
+
+            # Determine if we should use native tool calling
+            use_native_tools = False
+            current_provider = self.planner
+            if hasattr(self._orchestrator, '_registry'):
+                provider_obj = self._orchestrator._registry.get(current_provider)
+                if provider_obj and hasattr(provider_obj, 'supports_tool_calling'):
+                    use_native_tools = provider_obj.supports_tool_calling and hasattr(self.orch, 'delegate_with_tools')
+
+            # Build config for prompt generation
+            from scrappy.prompts import Platform
+            platform = Platform.WINDOWS if self.orch.context.platform.is_windows() else Platform.UNIX
+            config = AgentPromptConfig(
+                platform=platform,
+                tool_descriptions=self.tool_registry.generate_descriptions(),
+                use_native_tools=use_native_tools,
+                project_type=self.orch.context.get_project_type(),
+                codebase_structure=self._format_codebase_structure()
+            )
+
+            # Build the base system prompt
+            base_system_prompt = self._prompt_factory.create_agent_system_prompt(config)
+
+            # Build agent context with passive RAG and tool filtering
+            agent_context = self._context_factory.build_context(
+                task=task,
+                base_system_prompt=base_system_prompt,
+            )
+
+            # Use the enriched system prompt from context factory
+            system_prompt = agent_context.system_prompt
+
+            # Initialize conversation state
+            state = ConversationState(
+                messages=[
+                    {'role': 'system', 'content': system_prompt},
+                    {'role': 'user', 'content': f"Please complete this task: {task}"}
+                ],
+                system_prompt=system_prompt,
+                iteration=0,
+                max_iterations=max_iterations,
+                tools_executed=[],
+                auto_confirm=auto_confirm
+            )
+
+            # Check if agent loop supports streaming
+            if not hasattr(self._agent_loop, 'run_streaming'):
+                # Fallback: yield error event if streaming not supported
+                yield AgentEvent(
+                    event_type="error",
+                    content="Agent loop does not support streaming",
+                    iteration=0,
+                    metadata={"error": "streaming_not_supported"}
+                )
+                return
+
+            # Delegate to agent loop's streaming method
+            async for event in self._agent_loop.run_streaming(
+                task=task,
+                state=state,
+                dry_run=self.dry_run
+            ):
+                yield event
+
+                # Update audit log when task completes
+                if event.event_type == "complete":
+                    success = event.metadata.get("success", False)
+                    result = event.content
+                    if success:
+                        self._audit_logger.mark_complete(True, result)
+                    else:
+                        self._audit_logger.mark_complete(False, result)
+
+        except KeyboardInterrupt:
+            # User cancelled - save partial state
+            self.ui.show_warning("Agent interrupted by user. Saving audit log...")
+            self._audit_logger.mark_complete(False, "Interrupted by user (KeyboardInterrupt)")
+            yield AgentEvent(
+                event_type="error",
+                content="Interrupted by user",
+                iteration=state.iteration if 'state' in locals() else 0,
+                metadata={"error": "keyboard_interrupt"}
+            )
+            raise
+        except AllProvidersRateLimitedError as e:
+            # All providers exhausted
+            self.ui.show_error(
+                f"All LLM providers are rate limited.\n"
+                f"Attempted providers: {', '.join(e.attempted_providers)}\n"
+                f"Please wait a few minutes before retrying, or configure additional providers."
+            )
+            self._audit_logger.mark_complete(False, f"Rate limited: {str(e)}")
+            yield AgentEvent(
+                event_type="error",
+                content=f"All providers rate limited: {', '.join(e.attempted_providers)}",
+                iteration=state.iteration if 'state' in locals() else 0,
+                metadata={
+                    "error": "rate_limited",
+                    "attempted_providers": e.attempted_providers
+                }
+            )
+        except Exception as e:
+            # Unexpected error - save partial state
+            self.ui.show_error(f"Agent error: {str(e)}\nSaving audit log...")
+            self._audit_logger.mark_complete(False, f"Error: {str(e)}")
+            yield AgentEvent(
+                event_type="error",
+                content=str(e),
+                iteration=state.iteration if 'state' in locals() else 0,
+                metadata={"error": "exception", "exception_type": type(e).__name__}
+            )
+            raise
 
     def get_audit_log(self) -> list:
         """Get the audit log of all actions."""

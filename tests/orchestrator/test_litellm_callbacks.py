@@ -146,7 +146,8 @@ class TestRateTrackingCallback:
             end_time=end_time,
         )
 
-        assert tracker.last_recorded["tokens_used"] == 150
+        assert tracker.last_recorded["input_tokens"] == 50
+        assert tracker.last_recorded["output_tokens"] == 100
 
     def test_callback_records_latency_correctly(self):
         """Verify latency is calculated from start/end time and passed to status_tracker."""
@@ -252,7 +253,9 @@ class TestRateTrackingCallbackFailure:
         )
 
         assert tracker.last_recorded["provider"] == "groq"
-        assert tracker.last_recorded["tokens_used"] == 0
+        assert tracker.last_recorded["input_tokens"] == 0
+        assert tracker.last_recorded["output_tokens"] == 0
+        assert tracker.last_recorded["success"] is False
 
     def test_log_failure_handles_missing_provider(self):
         """Verify failure logging handles missing llm_provider."""

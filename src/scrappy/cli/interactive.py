@@ -131,13 +131,16 @@ class InteractiveMode:
         # Echo user query
         io.secho(f"> {user_input}", fg=self._theme.text)
 
-        # Always use auto-routing (task router handles classification and execution)
-        result = self.task_router.handle_auto_route(user_input)
+        # Use streaming auto-routing (task router handles classification and execution)
+        # Streaming displays tokens as they arrive via CLIStreamingOutput
+        result = self.task_router.handle_auto_route_streaming_sync(user_input)
         response_content = result.output if result.success else f"Error: {result.error}"
 
-        # Display response
-        io.echo()
-        io.echo(f"| {response_content}")
+        # For streaming, output was already displayed during stream
+        # Only show non-streamed content (errors or fallback responses)
+        if not result.metadata.get("streaming"):
+            io.echo()
+            io.echo(f"| {response_content}")
 
         # Verbose mode: show metadata
         if self.session_context.verbose_mode:

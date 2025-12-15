@@ -12,7 +12,7 @@ After LiteLLM integration (Phase 3):
 - provider_name is now a model GROUP name ("fast" or "quality")
 """
 
-from typing import Optional, Callable
+from typing import Optional, Callable, AsyncIterator
 from datetime import datetime
 import asyncio
 
@@ -26,7 +26,8 @@ try:
         BatchSchedulerProtocol,
         INTERNAL_KWARGS,
     )
-    from ..orchestrator.protocols import LLMServiceProtocol
+    from ..orchestrator.protocols import LLMServiceProtocol, StreamingCompletionProtocol
+    from ..orchestrator.types import StreamChunk
     from ..config import (
         DEFAULT_MAX_TOKENS,
         DEFAULT_TEMPERATURE,
@@ -43,7 +44,8 @@ except ImportError:
         PromptAugmenterProtocol,
         BatchSchedulerProtocol,
     )
-    from orchestrator.protocols import LLMServiceProtocol
+    from orchestrator.protocols import LLMServiceProtocol, StreamingCompletionProtocol
+    from orchestrator.types import StreamChunk
     from config import (
         DEFAULT_MAX_TOKENS,
         DEFAULT_TEMPERATURE,
@@ -527,3 +529,147 @@ class DelegationManager:
             request=request,
             providers=providers,
         )
+
+    async def stream_delegate(
+        self,
+        provider_name: str,
+        prompt: str,
+        model: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        temperature: float = DEFAULT_TEMPERATURE,
+        use_context: Optional[bool] = None,
+        use_cache: Optional[bool] = None,
+        **kwargs
+    ) -> AsyncIterator[StreamChunk]:
+        """
+        Stream delegation with prompt augmentation and cache checking.
+
+        This method streams LLM responses chunk-by-chunk, enabling real-time
+        display of generated text. Unlike delegate_async which returns a complete
+        response, this yields incremental StreamChunk objects as they arrive.
+
+        Cache behavior:
+        - If cache hit: yields single StreamChunk with full cached content
+        - If cache miss: streams from provider, then caches final result
+
+        Args:
+            provider_name: Initial provider to try
+            prompt: The prompt to send
+            model: Specific model (optional)
+            system_prompt: System prompt (optional)
+            max_tokens: Maximum tokens in response
+            temperature: Sampling temperature
+            use_context: Override context augmentation setting
+            use_cache: Override cache setting
+            **kwargs: Additional provider-specific arguments
+
+        Yields:
+            StreamChunk objects as they arrive from the provider
+
+        Raises:
+            AllProvidersRateLimitedError: If all providers are rate limited
+            ContextWindowExceededError: When quality tier also exceeds context
+            ValueError: If input validation fails
+
+        Example:
+            async for chunk in delegation_manager.stream_delegate(
+                provider_name="fast",
+                prompt="Write a story",
+                max_tokens=500
+            ):
+                print(chunk.content, end="", flush=True)
+        """
+        # Determine settings
+        should_use_context = use_context if use_context is not None else self._context_aware
+        should_use_cache = use_cache if use_cache is not None else True
+
+        # Step 1: Augment prompt with context and working memory
+        final_prompt = self._prompt_augmenter.augment(prompt, use_context=should_use_context)
+
+        # Step 2: Check cache first
+        cached_response = None
+        if should_use_cache:
+            cached_response = self._cache.get(
+                provider_name, final_prompt, model, system_prompt, max_tokens, temperature
+            )
+
+        if cached_response:
+            # Cache hit - yield single chunk with full cached content
+            yield StreamChunk(
+                content=cached_response.content,
+                tool_call_fragments=[],
+                finish_reason="stop",
+                model=cached_response.model,
+                provider=cached_response.provider,
+                metadata={
+                    "cached": True,
+                    "context_augmented": should_use_context,
+                }
+            )
+            return
+
+        # Step 3: Resolve model group and build messages
+        model_group = _resolve_model_group(provider_name)
+
+        # Build messages list for LiteLLM
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": final_prompt})
+
+        # Filter out internal kwargs that should NOT be passed to provider API
+        filtered_kwargs = {k: v for k, v in kwargs.items() if k not in INTERNAL_KWARGS}
+
+        # Step 4: Stream via LLMService (LiteLLM Router handles retry/fallback)
+        # Check if service supports streaming
+        if not isinstance(self._llm_service, StreamingCompletionProtocol):
+            raise NotImplementedError(
+                "LLM service does not support streaming. "
+                "Ensure LiteLLMService is used instead of a mock."
+            )
+
+        # Accumulate full response for caching
+        full_content = []
+        final_chunk = None
+
+        async for chunk in self._llm_service.stream_completion(
+            model=model_group,
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            **filtered_kwargs,
+        ):
+            # Accumulate content for caching
+            if chunk.content:
+                full_content.append(chunk.content)
+
+            # Track final chunk for metadata
+            final_chunk = chunk
+
+            # Yield chunk to caller
+            yield chunk
+
+        # Step 5: Store complete response in cache
+        if should_use_cache and final_chunk:
+            # Build LLMResponse from accumulated chunks
+            cached_llm_response = LLMResponse(
+                content="".join(full_content),
+                model=final_chunk.model,
+                provider=final_chunk.provider,
+                tokens_used=0,  # Token counting not available in streaming
+                latency_ms=0.0,  # Latency handled by streaming layer
+                metadata={
+                    "finish_reason": final_chunk.finish_reason,
+                    "context_augmented": should_use_context,
+                    "streamed": True,
+                }
+            )
+            self._cache.put(
+                cached_llm_response,
+                final_prompt,
+                model,
+                system_prompt,
+                max_tokens,
+                temperature
+            )

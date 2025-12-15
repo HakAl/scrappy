@@ -1,0 +1,113 @@
+interactions:
+- request:
+    body: '{"messages":[{"role":"user","content":"Count: 1, 2, 3"}],"model":"llama3.1-8b","max_tokens":30,"stream":true}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '109'
+      content-type:
+      - application/json
+      host:
+      - api.cerebras.ai
+      user-agent:
+      - AsyncOpenAI/Python 2.3.0
+      x-stainless-arch:
+      - other:amd64
+      x-stainless-async:
+      - async:asyncio
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Windows
+      x-stainless-package-version:
+      - 2.3.0
+      x-stainless-raw-response:
+      - 'true'
+      x-stainless-read-timeout:
+      - '60.0'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.13.1
+    method: POST
+    uri: https://api.cerebras.ai/v1/chat/completions
+  response:
+    body:
+      string: 'data: {"id":"chatcmpl-88a8a3f3-f669-450c-b997-6c2188860953","choices":[{"delta":{"role":"assistant"},"index":0}],"created":1765798605,"model":"llama3.1-8b","system_fingerprint":"fp_2df2c50ce520692a7dce","object":"chat.completion.chunk"}
+
+
+        data: {"id":"chatcmpl-88a8a3f3-f669-450c-b997-6c2188860953","choices":[{"delta":{"content":"It"},"index":0}],"created":1765798605,"model":"llama3.1-8b","system_fingerprint":"fp_2df2c50ce520692a7dce","object":"chat.completion.chunk"}
+
+
+        data: {"id":"chatcmpl-88a8a3f3-f669-450c-b997-6c2188860953","choices":[{"delta":{"content":"
+        looks like you''re counting up. I can count too: 1"},"index":0}],"created":1765798605,"model":"llama3.1-8b","system_fingerprint":"fp_2df2c50ce520692a7dce","object":"chat.completion.chunk"}
+
+
+        data: {"id":"chatcmpl-88a8a3f3-f669-450c-b997-6c2188860953","choices":[{"delta":{"content":",
+        2, 3, 4, 5"},"index":0}],"created":1765798605,"model":"llama3.1-8b","system_fingerprint":"fp_2df2c50ce520692a7dce","object":"chat.completion.chunk"}
+
+
+        data: {"id":"chatcmpl-88a8a3f3-f669-450c-b997-6c2188860953","choices":[{"delta":{"content":",
+        6"},"index":0}],"created":1765798605,"model":"llama3.1-8b","system_fingerprint":"fp_2df2c50ce520692a7dce","object":"chat.completion.chunk"}
+
+
+        data: {"id":"chatcmpl-88a8a3f3-f669-450c-b997-6c2188860953","choices":[{"delta":{},"finish_reason":"length","index":0}],"created":1765798605,"model":"llama3.1-8b","system_fingerprint":"fp_2df2c50ce520692a7dce","object":"chat.completion.chunk","usage":{"total_tokens":75,"completion_tokens":30,"prompt_tokens":45,"prompt_tokens_details":{"cached_tokens":0}},"time_info":{"queue_time":0.050745541,"prompt_time":0.003004405,"completion_time":0.011641345,"total_time":0.06758832931518555,"created":1765798605.2232354}}
+
+
+        '
+    headers:
+      CF-RAY:
+      - 9ae5a51b480ba606-IAD
+      Connection:
+      - keep-alive
+      Content-Type:
+      - text/event-stream; charset=utf-8
+      Date:
+      - Mon, 15 Dec 2025 11:36:44 GMT
+      Server:
+      - cloudflare
+      Set-Cookie:
+      - __cf_bm=OzgpgRMKXvwETYri2WBKFt_qccIjDSRXWfGlzhOuU1I-1765798604.042567-1.0.1.1-B0lrsL.QwveVXSCG3ddfcKkrid4mcMfD_acuhjcQmmRq33LI8Ska.LacNmjir1nEK7xs65Y8faUt50YyOKliDtjB5QYycAjCYhpIWKpVOc6xVb1zrTDB7dVyC0Rfw545;
+        HttpOnly; Secure; Path=/; Domain=cerebras-sandbox.net; Expires=Mon, 15 Dec
+        2025 12:06:44 GMT
+      Transfer-Encoding:
+      - chunked
+      alt-svc:
+      - h3=":443"; ma=86400
+      cf-cache-status:
+      - DYNAMIC
+      inference-id:
+      - chatcmpl-88a8a3f3-f669-450c-b997-6c2188860953
+      referrer-policy:
+      - strict-origin-when-cross-origin
+      strict-transport-security:
+      - max-age=3600; includeSubDomains
+      x-content-type-options:
+      - nosniff
+      x-ratelimit-remaining-requests-day:
+      - '14374'
+      x-ratelimit-remaining-requests-hour:
+      - '874'
+      x-ratelimit-remaining-requests-minute:
+      - '20'
+      x-ratelimit-remaining-tokens-day:
+      - '988130'
+      x-ratelimit-remaining-tokens-hour:
+      - '988130'
+      x-ratelimit-remaining-tokens-minute:
+      - '48130'
+      x-request-id:
+      - 9ae5a51b480ba606-IAD
+    status:
+      code: 200
+      message: OK
+version: 1

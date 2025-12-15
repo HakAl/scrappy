@@ -1,0 +1,612 @@
+interactions:
+- request:
+    body: '{"model": "llama-3.1-8b-instant", "messages": [{"role": "user", "content":
+      "Calculate 42 + 58 using the tool."}], "stream": true, "max_tokens": 100, "tools":
+      [{"type": "function", "function": {"name": "calculate", "description": "Add
+      two numbers", "parameters": {"type": "object", "properties": {"a": {"type":
+      "number"}, "b": {"type": "number"}}, "required": ["a", "b"]}}}]}'
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '374'
+      content-type:
+      - application/json
+      host:
+      - api.groq.com
+      user-agent:
+      - litellm/1.78.2
+    method: POST
+    uri: https://api.groq.com/openai/v1/chat/completions
+  response:
+    body:
+      string: 'data: {"id":"chatcmpl-0053ae3b-b7b7-4f92-9aec-c10f7d63e964","object":"chat.completion.chunk","created":1765798608,"model":"llama-3.1-8b-instant","system_fingerprint":"fp_020e283281","choices":[{"index":0,"delta":{"role":"assistant","content":null},"logprobs":null,"finish_reason":null}],"x_groq":{"id":"req_01kcgwrzche0y9w9ns5et804n6","seed":826868319}}
+
+
+        data: {"id":"chatcmpl-0053ae3b-b7b7-4f92-9aec-c10f7d63e964","object":"chat.completion.chunk","created":1765798608,"model":"llama-3.1-8b-instant","system_fingerprint":"fp_020e283281","choices":[{"index":0,"delta":{"tool_calls":[{"id":"z3vpkve4a","type":"function","function":{"name":"calculate","arguments":"{\"a\":42,\"b\":58}"},"index":0}]},"logprobs":null,"finish_reason":null}]}
+
+
+        data: {"id":"chatcmpl-0053ae3b-b7b7-4f92-9aec-c10f7d63e964","object":"chat.completion.chunk","created":1765798608,"model":"llama-3.1-8b-instant","system_fingerprint":"fp_020e283281","choices":[{"index":0,"delta":{},"logprobs":null,"finish_reason":"tool_calls"}],"x_groq":{"id":"req_01kcgwrzche0y9w9ns5et804n6","usage":{"queue_time":0.036303667,"prompt_tokens":222,"prompt_time":0.03315584,"completion_tokens":19,"completion_time":0.032181083,"total_tokens":241,"total_time":0.065336923}},"usage":{"queue_time":0.036303667,"prompt_tokens":222,"prompt_time":0.03315584,"completion_tokens":19,"completion_time":0.032181083,"total_tokens":241,"total_time":0.065336923}}
+
+
+        data: [DONE]
+
+
+        '
+    headers:
+      CF-RAY:
+      - 9ae5a5358d3688eb-PIT
+      Cache-Control:
+      - no-cache
+      Connection:
+      - keep-alive
+      Content-Type:
+      - text/event-stream
+      Date:
+      - Mon, 15 Dec 2025 11:36:48 GMT
+      Server:
+      - cloudflare
+      Set-Cookie:
+      - __cf_bm=6LMkwPDCiIK2MkbAN1Ht3tMZlZyBKneyXmFU.y6n4VA-1765798608.2458978-1.0.1.1-JLL07OT.Tsoez.IxHGgTIX2aPpNSWUx6G3D1mjtSvc3vo.ZgWL_8ZUr0Kq8fZ7zBsCWzUGj0n4jVu8y1ddKvFRUdhvSXEz921miwFt1LudEC_WPyUgzgjiW_K.AwIa_y;
+        HttpOnly; Secure; Path=/; Domain=groq.com; Expires=Mon, 15 Dec 2025 12:06:48
+        GMT
+      Strict-Transport-Security:
+      - max-age=2592000
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Origin
+      alt-svc:
+      - h3=":443"; ma=86400
+      cf-cache-status:
+      - DYNAMIC
+      x-groq-region:
+      - yul
+      x-ratelimit-limit-requests:
+      - '14400'
+      x-ratelimit-limit-tokens:
+      - '6000'
+      x-ratelimit-remaining-requests:
+      - '14396'
+      x-ratelimit-remaining-tokens:
+      - '5211'
+      x-ratelimit-reset-requests:
+      - 24s
+      x-ratelimit-reset-tokens:
+      - 7.89s
+      x-request-id:
+      - req_01kcgwrzche0y9w9ns5et804n6
+    status:
+      code: 200
+      message: OK
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - identity
+      Connection:
+      - keep-alive
+      X-Amzn-Trace-Id:
+      - c07e7718-cadb-4105-a30a-2ab4168c29f8
+      authorization:
+      - REDACTED
+      user-agent:
+      - unknown/None; hf_hub/0.35.0; python/3.13.1; torch/2.8.0
+    method: HEAD
+    uri: https://huggingface.co/Xenova/llama-3-tokenizer/resolve/main/tokenizer.json
+  response:
+    body:
+      string: ''
+    headers:
+      Access-Control-Allow-Origin:
+      - https://huggingface.co
+      Access-Control-Expose-Headers:
+      - X-Repo-Commit,X-Request-Id,X-Error-Code,X-Error-Message,X-Total-Count,ETag,Link,Accept-Ranges,Content-Range,X-Linked-Size,X-Linked-ETag,X-Xet-Hash
+      Access-Control-Max-Age:
+      - '86400'
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '87'
+      Content-Type:
+      - text/plain; charset=utf-8
+      Date:
+      - Mon, 15 Dec 2025 11:36:48 GMT
+      Location:
+      - /Xenova/llama3-tokenizer/resolve/main/tokenizer.json
+      RateLimit:
+      - '"resolvers";r=4999;t=111'
+      RateLimit-Policy:
+      - '"fixed window";"resolvers";q=5000;w=300'
+      Referrer-Policy:
+      - strict-origin-when-cross-origin
+      Vary:
+      - Origin, Accept
+      Via:
+      - 1.1 e418146247e46e005548ce63c9a80a34.cloudfront.net (CloudFront)
+      X-Amz-Cf-Id:
+      - QnG1OkJqrPNukC6YmhPJukXBK6FOiP3e_EGOo4q02NTU9SBqFhP1bw==
+      X-Amz-Cf-Pop:
+      - PIT50-P2
+      X-Cache:
+      - Miss from cloudfront
+      X-Powered-By:
+      - huggingface-moon
+      X-Request-Id:
+      - Root=1-693ff2d0-4c948233170568fa27fd07c6;c07e7718-cadb-4105-a30a-2ab4168c29f8
+      cross-origin-opener-policy:
+      - same-origin
+    status:
+      code: 307
+      message: Temporary Redirect
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - identity
+      Connection:
+      - keep-alive
+      X-Amzn-Trace-Id:
+      - 37e84dc5-5c5e-480b-989c-a18506a731d8
+      authorization:
+      - REDACTED
+      user-agent:
+      - unknown/None; hf_hub/0.35.0; python/3.13.1; torch/2.8.0
+    method: HEAD
+    uri: https://huggingface.co/Xenova/llama3-tokenizer/resolve/main/tokenizer.json
+  response:
+    body:
+      string: ''
+    headers:
+      Accept-Ranges:
+      - bytes
+      Access-Control-Allow-Origin:
+      - https://huggingface.co
+      Access-Control-Expose-Headers:
+      - X-Repo-Commit,X-Request-Id,X-Error-Code,X-Error-Message,X-Total-Count,ETag,Link,Accept-Ranges,Content-Range,X-Linked-Size,X-Linked-ETag,X-Xet-Hash
+      Access-Control-Max-Age:
+      - '86400'
+      Connection:
+      - keep-alive
+      Content-Disposition:
+      - inline; filename*=UTF-8''tokenizer.json; filename="tokenizer.json";
+      Content-Length:
+      - '256'
+      Content-Security-Policy:
+      - default-src 'none'; sandbox
+      Content-Type:
+      - text/plain; charset=utf-8
+      Date:
+      - Mon, 15 Dec 2025 11:36:49 GMT
+      Location:
+      - /api/resolve-cache/models/Xenova/llama3-tokenizer/72bff9ee09897a16b3b4b2b9995fecb0bfa7dbe6/tokenizer.json?%2FXenova%2Fllama3-tokenizer%2Fresolve%2Fmain%2Ftokenizer.json=&etag=%2294eacd0897072dcd7b84d1f6ff3c3f6d1933a8cc%22
+      RateLimit:
+      - '"resolvers";r=4998;t=110'
+      RateLimit-Policy:
+      - '"fixed window";"resolvers";q=5000;w=300'
+      Referrer-Policy:
+      - strict-origin-when-cross-origin
+      Vary:
+      - Origin, Accept
+      Via:
+      - 1.1 7c2520f39522c9e84e812f55c62b3840.cloudfront.net (CloudFront)
+      X-Amz-Cf-Id:
+      - hshHXNnlRXS4gSqA5cZuBsZbBWJ9Epx6slUhzUWBvWHF0dqTn4VORQ==
+      X-Amz-Cf-Pop:
+      - PIT50-P2
+      X-Cache:
+      - Miss from cloudfront
+      X-Hub-Cache:
+      - HIT
+      X-Linked-ETag:
+      - '"94eacd0897072dcd7b84d1f6ff3c3f6d1933a8cc"'
+      X-Powered-By:
+      - huggingface-moon
+      X-Repo-Commit:
+      - 72bff9ee09897a16b3b4b2b9995fecb0bfa7dbe6
+      X-Request-Id:
+      - Root=1-693ff2d1-555beb35320c076f36e183db;37e84dc5-5c5e-480b-989c-a18506a731d8
+      cross-origin-opener-policy:
+      - same-origin
+    status:
+      code: 307
+      message: Temporary Redirect
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - identity
+      Connection:
+      - keep-alive
+      X-Amzn-Trace-Id:
+      - 1fc3dcb3-8979-4a70-b21f-4361531223ba
+      authorization:
+      - REDACTED
+      user-agent:
+      - unknown/None; hf_hub/0.35.0; python/3.13.1; torch/2.8.0
+    method: HEAD
+    uri: https://huggingface.co/api/resolve-cache/models/Xenova/llama3-tokenizer/72bff9ee09897a16b3b4b2b9995fecb0bfa7dbe6/tokenizer.json
+  response:
+    body:
+      string: ''
+    headers:
+      Accept-Ranges:
+      - bytes
+      Access-Control-Allow-Origin:
+      - https://huggingface.co
+      Access-Control-Expose-Headers:
+      - X-Repo-Commit,X-Request-Id,X-Error-Code,X-Error-Message,X-Total-Count,ETag,Link,Accept-Ranges,Content-Range,X-Linked-Size,X-Linked-ETag,X-Xet-Hash
+      Access-Control-Max-Age:
+      - '86400'
+      Age:
+      - '50880'
+      Connection:
+      - keep-alive
+      Content-Disposition:
+      - inline; filename*=UTF-8''tokenizer.json; filename="tokenizer.json";
+      Content-Length:
+      - '9084490'
+      Content-Security-Policy:
+      - default-src 'none'; sandbox
+      Content-Type:
+      - text/plain; charset=utf-8
+      Date:
+      - Sun, 14 Dec 2025 21:28:49 GMT
+      ETag:
+      - '"94eacd0897072dcd7b84d1f6ff3c3f6d1933a8cc"'
+      RateLimit:
+      - '"resolvers";r=4997;t=290'
+      RateLimit-Policy:
+      - '"fixed window";"resolvers";q=5000;w=300'
+      Referrer-Policy:
+      - strict-origin-when-cross-origin
+      Vary:
+      - Origin
+      Via:
+      - 1.1 105f0a444f68cb77cde9660c45a62eb0.cloudfront.net (CloudFront)
+      X-Amz-Cf-Id:
+      - u0Jiz063CNfiCQUeh4xXp8bN8-rHGN1qLjCh9Ts_kZVhs3D44S9Zng==
+      X-Amz-Cf-Pop:
+      - PIT50-P2
+      X-Cache:
+      - Hit from cloudfront
+      X-Hub-Cache:
+      - MISS
+      X-Powered-By:
+      - huggingface-moon
+      X-Repo-Commit:
+      - 72bff9ee09897a16b3b4b2b9995fecb0bfa7dbe6
+      X-Request-Id:
+      - Root=1-693f2c11-6dec9a48646fc2d93d76318c;1b68cfa5-a7d3-48c8-9886-fb6ea701774f
+      cross-origin-opener-policy:
+      - same-origin
+    status:
+      code: 200
+      message: OK
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - identity
+      Connection:
+      - keep-alive
+      X-Amzn-Trace-Id:
+      - dccd3eba-2ebd-4634-911d-910d8801fcd1
+      authorization:
+      - REDACTED
+      user-agent:
+      - unknown/None; hf_hub/0.35.0; python/3.13.1; torch/2.8.0
+    method: HEAD
+    uri: https://huggingface.co/Xenova/llama-3-tokenizer/resolve/main/tokenizer.json
+  response:
+    body:
+      string: ''
+    headers:
+      Access-Control-Allow-Origin:
+      - https://huggingface.co
+      Access-Control-Expose-Headers:
+      - X-Repo-Commit,X-Request-Id,X-Error-Code,X-Error-Message,X-Total-Count,ETag,Link,Accept-Ranges,Content-Range,X-Linked-Size,X-Linked-ETag,X-Xet-Hash
+      Access-Control-Max-Age:
+      - '86400'
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '87'
+      Content-Type:
+      - text/plain; charset=utf-8
+      Date:
+      - Mon, 15 Dec 2025 12:00:42 GMT
+      Location:
+      - /Xenova/llama3-tokenizer/resolve/main/tokenizer.json
+      RateLimit:
+      - '"resolvers";r=4999;t=177'
+      RateLimit-Policy:
+      - '"fixed window";"resolvers";q=5000;w=300'
+      Referrer-Policy:
+      - strict-origin-when-cross-origin
+      Vary:
+      - Origin, Accept
+      Via:
+      - 1.1 7c2520f39522c9e84e812f55c62b3840.cloudfront.net (CloudFront)
+      X-Amz-Cf-Id:
+      - xn1RxvUC5XuklLuvo6u_NCgRy5GhGQ7L2HAQXL3BRhJnfd0d72arKw==
+      X-Amz-Cf-Pop:
+      - PIT50-P2
+      X-Cache:
+      - Miss from cloudfront
+      X-Powered-By:
+      - huggingface-moon
+      X-Request-Id:
+      - Root=1-693ff86a-72ce0f9413984bec309a7e72;dccd3eba-2ebd-4634-911d-910d8801fcd1
+      cross-origin-opener-policy:
+      - same-origin
+    status:
+      code: 307
+      message: Temporary Redirect
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - identity
+      Connection:
+      - keep-alive
+      X-Amzn-Trace-Id:
+      - 5f7f819e-1771-4d42-97a9-5b609349b843
+      authorization:
+      - REDACTED
+      user-agent:
+      - unknown/None; hf_hub/0.35.0; python/3.13.1; torch/2.8.0
+    method: HEAD
+    uri: https://huggingface.co/Xenova/llama3-tokenizer/resolve/main/tokenizer.json
+  response:
+    body:
+      string: ''
+    headers:
+      Accept-Ranges:
+      - bytes
+      Access-Control-Allow-Origin:
+      - https://huggingface.co
+      Access-Control-Expose-Headers:
+      - X-Repo-Commit,X-Request-Id,X-Error-Code,X-Error-Message,X-Total-Count,ETag,Link,Accept-Ranges,Content-Range,X-Linked-Size,X-Linked-ETag,X-Xet-Hash
+      Access-Control-Max-Age:
+      - '86400'
+      Connection:
+      - keep-alive
+      Content-Disposition:
+      - inline; filename*=UTF-8''tokenizer.json; filename="tokenizer.json";
+      Content-Length:
+      - '256'
+      Content-Security-Policy:
+      - default-src 'none'; sandbox
+      Content-Type:
+      - text/plain; charset=utf-8
+      Date:
+      - Mon, 15 Dec 2025 12:00:43 GMT
+      Location:
+      - /api/resolve-cache/models/Xenova/llama3-tokenizer/72bff9ee09897a16b3b4b2b9995fecb0bfa7dbe6/tokenizer.json?%2FXenova%2Fllama3-tokenizer%2Fresolve%2Fmain%2Ftokenizer.json=&etag=%2294eacd0897072dcd7b84d1f6ff3c3f6d1933a8cc%22
+      RateLimit:
+      - '"resolvers";r=4998;t=176'
+      RateLimit-Policy:
+      - '"fixed window";"resolvers";q=5000;w=300'
+      Referrer-Policy:
+      - strict-origin-when-cross-origin
+      Vary:
+      - Origin, Accept
+      Via:
+      - 1.1 298bfd7d0e5de775164fa161b32e71de.cloudfront.net (CloudFront)
+      X-Amz-Cf-Id:
+      - fEbhAZZIT2zgnKVOu8BROX3Wgye0mv6GiWqQ29c6EjGeVM4i5ErrkQ==
+      X-Amz-Cf-Pop:
+      - PIT50-P2
+      X-Cache:
+      - Miss from cloudfront
+      X-Hub-Cache:
+      - HIT
+      X-Linked-ETag:
+      - '"94eacd0897072dcd7b84d1f6ff3c3f6d1933a8cc"'
+      X-Powered-By:
+      - huggingface-moon
+      X-Repo-Commit:
+      - 72bff9ee09897a16b3b4b2b9995fecb0bfa7dbe6
+      X-Request-Id:
+      - Root=1-693ff86b-038d001f38fbb40b661b5f31;5f7f819e-1771-4d42-97a9-5b609349b843
+      cross-origin-opener-policy:
+      - same-origin
+    status:
+      code: 307
+      message: Temporary Redirect
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - identity
+      Connection:
+      - keep-alive
+      X-Amzn-Trace-Id:
+      - 6ddba2b2-f31b-474d-ac38-79f08a8af530
+      authorization:
+      - REDACTED
+      user-agent:
+      - unknown/None; hf_hub/0.35.0; python/3.13.1; torch/2.8.0
+    method: HEAD
+    uri: https://huggingface.co/api/resolve-cache/models/Xenova/llama3-tokenizer/72bff9ee09897a16b3b4b2b9995fecb0bfa7dbe6/tokenizer.json
+  response:
+    body:
+      string: ''
+    headers:
+      Accept-Ranges:
+      - bytes
+      Access-Control-Allow-Origin:
+      - https://huggingface.co
+      Access-Control-Expose-Headers:
+      - X-Repo-Commit,X-Request-Id,X-Error-Code,X-Error-Message,X-Total-Count,ETag,Link,Accept-Ranges,Content-Range,X-Linked-Size,X-Linked-ETag,X-Xet-Hash
+      Access-Control-Max-Age:
+      - '86400'
+      Age:
+      - '52314'
+      Connection:
+      - keep-alive
+      Content-Disposition:
+      - inline; filename*=UTF-8''tokenizer.json; filename="tokenizer.json";
+      Content-Length:
+      - '9084490'
+      Content-Security-Policy:
+      - default-src 'none'; sandbox
+      Content-Type:
+      - text/plain; charset=utf-8
+      Date:
+      - Sun, 14 Dec 2025 21:28:49 GMT
+      ETag:
+      - '"94eacd0897072dcd7b84d1f6ff3c3f6d1933a8cc"'
+      RateLimit:
+      - '"resolvers";r=4997;t=290'
+      RateLimit-Policy:
+      - '"fixed window";"resolvers";q=5000;w=300'
+      Referrer-Policy:
+      - strict-origin-when-cross-origin
+      Vary:
+      - Origin
+      Via:
+      - 1.1 f1d21247856e07e69e3f5fe1ef9bf908.cloudfront.net (CloudFront)
+      X-Amz-Cf-Id:
+      - yI7MHkoXtsFsKdiU9tDGvDkF4IZjlXRy4tN03ctACRS5D6viHaFvgg==
+      X-Amz-Cf-Pop:
+      - PIT50-P2
+      X-Cache:
+      - Hit from cloudfront
+      X-Hub-Cache:
+      - MISS
+      X-Powered-By:
+      - huggingface-moon
+      X-Repo-Commit:
+      - 72bff9ee09897a16b3b4b2b9995fecb0bfa7dbe6
+      X-Request-Id:
+      - Root=1-693f2c11-6dec9a48646fc2d93d76318c;1b68cfa5-a7d3-48c8-9886-fb6ea701774f
+      cross-origin-opener-policy:
+      - same-origin
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"messages":[{"role":"user","content":"Calculate 42 + 58 using the tool."}],"model":"llama3.1-8b","max_tokens":100,"stream":true,"tools":[{"type":"function","function":{"name":"calculate","description":"Add
+      two numbers","parameters":{"type":"object","properties":{"a":{"type":"number"},"b":{"type":"number"}},"required":["a","b"]}}}]}'
+    headers:
+      Accept:
+      - application/json
+      Accept-Encoding:
+      - gzip, deflate, zstd
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '334'
+      Content-Type:
+      - application/json
+      Host:
+      - api.cerebras.ai
+      User-Agent:
+      - AsyncOpenAI/Python 2.3.0
+      X-Stainless-Arch:
+      - other:amd64
+      X-Stainless-Async:
+      - async:asyncio
+      X-Stainless-Lang:
+      - python
+      X-Stainless-OS:
+      - Windows
+      X-Stainless-Package-Version:
+      - 2.3.0
+      X-Stainless-Raw-Response:
+      - 'true'
+      X-Stainless-Runtime:
+      - CPython
+      X-Stainless-Runtime-Version:
+      - 3.13.1
+      authorization:
+      - REDACTED
+      x-stainless-read-timeout:
+      - '60.0'
+      x-stainless-retry-count:
+      - '0'
+    method: POST
+    uri: https://api.cerebras.ai/v1/chat/completions
+  response:
+    body:
+      string: 'data: {"id":"chatcmpl-fa7521fa-90b8-4806-9208-35c2f669c16b","choices":[{"delta":{"role":"assistant"},"index":0}],"created":1765800093,"model":"llama3.1-8b","system_fingerprint":"fp_2df2c50ce520692a7dce","object":"chat.completion.chunk"}
+
+
+        data: {"id":"chatcmpl-fa7521fa-90b8-4806-9208-35c2f669c16b","choices":[{"delta":{"content":"The"},"index":0}],"created":1765800093,"model":"llama3.1-8b","system_fingerprint":"fp_2df2c50ce520692a7dce","object":"chat.completion.chunk"}
+
+
+        data: {"id":"chatcmpl-fa7521fa-90b8-4806-9208-35c2f669c16b","choices":[{"delta":{"content":"
+        result of 42 + 58 is 100."},"index":0}],"created":1765800093,"model":"llama3.1-8b","system_fingerprint":"fp_2df2c50ce520692a7dce","object":"chat.completion.chunk"}
+
+
+        data: {"id":"chatcmpl-fa7521fa-90b8-4806-9208-35c2f669c16b","choices":[{"delta":{},"finish_reason":"stop","index":0}],"created":1765800093,"model":"llama3.1-8b","system_fingerprint":"fp_2df2c50ce520692a7dce","object":"chat.completion.chunk","usage":{"total_tokens":542,"completion_tokens":13,"prompt_tokens":529,"prompt_tokens_details":{"cached_tokens":0}},"time_info":{"queue_time":0.784948983,"prompt_time":0.024525403,"completion_time":0.005422203,"total_time":0.817147970199585,"created":1765800093.3257494}}
+
+
+        '
+    headers:
+      CF-RAY:
+      - 9ae5c976bb184160-IAD
+      Connection:
+      - keep-alive
+      Content-Type:
+      - text/event-stream; charset=utf-8
+      Date:
+      - Mon, 15 Dec 2025 12:01:33 GMT
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      alt-svc:
+      - h3=":443"; ma=86400
+      cf-cache-status:
+      - DYNAMIC
+      inference-id:
+      - chatcmpl-fa7521fa-90b8-4806-9208-35c2f669c16b
+      referrer-policy:
+      - strict-origin-when-cross-origin
+      set-cookie:
+      - __cf_bm=mayc7ReTqJnE9RcxwR00eozarXecL7YBA6Z5XssDDxA-1765800093.23857-1.0.1.1-wK.UnNP39xnO9mhic_bvQl4sJAdpDZhZnJifjEvcfF4b6nctu0270gPtut7y9oWrLTZZwmX7METz1JW0MAi.RjNY_r850XdDE6_XJ3HunL9x1htjFFyzAWiKEo9xOh2a;
+        HttpOnly; Secure; Path=/; Domain=cerebras-sandbox.net; Expires=Mon, 15 Dec
+        2025 12:31:33 GMT
+      strict-transport-security:
+      - max-age=3600; includeSubDomains
+      x-content-type-options:
+      - nosniff
+      x-ratelimit-remaining-requests-day:
+      - '14370'
+      x-ratelimit-remaining-requests-hour:
+      - '870'
+      x-ratelimit-remaining-requests-minute:
+      - '16'
+      x-ratelimit-remaining-tokens-day:
+      - '987405'
+      x-ratelimit-remaining-tokens-hour:
+      - '987405'
+      x-ratelimit-remaining-tokens-minute:
+      - '47405'
+      x-request-id:
+      - 9ae5c976bb184160-IAD
+    status:
+      code: 200
+      message: OK
+version: 1
