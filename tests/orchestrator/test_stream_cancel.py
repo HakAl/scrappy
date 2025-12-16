@@ -8,9 +8,15 @@ Tests streaming behavior under cancellation scenarios:
 - Partial content recovery
 - Concurrent cancellations
 - Resource leak prevention
+
+These tests are marked as slow and skipped by default.
+Run with: pytest -m slow tests/orchestrator/test_stream_cancel.py
 """
 
 import pytest
+
+# Mark all tests in this module as slow (skipped by default)
+pytestmark = pytest.mark.slow
 import asyncio
 from typing import AsyncIterator, List, Optional
 from unittest.mock import Mock

@@ -168,10 +168,11 @@ def needs_clarification(
 
     Returns True when:
     - Confidence is below confidence_threshold
-    - Confidence is in medium range AND has conflicting signals
+    - Confidence is in medium range AND has conflicting signals (rule-based only)
 
     Returns False when:
     - Confidence is at or above high_confidence_bypass (trust the classifier)
+    - LLM classification was used (trust LLM over keyword matching)
 
     Args:
         task: The classified task
@@ -197,6 +198,11 @@ def needs_clarification(
     # High confidence means classifier is sure - trust it completely
     # Skip conflicting signal checks for high confidence classifications
     if task.confidence >= high_confidence_bypass:
+        return False
+
+    # If LLM was used for classification, trust it over keyword matching
+    # LLM already considered context and semantics
+    if "LLM semantic classification" in task.reasoning:
         return False
 
     # Medium confidence range: check for conflicting signals

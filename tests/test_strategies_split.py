@@ -48,7 +48,12 @@ class TestStrategyImports:
         """Test ConversationExecutor can be imported from its own module."""
         from scrappy.task_router.strategies.conversation_executor import ConversationExecutor
 
-        executor = ConversationExecutor()
+        mock_orch = Mock()
+        mock_orch.brain = "cerebras"
+        mock_orch.providers = Mock()
+        mock_orch.providers.list_available.return_value = ["cerebras"]
+
+        executor = ConversationExecutor(orchestrator=mock_orch)
         assert executor.name == "ConversationExecutor"
 
     @pytest.mark.unit
@@ -161,12 +166,28 @@ class TestDirectExecutorBehavior:
 class TestConversationExecutorBehavior:
     """Test ConversationExecutor behavior after split."""
 
+    @pytest.fixture
+    def mock_orchestrator(self):
+        """Create a mock orchestrator for ConversationExecutor."""
+        mock = Mock()
+        mock.brain = "cerebras"
+        mock.providers = Mock()
+        mock.providers.list_available.return_value = ["cerebras"]
+
+        # Mock delegate to return a response
+        mock_response = Mock()
+        mock_response.content = "Hello! How can I help you today?"
+        mock_response.tokens_used = 25
+        mock.delegate.return_value = mock_response
+
+        return mock
+
     @pytest.mark.unit
-    def test_conversation_executor_handles_greetings(self):
-        """Test ConversationExecutor handles greeting patterns."""
+    def test_conversation_executor_handles_greetings(self, mock_orchestrator):
+        """Test ConversationExecutor delegates greetings to LLM."""
         from scrappy.task_router.strategies.conversation_executor import ConversationExecutor
 
-        executor = ConversationExecutor()
+        executor = ConversationExecutor(orchestrator=mock_orchestrator)
 
         task = ClassifiedTask(
             original_input="hello",
@@ -180,14 +201,16 @@ class TestConversationExecutorBehavior:
 
         assert result.success is True
         assert len(result.output) > 0
-        assert "hello" in result.output.lower() or "help" in result.output.lower()
+        assert result.tokens_used > 0
+        mock_orchestrator.delegate.assert_called_once()
 
     @pytest.mark.unit
-    def test_conversation_executor_handles_thanks(self):
-        """Test ConversationExecutor handles thank you patterns."""
+    def test_conversation_executor_handles_thanks(self, mock_orchestrator):
+        """Test ConversationExecutor delegates thanks to LLM."""
         from scrappy.task_router.strategies.conversation_executor import ConversationExecutor
 
-        executor = ConversationExecutor()
+        mock_orchestrator.delegate.return_value.content = "You're welcome!"
+        executor = ConversationExecutor(orchestrator=mock_orchestrator)
 
         task = ClassifiedTask(
             original_input="thanks",
@@ -200,14 +223,15 @@ class TestConversationExecutorBehavior:
         result = executor.execute(task)
 
         assert result.success is True
-        assert "welcome" in result.output.lower()
+        assert len(result.output) > 0
+        mock_orchestrator.delegate.assert_called_once()
 
     @pytest.mark.unit
-    def test_conversation_executor_only_handles_conversation(self):
+    def test_conversation_executor_only_handles_conversation(self, mock_orchestrator):
         """Test ConversationExecutor only accepts CONVERSATION tasks."""
         from scrappy.task_router.strategies.conversation_executor import ConversationExecutor
 
-        executor = ConversationExecutor()
+        executor = ConversationExecutor(orchestrator=mock_orchestrator)
 
         # Should handle CONVERSATION
         conv_task = ClassifiedTask(
@@ -226,6 +250,52 @@ class TestConversationExecutorBehavior:
             reasoning="Code task"
         )
         assert executor.can_handle(code_task) is False
+
+    @pytest.mark.unit
+    def test_conversation_executor_uses_preferred_provider(self, mock_orchestrator):
+        """Test ConversationExecutor uses specified provider."""
+        from scrappy.task_router.strategies.conversation_executor import ConversationExecutor
+
+        mock_orchestrator.providers.list_available.return_value = ["cerebras", "groq"]
+        executor = ConversationExecutor(
+            orchestrator=mock_orchestrator,
+            preferred_provider="groq"
+        )
+
+        task = ClassifiedTask(
+            original_input="hello",
+            task_type=TaskType.CONVERSATION,
+            confidence=0.9,
+            reasoning="Greeting"
+        )
+
+        executor.execute(task)
+
+        # Verify delegate was called with groq as first positional arg
+        call_args = mock_orchestrator.delegate.call_args
+        assert call_args[0][0] == "groq"
+
+    @pytest.mark.unit
+    def test_conversation_executor_handles_errors_gracefully(self, mock_orchestrator):
+        """Test ConversationExecutor handles errors without crashing."""
+        from scrappy.task_router.strategies.conversation_executor import ConversationExecutor
+
+        mock_orchestrator.delegate.side_effect = Exception("API failure")
+
+        executor = ConversationExecutor(orchestrator=mock_orchestrator)
+
+        task = ClassifiedTask(
+            original_input="hello",
+            task_type=TaskType.CONVERSATION,
+            confidence=0.9,
+            reasoning="Greeting"
+        )
+
+        result = executor.execute(task)
+
+        assert result.success is False
+        assert result.error is not None
+        assert "failed" in result.error.lower()
 
 
 class TestResearchExecutorBehavior:

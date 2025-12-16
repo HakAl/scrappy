@@ -322,4 +322,107 @@ interactions:
     status:
       code: 200
       message: OK
+- request:
+    body: '{"messages":[{"role":"user","content":"Hi"}],"model":"llama3.1-8b","max_tokens":10,"stream":true}'
+    headers:
+      Accept:
+      - application/json
+      Accept-Encoding:
+      - gzip, deflate, zstd
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '97'
+      Content-Type:
+      - application/json
+      Host:
+      - api.cerebras.ai
+      User-Agent:
+      - AsyncOpenAI/Python 2.3.0
+      X-Stainless-Arch:
+      - other:amd64
+      X-Stainless-Async:
+      - async:asyncio
+      X-Stainless-Lang:
+      - python
+      X-Stainless-OS:
+      - Windows
+      X-Stainless-Package-Version:
+      - 2.3.0
+      X-Stainless-Raw-Response:
+      - 'true'
+      X-Stainless-Runtime:
+      - CPython
+      X-Stainless-Runtime-Version:
+      - 3.13.1
+      authorization:
+      - REDACTED
+      x-stainless-read-timeout:
+      - '60.0'
+      x-stainless-retry-count:
+      - '0'
+    method: POST
+    uri: https://api.cerebras.ai/v1/chat/completions
+  response:
+    body:
+      string: 'data: {"id":"chatcmpl-fce01847-ab0e-45e7-8122-eba8fecf645f","choices":[{"delta":{"role":"assistant"},"index":0}],"created":1765844218,"model":"llama3.1-8b","system_fingerprint":"fp_2df2c50ce520692a7dce","object":"chat.completion.chunk"}
+
+
+        data: {"id":"chatcmpl-fce01847-ab0e-45e7-8122-eba8fecf645f","choices":[{"delta":{"content":"It"},"index":0}],"created":1765844218,"model":"llama3.1-8b","system_fingerprint":"fp_2df2c50ce520692a7dce","object":"chat.completion.chunk"}
+
+
+        data: {"id":"chatcmpl-fce01847-ab0e-45e7-8122-eba8fecf645f","choices":[{"delta":{"content":"''s
+        nice to meet you. Is there something"},"index":0}],"created":1765844218,"model":"llama3.1-8b","system_fingerprint":"fp_2df2c50ce520692a7dce","object":"chat.completion.chunk"}
+
+
+        data: {"id":"chatcmpl-fce01847-ab0e-45e7-8122-eba8fecf645f","choices":[{"delta":{},"finish_reason":"length","index":0}],"created":1765844218,"model":"llama3.1-8b","system_fingerprint":"fp_2df2c50ce520692a7dce","object":"chat.completion.chunk","usage":{"total_tokens":46,"completion_tokens":10,"prompt_tokens":36,"prompt_tokens_details":{"cached_tokens":0}},"time_info":{"queue_time":0.0044589,"prompt_time":0.002072588,"completion_time":0.004089311,"total_time":0.012299299240112305,"created":1765844218.0289624}}
+
+
+        '
+    headers:
+      CF-RAY:
+      - 9ae9feba3ff4e600-IAD
+      Connection:
+      - keep-alive
+      Content-Type:
+      - text/event-stream; charset=utf-8
+      Date:
+      - Tue, 16 Dec 2025 00:16:58 GMT
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      alt-svc:
+      - h3=":443"; ma=86400
+      cf-cache-status:
+      - DYNAMIC
+      inference-id:
+      - chatcmpl-fce01847-ab0e-45e7-8122-eba8fecf645f
+      referrer-policy:
+      - strict-origin-when-cross-origin
+      set-cookie:
+      - __cf_bm=w9Osxw0SxGqtT1DpUZWDHU4rU3QVaa8wLQDwneDc3Kc-1765844217.9548829-1.0.1.1-Cat0SA7Ui1uKE_WNOorOcDrKuLdWaQ78aeN0pcf6XJfkFaD3Tfsf4kO83sYbqLWoaoJZXBVKe1t6FB4ClYKzTyQpP_k2AI_3DC2rtu9M6cxKajH.VbgxwPP.657BYTFH;
+        HttpOnly; Secure; Path=/; Domain=cerebras-sandbox.net; Expires=Tue, 16 Dec
+        2025 00:46:58 GMT
+      strict-transport-security:
+      - max-age=3600; includeSubDomains
+      x-content-type-options:
+      - nosniff
+      x-ratelimit-remaining-requests-day:
+      - '14364'
+      x-ratelimit-remaining-requests-hour:
+      - '864'
+      x-ratelimit-remaining-requests-minute:
+      - '26'
+      x-ratelimit-remaining-tokens-day:
+      - '985817'
+      x-ratelimit-remaining-tokens-hour:
+      - '985817'
+      x-ratelimit-remaining-tokens-minute:
+      - '45817'
+      x-request-id:
+      - 9ae9feba3ff4e600-IAD
+    status:
+      code: 200
+      message: OK
 version: 1

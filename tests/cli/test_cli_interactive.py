@@ -116,7 +116,8 @@ class TestInteractiveMode:
         mock_result = MagicMock()
         mock_result.success = True
         mock_result.output = "Hi there"
-        mode.task_router.handle_auto_route = MagicMock(return_value=mock_result)
+        mock_result.metadata = {"streaming": False}
+        mode.task_router.handle_auto_route_streaming_sync = MagicMock(return_value=mock_result)
 
         mode._process_input("hello")
 
@@ -202,7 +203,8 @@ class TestInteractiveModeDisplayOutput:
         mock_result.provider_used = "openai"
         mock_result.tokens_used = 150
         mock_result.execution_time = 0.5
-        mode.task_router.handle_auto_route = MagicMock(return_value=mock_result)
+        mock_result.metadata = {"streaming": False}
+        mode.task_router.handle_auto_route_streaming_sync = MagicMock(return_value=mock_result)
 
         mode._process_input("test")
 
@@ -222,7 +224,8 @@ class TestInteractiveModeDisplayOutput:
         mock_result.provider_used = "cerebras"
         mock_result.tokens_used = 100
         mock_result.execution_time = 0.25
-        mode.task_router.handle_auto_route = MagicMock(return_value=mock_result)
+        mock_result.metadata = {"streaming": False}
+        mode.task_router.handle_auto_route_streaming_sync = MagicMock(return_value=mock_result)
 
         mode._process_input("fetch https://example.com")
 

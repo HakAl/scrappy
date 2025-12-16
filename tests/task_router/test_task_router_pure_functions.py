@@ -460,6 +460,41 @@ class TestNeedsClarificationWithConfig:
         # Should NOT need clarification with lenient config
         assert needs_clarification(task, lenient_config) is False
 
+    @pytest.mark.unit
+    def test_llm_classification_skips_conflicting_signal_check(self):
+        """LLM classification should bypass conflicting signal checks."""
+        config = FakeClarificationConfig(
+            confidence_threshold=0.7,
+            high_confidence_bypass=0.9
+        )
+        # Task with "add" action word that would normally trigger clarification
+        # but was classified by LLM so should be trusted
+        task = ClassifiedTask(
+            original_input="name the top engineers and add a runner up",
+            task_type=TaskType.RESEARCH,
+            confidence=0.8,  # Medium confidence (would check for conflicts)
+            reasoning="LLM semantic classification: User wants information (was CODE_GENERATION, confidence 0.80)"
+        )
+        # Should NOT need clarification because LLM was used
+        assert needs_clarification(task, config) is False
+
+    @pytest.mark.unit
+    def test_non_llm_classification_still_checks_conflicts(self):
+        """Rule-based classification should still check conflicting signals."""
+        config = FakeClarificationConfig(
+            confidence_threshold=0.7,
+            high_confidence_bypass=0.9
+        )
+        # Same input but classified by rules (no "LLM semantic classification" in reasoning)
+        task = ClassifiedTask(
+            original_input="name the top engineers and add a runner up",
+            task_type=TaskType.RESEARCH,
+            confidence=0.8,  # Medium confidence
+            reasoning="Pattern matched: question"  # Rule-based reasoning
+        )
+        # Should need clarification because "add" is a conflicting signal
+        assert needs_clarification(task, config) is True
+
 
 class TestDetermineExecutionAction:
     """Tests for determine_execution_action pure function."""

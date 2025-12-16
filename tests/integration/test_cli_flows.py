@@ -6,9 +6,14 @@ state transitions, side effects, and multi-step interactions.
 
 TDD: Tests written first to demonstrate expected behavior of
 complete CLI workflows.
+
+Run with: pytest -m integration tests/integration/
 """
 
 import pytest
+
+# Mark all tests in this module as integration (skipped by default)
+pytestmark = pytest.mark.integration
 from unittest.mock import MagicMock, patch, PropertyMock
 from tests.helpers import (
     MockIO,

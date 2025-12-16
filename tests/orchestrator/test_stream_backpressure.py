@@ -8,9 +8,15 @@ Tests streaming behavior under backpressure scenarios:
 - Memory leak detection
 - Queue saturation
 - Throttling behavior
+
+These tests are marked as slow and skipped by default.
+Run with: pytest -m slow tests/orchestrator/test_stream_backpressure.py
 """
 
 import pytest
+
+# Mark all tests in this module as slow (skipped by default)
+pytestmark = pytest.mark.slow
 import asyncio
 from typing import AsyncIterator, List, Optional
 import sys

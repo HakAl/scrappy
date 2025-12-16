@@ -112,3 +112,130 @@ class TestIntentClarification:
         needs_clarify = router._needs_intent_clarification(task)
         assert needs_clarify is False
 
+
+class TestLLMClassification:
+    """Tests for LLM-based classification fallback."""
+
+    @pytest.fixture
+    def mock_orchestrator(self):
+        """Create mock orchestrator with delegate method."""
+        orch = Mock()
+        return orch
+
+    @pytest.fixture
+    def router_with_orchestrator(self, mock_orchestrator, default_clarification_config):
+        """Create router with mock orchestrator."""
+        return TaskRouter(
+            orchestrator=mock_orchestrator,
+            verbose=False,
+            clarification_config=default_clarification_config
+        )
+
+    @pytest.mark.unit
+    def test_llm_classification_calls_delegate_with_fast_model(self, router_with_orchestrator, mock_orchestrator):
+        """Test that LLM classification uses fast model group via delegate."""
+        # Setup mock response
+        mock_response = Mock()
+        mock_response.content = '{"task_type": "RESEARCH", "confidence": 0.9, "reasoning": "This is asking for information"}'
+        mock_orchestrator.delegate.return_value = mock_response
+
+        # Create low-confidence task that would trigger LLM classification
+        task = ClassifiedTask(
+            original_input="name the top software engineers from 1950-2020",
+            task_type=TaskType.CODE_GENERATION,
+            confidence=0.5,
+            reasoning="Pattern matched 'add'"
+        )
+
+        # Call LLM classification
+        result = router_with_orchestrator._classify_with_llm(task)
+
+        # Verify delegate was called
+        mock_orchestrator.delegate.assert_called_once()
+
+        # Check the call used 'fast' provider
+        call_kwargs = mock_orchestrator.delegate.call_args
+        assert call_kwargs.kwargs.get('provider_name') == 'fast' or call_kwargs.args[0] == 'fast'
+
+    @pytest.mark.unit
+    def test_llm_classification_reclassifies_to_research(self, router_with_orchestrator, mock_orchestrator):
+        """Test that LLM can reclassify code_generation to research."""
+        # Setup mock response - LLM says this is research
+        mock_response = Mock()
+        mock_response.content = '{"task_type": "RESEARCH", "confidence": 0.95, "reasoning": "User wants information about historical figures"}'
+        mock_orchestrator.delegate.return_value = mock_response
+
+        # Create misclassified task
+        task = ClassifiedTask(
+            original_input="name the top software engineers from 1950-2020",
+            task_type=TaskType.CODE_GENERATION,
+            confidence=0.5,
+            reasoning="Pattern matched 'add'"
+        )
+
+        # Call LLM classification
+        result = router_with_orchestrator._classify_with_llm(task)
+
+        # Should be reclassified to RESEARCH
+        assert result.task_type == TaskType.RESEARCH
+        assert result.confidence == 0.95
+        assert "LLM semantic classification" in result.reasoning
+
+    @pytest.mark.unit
+    def test_llm_classification_keeps_original_when_uncertain(self, router_with_orchestrator, mock_orchestrator):
+        """Test that uncertain LLM response keeps original classification."""
+        # Setup mock response - LLM is uncertain
+        mock_response = Mock()
+        mock_response.content = '{"task_type": "RESEARCH", "confidence": 0.5, "reasoning": "Could be either"}'
+        mock_orchestrator.delegate.return_value = mock_response
+
+        task = ClassifiedTask(
+            original_input="some ambiguous input",
+            task_type=TaskType.CODE_GENERATION,
+            confidence=0.5,
+            reasoning="Original"
+        )
+
+        result = router_with_orchestrator._classify_with_llm(task)
+
+        # Should keep original since LLM confidence < 0.7
+        assert result.task_type == TaskType.CODE_GENERATION
+
+    @pytest.mark.unit
+    def test_llm_classification_handles_no_orchestrator(self, default_clarification_config):
+        """Test that missing orchestrator returns original task."""
+        router = TaskRouter(
+            orchestrator=None,
+            verbose=False,
+            clarification_config=default_clarification_config
+        )
+
+        task = ClassifiedTask(
+            original_input="test input",
+            task_type=TaskType.RESEARCH,
+            confidence=0.5,
+            reasoning="Test"
+        )
+
+        result = router._classify_with_llm(task)
+
+        # Should return original task unchanged
+        assert result == task
+
+    @pytest.mark.unit
+    def test_llm_classification_handles_delegate_exception(self, router_with_orchestrator, mock_orchestrator):
+        """Test that delegate exceptions are handled gracefully."""
+        mock_orchestrator.delegate.side_effect = Exception("API error")
+
+        task = ClassifiedTask(
+            original_input="test input",
+            task_type=TaskType.CODE_GENERATION,
+            confidence=0.5,
+            reasoning="Test"
+        )
+
+        result = router_with_orchestrator._classify_with_llm(task)
+
+        # Should return original task on error
+        assert result.task_type == TaskType.CODE_GENERATION
+

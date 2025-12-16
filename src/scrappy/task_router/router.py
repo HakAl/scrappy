@@ -162,13 +162,12 @@ class TaskRouter:
             require_confirmation=not self.auto_confirm_direct
         )
 
-        # Conversation handler
-        strategies[TaskType.CONVERSATION] = ConversationExecutor(
-            orchestrator=self.orchestrator
-        )
-
         # AI-powered strategies (require orchestrator)
         if self.orchestrator:
+            # Conversation handler (requires LLM)
+            strategies[TaskType.CONVERSATION] = ConversationExecutor(
+                orchestrator=self.orchestrator
+            )
             # Provider will be resolved dynamically per task
             strategies[TaskType.RESEARCH] = ResearchExecutor(
                 orchestrator=self.orchestrator,
@@ -281,29 +280,15 @@ Rule-based reasoning: {task.reasoning}
 What is the user's PRIMARY intent? Respond with JSON only."""
 
         try:
-            # Use fast provider for quick classification
-            provider_to_use = None
-            if hasattr(self.orchestrator, 'providers'):
-                available = self.orchestrator.providers.list_available()
-                # Prefer fast providers
-                for pref in ['cerebras', 'groq', 'gemini']:
-                    if pref in available:
-                        provider_to_use = pref
-                        break
-
-            if not provider_to_use:
-                if self.verbose:
-                    self.output_handler.log_info("No provider available for LLM classification")
-                return task
-
-            # Make LLM call
+            # Use fast model group for quick classification (LiteLLM handles routing)
             response = self.orchestrator.delegate(
-                provider_to_use,
-                user_prompt,
+                provider_name="fast",  # Model group, not specific provider
+                prompt=user_prompt,
                 system_prompt=system_prompt,
                 max_tokens=200,
                 temperature=0.1,  # Low temperature for consistent classification
-                use_context=False
+                use_context=False,
+                selection_type=ModelSelectionType.FAST
             )
 
             # Parse response using pure function

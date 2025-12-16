@@ -5,11 +5,16 @@ output system correctly, rather than going directly to console.
 
 The key verification is that when running with an OutputSink (TUI mode),
 all output goes through the sink and can be captured.
+
+Run with: pytest -m integration tests/integration/
 """
 
 from typing import Any, List, Dict, Optional
 
 import pytest
+
+# Mark all tests in this module as integration (skipped by default)
+pytestmark = pytest.mark.integration
 from unittest.mock import Mock, patch, MagicMock
 
 from scrappy.cli.unified_io import UnifiedIO

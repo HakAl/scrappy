@@ -7,13 +7,16 @@ These tests record real API responses for:
 3. Tool calls - verify extraction works
 4. Provider quirks - capture edge cases for regression testing
 
-Run with: pytest tests/integration/test_vcr_provider.py --run-integration
+Run with: pytest -m integration tests/integration/
 
 Cassettes are stored in tests/integration/cassettes/ and replayed in CI.
 """
 
 import os
 import pytest
+
+# Mark all tests in this module as integration (skipped by default)
+pytestmark = pytest.mark.integration
 from dotenv import load_dotenv
 from scrappy.orchestrator.litellm_service import LiteLLMService
 from scrappy.orchestrator.litellm_config import create_litellm_router

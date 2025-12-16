@@ -383,3 +383,104 @@ class TestAsyncCallbackMethods:
         )
 
         assert len(tracker.recorded_requests) == 1
+
+
+class TestExtractProvider:
+    """Tests for _extract_provider method."""
+
+    def test_extracts_from_model_string_with_slash(self):
+        """Verify provider extracted from 'provider/model' format."""
+        callback = RateTrackingCallback()
+
+        result = callback._extract_provider("groq/llama-3.3-70b-versatile", {})
+
+        assert result == "groq"
+
+    def test_extracts_from_custom_llm_provider_kwarg(self):
+        """Verify provider extracted from custom_llm_provider in kwargs."""
+        callback = RateTrackingCallback()
+
+        result = callback._extract_provider(
+            "llama-3.3-70b-versatile",
+            {"custom_llm_provider": "groq"}
+        )
+
+        assert result == "groq"
+
+    def test_extracts_from_litellm_params(self):
+        """Verify provider extracted from litellm_params.custom_llm_provider."""
+        callback = RateTrackingCallback()
+
+        result = callback._extract_provider(
+            "llama-3.3-70b-versatile",
+            {"litellm_params": {"custom_llm_provider": "groq"}}
+        )
+
+        assert result == "groq"
+
+    def test_infers_groq_from_llama_70b_model(self):
+        """Verify groq inferred from llama 70b model without prefix."""
+        callback = RateTrackingCallback()
+
+        result = callback._extract_provider("llama-3.3-70b-versatile", {})
+
+        assert result == "groq"
+
+    def test_infers_groq_from_llama_8b_model(self):
+        """Verify groq inferred from llama 8b model without prefix."""
+        callback = RateTrackingCallback()
+
+        result = callback._extract_provider("llama-3.1-8b-instant", {})
+
+        assert result == "groq"
+
+    def test_infers_gemini_from_gemini_model(self):
+        """Verify gemini inferred from gemini model name."""
+        callback = RateTrackingCallback()
+
+        result = callback._extract_provider("gemini-2.0-flash-lite", {})
+
+        assert result == "gemini"
+
+    def test_infers_anthropic_from_claude_model(self):
+        """Verify anthropic inferred from claude model name."""
+        callback = RateTrackingCallback()
+
+        result = callback._extract_provider("claude-3-5-sonnet", {})
+
+        assert result == "anthropic"
+
+    def test_infers_openai_from_gpt_model(self):
+        """Verify openai inferred from gpt model name."""
+        callback = RateTrackingCallback()
+
+        result = callback._extract_provider("gpt-4o", {})
+
+        assert result == "openai"
+
+    def test_returns_unknown_for_unrecognized_model(self):
+        """Verify unknown returned for unrecognized model."""
+        callback = RateTrackingCallback()
+
+        result = callback._extract_provider("some-unknown-model", {})
+
+        assert result == "unknown"
+
+    def test_lowercases_provider_name(self):
+        """Verify provider name is lowercased."""
+        callback = RateTrackingCallback()
+
+        result = callback._extract_provider("GROQ/model", {})
+
+        assert result == "groq"
+
+    def test_model_string_takes_priority(self):
+        """Verify model string with slash takes priority over kwargs."""
+        callback = RateTrackingCallback()
+
+        result = callback._extract_provider(
+            "anthropic/claude-3",
+            {"custom_llm_provider": "openai"}  # Should be ignored
+        )
+
+        assert result == "anthropic"

@@ -3,25 +3,6 @@
 ---
 NEXT UP
 ---
----
-ConversationExecutor Issue:
-
-  Current behavior:
-  - Returns pre-defined strings for: greeting, thanks, acknowledgment, help_request, farewell
-  - Falls back to: "I understand. How can I assist you?"
-  - Never calls LLM - orchestrator is injected but unused
-
-  This means:
-  1. Streaming not applicable (no LLM call to stream)
-  2. BUT - general chat that doesn't match patterns gets a useless response
-
-  Question: Is this a streaming scope issue or a separate bug?
-
-  Options:
-  1. In scope: Add LLM fallback to ConversationExecutor + streaming for it
-  2. Out of scope: Note as separate issue, ConversationExecutor is intentionally simple
-
----
 
 ---
 /setup isn't listed in help

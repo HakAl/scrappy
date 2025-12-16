@@ -138,7 +138,7 @@ class RateTrackingCallback(CustomLogger):
         """
         # Extract actual provider/model (not group name)
         model_str = getattr(response_obj, 'model', '') or ''
-        provider = model_str.split("/")[0] if "/" in model_str else "unknown"
+        provider = self._extract_provider(model_str, kwargs)
 
         usage = getattr(response_obj, 'usage', None)
         input_tokens = getattr(usage, 'prompt_tokens', 0) if usage else 0
@@ -177,10 +177,15 @@ class RateTrackingCallback(CustomLogger):
             start_time: Request start time
             end_time: Request end time
         """
-        # Extract provider from exception if available
+        # Extract provider - try exception first, then use _extract_provider
         exception = kwargs.get('exception', None)
-        provider = getattr(exception, 'llm_provider', 'unknown')
+        provider = getattr(exception, 'llm_provider', None)
         model = kwargs.get('model', 'unknown')
+
+        if not provider:
+            # Use _extract_provider as fallback
+            provider = self._extract_provider(model, kwargs)
+
         error_msg = str(exception) if exception else "Unknown error"
 
         # Record failure to rate tracker (D9)
@@ -244,3 +249,54 @@ class RateTrackingCallback(CustomLogger):
     ) -> None:
         """Async version of log_failure_event."""
         self.log_failure_event(kwargs, response_obj, start_time, end_time)
+
+    def _extract_provider(self, model_str: str, kwargs: dict) -> str:
+        """
+        Extract provider name from model string or kwargs.
+
+        Tries multiple sources in order of reliability:
+        1. Model string with provider prefix (e.g., "groq/llama-3.3-70b")
+        2. custom_llm_provider from kwargs
+        3. litellm_params.custom_llm_provider
+        4. Infer from known model patterns
+        5. Fall back to "unknown"
+
+        Args:
+            model_str: Model string from response
+            kwargs: Request kwargs from LiteLLM
+
+        Returns:
+            Provider name (lowercase)
+        """
+        # 1. Check if model string has provider prefix
+        if "/" in model_str:
+            return model_str.split("/")[0].lower()
+
+        # 2. Check custom_llm_provider in kwargs
+        provider = kwargs.get("custom_llm_provider")
+        if provider:
+            return provider.lower()
+
+        # 3. Check litellm_params
+        litellm_params = kwargs.get("litellm_params", {})
+        provider = litellm_params.get("custom_llm_provider")
+        if provider:
+            return provider.lower()
+
+        # 4. Infer from known model patterns
+        model_lower = model_str.lower()
+        if any(pattern in model_lower for pattern in ["llama", "mixtral", "gemma"]):
+            # These are typically Groq models when not prefixed
+            if "70b" in model_lower or "versatile" in model_lower:
+                return "groq"
+            if "8b" in model_lower:
+                return "groq"  # Could also be cerebras, but groq more common
+        if "gemini" in model_lower:
+            return "gemini"
+        if "claude" in model_lower:
+            return "anthropic"
+        if "gpt" in model_lower:
+            return "openai"
+
+        # 5. Fall back to unknown
+        return "unknown"
