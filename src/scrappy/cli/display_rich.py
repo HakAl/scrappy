@@ -50,6 +50,7 @@ def show_help_table(
             ('/explore [path]', 'Explore codebase'),
         ],
         'Provider Management': [
+            ('/setup', 'Configure API keys'),
             ('/models [filter]', 'List available models'),
             ('/model [mode]', 'Toggle quality/fast mode'),
             ('/status', 'Show system status'),

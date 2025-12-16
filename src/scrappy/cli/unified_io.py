@@ -252,7 +252,10 @@ class OutputStrategyProtocol(Protocol):
         self,
         headers: List[str],
         rows: List[List[str]],
-        title: Optional[str] = None
+        title: Optional[str] = None,
+        title_style: Optional[str] = None,
+        header_style: Optional[str] = None,
+        border_style: Optional[str] = None,
     ) -> None:
         """Output a table.
 
@@ -260,6 +263,9 @@ class OutputStrategyProtocol(Protocol):
             headers: Column headers
             rows: Row data
             title: Optional title
+            title_style: Style for title
+            header_style: Style for headers
+            border_style: Style for borders
         """
         ...
 
@@ -448,10 +454,18 @@ class DirectConsoleOutput:
         self,
         headers: List[str],
         rows: List[List[str]],
-        title: Optional[str] = None
+        title: Optional[str] = None,
+        title_style: Optional[str] = None,
+        header_style: Optional[str] = None,
+        border_style: Optional[str] = None,
     ) -> None:
         """Output table to console."""
-        table = Table(title=title)
+        table = Table(
+            title=title,
+            title_style=title_style,
+            header_style=header_style,
+            border_style=border_style,
+        )
         for header in headers:
             table.add_column(header)
         for row in rows:
@@ -672,10 +686,18 @@ class OutputSinkAdapter:
         self,
         headers: List[str],
         rows: List[List[str]],
-        title: Optional[str] = None
+        title: Optional[str] = None,
+        title_style: Optional[str] = None,
+        header_style: Optional[str] = None,
+        border_style: Optional[str] = None,
     ) -> None:
         """Output table through sink as Rich Table."""
-        table = Table(title=title)
+        table = Table(
+            title=title,
+            title_style=title_style,
+            header_style=header_style,
+            border_style=border_style,
+        )
         for header in headers:
             table.add_column(header)
         for row in rows:
@@ -1047,7 +1069,12 @@ class UnifiedIO:
         title: Optional[str] = None
     ) -> None:
         """Display a table with headers and rows."""
-        self._strategy.output_table(headers, rows, title)
+        self._strategy.output_table(
+            headers, rows, title,
+            title_style=self._theme.primary,
+            header_style=self._theme.accent,
+            border_style=self._theme.text_muted,
+        )
 
     def syntax(
         self,

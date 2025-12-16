@@ -24,6 +24,7 @@ def display_banner(
 
     # Condensed welcome - no panel, just essential info
     io.secho("Welcome to Scrappy!", fg=theme.primary, bold=True)
+    io.echo()
     io.echo(f"  {io.style('/help', fg=theme.accent)}   - Show all commands")
     io.echo(f"  {io.style('/agent', fg=theme.accent)}  - Run code agent")
 
