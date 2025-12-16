@@ -16,6 +16,12 @@ from typing import Dict, Optional, Protocol
 
 from .base import BaseConfig
 from ..persistence.protocols import PersistenceProtocol
+from ..validation import validate_api_key, validate_env_var_name
+
+
+class ApiKeyValidationError(ValueError):
+    """Raised when API key validation fails."""
+    pass
 
 
 @dataclass
@@ -193,6 +199,18 @@ class ApiKeyConfigService:
             self._config = ApiKeyConfig.from_dict(data)
         return self._config
 
+    def reload(self) -> ApiKeyConfig:
+        """
+        Force reload config from persistence, clearing any cached state.
+
+        Use this after external changes to the config file (e.g., wizard saved keys).
+
+        Returns:
+            ApiKeyConfig instance freshly loaded from disk
+        """
+        self._config = None
+        return self.load()
+
     def save(self, config: ApiKeyConfig) -> None:
         """
         Save config to persistence.
@@ -227,15 +245,30 @@ class ApiKeyConfigService:
         """
         Set API key and save immediately.
 
+        Validates both env_var name and key value before storage.
         Lazy-loads config if not already loaded.
 
         Args:
             env_var: Environment variable name
             key: API key value
+
+        Raises:
+            ApiKeyValidationError: If env_var or key validation fails
         """
+        # Validate environment variable name
+        env_result = validate_env_var_name(env_var)
+        if not env_result.is_valid:
+            raise ApiKeyValidationError(f"Invalid env var name: {env_result.error}")
+
+        # Validate API key
+        key_result = validate_api_key(key)
+        if not key_result.is_valid:
+            raise ApiKeyValidationError(f"Invalid API key: {key_result.error}")
+
         if self._config is None:
             self.load()
-        self._config.set_key(env_var, key)
+        # Use sanitized values
+        self._config.set_key(env_result.sanitized_value, key_result.sanitized_value)
         self.save(self._config)
 
     def has_any_key(self, env_vars: list[str]) -> bool:

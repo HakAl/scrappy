@@ -27,18 +27,18 @@ class TestUserInput:
         assert error is None
 
     @pytest.mark.parametrize("invalid_input, expected_msg_part", [
-        (None, "cannot be None"),
+        (None, "cannot be none"),  # Lowercase for case-insensitive comparison
         (123, "must be a string"),
         (["list"], "must be a string"),
-        ("", "empty or whitespace"),
-        ("   ", "empty or whitespace"),
-        ("\t\n", "empty or whitespace"),
+        ("", "empty"),  # Now uses centralized validation with simpler message
+        ("   ", "empty"),
+        ("\t\n", "empty"),  # Caught as empty after stripping
     ])
     def test_invalid_types_and_empty(self, validator, invalid_input, expected_msg_part):
         """Test various invalid input types and empty strings."""
         valid, error = validator.validate_user_input(invalid_input)
         assert valid is False
-        assert expected_msg_part in error
+        assert expected_msg_part in error.lower()
 
     def test_max_length_boundary(self, strict_validator):
         """Test boundary conditions for max length."""
@@ -49,7 +49,7 @@ class TestUserInput:
         # Length + 1 (11 chars) -> Invalid
         valid, error = strict_validator.validate_user_input("0123456789A")
         assert valid is False
-        assert "User input too long" in error
+        assert "long" in error.lower()  # Now uses centralized validation
 
 # -----------------------------------------------------------------------------
 # Confidence Score Validation Tests

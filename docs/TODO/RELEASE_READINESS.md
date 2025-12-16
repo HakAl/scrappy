@@ -44,7 +44,7 @@ With conversation history (Phase 1/1.5) complete, scrappy is significantly close
 
 | Gap | Severity | Effort | Source | Rationale |
 |-----|----------|--------|--------|-----------|
-| **Error messages are cryptic** | High | Low | _BUGS.md | Users see "Error: Unknown" instead of actionable messages |
+| ~~**Error messages are cryptic**~~ | ~~High~~ | ~~Low~~ | ~~_BUGS.md~~ | DONE - Improved error formatting, descriptive fallbacks, and suggestions |
 | **No version/changelog** | High | Low | - | Beta users need to know what's new |
 | **No disclaimer banner** | High | Low | - | Legal/social liability for file system access |
 | **.git/ not explicitly blocked** | High | Low | - | LLM could corrupt git index |
@@ -55,11 +55,8 @@ These items separate "beta" from "release candidate." A buggy-feeling UI undermi
 
 | Gap | Severity | Effort | Source | Rationale |
 |-----|----------|--------|--------|-----------|
-| **TUI text selection broken** | High | Medium | _BUGS.md | Can't scroll to copy, shift-select required, click changes bg |
-| **UI polish pass** | High | Medium | _BUGS.md | Welcome banner too large, stale check verbose, log scroll issues |
 | **Agent verbose mode toggle** | High | Low | _BUGS.md | Too much agent output, no way to reduce |
 | **Agent safeguards review** | High | Low | _BUGS.md | Is max_steps=10 right? Review existing limits |
-| **Progress bar broken** | Medium | Medium | AGENT_BUGS | Shows 0% during indexing - numeric values lost |
 | **No `scrappy init` command** | Medium | Medium | HIGH_VALUE_FEATURES | Users manually edit .env - bad UX |
 | **No dependency check on startup** | Medium | Low | - | App starts then fails if git/pytest missing |
 
@@ -68,7 +65,6 @@ These items separate "beta" from "release candidate." A buggy-feeling UI undermi
 | Gap | Severity | Effort | Source | Rationale |
 |-----|----------|--------|--------|-----------|
 | **Diff preview before writes** | Medium | Medium | RESEARCHED_FEATURES | Users can't see what will change |
-| **Streaming responses** | Medium | Medium | RESEARCHED_FEATURES | Better UX for long responses |
 
 ### Tier 4: High Value Post-RC
 
@@ -86,7 +82,6 @@ These items separate "beta" from "release candidate." A buggy-feeling UI undermi
 |---------|----------|--------|--------|-----------|
 | Episodic Memory (Phase 2) | Medium | High | _WIP | Long conversation recall |
 | Parallel tool execution | Medium | Medium | PARALLEL_TOOL | Speed up multi-file operations |
-| VCR.py for tests | Low | Low | HIGH_VALUE_FEATURES | Deterministic API tests |
 | platformdirs (XDG paths) | Low | Low | HIGH_VALUE_FEATURES | Cross-platform config |
 | Offline/local mode | Low | Medium | OFFLINE_MODE | Graceful degradation when no API |
 | Local model support (Ollama) | Low | High | OFFLINE_MODE | Privacy-conscious users |
@@ -96,18 +91,16 @@ These items separate "beta" from "release candidate." A buggy-feeling UI undermi
 
 ## Release Checklist
 
-### Release Candidate (RC))
+### Release Candidate (RC)
 - [ ] Add diff preview for file writes
 - [ ] Add agent verbose mode toggle (/verbose agent or config)
 - [ ] Review agent safeguards (max_steps, confirm thresholds)
-- [ ] UI polish pass (see details below)
 - [ ] Test on Windows, macOS, Linux
 - [ ] Tag v0.9.0-rc1
 
 ### Post-RC (v1.0 Road)
 - [ ] Todo Tool for agent planning
 - [ ] Test Runner Tool for verification
-- [ ] Streaming responses
 - [ ] Proactive rate limiting
 
 ### Post-Release (v1.1+)
@@ -135,7 +128,6 @@ These items separate "beta" from "release candidate." A buggy-feeling UI undermi
 |-------|----------|-----|
 | Stale session check verbose | core.py | Single line: "Restored 5 msgs (last: 2h ago)" |
 | Log doesn't scroll well | main_screen.py | Auto-scroll to bottom on new content |
-| Click changes bg color | RichLog widget | Investigate Textual focus behavior |
 | Provider output truncated | _BUGS.md | Show full model list or "show more" |
 
 ---

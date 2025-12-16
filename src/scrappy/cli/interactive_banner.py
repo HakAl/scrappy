@@ -27,6 +27,7 @@ def display_banner(
     io.echo()
     io.echo(f"  {io.style('/help', fg=theme.accent)}   - Show all commands")
     io.echo(f"  {io.style('/agent', fg=theme.accent)}  - Run code agent")
+    io.echo()
 
 
 def display_disclaimer(io: "UnifiedIOProtocol") -> None:

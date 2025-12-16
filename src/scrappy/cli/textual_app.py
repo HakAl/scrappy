@@ -704,10 +704,11 @@ class ScrappyApp(App):
         self.consume_output_queue()
 
         # Navigate to appropriate screen
-        if not self._has_any_provider():
+        has_provider, env_key_count = self._check_and_migrate_providers()
+        if not has_provider:
             self._show_wizard_screen(allow_cancel=False)
         else:
-            self._show_main_screen()
+            self._show_main_screen(env_key_count=env_key_count)
 
     def on_unmount(self) -> None:
         """Called when app is about to close."""
@@ -736,17 +737,90 @@ class ScrappyApp(App):
             # fail silently to avoid breaking the operation
             pass
 
-    def _has_any_provider(self) -> bool:
-        """Check if any provider is configured."""
+    def _check_and_migrate_providers(self) -> tuple[bool, int]:
+        """Check if any provider is configured and migrate env keys if needed.
+
+        Returns:
+            Tuple of (has_any_provider, env_keys_found_count)
+        """
         from scrappy.infrastructure.config.api_keys import create_api_key_service
         from scrappy.orchestrator.provider_definitions import PROVIDERS
 
         config_service = create_api_key_service()
         env_vars = [info.env_var for info in PROVIDERS.values()]
-        return config_service.has_any_key(env_vars)
 
-    def _show_main_screen(self) -> None:
-        """Switch to main chat screen."""
+        # Migrate any keys from environment variables to config
+        env_key_count = self._migrate_env_keys_to_config(config_service, env_vars)
+
+        return config_service.has_any_key(env_vars), env_key_count
+
+    def _migrate_env_keys_to_config(
+        self,
+        config_service,
+        env_vars: list[str]
+    ) -> int:
+        """
+        Migrate API keys from environment variables to config file.
+
+        This allows users with existing .env files to skip the setup wizard.
+        Keys are validated and copied from os.environ to the config service
+        if not already present. Invalid keys are skipped with a warning.
+
+        Args:
+            config_service: The API key config service
+            env_vars: List of environment variable names to check
+
+        Returns:
+            Number of valid keys found in environment (migrated or already in config)
+        """
+        import os
+        import logging
+        from scrappy.infrastructure.config.api_keys import ApiKeyValidationError
+        from scrappy.infrastructure.validation import validate_api_key
+
+        logger = logging.getLogger(__name__)
+        env_keys_found = 0
+        migrated = []
+        skipped = []
+
+        for env_var in env_vars:
+            env_value = os.environ.get(env_var)
+            if env_value:
+                # Validate the env value before counting/migrating
+                validation_result = validate_api_key(env_value)
+                if not validation_result.is_valid:
+                    skipped.append((env_var, validation_result.error))
+                    logger.warning(
+                        f"Skipping invalid {env_var} from environment: {validation_result.error}"
+                    )
+                    continue
+
+                env_keys_found += 1
+                config_value = config_service.get_key(env_var)
+                if not config_value:
+                    # Migrate from environment to config (uses sanitized value)
+                    try:
+                        config_service.set_key(env_var, validation_result.sanitized_value)
+                        migrated.append(env_var)
+                    except ApiKeyValidationError as e:
+                        # Should not happen since we pre-validated, but defense-in-depth
+                        logger.warning(f"Failed to migrate {env_var}: {e}")
+                        env_keys_found -= 1
+
+        if migrated:
+            logger.info(f"Migrated {len(migrated)} API key(s) from environment: {', '.join(migrated)}")
+
+        if skipped:
+            logger.warning(f"Skipped {len(skipped)} invalid key(s) from environment")
+
+        return env_keys_found
+
+    def _show_main_screen(self, env_key_count: int = 0) -> None:
+        """Switch to main chat screen.
+
+        Args:
+            env_key_count: Number of API keys found in environment (for welcome message)
+        """
         from .screens import MainAppScreen
 
         screen = MainAppScreen(
@@ -756,6 +830,13 @@ class ScrappyApp(App):
             theme=self._theme,
         )
         self.push_screen(screen)
+
+        # Show welcome message if keys were found in environment
+        if env_key_count > 0:
+            key_word = "key" if env_key_count == 1 else "keys"
+            self.output_adapter.post_output(
+                f"Found {env_key_count} API {key_word} in environment. Use /setup to add more. Ready to go!\n"
+            )
 
     def _show_wizard_screen(self, allow_cancel: bool = True) -> None:
         """Push wizard screen."""

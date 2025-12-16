@@ -23,7 +23,14 @@ import time
 from typing import Optional, TYPE_CHECKING, AsyncIterator
 
 from ..providers.base import LLMResponse, ToolCall
-from ..infrastructure.exceptions.provider_errors import AllProvidersRateLimitedError
+from ..infrastructure.exceptions.provider_errors import (
+    AllProvidersRateLimitedError,
+    RateLimitError,
+    AuthenticationError,
+    NetworkError,
+    TimeoutError as ProviderTimeoutError,
+    ProviderExecutionError,
+)
 from ..protocols.output import BaseOutputProtocol
 from ..infrastructure.config.api_keys import ApiKeyConfigServiceProtocol
 from .types import StreamChunk, ToolCallFragment
@@ -60,6 +67,104 @@ ESCALATION_PATH = {
 
 # Default timeout for stuck stream detection (ms)
 DEFAULT_STREAM_TIMEOUT_MS = 30000  # 30 seconds
+
+
+def _map_litellm_error(error: Exception, provider: str = "", model: str = "") -> Exception:
+    """
+    Map LiteLLM exceptions to user-friendly exceptions with actionable suggestions.
+
+    Args:
+        error: The original LiteLLM exception
+        provider: Provider name for context
+        model: Model name for context
+
+    Returns:
+        A mapped exception with user-friendly message and suggestion
+    """
+    error_msg = str(error).lower()
+    error_type = type(error).__name__
+
+    # Provider name for messages
+    provider_display = provider or "the provider"
+
+    # Authentication errors
+    if "auth" in error_type.lower() or "401" in str(error) or "unauthorized" in error_msg:
+        return AuthenticationError(
+            f"Authentication failed for {provider_display}",
+            provider_name=provider,
+            suggestion=f"Check your API key for {provider_display} is correct in .env file."
+        )
+
+    # Rate limiting - more specific than base RateLimitError
+    if "rate" in error_type.lower() or "429" in str(error) or "rate limit" in error_msg or "quota" in error_msg:
+        return RateLimitError(
+            f"Rate limit exceeded for {provider_display}",
+            provider_name=provider,
+            suggestion="Wait a few seconds before retrying, or try a different provider."
+        )
+
+    # Connection errors
+    if "connection" in error_type.lower() or "connection" in error_msg or "unreachable" in error_msg:
+        return NetworkError(
+            f"Could not connect to {provider_display}",
+            suggestion="Check your internet connection and try again."
+        )
+
+    # Timeout errors
+    if "timeout" in error_type.lower() or "timeout" in error_msg or "timed out" in error_msg:
+        return ProviderTimeoutError(
+            f"Request to {provider_display} timed out",
+            suggestion="The provider may be slow. Try again or use a different provider."
+        )
+
+    # Content filtering / safety errors
+    if "content" in error_msg and ("filter" in error_msg or "blocked" in error_msg or "safety" in error_msg):
+        return ProviderExecutionError(
+            f"Content was blocked by {provider_display}'s safety filters",
+            provider_name=provider,
+            suggestion="Try rephrasing your request to avoid triggering content filters."
+        )
+
+    # Model not found
+    if "model" in error_msg and ("not found" in error_msg or "unknown" in error_msg or "invalid" in error_msg):
+        return ProviderExecutionError(
+            f"Model '{model}' not available from {provider_display}",
+            provider_name=provider,
+            suggestion="Check the model name or run '/providers' to see available models."
+        )
+
+    # Service unavailable
+    if "503" in str(error) or "service unavailable" in error_msg or "overloaded" in error_msg:
+        return ProviderExecutionError(
+            f"{provider_display} is temporarily unavailable",
+            provider_name=provider,
+            suggestion="The provider is experiencing issues. Try again later or use a different provider."
+        )
+
+    # Bad request (400) - often malformed input
+    if "400" in str(error) or "bad request" in error_msg:
+        return ProviderExecutionError(
+            f"Invalid request to {provider_display}",
+            provider_name=provider,
+            original_error=error,
+            suggestion="There may be an issue with the request format. Try a simpler prompt."
+        )
+
+    # Server errors (500)
+    if "500" in str(error) or "internal server error" in error_msg:
+        return ProviderExecutionError(
+            f"{provider_display} experienced an internal error",
+            provider_name=provider,
+            suggestion="This is a provider-side issue. Try again or use a different provider."
+        )
+
+    # Fallback: wrap with context but preserve original message
+    return ProviderExecutionError(
+        f"Error from {provider_display}: {error}",
+        provider_name=provider,
+        original_error=error,
+        suggestion="Try again or use a different provider."
+    )
 
 
 class NotConfiguredError(Exception):
@@ -140,11 +245,15 @@ class LiteLLMService:
         Configure router with current API keys.
 
         Call after wizard saves keys to enable completions.
+        Forces reload from disk to pick up any newly saved keys.
 
         Returns:
             True if at least one model group is available
         """
         from .litellm_config import build_model_list
+
+        # Force reload from disk to get freshly saved keys
+        self._api_key_service.reload()
 
         model_list = build_model_list(self._api_key_service)
         if not model_list:
@@ -510,16 +619,20 @@ class LiteLLMService:
             raise
 
         except Exception as e:
-            # Mid-stream error handling (5e): preserve partial content
+            # Map LiteLLM exceptions to user-friendly exceptions
+            # Extract provider from error if available
+            provider = getattr(e, 'llm_provider', '') or ''
+            mapped_error = _map_litellm_error(e, provider=provider, model=model)
+
+            # Mid-stream error handling: preserve partial content info
             if partial_content:
-                # Wrap exception with partial content info
-                raise type(e)(
-                    f"{str(e)} (partial content available: {len(partial_content)} chars)"
-                ) from e
-            raise
-        # NOTE: AuthenticationError is NOT caught here.
-        # LiteLLM Router handles auth failures internally by trying next provider in group.
-        # If all providers in group fail auth, Router raises the error which propagates up.
+                # Add partial content context to the mapped error
+                mapped_error.context = {
+                    **(getattr(mapped_error, 'context', {}) or {}),
+                    'partial_content_chars': len(partial_content)
+                }
+
+            raise mapped_error from e
 
     def _convert_chunk(self, chunk) -> StreamChunk:
         """

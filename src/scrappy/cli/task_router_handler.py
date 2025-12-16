@@ -506,7 +506,26 @@ class CLITaskRouterHandler:
         else:
             io_target.secho("\nExecution failed", fg=self._theme.error, bold=True)
             if result.error:
-                io_target.secho(f"Error: {result.error}", fg=self._theme.error)
+                from .utils.error_handler import get_error_suggestion, _get_descriptive_message
+
+                error_msg = str(result.error)
+                io_target.secho(f"Error: {error_msg}", fg=self._theme.error)
+
+                # Try to generate a suggestion based on error patterns
+                # Create a mock exception for suggestion lookup
+                suggestion = None
+                error_lower = error_msg.lower()
+                if "rate limit" in error_lower or "429" in error_lower:
+                    suggestion = "Wait a few seconds before retrying, or try a different provider."
+                elif "auth" in error_lower or "401" in error_lower or "api key" in error_lower:
+                    suggestion = "Check your API key is set correctly in .env file."
+                elif "timeout" in error_lower or "timed out" in error_lower:
+                    suggestion = "The request timed out. Try again or use a different provider."
+                elif "connection" in error_lower or "network" in error_lower:
+                    suggestion = "Check your internet connection and try again."
+
+                if suggestion:
+                    io_target.echo(f"Suggestion: {suggestion}")
 
         # Show output
         if result.output:

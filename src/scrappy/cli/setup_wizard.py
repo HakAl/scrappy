@@ -8,8 +8,10 @@ from typing import Optional, Tuple, Callable, TYPE_CHECKING
 from scrappy.orchestrator.provider_definitions import PROVIDERS
 from scrappy.infrastructure.config.api_keys import (
     ApiKeyConfigServiceProtocol,
+    ApiKeyValidationError,
     create_api_key_service,
 )
+from scrappy.infrastructure.validation import validate_api_key
 from scrappy.orchestrator.protocols import LLMServiceProtocol
 
 if TYPE_CHECKING:
@@ -21,6 +23,7 @@ PROVIDER_TO_MODEL = {
     "groq": "groq/llama-3.1-8b-instant",
     "cerebras": "cerebras/llama-3.3-70b",
     "gemini": "gemini/gemini-2.0-flash-lite",
+    "sambanova": "sambanova/Meta-Llama-3.1-8B-Instruct",
     "openrouter": "openrouter/meta-llama/llama-3.1-8b-instruct:free",
     "github_models": "azure/gpt-4o-mini",  # GitHub models uses Azure
 }
@@ -134,10 +137,10 @@ class SetupWizard:
         """Get prompt text for status bar based on current state."""
         if self._state == WizardState.MENU:
             # Always show "q" option - user can always exit
-            return f"Select provider (1-{len(PROVIDERS)} or q)"
+            return f"Select provider (1-{len(PROVIDERS)}) or q to exit"
         elif self._state == WizardState.AWAITING_KEY:
             info = PROVIDERS[self._current_provider]
-            return f"Enter {info.env_var} (or empty to cancel)"
+            return f"Enter {info.env_var} or q to cancel"
         return ""
 
     def handle_input(self, user_input: str) -> None:
@@ -176,26 +179,35 @@ class SetupWizard:
 
     def _handle_key_input(self, key: str) -> None:
         """Handle API key input."""
-        if not key:
+        if not key or key.lower() == 'q':
             self.io.secho("Configuration cancelled.", fg="yellow")
             self._state = WizardState.MENU
             # Screen will handle showing menu after clearing
             return
 
-        if not self._validate_key_format(key):
-            self.io.secho("Invalid key format", fg="red")
+        # Validate key format and security
+        validation_result = validate_api_key(key)
+        if not validation_result.is_valid:
+            self.io.secho(f"Invalid key: {validation_result.error}", fg="red")
             return
 
-        self.io.echo("Validating...")
-        valid, error_msg = self._test_provider_key(self._current_provider, key)
+        # Use sanitized value from validation
+        sanitized_key = validation_result.sanitized_value
+
+        self.io.echo("Validating with provider...")
+        valid, error_msg = self._test_provider_key(self._current_provider, sanitized_key)
         if not valid:
             self.io.secho(f"API key validation failed: {error_msg}", fg="red")
             return
 
-        # Save the key
+        # Save the key (config service will validate again as defense-in-depth)
         info = PROVIDERS[self._current_provider]
-        self._save_key(info.env_var, key)
-        self.io.secho(f"{self._current_provider.replace('_', ' ').title()} configured!", fg="green")
+        try:
+            self._save_key(info.env_var, sanitized_key)
+            self.io.secho(f"{self._current_provider.replace('_', ' ').title()} configured!", fg="green")
+        except ApiKeyValidationError as e:
+            self.io.secho(f"Failed to save key: {e}", fg="red")
+            return
 
         # Return to menu - screen will handle showing menu after clearing
         self._state = WizardState.MENU
@@ -241,10 +253,10 @@ class SetupWizard:
         from rich.panel import Panel
         from rich.table import Table
 
-        table = Table(show_header=False, box=None, padding=(0, 2))
-        table.add_column("Status", width=4)
-        table.add_column("Num", width=3)
-        table.add_column("Provider")
+        table = Table(show_header=False, box=None, padding=(0, 1), expand=False)
+        table.add_column("Status", width=6, no_wrap=True)
+        table.add_column("Num", width=3, no_wrap=True)
+        table.add_column("Provider", no_wrap=False, overflow="fold", max_width=50)
 
         for i, (name, info) in enumerate(sorted(
             PROVIDERS.items(), key=lambda x: x[1].priority
@@ -257,9 +269,9 @@ class SetupWizard:
             )
 
         table.add_row("", "", "")
-        table.add_row("", "[bold][q][/]", "[bold]Done - Exit Setup[/]")
+        table.add_row("", "", "[bold]q - Done / Exit Setup[/]")
 
-        panel = Panel(table, title="Provider Setup", border_style="blue")
+        panel = Panel(table, title="Provider Setup", border_style="blue", expand=False)
         self.io.echo("")
 
         # Post panel to RichLog via OutputSink
@@ -318,19 +330,27 @@ class SetupWizard:
             self.io.secho("Configuration cancelled.", fg="yellow")
             return False
 
-        if not self._validate_key_format(key):
-            self.io.secho("Invalid key format", fg="red")
+        # Validate key format and security
+        validation_result = validate_api_key(key)
+        if not validation_result.is_valid:
+            self.io.secho(f"Invalid key: {validation_result.error}", fg="red")
             return False
 
-        self.io.echo("Validating...")
-        valid, error_msg = self._test_provider_key(name, key)
+        sanitized_key = validation_result.sanitized_value
+
+        self.io.echo("Validating with provider...")
+        valid, error_msg = self._test_provider_key(name, sanitized_key)
         if not valid:
             self.io.secho(f"API key validation failed: {error_msg}", fg="red")
             return False
 
-        self._save_key(info.env_var, key)
-        self.io.secho(f"{name.replace('_', ' ').title()} configured!", fg="green")
-        return True
+        try:
+            self._save_key(info.env_var, sanitized_key)
+            self.io.secho(f"{name.replace('_', ' ').title()} configured!", fg="green")
+            return True
+        except ApiKeyValidationError as e:
+            self.io.secho(f"Failed to save key: {e}", fg="red")
+            return False
 
     def _test_provider_key(self, name: str, key: str) -> Tuple[bool, str]:
         """
@@ -374,21 +394,6 @@ class SetupWizard:
         if len(error_msg) > 200:
             return error_msg[:197] + "..."
         return error_msg
-
-    def _validate_key_format(self, key: str) -> bool:
-        """Basic format validation.
-
-        Args:
-            key: API key to validate
-
-        Returns:
-            True if format appears valid
-        """
-        if not key or len(key) < 10:
-            return False
-        if ' ' in key or '\n' in key or '\t' in key:
-            return False
-        return True
 
     def _is_configured(self, name: str) -> bool:
         """Check if provider is configured via config service.

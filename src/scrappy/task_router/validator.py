@@ -8,6 +8,7 @@ provide meaningful error messages.
 from typing import Optional, Tuple
 
 from .classifier import TaskType
+from scrappy.infrastructure.validation import validate_user_input as validate_user_input_impl
 
 
 class InputValidator:
@@ -34,6 +35,9 @@ class InputValidator:
         """
         Validate user input string.
 
+        Uses centralized validation from infrastructure.validation module
+        which handles null bytes, control characters, and length limits.
+
         Args:
             user_input: The user's input to validate
 
@@ -50,13 +54,10 @@ class InputValidator:
         if not isinstance(user_input, str):
             return False, f"User input must be a string, got {type(user_input).__name__}"
 
-        # Check for empty/whitespace-only
-        if not user_input.strip():
-            return False, "User input cannot be empty or whitespace-only"
-
-        # Check length (DoS protection)
-        if len(user_input) > self.max_length:
-            return False, f"User input too long (max {self.max_length} characters, got {len(user_input)})"
+        # Use centralized validation for sanitization and security checks
+        result = validate_user_input_impl(user_input, context="chat", max_length=self.max_length)
+        if not result.is_valid:
+            return False, result.error
 
         return True, None
 

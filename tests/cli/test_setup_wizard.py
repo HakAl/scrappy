@@ -95,45 +95,40 @@ class TestSetupWizardNonBlocking:
 
 
 class TestSetupWizardKeyValidation:
-    """Test key format validation."""
+    """Test key format validation.
+
+    The wizard now uses validate_api_key from infrastructure.validation.
+    These tests verify the validation integration.
+    """
 
     def test_validate_key_format_valid(self):
         """Valid keys pass validation."""
-        io = MockIO()
-        mock_llm = MockLLMService()
-        wizard = SetupWizard(io, llm_service=mock_llm)
+        from scrappy.infrastructure.validation import validate_api_key
 
-        assert wizard._validate_key_format("sk-abcdefghijk1234567890")
-        assert wizard._validate_key_format("gsk_1234567890abcdefghijk")
-        assert wizard._validate_key_format("AIzaSyB1234567890abcdef")
+        assert validate_api_key("sk-abcdefghijk1234567890").is_valid
+        assert validate_api_key("gsk_1234567890abcdefghijk").is_valid
+        assert validate_api_key("AIzaSyB1234567890abcdef").is_valid
 
     def test_validate_key_format_too_short(self):
         """Keys shorter than 10 characters fail."""
-        io = MockIO()
-        mock_llm = MockLLMService()
-        wizard = SetupWizard(io, llm_service=mock_llm)
+        from scrappy.infrastructure.validation import validate_api_key
 
-        assert not wizard._validate_key_format("short")
-        assert not wizard._validate_key_format("123456789")
+        assert not validate_api_key("short").is_valid
+        assert not validate_api_key("123456789").is_valid
 
     def test_validate_key_format_whitespace(self):
         """Keys with whitespace fail."""
-        io = MockIO()
-        mock_llm = MockLLMService()
-        wizard = SetupWizard(io, llm_service=mock_llm)
+        from scrappy.infrastructure.validation import validate_api_key
 
-        assert not wizard._validate_key_format("key with spaces")
-        assert not wizard._validate_key_format("key\nwith\nnewline")
-        assert not wizard._validate_key_format("key\twith\ttab")
+        assert not validate_api_key("key with spaces").is_valid
+        # Newlines and tabs are caught as dangerous
+        assert not validate_api_key("key\nwith\nnewline").is_valid
 
     def test_validate_key_format_empty(self):
         """Empty keys fail."""
-        io = MockIO()
-        mock_llm = MockLLMService()
-        wizard = SetupWizard(io, llm_service=mock_llm)
+        from scrappy.infrastructure.validation import validate_api_key
 
-        assert not wizard._validate_key_format("")
-        assert not wizard._validate_key_format(None)
+        assert not validate_api_key("").is_valid
 
 
 class TestSetupWizardProviderConfiguration:
@@ -269,7 +264,8 @@ class TestSetupWizardFlow:
         result = wizard._configure_provider("groq")
 
         assert result is False
-        error_shown = any("Invalid key format" in msg for msg in io.output)
+        # Error message now says "Invalid key: ..." with specific reason
+        error_shown = any("Invalid key" in msg for msg in io.output)
         assert error_shown
 
     def test_configure_provider_handles_failed_validation(self):

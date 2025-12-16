@@ -764,7 +764,10 @@ async def test_stream_completion_mid_stream_error_preserves_content(mock_api_key
     service._configured = True
 
     collected = []
-    with pytest.raises(RuntimeError) as exc_info:
+    # Now raises NetworkError due to error mapping (detects "connection" in message)
+    from scrappy.infrastructure.exceptions.provider_errors import NetworkError
+
+    with pytest.raises(NetworkError) as exc_info:
         async for chunk in service.stream_completion(
             model="fast",
             messages=[{"role": "user", "content": "test"}],
@@ -773,9 +776,10 @@ async def test_stream_completion_mid_stream_error_preserves_content(mock_api_key
 
     # Should have received chunks before error
     assert len(collected) == 2
-    # Error message should mention partial content
-    assert "partial content available" in str(exc_info.value)
-    assert "16 chars" in str(exc_info.value)  # "Partial content " = 16 chars
+    # Error should have context with partial content info
+    error = exc_info.value
+    assert hasattr(error, 'context')
+    assert error.context.get('partial_content_chars') == 16  # "Partial content " = 16 chars
 
 
 @pytest.mark.asyncio

@@ -276,7 +276,14 @@ class InteractiveMode:
                 }
             )
         else:
-            io.secho(f"\nError: {exception}", fg=self._theme.error)
+            from .utils.error_handler import format_error, get_error_suggestion
+
+            error_msg = format_error(exception)
+            suggestion = get_error_suggestion(exception)
+
+            io.secho(f"\nError: {error_msg}", fg=self._theme.error)
+            if suggestion:
+                io.echo(f"Suggestion: {suggestion}")
             self.logger.exception("Unhandled exception in interactive mode")
 
         io.echo("Type /help for available commands.\n")

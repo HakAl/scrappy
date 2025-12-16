@@ -115,3 +115,4 @@ SemanticProvider.index_chunks()
 **Priority:** LOW - Main paths fixed, remaining are edge cases
 
 ---
+

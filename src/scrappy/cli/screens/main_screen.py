@@ -287,7 +287,15 @@ class MainAppScreen(Screen):
                 self.app.exit()
         except Exception as e:
             from rich.text import Text
-            error_text = Text(f"Error: {str(e)}", style=self._theme.error)
+            from ..utils.error_handler import format_error, get_error_suggestion
+
+            error_msg = format_error(e)
+            suggestion = get_error_suggestion(e)
+
+            error_text = Text(f"Error: {error_msg}", style=self._theme.error)
+            if suggestion:
+                error_text.append(f"\nSuggestion: {suggestion}", style="dim")
+
             self.output_adapter.post_renderable(error_text)
             logger.exception("Error processing command")
         finally:

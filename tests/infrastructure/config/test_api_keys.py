@@ -187,27 +187,28 @@ class TestApiKeyConfigService:
         persistence = InMemoryPersistence()
         service = ApiKeyConfigService(persistence)
 
-        service.set_key("CEREBRAS_API_KEY", "test-key")
+        # Use a valid key (min 10 chars, no placeholders)
+        service.set_key("CEREBRAS_API_KEY", "csk_abc123xyz789")
 
         # Verify it was saved to persistence
-        assert persistence.data["api_keys"]["CEREBRAS_API_KEY"] == "test-key"
+        assert persistence.data["api_keys"]["CEREBRAS_API_KEY"] == "csk_abc123xyz789"
 
     def test_set_key_lazy_loads_config(self):
         """set_key() should lazy-load config if not already loaded."""
         persistence = InMemoryPersistence()
         persistence.data = {
             "api_keys": {
-                "EXISTING_KEY": "existing-value"
+                "EXISTING_KEY": "existing-value-123"
             }
         }
         service = ApiKeyConfigService(persistence)
 
-        # Don't call load() explicitly
-        service.set_key("NEW_KEY", "new-value")
+        # Don't call load() explicitly - use valid key
+        service.set_key("NEW_KEY", "new-value-123456")
 
         # Both keys should be present
-        assert persistence.data["api_keys"]["EXISTING_KEY"] == "existing-value"
-        assert persistence.data["api_keys"]["NEW_KEY"] == "new-value"
+        assert persistence.data["api_keys"]["EXISTING_KEY"] == "existing-value-123"
+        assert persistence.data["api_keys"]["NEW_KEY"] == "new-value-123456"
 
     def test_has_any_key_returns_false_when_empty(self):
         """has_any_key() should return False when no keys configured."""
@@ -223,7 +224,8 @@ class TestApiKeyConfigService:
         """has_any_key() should return False when different keys configured."""
         persistence = InMemoryPersistence()
         service = ApiKeyConfigService(persistence)
-        service.set_key("OTHER_KEY", "test-key")
+        # Use valid key
+        service.set_key("OTHER_KEY", "other-key-123456")
 
         result = service.has_any_key(["CEREBRAS_API_KEY", "GROQ_API_KEY"])
 

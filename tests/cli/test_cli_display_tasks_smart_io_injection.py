@@ -152,57 +152,103 @@ class TestDisplayIOInjection:
     def test_list_models_accepts_io_parameter(self):
         """list_models() should use injected io from constructor."""
         io = MockIO()
-        # Create a new display instance with the test io
         from scrappy.cli.display import CLIDisplay
         display = CLIDisplay(self.orchestrator, self.session_start, io)
 
-        # Mock providers for list_models
-        mock_provider = MagicMock()
-        mock_provider.available_models = ['model1', 'model2']
-        mock_provider.default_model = 'model1'
-        self.orchestrator.providers = MagicMock()
-        self.orchestrator.providers.list_available.return_value = ['openai']
-        self.orchestrator.providers.get.return_value = mock_provider
+        # Mock get_configured_models to return test data
+        from dataclasses import dataclass
+        @dataclass
+        class MockModel:
+            model_id: str
+            provider: str
+            group: str
+            context_length: int = 8192
+            rpd: int = 1000
 
-        display.list_models("")
+        mock_models = [
+            MockModel("cerebras/llama-3.3-70b", "cerebras", "fast"),
+            MockModel("groq/llama-3.1-8b-instant", "groq", "fast"),
+        ]
+
+        with patch('scrappy.orchestrator.litellm_config.get_configured_models', return_value=mock_models):
+            display.list_models("")
 
         output = io.get_output()
-        assert "Models" in output
+        assert "Models" in output or "FAST" in output
 
     def test_list_models_all_providers(self):
         """list_models() with no args should list configured models through io."""
         io = MockIO()
-        # Create a new display instance with the test io
         from scrappy.cli.display import CLIDisplay
         display = CLIDisplay(self.orchestrator, self.session_start, io)
 
-        display.list_models("")
+        from dataclasses import dataclass
+        @dataclass
+        class MockModel:
+            model_id: str
+            provider: str
+            group: str
+            context_length: int = 8192
+            rpd: int = 1000
+
+        mock_models = [
+            MockModel("cerebras/llama-3.3-70b", "cerebras", "fast"),
+            MockModel("gemini/gemini-2.0-flash", "gemini", "quality"),
+        ]
+
+        with patch('scrappy.orchestrator.litellm_config.get_configured_models', return_value=mock_models):
+            display.list_models("")
 
         output = io.get_output()
-        # New implementation shows "Configured Models" grouped by fast/quality
         assert "Configured Models" in output or "FAST" in output or "QUALITY" in output
 
     def test_list_models_specific_provider(self):
         """list_models() with provider name should list that provider through io."""
         io = MockIO()
-        # Create a new display instance with the test io
         from scrappy.cli.display import CLIDisplay
         display = CLIDisplay(self.orchestrator, self.session_start, io)
 
-        display.list_models("cerebras")
+        from dataclasses import dataclass
+        @dataclass
+        class MockModel:
+            model_id: str
+            provider: str
+            group: str
+            context_length: int = 8192
+            rpd: int = 1000
+
+        mock_models = [
+            MockModel("cerebras/llama-3.3-70b", "cerebras", "fast"),
+        ]
+
+        with patch('scrappy.orchestrator.litellm_config.get_configured_models', return_value=mock_models):
+            display.list_models("cerebras")
 
         output = io.get_output()
         assert "CEREBRAS" in output or "cerebras" in output.lower()
 
-
     def test_list_models_by_group(self):
         """list_models() with group name should filter by group."""
         io = MockIO()
-        # Create a new display instance with the test io
         from scrappy.cli.display import CLIDisplay
         display = CLIDisplay(self.orchestrator, self.session_start, io)
 
-        display.list_models("fast")
+        from dataclasses import dataclass
+        @dataclass
+        class MockModel:
+            model_id: str
+            provider: str
+            group: str
+            context_length: int = 8192
+            rpd: int = 1000
+
+        mock_models = [
+            MockModel("cerebras/llama-3.3-70b", "cerebras", "fast"),
+            MockModel("groq/llama-3.1-8b-instant", "groq", "fast"),
+        ]
+
+        with patch('scrappy.orchestrator.litellm_config.get_configured_models', return_value=mock_models):
+            display.list_models("fast")
 
         output = io.get_output()
         assert "FAST" in output
