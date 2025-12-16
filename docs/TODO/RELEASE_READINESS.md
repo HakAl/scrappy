@@ -98,7 +98,6 @@ These items separate "beta" from "release candidate." A buggy-feeling UI undermi
 
 ### Release Candidate (RC))
 - [ ] Add diff preview for file writes
-- [ ] Fix TUI text selection (scroll-copy, shift-select, click bg)
 - [ ] Add agent verbose mode toggle (/verbose agent or config)
 - [ ] Review agent safeguards (max_steps, confirm thresholds)
 - [ ] UI polish pass (see details below)
@@ -121,11 +120,6 @@ These items separate "beta" from "release candidate." A buggy-feeling UI undermi
 
 ## UI Polish Details (RC)
 
-### TUI Text Selection Issues
-- **Can't scroll to copy**: Only visible text is selectable
-- **Shift required**: Must hold shift to select text
-- **Click changes background**: Clicking in chat log changes bg color unexpectedly
-
 ### Agent Output Issues
 - **Too verbose**: Agent logs every thought/action, overwhelming for simple tasks
 - **No toggle**: No way to reduce verbosity (`/verbose agent` or config option)
@@ -139,7 +133,6 @@ These items separate "beta" from "release candidate." A buggy-feeling UI undermi
 ### General UI Polish
 | Issue | Location | Fix |
 |-------|----------|-----|
-| Welcome banner too large | display.py/display_rich.py | Condense to 3-4 lines |
 | Stale session check verbose | core.py | Single line: "Restored 5 msgs (last: 2h ago)" |
 | Log doesn't scroll well | main_screen.py | Auto-scroll to bottom on new content |
 | Click changes bg color | RichLog widget | Investigate Textual focus behavior |

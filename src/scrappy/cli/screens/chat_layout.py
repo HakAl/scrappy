@@ -5,8 +5,10 @@ import logging
 
 from textual.widget import Widget
 from textual.app import ComposeResult
-from textual.widgets import TextArea, RichLog, Label
+from textual.widgets import TextArea, Label
 from textual.containers import Container
+
+from ..widgets import SelectableLog
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +17,7 @@ class ChatLayout(Widget):
     """Reusable chat layout with output area, input field, and optional status bar.
 
     Provides:
-    - Scrollable output area (RichLog)
+    - Scrollable output area (SelectableLog - supports text selection)
     - Fixed input area at bottom (TextArea with prompt)
     - Optional status bar
 
@@ -40,21 +42,18 @@ class ChatLayout(Widget):
         self._input_placeholder = input_placeholder
 
         # Cached widget references (set after mount)
-        self._output: Optional[RichLog] = None
+        self._output: Optional[SelectableLog] = None
         self._input: Optional[TextArea] = None
 
     def compose(self) -> ComposeResult:
         """Create the chat layout widgets."""
         from ..textual_app import StatusBar, ActivityIndicator
 
-        # Scrollable output area
+        # Scrollable output area (with text selection support)
         with Container(id="output_container"):
-            yield RichLog(
+            yield SelectableLog(
                 id="output",
-                highlight=True,
-                markup=True,
-                auto_scroll=True,
-                wrap=True
+                auto_scroll=True
             )
 
         # Activity indicator
@@ -76,16 +75,16 @@ class ChatLayout(Widget):
 
     def on_mount(self) -> None:
         """Cache widget references after mounting."""
-        self._output = self.query_one("#output", RichLog)
+        self._output = self.query_one("#output", SelectableLog)
         self._input = self.query_one("#input", TextArea)
         if self._input_placeholder:
             self._input.placeholder = self._input_placeholder
 
     @property
-    def output(self) -> RichLog:
-        """Get the RichLog output widget."""
+    def output(self) -> SelectableLog:
+        """Get the SelectableLog output widget."""
         if self._output is None:
-            self._output = self.query_one("#output", RichLog)
+            self._output = self.query_one("#output", SelectableLog)
         return self._output
 
     @property

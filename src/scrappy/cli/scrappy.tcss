@@ -28,6 +28,16 @@ Screen {
 }
 
 /* Main scrollable output (includes banner as content) */
+SelectableLog {
+    background: $background;
+    color: $text;
+    border: none;
+    padding: 0 1 1 1;
+    height: 100%;
+    scrollbar-size-vertical: 0;
+}
+
+/* Legacy RichLog support (for screens still using RichLog) */
 RichLog {
     background: $background;
     color: $text;

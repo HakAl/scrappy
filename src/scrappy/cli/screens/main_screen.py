@@ -14,6 +14,7 @@ from textual import work
 from .chat_layout import ChatLayout
 from ..input_capture import InputCaptureManager, InputRequest
 from ..command_history import CommandHistory, get_default_history_path
+from ..widgets.selectable_log import SelectableLog
 
 from scrappy.infrastructure.theme import ThemeProtocol
 from scrappy.protocols.activity import ActivityState
@@ -176,6 +177,14 @@ class MainAppScreen(Screen):
 
             # Block up-arrow history during capture mode
             if event.key == "up":
+                event.stop()
+                return
+
+        # Handle Ctrl+C for copy from SelectableLog
+        if event.key == "ctrl+c":
+            output = self._layout.output
+            if isinstance(output, SelectableLog) and output._has_selection():
+                output.action_copy_selection()
                 event.stop()
                 return
 
