@@ -61,7 +61,7 @@ class TestResponseConversion:
         assert response.input_tokens == 15
         assert response.output_tokens == 25
         assert response.tokens_used == 40
-        assert response.latency_ms > 0
+        assert response.latency_ms >= 0  # May be 0 on fast systems with mocks
 
     def test_extracts_provider_from_model_string(self):
         """Verify 'cerebras/llama-3.3-70b' -> provider='cerebras'."""
@@ -145,7 +145,7 @@ class TestResponseConversion:
         assert task_record["provider"] == "groq"
         assert task_record["model"] == "groq/llama-3.1-8b-instant"
         assert task_record["tokens_used"] == 30
-        assert task_record["latency_ms"] > 0
+        assert task_record["latency_ms"] >= 0  # May be 0 on fast systems with mocks
 
     def test_returns_actual_model_used_not_group_name(self):
         """Ensure we record 'groq/llama-3...' not 'fast' in our logs."""
