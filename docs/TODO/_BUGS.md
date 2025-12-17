@@ -1,9 +1,5 @@
 ## Issues
-  Quality tier priority:
-  1. cerebras/qwen-3-235b-a22b-instruct-2507 - 235B instruction-tuned 
-  2. groq/meta-llama/llama-4-scout-17b-16e-instruct - 0.4s latency
-  3. groq/moonshotai/kimi-k2-instruct - fast, 128k context 
-  4. gemini/gemini-2.5-flash - deprioritized (JSON issues)
+
 ---
 NEXT UP
 ---
@@ -49,8 +45,6 @@ config
                     fingerprints.json
                     response_cache.json
                     session.json
-
-
 ---
 
 ---

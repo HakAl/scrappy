@@ -1,7 +1,3 @@
-> **Beta** - Usable today, but actively improving. Expect some rough edges.
-
----
-
 # Scrappy: The Free AI Coding Assistant
 
 A powerful, context-aware coding assistant for everyone—students, learners, anyone who doesn't want to pay for subscriptions.
