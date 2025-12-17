@@ -40,13 +40,6 @@ With conversation history (Phase 1/1.5) complete, scrappy is significantly close
 
 ## Critical Gaps for Release
 
-
-### Tier 3: Nice for RC (New Features)
-
-| Gap | Severity | Effort | Source | Rationale |
-|-----|----------|--------|--------|-----------|
-| **Diff preview before writes** | Medium | Medium | RESEARCHED_FEATURES | Users can't see what will change |
-
 ### Tier 4: High Value Post-RC
 
 | Feature | Priority | Effort | Source | Rationale |
@@ -73,9 +66,6 @@ With conversation history (Phase 1/1.5) complete, scrappy is significantly close
 ## Release Checklist
 
 ### Release Candidate (RC)
-- [ ] Add diff preview for file writes
-- [ ] Add agent verbose mode toggle (/verbose agent or config)
-- [ ] Review agent safeguards (max_steps, confirm thresholds)
 - [ ] Test on Windows, macOS, Linux
 - [ ] Tag v0.9.0-rc1
 
@@ -93,16 +83,6 @@ With conversation history (Phase 1/1.5) complete, scrappy is significantly close
 ---
 
 ## UI Polish Details (RC)
-
-### Agent Output Issues
-- **Too verbose**: Agent logs every thought/action, overwhelming for simple tasks
-- **No toggle**: No way to reduce verbosity (`/verbose agent` or config option)
-- **Consider**: Compact mode showing only tool calls + final result
-
-### Agent Safeguards Review
-- **max_steps=10**: Is this appropriate? Too low = incomplete tasks, too high = runaway
-- **Confirmation thresholds**: When to auto-approve vs prompt?
-- **Dangerous command detection**: Is blocklist complete?
 
 ### General UI Polish
 | Issue | Location | Fix |

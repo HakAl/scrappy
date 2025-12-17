@@ -442,6 +442,22 @@ class AgentUIProtocol(Protocol):
         """
         ...
 
+    def show_diff_preview(
+        self,
+        path: str,
+        diff_lines: List[str],
+        max_lines: int = 30
+    ) -> None:
+        """
+        Display diff preview before file write.
+
+        Args:
+            path: File path being modified
+            diff_lines: Lines from unified diff output
+            max_lines: Maximum lines to show before truncating
+        """
+        ...
+
     def show_command(self, command: str) -> None:
         """
         Display shell command being executed.

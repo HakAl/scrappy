@@ -4,7 +4,9 @@ Action executor coordinator.
 Orchestrates the flow: Safety check -> Duplicate check -> Tool execution -> Result.
 """
 
-from typing import Optional
+import difflib
+from pathlib import Path
+from typing import Optional, List
 
 from .types import AgentAction, ActionResult, ConversationState
 from .protocols import (
@@ -185,7 +187,68 @@ class ActionExecutor:
 
         # Ask user
         self.ui.show_tool_request(action.action, action.parameters)
+
+        # Show diff preview for write_file actions
+        if action.action == 'write_file':
+            diff_lines = self._generate_diff_preview(action)
+            path = action.parameters.get('path', '')
+            self.ui.show_diff_preview(path, diff_lines)
+
         return self.ui.prompt_confirm("Allow this action?", default=False)
+
+    def _generate_diff_preview(self, action: AgentAction) -> List[str]:
+        """
+        Generate unified diff for write_file action.
+
+        Args:
+            action: AgentAction with write_file parameters
+
+        Returns:
+            List of diff lines (empty for new files)
+        """
+        path = action.parameters.get('path', '')
+        new_content = action.parameters.get('content', '')
+
+        if not path:
+            return []
+
+        # Get project root from tool_runner's context
+        project_root = self._get_project_root()
+        if not project_root:
+            return []
+
+        file_path = project_root / path
+        if not file_path.exists():
+            # New file - no diff to show
+            return []
+
+        try:
+            existing_content = file_path.read_text(encoding='utf-8')
+        except (OSError, UnicodeDecodeError):
+            # Can't read existing file
+            return []
+
+        # Generate unified diff
+        existing_lines = existing_content.splitlines(keepends=True)
+        new_lines = new_content.splitlines(keepends=True)
+
+        diff = difflib.unified_diff(
+            existing_lines,
+            new_lines,
+            fromfile=f"a/{path}",
+            tofile=f"b/{path}",
+            lineterm=''
+        )
+
+        return list(diff)
+
+    def _get_project_root(self) -> Optional[Path]:
+        """Get project root from tool_runner's context if available."""
+        if hasattr(self.tool_runner, 'tool_context'):
+            ctx = self.tool_runner.tool_context
+            if hasattr(ctx, 'project_root'):
+                return ctx.project_root
+        return None
 
     def _handle_parse_failure(self, action: AgentAction) -> ActionResult:
         """Handle response parsing failure."""

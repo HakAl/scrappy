@@ -48,6 +48,9 @@ class TestAgentUI:
     def show_progress(self, message: str) -> None:
         self.shown_progress.append(message)
 
+    def show_diff_preview(self, path: str, diff_lines: list, max_lines: int = 30) -> None:
+        pass  # No-op for tests
+
     def show_provider_status(self, provider: str, message: str, color: str = "cyan") -> None:
         pass
 

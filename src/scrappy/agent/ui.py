@@ -5,7 +5,7 @@ Handles all user interaction and console output formatting for the agent.
 Wraps CLIIOProtocol to provide agent-specific display operations.
 """
 
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import json
 
 from ..protocols.io import CLIIOProtocol
@@ -96,6 +96,57 @@ class AgentUI:
         else:
             self.io.secho(f"\nTool: {tool_name}", fg=self._theme.primary, bold=True)
             self.io.echo(f"Parameters: {json.dumps(params, indent=2)}")
+
+    def show_diff_preview(
+        self,
+        path: str,
+        diff_lines: List[str],
+        max_lines: int = 30
+    ) -> None:
+        """Display diff preview before file write.
+
+        Shows unified diff with colored additions/deletions.
+        Always shown (both compact and verbose modes) since it's critical
+        for user to see what will change before approving.
+
+        Args:
+            path: File path being modified
+            diff_lines: Lines from unified diff output
+            max_lines: Maximum lines to show before truncating
+        """
+        if not diff_lines:
+            self.io.secho(f"    [new file] {path}", fg=self._theme.info)
+            return
+
+        # Show header
+        self.io.secho(f"    Changes to {path}:", fg=self._theme.info)
+
+        # Colorize and display diff lines
+        shown = 0
+        for line in diff_lines:
+            if shown >= max_lines:
+                remaining = len(diff_lines) - shown
+                self.io.secho(f"    ... ({remaining} more lines)", fg=self._theme.text_muted)
+                break
+
+            # Skip diff headers (---, +++, @@) in compact display
+            if line.startswith('---') or line.startswith('+++'):
+                continue
+            if line.startswith('@@'):
+                # Show hunk header in muted color
+                self.io.secho(f"    {line}", fg=self._theme.text_muted)
+                shown += 1
+                continue
+
+            # Colorize based on diff type
+            if line.startswith('+'):
+                self.io.secho(f"    {line}", fg=self._theme.success)
+            elif line.startswith('-'):
+                self.io.secho(f"    {line}", fg=self._theme.error)
+            else:
+                # Context lines
+                self.io.secho(f"    {line}", fg=self._theme.text_muted)
+            shown += 1
 
     def show_command(self, command: str) -> None:
         """Display shell command being executed."""
