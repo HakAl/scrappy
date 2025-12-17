@@ -6,6 +6,8 @@ A powerful, context-aware coding assistant for everyone—students, learners, an
 
 This tool combines the power of multiple free-tier LLM APIs to give you **23,000+ free, context-aware AI requests per day**. No credit card, subscriptions, or geographic restrictions.
 
+![Scrappy Agent with Diff Preview](docs/images/agent_diff.png)
+
 ### The Mission: AI for Everyone
 
 Paid AI tools like ChatGPT Plus ($20/month) and Claude Pro ($20+/month) are fantastic, but their cost creates a barrier for:
