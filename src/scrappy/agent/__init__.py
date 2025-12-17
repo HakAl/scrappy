@@ -12,6 +12,7 @@ from .types import (
     ConversationState
 )
 from .audit import AuditLogger
+from .cancellation import CancellationToken
 from .checkpoint import create_git_checkpoint, rollback_to_checkpoint
 from .core import CodeAgent
 from .response_parser import JSONResponseParser, ParseResult
@@ -39,6 +40,8 @@ __all__ = [
     'ParseResult',
     # Audit
     'AuditLogger',
+    # Cancellation
+    'CancellationToken',
     # Checkpoint
     'create_git_checkpoint',
     'rollback_to_checkpoint',

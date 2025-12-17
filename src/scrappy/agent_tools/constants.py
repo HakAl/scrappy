@@ -64,6 +64,7 @@ DEFAULT_ALLOWED_HIDDEN_FILES: Set[str] = {
 DEFAULT_AUDIT_LOG_RESULT_TRUNCATION = 500  # chars - keep logs readable
 DEFAULT_RESULT_DISPLAY_TRUNCATION = 300  # chars - prevent terminal spam
 DEFAULT_WRITE_PREVIEW_TRUNCATION = 500  # chars - show enough to verify
+DEFAULT_VERBOSE_OUTPUT = False  # verbose mode - compact output by default
 
 # LLM settings
 DEFAULT_MAX_TOKENS = 1500  # tokens - balance between completeness and cost

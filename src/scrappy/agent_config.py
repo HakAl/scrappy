@@ -30,6 +30,7 @@ from .agent_tools.constants import (
     DEFAULT_AUDIT_LOG_RESULT_TRUNCATION,
     DEFAULT_RESULT_DISPLAY_TRUNCATION,
     DEFAULT_WRITE_PREVIEW_TRUNCATION,
+    DEFAULT_VERBOSE_OUTPUT,
     DEFAULT_MAX_TOKENS,
     DEFAULT_TEMPERATURE,
     DEFAULT_PLANNER_PREFERENCES,
@@ -80,6 +81,7 @@ class AgentConfig(BaseConfig):
     _meaningful_actions: List[str] = field(default_factory=lambda: DEFAULT_MEANINGFUL_ACTIONS.copy(), init=False, repr=False)
     _passive_rag_enabled: bool = field(default=DEFAULT_PASSIVE_RAG_ENABLED, init=False, repr=False)
     _passive_rag_max_tokens: int = field(default=DEFAULT_PASSIVE_RAG_MAX_TOKENS, init=False, repr=False)
+    _verbose: bool = field(default=DEFAULT_VERBOSE_OUTPUT, init=False, repr=False)
 
     # File operations
     @property
@@ -402,6 +404,18 @@ class AgentConfig(BaseConfig):
         if value <= 0:
             raise ValueError(f"passive_rag_max_tokens must be positive, got {value}")
         self._passive_rag_max_tokens = value
+
+    # UI/Output settings
+    @property
+    def verbose(self) -> bool:
+        """Whether to show verbose output (full panels, thinking, etc.)."""
+        return self._verbose
+
+    @verbose.setter
+    def verbose(self, value: bool) -> None:
+        if not isinstance(value, bool):
+            raise TypeError(f"verbose must be a bool, got {type(value)}")
+        self._verbose = value
 
     def validate(self) -> None:
         """

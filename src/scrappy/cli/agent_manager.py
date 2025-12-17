@@ -5,7 +5,8 @@ Handles running and managing code execution agents with human approval.
 
 from typing import TYPE_CHECKING, Optional
 
-from ..agent import CodeAgent, create_git_checkpoint, rollback_to_checkpoint
+from ..agent import CodeAgent, CancellationToken, create_git_checkpoint, rollback_to_checkpoint
+from ..agent_config import AgentConfig
 from .io_interface import CLIIOProtocol
 from .display_manager import DisplayManager
 from .user_interaction import CLIUserInteraction
@@ -36,19 +37,29 @@ class CLIAgentManager:
         self.display = DisplayManager(io=io, dashboard_enabled=False)
         # Inject user interaction - defaults to CLI mode
         self._interaction = user_interaction or CLIUserInteraction(io)
+        # Cancellation token for current agent run (None when no agent running)
+        self._cancellation_token: Optional[CancellationToken] = None
 
-    def run_agent(self, task: str):
+    def cancel(self) -> None:
+        """Cancel the currently running agent if any."""
+        if self._cancellation_token:
+            self._cancellation_token.cancel()
+            self.io.secho("Cancelling... waiting for current step to finish", fg=self.io.theme.warning)
+
+    def run_agent(self, task: str, dry_run: bool = False, verbose: bool = False):
         """
         Run the code agent on a task with human-in-the-loop approval.
 
         Creates and executes a CodeAgent for the given task, with interactive
-        prompts for safety options like dry-run mode and git checkpoints.
+        prompts for git checkpoints.
 
         Args:
             task: Description of the task for the agent to perform.
+            dry_run: If True, agent simulates actions without making changes.
+            verbose: If True, show full output (thinking, params, results).
 
         Side Effects:
-            - Prompts user for dry-run mode and checkpoint creation
+            - Prompts user for checkpoint creation
             - May create a git checkpoint before execution
             - Displays agent configuration and progress to console via self.display
             - Agent may modify project files if not in dry-run mode
@@ -84,9 +95,6 @@ class CLIAgentManager:
             dashboard.update_thought_process(f"Task: {task}")
 
         # Safety options - use injected interaction handler for mode-aware prompts
-        dry_run = self._interaction.confirm(
-            "Run in dry-run mode? (no actual changes)", default=False
-        )
         create_checkpoint = self._interaction.confirm(
             "Create git checkpoint before running?", default=True
         )
@@ -100,8 +108,20 @@ class CLIAgentManager:
             else:
                 io.secho("Could not create checkpoint (not a git repo?)", fg=io.theme.warning)
 
-        # Create agent with bridged io instance
-        agent = CodeAgent(self.orchestrator, io=io)
+        # Create cancellation token for this run
+        self._cancellation_token = CancellationToken()
+
+        # Create config with verbose setting
+        config = AgentConfig()
+        config.verbose = verbose
+
+        # Create agent with bridged io instance and cancellation token
+        agent = CodeAgent(
+            self.orchestrator,
+            io=io,
+            config=config,
+            cancellation_token=self._cancellation_token
+        )
         agent.dry_run = dry_run
 
         # Show agent configuration
@@ -171,3 +191,6 @@ class CLIAgentManager:
                 f"Agent task '{task[:50]}...' failed: {str(e)[:50]}",
                 "agent_task"
             )
+        finally:
+            # Clear cancellation token after run completes
+            self._cancellation_token = None

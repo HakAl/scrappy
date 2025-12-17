@@ -40,25 +40,6 @@ With conversation history (Phase 1/1.5) complete, scrappy is significantly close
 
 ## Critical Gaps for Release
 
-### Tier 1: Must Fix (Blocks Release)
-
-| Gap | Severity | Effort | Source | Rationale |
-|-----|----------|--------|--------|-----------|
-| ~~**Error messages are cryptic**~~ | ~~High~~ | ~~Low~~ | ~~_BUGS.md~~ | DONE - Improved error formatting, descriptive fallbacks, and suggestions |
-| **No version/changelog** | High | Low | - | Beta users need to know what's new |
-| **No disclaimer banner** | High | Low | - | Legal/social liability for file system access |
-| **.git/ not explicitly blocked** | High | Low | - | LLM could corrupt git index |
-
-### Tier 2: Must Polish (RC Quality Bar)
-
-These items separate "beta" from "release candidate." A buggy-feeling UI undermines confidence in the whole tool.
-
-| Gap | Severity | Effort | Source | Rationale |
-|-----|----------|--------|--------|-----------|
-| **Agent verbose mode toggle** | High | Low | _BUGS.md | Too much agent output, no way to reduce |
-| **Agent safeguards review** | High | Low | _BUGS.md | Is max_steps=10 right? Review existing limits |
-| **No `scrappy init` command** | Medium | Medium | HIGH_VALUE_FEATURES | Users manually edit .env - bad UX |
-| **No dependency check on startup** | Medium | Low | - | App starts then fails if git/pytest missing |
 
 ### Tier 3: Nice for RC (New Features)
 

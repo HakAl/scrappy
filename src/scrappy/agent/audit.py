@@ -27,7 +27,7 @@ class AuditLogger:
 
     def __init__(
         self,
-        max_result_length: int = 1000,
+        max_result_length: int = 5000,
         path_provider: Optional[PathProviderProtocol] = None,
         platform_detector: Optional[PlatformDetectorProtocol] = None
     ):
@@ -159,7 +159,14 @@ class AuditLogger:
         except Exception:
             pass  # Don't let save errors interrupt agent execution
 
-    def log_action(self, action: str, params: dict, result: str, approved: bool) -> None:
+    def log_action(
+        self,
+        action: str,
+        params: dict,
+        result: str,
+        approved: bool,
+        thinking: Optional[str] = None,
+    ) -> None:
         """
         Log an action to the audit trail and save incrementally.
 
@@ -168,6 +175,7 @@ class AuditLogger:
             params: Parameters passed to the action
             result: The result of the action
             approved: Whether the action was approved by user
+            thinking: Optional LLM reasoning that led to this action
         """
         truncated_result = (
             result[:self.max_result_length]
@@ -180,8 +188,11 @@ class AuditLogger:
             'action': action,
             'parameters': params,
             'result': truncated_result,
-            'approved': approved
+            'approved': approved,
         }
+        # Only include thinking if provided (keeps logs smaller when not needed)
+        if thinking:
+            entry['thinking'] = thinking
         self.log.append(entry)
 
         # Auto-save after each action for crash safety

@@ -10,7 +10,7 @@ optimizations to make the implementation easier and more robust.
 
 ---
 
-### ⚠️ The Weak Link: `FileReferenceExtractor`
+### The Weak Link: `FileReferenceExtractor`
 
 Phase 1 is the trickiest part. Users are lazy. They rarely type full paths.
 *   *User Input:* "Why is the auth handler failing?"
@@ -63,7 +63,7 @@ if file in referenced_files:
 
 ---
 
-### 🛑 Answers to Open Questions
+### Answers to Open Questions
 
 #### 1. Fuzzy matching: How aggressive?
 **Start Conservative.**

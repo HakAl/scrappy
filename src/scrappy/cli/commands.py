@@ -51,6 +51,7 @@ def create_orchestrator_for_command(ctx):
 from .utils.session_utils import restore_session_to_cli
 from .utils.error_utils import run_with_error_handling, run_with_recovery
 from .utils.error_handler import format_error, get_error_suggestion
+from .utils.dependency_check import check_agent_dependencies
 from .validators import validate_path, validate_provider
 from .exceptions import (
     CLIError,
@@ -477,6 +478,14 @@ def agent(ctx, task, dry_run, no_checkpoint, auto_confirm, max_iterations):
     if not auto_confirm and not dry_run:
         click.secho("Error: Agent command requires --auto-confirm or --dry-run in one-off mode", fg="red")
         click.echo("For interactive approvals, use: scrappy (then /agent <task>)")
+        sys.exit(1)
+
+    # Check dependencies before running agent
+    deps_ok, errors = check_agent_dependencies()
+    if not deps_ok:
+        click.secho("Agent requires missing dependencies:", fg="red")
+        for err in errors:
+            click.echo(f"  - {err}")
         sys.exit(1)
 
     orchestrator = create_orchestrator_for_command(ctx)

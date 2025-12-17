@@ -33,6 +33,7 @@ class ApiKeyConfig(BaseConfig):
     All persistence is handled by ApiKeyConfigService.
     """
     api_keys: Dict[str, str] = field(default_factory=dict)
+    disclaimer_acknowledged: bool = False
 
     def validate(self) -> None:
         """
@@ -142,6 +143,21 @@ class ApiKeyConfigServiceProtocol(Protocol):
 
         Returns:
             True if any of the variables have configured keys
+        """
+        ...
+
+    def is_disclaimer_acknowledged(self) -> bool:
+        """
+        Check if user has acknowledged the disclaimer.
+
+        Returns:
+            True if disclaimer was acknowledged
+        """
+        ...
+
+    def acknowledge_disclaimer(self) -> None:
+        """
+        Mark disclaimer as acknowledged and save.
         """
         ...
 
@@ -286,6 +302,28 @@ class ApiKeyConfigService:
         if self._config is None:
             self.load()
         return any(self._config.has_key(ev) for ev in env_vars)
+
+    def is_disclaimer_acknowledged(self) -> bool:
+        """
+        Check if user has acknowledged the disclaimer.
+
+        Lazy-loads config on first access.
+
+        Returns:
+            True if disclaimer was acknowledged
+        """
+        if self._config is None:
+            self.load()
+        return self._config.disclaimer_acknowledged
+
+    def acknowledge_disclaimer(self) -> None:
+        """
+        Mark disclaimer as acknowledged and save immediately.
+        """
+        if self._config is None:
+            self.load()
+        self._config.disclaimer_acknowledged = True
+        self.save(self._config)
 
 
 def create_api_key_service() -> ApiKeyConfigService:

@@ -20,6 +20,7 @@ class MockApiKeyConfigService:
         self.load_called = False
         self.save_called = False
         self.saved_config = None
+        self._disclaimer_acknowledged = True  # Default to True for tests
 
     def load(self):
         """Mock load - returns in-memory config."""
@@ -45,6 +46,14 @@ class MockApiKeyConfigService:
     def has_any_key(self, env_vars: list[str]) -> bool:
         """Check if any of the env vars have keys configured."""
         return any(env_var in self.keys and self.keys[env_var] for env_var in env_vars)
+
+    def is_disclaimer_acknowledged(self) -> bool:
+        """Check if disclaimer has been acknowledged."""
+        return self._disclaimer_acknowledged
+
+    def acknowledge_disclaimer(self) -> None:
+        """Mark disclaimer as acknowledged."""
+        self._disclaimer_acknowledged = True
 
 
 class MockLLMService:

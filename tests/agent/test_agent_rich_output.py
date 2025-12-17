@@ -965,6 +965,9 @@ class TestAgentOutputHelpers:
         assert hasattr(agent.ui, 'show_thinking'), \
             "Agent UI should have show_thinking method"
 
+        # Enable verbose mode to test full output
+        agent.ui.verbose = True
+
         # Test the method
         agent.ui.show_thinking("Test thinking")
 
@@ -984,6 +987,9 @@ class TestAgentOutputHelpers:
 
         assert hasattr(agent.ui, 'show_tool_request'), \
             "Agent UI should have show_tool_request method"
+
+        # Enable verbose mode to test full output
+        agent.ui.verbose = True
 
         # Test the method
         agent.ui.show_tool_request("read_file", {"path": "/test.py"})
@@ -1023,6 +1029,9 @@ class TestAgentOutputHelpers:
 
         assert hasattr(agent.ui, 'show_result'), \
             "Agent UI should have show_result method"
+
+        # Enable verbose mode to test full output
+        agent.ui.verbose = True
 
         # Test the method
         agent.ui.show_result("Test result")

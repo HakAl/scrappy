@@ -26,8 +26,11 @@ class SafetyChecker:
         'list_files',
         'list_directory',
         'search_code',
+        'codebase_search',  # Semantic search - read-only
         'git_status',
         'git_diff',
+        'git_log',
+        'git_blame',
         'get_context',
     }
 

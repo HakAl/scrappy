@@ -97,7 +97,8 @@ class TestApiKeyConfig:
             "api_keys": {
                 "GROQ_API_KEY": "gsk_xyz",
                 "GEMINI_API_KEY": "AIza_abc",
-            }
+            },
+            "disclaimer_acknowledged": False,
         }
 
     def test_from_dict_deserializes_correctly(self):
@@ -154,7 +155,8 @@ class TestApiKeyConfigService:
         assert persistence.data == {
             "api_keys": {
                 "GROQ_API_KEY": "gsk_test"
-            }
+            },
+            "disclaimer_acknowledged": False,
         }
 
 

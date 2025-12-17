@@ -1,8 +1,58 @@
 ## Issues
-
+  Quality tier priority:
+  1. cerebras/qwen-3-235b-a22b-instruct-2507 - 235B instruction-tuned 
+  2. groq/meta-llama/llama-4-scout-17b-16e-instruct - 0.4s latency
+  3. groq/moonshotai/kimi-k2-instruct - fast, 128k context 
+  4. gemini/gemini-2.5-flash - deprioritized (JSON issues)
 ---
 NEXT UP
 ---
+✶ Adding verbose config… (esc to interrupt · ctrl+t to hide todos · 8m 5s · ↑ 18.1k tokens · thinking)
+     ☒ Add --dry-run flag parsing to command_router.py
+     ☒ Implement CancellationToken
+     ☒ Wire cancellation through AgentLoop
+     ☒ Add Escape binding to main_screen
+     ☒ Enhance audit logging with thinking field
+     ☒ Implement compact output mode
+     ☒ Fix codebase_search not in SAFE_ACTIONS
+     ☒ Fix timer cleanup on unmount
+     ☒ Fix app exit blocking issue
+     ☒ Update litellm_config with optimal models
+     ☒ Remove hard step limit, add soft c
+
+---
+Search: indexing -- if new (empty) repo, indexing message persists
+---
+
+
+---
+proper config scopes
+eg: command history should likely be per project, rate limit per user
+
+Current State: command_history in user scope, rate_limits in project
+
+Proposed State:
+
+    USER        |   PROJECT
+----------------------------------
+rate_limits.json
+config 
+ -api keys
+ -disclaimer
+                    command_history
+                    lancedb/
+                    conversations.db
+                    audit.json
+                    config.json -> project id
+                    conversations.db
+                    debug.log
+                    fingerprints.json
+                    response_cache.json
+                    session.json
+
+
+---
+
 ---
 python -m pytest tests/ --cov=src --cov-report=term-missing
 C:\Python313\Lib\site-packages\pytest_asyncio\plugin.py:207: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.

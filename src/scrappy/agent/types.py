@@ -64,7 +64,8 @@ class ConversationState:
     messages: List[Dict[str, str]] = field(default_factory=list)
     system_prompt: str = ""
     iteration: int = 0
-    max_iterations: int = 10
+    max_iterations: int = 100  # High default - use checkpoint_interval for soft stops
+    checkpoint_interval: int = 10  # Ask user to continue every N iterations
     tools_executed: List[str] = field(default_factory=list)
     auto_confirm: bool = False
     # Track failed commands to force different strategies

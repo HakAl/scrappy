@@ -29,6 +29,7 @@ from .protocols import (
     DenialHandlerProtocol,
     AgentContextFactoryProtocol,
 )
+from .cancellation import CancellationTokenProtocol
 
 if TYPE_CHECKING:
     from ..orchestrator_adapter import OrchestratorAdapter
@@ -64,6 +65,7 @@ class AgentLoop:
         audit_logger: Any = None,  # AuditLoggerProtocol
         tools: Optional[Dict[str, Any]] = None,
         denial_handler: Optional[DenialHandlerProtocol] = None,
+        cancellation_token: Optional[CancellationTokenProtocol] = None,
     ):
         """
         Initialize AgentLoop with injected dependencies.
@@ -80,6 +82,7 @@ class AgentLoop:
             audit_logger: Optional audit logger
             tools: Optional tools dict for backward compat
             denial_handler: Optional handler for user denials
+            cancellation_token: Optional token for cancellation signaling
         """
         self._orchestrator = orchestrator
         self._action_executor = action_executor
@@ -92,6 +95,7 @@ class AgentLoop:
         self._audit_logger = audit_logger
         self._tools = tools or {}
         self._denial_handler = denial_handler
+        self._cancellation_token = cancellation_token
         # Track current dry_run state
         self._dry_run = False
         # Track denials in current session
@@ -268,10 +272,14 @@ class AgentLoop:
         """
         result = self._action_executor.execute(action, state, dry_run=self._dry_run)
 
-        # Log action for audit trail
+        # Log action for audit trail (including thinking for debugging)
         if result.executed and self._audit_logger:
             self._audit_logger.log_action(
-                action.action, action.parameters, result.output, result.approved
+                action.action,
+                action.parameters,
+                result.output,
+                result.approved,
+                thinking=action.thought,
             )
 
         return result
@@ -314,11 +322,15 @@ class AgentLoop:
                 )
 
             final_result = action.result_text or 'Task completed'
-            self._ui.show_rule("Task Complete")
-            self._ui.show_result(final_result, title="Final Result")
+            # Use show_completion if available (compact mode aware)
+            if hasattr(self._ui, 'show_completion'):
+                self._ui.show_completion(final_result, success=True)
+            else:
+                self._ui.show_rule("Task Complete")
+                self._ui.show_result(final_result, title="Final Result")
 
-            if self._audit_logger:
-                self._audit_logger.log_action('complete', {}, final_result, True)
+            # Note: 'complete' action already logged in execute() stage
+            # Don't log again here to avoid duplicate audit entries
 
             return EvaluationResult(
                 is_complete=True,
@@ -621,9 +633,24 @@ class AgentLoop:
         """
         self._dry_run = dry_run
 
+        # Reset step counter for new task
+        if hasattr(self._ui, 'reset_step_counter'):
+            self._ui.reset_step_counter()
+
         self._ui.show_progress("Starting agent loop...")
 
         while state.iteration < state.max_iterations:
+            # Check for cancellation at start of each iteration
+            if self._cancellation_token and self._cancellation_token.is_cancelled():
+                self._ui.show_warning("Agent cancelled by user")
+                if self._audit_logger:
+                    self._audit_logger.log_action('cancelled', {}, 'Cancelled by user', True)
+                return {
+                    'success': False,
+                    'result': 'Cancelled by user',
+                    'iterations': state.iteration,
+                }
+
             state.iteration += 1
 
             # Minimal iteration indicator (only show on first iteration)
@@ -670,9 +697,34 @@ class AgentLoop:
                     'iterations': state.iteration,
                 }
 
+            # Soft checkpoint - ask user to continue every N iterations
+            if (state.checkpoint_interval > 0 and
+                state.iteration % state.checkpoint_interval == 0 and
+                not state.auto_confirm):
+                should_continue = self._checkpoint_prompt(state)
+                if not should_continue:
+                    return {
+                        'success': False,
+                        'result': f'Stopped at checkpoint (iteration {state.iteration})',
+                        'iterations': state.iteration,
+                    }
+
         # Max iterations reached
         return {
             'success': False,
             'result': f'Max iterations ({state.max_iterations}) reached',
             'iterations': state.iteration,
         }
+
+    def _checkpoint_prompt(self, state: ConversationState) -> bool:
+        """
+        Prompt user at checkpoint to decide whether to continue.
+
+        Returns:
+            True to continue, False to stop
+        """
+        self._ui.show_info(
+            f"Checkpoint: {state.iteration} iterations completed. "
+            f"{len(state.tools_executed)} tools executed."
+        )
+        return self._ui.confirm("Continue agent execution?")

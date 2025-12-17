@@ -128,6 +128,14 @@ class ThreadSafeAsyncBridge:
         self._pending_prompts: Dict[str, threading.Event] = {}
         self._prompt_results: Dict[str, Any] = {}
         self._lock = threading.Lock()
+        self._shutting_down = False
+
+    def shutdown(self) -> None:
+        """Signal all pending prompts to unblock - call when app is closing."""
+        self._shutting_down = True
+        with self._lock:
+            for event in self._pending_prompts.values():
+                event.set()
 
     def blocking_prompt(self, message: str, default: str = "") -> str:
         """Called from worker thread - blocks until main thread provides result."""
@@ -137,6 +145,9 @@ class ThreadSafeAsyncBridge:
                 "This will cause a deadlock."
             )
 
+        if self._shutting_down:
+            return default
+
         prompt_id = str(uuid.uuid4())
 
         with self._lock:
@@ -144,11 +155,15 @@ class ThreadSafeAsyncBridge:
             self._pending_prompts[prompt_id] = event
 
         self.app.post_message(RequestInlineInput(prompt_id, message, "prompt", default))
-        event.wait()
+
+        # Wait with timeout to allow for shutdown
+        while not event.wait(timeout=0.5):
+            if self._shutting_down:
+                return default
 
         with self._lock:
-            result = self._prompt_results.pop(prompt_id)
-            del self._pending_prompts[prompt_id]
+            result = self._prompt_results.pop(prompt_id, default)
+            self._pending_prompts.pop(prompt_id, None)
 
         return result
 
@@ -160,6 +175,9 @@ class ThreadSafeAsyncBridge:
                 "This will cause a deadlock."
             )
 
+        if self._shutting_down:
+            return False
+
         prompt_id = str(uuid.uuid4())
 
         with self._lock:
@@ -167,11 +185,15 @@ class ThreadSafeAsyncBridge:
             self._pending_prompts[prompt_id] = event
 
         self.app.post_message(RequestInlineInput(prompt_id, question, "confirm"))
-        event.wait()
+
+        # Wait with timeout to allow for shutdown
+        while not event.wait(timeout=0.5):
+            if self._shutting_down:
+                return False
 
         with self._lock:
-            result = self._prompt_results.pop(prompt_id)
-            del self._pending_prompts[prompt_id]
+            result = self._prompt_results.pop(prompt_id, False)
+            self._pending_prompts.pop(prompt_id, None)
 
         return result
 
@@ -705,8 +727,16 @@ class ScrappyApp(App):
 
         # Navigate to appropriate screen
         has_provider, env_key_count = self._check_and_migrate_providers()
-        if not has_provider:
-            self._show_wizard_screen(allow_cancel=False)
+
+        # Check if disclaimer has been acknowledged
+        from scrappy.infrastructure.config.api_keys import create_api_key_service
+        config_service = create_api_key_service()
+        disclaimer_acknowledged = config_service.is_disclaimer_acknowledged()
+
+        if not has_provider or not disclaimer_acknowledged:
+            # Show wizard if no provider OR disclaimer not acknowledged
+            # Allow cancel only if they already have a provider (just need to ack disclaimer)
+            self._show_wizard_screen(allow_cancel=has_provider)
         else:
             self._show_main_screen(env_key_count=env_key_count)
 
@@ -714,6 +744,9 @@ class ScrappyApp(App):
         """Called when app is about to close."""
         self._should_stop_consumer = True
         OutputModeContext.set_tui_mode(False)
+
+        # Signal bridge to release any blocked worker threads
+        self.bridge.shutdown()
 
         if self._codebase_context is not None:
             self._codebase_context.shutdown()

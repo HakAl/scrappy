@@ -83,6 +83,11 @@ class ActionExecutor:
         if action.action not in self.tool_runner.tools:
             return self._handle_unknown_tool(action)
 
+        # Validate required parameters before showing to user
+        missing = self._get_missing_required_params(action)
+        if missing:
+            return self._handle_missing_params(action, missing)
+
         # 1. Safety & Confirmation
         if not self._check_safety_and_get_approval(action, state):
             return ActionResult(
@@ -215,6 +220,47 @@ class ActionExecutor:
         error_msg = f"Unknown action '{action.action}'. Available tools: {available_tools}"
 
         self.ui.show_error(error_msg)
+
+        return ActionResult(
+            success=False,
+            output=error_msg,
+            action=action.action,
+            parameters=action.parameters,
+            approved=False,
+            executed=False
+        )
+
+    def _get_missing_required_params(self, action: AgentAction) -> list[str]:
+        """
+        Check if action has all required parameters.
+
+        Returns:
+            List of missing required parameter names (empty if all present)
+        """
+        # Check if tool_registry is available (may not be in tests)
+        if not hasattr(self.tool_runner, 'tool_registry'):
+            return []
+
+        tool = self.tool_runner.tool_registry.get(action.action)
+        if not tool:
+            return []  # Unknown tool handled elsewhere
+
+        missing = []
+        for param in tool.parameters:
+            if param.required and param.name not in action.parameters:
+                missing.append(param.name)
+
+        return missing
+
+    def _handle_missing_params(self, action: AgentAction, missing: list[str]) -> ActionResult:
+        """Handle action with missing required parameters."""
+        missing_str = ', '.join(missing)
+        error_msg = (
+            f"Action '{action.action}' is missing required parameters: {missing_str}. "
+            f"You must provide all required parameters."
+        )
+
+        self.ui.show_warning(f"Malformed action: missing {missing_str}")
 
         return ActionResult(
             success=False,

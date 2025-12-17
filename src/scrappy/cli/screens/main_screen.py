@@ -48,6 +48,7 @@ class MainAppScreen(Screen):
         Binding("enter", "submit_input", "Submit", priority=True),
         Binding("up", "history_previous", "Previous", priority=True),
         Binding("down", "history_next", "Next", priority=True),
+        Binding("escape", "cancel_agent", "Cancel", priority=True),
     ]
 
     def __init__(
@@ -127,6 +128,10 @@ class MainAppScreen(Screen):
         # Display welcome banner
         from scrappy.cli.interactive_banner import display_banner
         display_banner(self.interactive_mode.io)
+
+    def on_unmount(self) -> None:
+        """Called when screen is unmounted - clean up resources."""
+        self._stop_elapsed_timer()
 
     def on_click(self, event) -> None:
         """Refocus input when clicking anywhere except input field."""
@@ -258,6 +263,12 @@ class MainAppScreen(Screen):
             if self._history_temp_input:
                 self._layout.input.insert(self._history_temp_input)
                 self._history_temp_input = ""
+
+    def action_cancel_agent(self) -> None:
+        """Handle Escape key to cancel running agent."""
+        # Access agent_mgr through the command router
+        agent_mgr = self.interactive_mode.command_router.agent_mgr
+        agent_mgr.cancel()
 
     def _handle_captured_input(self, user_input: str) -> None:
         """Process input captured for prompt/confirm."""

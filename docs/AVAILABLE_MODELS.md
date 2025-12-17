@@ -1,3 +1,74 @@
+Gemini has even more! Here are the relevant chat models:
+
+  | Model                           | Context | Output | Thinking | Notes           |
+  |---------------------------------|---------|--------|----------|-----------------|
+  | gemini-2.5-flash                | 1M      | 64k    | Yes      | Current, stable |
+  | gemini-2.5-pro                  | 1M      | 64k    | Yes      | Higher quality  |
+  | gemini-3-pro-preview            | 1M      | 64k    | Yes      | Gemini 3!       |
+  | gemini-2.5-flash-lite           | 1M      | 64k    | Yes      | Faster/cheaper  |
+  | gemini-2.0-flash                | 1M      | 8k     | No       | Older           |
+  | gemini-2.0-flash-lite           | 1M      | 8k     | No       | Fast fallback   |
+  | gemini-2.5-computer-use-preview | 128k    | 64k    | Yes      | Agent-focused!  |
+  | deep-research-pro-preview       | 128k    | 64k    | Yes      | Deep research!  |
+
+  Gemma (smaller, open):
+  | Model          | Context | Output |
+  |----------------|---------|--------|
+  | gemma-3-27b-it | 128k    | 8k     |
+  | gemma-3-12b-it | 32k     | 8k     |
+  | gemma-3-4b-it  | 32k     | 8k     |
+
+----
+
+# CEREBRAS
+
+## Production Models
+
+Production models are fully supported offerings intended for use in production environments.
+
+| Model Name                            | Model ID        | Parameters  | Speed (tokens/s) |
+| :------------------------------------ | :-------------- | :---------- | :--------------- |
+| [Llama 3.1 8B](/models/llama-31-8b)   | `llama3.1-8b`   | 8 billion   | \~2200           |
+| [Llama 3.3 70B](/models/llama-33-70b) | `llama-3.3-70b` | 70 billion  | \~2100           |
+| [OpenAI GPT OSS](/models/openai-oss)  | `gpt-oss-120b`  | 120 billion | \~3000           |
+| [Qwen 3 32B](/models/qwen-3-32b)      | `qwen-3-32b`    | 32 billion  | \~2600           |
+
+## Model Compression
+
+We host a variety of open-source models from the community. You can refer to the links provided below for the exact architectures and weights that we serve. This section provides transparency about the compression state of each model available on our platform.
+We do not currently host pruned models on our public endpoints. All models served through our public endpoints are the original, unpruned versions. While we conduct research on pruning techniques like REAP (Router-weighted Expert Activation Pruning), these pruned models are shared with the research community on Hugging Face but are not available through our shared API. You can read more about REAP in our [research blog](https://www.cerebras.ai/blog/reap).
+The table below shows the precision state for each model available on our platform. **All models listed are unpruned.**
+
+| Model Name                       | Precision                           | Hugging Face Link                                                   |
+| :------------------------------- | :---------------------------------- | :------------------------------------------------------------------ |
+| `llama3.1-8b`                    | FP16                                | [View →](https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct)   |
+| `llama-3.3-70b`                  | FP16                                | [View →](https://huggingface.co/meta-llama/Llama-3.3-70B-Instruct)  |
+| `gpt-oss-120b`                   | FP16/FP8 (weights only)<sup>1</sup> | [View →](https://huggingface.co/openai/gpt-oss-120b)                |
+| `qwen-3-32b`                     | FP16                                | [View →](https://huggingface.co/Qwen/Qwen3-32B)                     |
+| `qwen-3-235b-a22b-instruct-2507` | FP16/FP8 (weights only)<sup>1</sup> | [View →](https://huggingface.co/Qwen/Qwen3-235B-A22B-Instruct-2507) |
+| `zai-glm-4.6`                    | FP16/FP8 (weights only)<sup>1</sup> | [View →](https://huggingface.co/zai-org/GLM-4.6)                    |
+
+---
+
+GROQ
+```
+  | Model                                         | Context | Max Output | Notes                              |
+  |-----------------------------------------------|---------|------------|------------------------------------|
+  | llama-3.1-8b-instant                          | 128k    | 128k       | Fast, have it                      |
+  | llama-3.3-70b-versatile                       | 128k    | 32k        | Quality, have it                   |
+  | moonshotai/kimi-k2-instruct                   | 128k    | 16k        | I was wrong - Groq DOES host Kimi! |
+  | moonshotai/kimi-k2-instruct-0905              | 256k    | 16k        | Newer Kimi version                 |
+  | meta-llama/llama-4-scout-17b-16e-instruct     | 128k    | 8k         | Llama 4!                           |
+  | meta-llama/llama-4-maverick-17b-128e-instruct | 128k    | 8k         | Llama 4!                           |
+  | qwen/qwen3-32b                                | 128k    | 40k        | Qwen 3!                            |
+  | openai/gpt-oss-120b                           | 128k    | 64k        | Open GPT 120B!                     |
+  | openai/gpt-oss-20b                            | 128k    | 64k        | Smaller GPT-OSS                    |
+  | groq/compound                                 | 128k    | 8k         | Groq's own                         |
+  | groq/compound-mini                            | 128k    | 8k         | Groq's mini                        |
+```
+
+----
+
 # Available LLM Models by Provider
 
 Last updated: 2025-11-17

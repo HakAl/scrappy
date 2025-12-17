@@ -536,6 +536,47 @@ class AgentUIProtocol(Protocol):
         """
         ...
 
+    def confirm(self, message: str, default: bool = True) -> bool:
+        """
+        Prompt user for yes/no confirmation.
+
+        Args:
+            message: Question to ask user
+            default: Default value if user just presses enter
+
+        Returns:
+            True if user confirms, False otherwise
+        """
+        ...
+
+    def show_info(self, message: str) -> None:
+        """
+        Display informational message.
+
+        Args:
+            message: Message to display
+        """
+        ...
+
+    def reset_step_counter(self) -> None:
+        """
+        Reset step counter for new task.
+
+        Should be called at the start of each new agent task to
+        ensure step numbering starts fresh.
+        """
+        ...
+
+    def show_completion(self, result: str, success: bool = True) -> None:
+        """
+        Display task completion message.
+
+        Args:
+            result: Completion message/result text
+            success: Whether the task completed successfully
+        """
+        ...
+
 
 @runtime_checkable
 class SafetyCheckerProtocol(Protocol):

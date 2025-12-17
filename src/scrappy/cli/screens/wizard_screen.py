@@ -159,9 +159,10 @@ class SetupWizardScreen(Screen):
         # Pass to wizard state machine
         self._wizard.handle_input(user_input)
 
-        # If we transitioned back to MENU, clear and re-show fresh menu
+        # If we transitioned to MENU from AWAITING_KEY, clear and re-show fresh menu
+        # (DISCLAIMER -> MENU transition already shows menu, don't clear it)
         state_after = self._wizard._state
-        if state_after == WizardState.MENU and state_before != WizardState.MENU:
+        if state_after == WizardState.MENU and state_before == WizardState.AWAITING_KEY:
             output_sink = self._io._output_sink
             if isinstance(output_sink, WizardOutputSink):
                 output_sink.clear_output()

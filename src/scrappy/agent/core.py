@@ -105,6 +105,7 @@ class CodeAgent:
         provider_strategy: Optional[ProviderSelectionStrategyProtocol] = None,
         agent_loop: Optional[AgentLoopProtocol] = None,
         prompt_factory: Optional[Any] = None,  # PromptFactoryProtocol
+        cancellation_token: Optional[Any] = None,  # CancellationTokenProtocol
     ):
         """
         Initialize the code agent with dependency injection.
@@ -130,6 +131,7 @@ class CodeAgent:
         self._initial_config = config
         self._initial_orchestrator = orchestrator
         self._initial_project_path = project_path
+        self._cancellation_token = cancellation_token
 
         # IO interface
         self.io = io or self._create_default_io()
@@ -208,7 +210,7 @@ class CodeAgent:
 
         # Setup new agent components
         # UI wraps the IO interface
-        self.ui = ui or AgentUI(self.io)
+        self.ui = ui or AgentUI(self.io, verbose=self.config.verbose)
 
         # Setup execution components (in dependency order)
         self._safety_checker = safety_checker or SafetyChecker()
@@ -277,6 +279,7 @@ class CodeAgent:
             context_factory=self._context_factory,
             audit_logger=self._audit_logger,
             tools=self.tools,
+            cancellation_token=self._cancellation_token,
         )
 
         # Prompt factory for stateless prompt generation

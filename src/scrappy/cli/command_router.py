@@ -18,6 +18,7 @@ from .smart_query import CLISmartQuery
 from .agent_manager import CLIAgentManager
 from .task_router_handler import CLITaskRouterHandler
 from .validators import validate_command
+from .utils.dependency_check import check_agent_dependencies
 from .utils.session_utils import (
     display_session_saved,
     display_session_save_error,
@@ -245,12 +246,38 @@ class CommandRouter:
     def _handle_agent(self, args: str) -> bool:
         """Handle /agent command."""
         io = self.io
+
+        # Parse flags
+        dry_run = False
+        verbose = False
+        if "--dry-run" in args:
+            dry_run = True
+            args = args.replace("--dry-run", "").strip()
+        if "--verbose" in args or "-v" in args:
+            verbose = True
+            args = args.replace("--verbose", "").replace(" -v ", " ").strip()
+            if args.startswith("-v "):
+                args = args[3:]
+            if args.endswith(" -v"):
+                args = args[:-3]
+
         if not args:
             io.echo("Usage: /agent <task description>")
-        else:
-            self.agent_mgr.run_agent(args)
-            if self.state_manager.plan_active:
-                self.state_manager.prompt_task_progression(io)
+            io.echo("  --dry-run  Simulate actions without making changes")
+            io.echo("  --verbose  Show full output (thinking, params, results)")
+            return True
+
+        # Check dependencies before running agent
+        deps_ok, errors = check_agent_dependencies()
+        if not deps_ok:
+            io.secho("Agent requires missing dependencies:", fg=io.theme.error)
+            for err in errors:
+                io.echo(f"  - {err}")
+            return True
+
+        self.agent_mgr.run_agent(args, dry_run=dry_run, verbose=verbose)
+        if self.state_manager.plan_active:
+            self.state_manager.prompt_task_progression(io)
         return True
 
     def _handle_synthesize(self, args: str) -> bool:

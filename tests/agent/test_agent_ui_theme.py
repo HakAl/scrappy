@@ -67,9 +67,9 @@ class TestAgentUIShowThinking:
     """Tests for show_thinking theme colors."""
 
     def test_show_thinking_uses_theme_info_for_panel(self):
-        """show_thinking uses theme.info for panel border."""
+        """show_thinking uses theme.info for panel border (verbose mode)."""
         io = MockIO()
-        ui = AgentUI(io)
+        ui = AgentUI(io, verbose=True)
         ui.show_thinking("Processing...")
 
         assert len(io.panel_calls) == 1
@@ -79,13 +79,13 @@ class TestAgentUIShowThinking:
         assert border_style == DEFAULT_THEME.info
 
     def test_show_thinking_uses_theme_info_for_secho_fallback(self):
-        """show_thinking uses theme.info for secho when panel not available."""
+        """show_thinking uses theme.info for secho when panel not available (verbose mode)."""
         io = Mock()
         io.secho = Mock()
         # Remove panel attribute to trigger fallback
         del io.panel
 
-        ui = AgentUI(io)
+        ui = AgentUI(io, verbose=True)
         ui.show_thinking("Processing...")
 
         io.secho.assert_called_once()
@@ -93,10 +93,10 @@ class TestAgentUIShowThinking:
         assert call_args.kwargs.get("fg") == DEFAULT_THEME.info
 
     def test_show_thinking_with_light_theme(self):
-        """show_thinking uses light theme info color."""
+        """show_thinking uses light theme info color (verbose mode)."""
         io = MockIO()
         light_theme = LightTheme()
-        ui = AgentUI(io, theme=light_theme)
+        ui = AgentUI(io, theme=light_theme, verbose=True)
         ui.show_thinking("Processing...")
 
         assert len(io.panel_calls) == 1
@@ -118,20 +118,35 @@ class TestAgentUIShowToolRequest:
     """Tests for show_tool_request theme colors."""
 
     def test_show_tool_request_uses_theme_primary_for_secho(self):
-        """show_tool_request uses theme.primary when no table."""
+        """show_tool_request uses theme.primary when no table (verbose mode)."""
         io = Mock()
         io.secho = Mock()
         io.echo = Mock()
         # Remove table to trigger secho path
         del io.table
 
-        ui = AgentUI(io)
+        ui = AgentUI(io, verbose=True)
         ui.show_tool_request("read_file", {"path": "test.py"})
 
         io.secho.assert_called_once()
         call_args = io.secho.call_args
         assert call_args.kwargs.get("fg") == DEFAULT_THEME.primary
         assert call_args.kwargs.get("bold") is True
+
+    def test_show_tool_request_compact_mode(self):
+        """show_tool_request shows one-line summary in compact mode."""
+        io = Mock()
+        io.secho = Mock()
+
+        ui = AgentUI(io, verbose=False)
+        ui.show_tool_request("read_file", {"file_path": "test.py"})
+
+        io.secho.assert_called_once()
+        call_args = io.secho.call_args
+        assert "[Step 1]" in call_args.args[0]
+        assert "read_file" in call_args.args[0]
+        assert "test.py" in call_args.args[0]
+        assert call_args.kwargs.get("fg") == DEFAULT_THEME.primary
 
 
 class TestAgentUIShowCommand:
@@ -185,9 +200,9 @@ class TestAgentUIShowResult:
     """Tests for show_result theme colors."""
 
     def test_show_result_uses_theme_success_for_panel(self):
-        """show_result uses theme.success for success panel."""
+        """show_result uses theme.success for success panel (verbose mode)."""
         io = MockIO()
-        ui = AgentUI(io)
+        ui = AgentUI(io, verbose=True)
         ui.show_result("Operation completed", is_error=False)
 
         assert len(io.panel_calls) == 1
@@ -195,9 +210,9 @@ class TestAgentUIShowResult:
         assert border_style == DEFAULT_THEME.success
 
     def test_show_result_uses_theme_error_for_error_panel(self):
-        """show_result uses theme.error for error panel."""
+        """show_result uses theme.error for error panel (errors always shown)."""
         io = MockIO()
-        ui = AgentUI(io)
+        ui = AgentUI(io)  # Compact mode, but errors always shown
         ui.show_result("Operation failed", is_error=True)
 
         assert len(io.panel_calls) == 1
@@ -205,25 +220,38 @@ class TestAgentUIShowResult:
         assert border_style == DEFAULT_THEME.error
 
     def test_show_result_uses_theme_colors_for_secho_fallback(self):
-        """show_result uses theme colors for secho fallback."""
+        """show_result uses theme colors for secho fallback (verbose mode)."""
         io = Mock()
         io.secho = Mock()
         del io.panel
 
-        ui = AgentUI(io)
+        ui = AgentUI(io, verbose=True)
         ui.show_result("Success", is_error=False)
 
         call_args = io.secho.call_args
         assert call_args.kwargs.get("fg") == DEFAULT_THEME.success
+
+    def test_show_result_compact_mode(self):
+        """show_result shows compact summary in compact mode."""
+        io = Mock()
+        io.secho = Mock()
+
+        ui = AgentUI(io, verbose=False)
+        ui.show_result("Line 1\nLine 2\nLine 3", is_error=False)
+
+        io.secho.assert_called_once()
+        call_args = io.secho.call_args
+        assert "done" in call_args.args[0]
+        assert "3 lines" in call_args.args[0]
 
 
 class TestAgentUIShowWarning:
     """Tests for show_warning theme colors."""
 
     def test_show_warning_uses_theme_warning_for_panel(self):
-        """show_warning uses theme.warning for panel border."""
+        """show_warning uses theme.warning for panel border (verbose mode)."""
         io = MockIO()
-        ui = AgentUI(io)
+        ui = AgentUI(io, verbose=True)
         ui.show_warning("Be careful")
 
         assert len(io.panel_calls) == 1
@@ -233,17 +261,29 @@ class TestAgentUIShowWarning:
         assert border_style == DEFAULT_THEME.warning
 
     def test_show_warning_uses_theme_warning_for_secho_fallback(self):
-        """show_warning uses theme.warning for secho when panel not available."""
+        """show_warning uses theme.warning for secho in compact mode."""
         io = Mock()
         io.secho = Mock()
-        del io.panel
 
-        ui = AgentUI(io)
+        ui = AgentUI(io, verbose=False)
         ui.show_warning("Be careful")
 
         io.secho.assert_called_once()
         call_args = io.secho.call_args
         assert call_args.kwargs.get("fg") == DEFAULT_THEME.warning
+
+    def test_show_warning_compact_mode(self):
+        """show_warning shows one-line summary in compact mode."""
+        io = Mock()
+        io.secho = Mock()
+
+        ui = AgentUI(io, verbose=False)
+        ui.show_warning("This is a warning message")
+
+        io.secho.assert_called_once()
+        call_args = io.secho.call_args
+        assert "[!]" in call_args.args[0]
+        assert "warning message" in call_args.args[0].lower()
 
 
 class TestAgentUIShowProgress:
@@ -290,10 +330,10 @@ class TestAgentUILightTheme:
     """Tests for AgentUI with LightTheme."""
 
     def test_all_methods_use_light_theme_colors(self):
-        """All AgentUI methods use light theme colors correctly."""
+        """All AgentUI methods use light theme colors correctly (verbose mode)."""
         io = MockIO()
         light_theme = LightTheme()
-        ui = AgentUI(io, theme=light_theme)
+        ui = AgentUI(io, theme=light_theme, verbose=True)
 
         # Test thinking (uses info)
         ui.show_thinking("Thinking...")
@@ -320,10 +360,10 @@ class TestAgentUINoColorTheme:
     """Tests for AgentUI with NoColorTheme."""
 
     def test_works_with_no_color_theme(self):
-        """AgentUI works with NoColorTheme (empty color strings)."""
+        """AgentUI works with NoColorTheme (verbose mode)."""
         io = MockIO()
         no_color = NoColorTheme()
-        ui = AgentUI(io, theme=no_color)
+        ui = AgentUI(io, theme=no_color, verbose=True)
 
         # Should not raise errors even with empty color strings
         ui.show_thinking("Thinking...")
@@ -333,6 +373,6 @@ class TestAgentUINoColorTheme:
         ui.show_progress("Progress...")
         ui.show_provider_status("test", "Message")
 
-        # All calls should have gone through
+        # All calls should have gone through (verbose mode)
         assert len(io.panel_calls) == 4
         assert len(io.secho_calls) == 2

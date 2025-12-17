@@ -301,11 +301,11 @@ class TestCLIAgentManager:
         mock_agent_class.return_value = mock_agent
 
         io = MockIO(
-            confirmations=[True, False, True, False]  # dry_run=True
+            confirmations=[True, False, True, False]
         )
         manager = CLIAgentManager(mock_orchestrator, io)
 
-        manager.run_agent("Test")
+        manager.run_agent("Test", dry_run=True)
 
         assert mock_agent.dry_run is True
         output = io.get_output()

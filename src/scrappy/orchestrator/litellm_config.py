@@ -48,6 +48,12 @@ class ModelMetadata:
 
 # Static metadata for display purposes
 # Keys are LiteLLM model format: "provider/model"
+#
+# JSON Compliance Testing (2025-12):
+# - Cerebras & Groq: 110/100 (perfect JSON)
+# - Gemini: 80/100 (adds markdown code fences - causes parse failures)
+#
+# Priority: Cerebras (highest RPD 14,400) > Groq (fast 0.4s) > SambaNova (low RPD)
 MODEL_METADATA: dict[str, ModelMetadata] = {
     # --- Fast tier (8B class, speed priority) ---
     "groq/llama-3.1-8b-instant": ModelMetadata(
@@ -71,39 +77,75 @@ MODEL_METADATA: dict[str, ModelMetadata] = {
         tpm=60000,
     ),
 
-    # --- Quality tier (70B+ class, >= 32k context required) ---
-    "gemini/gemini-2.5-flash": ModelMetadata(
-        model_id="gemini/gemini-2.5-flash",
-        provider="gemini",
+    # --- Quality tier ---
+
+    # Cerebras
+    "cerebras/llama-3.3-70b": ModelMetadata(
+        model_id="cerebras/llama-3.3-70b",
+        provider="cerebras",
         group="quality",
-        context_length=1000000,  # ~1M context
-        speed=SpeedRank.MODERATE,
+        context_length=8192,
+        speed=SpeedRank.ULTRA_FAST,  # 2100 tok/s
+        quality=QualityRank.EXCELLENT,
+        rpd=14400,
+        tpm=60000,
+    ),
+    "cerebras/qwen-3-235b-a22b-instruct-2507": ModelMetadata(
+        model_id="cerebras/qwen-3-235b-a22b-instruct-2507",
+        provider="cerebras",
+        group="quality",
+        context_length=8192,
+        speed=SpeedRank.FAST,  # 1.3s latency (235B size)
+        quality=QualityRank.EXCELLENT,  # Instruction-tuned
+        rpd=14400,
+        tpm=60000,
+    ),
+
+    # Groq
+    "groq/meta-llama/llama-4-scout-17b-16e-instruct": ModelMetadata(
+        model_id="groq/meta-llama/llama-4-scout-17b-16e-instruct",
+        provider="groq",
+        group="quality",
+        context_length=131072,  # 128k
+        speed=SpeedRank.ULTRA_FAST,  # 0.4s
         quality=QualityRank.VERY_GOOD,
-        rpd=250,
-        tpm=250000,
+        rpd=7000,
+        tpm=20000,
+    ),
+    "groq/moonshotai/kimi-k2-instruct": ModelMetadata(
+        model_id="groq/moonshotai/kimi-k2-instruct",
+        provider="groq",
+        group="quality",
+        context_length=131072,  # 128k
+        speed=SpeedRank.ULTRA_FAST,  # 0.4s
+        quality=QualityRank.VERY_GOOD,
+        rpd=7000,
+        tpm=20000,
     ),
     "groq/llama-3.3-70b-versatile": ModelMetadata(
         model_id="groq/llama-3.3-70b-versatile",
         provider="groq",
         group="quality",
         context_length=32768,
-        speed=SpeedRank.FAST,
+        speed=SpeedRank.FAST,  # 1.0s
         quality=QualityRank.EXCELLENT,
         rpd=1000,
         tpm=12000,
     ),
-    "groq/moonshotai/kimi-k2-instruct": ModelMetadata(
-        model_id="groq/moonshotai/kimi-k2-instruct",
-        provider="groq",
+
+    # Gemini
+    "gemini/gemini-2.5-flash": ModelMetadata(
+        model_id="gemini/gemini-2.5-flash",
+        provider="gemini",
         group="quality",
-        context_length=131072,
-        speed=SpeedRank.ULTRA_FAST,
-        quality=QualityRank.EXCELLENT,
-        rpd=7000,
-        tpm=20000,
+        context_length=1000000,  # 1M context
+        speed=SpeedRank.MODERATE,
+        quality=QualityRank.VERY_GOOD,
+        rpd=250,
+        tpm=250000,
     ),
 
-    # --- SambaNova models ---
+    # SambaNova
     "sambanova/Meta-Llama-3.1-8B-Instruct": ModelMetadata(
         model_id="sambanova/Meta-Llama-3.1-8B-Instruct",
         provider="sambanova",
@@ -111,24 +153,19 @@ MODEL_METADATA: dict[str, ModelMetadata] = {
         context_length=16384,
         speed=SpeedRank.FAST,
         quality=QualityRank.GOOD,
-        rpd=40,  # Free tier limit
-        tpm=100000,  # ~322 tok/s throughput
+        rpd=40,
+        tpm=100000,
     ),
     "sambanova/Meta-Llama-3.3-70B-Instruct": ModelMetadata(
         model_id="sambanova/Meta-Llama-3.3-70B-Instruct",
         provider="sambanova",
         group="quality",
-        context_length=131072,  # 128k context
-        speed=SpeedRank.ULTRA_FAST,  # 0.26s latency, 322 tok/s
+        context_length=131072,  # 128k
+        speed=SpeedRank.ULTRA_FAST,  # 0.26s latency
         quality=QualityRank.EXCELLENT,
-        rpd=40,  # Free tier limit
+        rpd=40,
         tpm=100000,
     ),
-
-    # --- NOT in quality tier (insufficient context for 32k requirement) ---
-    # These are documented but not added to quality group
-    # "cerebras/llama-3.3-70b" - Only 8k context despite EXCELLENT quality
-    # "cerebras/qwen-3-235b-a22b-instruct" - Only 8k context despite EXCELLENT quality
 }
 
 
@@ -194,10 +231,13 @@ def build_model_list(api_key_service: ApiKeyConfigServiceProtocol) -> list[dict]
     Build model list from configured API keys.
 
     Model Groups:
-    - "fast": 8B models, speed priority, any context OK
-    - "quality": 70B+ models, quality priority, >= 32k context required
+    - "fast": 8B models, speed priority
+    - "quality": Large models, quality priority, perfect JSON compliance
 
     Priority within groups determined by order (first = primary).
+    Based on JSON compliance testing (2025-12):
+    - Cerebras/Groq: 110/100 (perfect)
+    - Gemini: 80/100 (JSON issues - deprioritized)
 
     Args:
         api_key_service: Service for getting API keys
@@ -208,13 +248,13 @@ def build_model_list(api_key_service: ApiKeyConfigServiceProtocol) -> list[dict]
     """
     model_list = []
 
-    # --- Fast Models (8B class, speed priority) ---
-    # Priority: Groq (128k context) > Cerebras (8k context)
-
     groq_key = api_key_service.get_key("GROQ_API_KEY")
     cerebras_key = api_key_service.get_key("CEREBRAS_API_KEY")
     gemini_key = api_key_service.get_key("GEMINI_API_KEY")
     sambanova_key = api_key_service.get_key("SAMBANOVA_API_KEY")
+
+    # --- Fast Models (8B class, speed priority) ---
+    # Priority: Groq (128k) > Cerebras (8k) > SambaNova (low RPD)
 
     if groq_key:
         model_list.append({
@@ -238,7 +278,6 @@ def build_model_list(api_key_service: ApiKeyConfigServiceProtocol) -> list[dict]
             "rpm": 30,
         })
 
-    # SambaNova 8B - lower priority (40 RPD limit)
     if sambanova_key:
         model_list.append({
             "model_name": "fast",
@@ -250,32 +289,38 @@ def build_model_list(api_key_service: ApiKeyConfigServiceProtocol) -> list[dict]
             "rpm": 1,  # ~40 RPD = very low RPM
         })
 
-    # --- Quality Models (70B+ class, >= 32k context required) ---
-    # Priority: Gemini (1M) > Groq 70B (32k) > Groq Kimi (128k)
-    # NOTE: Cerebras 70B excluded - only 8k context, fails 32k requirement
+    # --- Quality Models (tool-use + instruction-following priority) ---
+    # Priority:
+    # 1. Cerebras Qwen 235B - instruction-tuned, massive model
+    # 2. Groq Llama 4 - fast, good tool use
+    # 3. Groq Kimi K2 - fast, 128k context
+    # 4. Gemini - fallback (JSON issues but huge context)
 
-    if gemini_key:
+    # Cerebras Qwen 235B - instruction-tuned for tool use
+    if cerebras_key:
         model_list.append({
             "model_name": "quality",
             "litellm_params": {
-                "model": "gemini/gemini-2.5-flash",
-                "api_key": gemini_key,
+                "model": "cerebras/qwen-3-235b-a22b-instruct-2507",
+                "api_key": cerebras_key,
             },
-            "tpm": 250000,
-            "rpm": 10,
-        })
-
-    if groq_key:
-        model_list.append({
-            "model_name": "quality",
-            "litellm_params": {
-                "model": "groq/llama-3.3-70b-versatile",
-                "api_key": groq_key,
-            },
-            "tpm": 12000,
+            "tpm": 60000,
             "rpm": 30,
         })
 
+    # Groq - fast inference, good tool use
+    if groq_key:
+        # Llama 4 - latest architecture, 0.4s latency
+        model_list.append({
+            "model_name": "quality",
+            "litellm_params": {
+                "model": "groq/meta-llama/llama-4-scout-17b-16e-instruct",
+                "api_key": groq_key,
+            },
+            "tpm": 20000,
+            "rpm": 30,
+        })
+        # Kimi K2 - fast, 128k context
         model_list.append({
             "model_name": "quality",
             "litellm_params": {
@@ -286,17 +331,16 @@ def build_model_list(api_key_service: ApiKeyConfigServiceProtocol) -> list[dict]
             "rpm": 30,
         })
 
-    # SambaNova 70B - blazing fast (0.26s, 322 tok/s) but only 40 RPD
-    # 128k context makes it excellent for large context tasks
-    if sambanova_key:
+    # Gemini - deprioritized (JSON issues) but useful for huge context
+    if gemini_key:
         model_list.append({
             "model_name": "quality",
             "litellm_params": {
-                "model": "sambanova/Meta-Llama-3.3-70B-Instruct",
-                "api_key": sambanova_key,
+                "model": "gemini/gemini-2.5-flash",
+                "api_key": gemini_key,
             },
-            "tpm": 100000,
-            "rpm": 1,  # ~40 RPD = very low RPM
+            "tpm": 250000,
+            "rpm": 10,
         })
 
     return model_list

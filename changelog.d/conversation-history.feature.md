@@ -1,0 +1,1 @@
+Conversation history with SQLite persistence, token-budgeted recall, and session staleness detection

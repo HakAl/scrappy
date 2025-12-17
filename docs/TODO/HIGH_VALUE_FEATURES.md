@@ -11,9 +11,6 @@ Priority Implementation List
   |----------|---------------------------|--------|-----------------------------------------------------------------
   ------------------------------------------------------------------------------------------------------------------
   ----------------------------------------|
-  | 1        | VCR.py / pytest-recording | Low    | Directly addresses your CLAUDE.md mandate "NEVER MAKE REAL API
-  CALLS IN TESTS". No production code changes required. Enables deterministic, free, fast tests. Should be done
-  first as it benefits all future development. |
   | 2        | XDG/platformdirs          | Low    | Cross-platform config paths with clear protocol design. Small
   scope, well-defined migration strategy. Improves user experience across OS platforms.
                                             |
@@ -44,8 +41,6 @@ Priority Implementation List
   ---
   Recommended Implementation Order
 
-  VCR.py (1-2 days)
-      |
   platformdirs (1-2 days)
       |
   Provider Perf Tracking (3-4 days)
@@ -56,11 +51,7 @@ Priority Implementation List
 
   Key Dependencies:
   - Rate Limit Enforcement benefits from Provider Performance Tracking (uses scoring for intelligent routing)
-  - VCR.py should come first to enable testing all subsequent features
-  - Semantic Search Tool and Rate Limiting can be parallelized after Provider Tracking
 
-  Would you like me to dive deeper into any of these features or create a detailed implementation plan for the first
-   one?
 ``` 
 
 

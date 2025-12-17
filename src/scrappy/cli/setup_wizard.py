@@ -62,9 +62,21 @@ def suppress_native_stderr():
 
 class WizardState(Enum):
     """State machine states for non-blocking wizard operation."""
+    DISCLAIMER = auto()    # Showing disclaimer (first-run only)
     MENU = auto()          # Showing provider menu
     AWAITING_KEY = auto()  # Waiting for API key input
     DONE = auto()          # Wizard complete
+
+
+DISCLAIMER_TEXT = """
+NOTICE: scrappy can read, modify, and delete files on your system.
+
+  - Review all file operations before confirming
+  - Back up important work before using agent mode
+  - The authors are not liable for data loss
+
+By continuing, you acknowledge these risks.
+"""
 
 
 class SetupWizard:
@@ -116,7 +128,8 @@ class SetupWizard:
         """
         Start wizard in non-blocking mode (for TUI).
 
-        Shows menu and returns immediately. Use handle_input() to process user input.
+        Shows disclaimer (if not acknowledged), then menu.
+        Returns immediately. Use handle_input() to process user input.
 
         Args:
             allow_cancel: If False, user must configure at least one provider
@@ -124,8 +137,14 @@ class SetupWizard:
         """
         self._allow_cancel = allow_cancel
         self._on_complete = on_complete
-        self._state = WizardState.MENU
-        self._show_menu()
+
+        # Check if disclaimer needs to be shown
+        if not self._config_service.is_disclaimer_acknowledged():
+            self._state = WizardState.DISCLAIMER
+            self._show_disclaimer()
+        else:
+            self._state = WizardState.MENU
+            self._show_menu()
 
     @property
     def is_active(self) -> bool:
@@ -135,7 +154,9 @@ class SetupWizard:
     @property
     def current_prompt(self) -> str:
         """Get prompt text for status bar based on current state."""
-        if self._state == WizardState.MENU:
+        if self._state == WizardState.DISCLAIMER:
+            return "Type 'ok' to continue, or 'q' to quit"
+        elif self._state == WizardState.MENU:
             # Always show "q" option - user can always exit
             return f"Select provider (1-{len(PROVIDERS)}) or q to exit"
         elif self._state == WizardState.AWAITING_KEY:
@@ -154,10 +175,43 @@ class SetupWizard:
         """
         user_input = user_input.strip()
 
-        if self._state == WizardState.MENU:
+        if self._state == WizardState.DISCLAIMER:
+            self._handle_disclaimer_input(user_input.lower())
+        elif self._state == WizardState.MENU:
             self._handle_menu_input(user_input.lower())
         elif self._state == WizardState.AWAITING_KEY:
             self._handle_key_input(user_input)
+
+    def _handle_disclaimer_input(self, response: str) -> None:
+        """Handle disclaimer acknowledgment input."""
+        if response == 'q':
+            self._finish()
+            return
+
+        if response in ('ok', 'yes', 'y'):
+            self._config_service.acknowledge_disclaimer()
+            self._state = WizardState.MENU
+            self._show_menu()
+        else:
+            self.io.secho("Please type 'ok' to continue or 'q' to quit.", fg="yellow")
+
+    def _show_disclaimer(self) -> None:
+        """Display disclaimer notice."""
+        from rich.panel import Panel
+
+        panel = Panel(
+            DISCLAIMER_TEXT.strip(),
+            title="Terms of Use",
+            border_style="yellow",
+            expand=False
+        )
+
+        if hasattr(self.io, 'output_sink') and self.io.output_sink:
+            self.io.output_sink.post_renderable(panel)
+        else:
+            from rich.console import Console
+            console = Console()
+            console.print(panel)
 
     def _handle_menu_input(self, choice: str) -> None:
         """Handle menu selection input."""
