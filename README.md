@@ -1,5 +1,9 @@
 # Scrappy: The Free AI Coding Assistant
 
+[![Tests](https://github.com/HakAl/scrappy/actions/workflows/tests.yml/badge.svg)](https://github.com/HakAl/scrappy/actions/workflows/tests.yml)
+[![PyPI version](https://badge.fury.io/py/scrappy-ai.svg)](https://badge.fury.io/py/scrappy-ai)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A powerful, context-aware coding assistant for everyone—students, learners, anyone who doesn't want to pay for subscriptions.
 
 > "For Users Without Claude Subscription: Yes, Useful"

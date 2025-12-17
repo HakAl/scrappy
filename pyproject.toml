@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scrappy-ai"
-version = "1.0.0"
+version = "1.0.1"
 description = "A context-aware coding assistant for everyone. Students, learners, anyone who doesn't want to pay for subscriptions."
 readme = "README.md"
 license = {text = "MIT"}
@@ -72,7 +72,7 @@ where = ["src"]
 include = ["scrappy*"]
 
 [tool.setuptools.package-data]
-"*" = ["*.md", "*.json"]
+"*" = ["*.md", "*.json", "*.tcss"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
