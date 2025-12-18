@@ -585,18 +585,19 @@ class TestConversationStoreGetLastMessageTime:
 
             import time
 
-            store.add_message({"role": "user", "content": "First"})
-            time.sleep(0.01)  # Small delay to ensure different timestamps
-            store.add_message({"role": "user", "content": "Second"})
+            try:
+                store.add_message({"role": "user", "content": "First"})
+                time.sleep(0.01)  # Small delay to ensure different timestamps
+                store.add_message({"role": "user", "content": "Second"})
 
-            last_time = store.get_last_message_time()
+                last_time = store.get_last_message_time()
 
-            # Verify it's very recent (within last second)
-            now = datetime.now(timezone.utc)
-            diff = now - last_time
-            assert diff.total_seconds() < 1
-
-            store.close()
+                # Verify it's very recent (within last second)
+                now = datetime.now(timezone.utc)
+                diff = now - last_time
+                assert diff.total_seconds() < 1
+            finally:
+                store.close()
 
 
 class TestConversationStoreClear:
