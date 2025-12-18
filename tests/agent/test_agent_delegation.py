@@ -101,13 +101,14 @@ class TestAgentProviderDelegation:
         assert len(tracking_orchestrator.delegate_calls) == 1
         call_info = tracking_orchestrator.delegate_calls[0]
 
-        # Agent should pass task_type to let orchestrator make informed decision
-        # The orchestrator picks the provider, not the agent
-        assert 'task_type' in call_info['kwargs'], (
-            "Agent should pass task_type to orchestrator for intelligent provider selection."
+        # Agent should pass selection_type to let orchestrator make informed decision
+        # The orchestrator picks the model based on selection type
+        assert 'selection_type' in call_info['kwargs'], (
+            "Agent should pass selection_type to orchestrator for intelligent model selection."
         )
-        assert call_info['kwargs']['task_type'] == 'planning', (
-            f"Agent should pass task_type='planning' when thinking, got '{call_info['kwargs'].get('task_type')}'."
+        from scrappy.orchestrator.model_selection import ModelSelectionType
+        assert call_info['kwargs']['selection_type'] == ModelSelectionType.INSTRUCT, (
+            f"Agent should pass selection_type=INSTRUCT when thinking, got '{call_info['kwargs'].get('selection_type')}'."
         )
         # Provider should be what orchestrator decided (cerebras), not hardcoded gemini
         assert call_info['provider'] == 'cerebras', (
@@ -138,12 +139,12 @@ class TestAgentProviderDelegation:
 
         agent._agent_loop.think(state, context)
 
-        # Agent should pass task_type so orchestrator knows what kind of provider to pick
-        # This test will FAIL because agent doesn't pass task_type
+        # Agent should pass selection_type so orchestrator knows what kind of model to pick
+        # INSTRUCT selection type is used for instruction-following (tool calling)
         call_info = orch.delegate_calls[0]
-        assert 'task_type' in call_info['kwargs'], (
-            "Agent should pass task_type to orchestrator so it can select appropriate provider. "
-            "Planning tasks need reasoning capability, execution needs speed."
+        assert 'selection_type' in call_info['kwargs'], (
+            "Agent should pass selection_type to orchestrator so it can select appropriate model. "
+            "INSTRUCT type is used for instruction-tuned models that handle tool calling well."
         )
 
     @pytest.mark.unit

@@ -29,25 +29,6 @@ While coding, you MUST document any issues you encounter here: docs/TODO/AGENT_B
 
 ---
 
-## PROJECT STATUS: PRERELEASE (AGGRESSIVE REFACTORING)
-
-This is a local development project. There are no external users.
-
-**THE GOLDEN RULE: CLEAN BREAKS OVER SHIMS**
-- **NO deprecation warnings** - Just remove the code.
-- **NO backward compatibility** - Delete the old path.
-- **NO "I left the old one just in case"** - Delete it.
-
-**HOW TO HANDLE BREAKING CHANGES:**
-1. **Search First:** Before changing a function signature or class, run `grep`/`find` to locate all callers.
-2. **Atomic Update:** You must update the Definition AND all Callers in the same work unit.
-3. **Verify:** If you delete a file, ensure no imports point to it.
-
-**When you see legacy code/technical debt:**
-Do not wrap it. Do not suppress it. **Delete it and rewrite it.**
-
----
-
 ## ARCHITECTURAL PRINCIPLES (READ THIS FIRST)
 
 ### You Are an Architect, Not a Code Monkey

@@ -350,6 +350,93 @@ class TestAsyncCompletion:
             )
 
 
+class TestParseToolArguments:
+    """Tests for _parse_tool_arguments method - handles various argument formats."""
+
+    def test_handles_dict_arguments(self):
+        """Already-parsed dict should be returned as-is."""
+        mock_router = MockLiteLLMRouter(response=make_mock_litellm_response())
+        mock_output = MockOutputForLiteLLM()
+        service = make_configured_service(router=mock_router, output=mock_output)
+
+        result = service._parse_tool_arguments({"path": "test.py", "content": "code"})
+        assert result == {"path": "test.py", "content": "code"}
+
+    def test_handles_json_string_arguments(self):
+        """JSON string should be parsed correctly."""
+        mock_router = MockLiteLLMRouter(response=make_mock_litellm_response())
+        mock_output = MockOutputForLiteLLM()
+        service = make_configured_service(router=mock_router, output=mock_output)
+
+        result = service._parse_tool_arguments('{"path": "test.py", "content": "code"}')
+        assert result == {"path": "test.py", "content": "code"}
+
+    def test_handles_markdown_wrapped_json(self):
+        """JSON wrapped in ```json code fences should be extracted."""
+        mock_router = MockLiteLLMRouter(response=make_mock_litellm_response())
+        mock_output = MockOutputForLiteLLM()
+        service = make_configured_service(router=mock_router, output=mock_output)
+
+        markdown_json = '```json\n{"path": "test.py", "content": "code"}\n```'
+        result = service._parse_tool_arguments(markdown_json)
+        assert result == {"path": "test.py", "content": "code"}
+
+    def test_handles_truncated_markdown_json(self):
+        """Truncated markdown (no closing ```) should still parse."""
+        mock_router = MockLiteLLMRouter(response=make_mock_litellm_response())
+        mock_output = MockOutputForLiteLLM()
+        service = make_configured_service(router=mock_router, output=mock_output)
+
+        truncated = '```json\n{"path": "test.py", "content": "code"}'
+        result = service._parse_tool_arguments(truncated)
+        assert result == {"path": "test.py", "content": "code"}
+
+    def test_handles_generic_code_fence(self):
+        """Generic ``` code fence should be handled."""
+        mock_router = MockLiteLLMRouter(response=make_mock_litellm_response())
+        mock_output = MockOutputForLiteLLM()
+        service = make_configured_service(router=mock_router, output=mock_output)
+
+        generic_fence = '```\n{"path": "test.py", "content": "code"}\n```'
+        result = service._parse_tool_arguments(generic_fence)
+        assert result == {"path": "test.py", "content": "code"}
+
+    def test_returns_empty_dict_on_invalid_json(self):
+        """Invalid JSON should return empty dict."""
+        mock_router = MockLiteLLMRouter(response=make_mock_litellm_response())
+        mock_output = MockOutputForLiteLLM()
+        service = make_configured_service(router=mock_router, output=mock_output)
+
+        result = service._parse_tool_arguments("not valid json")
+        assert result == {}
+
+    def test_returns_empty_dict_on_empty_string(self):
+        """Empty string should return empty dict."""
+        mock_router = MockLiteLLMRouter(response=make_mock_litellm_response())
+        mock_output = MockOutputForLiteLLM()
+        service = make_configured_service(router=mock_router, output=mock_output)
+
+        result = service._parse_tool_arguments("")
+        assert result == {}
+
+    def test_logs_warning_on_parse_failure(self):
+        """Should log warning when parsing fails."""
+        mock_router = MockLiteLLMRouter(response=make_mock_litellm_response())
+        mock_output = MockOutputForLiteLLM()
+
+        # Create mock logger
+        mock_logger = Mock()
+        service = make_configured_service(router=mock_router, output=mock_output)
+        service._logger = mock_logger
+
+        service._parse_tool_arguments("invalid json", tool_name="write_file")
+
+        mock_logger.warning.assert_called_once()
+        call_args = mock_logger.warning.call_args[0][0]
+        assert "write_file" in call_args
+        assert "failed to parse" in call_args
+
+
 class TestHandleEmptyModelString:
     """Tests for edge cases with model string."""
 

@@ -596,6 +596,15 @@ class PathProviderProtocol(Protocol):
         """
         ...
 
+    def debug_log_file(self) -> Path:
+        """
+        Get path to debug log file.
+
+        Returns:
+            Path to debug.log file
+        """
+        ...
+
     def ensure_data_dir(self) -> None:
         """
         Ensure data directory exists, creating it if necessary.

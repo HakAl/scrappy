@@ -1,0 +1,1 @@
+Added per-provider request throttling to prevent rate limiting from rapid sequential requests (Groq: 1.0s, Cerebras: 0.5s, Gemini: 0.3s).

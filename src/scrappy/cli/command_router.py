@@ -5,6 +5,7 @@ Routes slash commands to appropriate handlers.
 """
 
 from datetime import datetime
+from pathlib import Path
 from typing import List, Optional
 from .io_interface import CLIIOProtocol
 from .state_manager import PlanStateManager
@@ -250,6 +251,7 @@ class CommandRouter:
         # Parse flags
         dry_run = False
         verbose = False
+        clear_tasks = False
         if "--dry-run" in args:
             dry_run = True
             args = args.replace("--dry-run", "").strip()
@@ -260,11 +262,15 @@ class CommandRouter:
                 args = args[3:]
             if args.endswith(" -v"):
                 args = args[:-3]
+        if "--clear" in args:
+            clear_tasks = True
+            args = args.replace("--clear", "").strip()
 
         if not args:
             io.echo("Usage: /agent <task description>")
             io.echo("  --dry-run  Simulate actions without making changes")
             io.echo("  --verbose  Show full output (thinking, params, results)")
+            io.echo("  --clear    Clear previous task list before starting")
             return True
 
         # Check dependencies before running agent
@@ -275,10 +281,67 @@ class CommandRouter:
                 io.echo(f"  - {err}")
             return True
 
+        # Handle existing tasks
+        if not self._handle_existing_tasks(io, clear_tasks):
+            return True  # User cancelled
+
         self.agent_mgr.run_agent(args, dry_run=dry_run, verbose=verbose)
         if self.state_manager.plan_active:
             self.state_manager.prompt_task_progression(io)
         return True
+
+    def _handle_existing_tasks(self, io: CLIIOProtocol, clear_tasks: bool) -> bool:
+        """Check for existing tasks and handle appropriately.
+
+        Args:
+            io: IO interface for prompts and output.
+            clear_tasks: If True, clear tasks without prompting.
+
+        Returns:
+            True to continue with agent, False if user cancelled.
+        """
+        from ..agent_tools.tools.task_tools import MarkdownTaskStorage
+        from ..protocols.tasks import TaskStatus
+        from ..infrastructure.paths import ScrappyPathProvider
+
+        # Use ScrappyPathProvider for consistent path handling
+        path_provider = ScrappyPathProvider(Path.cwd())
+        storage = MarkdownTaskStorage(path_provider.todo_file())
+
+        if not storage.exists():
+            return True  # No tasks, continue
+
+        tasks = storage.read_tasks()
+        pending = [t for t in tasks if t.status != TaskStatus.DONE]
+
+        if not pending:
+            return True  # No pending tasks, continue
+
+        # Clear flag bypasses prompt
+        if clear_tasks:
+            storage.clear()
+            io.secho("Cleared previous task list.", fg=io.theme.info)
+            return True
+
+        # Show existing tasks and prompt
+        io.echo("\nFound tasks from previous session:")
+        for task in pending:
+            if task.status == TaskStatus.IN_PROGRESS:
+                checkbox = "[>]"
+            else:
+                checkbox = "[ ]"
+            priority = f"[{task.priority.value}] " if task.priority else ""
+            io.echo(f"  {checkbox} {priority}{task.description}")
+        io.echo()
+
+        # Prompt user
+        continue_tasks = io.confirm("Continue these tasks?", default=True)
+
+        if not continue_tasks:
+            storage.clear()
+            io.secho("Cleared task list. Starting fresh.", fg=io.theme.info)
+
+        return True  # Always continue (user chose continue or clear)
 
     def _handle_synthesize(self, args: str) -> bool:
         """Handle /synthesize command."""

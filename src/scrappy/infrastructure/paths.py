@@ -55,6 +55,14 @@ class ScrappyPathProvider:
         """Get path to context.json."""
         return self._data_dir / "context.json"
 
+    def todo_file(self) -> Path:
+        """Get path to .todo.md (agent task list)."""
+        return self._data_dir / ".todo.md"
+
+    def debug_log_file(self) -> Path:
+        """Get path to debug.log file."""
+        return self._data_dir / "debug.log"
+
     def ensure_data_dir(self) -> None:
         """Create .scrappy/ directory if it doesn't exist."""
         self._data_dir.mkdir(parents=True, exist_ok=True)
@@ -100,6 +108,14 @@ class TempPathProvider:
     def context_file(self) -> Path:
         """Get path to test context file."""
         return self._data_dir / "context.json"
+
+    def todo_file(self) -> Path:
+        """Get path to test todo file."""
+        return self._data_dir / ".todo.md"
+
+    def debug_log_file(self) -> Path:
+        """Get path to test debug.log file."""
+        return self._data_dir / "debug.log"
 
     def ensure_data_dir(self) -> None:
         """Create temporary data directory if it doesn't exist."""

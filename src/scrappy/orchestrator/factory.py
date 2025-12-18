@@ -12,6 +12,8 @@ from typing import Optional, Callable
 from datetime import datetime
 from pathlib import Path
 
+from ..infrastructure.logging import StructuredLogger
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -43,6 +45,7 @@ from .litellm_service import LiteLLMService
 from .litellm_config import create_litellm_router
 from .litellm_callbacks import RateTrackingCallback
 from .provider_status import ProviderStatusTracker
+from .model_selection import ModelSelectionService, ModelSelectionServiceProtocol
 from .manager_protocols import (
     ContextManagerProtocol,
     BackgroundTaskManagerProtocol,
@@ -93,6 +96,7 @@ class OrchestratorComponents:
         self.delegation_manager: Optional[DelegationManagerProtocol] = None
         self.llm_service: Optional[LLMServiceProtocol] = None
         self.provider_status_tracker: Optional[ProviderStatusTrackerProtocol] = None
+        self.model_selector: Optional[ModelSelectionServiceProtocol] = None
 
 
 class OrchestratorFactory:
@@ -182,6 +186,9 @@ class OrchestratorFactory:
             components.output,
             self.config
         )
+
+        # Model selector (deterministic model selection)
+        components.model_selector = self.create_model_selector()
 
         # Provider status tracker for LiteLLM callbacks
         components.provider_status_tracker = self.create_provider_status_tracker()
@@ -380,6 +387,63 @@ class OrchestratorFactory:
         """Create default provider status tracker for health monitoring."""
         return ProviderStatusTracker()
 
+    def create_model_selector(self) -> ModelSelectionServiceProtocol:
+        """
+        Create model selection service with configured models.
+
+        Determines which models have API keys configured and creates
+        a selector that provides deterministic, priority-based selection.
+        """
+        api_key_service = create_api_key_service()
+        configured_models = self._get_configured_models(api_key_service)
+        return ModelSelectionService(configured_models=configured_models)
+
+    def _get_configured_models(self, api_key_service) -> set[str]:
+        """
+        Get set of model IDs that have API keys configured.
+
+        Maps provider names to their configured models based on
+        which API keys are present.
+
+        Returns:
+            Set of model IDs in "provider/model" format
+        """
+        from .model_selection import MODEL_PRIORITIES
+
+        # Map providers to their API key names
+        provider_to_key = {
+            "groq": "GROQ_API_KEY",
+            "cerebras": "CEREBRAS_API_KEY",
+            "gemini": "GEMINI_API_KEY",
+            "sambanova": "SAMBANOVA_API_KEY",
+        }
+
+        configured = set()
+
+        # Collect all models from priorities
+        all_models = set()
+        for models in MODEL_PRIORITIES.values():
+            all_models.update(models)
+
+        # Check which providers have API keys configured
+        configured_providers = set()
+        for provider, key_name in provider_to_key.items():
+            if api_key_service.get_key(key_name):
+                configured_providers.add(provider)
+
+        logger.debug(f"Configured providers: {configured_providers}")
+
+        # Check which models have API keys
+        for model_id in all_models:
+            # Extract provider from model_id (e.g., "groq/llama-3.1-8b" -> "groq")
+            provider = model_id.split("/")[0]
+
+            if provider in configured_providers:
+                configured.add(model_id)
+
+        logger.debug(f"Configured models: {configured}")
+        return configured
+
     def create_llm_service(
         self,
         output: BaseOutputProtocol,
@@ -412,12 +476,23 @@ class OrchestratorFactory:
         # Create empty router - will be configured via service.configure()
         router = create_litellm_router(callbacks=[callback])
 
+        # Create logger for API request/response debugging
+        api_logger = None
+        if self._path_provider:
+            log_file = self._path_provider.debug_log_file()
+            api_logger = StructuredLogger(
+                name="llm_service",
+                log_file=log_file,
+                level=logging.DEBUG,
+            )
+
         # Create service with all dependencies
         service = LiteLLMService(
             router=router,
             api_key_service=api_key_service,
             output=output,
             callback=callback,
+            logger=api_logger,
         )
 
         # Try to configure if keys already exist

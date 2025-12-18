@@ -593,6 +593,18 @@ class AgentUIProtocol(Protocol):
         """
         ...
 
+    def notify_tasks_updated(self, tasks: list) -> None:
+        """
+        Notify UI that agent tasks have been updated.
+
+        Called when the task tool modifies tasks (add, update, delete, clear).
+        Implementations should update any task progress display.
+
+        Args:
+            tasks: Current list of Task objects
+        """
+        ...
+
 
 @runtime_checkable
 class SafetyCheckerProtocol(Protocol):

@@ -60,10 +60,22 @@ class JSONResponseParser:
         if result:
             return result
 
+        # Try fixing triple-quoted strings (LLMs sometimes use Python syntax)
+        result = self._try_triple_quote_fix(text)
+        if result:
+            return result
+
         result = self._try_brace_matching(text)
         if result:
             return result
 
+        # Try to salvage truncated JSON (LLM hit token limit mid-response)
+        # This handles write_file with partial content better than regex
+        result = self._try_truncated_json(text)
+        if result:
+            return result
+
+        # Last resort: regex extraction for minimal fields
         result = self._try_regex_extraction(text)
         if result:
             return result
@@ -78,20 +90,37 @@ class JSONResponseParser:
         )
 
     def _extract_from_markdown(self, text: str) -> str:
-        """Extract JSON from markdown code blocks."""
+        """Extract JSON from markdown code blocks.
+
+        Handles:
+        - Complete code blocks: ```json ... ```
+        - Truncated code blocks: ```json ... (no closing ```)
+        - Generic code blocks: ``` ... ```
+        """
         # Handle ```json blocks
         if "```json" in text:
             start = text.find("```json") + 7
             end = text.find("```", start)
             if end > start:
                 return text[start:end].strip()
+            else:
+                # Truncated response - no closing ```, extract everything after ```json
+                return text[start:].strip()
 
         # Handle generic ``` blocks
         if "```" in text:
             start = text.find("```") + 3
+            # Skip language identifier if present (e.g., ```javascript)
+            newline_pos = text.find("\n", start)
+            if newline_pos != -1 and newline_pos < start + 20:
+                # Language identifier likely present, skip to newline
+                start = newline_pos + 1
             end = text.find("```", start)
             if end > start:
                 return text[start:end].strip()
+            else:
+                # Truncated response - extract everything after opening
+                return text[start:].strip()
 
         return text
 
@@ -103,10 +132,95 @@ class JSONResponseParser:
         text = re.sub(r'\bNone\b', 'null', text)
         return text
 
+    def _fix_triple_quotes(self, text: str) -> str:
+        """Convert Python-style triple-quoted strings to JSON strings.
+
+        Handles LLMs that output:
+            "content": \"\"\"
+            multi-line content
+            \"\"\"
+
+        Converts to proper JSON:
+            "content": "multi-line content\\n..."
+        """
+        # Pattern: find triple quotes (""" or ''')
+        # We need to find pairs and convert the content between them
+        result = text
+
+        # Handle """ triple quotes
+        while '"""' in result:
+            start = result.find('"""')
+            if start == -1:
+                break
+
+            # Find closing """
+            end = result.find('"""', start + 3)
+            if end == -1:
+                # No closing triple quote - treat rest as content
+                content = result[start + 3:]
+                # Escape for JSON
+                escaped = self._escape_for_json(content)
+                result = result[:start] + '"' + escaped + '"'
+                break
+
+            # Extract content between triple quotes
+            content = result[start + 3:end]
+            # Escape for JSON
+            escaped = self._escape_for_json(content)
+            # Replace triple-quoted section with proper JSON string
+            result = result[:start] + '"' + escaped + '"' + result[end + 3:]
+
+        # Handle ''' triple quotes (less common but possible)
+        while "'''" in result:
+            start = result.find("'''")
+            if start == -1:
+                break
+
+            end = result.find("'''", start + 3)
+            if end == -1:
+                content = result[start + 3:]
+                escaped = self._escape_for_json(content)
+                result = result[:start] + '"' + escaped + '"'
+                break
+
+            content = result[start + 3:end]
+            escaped = self._escape_for_json(content)
+            result = result[:start] + '"' + escaped + '"' + result[end + 3:]
+
+        return result
+
+    def _escape_for_json(self, content: str) -> str:
+        """Escape a string for use in JSON."""
+        # Escape backslashes first
+        content = content.replace('\\', '\\\\')
+        # Escape double quotes
+        content = content.replace('"', '\\"')
+        # Escape newlines
+        content = content.replace('\n', '\\n')
+        # Escape carriage returns
+        content = content.replace('\r', '\\r')
+        # Escape tabs
+        content = content.replace('\t', '\\t')
+        return content
+
     def _try_direct_parse(self, text: str) -> Optional[ParseResult]:
         """Try parsing text directly as JSON."""
         try:
             data = json.loads(text)
+            return self._dict_to_result(data)
+        except json.JSONDecodeError:
+            return None
+
+    def _try_triple_quote_fix(self, text: str) -> Optional[ParseResult]:
+        """Try parsing after fixing triple-quoted strings."""
+        # Only try if triple quotes are present
+        if '"""' not in text and "'''" not in text:
+            return None
+
+        try:
+            fixed_text = self._fix_triple_quotes(text)
+            fixed_text = self._fix_python_booleans(fixed_text)
+            data = json.loads(fixed_text)
             return self._dict_to_result(data)
         except json.JSONDecodeError:
             return None
@@ -200,6 +314,71 @@ class JSONResponseParser:
             return result
 
         return None
+
+    def _try_truncated_json(self, text: str) -> Optional[ParseResult]:
+        """Try to salvage a truncated JSON response.
+
+        When LLM hits token limit mid-response, we can often still extract
+        the thought, action, and partial parameters. This is especially
+        useful for write_file actions where content may be cut off.
+        """
+        # Must have opening brace and look like JSON
+        if '{' not in text:
+            return None
+
+        # Extract thought using regex (handles escaped quotes)
+        thought_match = re.search(r'"thought"\s*:\s*"((?:[^"\\]|\\.)*)(?:"|$)', text)
+        thought = thought_match.group(1) if thought_match else "Truncated response"
+
+        # Unescape the thought string
+        if thought_match:
+            thought = thought.replace('\\"', '"').replace('\\n', '\n').replace('\\\\', '\\')
+
+        # Extract action
+        action_match = re.search(r'"action"\s*:\s*"([^"]+)"', text)
+        if not action_match:
+            action_match = re.search(r'"tool"\s*:\s*"([^"]+)"', text)
+
+        if not action_match:
+            return None  # Can't determine action
+
+        action = action_match.group(1)
+
+        # Try to extract parameters
+        parameters = {}
+
+        # For write_file, extract path and partial content
+        if action == 'write_file':
+            path_match = re.search(r'"path"\s*:\s*"([^"]+)"', text)
+            if path_match:
+                parameters['path'] = path_match.group(1)
+
+            # Extract content - may be truncated
+            content_match = re.search(r'"content"\s*:\s*"((?:[^"\\]|\\.)*)', text)
+            if content_match:
+                content = content_match.group(1)
+                # Unescape the content
+                content = content.replace('\\n', '\n').replace('\\t', '\t')
+                content = content.replace('\\"', '"').replace('\\\\', '\\')
+                parameters['content'] = content
+                parameters['_truncated'] = True  # Mark as truncated
+
+        # For other actions, try to extract simple parameters
+        else:
+            # Look for simple string parameters
+            param_pattern = r'"(\w+)"\s*:\s*"([^"]*)"'
+            for match in re.finditer(param_pattern, text):
+                key, value = match.groups()
+                if key not in ('thought', 'action', 'tool', 'is_complete'):
+                    parameters[key] = value
+
+        return ParseResult(
+            thought=thought,
+            action=action,
+            parameters=parameters,
+            is_complete=False,
+            error="Response JSON incomplete (truncated mid-string)"
+        )
 
     def _dict_to_result(self, data: dict) -> ParseResult:
         """Convert parsed dictionary to ParseResult.

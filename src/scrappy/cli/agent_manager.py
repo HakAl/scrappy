@@ -41,10 +41,28 @@ class CLIAgentManager:
         self._cancellation_token: Optional[CancellationToken] = None
 
     def cancel(self) -> None:
-        """Cancel the currently running agent if any."""
+        """Cancel the currently running agent if any.
+
+        First cancel: graceful (waits for current step)
+        Second cancel: force (marks for immediate termination)
+        """
         if self._cancellation_token:
+            was_force_cancelled = self._cancellation_token.is_force_cancelled()
             self._cancellation_token.cancel()
-            self.io.secho("Cancelling... waiting for current step to finish", fg=self.io.theme.warning)
+
+            if self._cancellation_token.is_force_cancelled() and not was_force_cancelled:
+                self.io.secho("Force cancelling...", fg=self.io.theme.error)
+            elif not self._cancellation_token.is_force_cancelled():
+                self.io.secho("Cancelling... waiting for current step to finish (press again to force)", fg=self.io.theme.warning)
+
+    def is_force_cancelled(self) -> bool:
+        """Check if force cancel was requested."""
+        return self._cancellation_token and self._cancellation_token.is_force_cancelled()
+
+    def reset_cancel_state(self) -> None:
+        """Reset cancellation state for a new agent run."""
+        if self._cancellation_token:
+            self._cancellation_token.reset()
 
     def run_agent(self, task: str, dry_run: bool = False, verbose: bool = False):
         """
@@ -89,6 +107,10 @@ class CLIAgentManager:
         io.secho(f"\nCode Agent - Task: {task}", bold=True)
         io.echo("-" * 60)
 
+        # Create cancellation token FIRST so Escape works during any prompt
+        self.reset_cancel_state()
+        self._cancellation_token = CancellationToken()
+
         # Update dashboard if enabled
         if dashboard:
             dashboard.set_state("idle", "Awaiting user input")
@@ -99,6 +121,12 @@ class CLIAgentManager:
             "Create git checkpoint before running?", default=True
         )
 
+        # Check if user cancelled during checkpoint prompt
+        if self._cancellation_token.is_cancelled():
+            io.secho("Agent cancelled.", fg=io.theme.warning)
+            self._cancellation_token = None
+            return
+
         checkpoint_hash = None
         if create_checkpoint:
             io.echo("Creating git checkpoint...")
@@ -107,9 +135,6 @@ class CLIAgentManager:
                 io.secho(f"Checkpoint created: {checkpoint_hash[:8]}", fg=io.theme.success)
             else:
                 io.secho("Could not create checkpoint (not a git repo?)", fg=io.theme.warning)
-
-        # Create cancellation token for this run
-        self._cancellation_token = CancellationToken()
 
         # Create config with verbose setting
         config = AgentConfig()

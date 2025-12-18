@@ -34,6 +34,14 @@ from .activity import (
     ActivityIndicatorProtocol,
 )
 
+from .tasks import (
+    Task,
+    TaskStatus,
+    TaskPriority,
+    TaskStorageProtocol,
+    InMemoryTaskStorage,
+)
+
 __all__ = [
     # Delegation protocols
     'LLMRequest',
@@ -56,4 +64,10 @@ __all__ = [
     # Activity protocols
     'ActivityState',
     'ActivityIndicatorProtocol',
+    # Task protocols
+    'Task',
+    'TaskStatus',
+    'TaskPriority',
+    'TaskStorageProtocol',
+    'InMemoryTaskStorage',
 ]

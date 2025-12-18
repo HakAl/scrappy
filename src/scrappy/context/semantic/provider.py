@@ -694,9 +694,12 @@ class LanceDBSearchProvider:
 
         # Hybrid Search: Vector (semantic) + FTS (keyword)
         try:
+            # LanceDB requires explicit .vector() and .text() for hybrid search
+            # Cannot pass vector to search() AND call .text() - must use both explicitly
             results = (
-                table.search(query_vector, query_type="hybrid") # Pass VECTOR, not string
-                .text(query) # Pass string separately for FTS/Reranking context
+                table.search(query_type="hybrid")
+                .vector(query_vector)
+                .text(query)
                 .limit(max_results)
                 .to_list()
             )

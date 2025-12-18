@@ -35,7 +35,7 @@ from .background import BackgroundTaskManager
 from .status_reporter import ProviderStatusReporter
 from .usage_reporter import UsageReporter
 from .context_coordinator import ContextCoordinator
-from .model_selection import ModelSelectionType
+from .model_selection import ModelSelectionType, AllModelsRateLimitedError
 from .manager_protocols import (
     ContextManagerProtocol,
     BackgroundTaskManagerProtocol,
@@ -45,6 +45,7 @@ from .manager_protocols import (
     StatusReporterProtocol,
 )
 from .factory import OrchestratorFactory, OrchestratorComponents
+from .model_selection import ModelSelectionServiceProtocol
 
 # Import protocols for type hints (Dependency Inversion Principle)
 from .protocols import (
@@ -97,6 +98,7 @@ class AgentOrchestrator:
         background_manager: Optional[BackgroundTaskManagerProtocol] = None,
         llm_service: Optional[LLMServiceProtocol] = None,
         provider_status_tracker: Optional[ProviderStatusTrackerProtocol] = None,
+        model_selector: Optional[ModelSelectionServiceProtocol] = None,
     ):
         """
         Initialize orchestrator (dependencies only - NO side effects).
@@ -116,6 +118,10 @@ class AgentOrchestrator:
         self.verbose_selection = verbose_selection
         self.enable_semantic_search = enable_semantic_search
         self.quality_mode = quality_mode
+
+        # Session-sticky model preferences (per selection type)
+        # Maps ModelSelectionType -> preferred model ID
+        self._preferred_models: dict[ModelSelectionType, str] = {}
 
         # Use injected components or create defaults via factory
         if all([
@@ -139,6 +145,7 @@ class AgentOrchestrator:
             self.background_manager = background_manager
             self.llm_service = llm_service
             self.provider_status_tracker = provider_status_tracker
+            self.model_selector = model_selector
         else:
             # Create missing components via factory
             factory = OrchestratorFactory(
@@ -172,6 +179,7 @@ class AgentOrchestrator:
             self.delegation_manager = delegation_manager or components.delegation_manager
             self.llm_service = llm_service or components.llm_service
             self.provider_status_tracker = provider_status_tracker or components.provider_status_tracker
+            self.model_selector = model_selector or components.model_selector
 
     def initialize(
         self,
@@ -493,9 +501,11 @@ class AgentOrchestrator:
         Delegate a task to a specific provider with automatic fallback on rate limits.
 
         Args:
-            provider_name: Initial provider to try (None for auto-selection)
+            provider_name: Provider/group hint (e.g., "fast", "quality") - used for
+                          backward compatibility. Prefer using selection_type instead.
             prompt: The prompt to send
-            model: Specific model (optional)
+            model: Specific model ID (e.g., "groq/llama-3.1-8b-instant"). If provided,
+                  bypasses model selection and uses this model directly.
             system_prompt: System prompt (optional)
             max_tokens: Maximum tokens in response
             temperature: Sampling temperature
@@ -504,7 +514,7 @@ class AgentOrchestrator:
             intent_classification: Intent data for semantic caching
             auto_fallback: Automatically try other providers on rate limit (default True)
             max_retries: Maximum retry attempts per provider (default 3)
-            selection_type: What kind of model to use for auto-selection
+            selection_type: What kind of model to use (FAST, QUALITY, etc.)
             **kwargs: Additional provider-specific arguments
 
         Returns:
@@ -513,21 +523,38 @@ class AgentOrchestrator:
         Raises:
             AllProvidersRateLimitedError: If all providers are rate limited
             ProviderNotFoundError: If no providers are available
-            Exception: Other non-rate-limit errors
+            ValueError: If no models configured for selection type
         """
         # Determine selection type based on quality_mode if not explicitly provided
         if selection_type is None:
             selection_type = ModelSelectionType.QUALITY if self.quality_mode else ModelSelectionType.FAST
 
-        # Auto-select provider if not specified
-        if provider_name is None:
-            provider_name = self.get_recommended_provider(selection_type)
+        # Use ModelSelectionService for deterministic model selection
+        # Only if model not explicitly provided
+        if model is None and self.model_selector is not None:
+            try:
+                # Get session-preferred model for this selection type
+                session_preferred = self._preferred_models.get(selection_type)
+
+                # Select specific model (deterministic, priority-based)
+                model = self.model_selector.select(selection_type, session_preferred)
+
+                # Update session preference (sticky for this session)
+                self._preferred_models[selection_type] = model
+            except ValueError:
+                # No models configured for this type - fall through to legacy system
+                pass
+
+        # Fallback: if no model_selector or model still None, use legacy provider selection
+        if model is None:
             if provider_name is None:
-                available = list(self.providers.list_available())
-                raise ProviderNotFoundError(
-                    provider_name="<auto-select>",
-                    available_providers=available
-                )
+                provider_name = self.get_recommended_provider(selection_type)
+                if provider_name is None:
+                    available = list(self.providers.list_available())
+                    raise ProviderNotFoundError(
+                        provider_name="<auto-select>",
+                        available_providers=available
+                    )
 
         # Determine cache setting
         should_use_cache = use_cache if use_cache is not None else self.caching_enabled
@@ -535,28 +562,66 @@ class AgentOrchestrator:
         # Determine min_context based on selection type (32k for QUALITY mode)
         min_context = 32768 if selection_type == ModelSelectionType.QUALITY else 0
 
-        # Delegate to DelegationManager
-        response, task_record = self.delegation_manager.delegate(
-            provider_name=provider_name,
-            prompt=prompt,
-            model=model,
-            system_prompt=system_prompt,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            use_context=use_context,
-            use_cache=should_use_cache,
-            intent_classification=intent_classification,
-            auto_fallback=auto_fallback,
-            max_retries=max_retries,
-            selection_type=selection_type.value if selection_type else None,
-            min_context=min_context,
-            **kwargs
-        )
+        # Delegate with rate limit handling and fallback
+        max_attempts = 3  # Limit fallback attempts
+        attempt = 0
+        last_error = None
 
-        # Record task completion
-        self._record_task_completion(task_record, is_async=False)
+        while attempt < max_attempts:
+            attempt += 1
+            try:
+                response, task_record = self.delegation_manager.delegate(
+                    provider_name=provider_name,
+                    prompt=prompt,
+                    model=model,
+                    system_prompt=system_prompt,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    use_context=use_context,
+                    use_cache=should_use_cache,
+                    intent_classification=intent_classification,
+                    auto_fallback=auto_fallback,
+                    max_retries=max_retries,
+                    selection_type=selection_type.value if selection_type else None,
+                    min_context=min_context,
+                    **kwargs
+                )
 
-        return response
+                # Record task completion
+                self._record_task_completion(task_record, is_async=False)
+                return response
+
+            except RateLimitError as e:
+                last_error = e
+                # Mark current model as rate limited
+                if model and self.model_selector is not None:
+                    self.model_selector.mark_rate_limited(model)
+
+                # Try to select a different model
+                if self.model_selector is not None and auto_fallback:
+                    try:
+                        # Clear session preference to allow different model
+                        self._preferred_models.pop(selection_type, None)
+
+                        # Try to get a new model (will skip rate-limited ones)
+                        model = self.model_selector.select(selection_type, session_preferred=None)
+                        self._preferred_models[selection_type] = model
+                        continue  # Retry with new model
+
+                    except AllModelsRateLimitedError:
+                        # All models exhausted - re-raise with clear message
+                        raise AllModelsRateLimitedError(
+                            f"All {selection_type.value} models are rate limited. "
+                            f"Try again later."
+                        ) from e
+                else:
+                    # No fallback available
+                    raise
+
+        # Should not reach here, but handle edge case
+        if last_error:
+            raise last_error
+        raise AllProvidersRateLimitedError("Delegation failed after max attempts")
 
     async def stream_delegate(
         self,
@@ -579,15 +644,15 @@ class AgentOrchestrator:
         enabling real-time display of generated text.
 
         Args:
-            provider_name: Initial provider to try (None for auto-selection)
+            provider_name: Provider/group hint - used for backward compatibility.
             prompt: The prompt to send
-            model: Specific model (optional)
+            model: Specific model ID. If provided, bypasses model selection.
             system_prompt: System prompt (optional)
             max_tokens: Maximum tokens in response
             temperature: Sampling temperature
             use_context: Override context augmentation setting
             use_cache: Override cache setting
-            selection_type: What kind of model to use for auto-selection
+            selection_type: What kind of model to use (FAST, QUALITY, etc.)
             **kwargs: Additional provider-specific arguments
 
         Yields:
@@ -596,6 +661,7 @@ class AgentOrchestrator:
         Raises:
             AllProvidersRateLimitedError: If all providers are rate limited
             ProviderNotFoundError: If no providers are available
+            ValueError: If no models configured for selection type
 
         Example:
             async for chunk in orchestrator.stream_delegate(
@@ -608,15 +674,32 @@ class AgentOrchestrator:
         if selection_type is None:
             selection_type = ModelSelectionType.QUALITY if self.quality_mode else ModelSelectionType.FAST
 
-        # Auto-select provider if not specified
-        if provider_name is None:
-            provider_name = self.get_recommended_provider(selection_type)
+        # Use ModelSelectionService for deterministic model selection
+        # Only if model not explicitly provided
+        if model is None and self.model_selector is not None:
+            try:
+                # Get session-preferred model for this selection type
+                session_preferred = self._preferred_models.get(selection_type)
+
+                # Select specific model (deterministic, priority-based)
+                model = self.model_selector.select(selection_type, session_preferred)
+
+                # Update session preference (sticky for this session)
+                self._preferred_models[selection_type] = model
+            except ValueError:
+                # No models configured for this type - fall through to legacy system
+                pass
+
+        # Fallback: if no model_selector or model still None, use legacy provider selection
+        if model is None:
             if provider_name is None:
-                available = list(self.providers.list_available())
-                raise ProviderNotFoundError(
-                    provider_name="<auto-select>",
-                    available_providers=available
-                )
+                provider_name = self.get_recommended_provider(selection_type)
+                if provider_name is None:
+                    available = list(self.providers.list_available())
+                    raise ProviderNotFoundError(
+                        provider_name="<auto-select>",
+                        available_providers=available
+                    )
 
         # Determine cache setting
         should_use_cache = use_cache if use_cache is not None else self.caching_enabled

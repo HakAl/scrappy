@@ -232,8 +232,15 @@ class DelegationManager:
             }
             return cached_response, task_record
 
-        # Step 3: Resolve model group and build messages
-        model_group = _resolve_model_group(provider_name)
+        # Step 3: Determine model to use
+        # If specific model provided (from ModelSelectionService), use it directly
+        # Otherwise resolve provider_name to model group for Router
+        if model:
+            # Specific model ID - use directly (e.g., "cerebras/qwen-3-235b-a22b-instruct-2507")
+            effective_model = model
+        else:
+            # Resolve to model group for LiteLLM Router (e.g., "fast", "quality")
+            effective_model = _resolve_model_group(provider_name)
 
         # Build messages list for LiteLLM
         messages = []
@@ -246,7 +253,7 @@ class DelegationManager:
 
         # Step 4: Execute via LLMService (LiteLLM Router handles retry/fallback)
         response, task_record = self._llm_service.completion_sync(
-            model=model_group,
+            model=effective_model,
             messages=messages,
             max_tokens=max_tokens,
             temperature=temperature,
@@ -356,8 +363,15 @@ class DelegationManager:
             }
             return cached_response, task_record
 
-        # Step 3: Resolve model group and build messages
-        model_group = _resolve_model_group(provider_name)
+        # Step 3: Determine model to use
+        # If specific model provided (from ModelSelectionService), use it directly
+        # Otherwise resolve provider_name to model group for Router
+        if model:
+            # Specific model ID - use directly (e.g., "cerebras/qwen-3-235b-a22b-instruct-2507")
+            effective_model = model
+        else:
+            # Resolve to model group for LiteLLM Router (e.g., "fast", "quality")
+            effective_model = _resolve_model_group(provider_name)
 
         # Build messages list for LiteLLM
         messages = []
@@ -370,7 +384,7 @@ class DelegationManager:
 
         # Step 4: Execute via LLMService (LiteLLM Router handles retry/fallback)
         response, task_record = await self._llm_service.completion(
-            model=model_group,
+            model=effective_model,
             messages=messages,
             max_tokens=max_tokens,
             temperature=temperature,
@@ -609,8 +623,15 @@ class DelegationManager:
             )
             return
 
-        # Step 3: Resolve model group and build messages
-        model_group = _resolve_model_group(provider_name)
+        # Step 3: Determine model to use
+        # If specific model provided (from ModelSelectionService), use it directly
+        # Otherwise resolve provider_name to model group for Router
+        if model:
+            # Specific model ID - use directly (e.g., "cerebras/qwen-3-235b-a22b-instruct-2507")
+            effective_model = model
+        else:
+            # Resolve to model group for LiteLLM Router (e.g., "fast", "quality")
+            effective_model = _resolve_model_group(provider_name)
 
         # Build messages list for LiteLLM
         messages = []
@@ -634,7 +655,7 @@ class DelegationManager:
         final_chunk = None
 
         async for chunk in self._llm_service.stream_completion(
-            model=model_group,
+            model=effective_model,
             messages=messages,
             max_tokens=max_tokens,
             temperature=temperature,

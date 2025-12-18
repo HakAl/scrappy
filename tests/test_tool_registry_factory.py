@@ -82,8 +82,8 @@ class TestToolRegistryFactoryBehavior:
         """Default registry should have expected number of tools."""
         registry = create_default_registry()
 
-        # 4 file + 6 git + 2 search + 2 web + 1 python + 1 command + 1 complete = 17 tools
-        assert len(registry.list_all()) == 17
+        # 4 file + 6 git + 2 search + 2 web + 1 python + 1 command + 1 complete + 1 task = 18 tools
+        assert len(registry.list_all()) == 18
 
     @pytest.mark.unit
     def test_all_tools_are_callable(self):
@@ -218,7 +218,7 @@ class TestToolRegistryFactoryCustomization:
 
         tool_names = [t.name for t in registry.list_all()]
         assert "custom_analysis" in tool_names
-        assert len(tool_names) == 18  # 17 default + 1 custom
+        assert len(tool_names) == 19  # 18 default + 1 custom
 
 
 class TestToolRegistryFactoryIntegration:

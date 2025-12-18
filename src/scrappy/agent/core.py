@@ -225,6 +225,7 @@ class CodeAgent:
             duplicate_detector=self._duplicate_detector,
             tool_runner=self._tool_runner,
             ui=self.ui,
+            cancellation_token=self._cancellation_token,
         )
 
         # Use orchestrator's intelligent provider selection
@@ -683,8 +684,7 @@ class CodeAgent:
             }
         except Exception as e:
             # Unexpected error - save partial state for debugging
-            self.io.echo("")  # New line
-            self.ui.show_error(f"Agent error: {str(e)}\nSaving audit log...")
+            # Don't display error here - let caller handle display
             self._audit_logger.mark_complete(False, f"Error: {str(e)}")
             raise  # Re-raise to let caller handle
 

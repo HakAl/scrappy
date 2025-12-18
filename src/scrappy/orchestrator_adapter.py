@@ -161,6 +161,7 @@ class AgentOrchestratorAdapter:
         max_tokens: int = 1500,
         temperature: float = 0.3,
         tool_choice: str = "auto",
+        selection_type: Optional["ModelSelectionType"] = None,
         **kwargs
     ) -> LLMResponse:
         """
@@ -169,7 +170,7 @@ class AgentOrchestratorAdapter:
         After LiteLLM integration:
         - No longer checks provider.supports_tool_calling
         - LiteLLM handles tool calling natively via kwargs
-        - Defaults to "quality" tier for tool calling (smarter models)
+        - Defaults to INSTRUCT tier for tool calling (instruction-tuned models)
 
         Args:
             provider_name: Provider name or model group (defaults to "quality")
@@ -179,13 +180,20 @@ class AgentOrchestratorAdapter:
             max_tokens: Maximum tokens in response
             temperature: Sampling temperature
             tool_choice: How the model should choose tools
+            selection_type: Model selection type (defaults to INSTRUCT for tool calling)
             **kwargs: Additional arguments
 
         Returns:
             LLMResponse with tool_calls field populated if model called tools
         """
+        from .orchestrator.model_selection import ModelSelectionType
+
         if tools is None:
             tools = []
+
+        # Default to INSTRUCT for tool calling (instruction-tuned models)
+        if selection_type is None:
+            selection_type = ModelSelectionType.INSTRUCT
 
         # Resolve provider name to model group (default to quality for tool calling)
         model_group = self._resolve_model_group(provider_name or "quality")
@@ -199,6 +207,7 @@ class AgentOrchestratorAdapter:
             temperature=temperature,
             tools=tools,
             tool_choice=tool_choice,
+            selection_type=selection_type,
             **kwargs
         )
 

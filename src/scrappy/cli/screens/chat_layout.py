@@ -8,7 +8,7 @@ from textual.app import ComposeResult
 from textual.widgets import TextArea, Label
 from textual.containers import Container
 
-from ..widgets import SelectableLog
+from ..widgets import SelectableLog, TaskProgressWidget
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +58,9 @@ class ChatLayout(Widget):
 
         # Activity indicator
         yield ActivityIndicator()
+
+        # Task progress display
+        yield TaskProgressWidget()
 
         # Fixed input area at bottom
         with Container(id="input_container"):

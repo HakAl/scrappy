@@ -5,7 +5,8 @@ Handles all user interaction and console output formatting for the agent.
 Wraps CLIIOProtocol to provide agent-specific display operations.
 """
 
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Callable
+
 import json
 
 from ..protocols.io import CLIIOProtocol
@@ -33,6 +34,7 @@ class AgentUI:
         io: CLIIOProtocol,
         theme: Optional[ThemeProtocol] = None,
         verbose: bool = False,
+        on_tasks_updated: Optional[Callable[[list], None]] = None,
     ):
         """
         Initialize agent UI.
@@ -41,11 +43,13 @@ class AgentUI:
             io: CLI I/O interface (CLIIOProtocol)
             theme: Optional theme for color styling. Defaults to DEFAULT_THEME.
             verbose: If True, show full output. If False, compact mode.
+            on_tasks_updated: Optional callback when tasks are updated.
         """
         self.io = io
         self._theme = theme or DEFAULT_THEME
         self.verbose = verbose
         self.current_step = 0
+        self._on_tasks_updated = on_tasks_updated
 
     def show_thinking(self, text: str) -> None:
         """Display agent thinking/reasoning."""
@@ -128,6 +132,9 @@ class AgentUI:
                 remaining = len(diff_lines) - shown
                 self.io.secho(f"    ... ({remaining} more lines)", fg=self._theme.text_muted)
                 break
+
+            # Strip trailing newlines to avoid double-spacing
+            line = line.rstrip('\n\r')
 
             # Skip diff headers (---, +++, @@) in compact display
             if line.startswith('---') or line.startswith('+++'):
@@ -309,3 +316,22 @@ class AgentUI:
             self.io.panel(result, title=status, border_style=color)
         else:
             self.io.secho(f"\n{status}: {result}", fg=color)
+
+    def notify_tasks_updated(self, tasks: list) -> None:
+        """Notify UI that agent tasks have been updated.
+
+        Called when the task tool modifies tasks (add, update, delete, clear).
+        Routes to TUI via output_sink if available, or invokes callback if set.
+
+        Args:
+            tasks: Current list of Task objects
+        """
+        # Try TUI output sink first
+        output_sink = getattr(self.io, "output_sink", None)
+        if output_sink is not None and hasattr(output_sink, "post_tasks_updated"):
+            output_sink.post_tasks_updated(tasks)
+            return
+
+        # Fall back to callback if provided
+        if self._on_tasks_updated:
+            self._on_tasks_updated(tasks)

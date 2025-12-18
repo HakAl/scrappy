@@ -493,6 +493,60 @@ class TestResponseParserInterface:
         # Future: NativeToolCallParser would also implement this interface
 
 
+class TestRealWorldFailures:
+    """Tests based on actual production failures - add failing responses here."""
+
+    @pytest.fixture
+    def parser(self):
+        return JSONResponseParser()
+
+    @pytest.mark.unit
+    def test_truncated_write_file_mid_content(self, parser):
+        """Real failure: LLM response truncated mid-content string."""
+        # This exact response failed in production - token limit truncation
+        response = r'{"thought": "Writing test file", "action": "write_file", "parameters": {"path": "test.py", "content": "import pytest\n\ndef test_example():\n    assert True\n\ndef test_another():\n    # More test code here\n    '
+        # Note: no closing quote, no closing braces
+
+        result = parser.parse(response)
+
+        # Should salvage what we can
+        assert result.action == "write_file"
+        assert result.parameters.get("path") == "test.py"
+        assert "import pytest" in result.parameters.get("content", "")
+
+    @pytest.mark.unit
+    def test_truncated_long_content_with_escapes(self, parser):
+        """Real failure: Long content with escape sequences truncated."""
+        response = r'{"thought": "Creating scraper tests", "action": "write_file", "parameters": {"path": "workers/tests/test_scraper.py", "content": "import asyncio\nimport pytest\nfrom unittest.mock import AsyncMock, Mock, patch\n\nfrom workers.scraper import WebScraper\n\n\ndef test_scraper_initialization():\n    \"\"\"Test that WebScraper initializes correctly.\"\"\"\n    scraper = WebScraper(\'http://example.com\')\n    \n    assert scraper.base_url == \'http://example.com\'\n    assert scraper.timeout == 30'
+        # Truncated mid-string
+
+        result = parser.parse(response)
+
+        assert result.action == "write_file"
+        assert result.parameters.get("path") == "workers/tests/test_scraper.py"
+        assert "test_scraper_initialization" in result.parameters.get("content", "")
+
+    @pytest.mark.unit
+    def test_triple_quoted_python_style(self, parser):
+        """Real failure: LLM used Python triple-quotes instead of JSON strings."""
+        response = '''{
+            "thought": "Writing multi-line content",
+            "action": "write_file",
+            "parameters": {
+                "path": "example.py",
+                "content": """def hello():
+    print("world")
+"""
+            },
+            "is_complete": false
+        }'''
+
+        result = parser.parse(response)
+
+        assert result.action == "write_file"
+        assert "def hello" in result.parameters.get("content", "")
+
+
 class TestJSONResponseParserCriticalBehavior:
     """Tests for critical behavior that must be preserved."""
 

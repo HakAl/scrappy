@@ -177,6 +177,8 @@ class MainAppScreen(Screen):
             if event.key == "escape" or event.key == "ctrl+c":
                 self.capture_manager.cancel()
                 self._exit_capture_ui()
+                # Also cancel the agent - don't just cancel the current prompt
+                self.action_cancel_agent()
                 event.stop()
                 return
 
@@ -185,11 +187,16 @@ class MainAppScreen(Screen):
                 event.stop()
                 return
 
-        # Handle Ctrl+C for copy from SelectableLog
+        # Handle Ctrl+C for copy from SelectableLog or cancel agent
         if event.key == "ctrl+c":
             output = self._layout.output
             if isinstance(output, SelectableLog) and output._has_selection():
                 output.action_copy_selection()
+                event.stop()
+                return
+            else:
+                # No selection - use Ctrl+C to cancel running agent (same as Escape)
+                self.action_cancel_agent()
                 event.stop()
                 return
 
@@ -269,6 +276,16 @@ class MainAppScreen(Screen):
         # Access agent_mgr through the command router
         agent_mgr = self.interactive_mode.command_router.agent_mgr
         agent_mgr.cancel()
+
+        # Stop the elapsed timer and hide activity indicator immediately
+        # Don't wait for agent to finish - user has already requested cancellation
+        self._stop_elapsed_timer()
+        try:
+            from ..textual_app import ActivityIndicator
+            indicator = self.query_one(ActivityIndicator)
+            indicator.hide()
+        except Exception:
+            pass  # Indicator might not be mounted
 
     def _handle_captured_input(self, user_input: str) -> None:
         """Process input captured for prompt/confirm."""
@@ -471,6 +488,20 @@ class MainAppScreen(Screen):
             else:
                 indicator.show(message.state, message.message)
                 self._start_elapsed_timer()
+
+    def update_tasks(self, tasks: list) -> None:
+        """Update task progress widget with new tasks.
+
+        Args:
+            tasks: List of Task objects to display.
+        """
+        from ..widgets import TaskProgressWidget
+
+        try:
+            widget = self.query_one(TaskProgressWidget)
+            widget.update_tasks(tasks)
+        except Exception:
+            pass  # Widget not mounted yet
 
     def _start_elapsed_timer(self) -> None:
         """Start the elapsed time timer for activity indicator updates."""

@@ -29,6 +29,7 @@ from .tools.web_tools import WebFetchTool, WebSearchTool
 from .tools.python_tools import AnalyzePythonDependenciesTool
 from .tools.command_tool import CommandTool
 from .tools.control_tools import CompleteTool
+from .tools.task_tools import TaskTool
 from .constants import DEFAULT_COMMAND_TIMEOUT, DEFAULT_MAX_COMMAND_OUTPUT
 
 if TYPE_CHECKING:
@@ -95,6 +96,9 @@ def create_default_registry(
 
     # Register control tools
     registry.register(CompleteTool())
+
+    # Register task management tool
+    registry.register(TaskTool())
 
     return registry
 

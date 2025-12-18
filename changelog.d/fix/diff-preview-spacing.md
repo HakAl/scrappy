@@ -1,0 +1,1 @@
+Fixed diff preview showing double-spaced lines by stripping trailing newlines from diff output.

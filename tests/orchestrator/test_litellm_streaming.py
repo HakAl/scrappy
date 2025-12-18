@@ -559,7 +559,7 @@ async def test_stream_completion_passes_kwargs_to_router(mock_api_keys, capturin
     assert call['model'] == "fast"
     assert call['messages'] == [{"role": "user", "content": "test"}]
     assert call['stream'] is True
-    assert call['num_retries'] == 3
+    assert call['num_retries'] == 0  # No LiteLLM retries - let Orchestrator handle rate limits
     assert call['max_tokens'] == 500
     assert call['temperature'] == 0.9
     assert 'tools' in call

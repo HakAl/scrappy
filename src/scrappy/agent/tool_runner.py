@@ -4,6 +4,7 @@ Tool runner implementation.
 Pure execution logic for running tools from the registry.
 """
 
+from pathlib import Path
 from typing import Dict, Any, Callable
 
 from ..agent_tools.tools import ToolRegistry, ToolContext, ToolResult
@@ -100,7 +101,5 @@ class ToolRunner:
                 command = command.replace('npx', 'npx --yes')
 
         # Delegate to command executor
-        return self.command_executor.run(
-            command,
-            cwd=str(self.tool_context.get_project_root())
-        )
+        project_root = Path(self.tool_context.get_project_root())
+        return self.command_executor.run(command, project_root)

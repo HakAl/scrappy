@@ -58,6 +58,10 @@ class ToolContext:
     orchestrator: Optional[MemoryProvider] = None
     semantic_search: Optional["SemanticSearchProtocol"] = None
 
+    def get_project_root(self) -> Path:
+        """Get project root directory."""
+        return self.project_root
+
     def is_safe_path(self, path: str) -> bool:
         """Check if path is within project sandbox and not in blocked paths.
 

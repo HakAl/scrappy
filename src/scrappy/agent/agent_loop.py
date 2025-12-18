@@ -10,6 +10,7 @@ Single Responsibility: Run the agent loop, nothing else.
 import time
 from typing import Optional, Dict, Any, List, TYPE_CHECKING
 
+from ..orchestrator.model_selection import ModelSelectionType, AllModelsRateLimitedError
 from .types import (
     AgentThought,
     AgentAction,
@@ -30,6 +31,7 @@ from .protocols import (
     AgentContextFactoryProtocol,
 )
 from .cancellation import CancellationTokenProtocol
+from .stop_condition import AgentStopCondition, StopReason
 
 if TYPE_CHECKING:
     from ..orchestrator_adapter import OrchestratorAdapter
@@ -66,6 +68,7 @@ class AgentLoop:
         tools: Optional[Dict[str, Any]] = None,
         denial_handler: Optional[DenialHandlerProtocol] = None,
         cancellation_token: Optional[CancellationTokenProtocol] = None,
+        stop_condition: Optional[AgentStopCondition] = None,
     ):
         """
         Initialize AgentLoop with injected dependencies.
@@ -83,6 +86,7 @@ class AgentLoop:
             tools: Optional tools dict for backward compat
             denial_handler: Optional handler for user denials
             cancellation_token: Optional token for cancellation signaling
+            stop_condition: Unified stop condition tracker (created if not provided)
         """
         self._orchestrator = orchestrator
         self._action_executor = action_executor
@@ -96,10 +100,15 @@ class AgentLoop:
         self._tools = tools or {}
         self._denial_handler = denial_handler
         self._cancellation_token = cancellation_token
+
+        # Unified stop condition - single source of truth for termination
+        self._stop_condition = stop_condition or AgentStopCondition(
+            cancellation_token=cancellation_token,
+            max_iterations=config.max_iterations if hasattr(config, 'max_iterations') else 50,
+        )
+
         # Track current dry_run state
         self._dry_run = False
-        # Track denials in current session
-        self._denial_count = 0
 
     def think(self, state: ConversationState, context: AgentContext) -> AgentThought:
         """
@@ -166,7 +175,7 @@ class AgentLoop:
                     max_tokens=self._config.default_max_tokens,
                     temperature=self._config.default_temperature,
                     use_context=False,  # Context already in system prompt
-                    task_type='planning',  # Inform orchestrator this is a planning task
+                    selection_type=ModelSelectionType.INSTRUCT,  # Instruction-tuned for tool calling
                 )
                 actual_provider = response.provider
             else:
@@ -177,6 +186,7 @@ class AgentLoop:
                     max_tokens=self._config.default_max_tokens,
                     temperature=self._config.default_temperature,
                     use_context=False,  # Context already in system prompt
+                    selection_type=ModelSelectionType.INSTRUCT,  # Instruction-tuned for tool calling
                 )
                 actual_provider = current_provider
 
@@ -222,6 +232,7 @@ class AgentLoop:
             max_tokens=self._config.default_max_tokens,
             temperature=self._config.default_temperature,
             tool_choice="auto",
+            selection_type=ModelSelectionType.INSTRUCT,  # Instruction-tuned for tool calling
         )
 
     def plan(self, thought: AgentThought) -> AgentAction:
@@ -311,7 +322,11 @@ class AgentLoop:
                 if t in self._config.meaningful_actions
             ]
 
-            if not meaningful_actions and not self._dry_run:
+            # Track repeated complete attempts to avoid infinite loops
+            # Agent might correctly determine a task is impossible
+            complete_attempts = state.tools_executed.count('complete')
+
+            if not meaningful_actions and not self._dry_run and complete_attempts < 2:
                 self._ui.show_warning(
                     "Agent declared completion without performing any file operations."
                 )
@@ -469,13 +484,15 @@ class AgentLoop:
         Returns:
             DenialHandlerResult with should_stop flag and message
         """
-        self._denial_count += 1
+        # Record denial in stop condition (tracks consecutive denials)
+        self._stop_condition.record_denial()
+        denial_count = self._stop_condition.consecutive_denials
 
         # Use denial handler if available
         if self._denial_handler:
             denial_result = self._denial_handler.handle_denial(
                 action=result.action,
-                denial_count=self._denial_count,
+                denial_count=denial_count,
             )
         else:
             # Default behavior: continue with message
@@ -560,7 +577,13 @@ class AgentLoop:
             t for t in state.tools_executed
             if t in self._config.meaningful_actions
         ]
-        if not meaningful_actions and not self._dry_run:
+
+        # Track repeated complete attempts - agent may have valid reason
+        # (e.g., task is genuinely impossible with current codebase)
+        complete_attempts = state.tools_executed.count('complete')
+
+        # Only push back on first attempt; after that, trust the agent's judgment
+        if not meaningful_actions and not self._dry_run and complete_attempts < 2:
             state.messages.append({
                 'role': 'assistant',
                 'content': thought.raw_response,
@@ -629,65 +652,110 @@ class AgentLoop:
             dry_run: If True, simulate execution
 
         Returns:
-            Dict with 'success', 'result', 'iterations'
+            Dict with 'success', 'result', 'iterations', 'stop_reason'
         """
         self._dry_run = dry_run
 
-        # Reset step counter for new task
+        # Reset stop condition and step counter for new task
+        self._stop_condition.reset()
         if hasattr(self._ui, 'reset_step_counter'):
             self._ui.reset_step_counter()
 
         self._ui.show_progress("Starting agent loop...")
 
-        while state.iteration < state.max_iterations:
-            # Check for cancellation at start of each iteration
-            if self._cancellation_token and self._cancellation_token.is_cancelled():
-                self._ui.show_warning("Agent cancelled by user")
-                if self._audit_logger:
-                    self._audit_logger.log_action('cancelled', {}, 'Cancelled by user', True)
-                return {
-                    'success': False,
-                    'result': 'Cancelled by user',
-                    'iterations': state.iteration,
-                }
+        while True:
+            # Unified stop check at start of each iteration
+            should_stop, reason = self._stop_condition.should_stop()
+            if should_stop:
+                return self._make_stop_result(reason, state)
 
-            state.iteration += 1
-
-            # Minimal iteration indicator (only show on first iteration)
-            if state.iteration == 1:
-                pass  # UI messages handled in think()
+            self._stop_condition.increment_iteration()
+            state.iteration = self._stop_condition.current_iteration
 
             # Stage 1: Think - LLM generates next thought/action
-            # Build context per iteration to pick up changes (e.g., index becoming ready)
-            context = self._context_factory.build_context(task, state.system_prompt)
-            thought = self.think(state, context)
+            try:
+                context = self._context_factory.build_context(task, state.system_prompt)
+                thought = self.think(state, context)
+                self._stop_condition.clear_network_errors()
+            except AllModelsRateLimitedError as e:
+                self._stop_condition.mark_rate_limited()
+                self._ui.show_error(str(e))
+                return self._make_stop_result(StopReason.RATE_LIMITED, state)
+            except ValueError as e:
+                # Configuration errors (e.g., no models configured for selection type)
+                self._ui.show_error(f"Configuration error: {e}")
+                return {
+                    'success': False,
+                    'result': f"Configuration error: {e}",
+                    'iterations': state.iteration,
+                    'stop_reason': 'configuration_error',
+                }
+            except Exception as e:
+                # Network/API errors
+                if self._is_network_error(e):
+                    self._stop_condition.record_network_error()
+                    self._ui.show_warning(f"Network error: {e}")
+                    should_stop, reason = self._stop_condition.should_stop()
+                    if should_stop:
+                        return self._make_stop_result(reason, state)
+                    continue  # Retry
+                raise
+
+            # Check stop condition after LLM call (can be slow)
+            should_stop, reason = self._stop_condition.should_stop()
+            if should_stop:
+                return self._make_stop_result(reason, state)
 
             # Stage 2: Plan - Parse response into structured action
             action = self.plan(thought)
 
+            # Track parse failures
+            if action.action == 'retry_parse':
+                self._stop_condition.record_parse_failure()
+                should_stop, reason = self._stop_condition.should_stop()
+                if should_stop:
+                    return self._make_stop_result(reason, state)
+            else:
+                self._stop_condition.clear_parse_failures()
+
+            # Check stop condition before execute
+            should_stop, reason = self._stop_condition.should_stop()
+            if should_stop:
+                return self._make_stop_result(reason, state)
+
             # Stage 3: Execute - Run the tool
             result = self.execute(action, state)
+
+            # Check if action was cancelled (force cancel detected in ActionExecutor)
+            if result.metadata.get("cancelled"):
+                return self._make_stop_result(StopReason.USER_CANCELLED, state)
+
+            # Check stop condition after execute (tools can take a long time)
+            should_stop, reason = self._stop_condition.should_stop()
+            if should_stop:
+                return self._make_stop_result(reason, state)
 
             # Stage 4: Evaluate - Check if task is complete
             evaluation = self.evaluate(action, result, state)
 
-            # Update conversation history and check for denial stop
+            # Update conversation history and check for denial
             denial_result = self.update_conversation(state, thought, action, result)
 
-            # Check if user wants to stop after denial
-            if denial_result and denial_result.should_stop:
-                return {
-                    'success': False,
-                    'result': denial_result.message,
-                    'iterations': state.iteration,
-                }
+            # Handle denial result (denial already recorded in _handle_denied_action)
+            if denial_result:
+                if denial_result.should_stop:
+                    return self._make_stop_result(StopReason.REPEATED_DENIALS, state)
+            elif result.approved:
+                self._stop_condition.clear_denials()
 
             # Check evaluation result
             if evaluation.is_complete:
+                self._stop_condition.mark_completed()
                 return {
                     'success': True,
                     'result': evaluation.final_result,
                     'iterations': state.iteration,
+                    'stop_reason': StopReason.COMPLETED.value,
                 }
 
             if not evaluation.should_continue:
@@ -695,6 +763,7 @@ class AgentLoop:
                     'success': False,
                     'result': evaluation.reason,
                     'iterations': state.iteration,
+                    'stop_reason': StopReason.MAX_ITERATIONS.value,
                 }
 
             # Soft checkpoint - ask user to continue every N iterations
@@ -707,14 +776,42 @@ class AgentLoop:
                         'success': False,
                         'result': f'Stopped at checkpoint (iteration {state.iteration})',
                         'iterations': state.iteration,
+                        'stop_reason': StopReason.USER_CANCELLED.value,
                     }
 
-        # Max iterations reached
+    def _make_stop_result(self, reason: StopReason, state: ConversationState) -> Dict[str, Any]:
+        """Create a standardized stop result dictionary."""
+        message = self._stop_condition.get_stop_message(reason)
+
+        # Log cancellation
+        if reason == StopReason.USER_CANCELLED and self._audit_logger:
+            self._audit_logger.log_action('cancelled', {}, message, True)
+
+        # Show appropriate UI message
+        if reason == StopReason.USER_CANCELLED:
+            self._ui.show_warning(message)
+        elif reason in (StopReason.RATE_LIMITED, StopReason.NETWORK_ERROR):
+            self._ui.show_error(message)
+        elif reason == StopReason.PARSE_FAILURES:
+            self._ui.show_error(message)
+        elif reason == StopReason.REPEATED_DENIALS:
+            self._ui.show_warning(message)
+
         return {
-            'success': False,
-            'result': f'Max iterations ({state.max_iterations}) reached',
+            'success': reason == StopReason.COMPLETED,
+            'result': message,
             'iterations': state.iteration,
+            'stop_reason': reason.value,
         }
+
+    def _is_network_error(self, error: Exception) -> bool:
+        """Check if an exception is a network-related error."""
+        error_str = str(error).lower()
+        network_indicators = [
+            'connection', 'timeout', 'network', 'socket',
+            'refused', 'reset', 'unreachable', 'dns',
+        ]
+        return any(indicator in error_str for indicator in network_indicators)
 
     def _checkpoint_prompt(self, state: ConversationState) -> bool:
         """

@@ -1,0 +1,1 @@
+Fixed model selector crash when no models configured for a selection type. Now gracefully falls back to legacy quality/fast system.

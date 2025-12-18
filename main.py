@@ -41,7 +41,7 @@ file_handler.setFormatter(
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[file_handler, logging.StreamHandler()]
+    handlers=[file_handler]
 )
 
 # Register cleanup to prevent ResourceWarning about unclosed file

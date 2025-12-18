@@ -18,9 +18,13 @@ Architecture:
 - Rate tracking handled by RateTrackingCallback (see litellm_callbacks.py)
 """
 
+import asyncio
 import json
 import time
+import threading
 from typing import Optional, TYPE_CHECKING, AsyncIterator
+
+from ..infrastructure.logging import StructuredLogger
 
 from ..providers.base import LLMResponse, ToolCall
 from ..infrastructure.exceptions.provider_errors import (
@@ -67,6 +71,74 @@ ESCALATION_PATH = {
 
 # Default timeout for stuck stream detection (ms)
 DEFAULT_STREAM_TIMEOUT_MS = 30000  # 30 seconds
+
+# Per-provider request throttle delays (seconds)
+# Groq is very fast but has strict rate limits - need to slow down
+PROVIDER_THROTTLE_DELAYS = {
+    "groq": 1.0,      # 1 second between Groq requests
+    "cerebras": 0.5,  # Cerebras is more lenient
+    "gemini": 0.3,    # Gemini is lenient
+    "sambanova": 0.5,
+}
+DEFAULT_THROTTLE_DELAY = 0.5  # Default for unknown providers
+
+
+class RequestThrottle:
+    """
+    Per-provider request throttling to avoid rate limits.
+
+    Tracks the last request time for each provider and enforces
+    a minimum delay between requests.
+    """
+
+    def __init__(self):
+        self._last_request: dict[str, float] = {}
+        self._lock = threading.Lock()
+
+    def _get_provider(self, model: str) -> str:
+        """Extract provider from model string (e.g., 'groq/llama-3.1' -> 'groq')."""
+        if "/" in model:
+            return model.split("/")[0]
+        return model
+
+    def _get_delay(self, provider: str) -> float:
+        """Get throttle delay for provider."""
+        return PROVIDER_THROTTLE_DELAYS.get(provider, DEFAULT_THROTTLE_DELAY)
+
+    def wait_sync(self, model: str) -> None:
+        """Wait if needed before making a request (sync version)."""
+        provider = self._get_provider(model)
+        delay = self._get_delay(provider)
+
+        with self._lock:
+            now = time.time()
+            last = self._last_request.get(provider, 0)
+            wait_time = delay - (now - last)
+
+            if wait_time > 0:
+                time.sleep(wait_time)
+
+            self._last_request[provider] = time.time()
+
+    async def wait_async(self, model: str) -> None:
+        """Wait if needed before making a request (async version)."""
+        provider = self._get_provider(model)
+        delay = self._get_delay(provider)
+
+        with self._lock:
+            now = time.time()
+            last = self._last_request.get(provider, 0)
+            wait_time = delay - (now - last)
+
+        if wait_time > 0:
+            await asyncio.sleep(wait_time)
+
+        with self._lock:
+            self._last_request[provider] = time.time()
+
+
+# Global throttle instance
+_request_throttle = RequestThrottle()
 
 
 def _map_litellm_error(error: Exception, provider: str = "", model: str = "") -> Exception:
@@ -218,6 +290,7 @@ class LiteLLMService:
         api_key_service: ApiKeyConfigServiceProtocol,
         output: BaseOutputProtocol,
         callback: Optional["RateTrackingCallback"] = None,
+        logger: Optional[StructuredLogger] = None,
     ):
         """
         Initialize LiteLLM service.
@@ -227,11 +300,13 @@ class LiteLLMService:
             api_key_service: Service for API key access
             output: Output interface for logging/warnings
             callback: Optional callback for escalation tracking
+            logger: Optional structured logger for API request/response debugging
         """
         self._router = router
         self._api_key_service = api_key_service
         self._output = output
         self._callback = callback
+        self._logger = logger
         self._configured = False
         # NOTE: Router-level callbacks handle rate tracking.
         # The callback reference here is for escalation metrics only.
@@ -356,14 +431,35 @@ class LiteLLMService:
 
         start = time.time()
 
+        # Log request
+        if self._logger:
+            tools = kwargs.get("tools") if kwargs else None
+            self._logger.debug(
+                f"API request: model={model}, messages={len(messages)}, tools={len(tools) if tools else 0}"
+            )
+
+        # Throttle requests to avoid rate limits (especially for Groq)
+        await _request_throttle.wait_async(model)
+
         try:
             response = await self._router.acompletion(
                 model=model,
                 messages=messages,
-                num_retries=3,
+                num_retries=0,  # Don't retry - let Orchestrator handle model fallback
                 **kwargs
             )
             elapsed = time.time() - start
+
+            # Log response tool calls (key for debugging missing params)
+            if self._logger and response and response.choices:
+                msg = response.choices[0].message
+                tc = getattr(msg, "tool_calls", None)
+                if tc:
+                    for t in tc:
+                        self._logger.debug(
+                            f"Tool call: {t.function.name} args={t.function.arguments}"
+                        )
+
             return self._convert_response(response, elapsed, escalated_from=_escalated_from)
 
         except ContextWindowExceededError as e:
@@ -439,14 +535,35 @@ class LiteLLMService:
 
         start = time.time()
 
+        # Log request
+        if self._logger:
+            tools = kwargs.get("tools") if kwargs else None
+            self._logger.debug(
+                f"API request: model={model}, messages={len(messages)}, tools={len(tools) if tools else 0}"
+            )
+
+        # Throttle requests to avoid rate limits (especially for Groq)
+        _request_throttle.wait_sync(model)
+
         try:
             response = self._router.completion(
                 model=model,
                 messages=messages,
-                num_retries=3,
+                num_retries=0,  # Don't retry - let Orchestrator handle model fallback
                 **kwargs
             )
             elapsed = time.time() - start
+
+            # Log response tool calls (key for debugging missing params)
+            if self._logger and response and response.choices:
+                msg = response.choices[0].message
+                tc = getattr(msg, "tool_calls", None)
+                if tc:
+                    for t in tc:
+                        self._logger.debug(
+                            f"Tool call: {t.function.name} args={t.function.arguments}"
+                        )
+
             return self._convert_response(response, elapsed, escalated_from=_escalated_from)
 
         except ContextWindowExceededError as e:
@@ -531,13 +648,16 @@ class LiteLLMService:
         seen_final = False  # For Groq double-final chunk dedup
         timeout_seconds = timeout_ms / 1000.0
 
+        # Throttle requests to avoid rate limits (especially for Groq)
+        await _request_throttle.wait_async(model)
+
         try:
             # Call LiteLLM Router's async streaming method
             stream = await self._router.acompletion(
                 model=model,
                 messages=messages,
                 stream=True,
-                num_retries=3,
+                num_retries=0,  # Don't retry - let Orchestrator handle model fallback
                 **kwargs
             )
 
@@ -747,10 +867,7 @@ class LiteLLMService:
 
         tool_calls = []
         for tc in message.tool_calls:
-            try:
-                arguments = json.loads(tc.function.arguments)
-            except (json.JSONDecodeError, AttributeError):
-                arguments = {}
+            arguments = self._parse_tool_arguments(tc.function.arguments, tc.function.name)
 
             tool_calls.append(
                 ToolCall(
@@ -761,6 +878,84 @@ class LiteLLMService:
             )
 
         return tool_calls if tool_calls else None
+
+    def _parse_tool_arguments(self, raw_arguments, tool_name: str = "") -> dict:
+        """
+        Parse tool call arguments with robust handling.
+
+        Handles:
+        - Already-parsed dict (some providers)
+        - JSON string
+        - JSON wrapped in markdown code fences (Gemini issue)
+
+        Args:
+            raw_arguments: Arguments from provider (str or dict)
+            tool_name: Tool name for logging context
+
+        Returns:
+            Parsed arguments dict (empty dict on failure)
+        """
+        # Already a dict - some providers return parsed
+        if isinstance(raw_arguments, dict):
+            return raw_arguments
+
+        # Not a string - unexpected type
+        if not isinstance(raw_arguments, str):
+            if self._logger:
+                self._logger.warning(
+                    f"Tool {tool_name}: unexpected arguments type {type(raw_arguments)}"
+                )
+            return {}
+
+        # Empty string
+        if not raw_arguments.strip():
+            return {}
+
+        # Try direct JSON parse first
+        try:
+            return json.loads(raw_arguments)
+        except json.JSONDecodeError:
+            pass
+
+        # Try extracting from markdown code fences (Gemini issue)
+        text = raw_arguments.strip()
+        if "```json" in text:
+            start = text.find("```json") + 7
+            end = text.find("```", start)
+            if end > start:
+                json_str = text[start:end].strip()
+            else:
+                # Truncated - no closing ```
+                json_str = text[start:].strip()
+            try:
+                return json.loads(json_str)
+            except json.JSONDecodeError:
+                pass
+
+        # Try generic ``` extraction
+        if "```" in text:
+            start = text.find("```") + 3
+            # Skip language identifier if present
+            newline_pos = text.find("\n", start)
+            if newline_pos != -1 and newline_pos < start + 20:
+                start = newline_pos + 1
+            end = text.find("```", start)
+            if end > start:
+                json_str = text[start:end].strip()
+            else:
+                json_str = text[start:].strip()
+            try:
+                return json.loads(json_str)
+            except json.JSONDecodeError:
+                pass
+
+        # Log failure for debugging
+        if self._logger:
+            self._logger.warning(
+                f"Tool {tool_name}: failed to parse arguments: {raw_arguments[:200]}"
+            )
+
+        return {}
 
     def _extract_tool_fragments(self, delta) -> list[ToolCallFragment]:
         """

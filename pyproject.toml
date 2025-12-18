@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scrappy-ai"
-version = "1.0.1"
+version = "1.0.2"
 description = "A context-aware coding assistant for everyone. Students, learners, anyone who doesn't want to pay for subscriptions."
 readme = "README.md"
 license = {text = "MIT"}
@@ -27,9 +27,6 @@ classifiers = [
 ]
 dependencies = [
     "litellm>=1.80.10",
-    "groq>=0.4.0",
-    "cohere>=5.0.0",
-    "google-generativeai>=0.8.0",
     "python-dotenv>=1.0.0",
     "openai>=1.0.0",
     "click>=8.0.0",

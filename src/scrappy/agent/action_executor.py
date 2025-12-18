@@ -16,6 +16,7 @@ from .protocols import (
     ToolRunnerProtocol,
     AgentUIProtocol,
 )
+from .cancellation import CancellationTokenProtocol
 
 
 class ActionExecutor:
@@ -34,6 +35,7 @@ class ActionExecutor:
         duplicate_detector: DuplicateDetectorProtocol,
         tool_runner: ToolRunnerProtocol,
         ui: AgentUIProtocol,
+        cancellation_token: Optional[CancellationTokenProtocol] = None,
     ):
         """
         Initialize action executor.
@@ -43,11 +45,13 @@ class ActionExecutor:
             duplicate_detector: Duplicate detection component
             tool_runner: Tool execution component
             ui: User interface component
+            cancellation_token: Optional token for cancellation signaling
         """
         self.safety = safety_checker
         self.duplicate_detector = duplicate_detector
         self.tool_runner = tool_runner
         self.ui = ui
+        self._cancellation_token = cancellation_token
 
     def execute(
         self,
@@ -74,6 +78,10 @@ class ActionExecutor:
         Returns:
             ActionResult with execution details
         """
+        # Check for force cancellation before starting
+        if self._is_force_cancelled():
+            return self._make_cancelled_result(action)
+
         # Display thinking
         self.ui.show_thinking(action.thought)
 
@@ -90,8 +98,16 @@ class ActionExecutor:
         if missing:
             return self._handle_missing_params(action, missing)
 
+        # Check for cancellation before asking for user approval
+        # This prevents the prompt from appearing after user pressed Escape
+        if self._is_cancelled():
+            return self._make_cancelled_result(action)
+
         # 1. Safety & Confirmation
         if not self._check_safety_and_get_approval(action, state):
+            # Check if this denial was due to cancellation
+            if self._is_cancelled():
+                return self._make_cancelled_result(action)
             return ActionResult(
                 success=False,
                 output="Action denied by user",
@@ -126,6 +142,10 @@ class ActionExecutor:
                 executed=False
             )
 
+        # Check for force cancellation before execution
+        if self._is_force_cancelled():
+            return self._make_cancelled_result(action)
+
         # 4. Execution
         self.ui.show_progress(f"Executing: {action.action}")
 
@@ -141,6 +161,11 @@ class ActionExecutor:
             # Display the result
             output_str = str(tool_result)
             self.ui.show_result(output_str, is_error=not tool_result.success)
+
+            # Notify UI if tasks were updated
+            if tool_result.metadata.get("tasks_changed"):
+                tasks = tool_result.metadata.get("tasks", [])
+                self.ui.notify_tasks_updated(tasks)
 
             return ActionResult(
                 success=tool_result.success,
@@ -332,4 +357,30 @@ class ActionExecutor:
             parameters=action.parameters,
             approved=False,
             executed=False
+        )
+
+    def _is_force_cancelled(self) -> bool:
+        """Check if force cancellation was requested."""
+        if not self._cancellation_token:
+            return False
+        if hasattr(self._cancellation_token, 'is_force_cancelled'):
+            return self._cancellation_token.is_force_cancelled()
+        return False
+
+    def _is_cancelled(self) -> bool:
+        """Check if any cancellation (graceful or force) was requested."""
+        if not self._cancellation_token:
+            return False
+        return self._cancellation_token.is_cancelled()
+
+    def _make_cancelled_result(self, action: AgentAction) -> ActionResult:
+        """Create a result indicating the action was cancelled."""
+        return ActionResult(
+            success=False,
+            output="Action cancelled by user",
+            action=action.action,
+            parameters=action.parameters,
+            approved=False,
+            executed=False,
+            metadata={"cancelled": True}
         )

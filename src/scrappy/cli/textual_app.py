@@ -111,6 +111,21 @@ class ActivityStateChange(Message):
         self.elapsed_ms = elapsed_ms
 
 
+class TasksUpdated(Message):
+    """Message for updating the task progress widget.
+
+    Posted when the agent's task list changes (add, update, delete, clear).
+    The main thread handles this by updating the TaskProgressWidget.
+
+    Args:
+        tasks: Current list of tasks to display.
+    """
+
+    def __init__(self, tasks: list) -> None:
+        super().__init__()
+        self.tasks = tasks
+
+
 # =============================================================================
 # Thread-Safe Bridge
 # =============================================================================
@@ -222,6 +237,14 @@ class TextualOutputAdapter:
 
     def post_renderable(self, obj: Any) -> None:
         self._queue.put(('renderable', obj))
+
+    def post_tasks_updated(self, tasks: list) -> None:
+        """Post task list update to UI.
+
+        Args:
+            tasks: List of Task objects to display.
+        """
+        self._queue.put(('tasks', tasks))
 
     def get_message(self, block: bool = True, timeout: Optional[float] = None) -> Optional[tuple[str, Any]]:
         try:
@@ -740,12 +763,35 @@ class ScrappyApp(App):
         else:
             self._show_main_screen(env_key_count=env_key_count)
 
+    def exit(
+        self,
+        result: object = None,
+        return_code: int = 0,
+        message: object = None,
+    ) -> None:
+        """Override exit to ensure bridge shutdown before worker wait.
+
+        Textual waits for workers to complete before on_unmount is called.
+        If a worker is blocked on bridge.blocking_confirm(), this creates
+        a deadlock. Signal shutdown early to unblock workers.
+        """
+        self._should_stop_consumer = True
+        self.bridge.shutdown()
+
+        # Cancel any running agent to unblock its worker thread
+        if hasattr(self, 'interactive_mode') and self.interactive_mode:
+            agent_mgr = self.interactive_mode.command_router.agent_mgr
+            if agent_mgr:
+                agent_mgr.cancel()
+
+        super().exit(result, return_code, message)
+
     def on_unmount(self) -> None:
         """Called when app is about to close."""
         self._should_stop_consumer = True
         OutputModeContext.set_tui_mode(False)
 
-        # Signal bridge to release any blocked worker threads
+        # Signal bridge to release any blocked worker threads (redundant but safe)
         self.bridge.shutdown()
 
         if self._codebase_context is not None:
@@ -919,6 +965,8 @@ class ScrappyApp(App):
                     self.post_message(WriteOutput(content))
                 elif msg_type == 'renderable':
                     self.post_message(WriteRenderable(content))
+                elif msg_type == 'tasks':
+                    self.post_message(TasksUpdated(content))
 
             except Exception as e:
                 logger.exception(f"Error consuming output queue: {e}")
@@ -976,3 +1024,11 @@ class ScrappyApp(App):
         screen = self.screen
         if isinstance(screen, MainAppScreen):
             screen.update_activity(message)
+
+    def on_tasks_updated(self, message: TasksUpdated) -> None:
+        """Route task updates to active screen."""
+        from .screens import MainAppScreen
+
+        screen = self.screen
+        if isinstance(screen, MainAppScreen):
+            screen.update_tasks(message.tasks)

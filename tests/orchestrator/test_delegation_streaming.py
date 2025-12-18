@@ -371,7 +371,8 @@ async def test_stream_delegate_passes_params_to_service(delegation_manager_strea
     assert len(llm_service.stream_calls) == 1
     call = llm_service.stream_calls[0]
 
-    assert call['model'] == "quality"
+    # When specific model is provided, it should be used directly (not resolved to group)
+    assert call['model'] == "custom-model"
     assert call['messages'] == [
         {"role": "system", "content": "You are helpful"},
         {"role": "user", "content": "test prompt"}
