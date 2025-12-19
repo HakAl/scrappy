@@ -13,10 +13,6 @@ Tune thresholds by observing logged score distributions.
 
   Tool Issues:
 
-  2. Search tool overlap - find_exact_text and codebase_search serve different purposes but the agent might not know
-  when to use which. The distinction (exact vs semantic) could be clearer in descriptions.
-  3. 6 git tools - git_log, git_status, git_diff, git_blame, git_show, git_recent_changes. Could arguably be one git
-  tool with a subcommand parameter. Though separate tools do make the LLM's job easier.
   4. No "think" or "scratchpad" tool - The agent has complete to end, but no explicit tool to pause and reason without
   taking action. Some agent frameworks include this.
   5. Research mode tool gating - CODEBASE research gets file tools, GENERAL gets web tools. If classification is wrong,

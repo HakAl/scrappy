@@ -10,24 +10,6 @@ Feature Requests / Enhancements
 
 ---
 
-### 4.2 Diff Preview
-**Status:** NOT IMPLEMENTED
-**Impact:** Medium - helpful for reviewing changes
-
-**Solution:** Show diff preview before applying file changes.
-
----
-
-### 4.3 Streaming Responses
-**Status:** NOT IMPLEMENTED
-**Impact:** Medium - better UX for long responses
-
-**Problem:** Token-by-token generation would improve perceived responsiveness.
-
-**Solution:** Implement streaming for LLM responses.
-
----
-
 ### 4.4 Structured Output Validation
 **Status:** NOT IMPLEMENTED
 **Impact:** Medium - reliability improvement

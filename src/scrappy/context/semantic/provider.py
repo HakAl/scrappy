@@ -161,6 +161,7 @@ class LanceDBSearchProvider:
         self._embedding_func = embedding_func  # None means lazy-load default
         self._code_schema = None
         self._is_writing = False  # Write protection flag for graceful shutdown
+        self._chunks_since_fts_rebuild = 0  # Track cumulative chunks for FTS threshold
 
         # Progress reporter (defaults to NullProgressReporter if not provided)
         if progress_reporter is None:
@@ -287,11 +288,6 @@ class LanceDBSearchProvider:
 
         try:
             yield
-        except Exception as e:
-            # Handle internal LanceDB errors (catch-all since LanceDB doesn't have specific exception types)
-            if "lance" in str(type(e)).lower() or "table" in str(e).lower():
-                raise IndexingError(f"Search engine error: {e}")
-            raise  # Re-raise if not a LanceDB error
         finally:
             try:
                 lock.release()
@@ -327,6 +323,21 @@ class LanceDBSearchProvider:
             logger.warning("No files provided for indexing")
             return
 
+        # Validate paths BEFORE acquiring lock or initializing DB
+        # This avoids unnecessary work when all files have invalid paths
+        valid_files = {}
+        for raw_path, content in files.items():
+            try:
+                norm_path = self._normalize_path(raw_path)
+                valid_files[norm_path] = content
+            except (ValueError, IndexingError):
+                logger.debug(f"Skipping invalid path: {raw_path}")
+                continue
+
+        if not valid_files:
+            logger.warning("No valid files after path validation")
+            return
+
         self._ensure_db()
         self._ensure_schema()  # Lazy-initialize embedding function and schema
 
@@ -336,7 +347,7 @@ class LanceDBSearchProvider:
 
             if not table_exists:
                 logger.info("Creating new index table")
-                self._create_and_populate(files)
+                self._create_and_populate(valid_files)
                 return
 
             table = self._db.open_table(TABLE_NAME)
@@ -351,20 +362,15 @@ class LanceDBSearchProvider:
             except Exception as e:
                 # Schema mismatch or corruption - rebuild
                 logger.warning(f"Could not read existing index ({type(e).__name__}: {e}). Rebuilding...")
-                self._create_and_populate(files)
+                self._create_and_populate(valid_files)
                 return
 
-            # 2. Calculate Diff
+            # 2. Calculate Diff (using pre-validated paths)
             files_to_add = {}     # {path: content}
             paths_to_remove = []  # [path]
 
-            # Check filesystem against DB
-            for raw_path, content in files.items():
-                try:
-                    norm_path = self._normalize_path(raw_path)
-                except ValueError:
-                    continue  # Skip unsafe paths
-
+            # Check filesystem against DB (paths already normalized)
+            for norm_path, content in valid_files.items():
                 current_hash = self._compute_hash(content)
 
                 # If new or modified
@@ -376,12 +382,7 @@ class LanceDBSearchProvider:
             # Check DB against filesystem (detect deletions)
             # SKIP during batched indexing to avoid deleting files from previous batches
             if not is_batch:
-                fs_paths_set = set()
-                for p in files:
-                    try:
-                        fs_paths_set.add(self._normalize_path(p))
-                    except ValueError:
-                        pass
+                fs_paths_set = set(valid_files.keys())
 
                 for db_path in db_state:
                     if db_path not in fs_paths_set:
@@ -412,43 +413,27 @@ class LanceDBSearchProvider:
 
             table.cleanup_old_versions()
 
-    def _create_and_populate(self, files: Dict[str, str]):
-        """Create table from scratch."""
-        logger.info(f"Creating new index from {len(files)} files")
+    def _create_and_populate(self, valid_files: Dict[str, str]):
+        """
+        Create table from scratch with pre-validated files.
+
+        Args:
+            valid_files: Dict mapping normalized paths to content (already validated)
+        """
+        logger.info(f"Creating new index from {len(valid_files)} files")
 
         # Drop if exists
         if TABLE_NAME in self._db.table_names():
             logger.debug("Dropping existing table")
             self._db.drop_table(TABLE_NAME)
 
-        # Don't create table if no valid files
-        if not files:
+        # Don't create table if no files
+        if not valid_files:
             logger.warning("No files to index, skipping table creation")
             return
 
-        # Normalize and validate paths BEFORE creating table
-        valid_files = {}
-        skipped = 0
-        for k, v in files.items():
-            try:
-                norm_path = self._normalize_path(k)
-                valid_files[norm_path] = v
-            except ValueError as e:
-                logger.warning(f"Path normalization failed for {k}: {e}")
-                skipped += 1
-            except Exception as e:
-                logger.error(f"Unexpected error normalizing {k}: {e}")
-                skipped += 1
-
-        if skipped > 0:
-            logger.warning(f"Skipped {skipped}/{len(files)} files with invalid paths")
-
-        if not valid_files:
-            logger.error(f"No valid files after normalization. Project path: {self._project_path}")
-            return
-
-        # Only create table if we have valid files to index
-        logger.info(f"Creating table and indexing {len(valid_files)} valid files")
+        # Create table and index files (paths already validated by caller)
+        logger.info(f"Creating table and indexing {len(valid_files)} files")
         table = self._db.create_table(TABLE_NAME, schema=self._code_schema)
 
         metrics = self._add_files_in_batches(table, valid_files)
@@ -606,7 +591,7 @@ class LanceDBSearchProvider:
 
     def _maybe_rebuild_fts(self, table, chunks_added: int, force: bool = False) -> None:
         """
-        Conditionally update FTS index based on chunks added.
+        Conditionally update FTS index based on cumulative chunks added.
 
         Uses incremental FTS indexing (replace=False) when possible to avoid
         locking readers. Falls back to full rebuild on initial creation or
@@ -614,7 +599,7 @@ class LanceDBSearchProvider:
 
         FTS rebuilding is O(N) where N is total rows. For small updates,
         this overhead isn't worth it. Only rebuild when significant
-        data has been added.
+        data has been added cumulatively since last rebuild.
 
         Args:
             table: LanceDB table
@@ -623,9 +608,12 @@ class LanceDBSearchProvider:
         """
         threshold = self._config.fts_rebuild_threshold
 
-        if not force and chunks_added < threshold:
+        # Track cumulative chunks since last FTS rebuild
+        self._chunks_since_fts_rebuild += chunks_added
+
+        if not force and self._chunks_since_fts_rebuild < threshold:
             logger.debug(
-                f"Skipping FTS rebuild ({chunks_added} chunks < {threshold} threshold)"
+                f"Skipping FTS rebuild ({self._chunks_since_fts_rebuild} cumulative chunks < {threshold} threshold)"
             )
             return
 
@@ -637,6 +625,8 @@ class LanceDBSearchProvider:
                 try:
                     logger.debug(f"Updating FTS index incrementally ({row_count} rows)")
                     table.create_fts_index("content", replace=False)
+                    # Reset counter after successful FTS rebuild
+                    self._chunks_since_fts_rebuild = 0
                 except Exception as e:
                     # Index may already exist or incremental not supported
                     # Fall back to full rebuild
@@ -644,14 +634,19 @@ class LanceDBSearchProvider:
                     if "already exists" in error_msg or "exist" in error_msg:
                         # Index exists and is up to date - this is expected
                         logger.debug("FTS index already exists, skipping update")
+                        # Reset counter - index is current
+                        self._chunks_since_fts_rebuild = 0
                     else:
                         # Other error - try full rebuild
                         logger.debug(f"Incremental FTS update failed ({e}), trying full rebuild")
                         table.create_fts_index("content", replace=True)
+                        # Reset counter after successful FTS rebuild
+                        self._chunks_since_fts_rebuild = 0
             else:
                 logger.warning("Table is empty, skipping FTS index creation")
         except Exception as e:
             logger.warning(f"FTS indexing failed (search will still work via vector): {e}")
+            # Don't reset counter on failure - try again next time
 
     # --- Core: Retrieval ---
 
@@ -703,8 +698,11 @@ class LanceDBSearchProvider:
                 .limit(max_results)
                 .to_list()
             )
+        except (KeyboardInterrupt, SystemExit, MemoryError):
+            # Don't catch fatal errors - let them propagate
+            raise
         except Exception as e:
-            # Fallback if FTS index broken or missing
+            # Fallback if FTS index broken or missing (e.g., index not created, corrupted)
             logger.warning(f"Hybrid search failed ({e}), falling back to vector search")
             results = table.search(query_vector, query_type="vector").limit(max_results).to_list()
 

@@ -2,10 +2,6 @@
 
 
 ---
-
----
-
----
 NEXT UP
 ---
 ✶ Adding verbose config… (esc to interrupt - 8m 5s)
@@ -14,6 +10,19 @@ NEXT UP
      [] Wire cancellation through AgentLoop
      [] Add Escape binding to main_screen
      [] Enhance audit logging with thinking field
+
+Write(tests\platform\test_executors.py)
+- Wrote 1 lines to tests\platform\test_executors.py
+```
+1 """
+2 Tests for command executors.
+3 Tests the different execution strategies: native, translated, and fallback.
+4 """
+5 import subprocess
+6 from pathlib import Path
+7 from unittest.mock import Mock, patch, MagicMock
+8 import pytest
+```
 ---
 
 ---

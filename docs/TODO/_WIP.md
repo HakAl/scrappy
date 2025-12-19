@@ -1,22 +1,2 @@
-src\scrappy\cli\screens\__init__.py 	4 	4 	0 	0.00%
-src\scrappy\cli\screens\chat_layout.py 	48 	48 	0 	0.00%
-src\scrappy\cli\screens\main_screen.py 	174 	174 	4 	0.00%
-src\scrappy\cli\screens\wizard_screen.py 	76 	76 	3 	0.00%
-src\scrappy\cli\types.py 	5 	5 	0 	0.00%
-src\scrappy\platform\executors.py 	83 	67 	0 	19.28%
-src\scrappy\context\semantic\initializer.py 	162 	127 	11 	21.60%
-src\scrappy\cli\textual_interactive.py 	42 	31 	12 	26.19%
-src\scrappy\task_router\strategies\agent_executor.py 	95 	64 	3 	32.63%
-src\scrappy\cli\smart_query.py 	77 	49 	0 	36.36%
-src\scrappy\cli\core.py 	140 	86 	3 	38.57%
-src\scrappy\cli\research_handlers\bug_investigation.py 	21 	12 	0 	42.86%
-src\scrappy\cli\research_handlers\testing.py 	21 	12 	0 	42.86%
-src\scrappy\cli\textual_app.py 	322 	184 	5 	42.86%
-src\scrappy\infrastructure\exceptions\cli_errors.py 	74 	42 	0 	43.24%
-src\scrappy\cli\research_handlers\dependency_info.py 	23 	13 	0 	43.48%
-src\scrappy\context\semantic\provider.py 	398 	223 	6 	43.97%
-src\scrappy\cli\research_handlers\architecture.py 	20 	11 	0 	45.00%
-src\scrappy\agent\duplicate_detector.py 	42 	22 	0 	47.62%
-src\scrappy\cli\research_handlers\configuration.py 	21 	11 	0 	47.62%
-src\scrappy\orchestrator\rate_limiting\policy.py 	27 	14 	0 	48.15%
-src\scrappy\cli\research_handlers\documentation.py 	16 	8 	0 	50.00%
+
+

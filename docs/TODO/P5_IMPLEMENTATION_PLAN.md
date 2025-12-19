@@ -2,26 +2,9 @@
 
 ## Overview
 
-These issues have been investigated and require attention.
-
-P5 issues are confirmed bugs that impact efficiency and edge-case behavior but are not blocking.
-
----
-
-## Issues Summary
-
-| Issue | Status | Impact | Effort |
-|-------|--------|--------|--------|
-| 5.4 Premature Task Completion | PARTIALLY CONFIRMED | Medium | Medium |
 
 
 
-## Issue 5.4: Premature Task Completion
-
-### Problem Statement
-
-The agent may declare task completion prematurely, especially in dry-run mode where the meaningful actions guard is bypassed. 
-Complex tasks may overwhelm the agent, causing it to give up early.
 
 ### Current Behavior
 
@@ -197,7 +180,7 @@ class CompletionValidator:
 
 #### Step 2: Fix dry-run bypass
 
-**File:** `src/agent/agent_loop.py:338-346`
+**File:** `src/agent/agent_loop.py`
 
 Change from:
 ```python

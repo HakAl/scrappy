@@ -8,7 +8,6 @@
 
 | Feature | Priority | Effort | Source | Rationale |
 |---------|----------|--------|--------|-----------|
-| **Todo Tool** | High | Medium | TODO_TOOL | Agent forgets progress on complex tasks |
 | **Test Runner Tool** | High | Medium | TEST_RUNNER_TOOL | Closes the TDD verification loop |
 | **Proactive rate limiting** | High | High | RATE_LIMITING | Stop wasting API calls on exhausted providers |
 | **Smart staleness detection** | Medium | Medium | IDEAL_UX | JIT reindex only referenced files |

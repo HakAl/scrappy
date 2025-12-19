@@ -44,27 +44,7 @@ After reviewing all TODO documents, here is my analysis organized by **impact vs
 
 ---
 
-### 4. LiteLLM Integration (LITELLM.md)
-
-**Why Medium:** Infrastructure improvement, not user-facing.
-
-**The doc is correct:** Your router is the "brain" (cognitive routing), LiteLLM is the "muscle" (connectivity, retries, fallbacks).
-
-**What to do:**
-- Keep your routing logic
-- Replace raw API calls with LiteLLM `completion()` calls
-- Gain: automatic retries, fallbacks, unified interface
-
-**Dependencies:**
-- Cleaner if orchestrator is refactored first
-- Enables easier Judge implementation
-
-**Effort:** Medium
-**Impact:** Medium (reliability improvement)
-
----
-
-### 5. TDD Loop (TDD_LOOP.md)
+### 4. TDD Loop (TDD_LOOP.md)
 
 **Why Medium:** Powerful self-healing capability, but complex.
 
@@ -92,7 +72,7 @@ After reviewing all TODO documents, here is my analysis organized by **impact vs
 
 ## Tier 3: Lower Priority (Nice to Have)
 
-### 6. Seamless Escalation (SEAMLESS_ESCALATION.md)
+### 5. Seamless Escalation (SEAMLESS_ESCALATION.md)
 
 **Why Lower:** UX polish, not core capability.
 
@@ -110,7 +90,7 @@ After reviewing all TODO documents, here is my analysis organized by **impact vs
 
 ---
 
-### 7. Gym / Model-Based Evaluation (GYM.md)
+### 6. Gym / Model-Based Evaluation (GYM.md)
 
 **Why Lower:** Meta-tooling, not product feature.
 
@@ -132,12 +112,10 @@ After reviewing all TODO documents, here is my analysis organized by **impact vs
 
 ```
 Phase 1: Foundation
-  [1] God Class Refactor (orchestrator, agent core)
   [2] Test Runner Tool
   [3] TODO Tool
 
 Phase 2: Infrastructure
-  [4] LiteLLM Integration
   [5] Parallel Tool Execution
 
 Phase 3: Quality Loop

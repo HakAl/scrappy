@@ -38,10 +38,6 @@ It is easy to extend the command palette with custom commands for your applicati
 ---
 
 ---
-**Conversation memory** - Persist chat history across sessions
----
-
----
 **Agent memory** - Learn from previous successful actions
 ---
 

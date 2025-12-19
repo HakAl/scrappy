@@ -1,8 +1,8 @@
 
 **Judge or Magistrate Pattern**
 
-However, you hit on the perfect solution: **The Judge (or "Magistrate") Pattern.**
-You don't need a *smart* coder; you need a *strict* reviewer. And for that, you don't need Gemini 3.0. You need a model that excels at **Logic & Instruction Following**, not necessarily creative generation.
+You don't need a *smart* coder; you need a *strict* reviewer.
+And for that, you don't need Gemini 3.0. You need a model that excels at **Logic & Instruction Following**, not necessarily creative generation.
 
 Here is your "Token-Poor" Judge architecture using open-weight models that punch way above their weight class.
 

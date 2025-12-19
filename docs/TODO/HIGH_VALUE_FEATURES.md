@@ -23,8 +23,6 @@ Priority Implementation List
   -------------------------------------------------------------------------------------------------------------|
   | 3        | Provider Performance Tracking | Medium | Natural extension of existing MetricsCollector. Enables
   intelligent routing decisions. Required foundation for proactive rate limiting.                                  |
-  | 4        | Semantic Search Tool          | Medium | Core infrastructure already exists (LanceDBSearchProvider,
-  SemanticSearchInitializer). Only needs thin tool wrapper and DI wiring. Unlocks significant agent capability. |
 
   Tier 3: Significant Investment (Higher Effort, High Impact)
 
@@ -45,8 +43,6 @@ Priority Implementation List
       |
   Provider Perf Tracking (3-4 days)
       |
-      +---> Semantic Search Tool (2-3 days)
-      |
       +---> Rate Limit Enforcement (5-7 days)
 
   Key Dependencies:
@@ -65,13 +61,7 @@ Priority Implementation List
   - The migration strategy shown is practical and user-friendly
   - Aligns with your protocol-first architecture (could define ConfigPathProtocol)
 
-  2. VCR.py / pytest-recording - HIGH VALUE
-  - Directly addresses your CLAUDE.md mandate: "NEVER MAKE REAL API CALLS IN TESTS"
-  - Your current architecture with protocols makes this easy to integrate
-  - Cassettes give deterministic, free, fast tests
-  - Already have MetricsCollector tracking execution - this complements it
-
-  3. Provider Performance Tracking - HIGH VALUE
+  2. Provider Performance Tracking - HIGH VALUE
   - You already have MetricsCollector with success rates and execution times
   - Extending to track per-provider stats is a natural evolution
   - Supports "Automatic strategy tuning based on success rates" (next item)
@@ -83,7 +73,6 @@ Priority Implementation List
   | Feature                | Effort | Value   | Recommendation |
   |------------------------|--------|---------|----------------|
   | XDG/platformdirs       | Low    | High    | Do it          |
-  | VCR.py testing         | Low    | High    | Do it          |
   | Provider perf tracking | Medium | High    | Do it          |
 ---
 
@@ -239,135 +228,7 @@ class LegacyMigration:
 
 ---
 
-### 2. VCR.py / pytest-recording for Deterministic API Tests
-
-**Goal:** Record real API responses once, replay forever for fast/free/deterministic tests.
-
-**Why This Fits Your Architecture:**
-- You already have `LLMProviderProtocol` - VCR intercepts at HTTP level below this
-- Works transparently with existing provider implementations
-- No code changes to production code required
-
-**Setup:**
-
-```bash
-pip install pytest-recording
-```
-
-**pytest Configuration:**
-
-```python
-# conftest.py
-
-import pytest
-
-@pytest.fixture(scope="module")
-def vcr_config():
-    """Configure VCR for API response recording."""
-    return {
-        "filter_headers": [
-            "authorization",
-            "x-api-key",
-            "api-key",
-        ],
-        "filter_query_parameters": [
-            "key",
-            "api_key",
-        ],
-        "record_mode": "once",  # Record once, replay forever
-        "match_on": ["method", "scheme", "host", "port", "path", "query", "body"],
-        "cassette_library_dir": "tests/cassettes",
-    }
-```
-
-**Example Test Pattern:**
-
-```python
-# tests/integration/test_providers_vcr.py
-
-import pytest
-from src.providers.groq import GroqProvider
-
-@pytest.mark.vcr()
-class TestGroqProviderVCR:
-    """
-    Integration tests using recorded API responses.
-
-    First run: Makes real API call, saves to tests/cassettes/
-    Subsequent runs: Replays saved response (fast, free, deterministic)
-    """
-
-    def test_chat_completion_basic(self, real_groq_provider):
-        """Test basic chat completion with recorded response."""
-        response = real_groq_provider.chat(
-            messages=[{"role": "user", "content": "Say hello"}],
-            model="llama-3.1-8b-instant",
-        )
-
-        assert response.content is not None
-        assert len(response.content) > 0
-        assert response.model == "llama-3.1-8b-instant"
-
-    def test_handles_rate_limit_response(self):
-        """Test rate limit handling with recorded 429 response."""
-        # This cassette contains a recorded 429 response
-        # Allows testing retry logic without hitting real rate limits
-        ...
-
-@pytest.fixture
-def real_groq_provider():
-    """
-    Provider configured for VCR recording.
-    Uses real API key from env for initial recording.
-    """
-    return GroqProvider(api_key=os.environ.get("GROQ_API_KEY", "test-key"))
-```
-
-**Directory Structure:**
-
-```
-tests/
-  cassettes/                          # Recorded API responses
-    test_groq_provider_vcr/
-      test_chat_completion_basic.yaml
-      test_handles_rate_limit_response.yaml
-    test_gemini_provider_vcr/
-      ...
-  integration/
-    test_providers_vcr.py             # VCR-enabled integration tests
-  unit/
-    ...                               # Existing unit tests (no VCR needed)
-```
-
-**Recording New Cassettes:**
-
-```bash
-# Record fresh cassettes (requires valid API keys)
-GROQ_API_KEY=xxx pytest tests/integration/ --record-mode=rewrite
-
-# Normal test run (uses recorded cassettes)
-pytest tests/integration/
-```
-
-**Best Practices:**
-1. Never commit API keys - filter_headers removes them from cassettes
-2. Record cassettes in CI with secrets, commit the sanitized YAML
-3. Use `--record-mode=none` in CI to fail if cassette missing
-4. Separate cassette dirs per test module for organization
-
-**Files to Create:**
-- `tests/conftest.py` - VCR configuration
-- `tests/integration/test_providers_vcr.py` - VCR-enabled tests
-- `tests/cassettes/.gitkeep` - Cassette directory
-
-**Integration with Existing Tests:**
-- Keep existing unit tests unchanged (they use mocks/protocols)
-- VCR tests are additive - they test real provider behavior
-- Run VCR tests in separate CI job with longer timeout
-
----
-
-### 3. Provider Performance Tracking
+### 2. Provider Performance Tracking
 
 **Goal:** Track per-provider metrics (latency, success rate, cost) to enable intelligent routing.
 
