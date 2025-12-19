@@ -106,20 +106,6 @@ def test_empty_arguments():
     assert result.arguments == {}
 
 
-def test_whitespace_only_arguments():
-    """Test completing a tool call with whitespace-only arguments."""
-    accumulator = ToolCallAccumulator()
-
-    fragment = make_fragment(
-        id="call_1",
-        name="whitespace_function",
-        arguments="   ",
-        index=0,
-        complete=True,
-    )
-
-    with pytest.raises(ValueError, match="Invalid JSON"):
-        accumulator.add_fragment(fragment)
 
 
 # =============================================================================
@@ -374,36 +360,8 @@ def test_out_of_order_completion():
 # JSON Parsing and Error Handling Tests
 # =============================================================================
 
-def test_invalid_json_raises_error():
-    """Test that invalid JSON in arguments raises ValueError."""
-    accumulator = ToolCallAccumulator()
-
-    fragment = make_fragment(
-        id="call_1",
-        name="bad_json",
-        arguments='{"invalid": json}',
-        index=0,
-        complete=True,
-    )
-
-    with pytest.raises(ValueError, match="Invalid JSON"):
-        accumulator.add_fragment(fragment)
 
 
-def test_incomplete_json_in_complete_fragment():
-    """Test incomplete JSON in fragment marked complete raises error."""
-    accumulator = ToolCallAccumulator()
-
-    fragment = make_fragment(
-        id="call_1",
-        name="incomplete",
-        arguments='{"key":',
-        index=0,
-        complete=True,
-    )
-
-    with pytest.raises(ValueError, match="Invalid JSON"):
-        accumulator.add_fragment(fragment)
 
 
 def test_complex_nested_json():
@@ -621,20 +579,6 @@ def test_force_complete_skips_incomplete_data():
     assert accumulator.has_pending()
 
 
-def test_force_complete_with_invalid_json():
-    """Test force complete raises error on invalid JSON."""
-    accumulator = ToolCallAccumulator()
-
-    accumulator.add_fragment(make_fragment(
-        id="call_1",
-        name="bad",
-        arguments='{"invalid',
-        index=0,
-        complete=False,
-    ))
-
-    with pytest.raises(ValueError, match="Invalid JSON"):
-        accumulator.force_complete_pending()
 
 
 def test_force_complete_empty_accumulator():

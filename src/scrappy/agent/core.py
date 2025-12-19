@@ -13,11 +13,8 @@ from pathlib import Path
 from typing import Optional, Union, Any
 
 from ..agent_config import AgentConfig
-from ..agent_tools.tools import ToolRegistry, ToolContext
+from ..agent_tools.tools import ToolContext
 from ..agent_tools.tools.command_tool import ShellCommandExecutor
-
-# Import IO protocol from shared location (no circular dependency)
-from ..protocols.io import CLIIOProtocol
 
 from ..orchestrator_adapter import (
     OrchestratorAdapter,
@@ -27,12 +24,7 @@ from ..infrastructure.exceptions import AllProvidersRateLimitedError
 from ..agent_tools.registry_factory import create_default_registry
 
 from .types import (
-    AgentThought,
-    AgentAction,
-    ActionResult,
-    EvaluationResult,
     ConversationState,
-    AgentContext,
 )
 from .audit import AuditLogger
 from .response_parser import UnifiedResponseParser
@@ -338,7 +330,8 @@ class CodeAgent:
             command_timeout=self.config.command_timeout,
             max_command_output=self.config.max_command_output,
             dangerous_commands=self.config.dangerous_commands,
-            semantic_search=semantic_search
+            semantic_search=semantic_search,
+            profile=self.config.tool_profile,
         )
 
     def _create_default_command_executor(self):
@@ -503,7 +496,7 @@ class CodeAgent:
                          fg="green" if result.returncode == 0 else "red")
 
             if result.returncode == 0:
-                return f"Command completed successfully (exit code 0). Output was displayed directly to terminal."
+                return "Command completed successfully (exit code 0). Output was displayed directly to terminal."
             else:
                 return f"Command finished with exit code {result.returncode}. Check terminal output for details."
 

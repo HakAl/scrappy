@@ -13,13 +13,12 @@ import threading
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
-
-logger = logging.getLogger(__name__)
-
 from ..infrastructure.protocols import PathProviderProtocol
-from ..infrastructure.paths import ScrappyPathProvider
 from scrappy.platform.protocols.detection import PlatformDetectorProtocol
 from scrappy.platform import create_platform_detector
+
+
+logger = logging.getLogger(__name__)
 
 
 class AuditLogger:
@@ -166,6 +165,7 @@ class AuditLogger:
         result: str,
         approved: bool,
         thinking: Optional[str] = None,
+        blocked: bool = False,
     ) -> None:
         """
         Log an action to the audit trail and save incrementally.
@@ -176,6 +176,7 @@ class AuditLogger:
             result: The result of the action
             approved: Whether the action was approved by user
             thinking: Optional LLM reasoning that led to this action
+            blocked: Whether the action was blocked (e.g., duplicate detection)
         """
         truncated_result = (
             result[:self.max_result_length]
@@ -193,6 +194,9 @@ class AuditLogger:
         # Only include thinking if provided (keeps logs smaller when not needed)
         if thinking:
             entry['thinking'] = thinking
+        # Only include blocked if true (keeps logs smaller for normal actions)
+        if blocked:
+            entry['blocked'] = True
         self.log.append(entry)
 
         # Auto-save after each action for crash safety

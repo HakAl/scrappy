@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional, Set
 import re
 
 from scrappy.infrastructure.config import BaseConfig
-from scrappy.infrastructure.theme import ThemeProtocol, load_theme_from_config, DEFAULT_THEME
+from scrappy.infrastructure.theme import ThemeProtocol, load_theme_from_config
 
 # Import from existing config modules
 from scrappy.cli.config.extensions import (

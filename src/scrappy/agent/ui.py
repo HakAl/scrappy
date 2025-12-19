@@ -10,7 +10,6 @@ from typing import Optional, Dict, Any, List, Callable
 import json
 
 from ..protocols.io import CLIIOProtocol
-from .protocols import AgentUIProtocol
 from ..infrastructure.theme import ThemeProtocol, DEFAULT_THEME
 
 

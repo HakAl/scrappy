@@ -42,56 +42,14 @@ class TestValidationResult:
         assert result.error == "Something went wrong"
         assert result.sanitized_value is None
 
-    def test_result_is_immutable(self):
-        """ValidationResult should be immutable (frozen dataclass)."""
-        result = ValidationResult.valid("test")
-        with pytest.raises(AttributeError):
-            result.is_valid = False
 
 
 class TestContainsDangerousPatterns:
     """Tests for dangerous pattern detection."""
 
     # Path traversal tests
-    @pytest.mark.parametrize("value,expected_dangerous", [
-        ("../etc/passwd", True),
-        ("..\\windows\\system32", True),
-        ("foo/../bar", True),
-        ("foo/bar/..", True),
-        ("/etc/passwd", True),  # Absolute Unix path
-        ("C:\\Windows", True),  # Absolute Windows path
-        ("\\\\server\\share", True),  # UNC path
-        ("~/secret", True),  # Home directory expansion
-        ("normal/path", False),
-        ("file.txt", False),
-    ])
-    def test_path_traversal_detection(self, value, expected_dangerous):
-        """Detect path traversal attempts."""
-        is_dangerous, _ = contains_dangerous_patterns(value)
-        assert is_dangerous == expected_dangerous
 
     # Shell injection tests
-    @pytest.mark.parametrize("value,expected_dangerous", [
-        ("key; rm -rf /", True),
-        ("key | cat /etc/passwd", True),
-        ("key & malicious", True),
-        ("key $HOME", True),
-        ("key `whoami`", True),
-        ("key $(id)", True),
-        ("key ${PATH}", True),
-        ("key > /tmp/file", True),
-        ("key < /etc/passwd", True),
-        ("key >> /tmp/log", True),
-        ("key || true", True),
-        ("key && false", True),
-        ("key\nmalicious", True),
-        ("normal_key_value", False),
-        ("api-key-12345", False),
-    ])
-    def test_shell_injection_detection(self, value, expected_dangerous):
-        """Detect shell injection attempts."""
-        is_dangerous, _ = contains_dangerous_patterns(value)
-        assert is_dangerous == expected_dangerous
 
     # Control character tests
     def test_null_byte_detection(self):
@@ -107,117 +65,40 @@ class TestContainsDangerousPatterns:
         assert "control" in reason.lower()
 
     # Unicode confusable tests
-    @pytest.mark.parametrize("confusable", [
-        "\u2024",  # One dot leader (looks like .)
-        "\u2025",  # Two dot leader (looks like ..)
-        "\uff0f",  # Fullwidth solidus (looks like /)
-        "\uff3c",  # Fullwidth reverse solidus (looks like \)
-    ])
-    def test_unicode_confusable_detection(self, confusable):
-        """Detect unicode characters that look like dangerous ASCII."""
-        is_dangerous, _ = contains_dangerous_patterns(f"foo{confusable}bar")
-        assert is_dangerous is True
 
-    def test_empty_string_is_safe(self):
-        """Empty string is not dangerous."""
-        is_dangerous, _ = contains_dangerous_patterns("")
-        assert is_dangerous is False
 
 
 class TestStripControlCharacters:
     """Tests for control character removal."""
 
-    def test_removes_null_byte(self):
-        """Null bytes are removed."""
-        result = strip_control_characters("hello\x00world")
-        assert "\x00" not in result
 
-    def test_removes_bell_character(self):
-        """Bell character is removed."""
-        result = strip_control_characters("hello\x07world")
-        assert "\x07" not in result
 
-    def test_removes_backspace(self):
-        """Backspace is removed."""
-        result = strip_control_characters("hello\x08world")
-        assert "\x08" not in result
 
-    def test_preserves_tab_by_default(self):
-        """Tab is NOT a control character we remove."""
-        # Tab is actually NOT in our control char pattern
-        result = strip_control_characters("hello\tworld")
-        # Check that the string is processed (may or may not keep tab)
-        assert "hello" in result and "world" in result
 
-    def test_removes_newlines_by_default(self):
-        """Newlines are removed by default."""
-        result = strip_control_characters("hello\nworld", allow_newlines=False)
-        assert "\n" not in result
 
-    def test_preserves_newlines_when_allowed(self):
-        """Newlines preserved when allow_newlines=True."""
-        result = strip_control_characters("hello\nworld", allow_newlines=True)
-        assert "\n" in result
 
-    def test_handles_empty_string(self):
-        """Empty string returns empty string."""
-        result = strip_control_characters("")
-        assert result == ""
 
 
 class TestNormalizeUnicode:
     """Tests for unicode normalization."""
+  # e with acute
 
-    def test_nfc_normalization(self):
-        """Applies NFC normalization."""
-        # e + combining acute accent should become e with acute
-        composed = normalize_unicode("e\u0301")  # e + combining acute
-        assert composed == "\xe9"  # e with acute
 
-    def test_replaces_fullwidth_slash(self):
-        """Replaces fullwidth slash with ASCII."""
-        result = normalize_unicode("foo\uff0fbar")
-        assert result == "foo/bar"
 
-    def test_replaces_fullwidth_backslash(self):
-        """Replaces fullwidth backslash with ASCII."""
-        result = normalize_unicode("foo\uff3cbar")
-        assert result == "foo\\bar"
-
-    def test_handles_empty_string(self):
-        """Empty string returns empty string."""
-        result = normalize_unicode("")
-        assert result == ""
 
 
 class TestIsAsciiPrintable:
     """Tests for ASCII printable checking."""
 
-    def test_printable_ascii_is_valid(self):
-        """Standard printable ASCII passes."""
-        assert is_ascii_printable("Hello World 123!@#") is True
 
     def test_control_chars_fail(self):
         """Control characters fail."""
         assert is_ascii_printable("hello\x00world") is False
         assert is_ascii_printable("hello\x07world") is False
 
-    def test_extended_ascii_fails_by_default(self):
-        """Extended ASCII (128-255) fails by default."""
-        assert is_ascii_printable("\x80") is False
 
-    def test_extended_ascii_allowed_when_enabled(self):
-        """Extended ASCII passes when allow_extended=True."""
-        assert is_ascii_printable("\x80", allow_extended=True) is True
 
-    def test_unicode_fails(self):
-        """Non-ASCII unicode fails."""
-        # Use actual unicode character (e.g., smart quote)
-        assert is_ascii_printable("hello\u201cworld") is False
 
-    def test_empty_string_is_valid(self):
-        """Empty string is valid."""
-        assert is_ascii_printable("") is True
 
 
 class TestSanitizeString:

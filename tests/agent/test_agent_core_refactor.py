@@ -104,7 +104,7 @@ class TestRegistryCreation:
         assert "read_file" in tool_names
         assert "write_file" in tool_names
         assert "list_files" in tool_names
-        assert "list_directory" in tool_names
+        # list_directory merged into list_files with tree=True param
 
     @pytest.mark.unit
     def test_agent_registry_has_git_tools(self, agent_with_config):
@@ -712,7 +712,7 @@ class TestCommandStreamingExecution:
     """Tests for _run_command_streaming behavior (now in ShellCommandExecutor)."""
 
     @pytest.mark.unit
-    @patch('scrappy.agent_tools.tools.command_tool.subprocess.Popen')
+    @patch('scrappy.agent_tools.components.subprocess_runner.subprocess.Popen')
     def test_captures_command_output(self, mock_popen, agent_with_config):
         """Should capture stdout from command."""
         mock_process = MagicMock()
@@ -727,7 +727,7 @@ class TestCommandStreamingExecution:
         assert "line2" in result
 
     @pytest.mark.unit
-    @patch('scrappy.agent_tools.tools.command_tool.subprocess.Popen')
+    @patch('scrappy.agent_tools.components.subprocess_runner.subprocess.Popen')
     def test_returns_no_output_marker(self, mock_popen, agent_with_config):
         """Should return marker when command produces no output."""
         mock_process = MagicMock()
@@ -763,7 +763,7 @@ class TestCommandStreamingExecution:
             assert "10s" in result
 
     @pytest.mark.unit
-    @patch('scrappy.agent_tools.tools.command_tool.subprocess.Popen')
+    @patch('scrappy.agent_tools.components.subprocess_runner.subprocess.Popen')
     def test_streaming_handles_process_errors_gracefully(self, mock_popen, agent_with_config):
         """Should handle process errors gracefully without crashing."""
         mock_process = MagicMock()
@@ -777,7 +777,7 @@ class TestCommandStreamingExecution:
         assert "Error" in result or "error" in result
 
     @pytest.mark.unit
-    @patch('scrappy.agent_tools.tools.command_tool.subprocess.Popen')
+    @patch('scrappy.agent_tools.components.subprocess_runner.subprocess.Popen')
     def test_sets_environment_for_non_interactive(self, mock_popen, agent_with_config):
         """Should set CI=true to prevent interactive prompts."""
         mock_process = MagicMock()
@@ -794,7 +794,7 @@ class TestCommandStreamingExecution:
         assert call_kwargs['env']['npm_config_yes'] == 'true'
 
     @pytest.mark.unit
-    @patch('scrappy.agent_tools.tools.command_tool.subprocess.Popen')
+    @patch('scrappy.agent_tools.components.subprocess_runner.subprocess.Popen')
     def test_uses_project_root_as_cwd(self, mock_popen, agent_with_config):
         """Should run command in project root directory."""
         mock_process = MagicMock()

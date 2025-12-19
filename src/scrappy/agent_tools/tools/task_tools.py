@@ -429,7 +429,6 @@ class TaskTool(ToolBase):
             )
 
         task = tasks[task_id - 1]
-        old_status = task.status
         task.status = new_status
         storage.write_tasks(tasks)
 

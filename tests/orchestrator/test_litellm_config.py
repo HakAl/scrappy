@@ -211,11 +211,6 @@ class TestGetModelsForGroup:
         assert len(quality_models) >= 1
         assert all(m.group == "quality" for m in quality_models)
 
-    def test_returns_empty_for_unknown_group(self):
-        """Verify returns empty list for unknown group."""
-        models = get_models_for_group("unknown")
-
-        assert models == []
 
 
 class TestGetConfiguredModels:

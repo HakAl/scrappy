@@ -150,7 +150,7 @@ class CLIAgentManager:
         agent.dry_run = dry_run
 
         # Show agent configuration
-        io.echo(f"\nAgent Configuration:")
+        io.echo("\nAgent Configuration:")
         io.echo(f"  Planner (smart tasks): {agent.planner}")
         io.echo(f"  Executor (fast tasks): {agent.executor}")
         io.echo(f"  Project root: {agent.project_root}")

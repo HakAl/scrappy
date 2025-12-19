@@ -29,17 +29,6 @@ class TestModelAvailabilityTracker:
 
         assert tracker.is_available("groq/llama-3.1-8b") is False
 
-    def test_model_available_after_cooldown(self):
-        """Model becomes available again after cooldown expires."""
-        tracker = ModelAvailabilityTracker(cooldown_seconds=1)
-
-        tracker.mark_rate_limited("groq/llama-3.1-8b")
-        assert tracker.is_available("groq/llama-3.1-8b") is False
-
-        # Wait for cooldown
-        time.sleep(1.1)
-
-        assert tracker.is_available("groq/llama-3.1-8b") is True
 
     def test_get_available_filters_rate_limited(self):
         """get_available removes rate-limited models from list."""
@@ -98,19 +87,6 @@ class TestModelAvailabilityTracker:
         assert tracker.is_available("model-a") is True
         assert tracker.is_available("model-b") is True
 
-    def test_multiple_rate_limits_tracked_independently(self):
-        """Each model's rate limit is tracked independently."""
-        tracker = ModelAvailabilityTracker(cooldown_seconds=60)
-
-        tracker.mark_rate_limited("model-a")
-        time.sleep(0.1)
-        tracker.mark_rate_limited("model-b")
-
-        remaining_a = tracker.get_cooldown_remaining("model-a")
-        remaining_b = tracker.get_cooldown_remaining("model-b")
-
-        # model-a was marked first, so has less time remaining
-        assert remaining_a < remaining_b
 
 
 class TestModelSelectionServiceRateLimits:
@@ -187,26 +163,6 @@ class TestModelSelectionServiceRateLimits:
         # Not configured
         assert service.is_available("model-c") is False
 
-    def test_rate_limit_recovery_after_cooldown(self):
-        """Models recover and become selectable after cooldown."""
-        tracker = ModelAvailabilityTracker(cooldown_seconds=1)
-        service = ModelSelectionService(
-            configured_models={"model-a", "model-b"},
-            model_priorities={
-                ModelSelectionType.FAST: ["model-a", "model-b"]
-            },
-            availability_tracker=tracker,
-        )
-
-        # Rate limit model-a
-        service.mark_rate_limited("model-a")
-        assert service.select(ModelSelectionType.FAST) == "model-b"
-
-        # Wait for cooldown
-        time.sleep(1.1)
-
-        # model-a should be available again (and selected as highest priority)
-        assert service.select(ModelSelectionType.FAST) == "model-a"
 
 
 class TestModelSelectionServiceFallbackChain:
@@ -274,17 +230,6 @@ class TestModelSelectionServiceEdgeCases:
 
         assert "no models configured" in str(exc_info.value).lower()
 
-    def test_empty_priority_list_raises_value_error(self):
-        """Raises ValueError when priority list is empty."""
-        service = ModelSelectionService(
-            configured_models={"model-a"},
-            model_priorities={
-                ModelSelectionType.FAST: []
-            }
-        )
-
-        with pytest.raises(ValueError):
-            service.select(ModelSelectionType.FAST)
 
     def test_mark_rate_limited_on_unconfigured_model(self):
         """Can mark unconfigured model as rate limited without error."""

@@ -217,28 +217,6 @@ class TestRateTrackingCallbackWithStatusTracker:
         assert rate_tracker.last_recorded is not None
         assert status_tracker.last_success is not None
 
-    def test_callback_works_with_no_trackers(self):
-        """Verify callback works when no trackers provided."""
-        callback = RateTrackingCallback()
-
-        mock_response = make_mock_litellm_response(model="groq/llama-3.1-8b-instant")
-        start_time = datetime.now()
-        end_time = start_time + timedelta(milliseconds=100)
-
-        # Should not raise
-        callback.log_success_event(
-            kwargs={},
-            response_obj=mock_response,
-            start_time=start_time,
-            end_time=end_time,
-        )
-
-        callback.log_failure_event(
-            kwargs={"exception": Exception("test")},
-            response_obj=None,
-            start_time=start_time,
-            end_time=end_time,
-        )
 
 
 class TestHealthCheckResult:

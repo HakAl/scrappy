@@ -110,7 +110,7 @@ class SubprocessRunner:
                     raise TimeoutError(f"Command timed out after {timeout}s")
 
                 if stall_time > 30 and not stall_warning_shown and stream_output and self._io:
-                    self._io.echo(f"   No output for 30s - command may be waiting for input")
+                    self._io.echo("   No output for 30s - command may be waiting for input")
                     stall_warning_shown = True
 
                 time.sleep(0.5)

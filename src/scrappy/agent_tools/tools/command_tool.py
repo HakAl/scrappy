@@ -5,13 +5,20 @@ Provides shell command execution with security checks, platform fixes,
 retry logic, and output parsing.
 """
 
-import os
-import subprocess
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from .base import ToolBase, ToolParameter, ToolResult, ToolContext
+
+if TYPE_CHECKING:
+    from ..protocols import (
+        CommandSecurityProtocol,
+        CommandAdvisorProtocol,
+        SubprocessRunnerProtocol,
+        OutputParserProtocol,
+    )
+    from scrappy.protocols.io import CLIIOProtocol
 from ..constants import DEFAULT_COMMAND_TIMEOUT, DEFAULT_MAX_COMMAND_OUTPUT
 
 # Import platform utilities
@@ -23,6 +30,13 @@ from scrappy.platform import (
     fix_spring_initializr_command,
     validate_command_for_platform,
     get_python_fallback,
+)
+
+from ..components import (
+    CommandSecurity,
+    CommandAdvisor,
+    SubprocessRunner,
+    OutputParser,
 )
 
 
@@ -45,12 +59,6 @@ def create_shell_executor(
     Returns:
         Fully configured ShellCommandExecutor instance
     """
-    from ..components import (
-        CommandSecurity,
-        CommandAdvisor,
-        SubprocessRunner,
-        OutputParser,
-    )
 
     # Create security validator with custom patterns if provided (None = use defaults)
     security = CommandSecurity(dangerous_patterns=dangerous_commands)
@@ -105,18 +113,6 @@ class ShellCommandExecutor:
             parser: Output parser (default: creates OutputParser)
             io: Optional IO interface for progress output (default: None, suppresses output)
         """
-        from ..protocols import (
-            CommandSecurityProtocol,
-            CommandAdvisorProtocol,
-            SubprocessRunnerProtocol,
-            OutputParserProtocol,
-        )
-        from ..components import (
-            CommandSecurity,
-            CommandAdvisor,
-            SubprocessRunner,
-            OutputParser,
-        )
 
         self.timeout = timeout
         self.max_output = max_output
@@ -200,7 +196,7 @@ class ShellCommandExecutor:
         # 6. Check for long-running commands
         is_long_running = self._is_long_running_command(command)
         if is_long_running and self._io:
-            self._io.echo(f"Long-running command detected")
+            self._io.echo("Long-running command detected")
             self._io.echo(f"   Timeout: {self.timeout}s | Streaming output enabled")
 
         # 7. Execute with retry logic

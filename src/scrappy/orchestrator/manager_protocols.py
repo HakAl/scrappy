@@ -43,6 +43,7 @@ class DelegationManagerProtocol(Protocol):
         system_prompt: Optional[str] = None,
         max_tokens: int = 1000,
         temperature: float = 0.7,
+        messages: Optional[list[dict]] = None,
         **kwargs: Any,
     ) -> LLMResponse:
         """
@@ -55,6 +56,7 @@ class DelegationManagerProtocol(Protocol):
             system_prompt: System prompt for context
             max_tokens: Maximum tokens in response
             temperature: Sampling temperature
+            messages: Pre-built messages array (bypasses prompt/system_prompt)
             **kwargs: Additional provider-specific parameters
 
         Returns:

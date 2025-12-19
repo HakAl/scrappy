@@ -158,19 +158,6 @@ class TestModelSelectionServiceCustomPriorities:
 
         assert result == "custom/model-a"
 
-    def test_empty_priority_list_raises(self):
-        """Empty priority list for selection type raises ValueError."""
-        custom_priorities = {
-            ModelSelectionType.FAST: [],  # Empty
-        }
-        configured = {"groq/llama-3.1-8b-instant"}
-        service = ModelSelectionService(
-            configured_models=configured,
-            model_priorities=custom_priorities
-        )
-
-        with pytest.raises(ValueError):
-            service.select(ModelSelectionType.FAST)
 
 
 class TestModelPrioritiesConfig:

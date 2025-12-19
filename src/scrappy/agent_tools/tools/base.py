@@ -290,9 +290,9 @@ class ToolBase:
             if param.name in kwargs:
                 value = kwargs[param.name]
                 # Type checking (basic)
-                if param.param_type == str and not isinstance(value, str):
+                if param.param_type is str and not isinstance(value, str):
                     return False, f"Parameter {param.name} must be string"
-                elif param.param_type == int and not isinstance(value, int):
+                elif param.param_type is int and not isinstance(value, int):
                     return False, f"Parameter {param.name} must be integer"
 
         return True, None

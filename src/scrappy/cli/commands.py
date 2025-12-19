@@ -10,6 +10,23 @@ import os
 from datetime import datetime
 from pathlib import Path
 
+from ..orchestrator import AgentOrchestrator
+from .utils.session_utils import restore_session_to_cli
+from .utils.error_handler import format_error, get_error_suggestion
+from .utils.dependency_check import check_agent_dependencies
+from .validators import validate_path, validate_provider
+from .exceptions import (
+    CLIError,
+    ValidationError,
+    TaskExecutionError,
+    FileOperationError,
+)
+from .logging import get_logger
+from ..agent import CodeAgent, create_git_checkpoint
+from .config_factory import get_config
+from scrappy.infrastructure.output_mode import OutputModeContext
+from .utils.cli_factory import create_cli_from_context
+
 # Load environment variables from .env file (supplements, doesn't override existing env vars)
 # Suppress dotenv warnings for malformed .env files - users may have syntax issues
 import warnings
@@ -23,8 +40,6 @@ try:
 except ImportError:
     pass  # python-dotenv not installed, skip
 
-from .utils.cli_factory import create_cli_from_context
-
 
 def create_orchestrator_for_command(ctx):
     """Create orchestrator for one-off commands (no CLI/Textual).
@@ -35,7 +50,6 @@ def create_orchestrator_for_command(ctx):
     Returns:
         Initialized AgentOrchestrator
     """
-    from ..orchestrator import AgentOrchestrator
 
     orchestrator = AgentOrchestrator(
         context_aware=ctx.obj.get('context_aware', True),
@@ -48,22 +62,6 @@ def create_orchestrator_for_command(ctx):
         auto_explore=ctx.obj.get('auto_explore', False)
     )
     return orchestrator
-from .utils.session_utils import restore_session_to_cli
-from .utils.error_utils import run_with_error_handling, run_with_recovery
-from .utils.error_handler import format_error, get_error_suggestion
-from .utils.dependency_check import check_agent_dependencies
-from .validators import validate_path, validate_provider
-from .exceptions import (
-    CLIError,
-    ValidationError,
-    TaskExecutionError,
-    FileOperationError,
-    ProviderError,
-)
-from .logging import get_logger
-from ..agent import CodeAgent, create_git_checkpoint, rollback_to_checkpoint
-from .config_factory import get_config
-from scrappy.infrastructure.output_mode import OutputModeContext
 
 
 def display_command_error(e: Exception, operation: str) -> None:
@@ -405,7 +403,7 @@ def context(ctx, clear, refresh):
     else:
         # Show current context
         if orchestrator.context.is_explored():
-            click.echo(f"\n=== Codebase Context ===")
+            click.echo("\n=== Codebase Context ===")
             click.echo(f"Project: {orchestrator.context.project_path}")
             click.echo(f"Summary: {orchestrator.context.summary or 'No summary'}")
         else:
@@ -439,7 +437,6 @@ def explore(ctx, path, save):
     try:
         os.chdir(path_obj)
         click.echo("Scanning codebase...")
-        result = orchestrator.explore_project(force=True)
         summary = orchestrator.context.summary or "No summary generated"
     finally:
         os.chdir(original_cwd)
@@ -452,7 +449,7 @@ def explore(ctx, path, save):
     if save:
         summary_file = path_obj / "CODEBASE_SUMMARY.md"
         with open(summary_file, 'w', encoding='utf-8') as f:
-            f.write(f"# Codebase Summary\n\n")
+            f.write("# Codebase Summary\n\n")
             f.write(f"Generated: {datetime.now().isoformat()}\n\n")
             f.write(summary)
         click.secho(f"\nSaved to: {summary_file}", fg="green")
@@ -505,7 +502,7 @@ def agent(ctx, task, dry_run, no_checkpoint, auto_confirm, max_iterations):
     code_agent = CodeAgent(orchestrator)
     code_agent.dry_run = dry_run
 
-    click.echo(f"\nAgent Configuration:")
+    click.echo("\nAgent Configuration:")
     click.echo(f"  Planner (smart tasks): {code_agent.planner}")
     click.echo(f"  Executor (fast tasks): {code_agent.executor}")
     click.echo(f"  Project root: {code_agent.project_root}")
@@ -587,6 +584,7 @@ def main():
         config = get_config()
         config.validate()
     except Exception as e:
+        logger = get_logger("cli.agent")
         # Early warning before Textual UI is available
         # Use logger for config warnings (no UnifiedIO needed for non-interactive commands)
         logger.error(f"Warning: Config validation failed: {e}")

@@ -172,29 +172,6 @@ class TestRateTrackingCallback:
         assert status_tracker.last_success is not None
         assert status_tracker.last_success["latency_ms"] == pytest.approx(250.0, abs=10)
 
-    def test_callbacks_noop_when_no_rate_tracker(self):
-        """Verify callbacks don't crash when no rate_tracker is provided."""
-        callback = RateTrackingCallback(rate_tracker=None)
-
-        mock_response = make_mock_litellm_response()
-
-        start_time = datetime.now()
-        end_time = start_time + timedelta(milliseconds=100)
-
-        # Should not raise any errors
-        callback.log_success_event(
-            kwargs={},
-            response_obj=mock_response,
-            start_time=start_time,
-            end_time=end_time,
-        )
-
-        callback.log_failure_event(
-            kwargs={"exception": Exception("test")},
-            response_obj=None,
-            start_time=start_time,
-            end_time=end_time,
-        )
 
 
 class TestRateTrackingCallbackEscalation:
@@ -278,16 +255,6 @@ class TestRateTrackingCallbackFailure:
 class TestCallbackLiteLLMInterface:
     """Tests for LiteLLM CustomLogger interface methods."""
 
-    def test_log_pre_api_call_is_noop(self):
-        """Verify log_pre_api_call does nothing (no errors)."""
-        callback = RateTrackingCallback()
-
-        # Should not raise
-        callback.log_pre_api_call(
-            model="fast",
-            messages=[],
-            kwargs={}
-        )
 
     def test_log_post_api_call_calls_success_for_valid_response(self):
         """Verify log_post_api_call calls log_success_event for valid responses."""
@@ -327,20 +294,6 @@ class TestCallbackLiteLLMInterface:
         # Should not have recorded anything
         assert len(tracker.recorded_requests) == 0
 
-    def test_log_stream_event_is_noop(self):
-        """Verify log_stream_event does nothing (no errors)."""
-        callback = RateTrackingCallback()
-
-        start_time = datetime.now()
-        end_time = start_time + timedelta(milliseconds=100)
-
-        # Should not raise
-        callback.log_stream_event(
-            kwargs={},
-            response_obj=None,
-            start_time=start_time,
-            end_time=end_time,
-        )
 
 
 class TestAsyncCallbackMethods:

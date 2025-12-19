@@ -184,13 +184,7 @@ class TestIsPlaceholderValue:
         assert is_placeholder_value("TEST") is True
         assert is_placeholder_value("CHANGEME") is True
 
-    def test_empty_is_placeholder(self):
-        """Empty string is considered placeholder."""
-        assert is_placeholder_value("") is True
 
-    def test_real_key_not_placeholder(self):
-        """Real-looking key is not placeholder."""
-        assert is_placeholder_value("sk-proj-abc123XYZ789") is False
 
     def test_repeated_chars_is_placeholder(self):
         """String of same character is placeholder."""

@@ -81,6 +81,12 @@ DEFAULT_EXECUTOR_PREFERENCES: List[str] = ['cerebras', 'groq']
 # Passive RAG settings
 DEFAULT_PASSIVE_RAG_ENABLED = True  # bool - enable passive RAG context injection
 DEFAULT_PASSIVE_RAG_MAX_TOKENS = 2000  # tokens - max tokens for passive RAG context
+DEFAULT_RAG_MIN_SCORE = 0.3  # float - minimum relevance score floor
+DEFAULT_RAG_MAX_GAP = 0.15  # float - max score drop for elbow detection
+
+# Tool profile settings
+DEFAULT_TOOL_PROFILE = "full"  # str - tool profile ("full", "optimized", "minimal")
+VALID_TOOL_PROFILES: List[str] = ["full", "optimized", "minimal"]
 
 # Completion validation
 DEFAULT_MEANINGFUL_ACTIONS: List[str] = ['write_file', 'run_command']

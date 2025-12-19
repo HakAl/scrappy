@@ -5,12 +5,19 @@ Defines abstract interfaces for agent components including audit logging,
 response parsing, prompt building, tool management, and checkpointing.
 """
 
-from typing import Protocol, Dict, Any, List, Optional, Callable, runtime_checkable
+from typing import Protocol, Dict, Any, List, Optional, runtime_checkable, TYPE_CHECKING
 from pathlib import Path
-from datetime import datetime
 
-# Import FileSystemProtocol from infrastructure to avoid duplication
-from ..infrastructure.protocols import FileSystemProtocol
+if TYPE_CHECKING:
+    from .types import (
+        AgentThought,
+        AgentAction,
+        ActionResult,
+        EvaluationResult,
+        ConversationState,
+        AgentContext,
+    )
+    from ..agent_tools.tools.base import ToolResult
 
 
 @runtime_checkable

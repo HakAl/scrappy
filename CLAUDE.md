@@ -338,7 +338,15 @@ def test_end_to_end_flow():
 
 ## COMMANDS
 
+**MANDATORY: After making code changes, ALWAYS run linting and type checking:**
+
 ```bash
+# Lint with ruff (REQUIRED after changes)
+ruff check src/ tests/
+
+# Type check with mypy (REQUIRED after changes)
+mypy src/
+
 # Run all tests
 python -m pytest tests/ -v
 
@@ -348,6 +356,8 @@ python -m pytest tests/test_<module>.py -v
 # Run with coverage (informational only)
 python -m pytest tests/ --cov=src --cov-report=term-missing
 ```
+
+**Quality Gate:** Do not consider a task complete until ruff and mypy pass without errors.
 
 ---
 

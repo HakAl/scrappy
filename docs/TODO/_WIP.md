@@ -1,359 +1,398 @@
-# ModelSelectionService Implementation Plan
+# Agent HUD (Heads-Up Display) Implementation Plan
 
-## Problem
+## Problem Statement
 
-LiteLLM Router's `simple-shuffle` strategy randomly distributes requests across all models in a group (e.g., "quality"). This causes:
+LLMs suffer from **Semantic Drift** - forgetting the original goal after 5-6 turns of debugging.
+Currently, the agent must explicitly call `task list` to see its own task state, and task data
+persists across sessions causing stale/confusing context.
 
-1. **Inconsistent behavior** - different models mid-conversation
-2. **Unpredictable debugging** - can't reproduce issues when model keeps changing
-3. **No session stickiness** - user preference not respected
+## Solution: Session-Scoped HUD
 
-## Solution
+Inject dynamic state as a user message every iteration, with task storage scoped to the
+current session via ToolContext.
 
-Create `ModelSelectionService` that owns model selection logic, separate from Orchestrator.
-
-## LLM Usage Paths (All Covered)
-
-All LLM calls funnel through `Orchestrator.delegate()`, so fixing model selection there covers everything:
-
-```
-TaskRouter._classify_with_llm()  --+
-TaskRouter strategies              |
-  - ResearchExecutor               |
-  - ConversationExecutor           +-->  Orchestrator.delegate()  -->  LiteLLMService
-  - AgentExecutor                  |
-Slash commands (/plan, /reason)    |
-Agent loop                       --+
-```
-
-### Slash Commands
-
-Slash commands are NOT a separate LLM path. `CommandRouter` is purely a dispatcher:
-
-1. User types `/plan fix the bug`
-2. `CommandRouter.route()` dispatches to `_handle_plan()`
-3. Handler calls `task_executor.plan()` which uses the orchestrator
-
-No direct LLM calls in command routing.
-
-### TaskRouter
-
-TaskRouter already passes `selection_type` to orchestrator (router.py:284-291):
-
-```python
-response = self.orchestrator.delegate(
-    provider_name="fast",
-    selection_type=ModelSelectionType.FAST  # Already passing this
-)
-```
-
-Once Orchestrator uses ModelSelectionService, TaskRouter automatically benefits.
-
-### ProviderResolver (task_router/provider_resolver.py)
-
-Currently maps selection types to group names. After this change:
-- **Keep it** for backward compatibility (returns group name)
-- Orchestrator resolves group name OR specific model ID
-- No changes needed in TaskRouter
-
-## Current Flow (The Problem)
-
-```
-Orchestrator.delegate(selection_type=FAST)
-    |
-    v
-provider_selector.get_model(FAST)
-    |
-    v
-Returns group name "fast"
-    |
-    v
-delegation_manager.delegate(provider_name="fast")
-    |
-    v
-LiteLLMService.complete() with group "fast"
-    |
-    v
-Router uses simple-shuffle --> RANDOM model pick (BAD)
-```
-
-## New Flow (The Fix)
-
-```
-Orchestrator.delegate(selection_type=FAST)
-    |
-    v
-model_selector.select(FAST, session_preferred)
-    |
-    v
-Returns specific model: "groq/llama-3.1-8b-instant"
-    |
-    v
-delegation_manager.delegate(model="groq/llama-3.1-8b-instant")
-    |
-    v
-LiteLLMService calls Router with exact model --> DETERMINISTIC (GOOD)
-```
+---
 
 ## Architecture
 
+### Current Flow
 ```
-ModelSelectionService (new)
-    - Injected: RateLimitTracker, model_config
-    - select(selection_type, session_preferred) -> specific_model_id
-    - Testable in isolation
+TaskTool._get_storage()
+    -> MarkdownTaskStorage(.scrappy/TODO.md)  # Persists across sessions (dangerous)
 
-Orchestrator
-    - Injected: ModelSelectionService
-    - Calls service.select() before delegation
-    - Passes specific model_id down
-
-DelegationManager
-    - Receives specific model_id (not group name)
-    - Passes through to LiteLLMService
-
-LiteLLMService
-    - Calls Router with specific model_id
-    - Router handles retries on that model
+AgentContextFactory.build_context()
+    -> No task/file/outcome state injected
 ```
 
-## Implementation Steps
+### Proposed Flow
+```
+CodeAgent.run(task)
+    -> Seeds task_storage with initial user task (HUD never empty on Turn 0)
 
-### 1. Define Protocol
-
-File: `src/scrappy/orchestrator/model_selection.py`
-
-```python
-class ModelSelectionServiceProtocol(Protocol):
-    """Protocol for model selection."""
-
-    def select(
-        self,
-        selection_type: ModelSelectionType,
-        session_preferred: Optional[str] = None,
-    ) -> str:
-        """
-        Select specific model ID.
-
-        Args:
-            selection_type: FAST or QUALITY
-            session_preferred: Previously selected model for this session
-
-        Returns:
-            Specific model ID (e.g., 'groq/llama-3.1-8b-instant')
-        """
-        ...
-
-    def get_models_for_type(self, selection_type: ModelSelectionType) -> list[str]:
-        """Get available models for selection type, ordered by priority."""
-        ...
+AgentLoop (each iteration)
+    -> Increments tool_context.turn
+    -> AgentContextFactory.build_context()
+        -> Reads from ToolContext:
+            - task_storage (current tasks)
+            - working_set (files touched with line ranges)
+        -> Reads from ConversationState:
+            - recent_outcomes (last 3 tool results)
+        -> Injects HUD as USER message (recency bias)
 ```
 
-### 2. Implement Service
+---
 
-File: `src/scrappy/orchestrator/model_selection.py`
+## HUD Format
 
-```python
-class ModelSelectionService:
-    """
-    Selects specific model based on session preference and rate limits.
+Injected as a **user message** before conversation history (exploits LLM recency bias):
 
-    Selection logic:
-    1. If session_preferred is set and has headroom -> use it
-    2. Otherwise, iterate priority list and pick first with headroom
-    3. If all at limit, return highest priority anyway (let it fail)
-    """
+```markdown
+=== CURRENT STATE ===
 
-    def __init__(
-        self,
-        rate_tracker: RateLimitTrackerProtocol,
-        model_priorities: dict[ModelSelectionType, list[str]],
-        headroom_threshold: float = 0.1,  # 10% remaining = "at limit"
-    ):
-        self._tracker = rate_tracker
-        self._priorities = model_priorities
-        self._threshold = headroom_threshold
+[OBJECTIVE]
+- [>] Fix the login bug (in progress)
 
-    def select(
-        self,
-        selection_type: ModelSelectionType,
-        session_preferred: Optional[str] = None,
-    ) -> str:
-        models = self._priorities.get(selection_type, [])
-        if not models:
-            raise ValueError(f"No models configured for {selection_type}")
+[TASKS]
+- [x] Read existing auth implementation
+- [ ] Update tests for new auth flow
 
-        # 1. Try session preferred if it has headroom
-        if session_preferred and session_preferred in models:
-            if self._has_headroom(session_preferred):
-                return session_preferred
+[WORKING SET]
+- src/auth/controller.py (Read L10-50 @ Turn 2, Modified @ Turn 4)
+- tests/test_auth.py (Read full file @ Turn 3)
 
-        # 2. Pick first model with headroom
-        for model_id in models:
-            if self._has_headroom(model_id):
-                return model_id
-
-        # 3. All at limit - return first (let it fail with proper error)
-        return models[0]
-
-    def _has_headroom(self, model_id: str) -> bool:
-        """Check if model has sufficient rate limit headroom."""
-        provider, model = self._parse_model_id(model_id)
-        # Use tracker to check remaining quota
-        # Return False if below threshold
-        ...
-
-    def _parse_model_id(self, model_id: str) -> tuple[str, str]:
-        """Parse 'provider/model' into (provider, model)."""
-        parts = model_id.split('/', 1)
-        return (parts[0], parts[1]) if len(parts) == 2 else (parts[0], parts[0])
+[RECENT OUTCOMES]
+- Turn 4: write_file src/auth/controller.py - Success
+- Turn 3: run_command pytest - Failed: "...AssertionError: expected 200 but got 401"
 ```
 
-### 3. Define Model Priorities
+---
 
-File: `src/scrappy/orchestrator/litellm_config.py`
+## Design Decisions (Resolved)
 
-```python
-# Priority order for each selection type
-# First model is highest priority, tried first
-MODEL_PRIORITIES: dict[ModelSelectionType, list[str]] = {
-    ModelSelectionType.FAST: [
-        "groq/llama-3.1-8b-instant",      # Fast, 128k context
-        "cerebras/llama3.1-8b",            # Ultra-fast, 8k context
-        "sambanova/Meta-Llama-3.1-8B-Instruct",  # Low RPD
-    ],
-    ModelSelectionType.QUALITY: [
-        "cerebras/qwen-3-235b-a22b-instruct-2507",  # Best quality
-        "groq/meta-llama/llama-4-scout-17b-16e-instruct",  # Fast, good
-        "groq/moonshotai/kimi-k2-instruct",  # Fast, 128k
-        "gemini/gemini-2.5-flash",          # Huge context, JSON issues
-    ],
-}
+| Decision | Answer | Rationale |
+|----------|--------|-----------|
+| Working set limit | 5 files | Cognitive load: 5 files + 3 tasks + 3 outcomes = ~11 items max |
+| Outcome trail depth | 3 items | Enough to detect loops: [Fail, Fail, Fail] |
+| Outcome truncation | 150 chars (tail) | Stack traces bury the lead at the end |
+| Success truncation | Short "(Success)" | No detail needed |
+| File persistence | No | Audit logs are persistence; avoid stale TODO.md |
+| Turn tracking | ToolContext.turn | Increment in AgentLoop, cleaner than kwargs |
+| HUD placement | User message | Recency bias - end of system prompt gets ignored |
+| Initial task | Auto-seed from user prompt | HUD never empty on Turn 0 |
+| Line tracking | Yes, track line windows | Prevents "I know the whole file" hallucination |
 
-def get_model_priorities(api_key_service: ApiKeyConfigServiceProtocol) -> dict:
-    """Get priorities filtered to only configured models."""
-    # Filter MODEL_PRIORITIES to only include models with API keys
-    ...
-```
+---
 
-### 4. Add to Session
+## Implementation Phases
 
-File: `src/scrappy/orchestrator/session.py`
+### Phase 1: Session-Scoped Task Storage + Turn Tracking
+
+**Files to modify:**
+
+1. `src/scrappy/agent_tools/tools/base.py`
+   ```python
+   @dataclass
+   class ToolContext:
+       # ... existing fields ...
+       task_storage: Optional[TaskStorageProtocol] = None
+       working_set: Optional[WorkingSet] = None
+       turn: int = 0  # Incremented each iteration
+   ```
+
+2. `src/scrappy/agent_tools/tools/task_tools.py`
+   ```python
+   class InMemoryTaskStorage:
+       """Session-scoped task storage."""
+       def __init__(self, initial_task: Optional[str] = None):
+           self._tasks: List[Task] = []
+           if initial_task:
+               self._tasks.append(Task(
+                   description=initial_task,
+                   status=TaskStatus.IN_PROGRESS
+               ))
+
+       def read_tasks(self) -> List[Task]: ...
+       def write_tasks(self, tasks: List[Task]) -> None: ...
+       def exists(self) -> bool: return True
+       def clear(self) -> None: self._tasks.clear()
+   ```
+   - Update `TaskTool._get_storage()` to prefer `context.task_storage`
+
+3. `src/scrappy/agent/core.py`
+   ```python
+   def _create_default_tool_context(self, initial_task: Optional[str] = None):
+       return ToolContext(
+           # ... existing ...
+           task_storage=InMemoryTaskStorage(initial_task=initial_task),
+           working_set=WorkingSet(),
+           turn=0,
+       )
+   ```
+
+4. `src/scrappy/agent/agent_loop.py`
+   - Increment `self._tool_context.turn` at start of each iteration
+
+### Phase 2: Working Set with Line Tracking
+
+**Data structures:**
 
 ```python
 @dataclass
-class SessionState:
-    # ... existing fields ...
-    preferred_model_id: Optional[str] = None  # Sticky model for session
+class FileAccess:
+    path: str
+    line_start: Optional[int] = None  # None = full file
+    line_end: Optional[int] = None
+    read_turn: Optional[int] = None
+    write_turn: Optional[int] = None
+
+@dataclass
+class WorkingSet:
+    _files: Dict[str, FileAccess] = field(default_factory=dict)
+    _max_files: int = 5
+
+    def record_read(self, path: str, turn: int,
+                    line_start: Optional[int] = None,
+                    line_end: Optional[int] = None) -> None:
+        """Record file read, tracking line window."""
+        if path in self._files:
+            access = self._files[path]
+            access.read_turn = turn
+            access.line_start = line_start
+            access.line_end = line_end
+        else:
+            self._files[path] = FileAccess(
+                path=path, line_start=line_start, line_end=line_end,
+                read_turn=turn
+            )
+        self._enforce_limit()
+
+    def record_write(self, path: str, turn: int) -> None:
+        """Record file write."""
+        if path in self._files:
+            self._files[path].write_turn = turn
+        else:
+            self._files[path] = FileAccess(path=path, write_turn=turn)
+        self._enforce_limit()
+
+    def remove_deleted(self, path: str) -> None:
+        """Remove file from working set (ghost file prevention)."""
+        self._files.pop(path, None)
+
+    def get_recent(self) -> List[FileAccess]:
+        """Get files ordered by most recent access."""
+        return sorted(
+            self._files.values(),
+            key=lambda f: max(f.read_turn or 0, f.write_turn or 0),
+            reverse=True
+        )[:self._max_files]
+
+    def _enforce_limit(self) -> None:
+        """Drop oldest files beyond limit."""
+        if len(self._files) > self._max_files:
+            oldest = sorted(
+                self._files.items(),
+                key=lambda kv: max(kv[1].read_turn or 0, kv[1].write_turn or 0)
+            )[0][0]
+            del self._files[oldest]
 ```
 
-### 5. Wire in Factory
+**Files to modify:**
 
-File: `src/scrappy/orchestrator/factory.py`
+1. `src/scrappy/agent_tools/tools/file_tools.py`
+   ```python
+   # In ReadFileTool.execute():
+   if context.working_set:
+       context.working_set.record_read(
+           path, context.turn,
+           line_start=offset, line_end=offset+limit if limit else None
+       )
+
+   # In WriteFileTool.execute():
+   if context.working_set:
+       context.working_set.record_write(path, context.turn)
+   ```
+
+### Phase 3: Outcome Trail
+
+**Data structures:**
 
 ```python
-def create_model_selection_service(
-    self,
-    rate_tracker: RateLimitTrackerProtocol,
-) -> ModelSelectionServiceProtocol:
-    """Create model selection service."""
-    priorities = get_model_priorities(create_api_key_service())
-    return ModelSelectionService(
-        rate_tracker=rate_tracker,
-        model_priorities=priorities,
-    )
+@dataclass
+class OutcomeRecord:
+    turn: int
+    tool: str
+    success: bool
+    summary: str  # Smart-truncated output
+
+def smart_truncate(output: str, success: bool) -> str:
+    """Truncate output - tail for errors (stack traces)."""
+    if success:
+        return "(Success)"
+    if len(output) <= 150:
+        return output
+    return "..." + output[-147:]  # Tail is more important
 ```
 
-### 6. Update Orchestrator
+**Files to modify:**
 
-File: `src/scrappy/orchestrator/core.py`
+1. `src/scrappy/agent/types.py`
+   ```python
+   @dataclass
+   class ConversationState:
+       # ... existing ...
+       recent_outcomes: List[OutcomeRecord] = field(default_factory=list)
+   ```
 
-```python
-class AgentOrchestrator:
-    def __init__(
-        self,
-        # ... existing params ...
-        model_selector: Optional[ModelSelectionServiceProtocol] = None,
-    ):
-        # ... existing init ...
-        self.model_selector = model_selector or components.model_selector
+2. `src/scrappy/agent/agent_loop.py`
+   ```python
+   def _handle_action_executed(self, ...):
+       # ... existing ...
 
-    def delegate(self, provider_name: str, prompt: str, ...):
-        # Get selection type from provider_name
-        selection_type = ModelSelectionType(provider_name)
+       # Record outcome for HUD
+       outcome = OutcomeRecord(
+           turn=state.iteration,
+           tool=result.action,
+           success=result.success,
+           summary=smart_truncate(result.output, result.success)
+       )
+       state.recent_outcomes.append(outcome)
 
-        # Get session preferred model
-        session_preferred = self.session_manager.get_preferred_model()
+       # Keep only last 3
+       if len(state.recent_outcomes) > 3:
+           state.recent_outcomes = state.recent_outcomes[-3:]
+   ```
 
-        # Select specific model
-        model_id = self.model_selector.select(selection_type, session_preferred)
+### Phase 4: HUD Injection
 
-        # Update session preference (sticky)
-        self.session_manager.set_preferred_model(model_id)
+**Files to modify:**
 
-        # Delegate with specific model
-        return self.delegation_manager.delegate(
-            model=model_id,  # specific, not group
-            prompt=prompt,
-            ...
-        )
-```
+1. `src/scrappy/agent/context_factory.py`
+   ```python
+   def __init__(self, ..., tool_context: ToolContext):
+       self._tool_context = tool_context
 
-### 7. Update DelegationManager
+   def build_hud_message(self, state: ConversationState) -> dict:
+       """Build HUD as a user message for recency bias."""
+       lines = ["=== CURRENT STATE ===", ""]
 
-File: `src/scrappy/orchestrator/delegation.py`
+       # Tasks
+       if self._tool_context.task_storage:
+           tasks = self._tool_context.task_storage.read_tasks()
+           if tasks:
+               lines.append("[TASKS]")
+               for task in tasks:
+                   marker = {"done": "[x]", "in_progress": "[>]", "pending": "[ ]"}
+                   lines.append(f"- {marker[task.status.value]} {task.description}")
+               lines.append("")
 
-- Change `_resolve_model_group(provider_name)` to just pass through model_id
-- Or remove that function entirely since Orchestrator now provides specific model
+       # Working Set
+       if self._tool_context.working_set:
+           files = self._tool_context.working_set.get_recent()
+           if files:
+               lines.append("[WORKING SET]")
+               for f in files:
+                   parts = [f.path]
+                   if f.read_turn:
+                       if f.line_start is not None:
+                           parts.append(f"Read L{f.line_start}-{f.line_end} @ Turn {f.read_turn}")
+                       else:
+                           parts.append(f"Read full @ Turn {f.read_turn}")
+                   if f.write_turn:
+                       parts.append(f"Modified @ Turn {f.write_turn}")
+                   lines.append(f"- {parts[0]} ({', '.join(parts[1:])})")
+               lines.append("")
 
-### 8. Tests
+       # Recent Outcomes
+       if state.recent_outcomes:
+           lines.append("[RECENT OUTCOMES]")
+           for o in reversed(state.recent_outcomes):  # Most recent first
+               status = "Success" if o.success else f"Failed: {o.summary}"
+               lines.append(f"- Turn {o.turn}: {o.tool} - {status}")
 
-File: `tests/orchestrator/test_model_selection.py`
+       return {"role": "user", "content": "\n".join(lines)}
+   ```
 
-```python
-class TestModelSelectionService:
-    def test_returns_session_preferred_when_has_headroom(self):
-        tracker = MockRateLimitTracker(has_headroom=True)
-        service = ModelSelectionService(tracker, MODEL_PRIORITIES)
+2. `src/scrappy/agent/core.py`
+   - Pass `tool_context` to AgentContextFactory
 
-        result = service.select(
-            ModelSelectionType.QUALITY,
-            session_preferred="groq/llama-4-scout"
-        )
+3. `src/scrappy/agent/agent_loop.py`
+   - Insert HUD message at start of conversation each iteration
 
-        assert result == "groq/llama-4-scout"
+---
 
-    def test_skips_session_preferred_when_no_headroom(self):
-        tracker = MockRateLimitTracker(
-            headroom_by_model={"groq/llama-4-scout": False, "cerebras/qwen": True}
-        )
-        service = ModelSelectionService(tracker, MODEL_PRIORITIES)
+## Safeguards
 
-        result = service.select(
-            ModelSelectionType.QUALITY,
-            session_preferred="groq/llama-4-scout"
-        )
+1. **Ghost File Prevention**
+   - In `run_command` result handling, detect `rm`/`del` patterns
+   - Call `working_set.remove_deleted(path)` for deleted files
 
-        assert result == "cerebras/qwen"  # First with headroom
+2. **Empty HUD Handling**
+   - If no tasks, no files, no outcomes: skip HUD injection entirely
+   - Avoids confusing empty state block
 
-    def test_returns_first_priority_when_all_limited(self):
-        tracker = MockRateLimitTracker(has_headroom=False)
-        service = ModelSelectionService(tracker, MODEL_PRIORITIES)
+3. **Turn 0 Seeding**
+   - User's initial task auto-added as in-progress task
+   - HUD is meaningful from the first iteration
 
-        result = service.select(ModelSelectionType.QUALITY)
+---
 
-        assert result == MODEL_PRIORITIES[ModelSelectionType.QUALITY][0]
-```
+## Test Strategy
 
-## Migration Notes
+1. **InMemoryTaskStorage tests**
+   - Session isolation (new storage = empty)
+   - Initial task seeding works
+   - CRUD operations match MarkdownTaskStorage behavior
 
-1. **Backward compatible** - existing code using group names still works until migrated
-2. **Incremental** - can migrate Orchestrator first, then agent loop, etc.
-3. **No breaking changes** - LiteLLMService already accepts specific model IDs
+2. **WorkingSet tests**
+   - Records reads/writes with turn numbers and line ranges
+   - Respects size limit (5 files)
+   - Orders by recency
+   - Ghost file removal works
 
-## Future Enhancements
+3. **OutcomeRecord tests**
+   - Smart truncation: success = short, failure = 150 char tail
+   - Keeps only last 3
 
-1. **Proactive limit avoidance** - switch before hitting 429, not after
-2. **Cost-aware selection** - prefer cheaper models when quality is similar
-3. **Latency-aware selection** - track actual latencies, prefer faster
-4. **Per-task model preference** - some tasks might prefer specific models
+4. **HUD formatting tests**
+   - Format matches spec
+   - Empty sections omitted
+   - Line ranges display correctly
+
+5. **Integration test**
+   - Full agent run with HUD enabled
+   - Verify HUD appears as user message
+   - Verify no cross-session pollution
+
+---
+
+## Dependencies (already exist)
+
+- `TaskStorageProtocol` in `src/scrappy/protocols/tasks.py`
+- `ConversationState.failed_commands` tracking (extend to outcomes)
+- `AgentContextFactory` rebuilds context each iteration
+- `ToolContext` created fresh per agent run
+
+---
+
+## Estimated Effort
+
+| Phase | Description | Effort |
+|-------|-------------|--------|
+| Phase 1 | Session-scoped tasks + turn tracking | 30 min |
+| Phase 2 | Working set with line tracking | 45 min |
+| Phase 3 | Outcome trail with smart truncation | 30 min |
+| Phase 4 | HUD injection as user message | 45 min |
+| Testing | Unit + integration tests | 60 min |
+
+**Total: ~3.5 hours**
+
+---
+
+## Rollout Plan
+
+1. Implement Phase 1 (task storage + turn tracking)
+2. Implement Phase 2 (working set)
+3. Implement Phase 3 (outcome trail)
+4. Implement Phase 4 (HUD injection)
+5. Run integration tests
+6. Deploy and monitor for drift reduction

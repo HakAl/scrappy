@@ -8,7 +8,7 @@ Single Responsibility: Run the agent loop, nothing else.
 """
 
 import time
-from typing import Optional, Dict, Any, List, TYPE_CHECKING
+from typing import Optional, Dict, Any, TYPE_CHECKING
 
 from ..orchestrator.model_selection import ModelSelectionType, AllModelsRateLimitedError
 from .types import (
@@ -21,7 +21,6 @@ from .types import (
     AgentContext,
 )
 from .protocols import (
-    AgentLoopProtocol,
     AgentUIProtocol,
     ActionExecutorProtocol,
     ResponseParserProtocol,
@@ -134,22 +133,17 @@ class AgentLoop:
         else:
             self._ui.show_provider_status(current_provider, "Thinking...")
 
-        # Build the prompt with conversation history for multi-turn
+        # Determine prompt and messages for multi-turn conversation
+        # First iteration: use prompt string
+        # Subsequent iterations: pass full messages array to preserve role separation
         if len(state.messages) == 2:
-            # First iteration: just use the task
+            # First iteration: just use the task as prompt
             user_prompt = state.messages[-1]['content']
+            messages_to_send = None
         else:
-            # Subsequent iterations: include conversation history
-            history_parts = []
-            for msg in state.messages[2:]:  # Skip system prompt and initial task
-                role = msg['role'].upper()
-                history_parts.append(f"{role}: {msg['content']}")
-            history_text = "\n\n".join(history_parts)
-            user_prompt = (
-                f"Previous conversation:\n{history_text}\n\n"
-                "Based on the above, continue with the task. "
-                "Remember to respond with valid JSON."
-            )
+            # Multi-turn: pass full messages array (don't flatten to string)
+            user_prompt = ""  # Not used when messages provided
+            messages_to_send = state.messages
 
         # Track API call time for first iteration
         start_time = time.time()
@@ -162,7 +156,8 @@ class AgentLoop:
         # Use native tool calling if both adapter and provider support it
         if has_delegate_with_tools and provider_supports_tools:
             response = self._delegate_with_tools(
-                current_provider, user_prompt, context.system_prompt
+                current_provider, user_prompt, context.system_prompt,
+                messages=messages_to_send
             )
             actual_provider = response.provider
         else:
@@ -175,7 +170,8 @@ class AgentLoop:
                     max_tokens=self._config.default_max_tokens,
                     temperature=self._config.default_temperature,
                     use_context=False,  # Context already in system prompt
-                    selection_type=ModelSelectionType.INSTRUCT,  # Instruction-tuned for tool calling
+                    selection_type=ModelSelectionType.INSTRUCT,
+                    messages=messages_to_send,
                 )
                 actual_provider = response.provider
             else:
@@ -186,7 +182,8 @@ class AgentLoop:
                     max_tokens=self._config.default_max_tokens,
                     temperature=self._config.default_temperature,
                     use_context=False,  # Context already in system prompt
-                    selection_type=ModelSelectionType.INSTRUCT,  # Instruction-tuned for tool calling
+                    selection_type=ModelSelectionType.INSTRUCT,
+                    messages=messages_to_send,
                 )
                 actual_provider = current_provider
 
@@ -218,7 +215,8 @@ class AgentLoop:
         return False
 
     def _delegate_with_tools(
-        self, provider: str, prompt: str, system_prompt: str
+        self, provider: str, prompt: str, system_prompt: str,
+        messages: Optional[list[dict]] = None
     ) -> Any:
         """Delegate to orchestrator with native tool calling."""
         # Get tool schemas from registry (single source of truth)
@@ -232,7 +230,8 @@ class AgentLoop:
             max_tokens=self._config.default_max_tokens,
             temperature=self._config.default_temperature,
             tool_choice="auto",
-            selection_type=ModelSelectionType.INSTRUCT,  # Instruction-tuned for tool calling
+            selection_type=ModelSelectionType.INSTRUCT,
+            messages=messages,
         )
 
     def plan(self, thought: AgentThought) -> AgentAction:
@@ -283,15 +282,19 @@ class AgentLoop:
         """
         result = self._action_executor.execute(action, state, dry_run=self._dry_run)
 
-        # Log action for audit trail (including thinking for debugging)
-        if result.executed and self._audit_logger:
-            self._audit_logger.log_action(
-                action.action,
-                action.parameters,
-                result.output,
-                result.approved,
-                thinking=action.thought,
-            )
+        # Log action for audit trail (including blocked actions for transparency)
+        if self._audit_logger:
+            # Log both executed and blocked actions
+            is_blocked = not result.executed and result.approved  # Approved but not executed = blocked
+            if result.executed or is_blocked:
+                self._audit_logger.log_action(
+                    action.action,
+                    action.parameters,
+                    result.output,
+                    result.approved,
+                    thinking=action.thought,
+                    blocked=is_blocked,
+                )
 
         return result
 

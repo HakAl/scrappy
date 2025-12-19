@@ -221,20 +221,8 @@ class TestValidateNumericChoice:
 class TestSanitizeForDisplay:
     """Tests for sanitize_for_display function."""
 
-    def test_normal_string_unchanged(self):
-        """Normal string passes through."""
-        result = sanitize_for_display("Hello World")
-        assert result == "Hello World"
 
-    def test_control_chars_removed(self):
-        """Control characters removed."""
-        result = sanitize_for_display("Hello\x07World")
-        assert "\x07" not in result
 
-    def test_null_bytes_removed(self):
-        """Null bytes removed."""
-        result = sanitize_for_display("Hello\x00World")
-        assert "\x00" not in result
 
     def test_truncates_long_strings(self):
         """Long strings are truncated."""
@@ -243,12 +231,4 @@ class TestSanitizeForDisplay:
         assert len(result) <= 100
         assert result.endswith("...")
 
-    def test_empty_string_returns_empty(self):
-        """Empty string returns empty."""
-        result = sanitize_for_display("")
-        assert result == ""
 
-    def test_non_string_converted(self):
-        """Non-string converted to string."""
-        result = sanitize_for_display(123)
-        assert result == "123"

@@ -5,7 +5,7 @@ This module defines the contracts that all command execution components
 must follow, enabling dependency injection and testability.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Protocol, Optional, List
 from pathlib import Path
 

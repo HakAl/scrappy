@@ -184,19 +184,63 @@ class AgentContextFactory:
 
         return int(base_budget * boost_factor)
 
-    def _format_rag_context(self, chunks: List[dict]) -> str:
+    def _format_rag_context(self, chunks: List[dict]) -> Optional[str]:
         """
-        Format RAG chunks into context string.
+        Format RAG chunks into context string with quality filtering.
+
+        Uses elbow filtering: absolute floor + relative gap detection to
+        filter out low-relevance results that add noise rather than signal.
 
         Args:
             chunks: List of chunk dicts with keys: path, lines, content, score
 
         Returns:
-            Formatted context string
+            Formatted context string, or None if no quality results
         """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        if not chunks:
+            return None
+
+        # Sort by score descending
+        chunks = sorted(chunks, key=lambda x: x.get('score', 0), reverse=True)
+
+        # Log scores for calibration
+        scores = [c.get('score', 0) for c in chunks]
+        logger.debug(f"RAG scores: {scores}")
+
+        # Filter thresholds from config
+        min_score = self._config.rag_min_score
+        max_gap = self._config.rag_max_gap
+
+        # Top result must meet floor
+        if chunks[0].get('score', 0) < min_score:
+            logger.debug(f"RAG: top score {chunks[0].get('score', 0)} below floor {min_score}")
+            return None
+
+        # Elbow filtering
+        filtered = [chunks[0]]
+        prev_score = chunks[0]['score']
+
+        for chunk in chunks[1:]:
+            score = chunk.get('score', 0)
+
+            # Check absolute floor
+            if score < min_score:
+                break
+
+            # Check relative gap (elbow detection)
+            if (prev_score - score) > max_gap:
+                break
+
+            filtered.append(chunk)
+            prev_score = score
+
+        # Format survivors
         lines = ["## Relevant Codebase Context\n"]
 
-        for chunk in chunks:
+        for chunk in filtered:
             path = chunk["path"]
             start_line, end_line = chunk["lines"]
             content = chunk["content"]

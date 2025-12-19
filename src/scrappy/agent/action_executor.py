@@ -10,7 +10,6 @@ from typing import Optional, List
 
 from .types import AgentAction, ActionResult, ConversationState
 from .protocols import (
-    ActionExecutorProtocol,
     SafetyCheckerProtocol,
     DuplicateDetectorProtocol,
     ToolRunnerProtocol,

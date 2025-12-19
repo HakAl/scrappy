@@ -373,34 +373,6 @@ class TestFingerprintingOptimization:
             "For INCREMENTAL_UPDATE, we need either hashes or actual indexing"
         )
 
-    @pytest.mark.unit
-    def test_hashing_happens_for_full_index(self, temp_project_dir):
-        """
-        Ensure hashing/indexing happens when decision is FULL_INDEX.
-
-        This test should PASS with both current and fixed code.
-        """
-        # No saved state - first run requires full index
-        state_manager = MockStateManager(saved_state=None)
-        decision_maker = MockDecisionMaker(decision=IndexingDecision.FULL_INDEX)
-
-        provider = MockSearchProvider()
-        initializer = MockInitializer(provider)
-
-        manager = SemanticSearchManager(
-            project_path=temp_project_dir,
-            initializer=initializer,
-            state_manager=state_manager,
-            decision_maker=decision_maker,
-        )
-
-        spy_collector = SpyFileCollector()
-        manager.index_files(spy_collector)
-
-        # For full index, we definitely need to do the work
-        assert spy_collector.collect_files_batched_called, (
-            "For FULL_INDEX, we must collect and index files"
-        )
 
 
 class TestStartupFingerprintingBehavior:

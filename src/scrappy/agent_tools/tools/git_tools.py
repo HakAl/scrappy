@@ -8,7 +8,7 @@ import subprocess
 from typing import Optional
 
 from .base import ToolBase, ToolParameter, ToolResult, ToolContext
-from ..formatters import OutputFormatter, GitOutputFormatter, NullFormatter
+from ..formatters import OutputFormatter, GitOutputFormatter
 
 
 class GitTool(ToolBase):

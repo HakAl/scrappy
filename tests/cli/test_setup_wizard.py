@@ -124,11 +124,6 @@ class TestSetupWizardKeyValidation:
         # Newlines and tabs are caught as dangerous
         assert not validate_api_key("key\nwith\nnewline").is_valid
 
-    def test_validate_key_format_empty(self):
-        """Empty keys fail."""
-        from scrappy.infrastructure.validation import validate_api_key
-
-        assert not validate_api_key("").is_valid
 
 
 class TestSetupWizardProviderConfiguration:

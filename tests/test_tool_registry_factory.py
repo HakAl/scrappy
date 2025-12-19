@@ -18,14 +18,93 @@ from scrappy.agent_tools.tools import ToolRegistry
 # This is intentional TDD - tests fail first, then we implement
 from scrappy.agent_tools.registry_factory import (
     create_default_registry,
-    create_minimal_registry
+    create_minimal_registry,
+    create_registry_with_profile,
+    get_available_profiles,
+    get_profile_tools,
+    TOOL_PROFILES,
 )
+
+
+class TestToolProfiles:
+    """Tests for the tool profile system."""
+
+    @pytest.mark.unit
+    def test_get_available_profiles(self):
+        """Should return list of available profiles."""
+        profiles = get_available_profiles()
+        assert "full" in profiles
+        assert "optimized" in profiles
+        assert "minimal" in profiles
+
+    @pytest.mark.unit
+    def test_full_profile_has_16_tools(self):
+        """Full profile should have all 16 tools."""
+        tools = get_profile_tools("full")
+        assert len(tools) == 16
+
+    @pytest.mark.unit
+    def test_optimized_profile_has_10_tools(self):
+        """Optimized profile should have 10 tools."""
+        tools = get_profile_tools("optimized")
+        assert len(tools) == 10
+
+    @pytest.mark.unit
+    def test_minimal_profile_has_7_tools(self):
+        """Minimal profile should have 7 tools."""
+        tools = get_profile_tools("minimal")
+        assert len(tools) == 7
+
+    @pytest.mark.unit
+    def test_create_registry_with_full_profile(self):
+        """Registry with full profile should have all tools."""
+        registry = create_registry_with_profile("full")
+        assert len(registry.list_all()) == 16
+
+    @pytest.mark.unit
+    def test_create_registry_with_optimized_profile(self):
+        """Registry with optimized profile should have 10 tools."""
+        registry = create_registry_with_profile("optimized")
+        tool_names = [t.name for t in registry.list_all()]
+        assert len(tool_names) == 10
+        # Core tools present
+        assert "read_file" in tool_names
+        assert "run_command" in tool_names
+        assert "complete" in tool_names
+        # Excluded tools
+        assert "task" not in tool_names
+        assert "git_log" not in tool_names
+
+    @pytest.mark.unit
+    def test_create_registry_with_minimal_profile(self):
+        """Registry with minimal profile should have 7 tools."""
+        registry = create_registry_with_profile("minimal")
+        tool_names = [t.name for t in registry.list_all()]
+        assert len(tool_names) == 7
+        # Essential tools only
+        assert "read_file" in tool_names
+        assert "codebase_search" in tool_names
+        assert "run_command" in tool_names
+
+    @pytest.mark.unit
+    def test_invalid_profile_raises_error(self):
+        """Invalid profile name should raise ValueError."""
+        with pytest.raises(ValueError) as exc_info:
+            create_registry_with_profile("nonexistent")
+        assert "nonexistent" in str(exc_info.value)
+        assert "full" in str(exc_info.value)  # Should list available profiles
+
+    @pytest.mark.unit
+    def test_profile_tools_returns_copy(self):
+        """get_profile_tools should return a copy, not the original."""
+        tools1 = get_profile_tools("full")
+        tools2 = get_profile_tools("full")
+        tools1.append("fake_tool")
+        assert "fake_tool" not in tools2
 
 
 class TestToolRegistryFactoryBehavior:
     """Tests for the factory behavior we want to extract."""
-
-    @pytest.mark.unit
 
     @pytest.mark.unit
     def test_default_registry_has_file_tools(self):
@@ -36,7 +115,7 @@ class TestToolRegistryFactoryBehavior:
         assert "read_file" in tool_names
         assert "write_file" in tool_names
         assert "list_files" in tool_names
-        assert "list_directory" in tool_names
+        # list_directory merged into list_files with tree=True param
 
     @pytest.mark.unit
     def test_default_registry_has_git_tools(self):
@@ -70,20 +149,12 @@ class TestToolRegistryFactoryBehavior:
         assert "web_search" in tool_names
 
     @pytest.mark.unit
-    def test_default_registry_has_python_tools(self):
-        """Default registry should include Python analysis tools."""
-        registry = create_default_registry()
-        tool_names = [t.name for t in registry.list_all()]
-
-        assert "analyze_python_dependencies" in tool_names
-
-    @pytest.mark.unit
     def test_default_registry_tool_count(self):
         """Default registry should have expected number of tools."""
         registry = create_default_registry()
 
-        # 4 file + 6 git + 2 search + 2 web + 1 python + 1 command + 1 complete + 1 task = 18 tools
-        assert len(registry.list_all()) == 18
+        # 3 file + 6 git + 2 search + 2 web + 1 command + 1 complete + 1 task = 16 tools
+        assert len(registry.list_all()) == 16
 
     @pytest.mark.unit
     def test_all_tools_are_callable(self):
@@ -181,26 +252,31 @@ class TestToolRegistryFactoryCustomization:
         assert len(tool_names) < 14
 
     @pytest.mark.unit
-    def test_can_create_registry_without_web_tools(self):
-        """Should be able to exclude web tools for offline mode."""
-        registry = create_default_registry(include_web=False)
+    def test_optimized_profile_excludes_web_search(self):
+        """Optimized profile should exclude web_search but keep web_fetch."""
+        registry = create_default_registry(profile="optimized")
         tool_names = [t.name for t in registry.list_all()]
 
-        assert "web_fetch" not in tool_names
-        assert "web_search" not in tool_names
-        # But other tools present
+        assert "web_fetch" in tool_names  # kept for external data
+        assert "web_search" not in tool_names  # excluded, use web_fetch directly
+        # Core tools present
         assert "read_file" in tool_names
         assert "git_status" in tool_names
 
     @pytest.mark.unit
-    def test_can_create_registry_without_git_tools(self):
-        """Should be able to exclude git tools for non-git projects."""
-        registry = create_default_registry(include_git=False)
+    def test_optimized_profile_excludes_extra_git_tools(self):
+        """Optimized profile should have minimal git tools."""
+        registry = create_default_registry(profile="optimized")
         tool_names = [t.name for t in registry.list_all()]
 
+        # Core git tools kept
+        assert "git_status" in tool_names
+        assert "git_diff" in tool_names
+        # Extra git tools excluded (agent uses run_command)
         assert "git_log" not in tool_names
-        assert "git_status" not in tool_names
-        # But other tools present
+        assert "git_blame" not in tool_names
+        assert "git_show" not in tool_names
+        # Other core tools present
         assert "read_file" in tool_names
         assert "find_exact_text" in tool_names
 
@@ -218,7 +294,7 @@ class TestToolRegistryFactoryCustomization:
 
         tool_names = [t.name for t in registry.list_all()]
         assert "custom_analysis" in tool_names
-        assert len(tool_names) == 19  # 18 default + 1 custom
+        assert len(tool_names) == 17  # 16 default + 1 custom
 
 
 class TestToolRegistryFactoryIntegration:
@@ -269,7 +345,7 @@ class TestToolRegistryFactoryIntegration:
         from scrappy.agent.core import CodeAgent
         from scrappy.agent_config import AgentConfig
 
-        # Create minimal registry
+        # Create minimal registry (7 tools including run_command)
         registry = create_minimal_registry()
 
         agent = CodeAgent(
@@ -279,10 +355,55 @@ class TestToolRegistryFactoryIntegration:
             tool_registry=registry
         )
 
-        # Should have fewer tools
+        # Agent should have same tools as registry
         registry_tool_count = len(registry.list_all())
-        # +1 for run_command which is always added
-        assert len(agent.tools) == registry_tool_count + 1
+        assert len(agent.tools) == registry_tool_count
+
+    @pytest.mark.unit
+    def test_agent_uses_config_tool_profile(self, mock_orchestrator_adapter, tmp_path):
+        """CodeAgent should use tool_profile from config when creating default registry."""
+        from scrappy.agent.core import CodeAgent
+        from scrappy.agent_config import AgentConfig
+
+        # Create config with optimized profile
+        config = AgentConfig()
+        config.tool_profile = "optimized"
+
+        # Create agent without injecting registry - should use config profile
+        agent = CodeAgent(
+            orchestrator=mock_orchestrator_adapter,
+            project_path=str(tmp_path),
+            config=config,
+        )
+
+        # Should have 10 tools (optimized profile)
+        assert len(agent.tools) == 10
+        # Should not have excluded tools
+        assert "git_log" not in agent.tools
+        assert "web_search" not in agent.tools
+        assert "task" not in agent.tools
+
+    @pytest.mark.unit
+    def test_agent_uses_minimal_profile_from_config(self, mock_orchestrator_adapter, tmp_path):
+        """CodeAgent should use minimal profile when configured."""
+        from scrappy.agent.core import CodeAgent
+        from scrappy.agent_config import AgentConfig
+
+        config = AgentConfig()
+        config.tool_profile = "minimal"
+
+        agent = CodeAgent(
+            orchestrator=mock_orchestrator_adapter,
+            project_path=str(tmp_path),
+            config=config,
+        )
+
+        # Should have 7 tools (minimal profile)
+        assert len(agent.tools) == 7
+        # Should have core tools
+        assert "read_file" in agent.tools
+        assert "run_command" in agent.tools
+        assert "complete" in agent.tools
 
 
 # Fixtures

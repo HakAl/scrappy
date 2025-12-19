@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""
-High-volume test-quality auditor.
-Adds heuristics that push “bad” count from ~ 5 % to 40-60 % on typical agent-generated codebases.
-Usage: python .\scripts\audit_tests.py .\tests\ --json > tests.json
-"""
+
+# High-volume test-quality auditor.
+# Adds heuristics that push “bad” count from ~ 5 % to 40-60 % on typical agent-generated codebases.
+# Usage: python .\scripts\audit_tests.py .\tests\ --json > tests.json
+
 import ast
 import sys
 import os

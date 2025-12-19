@@ -7,7 +7,7 @@ Provides different strategies for handling user denials of actions:
 - ContinueDenialHandler: Always continues (default behavior)
 """
 
-from .protocols import DenialHandlerProtocol, AgentUIProtocol
+from .protocols import AgentUIProtocol
 from .types import DenialHandlerResult
 
 

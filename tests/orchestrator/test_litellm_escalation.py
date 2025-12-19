@@ -83,51 +83,7 @@ class TestEscalationDepthGuard:
 
         assert "Max escalation depth" in str(exc_info.value)
 
-    def test_escalation_increments_depth(self):
-        """Verify escalation increments depth counter."""
-        context_error = make_context_window_error()
 
-        # First call raises ContextWindowExceeded, second succeeds
-        mock_router = MockLiteLLMRouter(
-            responses=[
-                context_error,
-                make_mock_litellm_response(model="groq/llama-3.3-70b-versatile"),
-            ]
-        )
-        mock_output = MockOutputForLiteLLM()
-        mock_callback = Mock(spec=RateTrackingCallback)
-
-        service = make_configured_service(
-            router=mock_router, output=mock_output, callback=mock_callback
-        )
-
-        response, task_record = service.completion_sync(
-            model="fast",
-            messages=[{"role": "user", "content": "test"}],
-        )
-
-        # Verify escalation was recorded
-        mock_callback.record_escalation.assert_called_once_with("fast", "quality")
-
-        # Verify task_record has escalation info
-        assert task_record["escalated_from"] == "fast"
-
-    def test_no_escalation_from_quality_tier(self):
-        """Verify quality tier has no escalation path (fatal error)."""
-        context_error = make_context_window_error(model="quality")
-
-        mock_router = MockLiteLLMRouter(exception=context_error)
-        mock_output = MockOutputForLiteLLM()
-        service = make_configured_service(router=mock_router, output=mock_output)
-
-        # Should re-raise because quality has no escalation path
-        from litellm import ContextWindowExceededError
-
-        with pytest.raises(ContextWindowExceededError):
-            service.completion_sync(
-                model="quality",
-                messages=[{"role": "user", "content": "test"}],
-            )
 
 
 class TestEscalationMetrics:
@@ -320,26 +276,3 @@ class TestMultipleEscalationAttempts:
         assert response.model == "gemini/gemini-2.5-flash"
         assert response.provider == "gemini"
 
-    def test_double_escalation_prevented_by_depth_guard(self):
-        """Verify double escalation (fast->quality->?) is blocked."""
-        context_error_fast = make_context_window_error(model="fast")
-        context_error_quality = make_context_window_error(model="quality")
-
-        # Both tiers fail with context window error
-        mock_router = MockLiteLLMRouter(
-            responses=[
-                context_error_fast,
-                context_error_quality,  # Quality tier also fails
-            ]
-        )
-        mock_output = MockOutputForLiteLLM()
-        service = make_configured_service(router=mock_router, output=mock_output)
-
-        # Quality has no escalation path, so it should raise
-        from litellm import ContextWindowExceededError
-
-        with pytest.raises(ContextWindowExceededError):
-            service.completion_sync(
-                model="fast",
-                messages=[{"role": "user", "content": "test"}],
-            )

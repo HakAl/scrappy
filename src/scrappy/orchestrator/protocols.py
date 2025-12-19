@@ -38,6 +38,7 @@ class Orchestrator(Protocol):
         system_prompt: Optional[str] = None,
         max_tokens: int = 1000,
         temperature: float = 0.7,
+        messages: Optional[list[dict]] = None,
         **kwargs: Any
     ) -> LLMResponse:
         """
@@ -50,6 +51,7 @@ class Orchestrator(Protocol):
             system_prompt: System prompt for context
             max_tokens: Maximum tokens in response
             temperature: Sampling temperature
+            messages: Pre-built messages array (bypasses prompt/system_prompt)
             **kwargs: Additional provider-specific parameters
 
         Returns:
@@ -716,7 +718,8 @@ class OrchestratorAdapter(Protocol):
         system_prompt: Optional[str] = None,
         max_tokens: int = 1500,
         temperature: float = 0.3,
-        use_context: bool = False
+        use_context: bool = False,
+        messages: Optional[list[dict]] = None
     ) -> LLMResponse:
         """
         Delegate a prompt to an LLM provider.
@@ -728,6 +731,7 @@ class OrchestratorAdapter(Protocol):
             max_tokens: Maximum tokens in response
             temperature: Sampling temperature
             use_context: Whether to augment with codebase context
+            messages: Pre-built messages array (bypasses prompt/system_prompt)
 
         Returns:
             LLMResponse with the model's response
@@ -743,6 +747,7 @@ class OrchestratorAdapter(Protocol):
         max_tokens: int = 1500,
         temperature: float = 0.3,
         tool_choice: str = "auto",
+        messages: Optional[list[dict]] = None,
         **kwargs: Any
     ) -> LLMResponse:
         """
@@ -755,6 +760,7 @@ class OrchestratorAdapter(Protocol):
             system_prompt: Optional system prompt
             max_tokens: Maximum tokens in response
             temperature: Sampling temperature
+            messages: Pre-built messages array (bypasses prompt/system_prompt)
             tool_choice: How the model should choose tools ("auto", "none", or specific tool)
             **kwargs: Additional provider-specific parameters
 

@@ -10,7 +10,6 @@ from typing import Optional, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .cancellation import CancellationTokenProtocol
-    from ..agent_config import AgentConfig
 
 
 class StopReason(Enum):

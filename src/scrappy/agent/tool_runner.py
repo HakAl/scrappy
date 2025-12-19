@@ -7,9 +7,9 @@ Pure execution logic for running tools from the registry.
 from pathlib import Path
 from typing import Dict, Any, Callable
 
-from ..agent_tools.tools import ToolRegistry, ToolContext, ToolResult
+from ..agent_tools.tools import ToolContext, ToolResult
 from ..agent_tools.tools.command_tool import ShellCommandExecutor
-from .protocols import ToolRunnerProtocol, ToolRegistryProtocol  # Protocols for type hints (DI)
+from .protocols import ToolRegistryProtocol
 
 
 class ToolRunner:

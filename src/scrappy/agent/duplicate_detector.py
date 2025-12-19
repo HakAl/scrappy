@@ -4,10 +4,7 @@ Duplicate action detector.
 Prevents the agent from repeating failed or redundant operations.
 """
 
-from typing import Dict, List
-
 from .types import AgentAction, ConversationState
-from .protocols import DuplicateDetectorProtocol
 
 
 class DuplicateDetector:

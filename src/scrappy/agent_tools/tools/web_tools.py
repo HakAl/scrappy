@@ -7,7 +7,6 @@ API responses, and web content.
 
 import json
 import re
-from typing import Optional
 from urllib.parse import urlparse
 
 import httpx
@@ -187,7 +186,7 @@ class WebFetchTool(ToolBase):
                         json_data = response.json()
                         output = self._format_json(json_data)
                         content_format = "json"
-                    except:
+                    except ValueError:
                         output = content
                         content_format = "text"
                 elif 'text/html' in content_type and extract_text:

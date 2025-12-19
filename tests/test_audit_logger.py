@@ -48,6 +48,31 @@ class TestAuditLoggerBasics:
         assert logger.log == []
         assert logger._task_info == {}
 
+    def test_log_action_with_blocked_flag(self):
+        """Test logging a blocked action includes blocked field."""
+        logger = AuditLogger()
+        logger.log_action(
+            "write_file",
+            {"path": "test.py", "content": "test"},
+            "Action was blocked as duplicate",
+            approved=True,
+            blocked=True,
+        )
+
+        assert len(logger.log) == 1
+        entry = logger.log[0]
+        assert entry['action'] == "write_file"
+        assert entry['blocked'] is True
+        assert entry['approved'] is True
+
+    def test_log_action_without_blocked_flag_has_no_blocked_field(self):
+        """Test normal action does not include blocked field."""
+        logger = AuditLogger()
+        logger.log_action("read_file", {"path": "test.py"}, "contents", True)
+
+        entry = logger.log[0]
+        assert 'blocked' not in entry  # Should not be present for normal actions
+
 
 class TestAutoSave:
     """Test automatic incremental saving."""

@@ -38,6 +38,10 @@ from ..infrastructure.exceptions.provider_errors import (
 from ..protocols.output import BaseOutputProtocol
 from ..infrastructure.config.api_keys import ApiKeyConfigServiceProtocol
 from .types import StreamChunk, ToolCallFragment
+from .litellm_config import build_model_list
+
+from litellm import ContextWindowExceededError
+from litellm import RateLimitError as LiteLLMRateLimitError
 
 if TYPE_CHECKING:
     import litellm
@@ -325,7 +329,6 @@ class LiteLLMService:
         Returns:
             True if at least one model group is available
         """
-        from .litellm_config import build_model_list
 
         # Force reload from disk to get freshly saved keys
         self._api_key_service.reload()
@@ -418,9 +421,6 @@ class LiteLLMService:
         if not self._configured:
             raise NotConfiguredError("LLM service not configured. Run setup wizard first.")
 
-        # Import here to avoid import errors if litellm not installed
-        from litellm import ContextWindowExceededError
-        from litellm import RateLimitError as LiteLLMRateLimitError
 
         # Safety guard against infinite recursion
         if _escalation_depth >= MAX_ESCALATION_DEPTH:
@@ -431,12 +431,20 @@ class LiteLLMService:
 
         start = time.time()
 
-        # Log request
+        # Log request with full prompt content for debugging
         if self._logger:
             tools = kwargs.get("tools") if kwargs else None
             self._logger.debug(
                 f"API request: model={model}, messages={len(messages)}, tools={len(tools) if tools else 0}"
             )
+            # Full messages JSON for prompt debugging
+            self._logger.debug(
+                f"PROMPT_MESSAGES: {json.dumps(messages, indent=2, default=str)}"
+            )
+            if tools:
+                self._logger.debug(
+                    f"PROMPT_TOOLS: {json.dumps(tools, indent=2, default=str)}"
+                )
 
         # Throttle requests to avoid rate limits (especially for Groq)
         await _request_throttle.wait_async(model)
@@ -522,10 +530,6 @@ class LiteLLMService:
         if not self._configured:
             raise NotConfiguredError("LLM service not configured. Run setup wizard first.")
 
-        # Import here to avoid import errors if litellm not installed
-        from litellm import ContextWindowExceededError
-        from litellm import RateLimitError as LiteLLMRateLimitError
-
         # Safety guard against infinite recursion
         if _escalation_depth >= MAX_ESCALATION_DEPTH:
             raise RuntimeError(
@@ -535,12 +539,20 @@ class LiteLLMService:
 
         start = time.time()
 
-        # Log request
+        # Log request with full prompt content for debugging
         if self._logger:
             tools = kwargs.get("tools") if kwargs else None
             self._logger.debug(
                 f"API request: model={model}, messages={len(messages)}, tools={len(tools) if tools else 0}"
             )
+            # Full messages JSON for prompt debugging
+            self._logger.debug(
+                f"PROMPT_MESSAGES: {json.dumps(messages, indent=2, default=str)}"
+            )
+            if tools:
+                self._logger.debug(
+                    f"PROMPT_TOOLS: {json.dumps(tools, indent=2, default=str)}"
+                )
 
         # Throttle requests to avoid rate limits (especially for Groq)
         _request_throttle.wait_sync(model)
@@ -631,10 +643,6 @@ class LiteLLMService:
 
         if not self._configured:
             raise NotConfiguredError("LLM service not configured. Run setup wizard first.")
-
-        # Import here to avoid import errors if litellm not installed
-        from litellm import ContextWindowExceededError
-        from litellm import RateLimitError as LiteLLMRateLimitError
 
         # Safety guard against infinite recursion
         if _escalation_depth >= MAX_ESCALATION_DEPTH:
@@ -1029,8 +1037,6 @@ class LiteLLMService:
             pre-stream escalation detection. The stream_completion method still
             handles mid-stream errors and normal streaming logic.
         """
-        from litellm import ContextWindowExceededError
-
         # Safety guard against infinite recursion
         if _escalation_depth >= MAX_ESCALATION_DEPTH:
             raise RuntimeError(

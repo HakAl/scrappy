@@ -7,7 +7,6 @@ Determines which actions are safe to auto-execute vs require user confirmation.
 from typing import Set
 
 from .types import AgentAction
-from .protocols import SafetyCheckerProtocol
 
 
 class SafetyChecker:

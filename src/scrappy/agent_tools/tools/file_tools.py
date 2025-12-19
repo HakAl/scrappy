@@ -5,7 +5,6 @@ Provides read, write, list, and directory tree operations.
 """
 
 from pathlib import Path
-from typing import Any, Optional
 
 from scrappy.infrastructure.theme import DEFAULT_THEME, SYNTAX_COLORS
 
@@ -175,7 +174,7 @@ class WriteFileTool(ToolBase):
                 if normalized_existing == normalized_new:
                     return ToolResult(
                         True,
-                        f"Warning: File content unchanged. No modifications needed.",
+                        "Warning: File content unchanged. No modifications needed.",
                         metadata={"chars": len(content), "path": path, "unchanged": True}
                     )
             except Exception:
@@ -215,7 +214,15 @@ class WriteFileTool(ToolBase):
 
 
 class ListFilesTool(ToolBase):
-    """List files matching a pattern."""
+    """List files matching a pattern, with optional tree view."""
+
+    def __init__(self, output_interface=None):
+        """Initialize tool with optional output interface for styling.
+
+        Args:
+            output_interface: Output interface for styling tree view. If None, no styling.
+        """
+        self._output = output_interface
 
     @property
     def name(self) -> str:
@@ -223,18 +230,25 @@ class ListFilesTool(ToolBase):
 
     @property
     def description(self) -> str:
-        return "List files matching pattern recursively"
+        return (
+            "List files in a directory. Use pattern for glob matching, "
+            "depth to control recursion, tree=true for visual tree structure."
+        )
 
     @property
     def parameters(self) -> list[ToolParameter]:
         return [
             ToolParameter("directory", str, "Directory to search", required=False, default="."),
-            ToolParameter("pattern", str, "Glob pattern to match", required=False, default="*")
+            ToolParameter("pattern", str, "Glob pattern to match", required=False, default="*"),
+            ToolParameter("depth", int, "Max directory depth (1=current only)", required=False, default=1),
+            ToolParameter("tree", bool, "Show as visual tree structure", required=False, default=False),
         ]
 
     def execute(self, context: ToolContext, **kwargs) -> ToolResult:
         directory = kwargs.get("directory", ".")
         pattern = kwargs.get("pattern", "*")
+        depth = kwargs.get("depth", 1)
+        tree = kwargs.get("tree", False)
 
         if not context.is_safe_path(directory):
             return ToolResult(False, "", f"Path '{directory}' is outside project directory")
@@ -242,33 +256,159 @@ class ListFilesTool(ToolBase):
         target = context.project_root / directory
         if not target.exists():
             return ToolResult(False, "", f"Directory '{directory}' does not exist")
+        if not target.is_dir():
+            return ToolResult(False, "", f"'{directory}' is not a directory")
 
         try:
-            files = list(target.glob(pattern))
-            max_files = context.config.max_file_listing
-            truncated = len(files) > max_files
-            if truncated:
-                files = files[:max_files]
-
-            result = []
-            for f in sorted(files):
-                rel_path = f.relative_to(context.project_root)
-                if f.is_dir():
-                    result.append(f"{rel_path}/")
-                else:
-                    result.append(str(rel_path))
-
-            output = "\n".join(result)
-            if truncated:
-                output += f"\n... [truncated to {max_files} items]"
-
-            return ToolResult(
-                True,
-                output,
-                metadata={"count": len(result), "truncated": truncated}
-            )
+            if tree:
+                return self._execute_tree(context, target, depth)
+            else:
+                return self._execute_flat(context, target, pattern, depth)
         except Exception as e:
             return ToolResult(False, "", f"Error listing files: {str(e)}")
+
+    def _execute_flat(self, context: ToolContext, target: Path, pattern: str, depth: int) -> ToolResult:
+        """Execute flat file listing with glob pattern."""
+        # Build glob pattern with depth
+        if depth == 1:
+            glob_pattern = pattern
+        else:
+            # For depth > 1, use recursive glob
+            glob_pattern = f"**/{pattern}" if depth > 1 else pattern
+
+        files = list(target.glob(glob_pattern))
+
+        # Filter by depth if using recursive glob
+        if depth > 1:
+            filtered = []
+            for f in files:
+                try:
+                    rel = f.relative_to(target)
+                    # Count path parts to determine depth
+                    if len(rel.parts) <= depth:
+                        filtered.append(f)
+                except ValueError:
+                    continue
+            files = filtered
+
+        max_files = context.config.max_file_listing
+        truncated = len(files) > max_files
+        if truncated:
+            files = files[:max_files]
+
+        result = []
+        for f in sorted(files):
+            rel_path = f.relative_to(context.project_root)
+            if f.is_dir():
+                result.append(f"{rel_path}/")
+            else:
+                result.append(str(rel_path))
+
+        output = "\n".join(result)
+        if truncated:
+            output += f"\n... [truncated to {max_files} items]"
+
+        return ToolResult(
+            True,
+            output,
+            metadata={"count": len(result), "truncated": truncated}
+        )
+
+    def _execute_tree(self, context: ToolContext, target: Path, depth: int) -> ToolResult:
+        """Execute tree-style directory listing."""
+        lines = []
+        skip_dirs = context.config.skip_directories
+        allowed_hidden = context.config.allowed_hidden_files
+
+        def build_tree(dir_path: Path, prefix: str = "", current_depth: int = 0):
+            if current_depth >= depth:
+                return
+
+            try:
+                items = sorted(dir_path.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower()))
+            except PermissionError:
+                lines.append(f"{prefix}[Permission Denied]")
+                return
+
+            # Filter out hidden and skip directories
+            items = [i for i in items if not i.name.startswith('.') or i.name in allowed_hidden]
+            items = [i for i in items if i.name not in skip_dirs]
+
+            for i, item in enumerate(items):
+                is_last = i == len(items) - 1
+                connector = "`-- " if is_last else "|-- "
+
+                if item.is_dir():
+                    # Directory - show with styling if available
+                    if self._output:
+                        dir_name = self._output.style(f"{item.name}/", color=DEFAULT_THEME.primary, bold=True)
+                    else:
+                        dir_name = f"{item.name}/"
+                    lines.append(f"{prefix}{connector}{dir_name}")
+
+                    # Recurse into subdirectory
+                    if current_depth < depth - 1:
+                        extension = "    " if is_last else "|   "
+                        build_tree(item, prefix + extension, current_depth + 1)
+                else:
+                    # File - show with size
+                    try:
+                        size = item.stat().st_size
+                        if size < 1024:
+                            size_str = f"{size}B"
+                        elif size < 1024 * 1024:
+                            size_str = f"{size/1024:.1f}KB"
+                        else:
+                            size_str = f"{size/(1024*1024):.1f}MB"
+                    except OSError:
+                        size_str = "?"
+
+                    # Color by file type
+                    if self._output:
+                        if item.suffix in ['.py']:
+                            file_name = self._output.style(item.name, color=SYNTAX_COLORS.python)
+                        elif item.suffix in ['.js', '.ts', '.jsx', '.tsx']:
+                            file_name = self._output.style(item.name, color=SYNTAX_COLORS.javascript)
+                        elif item.suffix in ['.md', '.txt', '.rst']:
+                            file_name = self._output.style(item.name, color=SYNTAX_COLORS.docs)
+                        elif item.suffix in ['.json', '.yaml', '.yml', '.toml']:
+                            file_name = self._output.style(item.name, color=SYNTAX_COLORS.config)
+                        else:
+                            file_name = item.name
+                        size_display = self._output.style(f"({size_str})", color=DEFAULT_THEME.text_muted)
+                    else:
+                        file_name = item.name
+                        size_display = f"({size_str})"
+
+                    lines.append(f"{prefix}{connector}{file_name} {size_display}")
+
+        # Start with the directory name
+        try:
+            root_name = str(target.relative_to(context.project_root))
+            if root_name == ".":
+                root_name = target.name or "."
+        except ValueError:
+            root_name = target.name
+
+        if self._output:
+            styled_root = self._output.style(root_name, color=DEFAULT_THEME.primary, bold=True)
+            lines.append(f"{styled_root}/")
+        else:
+            lines.append(f"{root_name}/")
+
+        build_tree(target)
+
+        max_lines = context.config.max_directory_tree_lines
+        truncated = len(lines) > max_lines
+        if truncated:
+            lines = lines[:max_lines]
+            lines.append(f"... [truncated to {max_lines} items]")
+
+        return ToolResult(
+            True,
+            "\n".join(lines),
+            metadata={"line_count": len(lines), "truncated": truncated, "tree": True}
+        )
 
 
 class ListDirectoryTool(ToolBase):
@@ -355,7 +495,7 @@ class ListDirectoryTool(ToolBase):
                                 size_str = f"{size/1024:.1f}KB"
                             else:
                                 size_str = f"{size/(1024*1024):.1f}MB"
-                        except:
+                        except OSError:
                             size_str = "?"
 
                         # Color by file type using SYNTAX_COLORS

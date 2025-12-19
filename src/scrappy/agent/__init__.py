@@ -22,8 +22,8 @@ from .protocols import (
     ToolRegistryProtocol,
     ToolContextProtocol,
     CheckpointManagerProtocol,
-    FileSystemProtocol,
 )
+from ..infrastructure.protocols import FileSystemProtocol
 from ..infrastructure.file_system import RealFileSystem, InMemoryFileSystem
 
 __all__ = [

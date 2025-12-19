@@ -160,6 +160,7 @@ class DelegationManager:
         max_retries: int = DEFAULT_MAX_RETRIES,
         selection_type: Optional[str] = None,
         min_context: int = 0,
+        messages: Optional[list[dict]] = None,
         **kwargs
     ) -> tuple[LLMResponse, dict]:
         """
@@ -184,6 +185,7 @@ class DelegationManager:
             max_retries: Maximum retry attempts per provider
             selection_type: ModelSelectionType value for fallback filtering (e.g., 'quality')
             min_context: Minimum context length for fallback filtering
+            messages: Pre-built messages array (bypasses prompt/system_prompt construction)
             **kwargs: Additional provider-specific arguments
 
         Returns:
@@ -193,7 +195,37 @@ class DelegationManager:
             AllProvidersRateLimitedError: If all providers are rate limited
             ValueError: If input validation fails
         """
-        # Determine settings
+        # If messages provided, use directly (skip augmentation, cache, prompt building)
+        # This is used for multi-turn conversations where messages array is pre-built
+        if messages is not None:
+            # Determine model
+            if model:
+                effective_model = model
+            else:
+                effective_model = _resolve_model_group(provider_name)
+
+            # Filter out internal kwargs
+            filtered_kwargs = {k: v for k, v in kwargs.items() if k not in INTERNAL_KWARGS}
+
+            # Execute directly with provided messages
+            response, task_record = self._llm_service.completion_sync(
+                model=effective_model,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                **filtered_kwargs,
+            )
+
+            # Update task record
+            task_record.update({
+                'timestamp': datetime.now().isoformat(),
+                'context_augmented': False,
+                'cached': False,
+                'async': False,
+            })
+            return response, task_record
+
+        # Standard flow: augment prompt, check cache, build messages
         should_use_context = use_context if use_context is not None else self._context_aware
         should_use_cache = use_cache if use_cache is not None else True
 
@@ -243,10 +275,10 @@ class DelegationManager:
             effective_model = _resolve_model_group(provider_name)
 
         # Build messages list for LiteLLM
-        messages = []
+        final_messages = []
         if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": final_prompt})
+            final_messages.append({"role": "system", "content": system_prompt})
+        final_messages.append({"role": "user", "content": final_prompt})
 
         # Filter out internal kwargs that should NOT be passed to provider API
         filtered_kwargs = {k: v for k, v in kwargs.items() if k not in INTERNAL_KWARGS}
@@ -254,7 +286,7 @@ class DelegationManager:
         # Step 4: Execute via LLMService (LiteLLM Router handles retry/fallback)
         response, task_record = self._llm_service.completion_sync(
             model=effective_model,
-            messages=messages,
+            messages=final_messages,
             max_tokens=max_tokens,
             temperature=temperature,
             **filtered_kwargs,

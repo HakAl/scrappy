@@ -4,9 +4,8 @@ Command router module for CLI.
 Routes slash commands to appropriate handlers.
 """
 
-from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 from .io_interface import CLIIOProtocol
 from .state_manager import PlanStateManager
 from .session_context import SessionContextProtocol
@@ -169,22 +168,22 @@ class CommandRouter:
             # Get actual model being used for feedback
             try:
                 provider, model = self.orchestrator.provider_selector.get_model(ModelSelectionType.FAST)
-                io.secho(f"Switched to FAST mode", fg=io.theme.success, bold=True)
+                io.secho("Switched to FAST mode", fg=io.theme.success, bold=True)
                 io.echo(f"  Using: {provider}/{model}")
-                io.echo(f"  High throughput, cost efficient.")
+                io.echo("  High throughput, cost efficient.")
             except Exception as e:
-                io.secho(f"Switched to FAST mode", fg=io.theme.success)
+                io.secho("Switched to FAST mode", fg=io.theme.success)
                 io.secho(f"  Warning: Could not determine model - {e}", fg=io.theme.warning)
         elif arg == "quality":
             self.orchestrator.quality_mode = True
             # Get actual model being used for feedback
             try:
                 provider, model = self.orchestrator.provider_selector.get_model(ModelSelectionType.QUALITY)
-                io.secho(f"Switched to QUALITY mode", fg=io.theme.success, bold=True)
+                io.secho("Switched to QUALITY mode", fg=io.theme.success, bold=True)
                 io.echo(f"  Using: {provider}/{model}")
-                io.echo(f"  Enhanced reasoning.")
+                io.echo("  Enhanced reasoning.")
             except Exception as e:
-                io.secho(f"Switched to QUALITY mode", fg=io.theme.success)
+                io.secho("Switched to QUALITY mode", fg=io.theme.success)
                 io.secho(f"  Warning: Could not determine model - {e}", fg=io.theme.warning)
         else:
             # Show current mode
@@ -440,7 +439,7 @@ class CommandRouter:
             io.echo(f"{role_style} {content}")
 
         io.echo()
-        io.echo(f"Use /history [n] to show last n messages (default: 10)")
+        io.echo("Use /history [n] to show last n messages (default: 10)")
         return True
 
     def _handle_autoexec(self, args: str) -> bool:

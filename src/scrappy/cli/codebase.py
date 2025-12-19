@@ -136,7 +136,7 @@ class CLICodebaseAnalysis:
         if self.io.confirm("\nSave summary to file?", default=False):
             summary_file = path / "CODEBASE_SUMMARY.md"
             with open(summary_file, 'w', encoding='utf-8') as f:
-                f.write(f"# Codebase Summary\n\n")
+                f.write("# Codebase Summary\n\n")
                 f.write(f"Generated: {datetime.now().isoformat()}\n\n")
                 f.write(summary)
             self.io.secho(f"Saved to: {summary_file}", fg=self.io.theme.success)

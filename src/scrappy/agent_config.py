@@ -38,6 +38,10 @@ from .agent_tools.constants import (
     DEFAULT_MEANINGFUL_ACTIONS,
     DEFAULT_PASSIVE_RAG_ENABLED,
     DEFAULT_PASSIVE_RAG_MAX_TOKENS,
+    DEFAULT_RAG_MIN_SCORE,
+    DEFAULT_RAG_MAX_GAP,
+    DEFAULT_TOOL_PROFILE,
+    VALID_TOOL_PROFILES,
 )
 
 
@@ -81,7 +85,10 @@ class AgentConfig(BaseConfig):
     _meaningful_actions: List[str] = field(default_factory=lambda: DEFAULT_MEANINGFUL_ACTIONS.copy(), init=False, repr=False)
     _passive_rag_enabled: bool = field(default=DEFAULT_PASSIVE_RAG_ENABLED, init=False, repr=False)
     _passive_rag_max_tokens: int = field(default=DEFAULT_PASSIVE_RAG_MAX_TOKENS, init=False, repr=False)
+    _rag_min_score: float = field(default=DEFAULT_RAG_MIN_SCORE, init=False, repr=False)
+    _rag_max_gap: float = field(default=DEFAULT_RAG_MAX_GAP, init=False, repr=False)
     _verbose: bool = field(default=DEFAULT_VERBOSE_OUTPUT, init=False, repr=False)
+    _tool_profile: str = field(default=DEFAULT_TOOL_PROFILE, init=False, repr=False)
 
     # File operations
     @property
@@ -405,6 +412,28 @@ class AgentConfig(BaseConfig):
             raise ValueError(f"passive_rag_max_tokens must be positive, got {value}")
         self._passive_rag_max_tokens = value
 
+    @property
+    def rag_min_score(self) -> float:
+        """Minimum relevance score floor for RAG results."""
+        return self._rag_min_score
+
+    @rag_min_score.setter
+    def rag_min_score(self, value: float) -> None:
+        if not (0.0 <= value <= 1.0):
+            raise ValueError(f"rag_min_score must be between 0.0 and 1.0, got {value}")
+        self._rag_min_score = value
+
+    @property
+    def rag_max_gap(self) -> float:
+        """Maximum score gap for elbow detection in RAG filtering."""
+        return self._rag_max_gap
+
+    @rag_max_gap.setter
+    def rag_max_gap(self, value: float) -> None:
+        if not (0.0 <= value <= 1.0):
+            raise ValueError(f"rag_max_gap must be between 0.0 and 1.0, got {value}")
+        self._rag_max_gap = value
+
     # UI/Output settings
     @property
     def verbose(self) -> bool:
@@ -416,6 +445,18 @@ class AgentConfig(BaseConfig):
         if not isinstance(value, bool):
             raise TypeError(f"verbose must be a bool, got {type(value)}")
         self._verbose = value
+
+    # Tool profile settings
+    @property
+    def tool_profile(self) -> str:
+        """Tool profile controlling which tools are registered ('full', 'optimized', 'minimal')."""
+        return self._tool_profile
+
+    @tool_profile.setter
+    def tool_profile(self, value: str) -> None:
+        if value not in VALID_TOOL_PROFILES:
+            raise ValueError(f"tool_profile must be one of {VALID_TOOL_PROFILES}, got '{value}'")
+        self._tool_profile = value
 
     def validate(self) -> None:
         """

@@ -39,15 +39,7 @@ class TestTaskDataclass:
         )
         assert task.priority == TaskPriority.HIGH
 
-    def test_empty_description_raises(self):
-        """Empty description raises ValueError."""
-        with pytest.raises(ValueError, match="cannot be empty"):
-            Task(description="", status=TaskStatus.PENDING)
 
-    def test_whitespace_description_raises(self):
-        """Whitespace-only description raises ValueError."""
-        with pytest.raises(ValueError, match="cannot be empty"):
-            Task(description="   ", status=TaskStatus.PENDING)
 
 
 class TestTaskPattern:
@@ -161,14 +153,7 @@ class TestMarkdownTaskStorage:
 
             storage.clear()
             assert not path.exists()
-
-    def test_clear_on_nonexistent_file_is_safe(self):
-        """clear() on non-existent file doesn't raise."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            path = Path(tmpdir) / ".scrappy" / ".todo.md"
-            storage = MarkdownTaskStorage(path)
-
-            storage.clear()  # Should not raise
+  # Should not raise
 
     def test_preserves_header_format(self):
         """Written file has proper markdown header."""

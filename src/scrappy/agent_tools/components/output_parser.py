@@ -6,7 +6,6 @@ command output formats (JSON, YAML, text, errors).
 """
 
 import json
-from typing import Optional
 
 
 class OutputParser:
@@ -154,7 +153,7 @@ class OutputParser:
                     parsed = yaml.safe_load(stripped)
                     if isinstance(parsed, (dict, list)):
                         return "yaml"
-                except:
+                except Exception:
                     pass
 
         return "text"

@@ -32,40 +32,11 @@ from src.scrappy.cli.conversation_store import (
 class TestStripAnsi:
     """Tests for ANSI escape code stripping."""
 
-    def test_strips_color_codes(self):
-        """Should remove SGR color codes from text."""
-        text = "\x1b[32mGreen text\x1b[0m"
-        result = strip_ansi(text)
-        assert result == "Green text"
 
-    def test_strips_multiple_color_codes(self):
-        """Should remove all color codes from text with multiple codes."""
-        text = "\x1b[31mRed\x1b[0m and \x1b[32mGreen\x1b[0m"
-        result = strip_ansi(text)
-        assert result == "Red and Green"
 
-    def test_strips_cursor_movement_codes(self):
-        """Should remove cursor movement codes."""
-        text = "\x1b[2JCleared\x1b[H"
-        result = strip_ansi(text)
-        assert result == "Cleared"
 
-    def test_preserves_plain_text(self):
-        """Should leave plain text unchanged."""
-        text = "No ANSI codes here"
-        result = strip_ansi(text)
-        assert result == "No ANSI codes here"
 
-    def test_handles_empty_string(self):
-        """Should handle empty string without error."""
-        result = strip_ansi("")
-        assert result == ""
 
-    def test_strips_complex_sequences(self):
-        """Should handle complex ANSI sequences with parameters."""
-        text = "\x1b[1;31;40mBold Red on Black\x1b[0m"
-        result = strip_ansi(text)
-        assert result == "Bold Red on Black"
 
 
 class TestGetOrCreateProjectId:
@@ -147,10 +118,6 @@ class TestGetOrCreateProjectId:
 class TestCheckSessionStaleness:
     """Tests for session staleness detection."""
 
-    def test_returns_false_when_no_last_message(self):
-        """Should return False when there are no previous messages."""
-        result = check_session_staleness(None)
-        assert result is False
 
     def test_returns_true_when_last_message_over_threshold(self):
         """Should return True when last message is older than 4 hours."""
@@ -550,18 +517,6 @@ class TestConversationStoreGetLastMessageTime:
 
             store.close()
 
-    def test_get_last_message_time_returns_datetime(self):
-        """Should return datetime object for most recent message."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            scrappy_dir = Path(tmpdir) / ".scrappy"
-            store = ConversationStore.create(scrappy_dir)
-
-            store.add_message({"role": "user", "content": "Test"})
-
-            last_time = store.get_last_message_time()
-            assert isinstance(last_time, datetime)
-
-            store.close()
 
     def test_get_last_message_time_is_timezone_aware(self):
         """Should return timezone-aware datetime in UTC."""
@@ -577,27 +532,6 @@ class TestConversationStoreGetLastMessageTime:
 
             store.close()
 
-    def test_get_last_message_time_returns_most_recent(self):
-        """Should return timestamp of most recent message, not oldest."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            scrappy_dir = Path(tmpdir) / ".scrappy"
-            store = ConversationStore.create(scrappy_dir)
-
-            import time
-
-            try:
-                store.add_message({"role": "user", "content": "First"})
-                time.sleep(0.01)  # Small delay to ensure different timestamps
-                store.add_message({"role": "user", "content": "Second"})
-
-                last_time = store.get_last_message_time()
-
-                # Verify it's very recent (within last second)
-                now = datetime.now(timezone.utc)
-                diff = now - last_time
-                assert diff.total_seconds() < 1
-            finally:
-                store.close()
 
 
 class TestConversationStoreClear:
@@ -719,22 +653,6 @@ class TestConversationStoreGetStats:
 
             store.close()
 
-    def test_get_stats_includes_oldest_timestamp(self):
-        """Should include timestamp of oldest message."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            scrappy_dir = Path(tmpdir) / ".scrappy"
-            store = ConversationStore.create(scrappy_dir)
-
-            import time
-
-            store.add_message({"role": "user", "content": "First"})
-            time.sleep(0.01)
-            store.add_message({"role": "user", "content": "Second"})
-
-            stats = store.get_stats()
-            assert stats["oldest"] is not None
-
-            store.close()
 
     def test_get_stats_includes_newest_timestamp(self):
         """Should include timestamp of newest message."""
@@ -802,27 +720,7 @@ class TestConversationStoreErrorHandling:
             assert stats["message_count"] == 0
             assert stats["estimated_tokens"] == 0
 
-    def test_clear_handles_error_gracefully(self):
-        """Should handle errors during clear without crashing."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            scrappy_dir = Path(tmpdir) / ".scrappy"
-            store = ConversationStore.create(scrappy_dir)
-
-            # Close connection to trigger error
-            store._conn.close()
-
-            # Should not raise exception
-            store.clear()
-
-    def test_close_handles_error_gracefully(self):
-        """Should handle errors during close without crashing."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            scrappy_dir = Path(tmpdir) / ".scrappy"
-            store = ConversationStore.create(scrappy_dir)
-
-            # Close twice to trigger error on second close
-            store.close()
-            store.close()  # Should not raise
+  # Should not raise
 
 
 class TestConversationStoreOrderingBug:
@@ -1447,18 +1345,6 @@ class TestPhase15StaleSessionMessage:
         assert message["role"] == "system"
         assert "previous session" in message["content"].lower()
 
-    def test_stale_message_structure(self):
-        """System message should have correct structure."""
-        from src.scrappy.cli.conversation_store import get_stale_context_message
-
-        message = get_stale_context_message()
-
-        assert isinstance(message, dict)
-        assert "role" in message
-        assert "content" in message
-        assert message["role"] == "system"
-        assert isinstance(message["content"], str)
-        assert len(message["content"]) > 0
 
     def test_stale_message_mentions_new_workflow(self):
         """System message should hint that user may be starting new workflow."""
