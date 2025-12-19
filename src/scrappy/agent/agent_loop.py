@@ -19,6 +19,8 @@ from .types import (
     ConversationState,
     DenialHandlerResult,
     AgentContext,
+    OutcomeRecord,
+    smart_truncate,
 )
 from .protocols import (
     AgentUIProtocol,
@@ -68,6 +70,7 @@ class AgentLoop:
         denial_handler: Optional[DenialHandlerProtocol] = None,
         cancellation_token: Optional[CancellationTokenProtocol] = None,
         stop_condition: Optional[AgentStopCondition] = None,
+        tool_context: Optional[Any] = None,  # ToolContext for HUD turn tracking
     ):
         """
         Initialize AgentLoop with injected dependencies.
@@ -86,6 +89,7 @@ class AgentLoop:
             denial_handler: Optional handler for user denials
             cancellation_token: Optional token for cancellation signaling
             stop_condition: Unified stop condition tracker (created if not provided)
+            tool_context: Optional ToolContext for HUD turn tracking
         """
         self._orchestrator = orchestrator
         self._action_executor = action_executor
@@ -99,6 +103,7 @@ class AgentLoop:
         self._tools = tools or {}
         self._denial_handler = denial_handler
         self._cancellation_token = cancellation_token
+        self._tool_context = tool_context  # For HUD turn tracking
 
         # Unified stop condition - single source of truth for termination
         self._stop_condition = stop_condition or AgentStopCondition(
@@ -470,6 +475,19 @@ class AgentLoop:
         })
         state.tools_executed.append(result.action)
 
+        # Record outcome for HUD display
+        outcome = OutcomeRecord(
+            turn=state.iteration,
+            tool=result.action,
+            success=result.success,
+            summary=smart_truncate(result.output, result.success),
+        )
+        state.recent_outcomes.append(outcome)
+
+        # Keep only last 3 outcomes
+        if len(state.recent_outcomes) > 3:
+            state.recent_outcomes = state.recent_outcomes[-3:]
+
     def _handle_denied_action(
         self,
         state: ConversationState,
@@ -675,10 +693,25 @@ class AgentLoop:
             self._stop_condition.increment_iteration()
             state.iteration = self._stop_condition.current_iteration
 
+            # Increment HUD turn counter (for working set tracking)
+            if self._tool_context is not None:
+                self._tool_context.turn = state.iteration
+
             # Stage 1: Think - LLM generates next thought/action
             try:
                 context = self._context_factory.build_context(task, state.system_prompt)
+
+                # Inject HUD message for recency bias (temporary, removed after think)
+                hud_message = self._context_factory.build_hud_message(state)
+                if hud_message:
+                    state.messages.append(hud_message)
+
                 thought = self.think(state, context)
+
+                # Remove HUD message to avoid permanent accumulation in history
+                if hud_message and state.messages and state.messages[-1] == hud_message:
+                    state.messages.pop()
+
                 self._stop_condition.clear_network_errors()
             except AllModelsRateLimitedError as e:
                 self._stop_condition.mark_rate_limited()

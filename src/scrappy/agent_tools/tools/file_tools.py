@@ -50,6 +50,10 @@ class ReadFileTool(ToolBase):
             # Store in working memory
             context.remember_file_read(path, content, lines)
 
+            # Record in HUD working set (whole file read, no line range)
+            if context.working_set:
+                context.working_set.record_read(path, context.turn)
+
             return ToolResult(True, content, metadata={"lines": lines, "path": path})
         except Exception as e:
             return ToolResult(False, "", f"Error reading file: {str(e)}")
@@ -203,6 +207,10 @@ class WriteFileTool(ToolBase):
                         "",
                         f"Write verification failed: content mismatch after writing to {path}"
                     )
+
+            # Record in HUD working set
+            if context.working_set:
+                context.working_set.record_write(path, context.turn)
 
             return ToolResult(
                 True,

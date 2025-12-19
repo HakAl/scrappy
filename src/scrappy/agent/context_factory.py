@@ -7,14 +7,15 @@ for adaptive RAG context.
 """
 
 import re
-from typing import Optional, List, TYPE_CHECKING
+from typing import Optional, List, Dict, TYPE_CHECKING
 
-from .types import AgentContext
+from .types import AgentContext, ConversationState
 from ..agent_config import AgentConfig
 from ..agent_tools.tools import ToolRegistry
 
 if TYPE_CHECKING:
     from ..context.protocols import SemanticSearchManagerProtocol
+    from ..agent_tools.tools.base import ToolContext
 
 
 class AgentContextFactory:
@@ -35,6 +36,7 @@ class AgentContextFactory:
         semantic_manager: Optional['SemanticSearchManagerProtocol'],
         config: AgentConfig,
         tool_registry: ToolRegistry,
+        tool_context: Optional['ToolContext'] = None,
     ):
         """Initialize context factory.
 
@@ -42,10 +44,12 @@ class AgentContextFactory:
             semantic_manager: Semantic search manager for RAG context
             config: Agent configuration
             tool_registry: Registry of available tools
+            tool_context: Optional ToolContext for HUD state (task_storage, working_set)
         """
         self._semantic_manager = semantic_manager
         self._config = config
         self._tool_registry = tool_registry
+        self._tool_context = tool_context
 
     def build_context(
         self,
@@ -320,3 +324,78 @@ class AgentContextFactory:
             )
 
         return "\n".join(lines)
+
+    def build_hud_message(self, state: ConversationState) -> Optional[Dict[str, str]]:
+        """Build HUD as a user message for recency bias.
+
+        The HUD (Heads-Up Display) provides the agent with current state:
+        - Tasks: Current objectives and their status
+        - Working Set: Files the agent has read/written with turn tracking
+        - Recent Outcomes: Last 3 tool execution results
+
+        Injected as a user message to exploit LLM recency bias - information
+        at the end of the context window gets more attention.
+
+        Args:
+            state: Current conversation state with recent_outcomes
+
+        Returns:
+            Dict with role='user' and HUD content, or None if no state to display
+        """
+        if not self._tool_context:
+            return None
+
+        lines: List[str] = []
+
+        # Tasks section
+        if self._tool_context.task_storage:
+            tasks = self._tool_context.task_storage.read_tasks()
+            if tasks:
+                lines.append("[TASKS]")
+                for task in tasks:
+                    # Map status to checkbox marker
+                    marker_map = {
+                        "done": "[x]",
+                        "in_progress": "[>]",
+                        "pending": "[ ]",
+                    }
+                    marker = marker_map.get(task.status.value, "[ ]")
+                    lines.append(f"- {marker} {task.description}")
+                lines.append("")
+
+        # Working Set section
+        if self._tool_context.working_set:
+            files = self._tool_context.working_set.get_recent()
+            if files:
+                lines.append("[WORKING SET]")
+                for f in files:
+                    parts = []
+                    if f.read_turn is not None:
+                        if f.line_start is not None and f.line_end is not None:
+                            parts.append(f"Read L{f.line_start}-{f.line_end} @ Turn {f.read_turn}")
+                        else:
+                            parts.append(f"Read full @ Turn {f.read_turn}")
+                    if f.write_turn is not None:
+                        parts.append(f"Modified @ Turn {f.write_turn}")
+                    info = f" ({', '.join(parts)})" if parts else ""
+                    lines.append(f"- {f.path}{info}")
+                lines.append("")
+
+        # Recent Outcomes section
+        if state.recent_outcomes:
+            lines.append("[RECENT OUTCOMES]")
+            # Most recent first
+            for outcome in reversed(state.recent_outcomes):
+                if outcome.success:
+                    status = "Success"
+                else:
+                    status = f"Failed: {outcome.summary}"
+                lines.append(f"- Turn {outcome.turn}: {outcome.tool} - {status}")
+
+        # Only return HUD if there's something to show
+        if not lines:
+            return None
+
+        # Prepend header
+        content = "=== CURRENT STATE ===\n\n" + "\n".join(lines)
+        return {"role": "user", "content": content}

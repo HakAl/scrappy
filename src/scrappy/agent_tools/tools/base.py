@@ -12,7 +12,7 @@ Architecture:
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, Protocol, Union, runtime_checkable
+from typing import TYPE_CHECKING, Dict, List, Optional, Protocol, Union, runtime_checkable
 
 from rich.syntax import Syntax
 from rich.text import Text
@@ -22,6 +22,123 @@ from scrappy.infrastructure.theme import DEFAULT_THEME
 if TYPE_CHECKING:
     from ...agent_config import AgentConfig
     from ...context.protocols import SemanticSearchProtocol
+    from ...protocols.tasks import TaskStorageProtocol
+
+
+@dataclass
+class FileAccess:
+    """Record of a file access in the working set.
+
+    Tracks when and how a file was accessed, including line ranges
+    to help the LLM understand what portions of a file it has seen.
+    """
+
+    path: str
+    line_start: Optional[int] = None  # None = full file read
+    line_end: Optional[int] = None
+    read_turn: Optional[int] = None
+    write_turn: Optional[int] = None
+
+
+class WorkingSet:
+    """Tracks files the agent has read/written during the session.
+
+    Used by the HUD to show the agent's "mental focus" - which files
+    are currently relevant. Helps prevent hallucinations about file
+    contents the agent hasn't actually seen.
+
+    Features:
+    - Tracks line ranges to remind LLM it only saw a snippet
+    - Limits to most recent N files to manage cognitive load
+    - Supports ghost file removal when files are deleted
+    """
+
+    def __init__(self, max_files: int = 5) -> None:
+        """Initialize working set.
+
+        Args:
+            max_files: Maximum number of files to track (oldest dropped).
+        """
+        self._files: Dict[str, FileAccess] = {}
+        self._max_files = max_files
+
+    def record_read(
+        self,
+        path: str,
+        turn: int,
+        line_start: Optional[int] = None,
+        line_end: Optional[int] = None,
+    ) -> None:
+        """Record a file read operation.
+
+        Args:
+            path: File path (relative to project root).
+            turn: Current turn number.
+            line_start: Starting line if partial read (1-indexed).
+            line_end: Ending line if partial read.
+        """
+        if path in self._files:
+            access = self._files[path]
+            access.read_turn = turn
+            access.line_start = line_start
+            access.line_end = line_end
+        else:
+            self._files[path] = FileAccess(
+                path=path,
+                line_start=line_start,
+                line_end=line_end,
+                read_turn=turn,
+            )
+        self._enforce_limit()
+
+    def record_write(self, path: str, turn: int) -> None:
+        """Record a file write operation.
+
+        Args:
+            path: File path (relative to project root).
+            turn: Current turn number.
+        """
+        if path in self._files:
+            self._files[path].write_turn = turn
+        else:
+            self._files[path] = FileAccess(path=path, write_turn=turn)
+        self._enforce_limit()
+
+    def remove_deleted(self, path: str) -> None:
+        """Remove a file from the working set (ghost file prevention).
+
+        Call this when a file is deleted to prevent the HUD from
+        showing files that no longer exist.
+
+        Args:
+            path: File path to remove.
+        """
+        self._files.pop(path, None)
+
+    def get_recent(self) -> List[FileAccess]:
+        """Get files ordered by most recent access.
+
+        Returns:
+            List of FileAccess objects, most recent first, up to max_files.
+        """
+        return sorted(
+            self._files.values(),
+            key=lambda f: max(f.read_turn or 0, f.write_turn or 0),
+            reverse=True,
+        )[: self._max_files]
+
+    def _enforce_limit(self) -> None:
+        """Drop oldest files beyond the limit."""
+        while len(self._files) > self._max_files:
+            # Find oldest file
+            oldest_path = min(
+                self._files.keys(),
+                key=lambda p: max(
+                    self._files[p].read_turn or 0,
+                    self._files[p].write_turn or 0,
+                ),
+            )
+            del self._files[oldest_path]
 
 
 class MemoryProvider(Protocol):
@@ -46,7 +163,7 @@ class ToolContext:
     Context provided to tools during execution.
 
     Contains shared resources like project path, configuration,
-    and memory access.
+    memory access, and HUD state tracking.
     """
 
     # Paths that are blocked from agent access (security)
@@ -57,6 +174,11 @@ class ToolContext:
     config: Optional["AgentConfig"] = None
     orchestrator: Optional[MemoryProvider] = None
     semantic_search: Optional["SemanticSearchProtocol"] = None
+
+    # HUD state tracking (session-scoped)
+    task_storage: Optional["TaskStorageProtocol"] = None
+    working_set: Optional[WorkingSet] = None
+    turn: int = 0  # Incremented each iteration by AgentLoop
 
     def get_project_root(self) -> Path:
         """Get project root directory."""

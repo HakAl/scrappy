@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 from enum import Enum
-from pathlib import Path
 from typing import Protocol
 
 
@@ -74,18 +73,33 @@ class TaskStorageProtocol(Protocol):
 
 
 class InMemoryTaskStorage:
-    """In-memory task storage for testing.
+    """In-memory task storage for session-scoped HUD.
 
     Implements TaskStorageProtocol without file I/O.
+    Used for session-scoped task tracking that doesn't persist across runs.
     """
 
-    def __init__(self, initial: list[Task] | None = None) -> None:
+    def __init__(
+        self,
+        initial: list[Task] | None = None,
+        initial_task: str | None = None,
+    ) -> None:
         """Initialize with optional initial tasks.
 
         Args:
             initial: Optional list of tasks to start with.
+            initial_task: Optional string to auto-seed as first in-progress task.
+                         Used to ensure HUD is never empty on Turn 0.
         """
         self._tasks: list[Task] = list(initial) if initial else []
+
+        # Auto-seed initial task from user prompt (HUD never empty on Turn 0)
+        if initial_task and initial_task.strip():
+            self._tasks.insert(0, Task(
+                description=initial_task.strip(),
+                status=TaskStatus.IN_PROGRESS,
+            ))
+
         self._exists = len(self._tasks) > 0
 
     def read_tasks(self) -> list[Task]:

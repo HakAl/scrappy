@@ -217,7 +217,10 @@ class TaskTool(ToolBase):
     def _get_storage(self, context: ToolContext) -> TaskStorageProtocol:
         """Get the storage implementation.
 
-        Uses injected storage for testing, otherwise creates default.
+        Priority order:
+        1. Injected storage (for testing)
+        2. Context task_storage (session-scoped HUD)
+        3. File-based markdown storage (legacy fallback)
 
         Args:
             context: Tool context with project root.
@@ -225,8 +228,15 @@ class TaskTool(ToolBase):
         Returns:
             TaskStorageProtocol implementation.
         """
+        # 1. Test injection takes priority
         if self._injected_storage:
             return self._injected_storage
+
+        # 2. Session-scoped storage from context (HUD)
+        if context.task_storage is not None:
+            return context.task_storage
+
+        # 3. Legacy file-based storage
         from scrappy.infrastructure.paths import ScrappyPathProvider
         path_provider = ScrappyPathProvider(context.project_root)
         return MarkdownTaskStorage(path_provider.todo_file())

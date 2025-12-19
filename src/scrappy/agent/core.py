@@ -14,7 +14,9 @@ from typing import Optional, Union, Any
 
 from ..agent_config import AgentConfig
 from ..agent_tools.tools import ToolContext
+from ..agent_tools.tools.base import WorkingSet
 from ..agent_tools.tools.command_tool import ShellCommandExecutor
+from ..protocols.tasks import InMemoryTaskStorage
 
 from ..orchestrator_adapter import (
     OrchestratorAdapter,
@@ -258,6 +260,7 @@ class CodeAgent:
             semantic_manager=semantic_manager,
             config=self.config,
             tool_registry=self.tool_registry,
+            tool_context=self.tool_context,  # For HUD state (tasks, working set)
         )
 
         # Phase 1 refactoring: Create AgentLoop
@@ -273,6 +276,7 @@ class CodeAgent:
             audit_logger=self._audit_logger,
             tools=self.tools,
             cancellation_token=self._cancellation_token,
+            tool_context=self.tool_context,  # For HUD turn tracking
         )
 
         # Prompt factory for stateless prompt generation
@@ -306,8 +310,13 @@ class CodeAgent:
         """Create default response parser."""
         return UnifiedResponseParser()
 
-    def _create_default_tool_context(self):
-        """Create default tool context."""
+    def _create_default_tool_context(self, initial_task: Optional[str] = None):
+        """Create default tool context with HUD state tracking.
+
+        Args:
+            initial_task: Optional user task to seed as first in-progress task.
+                         Ensures HUD is never empty on Turn 0.
+        """
         # Get semantic search provider from orchestrator context
         semantic_search = None
         if hasattr(self._initial_orchestrator, 'context') and hasattr(self._initial_orchestrator.context, 'get_search_provider'):
@@ -318,7 +327,11 @@ class CodeAgent:
             dry_run=self.dry_run,
             config=self.config,
             orchestrator=self._initial_orchestrator,
-            semantic_search=semantic_search
+            semantic_search=semantic_search,
+            # HUD state tracking (session-scoped)
+            task_storage=InMemoryTaskStorage(initial_task=initial_task),
+            working_set=WorkingSet(),
+            turn=0,
         )
 
     def _create_default_tool_registry(self):
@@ -565,13 +578,24 @@ class CodeAgent:
         # Update tool context dry_run state
         self.tool_context.dry_run = self.dry_run
 
+        # Reset HUD state for new run (session-scoped)
+        self.tool_context.turn = 0
+        if self.tool_context.task_storage:
+            # Seed initial task so HUD is never empty on Turn 0
+            from ..protocols.tasks import Task, TaskStatus
+            self.tool_context.task_storage.write_tasks([
+                Task(description=task, status=TaskStatus.IN_PROGRESS)
+            ])
+        if self.tool_context.working_set:
+            # Clear working set from any previous run
+            self.tool_context.working_set._files.clear()
+
         # Enable auto-save for crash safety (uses path_provider)
         self._audit_logger.enable_auto_save()
         self._audit_logger.set_task_info(task, max_iterations, auto_confirm)
 
         # Concise header
         task_preview = task[:80] + "..." if len(task) > 80 else task
-        self.ui.show_rule("Agent Task")
         self.io.secho(task_preview, fg="white", bold=True)
         if self.dry_run:
             self.io.secho("[DRY RUN MODE]", fg="yellow", bold=True)

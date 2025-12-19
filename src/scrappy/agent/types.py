@@ -12,6 +12,42 @@ if TYPE_CHECKING:
 
 
 @dataclass
+class OutcomeRecord:
+    """Record of a tool execution outcome for HUD display.
+
+    Tracks tool results with smart truncation to show meaningful
+    information without overwhelming the context window.
+    """
+
+    turn: int
+    tool: str
+    success: bool
+    summary: str  # Smart-truncated output
+
+
+def smart_truncate(output: str, success: bool, max_length: int = 150) -> str:
+    """Truncate tool output for HUD display.
+
+    For successful operations: return short summary.
+    For failures: return tail of output (stack traces end with the cause).
+
+    Args:
+        output: Raw tool output.
+        success: Whether the tool succeeded.
+        max_length: Maximum length for failure output.
+
+    Returns:
+        Truncated output suitable for HUD display.
+    """
+    if success:
+        return "(Success)"
+    if len(output) <= max_length:
+        return output
+    # Tail is more important for errors (stack traces end with the cause)
+    return "..." + output[-(max_length - 3):]
+
+
+@dataclass
 class AgentThought:
     """Result from the thinking stage (LLM response)."""
     raw_response: str
@@ -74,6 +110,8 @@ class ConversationState:
     # Track action history for duplicate detection
     action_history: List[Dict[str, object]] = field(default_factory=list)  # List of {action, parameters}
     last_action: Optional[Dict[str, object]] = None  # Most recent action for quick duplicate check
+    # HUD: Recent tool outcomes (last 3) for state display
+    recent_outcomes: List[OutcomeRecord] = field(default_factory=list)
 
 
 @dataclass
