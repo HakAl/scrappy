@@ -487,7 +487,7 @@ class SemanticSearchManager:
                 logger.info(f"Received batch {batch_count} with {batch_size} files")
 
                 progress_msg = f"Indexing files: batch {batch_count} ({total_indexed} files total)"
-                progress.update(description=progress_msg)
+                progress.update(current=total_indexed, description=progress_msg)
 
                 self._notify_progress(
                     f"Indexing batch {batch_count}...",
