@@ -8,6 +8,7 @@ from typing import Any
 
 from .io_interface import CLIIOProtocol
 from .validators import validate_subcommand
+from .utils.error_handler import session_error
 
 
 class SessionPersistence:
@@ -89,7 +90,7 @@ class SessionPersistence:
                     self.io.echo(f"Git Ops: {len(data.get('git_operations', []))}")
                     self.io.echo(f"Discoveries: {len(data.get('discoveries', []))}")
                 except Exception as e:
-                    self.io.echo(f"Error reading session: {e}")
+                    session_error(self.io, e, "read")
 
             # Show current memory stats
             mem = self.orchestrator.working_memory.get_summary()

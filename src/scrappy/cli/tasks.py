@@ -5,6 +5,7 @@ Handles planning and reasoning operations.
 
 from .io_interface import CLIIOProtocol
 from .display_manager import DisplayManager
+from .utils.error_handler import task_execution_error
 
 
 class CLITaskExecution:
@@ -71,7 +72,7 @@ class CLITaskExecution:
                     dashboard.set_state("idle", "Plan generated")
             except Exception as e:
                 progress.advance(1)
-                io.secho(f"Error during planning: {e}", fg=io.theme.error)
+                task_execution_error(io, e, "planning")
 
                 if dashboard:
                     dashboard.set_state("idle", "Planning failed")
@@ -158,7 +159,7 @@ class CLITaskExecution:
                     dashboard.set_state("idle", "Analysis complete")
             except Exception as e:
                 progress.advance(1)
-                io.secho(f"Error during reasoning: {e}", fg=io.theme.error)
+                task_execution_error(io, e, "reasoning")
 
                 if dashboard:
                     dashboard.set_state("idle", "Reasoning failed")

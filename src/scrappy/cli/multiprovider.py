@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Optional
 from .io_interface import CLIIOProtocol
 from .validators import is_empty_or_whitespace, validate_provider
 from .user_interaction import CLIUserInteraction
+from .utils.error_handler import api_delegation_error
 
 if TYPE_CHECKING:
     from .protocols import UserInteractionProtocol
@@ -177,4 +178,4 @@ class CLIMultiProvider:
                 "delegation"
             )
         except Exception as e:
-            self.io.secho(f"Error: {e}", fg=self.io.theme.error)
+            api_delegation_error(self.io, e, validation.provider)

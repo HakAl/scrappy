@@ -10,6 +10,7 @@ from ..agent_config import AgentConfig
 from .io_interface import CLIIOProtocol
 from .display_manager import DisplayManager
 from .user_interaction import CLIUserInteraction
+from .utils.error_handler import handle_error
 
 if TYPE_CHECKING:
     from .protocols import UserInteractionProtocol
@@ -211,7 +212,8 @@ class CLIAgentManager:
                 "agent_task"
             )
         except Exception as e:
-            io.secho(f"\nAgent error: {e}", fg=io.theme.error)
+            io.echo()  # Newline before error
+            handle_error(e, io, context="agent execution")
             self.orchestrator.working_memory.add_discovery(
                 f"Agent task '{task[:50]}...' failed: {str(e)[:50]}",
                 "agent_task"

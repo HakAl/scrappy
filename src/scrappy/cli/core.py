@@ -362,7 +362,7 @@ class CLI:
                     io.secho("Session restored successfully!", fg=io.theme.success)
                 else:
                     error_msg = result.get('message', 'unknown error')
-                    io.secho(f"Could not restore session: {error_msg}", fg="red")
+                    io.secho(f"Could not restore session: {error_msg}", fg=io.theme.error)
                     self.logger.warning("Session restore failed", extra={"error": error_msg})
             else:
                 io.secho("Starting fresh session.", fg="yellow")
