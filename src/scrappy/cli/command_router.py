@@ -18,7 +18,7 @@ from .smart_query import CLISmartQuery
 from .agent_manager import CLIAgentManager
 from .task_router_handler import CLITaskRouterHandler
 from .validators import validate_command
-from .utils.dependency_check import check_agent_dependencies
+from .utils.dependency_check import check_agent_dependencies, check_optional_dependencies
 from .utils.session_utils import (
     display_session_saved,
     display_session_save_error,
@@ -279,6 +279,11 @@ class CommandRouter:
             for err in errors:
                 io.echo(f"  - {err}")
             return True
+
+        # Check optional dependencies and warn
+        warnings = check_optional_dependencies()
+        for warning in warnings:
+            io.secho(f"Warning: {warning}", fg=io.theme.warning)
 
         # Handle existing tasks
         if not self._handle_existing_tasks(io, clear_tasks):

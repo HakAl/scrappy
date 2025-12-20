@@ -32,6 +32,21 @@ def check_git() -> DependencyStatus:
     )
 
 
+def check_rg() -> DependencyStatus:
+    """Check if ripgrep is available.
+
+    Returns:
+        DependencyStatus with availability info
+    """
+    path = shutil.which("rg")
+    if path:
+        return DependencyStatus(available=True, path=path)
+    return DependencyStatus(
+        available=False,
+        error="ripgrep (rg) not found. Install for faster text search."
+    )
+
+
 def check_pytest() -> DependencyStatus:
     """Check if pytest is available.
 
@@ -63,7 +78,7 @@ def check_agent_dependencies() -> tuple[bool, list[str]]:
     errors = []
 
     git_status = check_git()
-    if not git_status.available:
+    if not git_status.available and git_status.error:
         errors.append(git_status.error)
 
     # pytest is optional - just warn, don't block
@@ -72,3 +87,21 @@ def check_agent_dependencies() -> tuple[bool, list[str]]:
     #     errors.append(pytest_status.error)
 
     return len(errors) == 0, errors
+
+
+def check_optional_dependencies() -> list[str]:
+    """Check optional dependencies and return warnings.
+
+    These are non-blocking - agent will work without them but with reduced
+    functionality or performance.
+
+    Returns:
+        List of warning messages for missing optional dependencies.
+    """
+    warnings = []
+
+    rg_status = check_rg()
+    if not rg_status.available and rg_status.error:
+        warnings.append(rg_status.error)
+
+    return warnings
