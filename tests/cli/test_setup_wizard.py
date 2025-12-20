@@ -18,6 +18,14 @@ from scrappy.orchestrator.provider_definitions import PROVIDERS
 from .helpers import MockApiKeyConfigService, MockLLMService
 
 
+class MockTheme:
+    """Mock theme for testing."""
+    error = "red"
+    success = "green"
+    warning = "yellow"
+    primary = "cyan"
+
+
 class MockIO:
     """Mock UnifiedIO for testing."""
 
@@ -27,6 +35,7 @@ class MockIO:
         self.prompts: List[str] = []
         self.prompt_responses: List[str] = []
         self.output_sink = None
+        self.theme = MockTheme()
 
     def echo(self, text: str = "") -> None:
         """Capture echo output."""

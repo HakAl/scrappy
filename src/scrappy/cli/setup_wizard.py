@@ -228,7 +228,7 @@ class SetupWizard:
             self.io.echo(f"\nConfiguring {provider_name.replace('_', ' ').title()}")
             self.io.echo(f"Get your API key from: {info.console_url}")
         else:
-            self.io.secho("Invalid selection.", fg="red")
+            self.io.secho("Invalid selection.", fg=self.io.theme.error)
             self._show_menu()
 
     def _handle_key_input(self, key: str) -> None:
@@ -242,7 +242,7 @@ class SetupWizard:
         # Validate key format and security
         validation_result = validate_api_key(key)
         if not validation_result.is_valid:
-            self.io.secho(f"Invalid key: {validation_result.error}", fg="red")
+            self.io.secho(f"Invalid key: {validation_result.error}", fg=self.io.theme.error)
             return
 
         # Use sanitized value from validation
@@ -251,16 +251,16 @@ class SetupWizard:
         self.io.echo("Validating with provider...")
         valid, error_msg = self._test_provider_key(self._current_provider, sanitized_key)
         if not valid:
-            self.io.secho(f"API key validation failed: {error_msg}", fg="red")
+            self.io.secho(f"API key validation failed: {error_msg}", fg=self.io.theme.error)
             return
 
         # Save the key (config service will validate again as defense-in-depth)
         info = PROVIDERS[self._current_provider]
         try:
             self._save_key(info.env_var, sanitized_key)
-            self.io.secho(f"{self._current_provider.replace('_', ' ').title()} configured!", fg="green")
+            self.io.secho(f"{self._current_provider.replace('_', ' ').title()} configured!", fg=self.io.theme.success)
         except ApiKeyValidationError as e:
-            self.io.secho(f"Failed to save key: {e}", fg="red")
+            self.io.secho(f"Failed to save key: {e}", fg=self.io.theme.error)
             return
 
         # Return to menu - screen will handle showing menu after clearing
@@ -291,14 +291,14 @@ class SetupWizard:
             if choice == 'q':
                 if allow_cancel or self._has_any_provider():
                     break
-                self.io.secho("Must configure at least one provider.", fg="red")
+                self.io.secho("Must configure at least one provider.", fg=self.io.theme.error)
                 continue
 
             provider_name = self._get_provider_by_index(choice)
             if provider_name:
                 self._configure_provider(provider_name)
             else:
-                self.io.secho("Invalid selection.", fg="red")
+                self.io.secho("Invalid selection.", fg=self.io.theme.error)
 
         return self._has_any_provider()
 
@@ -387,7 +387,7 @@ class SetupWizard:
         # Validate key format and security
         validation_result = validate_api_key(key)
         if not validation_result.is_valid:
-            self.io.secho(f"Invalid key: {validation_result.error}", fg="red")
+            self.io.secho(f"Invalid key: {validation_result.error}", fg=self.io.theme.error)
             return False
 
         sanitized_key = validation_result.sanitized_value
@@ -395,15 +395,15 @@ class SetupWizard:
         self.io.echo("Validating with provider...")
         valid, error_msg = self._test_provider_key(name, sanitized_key)
         if not valid:
-            self.io.secho(f"API key validation failed: {error_msg}", fg="red")
+            self.io.secho(f"API key validation failed: {error_msg}", fg=self.io.theme.error)
             return False
 
         try:
             self._save_key(info.env_var, sanitized_key)
-            self.io.secho(f"{name.replace('_', ' ').title()} configured!", fg="green")
+            self.io.secho(f"{name.replace('_', ' ').title()} configured!", fg=self.io.theme.success)
             return True
         except ApiKeyValidationError as e:
-            self.io.secho(f"Failed to save key: {e}", fg="red")
+            self.io.secho(f"Failed to save key: {e}", fg=self.io.theme.error)
             return False
 
     def _test_provider_key(self, name: str, key: str) -> Tuple[bool, str]:
