@@ -174,13 +174,21 @@ def show_status_rich(
     # Add health summary if any requests have been made
     if provider_health:
         lines.append("")
-        lines.append("Provider Health:")
-        for provider, health in provider_health.items():
+        lines.append("Provider Performance:")
+        for provider, health in sorted(provider_health.items()):
             healthy = health.get('healthy', True)
             requests = health.get('request_count', 0)
-            errors = health.get('error_count', 0)
+            success_rate = health.get('success_rate', 1.0)
+            avg_latency = health.get('avg_latency_ms', 0)
+            tokens = health.get('total_tokens', 0)
             indicator = "[OK]" if healthy else "[!!]"
-            lines.append(f"  {indicator} {provider}: {requests} requests, {errors} errors")
+            lines.append(
+                f"  {indicator} {provider}: "
+                f"{success_rate:.0%} success, "
+                f"{avg_latency:.0f}ms avg, "
+                f"{tokens:,} tokens, "
+                f"{requests} reqs"
+            )
 
     content = "\n".join(lines)
     io.panel(content, title="System Status", border_style=io.theme.primary)

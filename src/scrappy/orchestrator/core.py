@@ -337,6 +337,11 @@ class AgentOrchestrator:
                     'request_count': status.request_count,
                     'error_count': status.error_count,
                     'last_error': status.last_error,
+                    # New rolling window metrics
+                    'success_rate': status.success_rate,
+                    'avg_latency_ms': status.avg_latency_ms,
+                    'total_tokens': status.total_tokens,
+                    'window_size': status.window_size,
                 }
                 for name, status in self.provider_status_tracker.get_all_status().items()
             }

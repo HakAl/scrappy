@@ -2838,19 +2838,25 @@ class MockProviderStatusTracker:
         self.successes: List[Dict[str, Any]] = []
         self.failures: List[Dict[str, Any]] = []
 
-    def on_success(self, provider: str, model: str, latency_ms: float) -> None:
+    def on_success(
+        self, provider: str, model: str, latency_ms: float, tokens: int = 0
+    ) -> None:
         """Record a success event."""
         self.successes.append({
             'provider': provider,
             'model': model,
             'latency_ms': latency_ms,
+            'tokens': tokens,
         })
 
-    def on_failure(self, provider: str, error: str) -> None:
+    def on_failure(
+        self, provider: str, error: str, latency_ms: float = 0.0
+    ) -> None:
         """Record a failure event."""
         self.failures.append({
             'provider': provider,
             'error': error,
+            'latency_ms': latency_ms,
         })
 
     def get_status(self, provider: str) -> Optional[Dict[str, Any]]:

@@ -157,7 +157,10 @@ class RateTrackingCallback(CustomLogger):
 
         # Record to status tracker (D10)
         if self._status_tracker:
-            self._status_tracker.on_success(provider, model_str, latency_ms)
+            total_tokens = input_tokens + output_tokens
+            self._status_tracker.on_success(
+                provider, model_str, latency_ms, tokens=total_tokens
+            )
 
     def log_failure_event(
         self,
@@ -187,6 +190,7 @@ class RateTrackingCallback(CustomLogger):
             provider = self._extract_provider(model, kwargs)
 
         error_msg = str(exception) if exception else "Unknown error"
+        latency_ms = (end_time - start_time).total_seconds() * 1000
 
         # Record failure to rate tracker (D9)
         if self._rate_tracker:
@@ -201,7 +205,7 @@ class RateTrackingCallback(CustomLogger):
 
         # Record failure to status tracker (D10)
         if self._status_tracker:
-            self._status_tracker.on_failure(provider, error_msg)
+            self._status_tracker.on_failure(provider, error_msg, latency_ms=latency_ms)
 
     # LiteLLM CustomLogger interface methods
     # These are called by LiteLLM Router automatically
