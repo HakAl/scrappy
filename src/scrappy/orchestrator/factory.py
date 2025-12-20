@@ -310,6 +310,8 @@ class OrchestratorFactory:
     def create_rate_tracker(self, codebase_context: ContextProvider) -> RateLimitTrackerProtocol:
         """Create default rate limit tracker with HTTP header capture."""
         if self._path_provider:
+            # Ensure user dir exists and migrate any project-level rate limits
+            self._path_provider.ensure_user_dir()
             tracker_path = self._path_provider.rate_limits_file()
         else:
             # Fallback for backwards compatibility

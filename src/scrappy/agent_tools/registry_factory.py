@@ -31,6 +31,7 @@ from .tools.web_tools import WebFetchTool, WebSearchTool
 from .tools.command_tool import CommandTool
 from .tools.control_tools import CompleteTool
 from .tools.task_tools import TaskTool
+from .tools.testing_tools import RunTestsTool
 from .constants import DEFAULT_COMMAND_TIMEOUT, DEFAULT_MAX_COMMAND_OUTPUT
 
 if TYPE_CHECKING:
@@ -41,12 +42,12 @@ if TYPE_CHECKING:
 # Tools not in profile are still in codebase but not registered
 TOOL_PROFILES: Dict[str, List[str]] = {
     "full": [
-        # All 16 tools - backward compatible
+        # All 17 tools - backward compatible
         "read_file", "write_file", "list_files",
         "git_log", "git_status", "git_diff", "git_blame", "git_show", "git_recent_changes",
         "find_exact_text", "codebase_search",
         "web_fetch", "web_search",
-        "run_command",
+        "run_command", "run_tests",
         "complete",
         "task",
     ],
@@ -137,6 +138,8 @@ def create_registry_with_profile(
             max_output=max_command_output,
             dangerous_patterns=dangerous_commands or []
         ),
+        # Testing tool
+        "run_tests": lambda: RunTestsTool(timeout=command_timeout),
         # Control tools
         "complete": lambda: CompleteTool(),
         # Task tools

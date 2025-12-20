@@ -12,6 +12,7 @@ from .sections import (
     quality_section,
     safety_section,
     strategy_section,
+    task_tracking_section,
     tool_format_section,
 )
 
@@ -67,6 +68,7 @@ Guidelines:
             codebase_structure_section(config.codebase_structure),
             f"## Available Tools\n\n{config.tool_descriptions}",
             tool_format_section(use_json=not config.use_native_tools),
+            task_tracking_section(),
             strategy_section(),
             efficiency_section(),
             quality_section(),

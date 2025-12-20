@@ -1,7 +1,24 @@
 # **Test Runner Tool**
 
-### 1. Objective
-Create a tool (`run_tests`) that allows the LLM to execute project tests. It needs to be smart enough to detect the test framework (pytest/unittest) but flexible enough to run specific test files or filtered cases (essential for the debugging loop).
+## Status: IMPLEMENTED
+
+See `src/scrappy/agent_tools/tools/testing_tools.py`
+
+**What was built:**
+- Tool name: `run_tests`
+- Parameter: `command` (str, default: `pytest -v`) - agent provides full command
+- Security: Uses `CommandSecurity` for validation (no framework auto-detection)
+- Output: Smart truncation (1000 head + 3000 tail if > 4000 chars)
+- Tests: 20 tests in `tests/agent_tools/test_testing_tools.py`
+
+**Deferred:** Context priming for test config (scrappy-982)
+
+---
+
+### 1. Objective (Original Spec)
+Create a tool (`run_tests`) that allows the LLM to execute project tests.
+It needs to be smart enough to detect the test framework (pytest/unittest)
+but flexible enough to run specific test files or filtered cases (essential for the debugging loop).
 
 ### 2. Location & Dependencies
 *   **New File:** `agent_tools/tools/testing_tools.py`

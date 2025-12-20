@@ -544,10 +544,21 @@ class PathProviderProtocol(Protocol):
 
     def data_dir(self) -> Path:
         """
-        Get the main data directory.
+        Get the main data directory (project-level).
 
         Returns:
             Path to data directory (e.g., .scrappy/)
+        """
+        ...
+
+    def user_data_dir(self) -> Path:
+        """
+        Get the user-level data directory.
+
+        Used for data shared across projects (e.g., rate limits).
+
+        Returns:
+            Path to user data directory (e.g., ~/.scrappy/)
         """
         ...
 
@@ -608,6 +619,18 @@ class PathProviderProtocol(Protocol):
     def ensure_data_dir(self) -> None:
         """
         Ensure data directory exists, creating it if necessary.
+
+        Raises:
+            PermissionError: If no write permission
+        """
+        ...
+
+    def ensure_user_dir(self) -> None:
+        """
+        Ensure user data directory exists and migrate data if needed.
+
+        Creates ~/.scrappy/ and migrates any project-level rate_limits.json
+        to user-level (then deletes the project-level file).
 
         Raises:
             PermissionError: If no write permission

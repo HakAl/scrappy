@@ -150,6 +150,29 @@ When task is complete, use the complete tool:
 Use lowercase true/false for booleans (not Python True/False)."""
 
 
+def task_tracking_section() -> str:
+    """Generate task tracking guidelines."""
+    return """## Task Tracking (REQUIRED)
+
+For all multi-step modifications, you MUST use the `task` tool to maintain state.
+
+### Protocol
+1. **Plan**: Use `task(command="add", ...)` to break down work.
+2. **Execute**: Perform the work (edit files, run tests).
+3. **Complete**: Use `task(command="update", status="done", ...)` after success.
+
+### Why?
+- Allows recovery from errors.
+- Keeps the user informed.
+
+### Example
+task(command="add", description="Update auth logic") # Returns ID: 1
+# ... user performs file edits ...
+task(command="update", task_id=1, status="done")
+
+EXCEPTION: Skip tracking for simple read-only queries or single-file fixes."""
+
+
 def strategy_section() -> str:
     """Generate strategic approach guidelines.
 

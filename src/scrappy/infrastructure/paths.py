@@ -6,9 +6,8 @@ and testing environments.
 """
 
 import logging
+import shutil
 from pathlib import Path
-from typing import Optional
-from .protocols import PathProviderProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -30,18 +29,23 @@ class ScrappyPathProvider:
         """
         self._project_root = project_root
         self._data_dir = project_root / ".scrappy"
+        self._user_dir = Path.home() / ".scrappy"
 
     def data_dir(self) -> Path:
-        """Get the .scrappy/ directory."""
+        """Get the .scrappy/ directory (project-level)."""
         return self._data_dir
+
+    def user_data_dir(self) -> Path:
+        """Get the ~/.scrappy/ directory (user-level)."""
+        return self._user_dir
 
     def session_file(self) -> Path:
         """Get path to session.json."""
         return self._data_dir / "session.json"
 
     def rate_limits_file(self) -> Path:
-        """Get path to rate_limits.json."""
-        return self._data_dir / "rate_limits.json"
+        """Get path to rate_limits.json (user-level, shared across projects)."""
+        return self._user_dir / "rate_limits.json"
 
     def audit_file(self) -> Path:
         """Get path to audit.json."""
@@ -67,6 +71,25 @@ class ScrappyPathProvider:
         """Create .scrappy/ directory if it doesn't exist."""
         self._data_dir.mkdir(parents=True, exist_ok=True)
 
+    def ensure_user_dir(self) -> None:
+        """Create ~/.scrappy/ directory and migrate rate limits if needed."""
+        self._user_dir.mkdir(parents=True, exist_ok=True)
+        self._migrate_rate_limits()
+
+    def _migrate_rate_limits(self) -> None:
+        """Migrate rate_limits.json from project-level to user-level."""
+        project_file = self._data_dir / "rate_limits.json"
+        user_file = self._user_dir / "rate_limits.json"
+
+        if project_file.exists() and not user_file.exists():
+            shutil.copy(project_file, user_file)
+            project_file.unlink()
+            logger.info(
+                "Migrated rate_limits.json from %s to %s",
+                project_file,
+                user_file
+            )
+
 
 class TempPathProvider:
     """
@@ -84,18 +107,23 @@ class TempPathProvider:
         """
         self._temp_dir = temp_dir
         self._data_dir = temp_dir / ".scrappy"
+        self._user_dir = temp_dir / ".scrappy_user"  # Separate for test isolation
 
     def data_dir(self) -> Path:
         """Get the temporary data directory."""
         return self._data_dir
+
+    def user_data_dir(self) -> Path:
+        """Get the temporary user data directory."""
+        return self._user_dir
 
     def session_file(self) -> Path:
         """Get path to test session file."""
         return self._data_dir / "session.json"
 
     def rate_limits_file(self) -> Path:
-        """Get path to test rate limits file."""
-        return self._data_dir / "rate_limits.json"
+        """Get path to test rate limits file (user-level)."""
+        return self._user_dir / "rate_limits.json"
 
     def audit_file(self) -> Path:
         """Get path to test audit file."""
@@ -120,3 +148,7 @@ class TempPathProvider:
     def ensure_data_dir(self) -> None:
         """Create temporary data directory if it doesn't exist."""
         self._data_dir.mkdir(parents=True, exist_ok=True)
+
+    def ensure_user_dir(self) -> None:
+        """Create temporary user data directory if it doesn't exist."""
+        self._user_dir.mkdir(parents=True, exist_ok=True)

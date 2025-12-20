@@ -1,7 +1,16 @@
 ---
 # Config Scopes: User vs Project
 
-## Problem
+## Status: IMPLEMENTED
+
+Rate limits now stored in `~/.scrappy/rate_limits.json` (user-level).
+Migration: existing project-level files are auto-migrated on first use.
+
+See `src/scrappy/infrastructure/paths.py` for implementation.
+
+---
+
+## Problem (Original)
 Rate limits should be per-user (API keys are user-level), not per-project.
 
 ## Proposed Scope
