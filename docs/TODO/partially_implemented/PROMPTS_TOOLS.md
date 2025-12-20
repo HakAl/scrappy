@@ -1,15 +1,6 @@
 # Agent Tools Inventory
 
 ## Issues
-  Prompt Composition Issues:
-
-RAG score filtering implemented in `agent/context_factory.py:_format_rag_context()`.
-
-- Floor: 0.3 minimum score
-- Elbow: 0.15 max gap between consecutive results
-- Debug logging: `logger.debug(f"RAG scores: {scores}")`
-
-Tune thresholds by observing logged score distributions.
 
   Tool Issues:
 

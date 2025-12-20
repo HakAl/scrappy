@@ -797,6 +797,13 @@ class ScrappyApp(App):
         if self._codebase_context is not None:
             self._codebase_context.shutdown()
 
+        # Close LLM service HTTP sessions
+        if hasattr(self, 'interactive_mode') and self.interactive_mode:
+            try:
+                self.interactive_mode.orchestrator.llm_service.close()
+            except Exception as e:
+                logger.debug("Error closing LLM service: %s", e)
+
     def update_status(self, content: str) -> None:
         """Update the status bar widget.
 

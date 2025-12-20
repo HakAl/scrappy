@@ -1,7 +1,6 @@
 """Rate limit tracker facade."""
 from __future__ import annotations
-from datetime import datetime
-from pathlib import Path
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from .protocols import (
@@ -9,7 +8,6 @@ from .protocols import (
     PolicyProtocol,
     CalculatorProtocol,
     RecommenderProtocol,
-    UsageQueryProtocol,
 )
 from scrappy.providers.base import ProviderLimits
 from ..config import OrchestratorConfig
@@ -142,6 +140,9 @@ class RateLimitTracker:
         """
         Get remaining quota for provider/model.
 
+        Prefers actual provider-reported values from HTTP headers when available
+        and fresh. Falls back to calculated estimates from our usage tracking.
+
         Args:
             provider: Provider name
             model: Model name
@@ -152,8 +153,86 @@ class RateLimitTracker:
         """
         self._check_and_reset()
         self._ensure_provider_model(provider, model)
+
+        # Try to use fresh header data first (actual provider-reported values)
+        header_remaining = self._get_remaining_from_headers(provider, limits)
+        if header_remaining is not None:
+            return header_remaining
+
+        # Fall back to calculated estimate
         usage = self._usage["providers"][provider][model]
         return self._calc.remaining(usage, limits)
+
+    def _get_remaining_from_headers(
+        self,
+        provider: str,
+        limits: ProviderLimits,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get remaining quota from cached HTTP headers if fresh.
+
+        Args:
+            provider: Provider name
+            limits: Provider limits (used for fields we can't get from headers)
+
+        Returns:
+            Remaining quota dict or None if headers unavailable/stale
+        """
+        header_data = self.get_provider_headers(provider)
+        if header_data is None:
+            return None
+
+        # Check freshness (default 5 minutes)
+        freshness_seconds = self.config.header_freshness_seconds if hasattr(
+            self.config, 'header_freshness_seconds'
+        ) else 300
+
+        last_updated = header_data.get("last_updated")
+        if last_updated:
+            try:
+                updated_time = datetime.fromisoformat(last_updated)
+                if datetime.now() - updated_time > timedelta(seconds=freshness_seconds):
+                    return None  # Headers are stale
+            except (ValueError, TypeError):
+                return None  # Invalid timestamp
+
+        # Build remaining dict from header data
+        # Prefer day values, fall back to generic values
+        requests_remaining = (
+            header_data.get("remaining_requests_day")
+            or header_data.get("remaining_requests")
+        )
+        tokens_remaining = (
+            header_data.get("remaining_tokens_day")
+            or header_data.get("remaining_tokens")
+        )
+
+        # If we don't have the key values, can't use header data
+        if requests_remaining is None:
+            return None
+
+        # Get our tracked usage for fields headers don't provide
+        usage = self._usage.get("providers", {}).get(provider, {})
+        first_model = next(iter(usage.values()), {}) if usage else {}
+
+        return {
+            "requests_remaining_today": requests_remaining,
+            "requests_remaining_month": (
+                header_data.get("remaining_requests_month")
+                or requests_remaining  # Approximate if not available
+            ),
+            "tokens_remaining_today": tokens_remaining or limits.tokens_per_day,
+            "tokens_remaining_minute": (
+                header_data.get("remaining_tokens_minute")
+                or limits.tokens_per_minute
+            ),
+            # Include our tracked usage for reference
+            "usage_today": first_model.get("requests_today", 0),
+            "tokens_today": first_model.get("tokens_today", 0),
+            "usage_this_month": first_model.get("requests_this_month", 0),
+            # Mark that this came from headers
+            "_source": "headers",
+        }
 
     def is_rate_limited(self, provider_name: str, registry: Any) -> bool:
         """
@@ -442,3 +521,124 @@ class RateLimitTracker:
             })
             # Keep only last 10 errors
             data["errors"] = data["errors"][-10:]
+
+    def update_from_headers(self, provider: str, headers: Dict[str, str]) -> None:
+        """Update rate limits from HTTP response headers.
+
+        Stores provider-reported remaining quotas for accurate routing decisions.
+        Different providers use different header formats:
+        - Groq: x-ratelimit-remaining-requests, x-ratelimit-limit-requests
+        - Cerebras: x-ratelimit-remaining-requests-day/hour/minute
+        - SambaNova: x-ratelimit-remaining-requests-day, x-ratelimit-limit-requests-day
+
+        Args:
+            provider: Provider name (groq, cerebras, sambanova, etc.)
+            headers: Dict of rate limit headers (lowercase keys)
+        """
+        if not headers:
+            return
+
+        # Ensure provider_headers structure exists
+        provider_headers = self._usage.setdefault("provider_headers", {})
+        provider_data = provider_headers.setdefault(provider, {})
+
+        # Store timestamp
+        provider_data["last_updated"] = datetime.now().isoformat()
+
+        # Parse headers based on provider format
+        parsed = self._parse_rate_limit_headers(provider, headers)
+        provider_data.update(parsed)
+
+        # Save to storage
+        self._storage.save(self._usage)
+
+    def _parse_rate_limit_headers(
+        self, provider: str, headers: Dict[str, str]
+    ) -> Dict[str, Any]:
+        """Parse rate limit headers into normalized format.
+
+        Args:
+            provider: Provider name
+            headers: Raw headers dict
+
+        Returns:
+            Normalized dict with remaining/limit values
+        """
+        result: Dict[str, Any] = {"raw_headers": headers}
+
+        # Common patterns across providers
+        # Note: Check "reset" before "limit" because "ratelimit" contains "limit"
+        for key, value in headers.items():
+            key_lower = key.lower()
+
+            # Try to parse numeric values
+            try:
+                numeric_value = int(value)
+            except (ValueError, TypeError):
+                # Keep as string for non-numeric (like reset times "6s")
+                numeric_value = None
+
+            # Reset times FIRST (stored as strings since format varies)
+            # Must check before "limit" since "ratelimit" contains "limit"
+            if "reset" in key_lower:
+                if "request" in key_lower:
+                    result["reset_requests"] = value
+                elif "token" in key_lower:
+                    result["reset_tokens"] = value
+
+            # Remaining requests
+            elif "remaining" in key_lower and "request" in key_lower:
+                if "day" in key_lower:
+                    result["remaining_requests_day"] = numeric_value
+                elif "hour" in key_lower:
+                    result["remaining_requests_hour"] = numeric_value
+                elif "minute" in key_lower:
+                    result["remaining_requests_minute"] = numeric_value
+                else:
+                    # Generic remaining requests (Groq format)
+                    result["remaining_requests"] = numeric_value
+
+            # Remaining tokens
+            elif "remaining" in key_lower and "token" in key_lower:
+                if "day" in key_lower:
+                    result["remaining_tokens_day"] = numeric_value
+                elif "hour" in key_lower:
+                    result["remaining_tokens_hour"] = numeric_value
+                elif "minute" in key_lower:
+                    result["remaining_tokens_minute"] = numeric_value
+                else:
+                    result["remaining_tokens"] = numeric_value
+
+            # Limit values (check "-limit-" to distinguish from "ratelimit")
+            elif "-limit-" in key_lower and "request" in key_lower:
+                if "day" in key_lower:
+                    result["limit_requests_day"] = numeric_value
+                elif "hour" in key_lower:
+                    result["limit_requests_hour"] = numeric_value
+                elif "minute" in key_lower:
+                    result["limit_requests_minute"] = numeric_value
+                else:
+                    result["limit_requests"] = numeric_value
+
+            elif "-limit-" in key_lower and "token" in key_lower:
+                if "day" in key_lower:
+                    result["limit_tokens_day"] = numeric_value
+                elif "hour" in key_lower:
+                    result["limit_tokens_hour"] = numeric_value
+                elif "minute" in key_lower:
+                    result["limit_tokens_minute"] = numeric_value
+                else:
+                    result["limit_tokens"] = numeric_value
+
+        return result
+
+    def get_provider_headers(self, provider: str) -> Optional[Dict[str, Any]]:
+        """Get provider-reported rate limit info from headers.
+
+        Args:
+            provider: Provider name
+
+        Returns:
+            Dict with parsed header data or None if not available
+        """
+        return self._usage.get("provider_headers", {}).get(provider)

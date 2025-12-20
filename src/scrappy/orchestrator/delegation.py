@@ -12,7 +12,7 @@ After LiteLLM integration (Phase 3):
 - provider_name is now a model GROUP name ("fast" or "quality")
 """
 
-from typing import Optional, Callable, AsyncIterator
+from typing import Optional, Callable, AsyncIterator, Any
 from datetime import datetime
 import asyncio
 
@@ -28,6 +28,12 @@ try:
     )
     from ..orchestrator.protocols import LLMServiceProtocol, StreamingCompletionProtocol
     from ..orchestrator.types import StreamChunk
+    from ..orchestrator.rate_limiting.protocols import (
+        EnforcementAction,
+        EnforcementDecision,
+        EnforcementPolicyProtocol,
+        UserNotifierProtocol,
+    )
     from ..config import (
         DEFAULT_MAX_TOKENS,
         DEFAULT_TEMPERATURE,
@@ -35,6 +41,7 @@ try:
         DEFAULT_PROVIDER,
         DEFAULT_MAX_CONCURRENT,
     )
+    from ..infrastructure.exceptions.provider_errors import AllProvidersRateLimitedError
 except ImportError:
     from providers import LLMResponse
     from protocols.delegation import (
@@ -46,6 +53,12 @@ except ImportError:
     )
     from orchestrator.protocols import LLMServiceProtocol, StreamingCompletionProtocol
     from orchestrator.types import StreamChunk
+    from orchestrator.rate_limiting.protocols import (
+        EnforcementAction,
+        EnforcementDecision,
+        EnforcementPolicyProtocol,
+        UserNotifierProtocol,
+    )
     from config import (
         DEFAULT_MAX_TOKENS,
         DEFAULT_TEMPERATURE,
@@ -53,6 +66,7 @@ except ImportError:
         DEFAULT_PROVIDER,
         DEFAULT_MAX_CONCURRENT,
     )
+    from infrastructure.exceptions.provider_errors import AllProvidersRateLimitedError
 
 
 # Model groups for LiteLLM Router
@@ -106,13 +120,13 @@ class DelegationManager:
     - Delegate batch/parallel execution to BatchScheduler
     - Store successful responses in cache
     - Return response with metadata
+    - Pre-request enforcement (block exhausted providers proactively)
 
     Does NOT:
     - Implement prompt augmentation logic (delegates to PromptAugmenter)
     - Implement retry logic (handled by LiteLLM Router via LLMService)
     - Implement batch scheduling logic (delegates to BatchScheduler)
     - Implement provider selection (handled by LiteLLM Router)
-    - Implement rate limit tracking (handled by LiteLLM callbacks)
     """
 
     def __init__(
@@ -124,6 +138,9 @@ class DelegationManager:
         prompt_augmenter: PromptAugmenterProtocol,
         batch_scheduler: BatchSchedulerProtocol,
         context_aware: bool = False,
+        enforcement: Optional[EnforcementPolicyProtocol] = None,
+        notifier: Optional[UserNotifierProtocol] = None,
+        registry: Optional[Any] = None,
     ):
         """
         Initialize DelegationManager.
@@ -137,6 +154,9 @@ class DelegationManager:
             prompt_augmenter: Prompt augmenter for adding context and working memory
             batch_scheduler: Batch scheduler for parallel execution
             context_aware: Whether to augment prompts with context
+            enforcement: Optional enforcement policy for pre-request blocking
+            notifier: Optional notifier for rate limit warnings
+            registry: Optional provider registry for enforcement lookups
         """
         self._llm_service = llm_service
         self._cache = cache
@@ -144,6 +164,84 @@ class DelegationManager:
         self._prompt_augmenter = prompt_augmenter
         self._batch_scheduler = batch_scheduler
         self._context_aware = context_aware
+        self._enforcement = enforcement
+        self._notifier = notifier
+        self._registry = registry
+
+    def _check_enforcement(
+        self,
+        provider_name: str,
+        model: Optional[str],
+        estimated_tokens: int,
+    ) -> tuple[str, Optional[str]]:
+        """
+        Check enforcement policy before making request.
+
+        Args:
+            provider_name: Requested provider
+            model: Requested model
+            estimated_tokens: Estimated token usage
+
+        Returns:
+            Tuple of (effective_provider, effective_model) to use
+
+        Raises:
+            AllProvidersRateLimitedError: If FAIL action returned
+        """
+        # Skip enforcement if not configured
+        if self._enforcement is None or self._registry is None:
+            return provider_name, model
+
+        # Skip enforcement for model groups (let LiteLLM handle it)
+        if provider_name in MODEL_GROUPS:
+            return provider_name, model
+
+        # Evaluate enforcement decision
+        decision = self._enforcement.evaluate(
+            provider=provider_name,
+            model=model or "default",
+            estimated_tokens=estimated_tokens,
+            registry=self._registry,
+        )
+
+        # Handle decision
+        if decision.action == EnforcementAction.ALLOW:
+            return provider_name, model
+
+        elif decision.action == EnforcementAction.WARN:
+            # Notify user but proceed
+            if self._notifier and decision.remaining_quota:
+                remaining_pct = decision.remaining_quota.get("requests_remaining_today", 0) / 1000
+                remaining_requests = decision.remaining_quota.get("requests_remaining_today", 0)
+                self._notifier.notify_approaching_limit(
+                    provider=provider_name,
+                    remaining_percent=remaining_pct,
+                    remaining_requests=remaining_requests,
+                )
+            return provider_name, model
+
+        elif decision.action == EnforcementAction.BLOCK:
+            # Use alternative provider if available
+            if decision.alternative_provider:
+                if self._notifier:
+                    self._notifier.notify_fallback(
+                        from_provider=provider_name,
+                        to_provider=decision.alternative_provider,
+                        reason=decision.reason,
+                    )
+                # Return alternative provider (model may need resolution)
+                return decision.alternative_provider, None
+            else:
+                # No alternative - fall through to FAIL
+                pass
+
+        # FAIL or BLOCK with no alternative
+        if self._notifier:
+            self._notifier.notify_all_exhausted([provider_name])
+        raise AllProvidersRateLimitedError(
+            message=decision.reason,
+            attempted_providers=[provider_name],
+        )
 
     def delegate(
         self,
@@ -264,15 +362,25 @@ class DelegationManager:
             }
             return cached_response, task_record
 
-        # Step 3: Determine model to use
+        # Step 3: Check enforcement policy (pre-request blocking)
+        # May redirect to alternative provider if quota exhausted
+        effective_provider, effective_model_override = self._check_enforcement(
+            provider_name=provider_name,
+            model=model,
+            estimated_tokens=max_tokens,
+        )
+
+        # Step 4: Determine model to use
         # If specific model provided (from ModelSelectionService), use it directly
         # Otherwise resolve provider_name to model group for Router
-        if model:
+        if effective_model_override:
+            effective_model = effective_model_override
+        elif model:
             # Specific model ID - use directly (e.g., "cerebras/qwen-3-235b-a22b-instruct-2507")
             effective_model = model
         else:
             # Resolve to model group for LiteLLM Router (e.g., "fast", "quality")
-            effective_model = _resolve_model_group(provider_name)
+            effective_model = _resolve_model_group(effective_provider)
 
         # Build messages list for LiteLLM
         final_messages = []
@@ -283,7 +391,7 @@ class DelegationManager:
         # Filter out internal kwargs that should NOT be passed to provider API
         filtered_kwargs = {k: v for k, v in kwargs.items() if k not in INTERNAL_KWARGS}
 
-        # Step 4: Execute via LLMService (LiteLLM Router handles retry/fallback)
+        # Step 5: Execute via LLMService (LiteLLM Router handles retry/fallback)
         response, task_record = self._llm_service.completion_sync(
             model=effective_model,
             messages=final_messages,
@@ -292,7 +400,7 @@ class DelegationManager:
             **filtered_kwargs,
         )
 
-        # Step 5: Store in cache
+        # Step 6: Store in cache
         if should_use_cache:
             self._cache.put(response, final_prompt, model, system_prompt, max_tokens, temperature)
             if intent_classification:
@@ -303,7 +411,7 @@ class DelegationManager:
                     intent_classification.get('keywords', [])
                 )
 
-        # Step 6: Add context info to task record
+        # Step 7: Add context info to task record
         task_record['context_augmented'] = should_use_context
         task_record['cached'] = False
         task_record['async'] = False
@@ -395,15 +503,25 @@ class DelegationManager:
             }
             return cached_response, task_record
 
-        # Step 3: Determine model to use
+        # Step 3: Check enforcement policy (pre-request blocking)
+        # May redirect to alternative provider if quota exhausted
+        effective_provider, effective_model_override = self._check_enforcement(
+            provider_name=provider_name,
+            model=model,
+            estimated_tokens=max_tokens,
+        )
+
+        # Step 4: Determine model to use
         # If specific model provided (from ModelSelectionService), use it directly
         # Otherwise resolve provider_name to model group for Router
-        if model:
+        if effective_model_override:
+            effective_model = effective_model_override
+        elif model:
             # Specific model ID - use directly (e.g., "cerebras/qwen-3-235b-a22b-instruct-2507")
             effective_model = model
         else:
             # Resolve to model group for LiteLLM Router (e.g., "fast", "quality")
-            effective_model = _resolve_model_group(provider_name)
+            effective_model = _resolve_model_group(effective_provider)
 
         # Build messages list for LiteLLM
         messages = []
@@ -414,7 +532,7 @@ class DelegationManager:
         # Filter out internal kwargs that should NOT be passed to provider API
         filtered_kwargs = {k: v for k, v in kwargs.items() if k not in INTERNAL_KWARGS}
 
-        # Step 4: Execute via LLMService (LiteLLM Router handles retry/fallback)
+        # Step 5: Execute via LLMService (LiteLLM Router handles retry/fallback)
         response, task_record = await self._llm_service.completion(
             model=effective_model,
             messages=messages,
@@ -423,7 +541,7 @@ class DelegationManager:
             **filtered_kwargs,
         )
 
-        # Step 5: Store in cache
+        # Step 6: Store in cache
         if should_use_cache:
             self._cache.put(response, final_prompt, model, system_prompt, max_tokens, temperature)
             if intent_classification:
@@ -434,7 +552,7 @@ class DelegationManager:
                     intent_classification.get('keywords', [])
                 )
 
-        # Step 6: Add context info to task record
+        # Step 7: Add context info to task record
         task_record['context_augmented'] = should_use_context
         task_record['cached'] = False
         task_record['async'] = True
@@ -655,15 +773,25 @@ class DelegationManager:
             )
             return
 
-        # Step 3: Determine model to use
+        # Step 3: Check enforcement policy (pre-request blocking)
+        # May redirect to alternative provider if quota exhausted
+        effective_provider, effective_model_override = self._check_enforcement(
+            provider_name=provider_name,
+            model=model,
+            estimated_tokens=max_tokens,
+        )
+
+        # Step 4: Determine model to use
         # If specific model provided (from ModelSelectionService), use it directly
         # Otherwise resolve provider_name to model group for Router
-        if model:
+        if effective_model_override:
+            effective_model = effective_model_override
+        elif model:
             # Specific model ID - use directly (e.g., "cerebras/qwen-3-235b-a22b-instruct-2507")
             effective_model = model
         else:
             # Resolve to model group for LiteLLM Router (e.g., "fast", "quality")
-            effective_model = _resolve_model_group(provider_name)
+            effective_model = _resolve_model_group(effective_provider)
 
         # Build messages list for LiteLLM
         messages = []
@@ -674,7 +802,7 @@ class DelegationManager:
         # Filter out internal kwargs that should NOT be passed to provider API
         filtered_kwargs = {k: v for k, v in kwargs.items() if k not in INTERNAL_KWARGS}
 
-        # Step 4: Stream via LLMService (LiteLLM Router handles retry/fallback)
+        # Step 5: Stream via LLMService (LiteLLM Router handles retry/fallback)
         # Check if service supports streaming
         if not isinstance(self._llm_service, StreamingCompletionProtocol):
             raise NotImplementedError(
@@ -703,7 +831,7 @@ class DelegationManager:
             # Yield chunk to caller
             yield chunk
 
-        # Step 5: Store complete response in cache
+        # Step 6: Store complete response in cache
         if should_use_cache and final_chunk:
             # Build LLMResponse from accumulated chunks
             cached_llm_response = LLMResponse(

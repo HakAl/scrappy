@@ -26,7 +26,12 @@ except ImportError:
     from infrastructure.config.api_keys import create_api_key_service
 
 from .cache import ResponseCache
-from .rate_limiting import create_rate_limit_tracker, RateLimitTracker
+from .rate_limiting import (
+    create_rate_limit_tracker,
+    create_enforcement_components,
+    install_rate_limit_hooks,
+    is_rate_limit_hooks_installed,
+)
 from .memory import WorkingMemory
 from .session import SessionManager
 from .task_executor import TaskExecutor
@@ -225,7 +230,9 @@ class OrchestratorFactory:
             components.cache,
             components.output,
             components.working_memory,
-            components.context_manager
+            components.context_manager,
+            components.rate_tracker,
+            components.registry,
         )
 
         # Status reporter (will need to be updated after brain is set)
@@ -301,17 +308,25 @@ class OrchestratorFactory:
         )
 
     def create_rate_tracker(self, codebase_context: ContextProvider) -> RateLimitTrackerProtocol:
-        """Create default rate limit tracker."""
+        """Create default rate limit tracker with HTTP header capture."""
         if self._path_provider:
             tracker_path = self._path_provider.rate_limits_file()
         else:
             # Fallback for backwards compatibility
             tracker_path = codebase_context.project_path / ".llm_rate_limits.json"
-        return create_rate_limit_tracker(
+        tracker = create_rate_limit_tracker(
             tracker_file=str(tracker_path),
             auto_load=True,
             config=self.config
         )
+
+        # Install httpx hooks to capture rate limit headers from API responses
+        # Only install once (idempotent) - hooks intercept all httpx requests
+        if not is_rate_limit_hooks_installed():
+            install_rate_limit_hooks(tracker)
+            logger.debug("Installed httpx rate limit header capture hooks")
+
+        return tracker
 
     def create_working_memory(self) -> WorkingMemoryProtocol:
         """Create default working memory."""
@@ -506,13 +521,16 @@ class OrchestratorFactory:
         cache: CacheProtocol,
         output: BaseOutputProtocol,
         working_memory: WorkingMemoryProtocol,
-        context_manager: ContextManagerProtocol
+        context_manager: ContextManagerProtocol,
+        rate_tracker: RateLimitTrackerProtocol,
+        registry: ProviderRegistryProtocol,
     ) -> DelegationManagerProtocol:
         """
         Create default delegation manager with all collaborators.
 
         Following SOLID principles - wires up all dependencies.
         Uses LiteLLMService for LLM calls (LiteLLM Router handles retry/fallback).
+        Includes rate limit enforcement for pre-request blocking.
         """
         # Create PromptAugmenter
         prompt_augmenter = PromptAugmenter(
@@ -526,7 +544,15 @@ class OrchestratorFactory:
             output=output,
         )
 
-        # Create DelegationManager with all dependencies
+        # Create enforcement components from existing rate tracker
+        # (tracker is already wired to RateTrackingCallback for usage recording)
+        enforcement_components = create_enforcement_components(
+            tracker=rate_tracker,
+            config=self.config,
+            output=output,
+        )
+
+        # Create DelegationManager with all dependencies including enforcement
         return DelegationManager(
             llm_service=llm_service,
             cache=cache,
@@ -534,4 +560,7 @@ class OrchestratorFactory:
             prompt_augmenter=prompt_augmenter,
             batch_scheduler=batch_scheduler,
             context_aware=self.context_aware,
+            enforcement=enforcement_components.enforcement,
+            notifier=enforcement_components.notifier,
+            registry=registry,
         )

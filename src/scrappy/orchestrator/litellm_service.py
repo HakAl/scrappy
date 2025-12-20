@@ -20,12 +20,12 @@ Architecture:
 
 import asyncio
 import json
+import logging
 import time
 import threading
 from typing import Optional, TYPE_CHECKING, AsyncIterator
 
 from ..infrastructure.logging import StructuredLogger
-
 from ..providers.base import LLMResponse, ToolCall
 from ..infrastructure.exceptions.provider_errors import (
     AllProvidersRateLimitedError,
@@ -40,12 +40,14 @@ from ..infrastructure.config.api_keys import ApiKeyConfigServiceProtocol
 from .types import StreamChunk, ToolCallFragment
 from .litellm_config import build_model_list
 
+import litellm
 from litellm import ContextWindowExceededError
 from litellm import RateLimitError as LiteLLMRateLimitError
 
 if TYPE_CHECKING:
-    import litellm
     from .litellm_callbacks import RateTrackingCallback
+
+logger = logging.getLogger(__name__)
 
 # Force httpx transport for LiteLLM streaming
 # aiohttp has issues with session lifecycle that cause incomplete streams
@@ -340,6 +342,68 @@ class LiteLLMService:
         self._router.set_model_list(model_list)
         self._configured = True
         return True
+
+    def close(self) -> None:
+        """
+        Close HTTP sessions to prevent 'unclosed client session' warnings.
+
+        Call on app shutdown. Closes httpx clients we created and any
+        aiohttp sessions that LiteLLM may have created internally.
+        """
+        # Close httpx sync client we created at module level
+        if hasattr(litellm, 'client_session') and litellm.client_session is not None:
+            try:
+                litellm.client_session.close()
+            except Exception as e:
+                logger.debug("Error closing httpx client: %s", e)
+            finally:
+                litellm.client_session = None
+
+        # AsyncClient needs async close - mark for GC
+        if hasattr(litellm, 'aclient_session') and litellm.aclient_session is not None:
+            litellm.aclient_session = None
+
+        # Close any aiohttp sessions LiteLLM created internally
+        if hasattr(litellm, '_client_session') and litellm._client_session is not None:
+            try:
+                loop = asyncio.get_event_loop_policy().get_event_loop()
+                if loop.is_running():
+                    asyncio.ensure_future(litellm._client_session.close())
+                else:
+                    loop.run_until_complete(litellm._client_session.close())
+            except Exception as e:
+                logger.debug("Error closing aiohttp session: %s", e)
+            finally:
+                litellm._client_session = None
+
+    async def aclose(self) -> None:
+        """Async version of close for async contexts."""
+        # Close httpx sync client
+        if hasattr(litellm, 'client_session') and litellm.client_session is not None:
+            try:
+                litellm.client_session.close()
+            except Exception as e:
+                logger.debug("Error closing httpx client: %s", e)
+            finally:
+                litellm.client_session = None
+
+        # Close httpx async client
+        if hasattr(litellm, 'aclient_session') and litellm.aclient_session is not None:
+            try:
+                await litellm.aclient_session.aclose()
+            except Exception as e:
+                logger.debug("Error closing httpx async client: %s", e)
+            finally:
+                litellm.aclient_session = None
+
+        # Close aiohttp sessions
+        if hasattr(litellm, '_client_session') and litellm._client_session is not None:
+            try:
+                await litellm._client_session.close()
+            except Exception as e:
+                logger.debug("Error closing aiohttp session: %s", e)
+            finally:
+                litellm._client_session = None
 
     def validate_key(
         self,

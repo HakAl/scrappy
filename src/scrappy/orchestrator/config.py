@@ -69,6 +69,23 @@ class OrchestratorConfig(BaseConfig):
     # Quality mode: prioritize best reasoning models over speed
     quality_mode: bool = True
 
+    # --- Rate Limit Enforcement Settings ---
+
+    # Enable pre-request enforcement (check quota before API call)
+    enforcement_enabled: bool = True
+
+    # Score threshold below which to warn user (0.1 = 10% remaining)
+    enforcement_warn_threshold: float = 0.1
+
+    # Score threshold at or below which to block and use fallback (0.0 = exhausted)
+    enforcement_block_threshold: float = 0.0
+
+    # Seconds between repeat rate limit warnings for same provider
+    notification_cooldown: int = 60
+
+    # Enable proactive fallback (switch provider before hitting limits)
+    proactive_fallback: bool = True
+
     def get_provider_reason(self, provider_name: str) -> str:
         """
         Get human-readable reason for provider selection.

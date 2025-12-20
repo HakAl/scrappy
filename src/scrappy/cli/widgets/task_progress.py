@@ -27,6 +27,7 @@ class TaskProgressWidget(Static):
         padding: 0 1;
         display: none;
         color: $text-muted;
+        background: $background;
     }
 
     TaskProgressWidget.active {

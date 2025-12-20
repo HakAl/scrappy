@@ -5,9 +5,51 @@ Define ALL contracts BEFORE writing any implementation.
 This enables testing, dependency injection, and SOLID principles.
 """
 from __future__ import annotations
+from dataclasses import dataclass
 from datetime import date
+from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol
+
+
+# --- Enforcement Types ---
+
+class EnforcementAction(Enum):
+    """Actions the enforcement policy can recommend."""
+    ALLOW = "allow"           # Proceed with request
+    WARN = "warn"             # Allow but warn user
+    QUEUE = "queue"           # Delay request (future)
+    BLOCK = "block"           # Reject request, use fallback
+    FAIL = "fail"             # Reject request, no fallback available
+
+
+@dataclass
+class EnforcementDecision:
+    """Decision from enforcement policy."""
+    action: EnforcementAction
+    provider: str
+    reason: str
+    alternative_provider: Optional[str] = None
+    wait_seconds: Optional[float] = None  # For QUEUE action
+    remaining_quota: Optional[Dict[str, int]] = None
+
+
+@dataclass
+class QuotaScore:
+    """Score representing provider availability."""
+    provider: str
+    score: float  # 0.0 (exhausted) to 1.0 (fully available)
+    requests_remaining: int
+    tokens_remaining: int
+    is_rate_limited: bool
+    warning_threshold_hit: bool
+
+
+class NotificationLevel(Enum):
+    """Notification severity levels."""
+    INFO = "info"
+    WARNING = "warning"
+    CRITICAL = "critical"
 
 
 class StorageProtocol(Protocol):
@@ -160,4 +202,121 @@ class FileSystemProtocol(Protocol):
 
     def unlink(self, path: Path) -> None:
         """Delete file."""
+        ...
+
+
+# --- Enforcement Protocols ---
+
+class QuotaScorerProtocol(Protocol):
+    """Contract for scoring providers by available quota."""
+
+    def score_provider(
+        self,
+        provider: str,
+        model: str,
+        limits: Any,  # ProviderLimits
+    ) -> QuotaScore:
+        """
+        Score a single provider's availability.
+
+        Args:
+            provider: Provider name
+            model: Model name
+            limits: Provider limits
+
+        Returns:
+            QuotaScore with availability metrics
+        """
+        ...
+
+    def rank_providers(
+        self,
+        providers: List[str],
+        registry: Any,  # ProviderRegistry
+        task_type: str = "general",
+    ) -> List[QuotaScore]:
+        """
+        Rank all providers by quota availability.
+
+        Args:
+            providers: List of provider names to rank
+            registry: Provider registry for limit lookup
+            task_type: Type of task for preference weighting
+
+        Returns:
+            List of QuotaScore sorted by score (highest first)
+        """
+        ...
+
+
+class EnforcementPolicyProtocol(Protocol):
+    """Contract for rate limit enforcement decisions."""
+
+    def evaluate(
+        self,
+        provider: str,
+        model: str,
+        estimated_tokens: int,
+        registry: Any,  # ProviderRegistry
+    ) -> EnforcementDecision:
+        """
+        Evaluate whether a request should proceed.
+
+        Args:
+            provider: Target provider name
+            model: Target model name
+            estimated_tokens: Estimated token usage for request
+            registry: Provider registry for fallback lookup
+
+        Returns:
+            EnforcementDecision with action and context
+        """
+        ...
+
+
+class UserNotifierProtocol(Protocol):
+    """Contract for user-facing rate limit notifications."""
+
+    def notify_approaching_limit(
+        self,
+        provider: str,
+        remaining_percent: float,
+        remaining_requests: int,
+    ) -> None:
+        """
+        Warn user that limits are approaching.
+
+        Args:
+            provider: Provider name
+            remaining_percent: Percentage of quota remaining (0.0-1.0)
+            remaining_requests: Absolute requests remaining
+        """
+        ...
+
+    def notify_fallback(
+        self,
+        from_provider: str,
+        to_provider: str,
+        reason: str,
+    ) -> None:
+        """
+        Inform user of automatic provider switch.
+
+        Args:
+            from_provider: Original provider
+            to_provider: Fallback provider
+            reason: Why fallback occurred
+        """
+        ...
+
+    def notify_all_exhausted(
+        self,
+        attempted_providers: List[str],
+    ) -> None:
+        """
+        Alert user that all providers are exhausted.
+
+        Args:
+            attempted_providers: List of providers that were tried
+        """
         ...
