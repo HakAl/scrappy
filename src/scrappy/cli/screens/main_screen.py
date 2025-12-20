@@ -2,7 +2,6 @@
 
 from typing import TYPE_CHECKING, Any, Optional
 import logging
-import re
 import time
 
 from textual.screen import Screen
@@ -218,10 +217,8 @@ class MainAppScreen(Screen):
         if self._layout is None:
             return
 
-        # Sanitize newlines before processing
-        raw_input = self._layout.input.text
-        user_input = raw_input.replace('\r\n', ' ').replace('\n', ' ').replace('\r', ' ').strip()
-        user_input = re.sub(r'\s+', ' ', user_input)
+        # Preserve multiline input as-is (Textual TextArea buffers paste correctly)
+        user_input = self._layout.input.text.strip()
 
         # Clear input immediately
         self._layout.input.clear()
