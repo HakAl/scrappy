@@ -38,10 +38,10 @@ class TestToolProfiles:
         assert "minimal" in profiles
 
     @pytest.mark.unit
-    def test_full_profile_has_16_tools(self):
-        """Full profile should have all 16 tools."""
+    def test_full_profile_has_17_tools(self):
+        """Full profile should have all 17 tools."""
         tools = get_profile_tools("full")
-        assert len(tools) == 16
+        assert len(tools) == 17
 
     @pytest.mark.unit
     def test_optimized_profile_has_10_tools(self):
@@ -59,7 +59,7 @@ class TestToolProfiles:
     def test_create_registry_with_full_profile(self):
         """Registry with full profile should have all tools."""
         registry = create_registry_with_profile("full")
-        assert len(registry.list_all()) == 16
+        assert len(registry.list_all()) == 17
 
     @pytest.mark.unit
     def test_create_registry_with_optimized_profile(self):
@@ -153,8 +153,8 @@ class TestToolRegistryFactoryBehavior:
         """Default registry should have expected number of tools."""
         registry = create_default_registry()
 
-        # 3 file + 6 git + 2 search + 2 web + 1 command + 1 complete + 1 task = 16 tools
-        assert len(registry.list_all()) == 16
+        # 3 file + 6 git + 2 search + 2 web + 1 command + 1 complete + 2 task = 17 tools
+        assert len(registry.list_all()) == 17
 
     @pytest.mark.unit
     def test_all_tools_are_callable(self):
@@ -294,7 +294,7 @@ class TestToolRegistryFactoryCustomization:
 
         tool_names = [t.name for t in registry.list_all()]
         assert "custom_analysis" in tool_names
-        assert len(tool_names) == 17  # 16 default + 1 custom
+        assert len(tool_names) == 18  # 17 default + 1 custom
 
 
 class TestToolRegistryFactoryIntegration:

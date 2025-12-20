@@ -333,8 +333,9 @@ class TestDelegateMode:
         handler.delegate_mode("openai Test prompt")
 
         output = io.get_output()
-        assert "Error" in output
+        # api_delegation_error outputs "Rate limit exceeded for {provider}"
         assert "rate limit" in output.lower()
+        assert "openai" in output.lower()
 
     @patch('scrappy.cli.multiprovider.validate_provider')
     def test_adds_delegation_to_working_memory(self, mock_validate):
