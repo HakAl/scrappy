@@ -33,6 +33,10 @@ from .protocols import (
 )
 from .cancellation import CancellationTokenProtocol
 from .stop_condition import AgentStopCondition, StopReason
+from .completion_validator import (
+    CompletionValidator,
+    CompletionValidatorProtocol,
+)
 
 if TYPE_CHECKING:
     from ..orchestrator_adapter import OrchestratorAdapter
@@ -71,6 +75,7 @@ class AgentLoop:
         cancellation_token: Optional[CancellationTokenProtocol] = None,
         stop_condition: Optional[AgentStopCondition] = None,
         tool_context: Optional[Any] = None,  # ToolContext for HUD turn tracking
+        completion_validator: Optional[CompletionValidatorProtocol] = None,
     ):
         """
         Initialize AgentLoop with injected dependencies.
@@ -90,6 +95,7 @@ class AgentLoop:
             cancellation_token: Optional token for cancellation signaling
             stop_condition: Unified stop condition tracker (created if not provided)
             tool_context: Optional ToolContext for HUD turn tracking
+            completion_validator: Validator for task completion (created if not provided)
         """
         self._orchestrator = orchestrator
         self._action_executor = action_executor
@@ -109,6 +115,11 @@ class AgentLoop:
         self._stop_condition = stop_condition or AgentStopCondition(
             cancellation_token=cancellation_token,
             max_iterations=config.max_iterations if hasattr(config, 'max_iterations') else 50,
+        )
+
+        # Completion validator - checks for meaningful work before allowing completion
+        self._completion_validator = completion_validator or CompletionValidator(
+            meaningful_actions=set(config.meaningful_actions)
         )
 
         # Track current dry_run state
@@ -324,24 +335,24 @@ class AgentLoop:
         """
         # Check if task is complete via metadata (from CompleteTool execution)
         if result.metadata.get("stop_loop", False):
-            # Verify that at least one meaningful action was performed
-            meaningful_actions = [
-                t for t in state.tools_executed
-                if t in self._config.meaningful_actions
-            ]
-
-            # Track repeated complete attempts to avoid infinite loops
-            # Agent might correctly determine a task is impossible
+            # Validate completion - checks for meaningful work
             complete_attempts = state.tools_executed.count('complete')
+            validation = self._completion_validator.validate(
+                tools_executed=state.tools_executed,
+                task_description="",  # Not used for current checks
+                result_text=action.result_text,
+                complete_attempts=complete_attempts - 1,  # -1 because current attempt counted
+            )
 
-            if not meaningful_actions and not self._dry_run and complete_attempts < 2:
-                self._ui.show_warning(
-                    "Agent declared completion without performing any file operations."
-                )
+            if not validation.allow_completion:
+                self._ui.show_warning(f"Completion blocked: {validation.reason}")
+                if validation.suggestions:
+                    for suggestion in validation.suggestions:
+                        self._ui.show_info(f"  - {suggestion}")
                 return EvaluationResult(
                     is_complete=False,
                     should_continue=True,
-                    reason="No meaningful actions performed yet",
+                    reason=validation.reason,
                 )
 
             final_result = action.result_text or 'Task completed'
@@ -594,17 +605,16 @@ class AgentLoop:
         thought: AgentThought,
     ) -> None:
         """Handle premature completion without meaningful work."""
-        meaningful_actions = [
-            t for t in state.tools_executed
-            if t in self._config.meaningful_actions
-        ]
-
-        # Track repeated complete attempts - agent may have valid reason
-        # (e.g., task is genuinely impossible with current codebase)
         complete_attempts = state.tools_executed.count('complete')
+        validation = self._completion_validator.validate(
+            tools_executed=state.tools_executed,
+            task_description="",
+            result_text=None,
+            complete_attempts=complete_attempts,
+        )
 
-        # Only push back on first attempt; after that, trust the agent's judgment
-        if not meaningful_actions and not self._dry_run and complete_attempts < 2:
+        # Only push back if validation fails
+        if not validation.allow_completion:
             state.messages.append({
                 'role': 'assistant',
                 'content': thought.raw_response,
