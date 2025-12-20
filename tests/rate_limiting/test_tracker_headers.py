@@ -368,3 +368,206 @@ class TestGetRemainingQuotaWithHeaders:
         # Should fall back to calculated
         assert result["requests_remaining_today"] == 999
         assert "_source" not in result
+
+
+class TestUpdateFromError:
+    """Tests for update_from_error method (Gemini rate limit parsing)."""
+
+    @pytest.mark.unit
+    def test_stores_retry_after_seconds(self, tracker):
+        """Should store retry_after_seconds from error data."""
+        error_data = {
+            "retry_after_seconds": 7.215,
+            "message": "Resource exhausted. Please retry in 7.215s",
+        }
+
+        tracker.update_from_error("gemini", error_data)
+
+        stored = tracker.get_provider_headers("gemini")
+        assert stored is not None
+        assert stored["retry_after_seconds"] == 7.215
+
+    @pytest.mark.unit
+    def test_calculates_retry_at_timestamp(self, tracker):
+        """Should calculate when we can retry."""
+        error_data = {
+            "retry_after_seconds": 30.0,
+            "message": "Please retry in 30s",
+        }
+
+        tracker.update_from_error("gemini", error_data)
+
+        stored = tracker.get_provider_headers("gemini")
+        assert "retry_at" in stored
+        # Should be a valid ISO timestamp
+        from datetime import datetime
+        retry_at = datetime.fromisoformat(stored["retry_at"])
+        assert retry_at > datetime.now()
+
+    @pytest.mark.unit
+    def test_stores_quota_type(self, tracker):
+        """Should store quota_type when provided."""
+        error_data = {
+            "quota_type": "tokens",
+            "message": "Token quota exceeded",
+        }
+
+        tracker.update_from_error("gemini", error_data)
+
+        stored = tracker.get_provider_headers("gemini")
+        assert stored["quota_exceeded"] == "tokens"
+
+    @pytest.mark.unit
+    def test_stores_error_message_truncated(self, tracker):
+        """Should store error message, truncated to 200 chars."""
+        long_message = "x" * 300
+        error_data = {
+            "message": long_message,
+        }
+
+        tracker.update_from_error("gemini", error_data)
+
+        stored = tracker.get_provider_headers("gemini")
+        assert len(stored["error_message"]) == 200
+
+    @pytest.mark.unit
+    def test_marks_from_error_flag(self, tracker):
+        """Should mark data as coming from error response."""
+        error_data = {"message": "Rate limit exceeded"}
+
+        tracker.update_from_error("gemini", error_data)
+
+        stored = tracker.get_provider_headers("gemini")
+        assert stored["from_error"] is True
+
+    @pytest.mark.unit
+    def test_stores_timestamp(self, tracker):
+        """Should store when error was received."""
+        error_data = {"message": "Quota exceeded"}
+
+        tracker.update_from_error("gemini", error_data)
+
+        stored = tracker.get_provider_headers("gemini")
+        assert "last_updated" in stored
+
+    @pytest.mark.unit
+    def test_persists_to_storage(self, tracker):
+        """Should save to storage after update."""
+        error_data = {"message": "Rate limit exceeded"}
+
+        tracker.update_from_error("gemini", error_data)
+
+        # Verify storage.save was called
+        assert len(tracker._storage.save_calls) > 0
+        saved = tracker._storage.save_calls[-1]
+        assert "provider_headers" in saved
+        assert "gemini" in saved["provider_headers"]
+
+    @pytest.mark.unit
+    def test_ignores_empty_error_data(self, tracker):
+        """Should not update when error_data is empty."""
+        tracker.update_from_error("gemini", {})
+
+        stored = tracker.get_provider_headers("gemini")
+        assert stored is None
+
+    @pytest.mark.unit
+    def test_ignores_none_error_data(self, tracker):
+        """Should not update when error_data is None."""
+        tracker.update_from_error("gemini", None)
+
+        stored = tracker.get_provider_headers("gemini")
+        assert stored is None
+
+    @pytest.mark.unit
+    def test_updates_existing_provider(self, tracker):
+        """Should update existing provider data."""
+        # First update
+        tracker.update_from_error("gemini", {"retry_after_seconds": 10.0, "message": "First"})
+
+        # Second update
+        tracker.update_from_error("gemini", {"retry_after_seconds": 5.0, "message": "Second"})
+
+        stored = tracker.get_provider_headers("gemini")
+        assert stored["retry_after_seconds"] == 5.0
+        assert stored["error_message"] == "Second"
+
+
+class TestIsRateLimitedWithRetryAt:
+    """Tests for is_rate_limited checking retry_at timestamp."""
+
+    @pytest.mark.unit
+    def test_returns_true_when_retry_at_in_future(self, tracker):
+        """Should return True when retry_at is in the future."""
+        from datetime import datetime, timedelta
+
+        # Set retry_at to 30 seconds from now
+        future_time = datetime.now() + timedelta(seconds=30)
+        tracker._usage["provider_headers"] = {
+            "gemini": {
+                "retry_at": future_time.isoformat(),
+            }
+        }
+
+        # Mock registry with empty provider
+        class MockRegistry:
+            def get(self, name):
+                return None
+
+        result = tracker.is_rate_limited("gemini", MockRegistry())
+        assert result is True
+
+    @pytest.mark.unit
+    def test_returns_false_when_retry_at_in_past(self, tracker):
+        """Should return False when retry_at has passed."""
+        from datetime import datetime, timedelta
+
+        # Set retry_at to 30 seconds ago
+        past_time = datetime.now() - timedelta(seconds=30)
+        tracker._usage["provider_headers"] = {
+            "gemini": {
+                "retry_at": past_time.isoformat(),
+            }
+        }
+
+        # Mock registry with empty provider
+        class MockRegistry:
+            def get(self, name):
+                return None
+
+        result = tracker.is_rate_limited("gemini", MockRegistry())
+        assert result is False  # retry_at passed, provider not in registry
+
+    @pytest.mark.unit
+    def test_handles_invalid_retry_at(self, tracker):
+        """Should ignore invalid retry_at timestamps."""
+        tracker._usage["provider_headers"] = {
+            "gemini": {
+                "retry_at": "not-a-timestamp",
+            }
+        }
+
+        class MockRegistry:
+            def get(self, name):
+                return None
+
+        # Should not raise, just ignore
+        result = tracker.is_rate_limited("gemini", MockRegistry())
+        assert result is False
+
+    @pytest.mark.unit
+    def test_integrates_with_error_update(self, tracker):
+        """Should detect rate limit from error update flow."""
+        # Simulate Gemini rate limit error
+        tracker.update_from_error("gemini", {
+            "retry_after_seconds": 60.0,
+            "message": "Please retry in 60s",
+        })
+
+        class MockRegistry:
+            def get(self, name):
+                return None
+
+        # Should be rate limited since retry_at is in future
+        result = tracker.is_rate_limited("gemini", MockRegistry())
+        assert result is True

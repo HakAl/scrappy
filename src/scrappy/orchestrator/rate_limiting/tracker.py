@@ -238,6 +238,8 @@ class RateLimitTracker:
         """
         Check if provider is currently rate limited.
 
+        Checks both quota-based limits and retry_at timestamp from error responses.
+
         Args:
             provider_name: Provider name
             registry: Provider registry
@@ -245,6 +247,17 @@ class RateLimitTracker:
         Returns:
             True if rate limited
         """
+        # Check if we have a retry_at timestamp that's still in the future
+        # (from Gemini error responses or similar)
+        header_data = self.get_provider_headers(provider_name)
+        if header_data and "retry_at" in header_data:
+            try:
+                retry_at = datetime.fromisoformat(header_data["retry_at"])
+                if retry_at > datetime.now():
+                    return True  # Still waiting for retry window
+            except (ValueError, TypeError):
+                pass  # Invalid timestamp, ignore
+
         provider = registry.get(provider_name)
         if not provider:
             return False
@@ -642,3 +655,46 @@ class RateLimitTracker:
             Dict with parsed header data or None if not available
         """
         return self._usage.get("provider_headers", {}).get(provider)
+
+    def update_from_error(self, provider: str, error_data: Dict[str, Any]) -> None:
+        """Update rate limits from error response data.
+
+        For providers like Gemini that return rate limit info in error responses
+        (429 status) rather than headers. Stores retry_after and any quota info.
+
+        Args:
+            provider: Provider name (e.g., "gemini")
+            error_data: Parsed error data with keys like:
+                - retry_after_seconds: Seconds until retry allowed
+                - quota_type: Type of quota exceeded (e.g., "requests", "tokens")
+                - message: Original error message
+        """
+        if not error_data:
+            return
+
+        # Store in same structure as header data for consistency
+        provider_headers = self._usage.setdefault("provider_headers", {})
+        provider_data = provider_headers.setdefault(provider, {})
+
+        # Store timestamp
+        provider_data["last_updated"] = datetime.now().isoformat()
+        provider_data["from_error"] = True
+
+        # Store retry_after if present
+        if "retry_after_seconds" in error_data:
+            retry_seconds = error_data["retry_after_seconds"]
+            provider_data["retry_after_seconds"] = retry_seconds
+            # Calculate when we can retry
+            retry_at = datetime.now() + timedelta(seconds=retry_seconds)
+            provider_data["retry_at"] = retry_at.isoformat()
+
+        # Store any quota info
+        if "quota_type" in error_data:
+            provider_data["quota_exceeded"] = error_data["quota_type"]
+
+        # Store original message for debugging
+        if "message" in error_data:
+            provider_data["error_message"] = error_data["message"][:200]
+
+        # Save to storage
+        self._storage.save(self._usage)

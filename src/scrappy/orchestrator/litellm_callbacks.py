@@ -18,13 +18,68 @@ Implements:
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional, Any, TYPE_CHECKING
+import re
+from typing import Optional, Any, Dict, TYPE_CHECKING
 
 from litellm.integrations.custom_logger import CustomLogger
 
 if TYPE_CHECKING:
     from ..orchestrator.protocols import RateLimitTrackerProtocol
     from ..orchestrator.provider_status import ProviderStatusTracker
+
+
+def parse_gemini_rate_limit_error(error_message: str) -> Optional[Dict[str, Any]]:
+    """Parse Gemini rate limit error message to extract retry info.
+
+    Gemini returns rate limit info in error responses (429), not headers.
+    Common formats:
+    - "Resource has been exhausted (e.g. check quota)."
+    - "Please retry in 7.215400659s"
+    - "Quota exceeded for quota metric"
+
+    Args:
+        error_message: The error message string from the exception
+
+    Returns:
+        Dict with parsed data or None if not a rate limit error:
+        - retry_after_seconds: Float seconds until retry (if found)
+        - quota_type: Type of quota exceeded (if identifiable)
+        - message: Original error message
+    """
+    if not error_message:
+        return None
+
+    error_lower = error_message.lower()
+
+    # Check if this is a rate limit error
+    rate_limit_indicators = [
+        "rate limit",
+        "quota",
+        "exhausted",
+        "too many requests",
+        "429",
+        "retry in",
+    ]
+    if not any(indicator in error_lower for indicator in rate_limit_indicators):
+        return None
+
+    result: Dict[str, Any] = {"message": error_message}
+
+    # Parse "Please retry in Xs" or "retry in Xs"
+    # Matches: "retry in 7.215400659s", "Please retry in 30s", etc.
+    retry_match = re.search(r"retry in (\d+(?:\.\d+)?)\s*s", error_lower)
+    if retry_match:
+        result["retry_after_seconds"] = float(retry_match.group(1))
+
+    # Try to identify quota type
+    if "token" in error_lower:
+        result["quota_type"] = "tokens"
+    elif "request" in error_lower:
+        result["quota_type"] = "requests"
+    elif "quota" in error_lower:
+        result["quota_type"] = "quota"
+
+    return result
 
 
 @dataclass
@@ -173,6 +228,7 @@ class RateTrackingCallback(CustomLogger):
         Called by LiteLLM after failed request.
 
         Records failure to rate tracker and status tracker.
+        For Gemini, also parses rate limit info from error message.
 
         Args:
             kwargs: Original request kwargs
@@ -202,6 +258,13 @@ class RateTrackingCallback(CustomLogger):
                 success=False,
                 error_message=error_msg,
             )
+
+            # For Gemini, parse rate limit info from error message
+            # Gemini returns rate limit details in error body, not headers
+            if provider == "gemini" and hasattr(self._rate_tracker, 'update_from_error'):
+                parsed_error = parse_gemini_rate_limit_error(error_msg)
+                if parsed_error:
+                    self._rate_tracker.update_from_error(provider, parsed_error)
 
         # Record failure to status tracker (D10)
         if self._status_tracker:
