@@ -375,49 +375,27 @@ class MainAppScreen(Screen):
         is_complete = (
             complete
             or message.startswith("Indexing complete")
+            or message.startswith("Indexing failed")
             or message == "Semantic search ready"
             or message == "Index up to date - no changes detected"
+            or message == "No files to index"
+            or message == "Indexing cancelled"
+            or message == "No file collector available"
         )
 
         if is_complete:
-            # Update semantic status to ready (no separate progress indicator)
+            # Update semantic status to ready
             if hasattr(self, '_semantic_status'):
-                # Extract chunk count from message if present
-                chunks = total
-                if "Indexing complete" in message:
-                    # Try to extract number from "Indexing complete (N files)"
-                    import re
-                    match = re.search(r'\((\d+)\s+files?\)', message)
-                    if match:
-                        chunks = int(match.group(1))
-                self._semantic_status.set_ready(chunks=chunks)
+                # Use numeric total directly (no more regex parsing)
+                self._semantic_status.set_ready(chunks=total if total > 0 else progress)
         else:
-            # Update semantic status with progress info on same line
+            # Update semantic status with progress info
             if hasattr(self, '_semantic_status'):
-                # Format progress info for right side
-                progress_info = ""
-                if progress > 0 and total > 0:
-                    progress_info = f"{progress}/{total} files"
-                elif "batch" in message.lower():
-                    # Extract batch info from message format:
-                    # "Indexing batch {batch_count} ({batch_size} files, {total_indexed} total)..."
-                    import re
-                    match = re.search(
-                        r'batch\s+(\d+)\s+\(\d+\s+files?,\s+(\d+)\s+total\)',
-                        message,
-                        re.IGNORECASE
-                    )
-                    if match:
-                        batch_num = int(match.group(1))
-                        total_files = int(match.group(2))
-                        # Fixed-width format to prevent layout shift
-                        progress_info = f"batch {batch_num:>3} | {total_files:>5} files"
-                    else:
-                        # Fallback: just extract batch number
-                        match = re.search(r'batch\s+(\d+)', message, re.IGNORECASE)
-                        if match:
-                            batch_num = int(match.group(1))
-                            progress_info = f"batch {batch_num:>3}"
+                # Use numeric progress directly (no more regex parsing)
+                if progress > 0:
+                    progress_info = f"{progress} files"
+                else:
+                    progress_info = ""
                 self._semantic_status.set_indexing(progress_info)
 
         status_bar = self.query_one(StatusBar)

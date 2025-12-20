@@ -955,7 +955,7 @@ class SemanticSearchManagerProtocol(Protocol):
         Set callback for progress updates during indexing.
 
         Args:
-            callback: Function taking a string message
+            callback: Function taking (message: str, progress: int, total: int)
         """
         ...
 

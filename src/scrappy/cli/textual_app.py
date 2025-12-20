@@ -712,9 +712,13 @@ class ScrappyApp(App):
         """
         self._codebase_context = context
 
-        def progress_callback(message: str) -> None:
+        def progress_callback(
+            message: str, progress: int = 0, total: int = 0
+        ) -> None:
             if self.is_running and not self._should_stop_consumer:
-                self.post_message(IndexingProgress(message=message))
+                self.post_message(IndexingProgress(
+                    message=message, progress=progress, total=total
+                ))
 
         context.set_indexing_progress_callback(progress_callback)
 

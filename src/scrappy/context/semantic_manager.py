@@ -93,7 +93,7 @@ class SemanticSearchManager:
         # Semantic search state
         self._semantic_search: Optional[SemanticSearchProtocol] = None
         self._initializer = initializer
-        self._progress_callback: Optional[Callable[[str], None]] = None
+        self._progress_callback: Optional[Callable[[str, int, int], None]] = None
         self._file_collector_callback: Optional[Callable[[], Optional[FileCollectorProtocol]]] = None
         self._cancellation_check: Optional[Callable[[], bool]] = None
 
@@ -490,8 +490,9 @@ class SemanticSearchManager:
                 progress.update(description=progress_msg)
 
                 self._notify_progress(
-                    f"Indexing batch {batch_count} ({batch_size} files, "
-                    f"{total_indexed} total)..."
+                    f"Indexing batch {batch_count}...",
+                    progress=total_indexed,
+                    total=0,  # Unknown total with batched collection
                 )
 
                 logger.debug(f"Indexing batch {batch_count} with {batch_size} files")
@@ -503,7 +504,11 @@ class SemanticSearchManager:
                 return
 
             logger.info(f"Semantic search indexing complete ({total_indexed} files)")
-            self._notify_progress(f"Indexing complete ({total_indexed} files)")
+            self._notify_progress(
+                f"Indexing complete ({total_indexed} files)",
+                progress=total_indexed,
+                total=total_indexed,
+            )
 
             # Save state for future decision-making
             if self._state_manager:
@@ -544,12 +549,14 @@ class SemanticSearchManager:
         """
         return self._event_queue.process_pending()
 
-    def set_progress_callback(self, callback: Optional[Callable[[str], None]]) -> None:
+    def set_progress_callback(
+        self, callback: Optional[Callable[[str, int, int], None]]
+    ) -> None:
         """
         Set callback for progress updates.
 
         Args:
-            callback: Function taking a string message (or None to clear)
+            callback: Function taking (message, progress, total) or None to clear
         """
         self._progress_callback = callback
 
@@ -574,11 +581,13 @@ class SemanticSearchManager:
                 return False
         return False
 
-    def _notify_progress(self, message: str) -> None:
+    def _notify_progress(
+        self, message: str, progress: int = 0, total: int = 0
+    ) -> None:
         """Notify registered callback of progress."""
         if self._progress_callback:
             try:
-                self._progress_callback(message)
+                self._progress_callback(message, progress, total)
             except Exception as e:
                 logger.debug(f"Error in progress callback: {e}")
 
@@ -678,7 +687,9 @@ class NullSemanticSearchManager:
         """Returns 0."""
         return 0
 
-    def set_progress_callback(self, callback: Optional[Callable[[str], None]]) -> None:
+    def set_progress_callback(
+        self, callback: Optional[Callable[[str, int, int], None]]
+    ) -> None:
         """No-op."""
         pass
 
