@@ -799,6 +799,9 @@ class OutputSinkAdapter:
         if bridge not available.
         """
         if self._bridge is not None:
+            # Flush pending output so it renders before confirmation prompt
+            if hasattr(self._sink, 'flush'):
+                self._sink.flush(timeout=5.0)
             # Phase 3: Use modal dialog via bridge
             return self._bridge.blocking_confirm(text)
 

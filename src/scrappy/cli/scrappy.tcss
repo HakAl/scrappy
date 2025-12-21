@@ -19,12 +19,50 @@
 Screen {
     background: $background;
     layout: vertical;
+    border: none;
+}
+
+/* Global border suppression for all containers and widgets */
+Container {
+    border: none;
+}
+
+Vertical {
+    border: none;
+}
+
+Horizontal {
+    border: none;
+}
+
+Static {
+    border: none;
+}
+
+Label {
+    border: none;
+}
+
+ScrollView {
+    border: none;
+}
+
+Widget {
+    border: none;
+}
+
+/* ChatLayout widget */
+ChatLayout {
+    border: none;
+    background: $background;
 }
 
 /* Scrollable output container */
 #output_container {
     height: 1fr;
     overflow-y: auto;
+    border: none;
+    background: $background;
 }
 
 /* Main scrollable output (includes banner as content) */
@@ -35,6 +73,13 @@ SelectableLog {
     padding: 0 1 1 1;
     height: 100%;
     scrollbar-size-vertical: 0;
+    scrollbar-size-horizontal: 0;
+    scrollbar-background: $background;
+    scrollbar-color: $background;
+}
+
+SelectableLog:focus {
+    border: none;
 }
 
 /* Legacy RichLog support (for screens still using RichLog) */
@@ -53,6 +98,7 @@ RichLog {
     height: auto;
     background: $background;
     padding: 1;
+    border: none;
 }
 
 /* Input prompt character - uses primary (cyan) for normal mode */
@@ -106,19 +152,24 @@ TextArea > .text-area--cursor {
     background: $surface;
     padding: 0;
     display: none;
+    border: none;
 }
 
 #status_bar.show {
     display: block;
-    height: 4;  /* Fixed 2-line height to prevent jank */
-    min-height: 4;
+    height: auto;
+    min-height: 2;
+    max-height: 6;
     padding: 1;
     overflow: hidden;
+    border: none;
 }
 
 #status_content {
     width: 100%;
     height: auto;
+    border: none;
+    background: $surface;
 }
 
 /* Progress indicator styling */
@@ -172,6 +223,8 @@ TextArea > .text-area--cursor {
     width: 100%;
     color: $accent;
     padding: 0 1;
+    border: none;
+    background: $surface;
 }
 
 /* Activity indicator - shows thinking/syncing/tool execution state
@@ -182,12 +235,15 @@ TextArea > .text-area--cursor {
     height: auto;
     padding: 0 1;
     display: none;
+    border: none;
+    background: $background;
 }
 
 #activity_indicator.active {
     display: block;
     color: $text-muted;
     text-style: italic;
+    border: none;
 }
 
 /* Task progress widget - shows agent task list above input */
@@ -198,8 +254,10 @@ TaskProgressWidget {
     display: none;
     color: $text-muted;
     background: $background;
+    border: none;
 }
 
 TaskProgressWidget.active {
     display: block;
+    border: none;
 }

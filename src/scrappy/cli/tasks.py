@@ -63,22 +63,19 @@ class CLITaskExecution:
             dashboard.set_state("thinking", "Generating plan...")
             dashboard.update_thought_process(f"Planning task: {task}")
 
-        with io.progress(total=1, description="Generating plan") as progress:
-            try:
-                steps = self.orchestrator.plan(task)
-                progress.advance(1)
+        try:
+            steps = self.orchestrator.plan(task)
 
-                if dashboard:
-                    dashboard.set_state("idle", "Plan generated")
-            except Exception as e:
-                progress.advance(1)
-                task_execution_error(io, e, "planning")
+            if dashboard:
+                dashboard.set_state("idle", "Plan generated")
+        except Exception as e:
+            task_execution_error(io, e, "planning")
 
-                if dashboard:
-                    dashboard.set_state("idle", "Planning failed")
-                    dashboard.append_terminal(f"Error: {e}")
+            if dashboard:
+                dashboard.set_state("idle", "Planning failed")
+                dashboard.append_terminal(f"Error: {e}")
 
-                return []
+            return []
 
         io.echo()
         plan_summary = ""
@@ -87,8 +84,6 @@ class CLITaskExecution:
                 if isinstance(step, dict):
                     io.secho(f"{i}. {step.get('step', 'Step')}", bold=True)
                     io.echo(f"   {step.get('description', '')}")
-                    if 'provider_type' in step:
-                        io.secho(f"   [Recommended: {step['provider_type']}]", fg=io.theme.primary)
                     plan_summary += f"{i}. {step.get('step', 'Step')}\n"
                 else:
                     io.echo(f"{i}. {step}")
@@ -150,30 +145,27 @@ class CLITaskExecution:
             dashboard.set_state("thinking", "Analyzing question...")
             dashboard.update_thought_process(f"Reasoning about: {question}")
 
-        with io.progress(total=1, description="Analyzing") as progress:
-            try:
-                response = self.orchestrator.reason(question)
-                progress.advance(1)
+        try:
+            response = self.orchestrator.reason(question)
 
-                if dashboard:
-                    dashboard.set_state("idle", "Analysis complete")
-            except Exception as e:
-                progress.advance(1)
-                task_execution_error(io, e, "reasoning")
+            if dashboard:
+                dashboard.set_state("idle", "Analysis complete")
+        except Exception as e:
+            task_execution_error(io, e, "reasoning")
 
-                if dashboard:
-                    dashboard.set_state("idle", "Reasoning failed")
-                    dashboard.append_terminal(f"Error: {e}")
+            if dashboard:
+                dashboard.set_state("idle", "Reasoning failed")
+                dashboard.append_terminal(f"Error: {e}")
 
-                return
+            return
 
         io.echo()
         conclusion = ""
         if isinstance(response, dict):
             io.echo(f"Question: {response.get('question', question)}")
-            io.secho(f"\nAnalysis:", bold=True)
+            io.secho("\nAnalysis:", bold=True)
             io.echo(response.get('analysis', ''))
-            io.secho(f"\nConclusion: ", bold=True, nl=False)
+            io.secho("\nConclusion: ", bold=True, nl=False)
             conclusion = response.get('conclusion', '')
             io.echo(conclusion)
             io.echo(f"Confidence: {response.get('confidence', 'N/A')}")

@@ -4,8 +4,7 @@ Task execution and orchestration logic.
 Provides planning, reasoning, and synthesis capabilities using LLM providers.
 """
 
-from typing import Optional, Callable
-from datetime import datetime
+from typing import Optional, Callable, TYPE_CHECKING
 import json
 
 try:
@@ -13,25 +12,35 @@ try:
 except ImportError:
     from providers import LLMResponse
 
+if TYPE_CHECKING:
+    from .protocols import LLMServiceProtocol
+
 
 class TaskExecutor:
     """
     Handles task planning, reasoning, and synthesis operations.
 
-    Uses an LLM provider as the "brain" for complex orchestration tasks.
+    Uses LLMService for LLM calls (replaces old brain provider pattern).
     """
 
-    def __init__(self, get_brain_provider: Callable, get_brain_name: Callable, record_task: Callable):
+    def __init__(
+        self,
+        llm_service: "LLMServiceProtocol",
+        record_task: Callable,
+        # Legacy parameters for backward compatibility
+        get_brain_provider: Optional[Callable] = None,
+        get_brain_name: Optional[Callable] = None,
+    ):
         """
         Initialize task executor.
 
         Args:
-            get_brain_provider: Callable that returns the brain provider instance
-            get_brain_name: Callable that returns the brain provider name
+            llm_service: LLM service for making completion calls
             record_task: Callable to record task history
+            get_brain_provider: DEPRECATED - ignored
+            get_brain_name: DEPRECATED - ignored
         """
-        self._get_brain_provider = get_brain_provider
-        self._get_brain_name = get_brain_name
+        self._llm_service = llm_service
         self._record_task = record_task
 
     def _is_simple_task(self, task: str) -> bool:
@@ -85,16 +94,9 @@ class TaskExecutor:
             for step in steps:
                 result = orch.delegate(step['provider_type'], step['description'])
         """
-        # Skip planning for simple tasks
+        # Only skip planning if explicitly marked as simple via complexity_score
+        # Never skip when user explicitly requests planning via /plan command
         if complexity_score is not None and complexity_score <= 3:
-            return [{
-                'step': 'execute_task',
-                'description': task,
-                'provider_type': 'fast'
-            }]
-
-        # Heuristic-based simplicity check if no complexity score provided
-        if complexity_score is None and self._is_simple_task(task):
             return [{
                 'step': 'execute_task',
                 'description': task,
@@ -119,25 +121,21 @@ Maximum {max_steps} steps. Be specific and actionable."""
         if context:
             user_prompt = f"Context:\n{context}\n\nTask:\n{task}"
 
-        brain = self._get_brain_provider()
-        response = brain.chat(
-            messages=[
-                {'role': 'system', 'content': system_prompt},
-                {'role': 'user', 'content': user_prompt}
-            ],
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_prompt}
+        ]
+
+        response, task_record = self._llm_service.completion_sync(
+            model="quality",  # Planning uses quality tier
+            messages=messages,
             max_tokens=2000,
             temperature=0.3  # Lower temp for structured output
         )
 
         # Track this as an orchestration task
-        self._record_task({
-            'timestamp': datetime.now().isoformat(),
-            'provider': self._get_brain_name(),
-            'model': response.model,
-            'tokens_used': response.tokens_used,
-            'latency_ms': response.latency_ms,
-            'task_type': 'planning',
-        })
+        task_record['task_type'] = 'planning'
+        self._record_task(task_record)
 
         # Parse the response
         try:
@@ -245,25 +243,21 @@ Be thorough but concise. Do not repeat yourself. Provide unique insights in each
             evidence_str = "\n".join(f"- {e}" for e in evidence)
             user_prompt += f"\n\nEvidence to consider:\n{evidence_str}"
 
-        brain = self._get_brain_provider()
-        response = brain.chat(
-            messages=[
-                {'role': 'system', 'content': system_prompt},
-                {'role': 'user', 'content': user_prompt}
-            ],
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_prompt}
+        ]
+
+        response, task_record = self._llm_service.completion_sync(
+            model="quality",  # Reasoning uses quality tier
+            messages=messages,
             max_tokens=1500,
             temperature=0.3  # Lower temperature for structured output
         )
 
         # Track
-        self._record_task({
-            'timestamp': datetime.now().isoformat(),
-            'provider': self._get_brain_name(),
-            'model': response.model,
-            'tokens_used': response.tokens_used,
-            'latency_ms': response.latency_ms,
-            'task_type': 'reasoning',
-        })
+        task_record['task_type'] = 'reasoning'
+        self._record_task(task_record)
 
         # Parse JSON response
         try:
@@ -314,24 +308,20 @@ Be thorough but concise. Do not repeat yourself. Provide unique insights in each
 
         combined = "\n\n---\n\n".join(results_text)
 
-        brain = self._get_brain_provider()
-        response = brain.chat(
-            messages=[
-                {'role': 'system', 'content': 'You are a synthesis assistant. Combine multiple perspectives into a coherent whole.'},
-                {'role': 'user', 'content': f"{synthesis_prompt}\n\n{combined}"}
-            ],
+        messages = [
+            {'role': 'system', 'content': 'You are a synthesis assistant. Combine multiple perspectives into a coherent whole.'},
+            {'role': 'user', 'content': f"{synthesis_prompt}\n\n{combined}"}
+        ]
+
+        response, task_record = self._llm_service.completion_sync(
+            model="quality",  # Synthesis uses quality tier
+            messages=messages,
             max_tokens=2000,
             temperature=0.4
         )
 
-        self._record_task({
-            'timestamp': datetime.now().isoformat(),
-            'provider': self._get_brain_name(),
-            'model': response.model,
-            'tokens_used': response.tokens_used,
-            'latency_ms': response.latency_ms,
-            'task_type': 'synthesis',
-        })
+        task_record['task_type'] = 'synthesis'
+        self._record_task(task_record)
 
         return response.content
 
@@ -345,23 +335,19 @@ Be thorough but concise. Do not repeat yourself. Provide unique insights in each
         Returns:
             Summary string
         """
-        brain = self._get_brain_provider()
-        response = brain.chat(
-            messages=[
-                {'role': 'system', 'content': 'You are a code analyst. Provide concise technical summaries.'},
-                {'role': 'user', 'content': context_data}
-            ],
+        messages = [
+            {'role': 'system', 'content': 'You are a code analyst. Provide concise technical summaries.'},
+            {'role': 'user', 'content': context_data}
+        ]
+
+        response, task_record = self._llm_service.completion_sync(
+            model="quality",  # Context analysis uses quality tier
+            messages=messages,
             max_tokens=500,
             temperature=0.3
         )
 
-        self._record_task({
-            'timestamp': datetime.now().isoformat(),
-            'provider': self._get_brain_name(),
-            'model': response.model,
-            'tokens_used': response.tokens_used,
-            'latency_ms': response.latency_ms,
-            'task_type': 'context_analysis',
-        })
+        task_record['task_type'] = 'context_analysis'
+        self._record_task(task_record)
 
         return response.content

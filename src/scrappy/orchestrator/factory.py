@@ -8,7 +8,7 @@ Following SOLID principles:
 """
 
 import logging
-from typing import Optional, Callable
+from typing import Optional, Callable, Any
 from datetime import datetime
 from pathlib import Path
 
@@ -154,17 +154,18 @@ class OrchestratorFactory:
 
     def create_all_components(
         self,
+        task_history_recorder: Optional[Callable] = None,
+        # Legacy parameters - ignored
         brain_provider_getter: Optional[Callable] = None,
         brain_name_getter: Optional[Callable] = None,
-        task_history_recorder: Optional[Callable] = None,
     ) -> OrchestratorComponents:
         """
         Create all default components with proper dependency injection.
 
         Args:
-            brain_provider_getter: Callable that returns brain provider
-            brain_name_getter: Callable that returns brain name
             task_history_recorder: Callable to record tasks
+            brain_provider_getter: DEPRECATED - ignored
+            brain_name_getter: DEPRECATED - ignored
 
         Returns:
             OrchestratorComponents with all components initialized
@@ -209,10 +210,9 @@ class OrchestratorFactory:
         # Usage reporter
         components.usage_reporter = self.create_usage_reporter(components.cache)
 
-        # Task executor (needs brain getters and task recorder)
+        # Task executor (needs llm_service for LLM calls)
         components.task_executor = self.create_task_executor(
-            brain_provider_getter,
-            brain_name_getter,
+            components.llm_service,
             task_history_recorder
         )
 
@@ -376,14 +376,12 @@ class OrchestratorFactory:
 
     def create_task_executor(
         self,
-        brain_provider_getter: Optional[Callable] = None,
-        brain_name_getter: Optional[Callable] = None,
+        llm_service: Any,
         task_history_recorder: Optional[Callable] = None
     ) -> TaskExecutorProtocol:
         """Create default task executor."""
         return TaskExecutor(
-            get_brain_provider=brain_provider_getter or (lambda: None),
-            get_brain_name=brain_name_getter or (lambda: None),
+            llm_service=llm_service,
             record_task=task_history_recorder or (lambda task: None)
         )
 

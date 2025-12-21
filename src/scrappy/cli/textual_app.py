@@ -22,7 +22,6 @@ from textual import work
 from scrappy.infrastructure.output_mode import OutputModeContext
 from scrappy.infrastructure.theme import DEFAULT_THEME, ThemeProtocol
 from scrappy.protocols.activity import ActivityState
-from .input_capture import InputCaptureManager, InputRequest
 from .protocols import StatusComponentProtocol
 
 if TYPE_CHECKING:
@@ -231,6 +230,8 @@ class TextualOutputAdapter:
 
     def __init__(self):
         self._queue: Queue[tuple[str, Any]] = Queue()
+        self._flush_events: Dict[str, threading.Event] = {}
+        self._flush_lock = threading.Lock()
 
     def post_output(self, content: str) -> None:
         self._queue.put(('output', content))
@@ -245,6 +246,34 @@ class TextualOutputAdapter:
             tasks: List of Task objects to display.
         """
         self._queue.put(('tasks', tasks))
+
+    def flush(self, timeout: float = 5.0) -> bool:
+        """Wait for all pending output to be processed.
+
+        Posts a flush sentinel and waits for consumer to acknowledge it.
+        Returns True if flushed successfully, False on timeout.
+        """
+        flush_id = str(uuid.uuid4())
+        event = threading.Event()
+
+        with self._flush_lock:
+            self._flush_events[flush_id] = event
+
+        self._queue.put(('flush', flush_id))
+
+        success = event.wait(timeout=timeout)
+
+        with self._flush_lock:
+            self._flush_events.pop(flush_id, None)
+
+        return success
+
+    def acknowledge_flush(self, flush_id: str) -> None:
+        """Called by consumer when flush sentinel is processed."""
+        with self._flush_lock:
+            event = self._flush_events.get(flush_id)
+            if event:
+                event.set()
 
     def get_message(self, block: bool = True, timeout: Optional[float] = None) -> Optional[tuple[str, Any]]:
         try:
@@ -978,6 +1007,9 @@ class ScrappyApp(App):
                     self.post_message(WriteRenderable(content))
                 elif msg_type == 'tasks':
                     self.post_message(TasksUpdated(content))
+                elif msg_type == 'flush':
+                    # Acknowledge flush - all prior items processed
+                    self.output_adapter.acknowledge_flush(content)
 
             except Exception as e:
                 logger.exception(f"Error consuming output queue: {e}")

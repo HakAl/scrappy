@@ -158,8 +158,6 @@ class AgentOrchestrator:
             )
 
             components = factory.create_all_components(
-                brain_provider_getter=lambda: self._brain,
-                brain_name_getter=lambda: self._brain_name,
                 task_history_recorder=lambda task: self.task_history.append(task)
             )
 

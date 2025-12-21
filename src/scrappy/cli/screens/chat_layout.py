@@ -51,10 +51,7 @@ class ChatLayout(Widget):
 
         # Scrollable output area (with text selection support)
         with Container(id="output_container"):
-            yield SelectableLog(
-                id="output",
-                auto_scroll=True
-            )
+            yield SelectableLog(id="output", auto_scroll=True)
 
         # Activity indicator
         yield ActivityIndicator()
@@ -85,7 +82,7 @@ class ChatLayout(Widget):
 
     @property
     def output(self) -> SelectableLog:
-        """Get the SelectableLog output widget."""
+        """Get the output widget (SelectableLog)."""
         if self._output is None:
             self._output = self.query_one("#output", SelectableLog)
         return self._output

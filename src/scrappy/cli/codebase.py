@@ -81,24 +81,22 @@ class CLICodebaseAnalysis:
         if is_current_project:
             # Use orchestrator's context system for proper persistence
             self.io.echo("Using context-aware exploration...")
-            with self.io.progress(total=2, description="Scanning codebase") as progress:
-                # Step 1: Explore and scan files
-                result = self.orchestrator.context.explore(force=True)
-                progress.advance(1)
 
-                # Step 2: Generate summary with LLM (this saves to context)
-                def llm_summary(prompt):
-                    response = self.orchestrator.delegate(
-                        self.orchestrator.brain,
-                        prompt,
-                        system_prompt="You are a code analysis expert. Analyze codebases and provide clear, actionable summaries. Be concise but thorough.",
-                        max_tokens=MAX_TOKENS_SUMMARY,
-                        temperature=TEMPERATURE_LOW
-                    )
-                    return response.content
+            # Step 1: Explore and scan files
+            result = self.orchestrator.context.explore(force=True)
 
-                summary = self.orchestrator.context.generate_summary(llm_summary)
-                progress.advance(1)
+            # Step 2: Generate summary with LLM (this saves to context)
+            def llm_summary(prompt):
+                response = self.orchestrator.delegate(
+                    self.orchestrator.brain,
+                    prompt,
+                    system_prompt="You are a code analysis expert. Analyze codebases and provide clear, actionable summaries. Be concise but thorough.",
+                    max_tokens=MAX_TOKENS_SUMMARY,
+                    temperature=TEMPERATURE_LOW
+                )
+                return response.content
+
+            summary = self.orchestrator.context.generate_summary(llm_summary)
 
             # Add discovery to working memory
             self.orchestrator.working_memory.add_discovery(
@@ -108,15 +106,10 @@ class CLICodebaseAnalysis:
         else:
             # For external directories, use standalone exploration (legacy behavior)
             self.io.echo("Exploring external directory (not persisted to context)...")
-            with self.io.progress(total=4, description="Scanning codebase") as progress:
-                source_files = self._find_source_files(path)
-                progress.advance(1)
-                structure = self._analyze_structure(path, source_files)
-                progress.advance(1)
-                key_contents = self._read_key_files(path, source_files)
-                progress.advance(1)
-                summary = self._generate_codebase_summary(path, structure, key_contents)
-                progress.advance(1)
+            source_files = self._find_source_files(path)
+            structure = self._analyze_structure(path, source_files)
+            key_contents = self._read_key_files(path, source_files)
+            summary = self._generate_codebase_summary(path, structure, key_contents)
 
             # Still add to working memory as a discovery
             self.orchestrator.working_memory.add_discovery(

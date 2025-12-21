@@ -23,10 +23,8 @@ if TYPE_CHECKING:
     from ..textual_app import (
         TextualOutputAdapter,
         ThreadSafeAsyncBridge,
-        StatusBar,
         SemanticStatusComponent,
         ActivityStateChange,
-        ScrappyApp,
     )
 
 logger = logging.getLogger(__name__)
@@ -400,10 +398,19 @@ class MainAppScreen(Screen):
 
     def _update_capture_ui(self, request: "InputRequest") -> None:
         """Update UI for capture mode."""
-        from ..textual_app import StatusBar
+        from ..textual_app import StatusBar, ActivityIndicator
 
         if self._layout is None:
             return
+
+        # Hide activity indicator during prompts - we're waiting for user input,
+        # not "thinking". This prevents the timer from showing with the prompt.
+        self._stop_elapsed_timer()
+        try:
+            indicator = self.query_one(ActivityIndicator)
+            indicator.hide()
+        except Exception:
+            pass  # Indicator might not be mounted
 
         self.prompt_display.show_prompt(
             message=request.message,
@@ -413,6 +420,12 @@ class MainAppScreen(Screen):
 
         status_bar = self.query_one(StatusBar)
         status_bar.refresh_display()
+
+        # Also show prompt in output area so user always sees the question
+        from rich.text import Text
+        hint = " [y/n]" if request.input_type == "confirm" else ""
+        prompt_text = Text(f"\n{request.message}{hint}", style="bold yellow")
+        self.write_renderable(prompt_text)
 
         input_container = self.query_one("#input_container")
         input_container.add_class("capture-mode")
@@ -493,7 +506,7 @@ class MainAppScreen(Screen):
 
     def _update_elapsed(self) -> None:
         """Update elapsed time in the activity indicator."""
-        from ..textual_app import ActivityIndicator, ActivityStateChange
+        from ..textual_app import ActivityIndicator
 
         if self._elapsed_start_time == 0.0:
             return
