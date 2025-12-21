@@ -119,18 +119,11 @@ def validate_command(command_input: str) -> CommandValidationResult:
             error=f"Command exceeds maximum length of {MAX_COMMAND_LENGTH} characters"
         )
 
-    # Check for control characters
+    # Check for control characters (excluding newlines which are valid in args)
     if CONTROL_CHARS_PATTERN.search(command_input):
         return CommandValidationResult(
             is_valid=False,
             error="Command contains invalid control characters"
-        )
-
-    # Check for newlines
-    if NEWLINE_PATTERN.search(command_input):
-        return CommandValidationResult(
-            is_valid=False,
-            error="Command cannot contain newline characters"
         )
 
     # Must start with /

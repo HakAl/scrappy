@@ -181,10 +181,13 @@ class TestValidateCommand:
         assert result.command == "plan"
         # Args should be preserved or normalized
 
-    def test_command_with_newline_fails(self):
-        """Should reject commands with newlines."""
+    def test_command_with_newline_in_args_allowed(self):
+        """Should allow newlines in command arguments (multiline input)."""
         result = validate_command("/plan line1\nline2")
-        assert not result.is_valid
+        assert result.is_valid
+        assert result.command == "plan"
+        assert "line1" in result.args
+        assert "line2" in result.args
 
     def test_command_with_tab_in_args(self):
         """Should handle tabs in arguments appropriately."""
