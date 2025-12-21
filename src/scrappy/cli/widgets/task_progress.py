@@ -28,10 +28,12 @@ class TaskProgressWidget(Static):
         display: none;
         color: $text-muted;
         background: $background;
+        border: none;
     }
 
     TaskProgressWidget.active {
         display: block;
+        border: none;
     }
     """
 

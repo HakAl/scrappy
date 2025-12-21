@@ -30,6 +30,7 @@ class SelectableLog(ScrollView, can_focus=True):
     DEFAULT_CSS = """
     SelectableLog {
         background: $surface;
+        border: none;
     }
     """
 
