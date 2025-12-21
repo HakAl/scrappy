@@ -21,40 +21,10 @@ Screen {
     layout: vertical;
 }
 
-/* Suppress default focus styles globally */
-*:focus {
-    border: none;
-}
-
-/* Container default styling */
-Container {
-    border: none;
-    background: $background;
-}
-
-/* Static and Label default styling */
-Static {
-    border: none;
-    background: $background;
-}
-
-Label {
-    border: none;
-    background: $background;
-}
-
-/* ScrollView base (SelectableLog extends this) */
-ScrollView {
-    border: none;
-    background: $background;
-}
-
 /* Scrollable output container */
 #output_container {
     height: 1fr;
     overflow-y: auto;
-    border: none;
-    background: $background;
 }
 
 /* Main scrollable output (includes banner as content) */
@@ -207,14 +177,10 @@ TextArea > .text-area--cursor {
     height: auto;
     padding: 0 1;
     display: none;
-    border: none;
-    background: $background;
 }
 
 #activity_indicator.active {
     display: block;
     color: $text-muted;
     text-style: italic;
-    border: none;
-    background: $background;
 }
