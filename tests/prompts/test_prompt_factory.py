@@ -138,6 +138,33 @@ class TestAgentMode:
 
         assert "Completion" in prompt
 
+    def test_agent_system_prompt_includes_self_review_section(self):
+        factory = PromptFactory()
+        config = AgentPromptConfig(
+            platform=Platform.UNIX,
+            tool_descriptions="tools here",
+        )
+        prompt = factory.create_agent_system_prompt(config)
+
+        assert "Self-Review" in prompt
+        assert "zen_lint" in prompt
+
+    def test_self_review_comes_before_completion(self):
+        """Self-review section appears before completion section in prompt."""
+        factory = PromptFactory()
+        config = AgentPromptConfig(
+            platform=Platform.UNIX,
+            tool_descriptions="tools here",
+        )
+        prompt = factory.create_agent_system_prompt(config)
+
+        self_review_pos = prompt.find("## Self-Review")
+        completion_pos = prompt.find("## Completion")
+
+        assert self_review_pos != -1, "Self-Review section not found"
+        assert completion_pos != -1, "Completion section not found"
+        assert self_review_pos < completion_pos, "Self-Review must come before Completion"
+
     def test_agent_system_prompt_includes_safety_section(self):
         factory = PromptFactory()
         config = AgentPromptConfig(

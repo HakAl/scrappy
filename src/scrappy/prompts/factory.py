@@ -11,6 +11,7 @@ from .sections import (
     project_section,
     quality_section,
     safety_section,
+    self_review_section,
     strategy_section,
     task_tracking_section,
     tool_format_section,
@@ -72,6 +73,7 @@ Guidelines:
             strategy_section(),
             efficiency_section(),
             quality_section(),
+            self_review_section(),
             completion_section(),
             safety_section(),
         ]

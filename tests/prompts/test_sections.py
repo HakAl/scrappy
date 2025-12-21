@@ -11,6 +11,7 @@ from scrappy.prompts.sections import (
     platform_section,
     project_section,
     safety_section,
+    self_review_section,
     strategy_section,
     tool_format_section,
 )
@@ -122,6 +123,43 @@ class TestEfficiencySection:
         assert "re-read" in result.lower() or "already seen" in result.lower()
 
 
+class TestSelfReviewSection:
+    """Tests for self_review_section function."""
+
+    def test_contains_module_invocation(self):
+        """Uses OS-agnostic python -m invocation."""
+        result = self_review_section()
+
+        assert "python -m scrappy.tools.zen_lint" in result
+
+    def test_respects_env_var(self, monkeypatch):
+        """Severity comes from AGENT_LINT_SEVERITY env var."""
+        monkeypatch.setenv("AGENT_LINT_SEVERITY", "HIGH")
+        result = self_review_section()
+
+        assert "-s HIGH" in result
+
+    def test_default_severity_is_medium(self, monkeypatch):
+        """Default severity is MEDIUM when env var not set."""
+        monkeypatch.delenv("AGENT_LINT_SEVERITY", raising=False)
+        result = self_review_section()
+
+        assert "-s MEDIUM" in result
+
+    def test_has_iteration_limit(self):
+        """Mentions maximum 2 lint passes."""
+        result = self_review_section()
+
+        assert "2" in result
+        assert "lint pass" in result.lower() or "attempts" in result.lower()
+
+    def test_mentions_quality_gate_warnings_flag(self):
+        """Documents quality-gate-warnings for audit log."""
+        result = self_review_section()
+
+        assert "quality-gate-warnings" in result
+
+
 class TestCompletionSection:
     """Tests for completion_section function."""
 
@@ -135,6 +173,12 @@ class TestCompletionSection:
         result = completion_section()
 
         assert "optional" in result.lower() or "extras" in result.lower()
+
+    def test_has_linter_reminder(self):
+        """Completion section reminds to run self-review linter."""
+        result = completion_section()
+
+        assert "self-review" in result.lower() or "linter" in result.lower()
 
 
 class TestSafetySection:

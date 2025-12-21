@@ -1,5 +1,6 @@
 """Pure functions for building prompt sections."""
 
+import os
 from typing import Optional
 
 from .protocols import Platform
@@ -200,6 +201,36 @@ Don't re-run searches for information you already have.
 Batch related operations when possible."""
 
 
+def self_review_section() -> str:
+    """Generate self-review guidelines for code quality checking.
+
+    Uses AGENT_LINT_SEVERITY env var to configure severity level (default: MEDIUM).
+
+    Returns:
+        Self-review section with linting instructions
+    """
+    severity = os.getenv("AGENT_LINT_SEVERITY", "MEDIUM").upper()
+    return f"""## Self-Review Before Completion
+
+Before marking a task as complete, run the quality linter on files you created or modified:
+
+```
+python -m scrappy.tools.zen_lint <files_you_touched> -s {severity}
+```
+
+Review the output:
+- [PASS] - No issues, proceed to complete
+- Issues found - Fix them and re-run
+
+Common issues to fix:
+- TODO/FIXME in comments - implement or explain why deferred
+- Stub implementations (pass, ...) - complete them
+- Truncation markers (... rest of) - finish the code
+
+IMPORTANT: Maximum 2 lint passes. If issues remain after 2 attempts, complete anyway
+but note "quality-gate-warnings" in your completion message for the audit log."""
+
+
 def completion_section() -> str:
     """Generate task completion guidelines.
 
@@ -207,6 +238,8 @@ def completion_section() -> str:
         Completion section with scope management rules
     """
     return """## Completion
+
+IMPORTANT: Run self-review linter on modified files before completing.
 
 Mark task complete when primary goal is done.
 Don't add optional extras unless explicitly requested.
