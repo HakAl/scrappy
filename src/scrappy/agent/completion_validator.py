@@ -56,16 +56,20 @@ class CompletionValidator:
     """
 
     # Patterns indicating incomplete work
+    # These are specific to avoid false positives like "I fixed the TODO items"
     INCOMPLETE_PATTERNS = [
-        r"\bTODO\b",
-        r"\bFIXME\b",
-        r"\bHACK\b",
-        r"\bXXX\b",
+        # Code comment markers (Python/Shell, C-style, block comments)
+        r"#\s*(?:TODO|FIXME|HACK|XXX)\b",
+        r"//\s*(?:TODO|FIXME|HACK|XXX)\b",
+        r"/\*\s*(?:TODO|FIXME|HACK|XXX)\b",
+        # Standalone markers with colon (common in prose and code)
+        r"\b(?:TODO|FIXME|HACK|XXX)\s*:",
+        # Phrases indicating remaining work
         r"not yet implemented",
-        r"will implement",
-        r"need to add",
+        r"will implement later",
+        r"need to add more",
         r"remaining work",
-        r"still need",
+        r"still need to",
     ]
 
     def __init__(self, meaningful_actions: Set[str]):

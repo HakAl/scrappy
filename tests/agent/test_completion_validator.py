@@ -92,7 +92,7 @@ class TestCompletionValidator:
             "will implement later",
             "need to add more tests",
             "remaining work includes",
-            "still need to fix",
+            "still need to fix the edge cases",
         ]
 
         for phrase in incomplete_phrases:
@@ -103,15 +103,48 @@ class TestCompletionValidator:
             )
             assert not result.allow_completion, f"Should block: {phrase}"
 
+    def test_detects_comment_style_todo(self, validator):
+        """Detects TODO in comment format."""
+        comment_styles = [
+            "# TODO fix this later",
+            "// TODO: implement error handling",
+            "/* TODO add validation */",
+        ]
+
+        for comment in comment_styles:
+            result = validator.validate(
+                tools_executed=['write_file'],
+                task_description="Create a file",
+                result_text=f"Created file with {comment}",
+            )
+            assert not result.allow_completion, f"Should block: {comment}"
+
     def test_case_insensitive_detection(self, validator):
         """Incomplete indicators are detected case-insensitively."""
         result = validator.validate(
             tools_executed=['write_file'],
             task_description="Create a file",
-            result_text="Created file with todo items remaining",
+            result_text="Created file with todo: finish this later",
         )
 
         assert not result.allow_completion
+
+    def test_no_false_positive_on_todo_mention(self, validator):
+        """Does NOT block when TODO is mentioned but not as a marker."""
+        false_positive_cases = [
+            "I fixed all the TODO items",
+            "Addressed the FIXME you mentioned",
+            "Resolved the TODO from the previous review",
+            "The TODO list is now complete",
+        ]
+
+        for text in false_positive_cases:
+            result = validator.validate(
+                tools_executed=['write_file'],
+                task_description="Fix issues",
+                result_text=text,
+            )
+            assert result.allow_completion, f"Should NOT block: {text}"
 
     def test_allows_clean_completion(self, validator):
         """Allows completion when result text is clean."""
