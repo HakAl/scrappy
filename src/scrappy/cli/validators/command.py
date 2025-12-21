@@ -50,8 +50,6 @@ VALID_COMMANDS = {
     "usage", "models", "model", "setup",
     # Session commands
     "context", "cache", "session", "limits",
-    # Multi-provider commands
-    "synthesize", "delegate",
     # Codebase commands
     "explore",
     # Mode toggles

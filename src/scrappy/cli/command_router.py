@@ -13,7 +13,6 @@ from .display import CLIDisplay
 from .session import CLISessionManager
 from .codebase import CLICodebaseAnalysis
 from .tasks import CLITaskExecution
-from .multiprovider import CLIMultiProvider
 from .smart_query import CLISmartQuery
 from .agent_manager import CLIAgentManager
 from .task_router_handler import CLITaskRouterHandler
@@ -40,7 +39,6 @@ class CommandRouter:
         session_mgr: CLISessionManager,
         codebase: CLICodebaseAnalysis,
         tasks: CLITaskExecution,
-        multiprovider: CLIMultiProvider,
         smart: CLISmartQuery,
         agent_mgr: CLIAgentManager,
         task_router: CLITaskRouterHandler,
@@ -57,7 +55,6 @@ class CommandRouter:
             session_mgr: Session manager for persistence.
             codebase: Codebase analysis handler.
             tasks: Task execution handler.
-            multiprovider: Multi-provider handler.
             smart: Smart query handler.
             agent_mgr: Agent manager handler.
             task_router: Task router handler.
@@ -70,7 +67,6 @@ class CommandRouter:
         self.session_mgr = session_mgr
         self.codebase = codebase
         self.tasks = tasks
-        self.multiprovider = multiprovider
         self.smart = smart
         self.agent_mgr = agent_mgr
         self.task_router = task_router
@@ -97,9 +93,6 @@ class CommandRouter:
             "/plan": self._handle_plan,
             "/reason": self._handle_reason,
             "/agent": self._handle_agent,
-            # Multi-provider commands
-            "/synthesize": self._handle_synthesize,
-            "/delegate": self._handle_delegate,
             # Smart query commands
             "/smart": self._handle_smart,
             # Codebase commands
@@ -346,16 +339,6 @@ class CommandRouter:
             io.secho("Cleared task list. Starting fresh.", fg=io.theme.info)
 
         return True  # Always continue (user chose continue or clear)
-
-    def _handle_synthesize(self, args: str) -> bool:
-        """Handle /synthesize command."""
-        self.multiprovider.synthesize_mode(io=self.io)
-        return True
-
-    def _handle_delegate(self, args: str) -> bool:
-        """Handle /delegate command."""
-        self.multiprovider.delegate_mode(args, io=self.io)
-        return True
 
     def _handle_smart(self, args: str) -> bool:
         """Handle /smart command."""

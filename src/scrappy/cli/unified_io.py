@@ -447,7 +447,7 @@ class DirectConsoleOutput:
         border_style: str = "blue"
     ) -> None:
         """Output panel to console."""
-        panel = Panel(content, title=title, border_style=border_style)
+        panel = Panel(content, title=title, border_style=border_style, expand=False)
         self._console.print(panel)
 
     def output_table(
@@ -679,7 +679,7 @@ class OutputSinkAdapter:
         border_style: str = "blue"
     ) -> None:
         """Output panel through sink as Rich Panel."""
-        panel = Panel(content, title=title, border_style=border_style)
+        panel = Panel(content, title=title, border_style=border_style, expand=False)
         self._sink.post_renderable(panel)
 
     def output_table(

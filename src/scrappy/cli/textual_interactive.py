@@ -144,12 +144,11 @@ class TextualInteractiveMode:
         self.io.set_bridge(app.bridge)
 
         # Phase 2: Reinitialize handlers with bridge for TUI-aware user interaction
-        # This allows CLIAgentManager and CLIMultiProvider to use modal dialogs
+        # This allows CLIAgentManager to use modal dialogs
         if self._cli is not None:
             self._cli.reinitialize_handlers_with_bridge(app.bridge)
             # Update command router's references to the new handlers
             self.command_router.agent_mgr = self._cli.agent_mgr
-            self.command_router.multiprovider = self._cli.multiprovider
 
         # Launch the TUI
         app.run()

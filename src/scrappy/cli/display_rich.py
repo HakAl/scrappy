@@ -45,8 +45,6 @@ def show_help_table(
             ('/reason <q>', 'Analyze with reasoning'),
             ('/agent <task>', 'Run code agent'),
             ('/smart <query>', 'Research-first query'),
-            ('/synthesize', 'Combine provider responses'),
-            ('/delegate <p>', 'Send to specific provider'),
             ('/explore [path]', 'Explore codebase'),
         ],
         'Provider Management': [

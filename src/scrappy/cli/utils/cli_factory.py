@@ -15,7 +15,6 @@ from ..display import CLIDisplay
 from ..session import CLISessionManager
 from ..codebase import CLICodebaseAnalysis
 from ..tasks import CLITaskExecution
-from ..multiprovider import CLIMultiProvider
 from ..smart_query import CLISmartQuery
 from ..agent_manager import CLIAgentManager
 from ..task_router_handler import CLITaskRouterHandler
@@ -179,7 +178,6 @@ def initialize_cli_handlers(
         'session_mgr': session_mgr,
         'codebase': CLICodebaseAnalysis(orchestrator, io),
         'tasks': CLITaskExecution(orchestrator, io),
-        'multiprovider': CLIMultiProvider(orchestrator, io, interaction),
         'smart': CLISmartQuery(orchestrator, io),
         'agent_mgr': CLIAgentManager(orchestrator, io, interaction),
         'task_router': CLITaskRouterHandler(orchestrator, io, theme=theme),

@@ -113,7 +113,6 @@ class CLI:
         self.session_mgr = handlers['session_mgr']
         self.codebase = handlers['codebase']
         self.tasks = handlers['tasks']
-        self.multiprovider = handlers['multiprovider']
         self.smart = handlers['smart']
         self.agent_mgr = handlers['agent_mgr']
         self.task_router = handlers['task_router']
@@ -198,7 +197,6 @@ class CLI:
             session_mgr=self.session_mgr,
             codebase=self.codebase,
             tasks=self.tasks,
-            multiprovider=self.multiprovider,
             smart=self.smart,
             agent_mgr=self.agent_mgr,
             task_router=self.task_router,
@@ -378,14 +376,13 @@ class CLI:
 
         Called by TextualInteractiveMode.run() after the ScrappyApp creates
         the ThreadSafeAsyncBridge. This allows handlers like CLIAgentManager
-        and CLIMultiProvider to use modal dialogs instead of blocking prompts.
+        to use modal dialogs instead of blocking prompts.
 
         Args:
             bridge: The ThreadSafeAsyncBridge from ScrappyApp
 
         Side Effects:
-            - Recreates agent_mgr and multiprovider with TUI-aware interaction
-            - Updates command_router reference if it exists
+            - Recreates agent_mgr with TUI-aware interaction
         """
         from .user_interaction import get_user_interaction
 
@@ -394,10 +391,8 @@ class CLI:
 
         # Re-create handlers that use user interaction
         from .agent_manager import CLIAgentManager
-        from .multiprovider import CLIMultiProvider
 
         self.agent_mgr = CLIAgentManager(self.orchestrator, self.io, interaction)
-        self.multiprovider = CLIMultiProvider(self.orchestrator, self.io, interaction)
 
     def interactive_mode(self):
         """
