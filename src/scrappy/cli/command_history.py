@@ -1,8 +1,10 @@
 """Command history management for TUI mode.
 
 Provides persistent command history with up/down arrow navigation.
+Uses JSON encoding to preserve multiline commands.
 """
 
+import json
 from pathlib import Path
 from typing import Optional, Protocol, List
 
@@ -55,11 +57,29 @@ class CommandHistory:
             self._load_entries()
 
     def _load_entries(self) -> None:
-        """Load history entries from file."""
+        """Load history entries from file.
+
+        Uses JSON Lines format (one JSON-encoded string per line) to
+        properly handle multiline commands.
+        """
         if self._history_file and self._history_file.exists():
             try:
                 content = self._history_file.read_text(encoding="utf-8")
-                self._entries = [line for line in content.split("\n") if line.strip()]
+                entries = []
+                for line in content.split("\n"):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    # Try JSON decode first (new format)
+                    if line.startswith('"'):
+                        try:
+                            entries.append(json.loads(line))
+                            continue
+                        except json.JSONDecodeError:
+                            pass
+                    # Fall back to plain text (legacy format)
+                    entries.append(line)
+                self._entries = entries
                 # Trim to max size
                 if len(self._entries) > self._max_size:
                     self._entries = self._entries[-self._max_size:]
@@ -69,10 +89,16 @@ class CommandHistory:
                 self._position = 0
 
     def _save_entries(self) -> None:
-        """Save history entries to file."""
+        """Save history entries to file.
+
+        Uses JSON Lines format (one JSON-encoded string per line) to
+        properly handle multiline commands.
+        """
         if self._history_file:
             try:
-                content = "\n".join(self._entries[-self._max_size:])
+                # JSON encode each entry to escape newlines and special chars
+                lines = [json.dumps(entry) for entry in self._entries[-self._max_size:]]
+                content = "\n".join(lines)
                 self._history_file.write_text(content, encoding="utf-8")
             except Exception:
                 pass  # Silently fail on save errors

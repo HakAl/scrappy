@@ -20,21 +20,6 @@ class TaskProgressWidget(Static):
         [ ] Pending task
     """
 
-    DEFAULT_CSS = """
-    TaskProgressWidget {
-        height: auto;
-        max-height: 8;
-        padding: 0 1;
-        display: none;
-        color: $text-muted;
-        background: $background;
-    }
-
-    TaskProgressWidget.active {
-        display: block;
-    }
-    """
-
     tasks: reactive[list[Task]] = reactive(list, always_update=True)
 
     def __init__(self) -> None:

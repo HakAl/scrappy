@@ -27,12 +27,6 @@ class SelectableLog(ScrollView, can_focus=True):
     - Proper handling of double-width characters (emoji, CJK)
     """
 
-    DEFAULT_CSS = """
-    SelectableLog {
-        background: $surface;
-    }
-    """
-
     def __init__(
         self,
         max_lines: Optional[int] = None,

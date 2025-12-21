@@ -72,6 +72,11 @@ TextArea {
     background: $background;
 }
 
+/* Override Textual's focus border (prevents cyan bar from appearing) */
+TextArea:focus {
+    border: none;
+}
+
 /* TextArea internal gutter (line numbers area) */
 TextArea > .text-area--gutter {
     background: $background;
@@ -183,4 +188,18 @@ TextArea > .text-area--cursor {
     display: block;
     color: $text-muted;
     text-style: italic;
+}
+
+/* Task progress widget - shows agent task list above input */
+TaskProgressWidget {
+    height: auto;
+    max-height: 8;
+    padding: 0 1;
+    display: none;
+    color: $text-muted;
+    background: $background;
+}
+
+TaskProgressWidget.active {
+    display: block;
 }

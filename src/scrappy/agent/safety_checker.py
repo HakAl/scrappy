@@ -25,6 +25,7 @@ class SafetyChecker:
         'list_files',
         'list_directory',
         'search_code',
+        'find_exact_text',  # Exact text search - read-only
         'codebase_search',  # Semantic search - read-only
         'git_status',
         'git_diff',
