@@ -101,9 +101,13 @@ class ConversationState:
     system_prompt: str = ""
     iteration: int = 0
     max_iterations: int = 100  # High default - use checkpoint_interval for soft stops
-    checkpoint_interval: int = 10  # Ask user to continue every N iterations
+    checkpoint_interval: int = 15  # Safety checkpoint every N iterations
     tools_executed: List[str] = field(default_factory=list)
     auto_confirm: bool = False
+    # Allow-all mode: skip confirmations after user enables at checkpoint
+    allow_all_enabled: bool = False
+    # Git checkpoint hash for rollback
+    last_checkpoint_hash: Optional[str] = None
     # Track failed commands to force different strategies
     failed_commands: List[Dict[str, str]] = field(default_factory=list)  # List of {command, error, approach}
     retry_warnings: List[str] = field(default_factory=list)  # Warnings to inject into next prompt

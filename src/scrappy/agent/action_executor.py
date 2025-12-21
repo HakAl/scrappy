@@ -206,7 +206,9 @@ class ActionExecutor:
             return True
 
         # Check if confirmation required
-        if not self.safety.requires_confirmation(action, state.auto_confirm):
+        # allow_all_enabled is set at safety checkpoint when user chooses 'a'
+        skip_confirm = state.auto_confirm or getattr(state, 'allow_all_enabled', False)
+        if not self.safety.requires_confirmation(action, skip_confirm):
             return True
 
         # Ask user

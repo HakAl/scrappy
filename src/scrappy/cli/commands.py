@@ -460,7 +460,7 @@ def explore(ctx, path, save):
 @click.option("--dry-run", "-d", is_flag=True, help="Run in dry-run mode (no actual changes)")
 @click.option("--no-checkpoint", is_flag=True, help="Skip git checkpoint creation")
 @click.option("--auto-confirm", is_flag=True, help="Auto-confirm all actions (use with caution)")
-@click.option("--max-iterations", "-m", default=10, type=int, help="Maximum agent iterations")
+@click.option("--max-iterations", "-m", default=50, type=int, help="Maximum agent iterations (checkpoint every 15)")
 @click.pass_context
 def agent(ctx, task, dry_run, no_checkpoint, auto_confirm, max_iterations):
     """Run code agent to complete a task.

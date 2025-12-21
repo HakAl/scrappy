@@ -334,3 +334,40 @@ class AgentUI:
         # Fall back to callback if provided
         if self._on_tasks_updated:
             self._on_tasks_updated(tasks)
+
+    def prompt_checkpoint(self, iteration: int, tools_count: int) -> str:
+        """Prompt user at safety checkpoint with multiple options.
+
+        Displays a checkpoint prompt with options to continue, create git
+        checkpoint, enable allow-all mode, or stop.
+
+        Args:
+            iteration: Current iteration number
+            tools_count: Number of tools executed so far
+
+        Returns:
+            User's choice: 'c' (continue), 'g' (git checkpoint),
+            'a' (allow all), 's' (stop)
+        """
+        # Show checkpoint banner
+        self.io.echo("")
+        self.io.secho("=" * 60, fg=self._theme.warning)
+        self.io.secho(
+            f"  Safety Checkpoint - {iteration} iterations, {tools_count} actions",
+            fg=self._theme.warning,
+            bold=True
+        )
+        self.io.secho("=" * 60, fg=self._theme.warning)
+        self.io.echo("")
+        self.io.secho("  [c] Continue        - keep going", fg=self._theme.info)
+        self.io.secho("  [g] Git checkpoint  - save restore point, then continue", fg=self._theme.info)
+        self.io.secho("  [a] Allow all       - skip confirmations for remaining actions", fg=self._theme.info)
+        self.io.secho("  [s] Stop            - end agent run", fg=self._theme.info)
+        self.io.echo("")
+
+        # Get user choice
+        while True:
+            choice = self.io.prompt("Choice [c/g/a/s]", default="c").lower().strip()
+            if choice in ('c', 'g', 'a', 's'):
+                return choice
+            self.io.secho("Invalid choice. Please enter c, g, a, or s.", fg=self._theme.error)

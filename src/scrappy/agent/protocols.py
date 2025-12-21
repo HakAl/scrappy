@@ -612,6 +612,23 @@ class AgentUIProtocol(Protocol):
         """
         ...
 
+    def prompt_checkpoint(self, iteration: int, tools_count: int) -> str:
+        """
+        Prompt user at safety checkpoint with multiple options.
+
+        Called every N iterations to give user control over long-running agents.
+        Works even in auto-confirm mode as a safety net.
+
+        Args:
+            iteration: Current iteration number
+            tools_count: Number of tools executed so far
+
+        Returns:
+            User's choice: 'c' (continue), 'g' (git checkpoint),
+            'a' (allow all), 's' (stop)
+        """
+        ...
+
 
 @runtime_checkable
 class SafetyCheckerProtocol(Protocol):

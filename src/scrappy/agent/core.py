@@ -277,6 +277,7 @@ class CodeAgent:
             tools=self.tools,
             cancellation_token=self._cancellation_token,
             tool_context=self.tool_context,  # For HUD turn tracking
+            project_root=str(self.project_root),  # For git checkpoints
         )
 
         # Prompt factory for stateless prompt generation
@@ -557,7 +558,7 @@ class CodeAgent:
         """
         return self._command_executor._categorize_command_approach(command)
 
-    def run(self, task: str, max_iterations: int = 10, auto_confirm: bool = False) -> dict:
+    def run(self, task: str, max_iterations: int = 50, auto_confirm: bool = False) -> dict:
         """
         Run the agent on a task using decoupled stages.
 

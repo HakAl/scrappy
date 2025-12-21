@@ -101,7 +101,7 @@ class CLIConfig(BaseConfig):
     separator_width_wide: int = 60
 
     # Command defaults
-    max_iterations: int = 10
+    max_iterations: int = 50  # Checkpoint every 15 iterations
 
     # File extensions
     python_extensions: List[str] = field(default_factory=lambda: PYTHON_EXTENSIONS.copy())

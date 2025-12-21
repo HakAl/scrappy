@@ -5,14 +5,13 @@ Tests the AgentLoop class extracted from CodeAgent.
 """
 
 import pytest
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import Mock, patch
 
 from scrappy.agent.agent_loop import AgentLoop
 from scrappy.agent.types import (
     AgentThought,
     AgentAction,
     ActionResult,
-    EvaluationResult,
     ConversationState,
     AgentContext,
 )
@@ -714,3 +713,170 @@ class TestAgentLoopContextRebuild:
         assert contexts_generated[1].system_prompt == "system 2"
         assert contexts_generated[0].passive_rag_context == "iteration 1"
         assert contexts_generated[1].passive_rag_context == "iteration 2"
+
+
+class TestSafetyCheckpoint:
+    """Tests for safety checkpoint functionality."""
+
+    def test_checkpoint_triggers_at_interval(
+        self,
+        mock_orchestrator,
+        mock_action_executor,
+        mock_response_parser,
+        mock_ui,
+        mock_tool_registry,
+        mock_provider_strategy,
+        mock_context_factory,
+    ):
+        """Checkpoint should trigger when iteration matches checkpoint_interval."""
+        config = AgentConfig()
+        agent_loop = AgentLoop(
+            orchestrator=mock_orchestrator,
+            action_executor=mock_action_executor,
+            response_parser=mock_response_parser,
+            ui=mock_ui,
+            tool_registry=mock_tool_registry,
+            provider_strategy=mock_provider_strategy,
+            config=config,
+            context_factory=mock_context_factory,
+            tools={"read_file": Mock()},
+        )
+
+        # User chooses to continue
+        mock_ui.prompt_checkpoint.return_value = 'c'
+
+        state = ConversationState(
+            messages=[
+                {"role": "system", "content": "system"},
+                {"role": "user", "content": "task"},
+            ],
+            system_prompt="system",
+            iteration=15,  # Matches default checkpoint_interval
+            checkpoint_interval=15,
+        )
+
+        result = agent_loop._handle_safety_checkpoint(state)
+
+        assert result is None  # Continue
+        mock_ui.prompt_checkpoint.assert_called_once_with(15, 0)
+
+    def test_checkpoint_stop_returns_result(
+        self,
+        mock_orchestrator,
+        mock_action_executor,
+        mock_response_parser,
+        mock_ui,
+        mock_tool_registry,
+        mock_provider_strategy,
+        mock_context_factory,
+    ):
+        """User choosing 'stop' should return a stop result."""
+        config = AgentConfig()
+        agent_loop = AgentLoop(
+            orchestrator=mock_orchestrator,
+            action_executor=mock_action_executor,
+            response_parser=mock_response_parser,
+            ui=mock_ui,
+            tool_registry=mock_tool_registry,
+            provider_strategy=mock_provider_strategy,
+            config=config,
+            context_factory=mock_context_factory,
+            tools={"read_file": Mock()},
+        )
+
+        mock_ui.prompt_checkpoint.return_value = 's'
+
+        state = ConversationState(
+            messages=[],
+            system_prompt="system",
+            iteration=15,
+            checkpoint_interval=15,
+        )
+
+        result = agent_loop._handle_safety_checkpoint(state)
+
+        assert result is not None
+        assert result['success'] is False
+        assert 'Stopped at checkpoint' in result['result']
+        assert result['stop_reason'] == 'user_cancelled'
+
+    def test_checkpoint_allow_all_enables_flag(
+        self,
+        mock_orchestrator,
+        mock_action_executor,
+        mock_response_parser,
+        mock_ui,
+        mock_tool_registry,
+        mock_provider_strategy,
+        mock_context_factory,
+    ):
+        """User choosing 'allow all' should enable allow_all_enabled flag."""
+        config = AgentConfig()
+        agent_loop = AgentLoop(
+            orchestrator=mock_orchestrator,
+            action_executor=mock_action_executor,
+            response_parser=mock_response_parser,
+            ui=mock_ui,
+            tool_registry=mock_tool_registry,
+            provider_strategy=mock_provider_strategy,
+            config=config,
+            context_factory=mock_context_factory,
+            tools={"read_file": Mock()},
+        )
+
+        mock_ui.prompt_checkpoint.return_value = 'a'
+
+        state = ConversationState(
+            messages=[],
+            system_prompt="system",
+            iteration=15,
+            checkpoint_interval=15,
+        )
+
+        assert state.allow_all_enabled is False
+
+        result = agent_loop._handle_safety_checkpoint(state)
+
+        assert result is None  # Continue
+        assert state.allow_all_enabled is True
+
+    def test_checkpoint_git_creates_checkpoint(
+        self,
+        mock_orchestrator,
+        mock_action_executor,
+        mock_response_parser,
+        mock_ui,
+        mock_tool_registry,
+        mock_provider_strategy,
+        mock_context_factory,
+    ):
+        """User choosing 'git checkpoint' should create checkpoint and continue."""
+        config = AgentConfig()
+        agent_loop = AgentLoop(
+            orchestrator=mock_orchestrator,
+            action_executor=mock_action_executor,
+            response_parser=mock_response_parser,
+            ui=mock_ui,
+            tool_registry=mock_tool_registry,
+            provider_strategy=mock_provider_strategy,
+            config=config,
+            context_factory=mock_context_factory,
+            tools={"read_file": Mock()},
+        )
+
+        mock_ui.prompt_checkpoint.return_value = 'g'
+
+        state = ConversationState(
+            messages=[],
+            system_prompt="system",
+            iteration=15,
+            checkpoint_interval=15,
+        )
+
+        # Mock the git checkpoint function
+        with patch('scrappy.agent.agent_loop.create_git_checkpoint', return_value="abc123"):
+            result = agent_loop._handle_safety_checkpoint(state)
+
+            assert result is None  # Continue
+            assert state.last_checkpoint_hash == "abc123"
+            mock_ui.show_info.assert_called()

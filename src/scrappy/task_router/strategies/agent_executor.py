@@ -32,7 +32,7 @@ class AgentExecutor(ProviderAwareStrategy):
         self,
         orchestrator: OrchestratorLike,
         project_root: Optional[Path] = None,
-        max_iterations: int = 10,
+        max_iterations: int = 50,
         require_approval: bool = True,
         io: Optional[Any] = None,  # CLIIOProtocol - Any to avoid circular import
     ):

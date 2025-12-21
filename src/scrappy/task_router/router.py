@@ -178,7 +178,7 @@ class TaskRouter:
             strategies[TaskType.CODE_GENERATION] = AgentExecutor(
                 orchestrator=self.orchestrator,
                 project_root=self.project_root,
-                max_iterations=10,
+                max_iterations=50,
                 require_approval=True,
                 io=self._io,
             )

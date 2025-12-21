@@ -37,6 +37,7 @@ from .completion_validator import (
     CompletionValidator,
     CompletionValidatorProtocol,
 )
+from .checkpoint import create_git_checkpoint
 
 if TYPE_CHECKING:
     from ..orchestrator_adapter import OrchestratorAdapter
@@ -76,6 +77,7 @@ class AgentLoop:
         stop_condition: Optional[AgentStopCondition] = None,
         tool_context: Optional[Any] = None,  # ToolContext for HUD turn tracking
         completion_validator: Optional[CompletionValidatorProtocol] = None,
+        project_root: Optional[str] = None,  # For git checkpoints
     ):
         """
         Initialize AgentLoop with injected dependencies.
@@ -96,8 +98,10 @@ class AgentLoop:
             stop_condition: Unified stop condition tracker (created if not provided)
             tool_context: Optional ToolContext for HUD turn tracking
             completion_validator: Validator for task completion (created if not provided)
+            project_root: Project root path for git checkpoints
         """
         self._orchestrator = orchestrator
+        self._project_root = project_root or "."
         self._action_executor = action_executor
         self._response_parser = response_parser
         self._ui = ui
@@ -812,18 +816,13 @@ class AgentLoop:
                     'stop_reason': StopReason.MAX_ITERATIONS.value,
                 }
 
-            # Soft checkpoint - ask user to continue every N iterations
+            # Safety checkpoint - ask user to continue every N iterations
+            # Works even in auto_confirm mode as a safety net
             if (state.checkpoint_interval > 0 and
-                state.iteration % state.checkpoint_interval == 0 and
-                not state.auto_confirm):
-                should_continue = self._checkpoint_prompt(state)
-                if not should_continue:
-                    return {
-                        'success': False,
-                        'result': f'Stopped at checkpoint (iteration {state.iteration})',
-                        'iterations': state.iteration,
-                        'stop_reason': StopReason.USER_CANCELLED.value,
-                    }
+                state.iteration % state.checkpoint_interval == 0):
+                result = self._handle_safety_checkpoint(state)
+                if result is not None:
+                    return result
 
     def _make_stop_result(self, reason: StopReason, state: ConversationState) -> Dict[str, Any]:
         """Create a standardized stop result dictionary."""
@@ -859,15 +858,51 @@ class AgentLoop:
         ]
         return any(indicator in error_str for indicator in network_indicators)
 
-    def _checkpoint_prompt(self, state: ConversationState) -> bool:
+    def _handle_safety_checkpoint(
+        self, state: ConversationState
+    ) -> Optional[Dict[str, Any]]:
         """
-        Prompt user at checkpoint to decide whether to continue.
+        Handle safety checkpoint with multi-option prompt.
+
+        Prompts user with options to continue, create git checkpoint,
+        enable allow-all mode, or stop. Works even in auto_confirm mode.
+
+        Args:
+            state: Current conversation state
 
         Returns:
-            True to continue, False to stop
+            None to continue, or a result dict to stop the agent
         """
-        self._ui.show_info(
-            f"Checkpoint: {state.iteration} iterations completed. "
-            f"{len(state.tools_executed)} tools executed."
-        )
-        return self._ui.confirm("Continue agent execution?")
+        tools_count = len(state.tools_executed)
+        choice = self._ui.prompt_checkpoint(state.iteration, tools_count)
+
+        if choice == 'c':
+            # Continue
+            self._ui.show_progress("Continuing...")
+            return None
+
+        elif choice == 'g':
+            # Git checkpoint then continue
+            self._ui.show_progress("Creating git checkpoint...")
+            commit_hash = create_git_checkpoint(self._project_root)
+            if commit_hash:
+                state.last_checkpoint_hash = commit_hash
+                self._ui.show_info(f"Checkpoint created: {commit_hash[:8]}")
+            else:
+                self._ui.show_warning("Could not create git checkpoint (not a git repo?)")
+            return None
+
+        elif choice == 'a':
+            # Enable allow-all mode
+            state.allow_all_enabled = True
+            self._ui.show_progress("Allow-all mode enabled for remaining actions")
+            return None
+
+        else:  # choice == 's'
+            # Stop
+            return {
+                'success': False,
+                'result': f'Stopped at checkpoint (iteration {state.iteration})',
+                'iterations': state.iteration,
+                'stop_reason': StopReason.USER_CANCELLED.value,
+            }
