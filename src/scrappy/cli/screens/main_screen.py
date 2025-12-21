@@ -169,6 +169,14 @@ class MainAppScreen(Screen):
         if self._layout is None:
             return
 
+        # Handle Ctrl+C for copy from SelectableLog (works in any mode)
+        if event.key == "ctrl+c":
+            output = self._layout.output
+            if isinstance(output, SelectableLog) and output._has_selection():
+                output.action_copy_selection()
+                event.stop()
+                return
+
         # Handle Escape or Ctrl+C in capture mode
         if self.capture_manager.is_capturing:
             if event.key == "escape" or event.key == "ctrl+c":
@@ -184,18 +192,11 @@ class MainAppScreen(Screen):
                 event.stop()
                 return
 
-        # Handle Ctrl+C for copy from SelectableLog or cancel agent
+        # Handle Ctrl+C to cancel running agent (no selection, not in capture mode)
         if event.key == "ctrl+c":
-            output = self._layout.output
-            if isinstance(output, SelectableLog) and output._has_selection():
-                output.action_copy_selection()
-                event.stop()
-                return
-            else:
-                # No selection - use Ctrl+C to cancel running agent (same as Escape)
-                self.action_cancel_agent()
-                event.stop()
-                return
+            self.action_cancel_agent()
+            event.stop()
+            return
 
         # Already focused on input, let it handle naturally
         if self._layout.input.has_focus:
