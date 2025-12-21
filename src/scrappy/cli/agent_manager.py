@@ -221,3 +221,7 @@ class CLIAgentManager:
         finally:
             # Clear cancellation token after run completes
             self._cancellation_token = None
+            # Clear task progress widget
+            output_sink = getattr(io, "output_sink", None)
+            if output_sink is not None and hasattr(output_sink, "post_tasks_updated"):
+                output_sink.post_tasks_updated([])

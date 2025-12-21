@@ -44,6 +44,9 @@ class TaskProgressWidget(Static):
         super().__init__(id="task_progress")
         self._visible = False
 
+    # Max characters per task description (roughly 1-2 lines)
+    MAX_DESCRIPTION_LENGTH = 80
+
     def render(self) -> RenderableType:
         """Render the task list.
 
@@ -70,8 +73,12 @@ class TaskProgressWidget(Static):
             if task.priority:
                 text.append(f"[{task.priority.value}] ", style="bold")
 
-            # Description
-            text.append(task.description)
+            # Truncate long descriptions to 1-2 lines
+            description = task.description
+            if len(description) > self.MAX_DESCRIPTION_LENGTH:
+                description = description[:self.MAX_DESCRIPTION_LENGTH - 3] + "..."
+
+            text.append(description)
 
             # In-progress marker
             if task.status == TaskStatus.IN_PROGRESS:
