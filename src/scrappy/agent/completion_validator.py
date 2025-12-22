@@ -51,8 +51,9 @@ class CompletionValidator:
 
     Checks:
     1. Meaningful actions performed (file writes, commands)
-    2. No obvious incomplete state indicators
-    3. Allows override on second attempt (trust agent judgment)
+    2. Sufficient investigation work (reads, searches) as alternative
+    3. No obvious incomplete state indicators
+    4. Allows override on second attempt (trust agent judgment)
     """
 
     # Patterns indicating incomplete work
@@ -71,6 +72,19 @@ class CompletionValidator:
         r"remaining work",
         r"still need to",
     ]
+
+    # Actions that count as investigation work
+    INVESTIGATION_ACTIONS = {
+        'read_file',
+        'search_files',
+        'grep_search',
+        'list_directory',
+        'find_files',
+        'get_file_info',
+    }
+
+    # Minimum investigation actions to count as meaningful work
+    MIN_INVESTIGATION_THRESHOLD = 3
 
     def __init__(self, meaningful_actions: Set[str]):
         """
@@ -111,20 +125,30 @@ class CompletionValidator:
                 reason="Completion allowed after prior attempt"
             )
 
-        # Check for meaningful work
+        # Check for meaningful work (writes, commands)
         meaningful_work = [
             t for t in tools_executed
             if t in self._meaningful_actions
         ]
 
-        if not meaningful_work:
+        # Check for investigation work (reads, searches)
+        investigation_work = [
+            t for t in tools_executed
+            if t in self.INVESTIGATION_ACTIONS
+        ]
+
+        # Allow if meaningful actions performed OR sufficient investigation done
+        has_meaningful_work = len(meaningful_work) > 0
+        has_sufficient_investigation = len(investigation_work) >= self.MIN_INVESTIGATION_THRESHOLD
+
+        if not has_meaningful_work and not has_sufficient_investigation:
             return CompletionValidation(
                 allow_completion=False,
                 reason="No meaningful actions performed",
                 suggestions=[
                     "Use write_file to create or modify files",
                     "Use run_command to execute necessary commands",
-                    "Explain why no file changes are needed",
+                    f"Or perform at least {self.MIN_INVESTIGATION_THRESHOLD} investigation actions (read, search)",
                 ]
             )
 

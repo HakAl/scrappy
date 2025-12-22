@@ -177,6 +177,58 @@ class TestCompletionValidator:
 
         assert result.allow_completion
 
+    def test_allows_completion_with_sufficient_investigation(self, validator):
+        """Completion allowed when sufficient investigation work performed."""
+        # 3+ investigation actions should be enough
+        result = validator.validate(
+            tools_executed=['read_file', 'read_file', 'search_files'],
+            task_description="Check if site is accessible",
+            result_text="Site is already accessible, no changes needed.",
+        )
+
+        assert result.allow_completion
+        assert "validated" in result.reason.lower()
+
+    def test_blocks_insufficient_investigation(self, validator):
+        """Completion blocked when investigation work is insufficient."""
+        # Only 2 investigation actions - not enough
+        result = validator.validate(
+            tools_executed=['read_file', 'read_file'],
+            task_description="Check the configuration",
+            result_text="Config looks fine.",
+        )
+
+        assert not result.allow_completion
+        assert "No meaningful actions" in result.reason
+
+    def test_mixed_investigation_actions_count(self, validator):
+        """Different investigation actions all count toward threshold."""
+        result = validator.validate(
+            tools_executed=['read_file', 'grep_search', 'list_directory'],
+            task_description="Investigate the codebase structure",
+            result_text="Codebase follows standard structure.",
+        )
+
+        assert result.allow_completion
+
+    def test_investigation_threshold_is_three(self, validator):
+        """Exactly 3 investigation actions meets the threshold."""
+        # Exactly 3 should pass
+        result_pass = validator.validate(
+            tools_executed=['read_file', 'read_file', 'read_file'],
+            task_description="Review files",
+            result_text="Files look good.",
+        )
+        assert result_pass.allow_completion
+
+        # 2 should fail
+        result_fail = validator.validate(
+            tools_executed=['read_file', 'read_file'],
+            task_description="Review files",
+            result_text="Files look good.",
+        )
+        assert not result_fail.allow_completion
+
 
 class TestCompletionValidation:
     """Tests for CompletionValidation dataclass."""
