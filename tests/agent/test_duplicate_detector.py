@@ -10,6 +10,79 @@ from scrappy.agent.duplicate_detector import DuplicateDetector
 from scrappy.agent.types import AgentAction, ConversationState
 
 
+class TestDuplicateDetectorSkipActions:
+    """Tests for actions that should never be flagged as duplicates."""
+
+    @pytest.mark.unit
+    def test_read_file_never_duplicate(self):
+        """read_file should never be flagged as duplicate (normal to re-read)."""
+        detector = DuplicateDetector()
+        state = ConversationState()
+        state.last_action = {"action": "read_file", "parameters": {"path": "test.py"}}
+
+        action = AgentAction(
+            action="read_file",
+            parameters={"path": "test.py"},
+            thought="Reading file again",
+            is_complete=False
+        )
+
+        is_dup, msg = detector.check_duplicate(action, state)
+
+        assert is_dup is False
+        assert msg == ""
+
+    @pytest.mark.unit
+    def test_write_file_never_duplicate(self):
+        """write_file should never be flagged as duplicate (normal to overwrite)."""
+        detector = DuplicateDetector()
+        state = ConversationState()
+        state.last_action = {
+            "action": "write_file",
+            "parameters": {"path": "test.py", "content": "code"}
+        }
+
+        action = AgentAction(
+            action="write_file",
+            parameters={"path": "test.py", "content": "code"},
+            thought="Writing again",
+            is_complete=False
+        )
+
+        is_dup, msg = detector.check_duplicate(action, state)
+
+        assert is_dup is False
+        assert msg == ""
+
+    @pytest.mark.unit
+    def test_task_never_duplicate(self):
+        """task should never be flagged as duplicate (internal tracking)."""
+        detector = DuplicateDetector()
+        state = ConversationState()
+        state.last_action = {"action": "task", "parameters": {"operation": "update"}}
+
+        action = AgentAction(
+            action="task",
+            parameters={"operation": "update"},
+            thought="Updating task",
+            is_complete=False
+        )
+
+        is_dup, msg = detector.check_duplicate(action, state)
+
+        assert is_dup is False
+
+    @pytest.mark.unit
+    def test_skip_list_includes_expected_actions(self):
+        """Verify SKIP_DUPLICATE_CHECK includes all file and search operations."""
+        expected = {
+            'read_file', 'write_file', 'list_files', 'list_directory',
+            'search_code', 'find_exact_text', 'codebase_search',
+            'git_status', 'git_diff', 'task'
+        }
+        assert expected.issubset(DuplicateDetector.SKIP_DUPLICATE_CHECK)
+
+
 class TestDuplicateDetectorBasics:
     """Basic duplicate detection tests."""
 
@@ -35,15 +108,16 @@ class TestDuplicateDetectorBasics:
         """Action matching last_action should be duplicate."""
         detector = DuplicateDetector()
         state = ConversationState()
+        # Use an action NOT in SKIP_DUPLICATE_CHECK (read_file is skipped)
         state.last_action = {
-            "action": "read_file",
-            "parameters": {"path": "test.py"}
+            "action": "api_call",
+            "parameters": {"endpoint": "/test"}
         }
 
         action = AgentAction(
-            action="read_file",
-            parameters={"path": "test.py"},
-            thought="Reading file again",
+            action="api_call",
+            parameters={"endpoint": "/test"},
+            thought="Calling API again",
             is_complete=False
         )
 
@@ -103,15 +177,16 @@ class TestDuplicateDetectorHistory:
         """Action in recent history should be duplicate."""
         detector = DuplicateDetector()
         state = ConversationState()
+        # Use api_call which is NOT in SKIP_DUPLICATE_CHECK
         state.action_history = [
-            {"action": "read_file", "parameters": {"path": "a.py"}},
-            {"action": "read_file", "parameters": {"path": "b.py"}},
+            {"action": "api_call", "parameters": {"endpoint": "/a"}},
+            {"action": "api_call", "parameters": {"endpoint": "/b"}},
         ]
 
         action = AgentAction(
-            action="read_file",
-            parameters={"path": "a.py"},
-            thought="Reading a.py again",
+            action="api_call",
+            parameters={"endpoint": "/a"},
+            thought="Calling /a again",
             is_complete=False
         )
 
@@ -158,16 +233,17 @@ class TestDuplicateDetectorHistory:
         state = ConversationState()
 
         # Put target action exactly at window boundary
+        # Use api_call which is NOT in SKIP_DUPLICATE_CHECK
         state.action_history = [
-            {"action": "read_file", "parameters": {"path": "target.py"}},  # 3rd from end
-            {"action": "write_file", "parameters": {"path": "a.py"}},
-            {"action": "write_file", "parameters": {"path": "b.py"}},
+            {"action": "api_call", "parameters": {"endpoint": "/target"}},  # 3rd from end
+            {"action": "api_call", "parameters": {"endpoint": "/a"}},
+            {"action": "api_call", "parameters": {"endpoint": "/b"}},
         ]
 
         action = AgentAction(
-            action="read_file",
-            parameters={"path": "target.py"},
-            thought="Reading target",
+            action="api_call",
+            parameters={"endpoint": "/target"},
+            thought="Calling target again",
             is_complete=False
         )
 
@@ -446,22 +522,23 @@ class TestDuplicateDetectorEdgeCases:
         """Should correctly match complex nested parameters."""
         detector = DuplicateDetector()
         state = ConversationState()
+        # Use api_call which is NOT in SKIP_DUPLICATE_CHECK
         state.last_action = {
-            "action": "write_file",
+            "action": "api_call",
             "parameters": {
-                "path": "test.py",
-                "content": "def foo():\n    pass"
+                "endpoint": "/submit",
+                "body": {"data": "value", "nested": {"key": 1}}
             }
         }
 
         # Exact same parameters
         action = AgentAction(
-            action="write_file",
+            action="api_call",
             parameters={
-                "path": "test.py",
-                "content": "def foo():\n    pass"
+                "endpoint": "/submit",
+                "body": {"data": "value", "nested": {"key": 1}}
             },
-            thought="Writing",
+            thought="Calling API again",
             is_complete=False
         )
 

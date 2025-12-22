@@ -20,6 +20,21 @@ class DuplicateDetector:
     LOOKBACK_WINDOW = 3  # Check last N actions for duplicates
     MAX_COMMAND_FAILURES = 3  # Block command after N failures
 
+    # Actions that should never be flagged as duplicates
+    # File operations are normal to repeat (read to check state, write iteratively)
+    SKIP_DUPLICATE_CHECK: set[str] = {
+        'read_file',
+        'write_file',
+        'list_files',
+        'list_directory',
+        'search_code',
+        'find_exact_text',
+        'codebase_search',
+        'git_status',
+        'git_diff',
+        'task',
+    }
+
     def check_duplicate(
         self,
         action: AgentAction,
@@ -36,6 +51,10 @@ class DuplicateDetector:
             Tuple of (is_duplicate, warning_message).
             If is_duplicate is True, warning_message explains why.
         """
+        # Skip duplicate check for file operations and other repeatable actions
+        if action.action in self.SKIP_DUPLICATE_CHECK:
+            return (False, "")
+
         # Check if this exact action was recently executed
         if self._is_recent_duplicate(action, state):
             return (
