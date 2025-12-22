@@ -7,7 +7,6 @@ from typing import Optional
 
 from ..agent import CodeAgent
 from scrappy.task_router.intent import RegexIntentClassifier, RegexEntityExtractor
-from scrappy.task_router.protocols import IntentResult
 from scrappy.task_router.strategies.response_cleaner import ResponseCleaner
 from .io_interface import CLIIOProtocol
 from .research_prompt_builder import ResearchPromptBuilder
@@ -182,15 +181,26 @@ class CLISmartQuery:
 
         return response
 
+    # Minimum confidence to display/use intent classification
+    CONFIDENCE_DISPLAY_THRESHOLD = 0.5
+
     def _display_classification(self, classification: ClassificationResult, io: CLIIOProtocol) -> None:
         """Display classification information to the user.
+
+        Only displays intent classification if confidence is above threshold.
+        Low confidence classifications are shown as 'uncertain' to avoid
+        misleading the user and LLM.
 
         Args:
             classification: The classification result
             io: IO interface for output
         """
-        io.echo(f"  Primary intent: {classification.intent_result.intent.value} "
-                f"(confidence: {classification.intent_result.confidence:.2f})")
+        confidence = classification.intent_result.confidence
+        if confidence >= self.CONFIDENCE_DISPLAY_THRESHOLD:
+            io.echo(f"  Primary intent: {classification.intent_result.intent.value} "
+                    f"(confidence: {confidence:.2f})")
+        else:
+            io.echo(f"  Primary intent: uncertain (confidence too low: {confidence:.2f})")
 
         if classification.entities:
             for entity_type, values in classification.entities.items():

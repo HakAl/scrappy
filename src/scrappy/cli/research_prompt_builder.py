@@ -12,6 +12,9 @@ from .research_handlers.base import ClassificationResult
 class ResearchPromptBuilder:
     """Builds prompts for LLM with classification context and research results."""
 
+    # Minimum confidence to include intent in prompt context
+    CONFIDENCE_THRESHOLD = 0.5
+
     def build(
         self,
         query: str,
@@ -80,6 +83,9 @@ Provide a helpful answer based on your understanding of the query intent."""
         """
         Build classification context string.
 
+        Only includes intent classification if confidence is above threshold.
+        Low confidence intents are omitted to avoid misleading the LLM.
+
         Args:
             classification: The query classification result
 
@@ -100,8 +106,15 @@ Provide a helpful answer based on your understanding of the query intent."""
         if not keywords_str:
             keywords_str = "none"
 
+        # Only include intent if confidence is above threshold
+        confidence = classification.intent_result.confidence
+        if confidence >= self.CONFIDENCE_THRESHOLD:
+            intent_str = f"{classification.intent_result.intent.value} (confidence: {confidence:.2f})"
+        else:
+            intent_str = "uncertain (classification confidence too low)"
+
         return f"""Query Classification:
-- Primary Intent: {classification.intent_result.intent.value} (confidence: {classification.intent_result.confidence:.2f})
+- Primary Intent: {intent_str}
 - Key entities: {entities_str}
 - Keywords: {keywords_str}"""
 
