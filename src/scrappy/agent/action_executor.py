@@ -221,7 +221,14 @@ class ActionExecutor:
             path = action.parameters.get('path', '')
             self.ui.show_diff_preview(path, diff_lines)
 
-        return self.ui.prompt_confirm("Allow this action?", default=False)
+        # Use action confirm with allow-all option [y/n/a]
+        response = self.ui.prompt_action_confirm("Allow this action?")
+        if response == 'a':
+            # Enable allow-all mode for remaining actions
+            state.allow_all_enabled = True
+            self.ui.show_progress("Allow-all mode enabled for remaining actions")
+            return True
+        return response == 'y'
 
     def _generate_diff_preview(self, action: AgentAction) -> List[str]:
         """

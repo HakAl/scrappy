@@ -276,6 +276,29 @@ class AgentUI:
         """Prompt user for confirmation."""
         return self.io.confirm(message, default=default)
 
+    def prompt_action_confirm(
+        self,
+        message: str = "Allow this action?",
+    ) -> str:
+        """
+        Prompt user for action confirmation with allow-all option.
+
+        Returns 'y', 'n', or 'a' for yes/no/allow-all.
+        """
+        prompt = f"{message} [y/n/a] "
+        while True:
+            response = self.io.prompt(prompt).strip().lower()
+            if response in ('y', 'yes'):
+                return 'y'
+            elif response in ('n', 'no'):
+                return 'n'
+            elif response in ('a', 'all', 'allow', 'allow-all'):
+                return 'a'
+            elif response == '':
+                return 'n'  # Default to no
+            else:
+                self.io.secho("Please enter y, n, or a", fg=self._theme.warning)
+
     def confirm(self, message: str, default: bool = True) -> bool:
         """Prompt user for yes/no confirmation.
 

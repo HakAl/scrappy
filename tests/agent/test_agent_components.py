@@ -63,6 +63,17 @@ class TestAgentUI:
             return self.confirmation_responses.pop(0)
         return default
 
+    def prompt_action_confirm(self, message: str = "Allow this action?") -> str:
+        """Test double for action confirmation with allow-all option."""
+        self.confirmations_requested.append(message)
+        if self.confirmation_responses:
+            response = self.confirmation_responses.pop(0)
+            # Convert bool to string for backward compat with existing tests
+            if isinstance(response, bool):
+                return 'y' if response else 'n'
+            return response
+        return 'n'  # Default deny
+
     def confirm_batch(self, actions: list) -> bool:
         """Test double for batch confirmation."""
         self.confirmations_requested.append(("batch", actions))

@@ -559,6 +559,23 @@ class AgentUIProtocol(Protocol):
         """
         ...
 
+    def prompt_action_confirm(
+        self,
+        message: str = "Allow this action?",
+    ) -> str:
+        """
+        Prompt user for action confirmation with allow-all option.
+
+        Args:
+            message: Confirmation prompt text
+
+        Returns:
+            'y' if user approved this action
+            'n' if user denied this action
+            'a' if user chose allow-all mode
+        """
+        ...
+
     def confirm(self, message: str, default: bool = True) -> bool:
         """
         Prompt user for yes/no confirmation.
