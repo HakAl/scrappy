@@ -134,6 +134,7 @@ class AgentLoop:
         Generate the next thought/action from the LLM.
 
         This is the reasoning stage where the agent decides what to do next.
+        Includes retry logic for truncated responses (finish_reason == 'length').
 
         Args:
             state: Current conversation state
@@ -173,39 +174,59 @@ class AgentLoop:
         has_delegate_with_tools = hasattr(self._orchestrator, 'delegate_with_tools')
         provider_supports_tools = self._check_provider_supports_tools(current_provider)
 
-        # Use native tool calling if both adapter and provider support it
-        if has_delegate_with_tools and provider_supports_tools:
-            response = self._delegate_with_tools(
-                current_provider, user_prompt, context.system_prompt,
-                messages=messages_to_send
-            )
-            actual_provider = response.provider
-        else:
-            # Fall back to regular delegate with JSON parsing
-            if self._provider_strategy.supports_dynamic_selection():
-                response = self._orchestrator.delegate(
-                    provider_name=None,  # Let orchestrator decide
-                    prompt=user_prompt,
-                    system_prompt=context.system_prompt,
-                    max_tokens=self._config.default_max_tokens,
-                    temperature=self._config.default_temperature,
-                    use_context=False,  # Context already in system prompt
-                    selection_type=ModelSelectionType.INSTRUCT,
+        # Retry logic for truncated responses
+        # Start with default, double on each retry up to max
+        max_tokens = self._config.default_max_tokens
+        max_retries = 2  # Allow 2 retries with higher limits
+        max_token_limit = 8000  # Cap to prevent excessive token usage
+
+        for attempt in range(max_retries + 1):
+            # Use native tool calling if both adapter and provider support it
+            if has_delegate_with_tools and provider_supports_tools:
+                response = self._delegate_with_tools(
+                    current_provider, user_prompt, context.system_prompt,
                     messages=messages_to_send,
+                    max_tokens=max_tokens,
                 )
                 actual_provider = response.provider
             else:
-                response = self._orchestrator.delegate(
-                    current_provider,
-                    user_prompt,
-                    system_prompt=context.system_prompt,
-                    max_tokens=self._config.default_max_tokens,
-                    temperature=self._config.default_temperature,
-                    use_context=False,  # Context already in system prompt
-                    selection_type=ModelSelectionType.INSTRUCT,
-                    messages=messages_to_send,
-                )
-                actual_provider = current_provider
+                # Fall back to regular delegate with JSON parsing
+                if self._provider_strategy.supports_dynamic_selection():
+                    response = self._orchestrator.delegate(
+                        provider_name=None,  # Let orchestrator decide
+                        prompt=user_prompt,
+                        system_prompt=context.system_prompt,
+                        max_tokens=max_tokens,
+                        temperature=self._config.default_temperature,
+                        use_context=False,  # Context already in system prompt
+                        selection_type=ModelSelectionType.INSTRUCT,
+                        messages=messages_to_send,
+                    )
+                    actual_provider = response.provider
+                else:
+                    response = self._orchestrator.delegate(
+                        current_provider,
+                        user_prompt,
+                        system_prompt=context.system_prompt,
+                        max_tokens=max_tokens,
+                        temperature=self._config.default_temperature,
+                        use_context=False,  # Context already in system prompt
+                        selection_type=ModelSelectionType.INSTRUCT,
+                        messages=messages_to_send,
+                    )
+                    actual_provider = current_provider
+
+            # Check for truncation and retry with higher limit if needed
+            if self._is_truncated(response) and attempt < max_retries:
+                new_max_tokens = min(max_tokens * 2, max_token_limit)
+                if new_max_tokens > max_tokens:
+                    self._ui.show_warning(
+                        f"Response truncated, retrying with higher limit "
+                        f"({max_tokens} -> {new_max_tokens} tokens)"
+                    )
+                    max_tokens = new_max_tokens
+                    continue
+            break
 
         # Report latency on first call
         if state.iteration == 1:
@@ -236,7 +257,8 @@ class AgentLoop:
 
     def _delegate_with_tools(
         self, provider: str, prompt: str, system_prompt: str,
-        messages: Optional[list[dict]] = None
+        messages: Optional[list[dict]] = None,
+        max_tokens: Optional[int] = None,
     ) -> Any:
         """Delegate to orchestrator with native tool calling."""
         # Get tool schemas from registry (single source of truth)
@@ -247,12 +269,27 @@ class AgentLoop:
             prompt=prompt,
             tools=tools,
             system_prompt=system_prompt,
-            max_tokens=self._config.default_max_tokens,
+            max_tokens=max_tokens or self._config.default_max_tokens,
             temperature=self._config.default_temperature,
             tool_choice="auto",
             selection_type=ModelSelectionType.INSTRUCT,
             messages=messages,
         )
+
+    def _is_truncated(self, response: Any) -> bool:
+        """
+        Check if response was truncated due to max_tokens limit.
+
+        Args:
+            response: LLMResponse object
+
+        Returns:
+            True if response was truncated (finish_reason == 'length')
+        """
+        if not hasattr(response, 'metadata'):
+            return False
+        finish_reason = response.metadata.get('finish_reason')
+        return finish_reason == 'length'
 
     def plan(self, thought: AgentThought) -> List[AgentAction]:
         """
