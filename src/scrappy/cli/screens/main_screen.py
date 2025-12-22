@@ -445,7 +445,7 @@ class MainAppScreen(Screen):
 
     def _exit_capture_ui(self) -> None:
         """Clean up capture mode UI state."""
-        from ..textual_app import StatusBar
+        from ..textual_app import StatusBar, ActivityStateChange
 
         if self._layout is None:
             return
@@ -458,6 +458,11 @@ class MainAppScreen(Screen):
 
         input_container = self.query_one("#input_container")
         input_container.remove_class("capture-mode")
+
+        # Restore activity indicator - agent is continuing after the prompt.
+        # _update_capture_ui hid it while waiting for input, now we resume.
+        # The THINKING state will be replaced by IDLE when process_command ends.
+        self.app.post_message(ActivityStateChange(ActivityState.THINKING))
 
     def update_activity(self, message: "ActivityStateChange") -> None:
         """Update activity indicator based on state change message.
