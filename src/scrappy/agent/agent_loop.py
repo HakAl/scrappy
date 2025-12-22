@@ -398,7 +398,7 @@ class AgentLoop:
                 tools_executed=state.tools_executed,
                 task_description="",  # Not used for current checks
                 result_text=action.result_text,
-                complete_attempts=complete_attempts - 1,  # -1 because current attempt counted
+                complete_attempts=complete_attempts,  # Count of previous attempts (current not yet recorded)
             )
 
             if not validation.allow_completion:
