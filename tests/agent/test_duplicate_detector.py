@@ -78,9 +78,27 @@ class TestDuplicateDetectorSkipActions:
         expected = {
             'read_file', 'write_file', 'list_files', 'list_directory',
             'search_code', 'find_exact_text', 'codebase_search',
-            'git_status', 'git_diff', 'task'
+            'git_status', 'git_diff', 'task', 'complete'
         }
         assert expected.issubset(DuplicateDetector.SKIP_DUPLICATE_CHECK)
+
+    @pytest.mark.unit
+    def test_complete_never_duplicate(self):
+        """complete should never be flagged as duplicate (let validator handle it)."""
+        detector = DuplicateDetector()
+        state = ConversationState()
+        state.last_action = {"action": "complete", "parameters": {"result": "Done"}}
+
+        action = AgentAction(
+            action="complete",
+            parameters={"result": "Done"},
+            thought="Completing again",
+            is_complete=True
+        )
+
+        is_dup, msg = detector.check_duplicate(action, state)
+
+        assert is_dup is False
 
 
 class TestDuplicateDetectorBasics:

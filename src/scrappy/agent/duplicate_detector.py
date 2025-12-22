@@ -33,6 +33,7 @@ class DuplicateDetector:
         'git_status',
         'git_diff',
         'task',
+        'complete',  # Let completion validator handle this, not duplicate detector
     }
 
     def check_duplicate(
