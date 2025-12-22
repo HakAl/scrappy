@@ -422,17 +422,21 @@ class MainAppScreen(Screen):
         status_bar = self.query_one(StatusBar)
         status_bar.refresh_display()
 
-        # Also show prompt in output area so user always sees the question
-        from rich.text import Text
-        hint = " [y/n]" if request.input_type == "confirm" else ""
-        prompt_text = Text(f"\n{request.message}{hint}", style="bold yellow")
-        self.write_renderable(prompt_text)
+        # Show prompt in output area ONLY for confirm/prompt types
+        # Checkpoint prompts should ONLY appear in activity bar (not log)
+        if request.input_type != "checkpoint":
+            from rich.text import Text
+            hint = " [y/n]" if request.input_type == "confirm" else ""
+            prompt_text = Text(f"\n{request.message}{hint}", style="bold yellow")
+            self.write_renderable(prompt_text)
 
         input_container = self.query_one("#input_container")
         input_container.add_class("capture-mode")
 
         if request.input_type == "confirm":
             self._layout.input.placeholder = "Type y or n..."
+        elif request.input_type == "checkpoint":
+            self._layout.input.placeholder = "Type c, g, a, or s..."
         else:
             hint = f" (default: {request.default})" if request.default else ""
             self._layout.input.placeholder = f"Enter value{hint}..."

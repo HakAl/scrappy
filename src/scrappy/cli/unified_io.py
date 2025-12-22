@@ -377,6 +377,21 @@ class OutputStrategyProtocol(Protocol):
         """
         ...
 
+    def input_checkpoint(self, message: str, default: str = "c") -> str:
+        """Get checkpoint choice (activity bar only, no log output).
+
+        DirectConsoleOutput: Blocking input with validation
+        OutputSinkAdapter: Routes through bridge with input_type="checkpoint"
+
+        Args:
+            message: Checkpoint prompt message with options
+            default: Default choice
+
+        Returns:
+            User's choice
+        """
+        ...
+
     def input_line(self) -> str:
         """Read raw line of input.
 
@@ -569,6 +584,31 @@ class DirectConsoleOutput:
             )
         try:
             return Confirm.ask(text, default=default, console=self._console)
+        except EOFError:
+            return default
+
+    def input_checkpoint(self, message: str, default: str = "c") -> str:
+        """Get blocking checkpoint choice.
+
+        WARNING: CLI MODE ONLY. In CLI mode, this displays the checkpoint
+        message and prompts for input, validating the choice.
+
+        Raises:
+            RuntimeError: If called in TUI mode
+        """
+        if OutputModeContext.is_tui_mode():
+            raise RuntimeError(
+                "DirectConsoleOutput.input_checkpoint() called in TUI mode. "
+                "Use OutputSinkAdapter or UnifiedIO with output_sink instead."
+            )
+        # In CLI mode, display the message and get input
+        self._console.print(message)
+        self._console.print(f"Choice [c/g/a/s] [{default}]", end=' ')
+        try:
+            user_input = input().lower().strip()
+            if user_input in ('c', 'g', 'a', 's'):
+                return user_input
+            return default
         except EOFError:
             return default
 
@@ -830,6 +870,31 @@ class OutputSinkAdapter:
         self._sink.post_renderable(warning_panel)
         return True
 
+    def input_checkpoint(self, message: str, default: str = "c") -> str:
+        """Get checkpoint choice via activity bar only (no log output).
+
+        Uses ThreadSafeAsyncBridge with input_type="checkpoint" which
+        displays in the activity bar but skips writing to the chat log.
+        """
+        if self._bridge is not None:
+            # Flush pending output so it renders before checkpoint prompt
+            if hasattr(self._sink, 'flush'):
+                self._sink.flush(timeout=5.0)
+            return self._bridge.blocking_checkpoint(message, default)
+
+        # Fallback: Auto-approve with warning (bridge not set)
+        warning_panel = Panel(
+            f"[bold yellow]BRIDGE NOT INITIALIZED[/]\n\n"
+            f"[white]Attempted checkpoint prompt:[/]\n"
+            f"{message}\n\n"
+            f"[yellow]Bridge not available - returning default.[/]\n\n"
+            f"[white]Returning default:[/] [cyan]{default}[/]",
+            title="[yellow]Auto-Response[/]",
+            border_style="yellow"
+        )
+        self._sink.post_renderable(warning_panel)
+        return default
+
     def input_line(self) -> str:
         """Not supported in Textual mode."""
         raise NotImplementedError(
@@ -1039,6 +1104,15 @@ class UnifiedIO:
         - TUI: Auto-approves with security warning (Phase 1 limitation)
         """
         return self._strategy.input_confirm(text, default)
+
+    def checkpoint_prompt(self, message: str, default: str = "c") -> str:
+        """Get checkpoint choice from user (activity bar only in TUI).
+
+        Behavior varies by mode:
+        - CLI: Displays message and prompts for choice
+        - TUI: Shows in activity bar only (no log output)
+        """
+        return self._strategy.input_checkpoint(message, default)
 
     def input_line(self) -> str:
         """Read a raw line of input.

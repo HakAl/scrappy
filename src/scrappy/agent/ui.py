@@ -347,8 +347,9 @@ class AgentUI:
     def prompt_checkpoint(self, iteration: int, tools_count: int) -> str:
         """Prompt user at safety checkpoint with multiple options.
 
-        Displays a checkpoint prompt with options to continue, create git
-        checkpoint, enable allow-all mode, or stop.
+        Displays a checkpoint prompt in the activity bar (not chat log)
+        with options to continue, create git checkpoint, enable allow-all
+        mode, or stop.
 
         Args:
             iteration: Current iteration number
@@ -358,28 +359,21 @@ class AgentUI:
             User's choice: 'c' (continue), 'g' (git checkpoint),
             'a' (allow all), 's' (stop)
         """
-        # Show checkpoint banner
-        self.io.echo("")
-        self.io.secho("=" * 60, fg=self._theme.warning)
-        self.io.secho(
-            f"  Safety Checkpoint - {iteration} iterations, {tools_count} actions",
-            fg=self._theme.warning,
-            bold=True
+        # Format compact message for activity bar display
+        # Multi-line format:
+        #   Checkpoint (15 steps, 23 actions)
+        #   (c) continue  (g) git checkpoint  (a) allow all  (s) stop
+        message = (
+            f"Checkpoint ({iteration} steps, {tools_count} actions)\n"
+            f"(c) continue  (g) git checkpoint  (a) allow all  (s) stop"
         )
-        self.io.secho("=" * 60, fg=self._theme.warning)
-        self.io.echo("")
-        self.io.secho("  [c] Continue        - keep going", fg=self._theme.info)
-        self.io.secho("  [g] Git checkpoint  - save restore point, then continue", fg=self._theme.info)
-        self.io.secho("  [a] Allow all       - skip confirmations for remaining actions", fg=self._theme.info)
-        self.io.secho("  [s] Stop            - end agent run", fg=self._theme.info)
-        self.io.echo("")
 
-        # Get user choice
+        # Use checkpoint_prompt which routes to activity bar only in TUI mode
         while True:
-            choice = self.io.prompt("Choice [c/g/a/s]", default="c").lower().strip()
+            choice = self.io.checkpoint_prompt(message, default="c").lower().strip()
             if choice in ('c', 'g', 'a', 's'):
                 return choice
-            self.io.secho("Invalid choice. Please enter c, g, a, or s.", fg=self._theme.error)
+            # Invalid input - will re-prompt (activity bar stays visible)
 
     def confirm_batch(
         self,

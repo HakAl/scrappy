@@ -211,6 +211,41 @@ class ThreadSafeAsyncBridge:
 
         return result
 
+    def blocking_checkpoint(self, message: str, default: str = "c") -> str:
+        """Called from worker thread for checkpoint prompts.
+
+        Similar to blocking_prompt but uses input_type="checkpoint" which
+        displays ONLY in activity bar (not in chat log).
+        """
+        if threading.current_thread() is threading.main_thread():
+            raise RuntimeError(
+                "CRITICAL ERROR: blocking_checkpoint() called from Main Thread! "
+                "This will cause a deadlock."
+            )
+
+        if self._shutting_down:
+            return default
+
+        prompt_id = str(uuid.uuid4())
+
+        with self._lock:
+            event = threading.Event()
+            self._pending_prompts[prompt_id] = event
+
+        # Use "checkpoint" input_type to skip log output
+        self.app.post_message(RequestInlineInput(prompt_id, message, "checkpoint", default))
+
+        # Wait with timeout to allow for shutdown
+        while not event.wait(timeout=0.5):
+            if self._shutting_down:
+                return default
+
+        with self._lock:
+            result = self._prompt_results.pop(prompt_id, default)
+            self._pending_prompts.pop(prompt_id, None)
+
+        return result
+
     def provide_result(self, prompt_id: str, result: Any) -> None:
         """Called from main thread after input is captured."""
         with self._lock:
