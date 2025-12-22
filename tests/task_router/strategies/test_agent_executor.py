@@ -51,7 +51,7 @@ class TestAgentExecutorInit:
 
         assert executor.orchestrator is orchestrator
         assert executor.project_root == Path.cwd()
-        assert executor.max_iterations == 10
+        assert executor.max_iterations == 50  # Updated default for extended agent mode
         assert executor.require_approval is True
         assert executor.io is None
 

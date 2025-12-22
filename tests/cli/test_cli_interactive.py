@@ -5,8 +5,7 @@ TDD: Tests written first for the interactive.py module which handles
 the main interactive chat loop.
 """
 
-import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock
 from tests.helpers import MockIO, ConfigurableTestOrchestrator
 
 
@@ -41,7 +40,6 @@ def create_test_interactive_mode(io, orchestrator):
         session_mgr=handlers['session_mgr'],
         codebase=handlers['codebase'],
         tasks=handlers['tasks'],
-        multiprovider=handlers['multiprovider'],
         smart=handlers['smart'],
         agent_mgr=handlers['agent_mgr'],
         task_router=handlers['task_router'],

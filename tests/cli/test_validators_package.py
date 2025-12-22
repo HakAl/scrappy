@@ -322,7 +322,6 @@ class TestExistingTestsStillWork:
             "plan", "reason", "agent", "smart", "tasks", "classify",
             "usage", "models", "model", "setup",
             "context", "cache", "session", "limits",
-            "synthesize", "delegate",
             "explore",
             "ml", "multiline", "paste", "autoexec", "verbose", "v"
         }

@@ -4,9 +4,7 @@ Tests that validators are properly integrated into command router,
 input handler, and CLI commands.
 """
 
-import pytest
 from datetime import datetime
-from unittest.mock import Mock, patch
 from tests.helpers import MockIO, ConfigurableTestOrchestrator
 from scrappy.cli.command_router import CommandRouter
 from scrappy.cli.session_context import SessionContext
@@ -38,7 +36,6 @@ class TestCommandRouterValidation:
             session_mgr=handlers['session_mgr'],
             codebase=handlers['codebase'],
             tasks=handlers['tasks'],
-            multiprovider=handlers['multiprovider'],
             smart=handlers['smart'],
             agent_mgr=handlers['agent_mgr'],
             task_router=handlers['task_router']

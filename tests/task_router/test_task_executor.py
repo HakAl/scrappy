@@ -2,7 +2,7 @@
 Tests for TaskExecutor - planning, reasoning, and synthesis operations.
 """
 import pytest
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock
 from scrappy.orchestrator.task_executor import TaskExecutor
 from scrappy.providers import LLMResponse
 
@@ -13,12 +13,10 @@ class TestTaskExecutorSimpleTaskDetection:
     @pytest.fixture
     def executor(self):
         """Create a TaskExecutor with mock dependencies."""
-        mock_brain = Mock()
-        mock_brain_name = Mock(return_value="test_brain")
+        mock_llm_service = Mock()
         mock_record = Mock()
         return TaskExecutor(
-            get_brain_provider=lambda: mock_brain,
-            get_brain_name=mock_brain_name,
+            llm_service=mock_llm_service,
             record_task=mock_record
         )
 
@@ -81,30 +79,32 @@ class TestTaskExecutorPlanSkipLogic:
     """Test the plan() method skip logic for simple tasks."""
 
     @pytest.fixture
-    def mock_brain(self):
-        """Create a mock brain provider."""
-        brain = Mock()
-        brain.chat = Mock(return_value=LLMResponse(
-            content='[{"step": "analyze", "description": "analyze the task", "provider_type": "quality"}]',
-            model="test-model",
-            provider="test",
-            tokens_used=100,
-            latency_ms=50.0
+    def mock_llm_service(self):
+        """Create a mock LLM service."""
+        llm_service = Mock()
+        llm_service.completion_sync = Mock(return_value=(
+            LLMResponse(
+                content='[{"step": "analyze", "description": "analyze the task", "provider_type": "quality"}]',
+                model="test-model",
+                provider="test",
+                tokens_used=100,
+                latency_ms=50.0
+            ),
+            {"provider": "test", "tokens_used": 100}  # task_record
         ))
-        return brain
+        return llm_service
 
     @pytest.fixture
-    def executor(self, mock_brain):
+    def executor(self, mock_llm_service):
         """Create a TaskExecutor with mock dependencies."""
         mock_record = Mock()
         return TaskExecutor(
-            get_brain_provider=lambda: mock_brain,
-            get_brain_name=lambda: "test_brain",
+            llm_service=mock_llm_service,
             record_task=mock_record
         )
 
     @pytest.mark.unit
-    def test_low_complexity_score_skips_planning(self, executor, mock_brain):
+    def test_low_complexity_score_skips_planning(self, executor, mock_llm_service):
         """When complexity_score <= 3, planning is skipped."""
         result = executor.plan("Open file", complexity_score=2)
 
@@ -114,39 +114,40 @@ class TestTaskExecutorPlanSkipLogic:
         assert result[0]['description'] == 'Open file'
         assert result[0]['provider_type'] == 'fast'
 
-        # Should NOT call the brain
-        mock_brain.chat.assert_not_called()
+        # Should NOT call LLM service
+        mock_llm_service.completion_sync.assert_not_called()
 
     @pytest.mark.unit
-    def test_complexity_score_3_skips_planning(self, executor, mock_brain):
+    def test_complexity_score_3_skips_planning(self, executor, mock_llm_service):
         """Complexity score of exactly 3 should skip planning."""
         result = executor.plan("Save document", complexity_score=3)
 
         assert len(result) == 1
         assert result[0]['provider_type'] == 'fast'
-        mock_brain.chat.assert_not_called()
+        mock_llm_service.completion_sync.assert_not_called()
 
     @pytest.mark.unit
-    def test_complexity_score_4_does_not_skip(self, executor, mock_brain):
-        """Complexity score > 3 should call the brain for planning."""
+    def test_complexity_score_4_does_not_skip(self, executor, mock_llm_service):
+        """Complexity score > 3 should call LLM service for planning."""
         result = executor.plan("Implement feature", complexity_score=4)
 
-        # Should call the brain
-        mock_brain.chat.assert_called_once()
+        # Should call LLM service
+        mock_llm_service.completion_sync.assert_called_once()
 
-        # Should return parsed plan from brain
+        # Should return parsed plan from LLM
         assert len(result) >= 1
         assert result[0]['step'] == 'analyze'
 
     @pytest.mark.unit
-    def test_no_score_simple_task_skips_planning(self, executor, mock_brain):
-        """Without complexity score, simple tasks skip planning via heuristic."""
+    def test_no_score_calls_llm_for_planning(self, executor, mock_llm_service):
+        """Without complexity score, LLM is called for planning (heuristic not used)."""
         result = executor.plan("Open file")
 
-        assert len(result) == 1
-        assert result[0]['step'] == 'execute_task'
-        assert result[0]['description'] == 'Open file'
-        mock_brain.chat.assert_not_called()
+        # Without explicit complexity_score, LLM is called
+        mock_llm_service.completion_sync.assert_called_once()
+        # Returns parsed plan from LLM
+        assert len(result) >= 1
+        assert result[0]['step'] == 'analyze'
 
 
 
@@ -172,16 +173,26 @@ class TestTaskExecutorPlanParsing:
     def mock_record(self):
         return Mock()
 
+    def _create_mock_llm_service(self, response_content):
+        """Helper to create a mock LLM service with specific response."""
+        llm_service = Mock()
+        llm_service.completion_sync = Mock(return_value=(
+            LLMResponse(
+                content=response_content,
+                model="test", provider="test", tokens_used=10, latency_ms=10.0
+            ),
+            {"provider": "test", "tokens_used": 10}
+        ))
+        return llm_service
+
     @pytest.mark.unit
     def test_plan_parses_json_array(self, mock_record):
         """Plan correctly parses JSON array response."""
-        mock_brain = Mock()
-        mock_brain.chat = Mock(return_value=LLMResponse(
-            content='[{"step": "step1", "description": "do thing", "provider_type": "fast"}]',
-            model="test", provider="test", tokens_used=10, latency_ms=10.0
-        ))
+        llm_service = self._create_mock_llm_service(
+            '[{"step": "step1", "description": "do thing", "provider_type": "fast"}]'
+        )
 
-        executor = TaskExecutor(lambda: mock_brain, lambda: "brain", mock_record)
+        executor = TaskExecutor(llm_service=llm_service, record_task=mock_record)
         result = executor.plan("Complex task", complexity_score=10)
 
         assert len(result) == 1
@@ -190,13 +201,11 @@ class TestTaskExecutorPlanParsing:
     @pytest.mark.unit
     def test_plan_handles_markdown_code_block(self, mock_record):
         """Plan extracts JSON from markdown code blocks."""
-        mock_brain = Mock()
-        mock_brain.chat = Mock(return_value=LLMResponse(
-            content='```json\n[{"step": "extracted", "description": "from markdown", "provider_type": "quality"}]\n```',
-            model="test", provider="test", tokens_used=10, latency_ms=10.0
-        ))
+        llm_service = self._create_mock_llm_service(
+            '```json\n[{"step": "extracted", "description": "from markdown", "provider_type": "quality"}]\n```'
+        )
 
-        executor = TaskExecutor(lambda: mock_brain, lambda: "brain", mock_record)
+        executor = TaskExecutor(llm_service=llm_service, record_task=mock_record)
         result = executor.plan("Complex task", complexity_score=10)
 
         assert result[0]['step'] == 'extracted'
@@ -204,13 +213,9 @@ class TestTaskExecutorPlanParsing:
     @pytest.mark.unit
     def test_plan_handles_json_decode_error(self, mock_record):
         """Plan handles malformed JSON gracefully."""
-        mock_brain = Mock()
-        mock_brain.chat = Mock(return_value=LLMResponse(
-            content='This is not valid JSON at all',
-            model="test", provider="test", tokens_used=10, latency_ms=10.0
-        ))
+        llm_service = self._create_mock_llm_service('This is not valid JSON at all')
 
-        executor = TaskExecutor(lambda: mock_brain, lambda: "brain", mock_record)
+        executor = TaskExecutor(llm_service=llm_service, record_task=mock_record)
         result = executor.plan("Complex task", complexity_score=10)
 
         # Should fall back to single step with raw content
@@ -226,22 +231,30 @@ class TestTaskExecutorPlanOutputValidation:
     def mock_record(self):
         return Mock()
 
+    def _create_mock_llm_service(self, response_content, tokens_used=100, latency_ms=50.0):
+        """Helper to create a mock LLM service with specific response."""
+        llm_service = Mock()
+        llm_service.completion_sync = Mock(return_value=(
+            LLMResponse(
+                content=response_content,
+                model="test", provider="test", tokens_used=tokens_used, latency_ms=latency_ms
+            ),
+            {"provider": "test", "tokens_used": tokens_used}
+        ))
+        return llm_service
+
     @pytest.mark.unit
     def test_plan_returns_valid_steps_for_complex_task(self, mock_record):
         """Complex task returns multiple steps with valid structure."""
-        mock_brain = Mock()
-        mock_brain.chat = Mock(return_value=LLMResponse(
-            content='''[
+        llm_service = self._create_mock_llm_service('''[
                 {"step": "analyze_requirements", "description": "Review OAuth requirements and identify providers", "provider_type": "quality"},
                 {"step": "setup_oauth_config", "description": "Configure OAuth client credentials and callbacks", "provider_type": "fast"},
                 {"step": "implement_auth_flow", "description": "Build authentication flow with token exchange", "provider_type": "quality"},
                 {"step": "add_session_management", "description": "Implement secure session handling", "provider_type": "quality"},
                 {"step": "write_tests", "description": "Create integration tests for auth flow", "provider_type": "fast"}
-            ]''',
-            model="test", provider="test", tokens_used=200, latency_ms=100.0
-        ))
+            ]''', tokens_used=200, latency_ms=100.0)
 
-        executor = TaskExecutor(lambda: mock_brain, lambda: "brain", mock_record)
+        executor = TaskExecutor(llm_service=llm_service, record_task=mock_record)
         result = executor.plan("Implement user auth with OAuth", complexity_score=8)
 
         # Verify multiple steps returned
@@ -265,16 +278,12 @@ class TestTaskExecutorPlanOutputValidation:
     @pytest.mark.unit
     def test_plan_step_names_are_meaningful(self, mock_record):
         """Plan step names should be descriptive identifiers."""
-        mock_brain = Mock()
-        mock_brain.chat = Mock(return_value=LLMResponse(
-            content='''[
+        llm_service = self._create_mock_llm_service('''[
                 {"step": "validate_input", "description": "Check input parameters", "provider_type": "fast"},
                 {"step": "process_data", "description": "Transform and process data", "provider_type": "quality"}
-            ]''',
-            model="test", provider="test", tokens_used=50, latency_ms=30.0
-        ))
+            ]''', tokens_used=50, latency_ms=30.0)
 
-        executor = TaskExecutor(lambda: mock_brain, lambda: "brain", mock_record)
+        executor = TaskExecutor(llm_service=llm_service, record_task=mock_record)
         result = executor.plan("Process data pipeline", complexity_score=5)
 
         # Step names should be snake_case identifiers (no spaces, lowercase)
@@ -289,17 +298,13 @@ class TestTaskExecutorPlanOutputValidation:
     @pytest.mark.unit
     def test_plan_provider_types_match_task_complexity(self, mock_record):
         """Provider types should be appropriate for step complexity."""
-        mock_brain = Mock()
-        mock_brain.chat = Mock(return_value=LLMResponse(
-            content='''[
+        llm_service = self._create_mock_llm_service('''[
                 {"step": "quick_check", "description": "Simple validation", "provider_type": "fast"},
                 {"step": "deep_analysis", "description": "Complex reasoning task", "provider_type": "quality"},
                 {"step": "batch_process", "description": "Process many items", "provider_type": "high_volume"}
-            ]''',
-            model="test", provider="test", tokens_used=80, latency_ms=50.0
-        ))
+            ]''', tokens_used=80, latency_ms=50.0)
 
-        executor = TaskExecutor(lambda: mock_brain, lambda: "brain", mock_record)
+        executor = TaskExecutor(llm_service=llm_service, record_task=mock_record)
         result = executor.plan("Multi-step task", complexity_score=7)
 
         # Should have at least one step
@@ -321,23 +326,31 @@ class TestTaskExecutorMalformedJSONRecovery:
     def mock_record(self):
         return Mock()
 
+    def _create_mock_llm_service(self, response_content, tokens_used=50, latency_ms=30.0):
+        """Helper to create a mock LLM service with specific response."""
+        llm_service = Mock()
+        llm_service.completion_sync = Mock(return_value=(
+            LLMResponse(
+                content=response_content,
+                model="test", provider="test", tokens_used=tokens_used, latency_ms=latency_ms
+            ),
+            {"provider": "test", "tokens_used": tokens_used}
+        ))
+        return llm_service
+
     @pytest.mark.unit
     def test_plan_recovers_json_with_surrounding_text(self, mock_record):
         """Recover JSON array embedded in explanatory text."""
-        mock_brain = Mock()
-        mock_brain.chat = Mock(return_value=LLMResponse(
-            content='''Here's my plan for implementing the feature:
+        llm_service = self._create_mock_llm_service('''Here's my plan for implementing the feature:
 
 [
     {"step": "design", "description": "Design the architecture", "provider_type": "quality"},
     {"step": "implement", "description": "Write the code", "provider_type": "fast"}
 ]
 
-This plan covers all the requirements.''',
-            model="test", provider="test", tokens_used=100, latency_ms=60.0
-        ))
+This plan covers all the requirements.''', tokens_used=100, latency_ms=60.0)
 
-        executor = TaskExecutor(lambda: mock_brain, lambda: "brain", mock_record)
+        executor = TaskExecutor(llm_service=llm_service, record_task=mock_record)
         result = executor.plan("Build feature", complexity_score=6)
 
         # Should extract the JSON array
@@ -348,15 +361,11 @@ This plan covers all the requirements.''',
     @pytest.mark.unit
     def test_plan_recovers_json_from_generic_code_block(self, mock_record):
         """Recover JSON from code block without json tag."""
-        mock_brain = Mock()
-        mock_brain.chat = Mock(return_value=LLMResponse(
-            content='''```
+        llm_service = self._create_mock_llm_service('''```
 [{"step": "test", "description": "Run tests", "provider_type": "fast"}]
-```''',
-            model="test", provider="test", tokens_used=30, latency_ms=20.0
-        ))
+```''', tokens_used=30, latency_ms=20.0)
 
-        executor = TaskExecutor(lambda: mock_brain, lambda: "brain", mock_record)
+        executor = TaskExecutor(llm_service=llm_service, record_task=mock_record)
         result = executor.plan("Test code", complexity_score=4)
 
         assert len(result) == 1
@@ -365,15 +374,11 @@ This plan covers all the requirements.''',
     @pytest.mark.unit
     def test_plan_handles_nested_brackets_in_json(self, mock_record):
         """Handle JSON with nested arrays or objects."""
-        mock_brain = Mock()
-        mock_brain.chat = Mock(return_value=LLMResponse(
-            content='''[
+        llm_service = self._create_mock_llm_service('''[
                 {"step": "complex", "description": "Task with [brackets] in text", "provider_type": "quality"}
-            ]''',
-            model="test", provider="test", tokens_used=40, latency_ms=25.0
-        ))
+            ]''', tokens_used=40, latency_ms=25.0)
 
-        executor = TaskExecutor(lambda: mock_brain, lambda: "brain", mock_record)
+        executor = TaskExecutor(llm_service=llm_service, record_task=mock_record)
         result = executor.plan("Nested task", complexity_score=5)
 
         assert len(result) == 1
@@ -382,13 +387,12 @@ This plan covers all the requirements.''',
     @pytest.mark.unit
     def test_plan_handles_single_object_response(self, mock_record):
         """Convert single step object to list."""
-        mock_brain = Mock()
-        mock_brain.chat = Mock(return_value=LLMResponse(
-            content='{"step": "single", "description": "Only one step", "provider_type": "fast"}',
-            model="test", provider="test", tokens_used=20, latency_ms=15.0
-        ))
+        llm_service = self._create_mock_llm_service(
+            '{"step": "single", "description": "Only one step", "provider_type": "fast"}',
+            tokens_used=20, latency_ms=15.0
+        )
 
-        executor = TaskExecutor(lambda: mock_brain, lambda: "brain", mock_record)
+        executor = TaskExecutor(llm_service=llm_service, record_task=mock_record)
         result = executor.plan("Simple task", complexity_score=4)
 
         # Single object should be wrapped in list
@@ -399,17 +403,13 @@ This plan covers all the requirements.''',
     @pytest.mark.unit
     def test_plan_handles_mixed_valid_invalid_steps(self, mock_record):
         """Handle array with mix of valid dicts and invalid items."""
-        mock_brain = Mock()
-        mock_brain.chat = Mock(return_value=LLMResponse(
-            content='''[
+        llm_service = self._create_mock_llm_service('''[
                 {"step": "valid", "description": "Valid step", "provider_type": "fast"},
                 "invalid string item",
                 {"step": "also_valid", "description": "Another valid step", "provider_type": "quality"}
-            ]''',
-            model="test", provider="test", tokens_used=60, latency_ms=35.0
-        ))
+            ]''', tokens_used=60, latency_ms=35.0)
 
-        executor = TaskExecutor(lambda: mock_brain, lambda: "brain", mock_record)
+        executor = TaskExecutor(llm_service=llm_service, record_task=mock_record)
         result = executor.plan("Mixed task", complexity_score=5)
 
         # Should preserve valid steps and convert invalid ones
@@ -423,13 +423,12 @@ This plan covers all the requirements.''',
     @pytest.mark.unit
     def test_plan_handles_whitespace_variations(self, mock_record):
         """Parse JSON with various whitespace formats."""
-        mock_brain = Mock()
-        mock_brain.chat = Mock(return_value=LLMResponse(
-            content='[{"step":"compact","description":"No spaces","provider_type":"fast"}]',
-            model="test", provider="test", tokens_used=25, latency_ms=18.0
-        ))
+        llm_service = self._create_mock_llm_service(
+            '[{"step":"compact","description":"No spaces","provider_type":"fast"}]',
+            tokens_used=25, latency_ms=18.0
+        )
 
-        executor = TaskExecutor(lambda: mock_brain, lambda: "brain", mock_record)
+        executor = TaskExecutor(llm_service=llm_service, record_task=mock_record)
         result = executor.plan("Compact JSON", complexity_score=4)
 
         assert len(result) == 1
@@ -438,14 +437,10 @@ This plan covers all the requirements.''',
     @pytest.mark.unit
     def test_plan_fallback_preserves_full_response(self, mock_record):
         """When JSON fails completely, preserve full response in fallback."""
-        mock_brain = Mock()
         content = "Step 1: Do this\nStep 2: Do that\nStep 3: Finish"
-        mock_brain.chat = Mock(return_value=LLMResponse(
-            content=content,
-            model="test", provider="test", tokens_used=30, latency_ms=20.0
-        ))
+        llm_service = self._create_mock_llm_service(content, tokens_used=30, latency_ms=20.0)
 
-        executor = TaskExecutor(lambda: mock_brain, lambda: "brain", mock_record)
+        executor = TaskExecutor(llm_service=llm_service, record_task=mock_record)
         result = executor.plan("Text response", complexity_score=5)
 
         # Should create fallback with full content
@@ -457,13 +452,9 @@ This plan covers all the requirements.''',
     @pytest.mark.unit
     def test_plan_handles_empty_array_response(self, mock_record):
         """Handle empty array from LLM."""
-        mock_brain = Mock()
-        mock_brain.chat = Mock(return_value=LLMResponse(
-            content='[]',
-            model="test", provider="test", tokens_used=5, latency_ms=10.0
-        ))
+        llm_service = self._create_mock_llm_service('[]', tokens_used=5, latency_ms=10.0)
 
-        executor = TaskExecutor(lambda: mock_brain, lambda: "brain", mock_record)
+        executor = TaskExecutor(llm_service=llm_service, record_task=mock_record)
         result = executor.plan("Empty response", complexity_score=4)
 
         # Should return empty list (valid JSON)
@@ -473,13 +464,12 @@ This plan covers all the requirements.''',
     @pytest.mark.unit
     def test_plan_handles_unicode_in_json(self, mock_record):
         """Handle JSON with unicode characters."""
-        mock_brain = Mock()
-        mock_brain.chat = Mock(return_value=LLMResponse(
-            content='[{"step": "process", "description": "Handle data", "provider_type": "fast"}]',
-            model="test", provider="test", tokens_used=35, latency_ms=22.0
-        ))
+        llm_service = self._create_mock_llm_service(
+            '[{"step": "process", "description": "Handle data", "provider_type": "fast"}]',
+            tokens_used=35, latency_ms=22.0
+        )
 
-        executor = TaskExecutor(lambda: mock_brain, lambda: "brain", mock_record)
+        executor = TaskExecutor(llm_service=llm_service, record_task=mock_record)
         result = executor.plan("Unicode task", complexity_score=4)
 
         assert len(result) == 1
