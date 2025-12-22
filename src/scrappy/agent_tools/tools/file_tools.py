@@ -122,7 +122,11 @@ class WriteFileTool(ToolBase):
             )
 
         # Warn if content is suspiciously short for certain file types
-        suspicious_extensions = ['.py', '.js', '.ts', '.java', '.cpp', '.go', '.rs']
+        suspicious_extensions = [
+            '.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.cpp', '.go', '.rs',
+            '.html', '.css', '.scss', '.vue', '.svelte', '.rb', '.php', '.swift',
+            '.kt', '.scala', '.c', '.h', '.hpp', '.cs', '.sh', '.bash', '.zsh'
+        ]
         if any(path.endswith(ext) for ext in suspicious_extensions):
             if len(content.strip()) < 10:
                 return ToolResult(
@@ -171,6 +175,9 @@ class WriteFileTool(ToolBase):
         if target.exists():
             try:
                 existing_content = target.read_text(encoding='utf-8')
+                existing_len = len(existing_content)
+                new_len = len(content)
+
                 # Normalize line endings for comparison
                 normalized_existing = existing_content.replace('\r\n', '\n')
                 normalized_new = content.replace('\r\n', '\n')
@@ -180,6 +187,18 @@ class WriteFileTool(ToolBase):
                         True,
                         "Warning: File content unchanged. No modifications needed.",
                         metadata={"chars": len(content), "path": path, "unchanged": True}
+                    )
+
+                # Detect significant shrinkage (potential corruption loop)
+                # If new content is less than 50% of existing and existing was substantial,
+                # this is likely a truncation error, not an intentional reduction
+                if existing_len > 100 and new_len < existing_len * 0.5:
+                    return ToolResult(
+                        False,
+                        "",
+                        f"Content shrinkage detected: new content ({new_len} chars) is less than "
+                        f"50% of existing ({existing_len} chars). This may indicate truncation. "
+                        f"If intentional, delete the file first then write new content."
                     )
             except Exception:
                 # If we can't read the existing file, proceed with write

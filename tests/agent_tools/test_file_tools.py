@@ -182,6 +182,51 @@ class TestWriteFileTool:
         assert not result.success
         assert "verification failed" in result.error
 
+    def test_detect_significant_shrinkage(self, mock_context):
+        """Should reject writes that shrink a file by more than 50%."""
+        tool = WriteFileTool()
+        # Create a substantial file (200+ chars)
+        original_content = "x" * 200
+        (mock_context.project_root / "page.html").write_text(original_content)
+
+        # Try to write much smaller content (less than 50% of original)
+        small_content = "x" * 50  # 25% of original
+
+        result = tool.execute(mock_context, path="page.html", content=small_content)
+
+        assert not result.success
+        assert "shrinkage detected" in result.error
+
+    def test_allow_small_shrinkage(self, mock_context):
+        """Should allow writes that shrink a file by less than 50%."""
+        tool = WriteFileTool()
+        # Create a substantial file (200 chars)
+        original_content = "x" * 200
+        (mock_context.project_root / "page.html").write_text(original_content)
+
+        # Write content that is more than 50% of original (allowed)
+        smaller_content = "x" * 120  # 60% of original
+
+        result = tool.execute(mock_context, path="page.html", content=smaller_content)
+
+        assert result.success
+
+    def test_html_short_content_validation(self, mock_context):
+        """Should reject suspiciously short HTML content."""
+        tool = WriteFileTool()
+        result = tool.execute(mock_context, path="index.html", content="hi")
+
+        assert not result.success
+        assert "Content too short" in result.error
+
+    def test_css_short_content_validation(self, mock_context):
+        """Should reject suspiciously short CSS content."""
+        tool = WriteFileTool()
+        result = tool.execute(mock_context, path="style.css", content="x")
+
+        assert not result.success
+        assert "Content too short" in result.error
+
 
 # --- ListFilesTool Tests ---
 
