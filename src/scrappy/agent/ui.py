@@ -71,18 +71,27 @@ class AgentUI:
 
         # Compact mode: one-line summary
         if not self.verbose:
-            # Extract most relevant parameter for display
-            target = (
-                params.get('file_path') or
-                params.get('path') or
-                params.get('command') or
-                params.get('query') or
-                params.get('pattern') or
-                (str(list(params.values())[0]) if params else '')
-            )
-            # Truncate long targets
-            if len(target) > 50:
-                target = target[:47] + "..."
+            # Special handling for task tool: show command + description
+            if tool_name == 'task' and params.get('command') and params.get('description'):
+                cmd = params['command']
+                desc = params['description']
+                if len(desc) > 45:
+                    desc = desc[:42] + "..."
+                target = f"{cmd} \"{desc}\""
+            else:
+                # Extract most relevant parameter for display
+                target = (
+                    params.get('file_path') or
+                    params.get('path') or
+                    params.get('description') or
+                    params.get('command') or
+                    params.get('query') or
+                    params.get('pattern') or
+                    (str(list(params.values())[0]) if params else '')
+                )
+                # Truncate long targets
+                if len(target) > 50:
+                    target = target[:47] + "..."
             self.io.secho(f"[Step {self.current_step}] {tool_name}: {target}", fg=self._theme.primary)
             return
 
