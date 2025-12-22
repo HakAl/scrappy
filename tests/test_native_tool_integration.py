@@ -305,12 +305,12 @@ class TestPlanActionNativeToolParsing:
             llm_response=response
         )
 
-        action = agent_with_native_orchestrator._agent_loop.plan(thought)
+        actions = agent_with_native_orchestrator._agent_loop.plan(thought)
 
         # Should have parsed the tool call correctly
-        assert action.action == "read_file"
-        assert action.parameters == {"file_path": "src/main.py"}
-        assert action.thought == "I'll read the main file to understand the structure."
+        assert actions[0].action == "read_file"
+        assert actions[0].parameters == {"file_path": "src/main.py"}
+        assert actions[0].thought == "I'll read the main file to understand the structure."
 
     @pytest.mark.unit
     def test_plan_action_falls_back_to_json_when_no_tool_calls(
@@ -327,12 +327,12 @@ class TestPlanActionNativeToolParsing:
             llm_response=None  # No LLMResponse means JSON parsing
         )
 
-        action = agent_with_native_orchestrator._agent_loop.plan(thought)
+        actions = agent_with_native_orchestrator._agent_loop.plan(thought)
 
         # Should have parsed JSON correctly
-        assert action.action == "read_file"
-        assert action.parameters == {"file_path": "main.py"}
-        assert action.thought == "Analyzing code"
+        assert actions[0].action == "read_file"
+        assert actions[0].parameters == {"file_path": "main.py"}
+        assert actions[0].thought == "Analyzing code"
 
     @pytest.mark.unit
     def test_plan_action_handles_complete_action_from_native_tools(
@@ -356,12 +356,12 @@ class TestPlanActionNativeToolParsing:
             llm_response=response
         )
 
-        action = agent_with_native_orchestrator._agent_loop.plan(thought)
+        actions = agent_with_native_orchestrator._agent_loop.plan(thought)
 
         # Should recognize completion
-        assert action.is_complete is True
-        assert action.action == "complete"
-        assert "Task completed successfully" in action.result_text
+        assert actions[0].is_complete is True
+        assert actions[0].action == "complete"
+        assert "Task completed successfully" in actions[0].result_text
 
     @pytest.mark.unit
     def test_plan_action_handles_empty_tool_calls_falls_back_to_json(
@@ -386,12 +386,12 @@ class TestPlanActionNativeToolParsing:
             llm_response=response
         )
 
-        action = agent_with_native_orchestrator._agent_loop.plan(thought)
+        actions = agent_with_native_orchestrator._agent_loop.plan(thought)
 
         # Should parse JSON content successfully
-        assert action.is_complete is True
-        assert action.action == "complete"
-        assert "Summary here" in action.result_text
+        assert actions[0].is_complete is True
+        assert actions[0].action == "complete"
+        assert "Summary here" in actions[0].result_text
 
 
 class TestOrchestratorAdapterDelegateWithTools:

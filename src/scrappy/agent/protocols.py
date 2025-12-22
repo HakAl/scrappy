@@ -5,7 +5,7 @@ Defines abstract interfaces for agent components including audit logging,
 response parsing, prompt building, tool management, and checkpointing.
 """
 
-from typing import Protocol, Dict, Any, List, Optional, runtime_checkable, TYPE_CHECKING
+from typing import Protocol, Dict, Any, List, Optional, Tuple, runtime_checkable, TYPE_CHECKING
 from pathlib import Path
 
 if TYPE_CHECKING:
@@ -626,6 +626,24 @@ class AgentUIProtocol(Protocol):
         Returns:
             User's choice: 'c' (continue), 'g' (git checkpoint),
             'a' (allow all), 's' (stop)
+        """
+        ...
+
+    def confirm_batch(
+        self,
+        actions: List[Tuple[str, Dict[str, Any]]],
+    ) -> bool:
+        """
+        Display batch of actions in activity bar and prompt for approval.
+
+        Used when LLM returns multiple tool calls. Shows a compact summary
+        of all actions and asks for batch approval.
+
+        Args:
+            actions: List of (tool_name, parameters) tuples
+
+        Returns:
+            True if user approves all actions, False if denied
         """
         ...
 

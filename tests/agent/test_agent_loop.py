@@ -58,6 +58,7 @@ def mock_response_parser():
         parameters={"path": "test.py"},
         is_complete=False,
         result_text="",
+        additional_actions=[],  # Multi-tool-call support
     )
     return mock
 
@@ -376,6 +377,7 @@ class TestAgentLoopRun:
                     parameters={"path": "test.py", "content": "test"},
                     is_complete=False,
                     result_text="",
+                    additional_actions=[],
                 )
             return Mock(
                 thought="done",
@@ -383,6 +385,7 @@ class TestAgentLoopRun:
                 parameters={},
                 is_complete=True,
                 result_text="Task completed",
+                additional_actions=[],
             )
 
         mock_response_parser.parse.side_effect = parse_side_effect
@@ -448,6 +451,7 @@ class TestAgentLoopRun:
             parameters={"path": "test.py"},
             is_complete=False,
             result_text="",
+            additional_actions=[],
         )
 
         config = AgentConfig()
@@ -513,6 +517,7 @@ class TestAgentLoopContextRebuild:
             parameters={"path": "test.py"},
             is_complete=False,
             result_text="",
+            additional_actions=[],
         )
 
         config = AgentConfig()
@@ -579,6 +584,7 @@ class TestAgentLoopContextRebuild:
             parameters={"path": "test.py"},
             is_complete=False,
             result_text="",
+            additional_actions=[],
         )
 
         config = AgentConfig()
@@ -664,6 +670,7 @@ class TestAgentLoopContextRebuild:
             parameters={"path": "test.py"},
             is_complete=False,
             result_text="",
+            additional_actions=[],
         )
 
         config = AgentConfig()

@@ -842,8 +842,8 @@ class TestUnifiedResponseParser:
         assert result.thought == "I'll read that file for you."
 
     @pytest.mark.unit
-    def test_llm_response_with_multiple_tool_calls_uses_first(self, parser):
-        """When multiple tool calls, parser should use the first one."""
+    def test_llm_response_with_multiple_tool_calls_captures_all(self, parser):
+        """When multiple tool calls, parser captures all in additional_actions."""
         from scrappy.providers.base import LLMResponse, ToolCall
 
         llm_response = LLMResponse(
@@ -852,15 +852,71 @@ class TestUnifiedResponseParser:
             provider="groq",
             tool_calls=[
                 ToolCall(id="call_1", name="read_file", arguments={"path": "a.py"}),
-                ToolCall(id="call_2", name="read_file", arguments={"path": "b.py"})
+                ToolCall(id="call_2", name="read_file", arguments={"path": "b.py"}),
+                ToolCall(id="call_3", name="write_file", arguments={"path": "c.py", "content": "data"})
             ]
         )
 
         result = parser.parse(llm_response)
 
-        # Should use first tool call
+        # Primary action should be first tool call
         assert result.action == "read_file"
         assert result.parameters == {"path": "a.py"}
+        assert result.thought == "Let me read these files."
+
+        # Additional actions should contain remaining tool calls
+        assert len(result.additional_actions) == 2
+        assert result.additional_actions[0].action == "read_file"
+        assert result.additional_actions[0].parameters == {"path": "b.py"}
+        assert result.additional_actions[0].thought == ""  # Only first has thought
+        assert result.additional_actions[1].action == "write_file"
+        assert result.additional_actions[1].parameters == {"path": "c.py", "content": "data"}
+
+    @pytest.mark.unit
+    def test_single_tool_call_has_empty_additional_actions(self, parser):
+        """Single tool call should have empty additional_actions list."""
+        from scrappy.providers.base import LLMResponse, ToolCall
+
+        llm_response = LLMResponse(
+            content="Reading file.",
+            model="llama-3.1-8b",
+            provider="groq",
+            tool_calls=[
+                ToolCall(id="call_1", name="read_file", arguments={"path": "a.py"})
+            ]
+        )
+
+        result = parser.parse(llm_response)
+
+        assert result.action == "read_file"
+        assert result.additional_actions == []
+
+    @pytest.mark.unit
+    def test_multiple_tool_calls_with_complete(self, parser):
+        """Multiple tool calls with complete action should handle is_complete."""
+        from scrappy.providers.base import LLMResponse, ToolCall
+
+        llm_response = LLMResponse(
+            content="Writing files and completing.",
+            model="llama-3.1-8b",
+            provider="groq",
+            tool_calls=[
+                ToolCall(id="call_1", name="write_file", arguments={"path": "a.py", "content": "x"}),
+                ToolCall(id="call_2", name="complete", arguments={"result": "Done"})
+            ]
+        )
+
+        result = parser.parse(llm_response)
+
+        # Primary action
+        assert result.action == "write_file"
+        assert result.is_complete is False
+
+        # Additional actions - complete should have is_complete=True
+        assert len(result.additional_actions) == 1
+        assert result.additional_actions[0].action == "complete"
+        assert result.additional_actions[0].is_complete is True
+        assert result.additional_actions[0].result_text == "Done"
 
     @pytest.mark.unit
     def test_llm_response_with_complete_action(self, parser):

@@ -63,6 +63,13 @@ class TestAgentUI:
             return self.confirmation_responses.pop(0)
         return default
 
+    def confirm_batch(self, actions: list) -> bool:
+        """Test double for batch confirmation."""
+        self.confirmations_requested.append(("batch", actions))
+        if self.confirmation_responses:
+            return self.confirmation_responses.pop(0)
+        return False  # Default deny for safety
+
 
 class PermissiveSafetyChecker:
     """Test double - all actions are safe."""

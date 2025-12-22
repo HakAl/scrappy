@@ -6,7 +6,7 @@ Orchestrates the flow: Safety check -> Duplicate check -> Tool execution -> Resu
 
 import difflib
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Tuple
 
 from .types import AgentAction, ActionResult, ConversationState
 from .protocols import (
@@ -385,3 +385,125 @@ class ActionExecutor:
             executed=False,
             metadata={"cancelled": True}
         )
+
+    def confirm_batch(
+        self,
+        actions: List[AgentAction],
+        state: ConversationState
+    ) -> Tuple[bool, List[AgentAction], List[AgentAction]]:
+        """
+        Get batch confirmation for multiple actions.
+
+        Separates safe (auto-approved) from unsafe actions and prompts
+        user once for all unsafe actions.
+
+        Args:
+            actions: List of actions to confirm
+            state: Current conversation state
+
+        Returns:
+            Tuple of (approved, safe_actions, unsafe_actions):
+            - approved: True if batch is approved (or only safe actions)
+            - safe_actions: Actions that are auto-approved
+            - unsafe_actions: Actions that required user confirmation
+        """
+        # Separate safe vs unsafe actions
+        safe_actions = []
+        unsafe_actions = []
+        for action in actions:
+            if self.safety.is_safe_action(action):
+                safe_actions.append(action)
+            else:
+                unsafe_actions.append(action)
+
+        # If no unsafe actions, all approved
+        if not unsafe_actions:
+            return True, safe_actions, unsafe_actions
+
+        # Check if auto-confirm or allow-all mode
+        skip_confirm = state.auto_confirm or getattr(state, 'allow_all_enabled', False)
+        if skip_confirm:
+            return True, safe_actions, unsafe_actions
+
+        # Check for cancellation before prompting
+        if self._is_cancelled():
+            return False, safe_actions, unsafe_actions
+
+        # Build list of (tool_name, params) for UI
+        action_tuples = [(a.action, a.parameters) for a in unsafe_actions]
+
+        # Prompt user for batch approval
+        approved = self.ui.confirm_batch(action_tuples)
+
+        return approved, safe_actions, unsafe_actions
+
+    def execute_batch(
+        self,
+        actions: List[AgentAction],
+        state: ConversationState,
+        dry_run: bool = False
+    ) -> List[ActionResult]:
+        """
+        Execute multiple actions with batch confirmation.
+
+        First confirms all unsafe actions with a single prompt,
+        then executes all actions sequentially. Uses fail-fast:
+        stops on first error.
+
+        Args:
+            actions: List of actions to execute
+            state: Current conversation state
+            dry_run: If True, simulate execution without running tools
+
+        Returns:
+            List of ActionResult, one per action executed.
+            If batch is denied, returns single denied result.
+            If error occurs, returns results up to and including the error.
+        """
+        if not actions:
+            return []
+
+        # Get batch confirmation
+        approved, safe_actions, unsafe_actions = self.confirm_batch(actions, state)
+
+        if not approved:
+            # Return single denied result for first action
+            return [ActionResult(
+                success=False,
+                output="Batch denied by user",
+                action=actions[0].action,
+                parameters=actions[0].parameters,
+                approved=False,
+                executed=False
+            )]
+
+        # Execute all actions sequentially
+        results = []
+        for action in actions:
+            # Execute with confirmation already handled
+            # We pass a modified state with auto_confirm=True since batch was approved
+            batch_state = ConversationState(
+                messages=state.messages,
+                system_prompt=state.system_prompt,
+                iteration=state.iteration,
+                max_iterations=state.max_iterations,
+                checkpoint_interval=state.checkpoint_interval,
+                tools_executed=state.tools_executed,
+                auto_confirm=True,  # Batch was approved
+                allow_all_enabled=True,  # Skip individual confirmations
+                last_checkpoint_hash=state.last_checkpoint_hash,
+                failed_commands=state.failed_commands,
+                retry_warnings=state.retry_warnings,
+                action_history=state.action_history,
+                last_action=state.last_action,
+                recent_outcomes=state.recent_outcomes,
+            )
+
+            result = self.execute(action, batch_state, dry_run)
+            results.append(result)
+
+            # Fail-fast: stop on first error
+            if not result.success:
+                break
+
+        return results

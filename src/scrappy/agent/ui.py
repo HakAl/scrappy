@@ -5,7 +5,7 @@ Handles all user interaction and console output formatting for the agent.
 Wraps CLIIOProtocol to provide agent-specific display operations.
 """
 
-from typing import Optional, Dict, Any, List, Callable
+from typing import Optional, Dict, Any, List, Tuple, Callable
 
 import json
 
@@ -380,3 +380,43 @@ class AgentUI:
             if choice in ('c', 'g', 'a', 's'):
                 return choice
             self.io.secho("Invalid choice. Please enter c, g, a, or s.", fg=self._theme.error)
+
+    def confirm_batch(
+        self,
+        actions: List[Tuple[str, Dict[str, Any]]],
+    ) -> bool:
+        """Display batch of actions in activity bar and prompt for approval.
+
+        Used when LLM returns multiple tool calls. Shows a compact summary
+        of all actions and asks for batch approval.
+
+        Args:
+            actions: List of (tool_name, parameters) tuples
+
+        Returns:
+            True if user approves all actions, False if denied
+        """
+        # Build compact summaries for each action
+        summaries = []
+        for tool_name, params in actions:
+            # Extract most relevant parameter (same logic as show_tool_request)
+            target = (
+                params.get('file_path') or
+                params.get('path') or
+                params.get('description') or
+                params.get('command') or
+                params.get('query') or
+                params.get('pattern') or
+                (str(list(params.values())[0]) if params else '')
+            )
+            # Truncate long targets
+            if len(target) > 30:
+                target = target[:27] + "..."
+            summaries.append(f"{tool_name}: {target}")
+
+        # Format prompt message with numbered actions
+        actions_preview = " ".join(f"[{i}] {s}" for i, s in enumerate(summaries, 1))
+        prompt_msg = f"Allow {len(actions)} actions? {actions_preview}"
+
+        # Use io.confirm which routes to activity bar in TUI mode
+        return self.io.confirm(prompt_msg, default=False)

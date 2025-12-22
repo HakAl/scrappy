@@ -9,19 +9,24 @@ All parsers implement the ResponseParserProtocol from protocols.py.
 
 import json
 import re
-from dataclasses import dataclass
-from typing import Dict, Any, Optional
+from dataclasses import dataclass, field
+from typing import Dict, Any, List, Optional
 
 
 @dataclass
 class ParseResult:
-    """Result of parsing an LLM response into an action."""
+    """Result of parsing an LLM response into an action.
+
+    For responses with multiple tool calls, the primary action is in
+    action/parameters, and additional actions are in additional_actions.
+    """
     thought: str
     action: str
     parameters: Dict[str, Any]
     is_complete: bool
     result_text: str = ""
     error: Optional[str] = None
+    additional_actions: List['ParseResult'] = field(default_factory=list)
 
 
 class JSONResponseParser:
@@ -432,13 +437,14 @@ class NativeToolCallParser:
         Parse an LLMResponse with native tool calls.
 
         This is the primary method for parsing responses from providers that
-        support native tool calling.
+        support native tool calling. Processes ALL tool calls, not just the first.
 
         Args:
             response: LLMResponse object with tool_calls field
 
         Returns:
-            ParseResult containing the parsed action details
+            ParseResult containing the parsed action details.
+            If multiple tool calls exist, additional ones are in additional_actions.
         """
         # Handle None or empty tool_calls as completion
         if response.tool_calls is None or len(response.tool_calls) == 0:
@@ -451,7 +457,7 @@ class NativeToolCallParser:
                 result_text=response.content
             )
 
-        # Use the first tool call (most common case)
+        # Process first tool call as primary action
         tool_call = response.tool_calls[0]
 
         # Handle "complete" action specially
@@ -460,12 +466,29 @@ class NativeToolCallParser:
         if is_complete:
             result_text = tool_call.arguments.get("result", response.content)
 
+        # Process additional tool calls (if any)
+        additional_actions = []
+        for tc in response.tool_calls[1:]:
+            tc_is_complete = tc.name == "complete"
+            tc_result_text = ""
+            if tc_is_complete:
+                tc_result_text = tc.arguments.get("result", "")
+
+            additional_actions.append(ParseResult(
+                thought="",  # Only first action has the thought
+                action=tc.name,
+                parameters=tc.arguments,
+                is_complete=tc_is_complete,
+                result_text=tc_result_text
+            ))
+
         return ParseResult(
             thought=response.content,  # LLM's explanation/reasoning
             action=tool_call.name,     # Tool to execute
             parameters=tool_call.arguments,  # Tool parameters
             is_complete=is_complete,
-            result_text=result_text
+            result_text=result_text,
+            additional_actions=additional_actions
         )
 
 

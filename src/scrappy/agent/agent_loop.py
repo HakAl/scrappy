@@ -8,7 +8,7 @@ Single Responsibility: Run the agent loop, nothing else.
 """
 
 import time
-from typing import Optional, Dict, Any, TYPE_CHECKING
+from typing import Optional, Dict, Any, List, TYPE_CHECKING
 
 from ..orchestrator.model_selection import ModelSelectionType, AllModelsRateLimitedError
 from .types import (
@@ -254,17 +254,19 @@ class AgentLoop:
             messages=messages,
         )
 
-    def plan(self, thought: AgentThought) -> AgentAction:
+    def plan(self, thought: AgentThought) -> List[AgentAction]:
         """
-        Parse the LLM response into a structured action.
+        Parse the LLM response into structured actions.
 
-        This is the planning stage where we extract the action to take.
+        This is the planning stage where we extract the actions to take.
+        Supports multiple tool calls from a single LLM response.
 
         Args:
             thought: Raw thought from think()
 
         Returns:
-            AgentAction with parsed action details
+            List of AgentAction with parsed action details.
+            First action is the primary action, additional ones follow.
         """
         # Check if we have a full LLMResponse with actual tool_calls
         if (
@@ -278,13 +280,26 @@ class AgentLoop:
             # Fall back to parsing raw text response (JSON format)
             parse_result = self._response_parser.parse(thought.raw_response)
 
-        return AgentAction(
+        # Build list of actions starting with primary
+        actions = [AgentAction(
             thought=parse_result.thought,
             action=parse_result.action,
             parameters=parse_result.parameters,
             is_complete=parse_result.is_complete,
             result_text=parse_result.result_text,
-        )
+        )]
+
+        # Add additional actions from multi-tool-call responses
+        for additional in parse_result.additional_actions:
+            actions.append(AgentAction(
+                thought="",  # Only first action has the thought
+                action=additional.action,
+                parameters=additional.parameters,
+                is_complete=additional.is_complete,
+                result_text=additional.result_text,
+            ))
+
+        return actions
 
     def execute(self, action: AgentAction, state: ConversationState) -> ActionResult:
         """
@@ -317,6 +332,44 @@ class AgentLoop:
                 )
 
         return result
+
+    def execute_batch(
+        self,
+        actions: List[AgentAction],
+        state: ConversationState
+    ) -> List[ActionResult]:
+        """
+        Execute multiple actions with batch confirmation.
+
+        Uses ActionExecutor.execute_batch() for batch confirmation and
+        sequential execution with fail-fast behavior.
+
+        Args:
+            actions: List of parsed actions from plan()
+            state: Current conversation state
+
+        Returns:
+            List of ActionResult, one per action executed
+        """
+        results = self._action_executor.execute_batch(
+            actions, state, dry_run=self._dry_run
+        )
+
+        # Log each action for audit trail
+        if self._audit_logger:
+            for action, result in zip(actions, results):
+                is_blocked = not result.executed and result.approved
+                if result.executed or is_blocked:
+                    self._audit_logger.log_action(
+                        action.action,
+                        action.parameters,
+                        result.output,
+                        result.approved,
+                        thinking=action.thought,
+                        blocked=is_blocked,
+                    )
+
+        return results
 
     def evaluate(
         self,
@@ -756,11 +809,12 @@ class AgentLoop:
             if should_stop:
                 return self._make_stop_result(reason, state)
 
-            # Stage 2: Plan - Parse response into structured action
-            action = self.plan(thought)
+            # Stage 2: Plan - Parse response into structured actions
+            # (supports multiple tool calls from a single LLM response)
+            actions = self.plan(thought)
 
-            # Track parse failures
-            if action.action == 'retry_parse':
+            # Track parse failures (check first action)
+            if actions[0].action == 'retry_parse':
                 self._stop_condition.record_parse_failure()
                 should_stop, reason = self._stop_condition.should_stop()
                 if should_stop:
@@ -773,11 +827,15 @@ class AgentLoop:
             if should_stop:
                 return self._make_stop_result(reason, state)
 
-            # Stage 3: Execute - Run the tool
-            result = self.execute(action, state)
+            # Stage 3: Execute - Run the tool(s)
+            # Use batch execution for multiple actions, single for one
+            if len(actions) == 1:
+                results = [self.execute(actions[0], state)]
+            else:
+                results = self.execute_batch(actions, state)
 
-            # Check if action was cancelled (force cancel detected in ActionExecutor)
-            if result.metadata.get("cancelled"):
+            # Check if any action was cancelled
+            if any(r.metadata.get("cancelled") for r in results):
                 return self._make_stop_result(StopReason.USER_CANCELLED, state)
 
             # Check stop condition after execute (tools can take a long time)
@@ -786,16 +844,31 @@ class AgentLoop:
                 return self._make_stop_result(reason, state)
 
             # Stage 4: Evaluate - Check if task is complete
-            evaluation = self.evaluate(action, result, state)
+            # Use last action/result for evaluation (completion is typically last)
+            last_action = actions[-1] if len(results) == len(actions) else actions[len(results) - 1]
+            last_result = results[-1]
+            evaluation = self.evaluate(last_action, last_result, state)
 
-            # Update conversation history and check for denial
-            denial_result = self.update_conversation(state, thought, action, result)
+            # Update conversation history for all actions/results
+            denial_result = None
+            any_approved = False
+            for action, result in zip(actions, results):
+                denial_result = self.update_conversation(state, thought, action, result)
+                if result.approved:
+                    any_approved = True
+                # Only process first action's thought (others have empty thought)
+                thought = AgentThought(
+                    raw_response="",
+                    provider=thought.provider,
+                    iteration=thought.iteration,
+                    llm_response=None
+                )
 
             # Handle denial result (denial already recorded in _handle_denied_action)
             if denial_result:
                 if denial_result.should_stop:
                     return self._make_stop_result(StopReason.REPEATED_DENIALS, state)
-            elif result.approved:
+            elif any_approved:
                 self._stop_condition.clear_denials()
 
             # Check evaluation result
