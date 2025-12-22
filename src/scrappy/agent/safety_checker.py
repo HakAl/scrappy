@@ -32,6 +32,7 @@ class SafetyChecker:
         'git_log',
         'git_blame',
         'get_context',
+        'task',  # Agent's internal todo list - no system impact
     }
 
     def is_safe_action(self, action: AgentAction) -> bool:
