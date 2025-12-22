@@ -1,7 +1,7 @@
 """
 Action executor coordinator.
 
-Orchestrates the flow: Safety check -> Duplicate check -> Tool execution -> Result.
+Orchestrates the flow: Duplicate check -> Safety check -> Tool execution -> Result.
 """
 
 import difflib
@@ -64,8 +64,8 @@ class ActionExecutor:
         Flow:
         1. Display thinking
         2. Handle special cases (complete, retry_parse, unknown)
-        3. Check safety and get confirmation if needed
-        4. Check for duplicates/retry patterns
+        3. Check for duplicates/retry patterns (BEFORE prompting user)
+        4. Check safety and get confirmation if needed
         5. Execute tool (unless dry-run)
         6. Display and return result
 
@@ -97,12 +97,26 @@ class ActionExecutor:
         if missing:
             return self._handle_missing_params(action, missing)
 
+        # 1. Duplicate Detection (BEFORE prompting user)
+        # This prevents wasting user's confirmation on duplicate actions
+        is_duplicate, warning = self.duplicate_detector.check_duplicate(action, state)
+        if is_duplicate:
+            self.ui.show_warning(warning)
+            return ActionResult(
+                success=False,
+                output=warning,
+                action=action.action,
+                parameters=action.parameters,
+                approved=False,  # User was never asked
+                executed=False
+            )
+
         # Check for cancellation before asking for user approval
         # This prevents the prompt from appearing after user pressed Escape
         if self._is_cancelled():
             return self._make_cancelled_result(action)
 
-        # 1. Safety & Confirmation
+        # 2. Safety & Confirmation
         if not self._check_safety_and_get_approval(action, state):
             # Check if this denial was due to cancellation
             if self._is_cancelled():
@@ -113,19 +127,6 @@ class ActionExecutor:
                 action=action.action,
                 parameters=action.parameters,
                 approved=False,
-                executed=False
-            )
-
-        # 2. Duplicate Detection
-        is_duplicate, warning = self.duplicate_detector.check_duplicate(action, state)
-        if is_duplicate:
-            self.ui.show_warning(warning)
-            return ActionResult(
-                success=False,
-                output=warning,
-                action=action.action,
-                parameters=action.parameters,
-                approved=True,
                 executed=False
             )
 
