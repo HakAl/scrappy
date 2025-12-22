@@ -27,7 +27,6 @@ from scrappy.cli.config.extensions import (
 )
 from scrappy.cli.config.paths import (
     SESSION_FILE,
-    RATE_LIMITS_FILE,
     RESPONSE_CACHE_FILE,
     CONTEXT_FILE,
     AUDIT_FILE,
@@ -119,7 +118,6 @@ class CLIConfig(BaseConfig):
 
     # Path configuration
     session_file: str = SESSION_FILE
-    rate_limits_file: str = RATE_LIMITS_FILE
     response_cache_file: str = RESPONSE_CACHE_FILE
     context_file: str = CONTEXT_FILE
     audit_file: str = AUDIT_FILE

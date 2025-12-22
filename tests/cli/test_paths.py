@@ -6,8 +6,6 @@ skip directories, session files, and path-related constants used
 throughout the CLI.
 """
 
-import pytest
-
 
 class TestSkipDirectories:
     """Tests for directories to skip during scanning."""
@@ -69,12 +67,6 @@ class TestSessionFiles:
         """SESSION_FILE should be .scrappy/session.json."""
         from scrappy.cli.config.paths import SESSION_FILE
         assert SESSION_FILE == '.scrappy/session.json'
-
-
-    def test_rate_limits_file_value(self):
-        """RATE_LIMITS_FILE should be .scrappy/rate_limits.json."""
-        from scrappy.cli.config.paths import RATE_LIMITS_FILE
-        assert RATE_LIMITS_FILE == '.scrappy/rate_limits.json'
 
 
 class TestProjectIndicatorFiles:

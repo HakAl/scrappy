@@ -23,7 +23,6 @@ LEGACY_USER_DIR = Path.home() / '.scrappy'
 
 # Session and tracking files (now in .scrappy/ directory)
 SESSION_FILE = '.scrappy/session.json'
-RATE_LIMITS_FILE = '.scrappy/rate_limits.json'
 RESPONSE_CACHE_FILE = '.scrappy/response_cache.json'
 CONTEXT_FILE = '.scrappy/context.json'
 AUDIT_FILE = '.scrappy/audit.json'
@@ -31,7 +30,6 @@ AUDIT_FILE = '.scrappy/audit.json'
 # Hidden files and directories (should not be shown in file listings)
 HIDDEN_FILES: List[str] = [
     SESSION_FILE,
-    RATE_LIMITS_FILE,
     RESPONSE_CACHE_FILE,
     CONTEXT_FILE,
     AUDIT_FILE,
