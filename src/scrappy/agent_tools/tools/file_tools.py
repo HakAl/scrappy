@@ -59,6 +59,116 @@ class ReadFileTool(ToolBase):
             return ToolResult(False, "", f"Error reading file: {str(e)}")
 
 
+class ReadFilesTool(ToolBase):
+    """Read contents of multiple files in a single operation."""
+
+    @property
+    def name(self) -> str:
+        return "read_files"
+
+    @property
+    def description(self) -> str:
+        return "Read contents of multiple files at once. More efficient than multiple read_file calls."
+
+    @property
+    def parameters(self) -> list[ToolParameter]:
+        return [
+            ToolParameter(
+                "paths",
+                list,
+                "List of file paths relative to project root",
+                required=True
+            )
+        ]
+
+    def execute(self, context: ToolContext, **kwargs) -> ToolResult:
+        paths = kwargs.get("paths", [])
+
+        if not paths:
+            return ToolResult(False, "", "No paths provided")
+
+        if not isinstance(paths, list):
+            return ToolResult(False, "", "paths must be a list of file paths")
+
+        results = []
+        total_size = 0
+        max_total_size = context.config.max_file_read_size * 3  # Allow 3x single file limit for batch
+        files_read = 0
+        files_failed = 0
+        truncated = False
+
+        for path in paths:
+            # Check if we've hit size limit
+            if total_size >= max_total_size:
+                truncated = True
+                results.append(f"\n{'='*60}\n[TRUNCATED] Remaining files skipped due to size limit\n{'='*60}")
+                break
+
+            # Validate path
+            if not isinstance(path, str):
+                results.append(f"\n{'='*60}\nFILE: {path}\n{'='*60}\n[ERROR] Invalid path type")
+                files_failed += 1
+                continue
+
+            if not context.is_safe_path(path):
+                results.append(f"\n{'='*60}\nFILE: {path}\n{'='*60}\n[ERROR] Path is outside project directory")
+                files_failed += 1
+                continue
+
+            target = context.project_root / path
+            if not target.exists():
+                results.append(f"\n{'='*60}\nFILE: {path}\n{'='*60}\n[ERROR] File does not exist")
+                files_failed += 1
+                continue
+
+            try:
+                content = target.read_text(encoding='utf-8')
+                lines = content.count('\n') + 1
+
+                # Check remaining budget
+                remaining_budget = max_total_size - total_size
+                if len(content) > remaining_budget:
+                    content = content[:remaining_budget] + "\n... [truncated]"
+                    truncated = True
+
+                total_size += len(content)
+
+                # Store in working memory
+                context.remember_file_read(path, content, lines)
+
+                # Record in HUD working set
+                if context.working_set:
+                    context.working_set.record_read(path, context.turn)
+
+                results.append(f"\n{'='*60}\nFILE: {path} ({lines} lines)\n{'='*60}\n{content}")
+                files_read += 1
+
+            except Exception as e:
+                results.append(f"\n{'='*60}\nFILE: {path}\n{'='*60}\n[ERROR] {str(e)}")
+                files_failed += 1
+
+        if not results:
+            return ToolResult(False, "", "No files could be read")
+
+        output = "".join(results)
+        summary = f"Read {files_read} file(s)"
+        if files_failed > 0:
+            summary += f", {files_failed} failed"
+        if truncated:
+            summary += " (output truncated)"
+
+        return ToolResult(
+            True,
+            output,
+            metadata={
+                "files_read": files_read,
+                "files_failed": files_failed,
+                "total_size": total_size,
+                "truncated": truncated
+            }
+        )
+
+
 class WriteFileTool(ToolBase):
     """Write content to a file."""
 

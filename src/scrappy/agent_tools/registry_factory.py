@@ -14,6 +14,7 @@ from .tools import ToolRegistry
 from .tools.base import ToolBase
 from .tools.file_tools import (
     ReadFileTool,
+    ReadFilesTool,
     WriteFileTool,
     ListFilesTool,
 )
@@ -42,8 +43,8 @@ if TYPE_CHECKING:
 # Tools not in profile are still in codebase but not registered
 TOOL_PROFILES: Dict[str, List[str]] = {
     "full": [
-        # All 17 tools - backward compatible
-        "read_file", "write_file", "list_files",
+        # All 18 tools - backward compatible
+        "read_file", "read_files", "write_file", "list_files",
         "git_log", "git_status", "git_diff", "git_blame", "git_show", "git_recent_changes",
         "find_exact_text", "codebase_search",
         "web_fetch", "web_search",
@@ -52,11 +53,11 @@ TOOL_PROFILES: Dict[str, List[str]] = {
         "task",
     ],
     "optimized": [
-        # 10 tools - 40% token savings, production default
+        # 11 tools - 40% token savings, production default
         # Agent uses run_command for git_log, git_blame, git_show, git_recent_changes
         # Agent uses web_fetch for web_search functionality
         # Task management via system prompt or TODO.md
-        "read_file", "write_file", "list_files",
+        "read_file", "read_files", "write_file", "list_files",
         "git_status", "git_diff",
         "find_exact_text", "codebase_search",
         "web_fetch",
@@ -64,9 +65,9 @@ TOOL_PROFILES: Dict[str, List[str]] = {
         "complete",
     ],
     "minimal": [
-        # 7 tools - maximum token savings
+        # 8 tools - maximum token savings
         # Only essential tools, agent relies heavily on run_command
-        "read_file", "write_file", "list_files",
+        "read_file", "read_files", "write_file", "list_files",
         "codebase_search",
         "git_status",
         "run_command",
@@ -117,6 +118,7 @@ def create_registry_with_profile(
     tool_factories: Dict[str, Callable[[], ToolBase]] = {
         # File tools
         "read_file": lambda: ReadFileTool(),
+        "read_files": lambda: ReadFilesTool(),
         "write_file": lambda: WriteFileTool(),
         "list_files": lambda: ListFilesTool(),
         # Git tools

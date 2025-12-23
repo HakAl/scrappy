@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, Mock, patch
 
 from scrappy.agent_tools.tools.file_tools import (
     ReadFileTool,
+    ReadFilesTool,
     WriteFileTool,
     ListFilesTool,
     ListDirectoryTool
@@ -86,6 +87,114 @@ class TestReadFileTool:
         assert result.success
         assert len(result.output) < 1500
         assert "... [truncated]" in result.output
+
+
+# --- ReadFilesTool Tests ---
+
+class TestReadFilesTool:
+    def test_read_multiple_files(self, mock_context):
+        """Should read multiple files and return combined output."""
+        tool = ReadFilesTool()
+        (mock_context.project_root / "a.txt").write_text("Content A")
+        (mock_context.project_root / "b.txt").write_text("Content B")
+        (mock_context.project_root / "c.txt").write_text("Content C")
+
+        result = tool.execute(mock_context, paths=["a.txt", "b.txt", "c.txt"])
+
+        assert result.success
+        assert "Content A" in result.output
+        assert "Content B" in result.output
+        assert "Content C" in result.output
+        assert result.metadata["files_read"] == 3
+        assert result.metadata["files_failed"] == 0
+
+    def test_clear_file_boundaries(self, mock_context):
+        """Should have clear delimiters between files."""
+        tool = ReadFilesTool()
+        (mock_context.project_root / "first.txt").write_text("First content")
+        (mock_context.project_root / "second.txt").write_text("Second content")
+
+        result = tool.execute(mock_context, paths=["first.txt", "second.txt"])
+
+        assert result.success
+        assert "FILE: first.txt" in result.output
+        assert "FILE: second.txt" in result.output
+        assert "=" * 60 in result.output  # Delimiter
+
+    def test_handles_missing_files_gracefully(self, mock_context):
+        """Should continue reading when some files don't exist."""
+        tool = ReadFilesTool()
+        (mock_context.project_root / "exists.txt").write_text("I exist")
+
+        result = tool.execute(mock_context, paths=["exists.txt", "missing.txt", "also_missing.txt"])
+
+        assert result.success  # Partial success
+        assert "I exist" in result.output
+        assert result.metadata["files_read"] == 1
+        assert result.metadata["files_failed"] == 2
+        assert "[ERROR] File does not exist" in result.output
+
+    def test_reject_unsafe_paths(self, mock_context):
+        """Should reject paths outside project directory."""
+        tool = ReadFilesTool()
+        (mock_context.project_root / "safe.txt").write_text("Safe content")
+
+        # Mark the second path as unsafe
+        def is_safe(path):
+            return path == "safe.txt"
+        mock_context.is_safe_path = is_safe
+
+        result = tool.execute(mock_context, paths=["safe.txt", "../secret.txt"])
+
+        assert result.success  # Partial success
+        assert "Safe content" in result.output
+        assert result.metadata["files_read"] == 1
+        assert result.metadata["files_failed"] == 1
+        assert "outside project directory" in result.output
+
+    def test_empty_paths_list(self, mock_context):
+        """Should fail with empty paths list."""
+        tool = ReadFilesTool()
+
+        result = tool.execute(mock_context, paths=[])
+
+        assert not result.success
+        assert "No paths provided" in result.error
+
+    def test_invalid_paths_type(self, mock_context):
+        """Should fail if paths is not a list."""
+        tool = ReadFilesTool()
+
+        result = tool.execute(mock_context, paths="single_path.txt")
+
+        assert not result.success
+        assert "must be a list" in result.error
+
+    def test_truncates_when_combined_too_large(self, mock_context):
+        """Should truncate when total content exceeds limit."""
+        tool = ReadFilesTool()
+        # max_file_read_size is 1000, batch limit is 3x = 3000
+        (mock_context.project_root / "big1.txt").write_text("A" * 1500)
+        (mock_context.project_root / "big2.txt").write_text("B" * 1500)
+        (mock_context.project_root / "big3.txt").write_text("C" * 1500)
+
+        result = tool.execute(mock_context, paths=["big1.txt", "big2.txt", "big3.txt"])
+
+        assert result.success
+        assert result.metadata["truncated"] is True
+        # Should have read first two files and part of third or skipped third
+        assert result.metadata["files_read"] >= 2
+
+    def test_stores_in_working_memory(self, mock_context):
+        """Should store each file in working memory."""
+        tool = ReadFilesTool()
+        (mock_context.project_root / "mem1.txt").write_text("Memory 1")
+        (mock_context.project_root / "mem2.txt").write_text("Memory 2")
+
+        result = tool.execute(mock_context, paths=["mem1.txt", "mem2.txt"])
+
+        assert result.success
+        assert mock_context.remember_file_read.call_count == 2
 
 
 # --- WriteFileTool Tests ---
