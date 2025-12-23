@@ -2,6 +2,7 @@
 
 from typing import TYPE_CHECKING, Any, Optional
 import logging
+import os
 import time
 
 from textual.screen import Screen
@@ -166,6 +167,10 @@ class MainAppScreen(Screen):
 
     def on_key(self, event) -> None:
         """Handle key events."""
+        # Handle Ctrl+Q to exit - must intercept before Input consumes it
+        if event.key == "ctrl+q":
+            os._exit(0)
+
         if self._layout is None:
             return
 
