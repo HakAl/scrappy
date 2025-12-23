@@ -176,16 +176,6 @@ class CLIAgentManager:
             else:
                 io.secho("Task Did Not Complete", fg=io.theme.warning, bold=True)
 
-            io.echo(f"Result: {result['result']}")
-            io.echo(f"Iterations: {result['iterations']}")
-
-            # Show audit log summary
-            if result['audit_log']:
-                io.secho("\nAudit Log:", bold=True)
-                for entry in result['audit_log']:
-                    approved = io.style("Approved", fg=io.theme.success) if entry['approved'] else io.style("Denied", fg=io.theme.error)
-                    io.echo(f"  [{entry['timestamp'][:19]}] {entry['action']} - {approved}")
-
             # Audit log is auto-saved to .scrappy/audit.json
             audit_path = agent.project_root / ".scrappy" / "audit.json"
             if audit_path.exists():

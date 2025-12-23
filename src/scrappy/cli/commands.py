@@ -531,17 +531,8 @@ def agent(ctx, task, dry_run, no_checkpoint, auto_confirm, max_iterations):
             click.secho("Task Did Not Complete", fg="yellow", bold=True)
             logger.warning("Agent task incomplete", extra={"task": task, "iterations": result['iterations']})
 
-        click.echo(f"Result: {result['result']}")
-        click.echo(f"Iterations: {result['iterations']}")
-
-        if result['audit_log']:
-            click.secho("\nAudit Log:", bold=True)
-            for entry in result['audit_log']:
-                approved = "Approved" if entry['approved'] else "Denied"
-                click.echo(f"  [{entry['timestamp'][:19]}] {entry['action']} - {approved}")
-
         log_path = code_agent.save_audit_log()
-        click.secho(f"\nAudit log saved to: {log_path}", fg="cyan")
+        click.secho(f"Audit log: {log_path}", fg="cyan")
 
         if checkpoint_hash and not dry_run:
             click.echo(f"\nTo rollback changes: git reset --hard {checkpoint_hash}")

@@ -276,8 +276,7 @@ class TestCLIAgentManager:
         manager.run_agent("Create file")
 
         output = io.get_output()
-        assert "Task Completed Successfully" in output or "Completed" in output
-        assert "Task completed successfully" in output
+        assert "Task Completed Successfully" in output
 
 
     @pytest.mark.unit
