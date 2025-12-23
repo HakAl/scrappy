@@ -38,35 +38,35 @@ class TestToolProfiles:
         assert "minimal" in profiles
 
     @pytest.mark.unit
-    def test_full_profile_has_17_tools(self):
-        """Full profile should have all 17 tools."""
+    def test_full_profile_has_19_tools(self):
+        """Full profile should have all 19 tools."""
         tools = get_profile_tools("full")
-        assert len(tools) == 17
+        assert len(tools) == 19
 
     @pytest.mark.unit
-    def test_optimized_profile_has_10_tools(self):
-        """Optimized profile should have 10 tools."""
+    def test_optimized_profile_has_12_tools(self):
+        """Optimized profile should have 12 tools."""
         tools = get_profile_tools("optimized")
-        assert len(tools) == 10
+        assert len(tools) == 12
 
     @pytest.mark.unit
-    def test_minimal_profile_has_7_tools(self):
-        """Minimal profile should have 7 tools."""
+    def test_minimal_profile_has_9_tools(self):
+        """Minimal profile should have 9 tools."""
         tools = get_profile_tools("minimal")
-        assert len(tools) == 7
+        assert len(tools) == 9
 
     @pytest.mark.unit
     def test_create_registry_with_full_profile(self):
         """Registry with full profile should have all tools."""
         registry = create_registry_with_profile("full")
-        assert len(registry.list_all()) == 17
+        assert len(registry.list_all()) == 19
 
     @pytest.mark.unit
     def test_create_registry_with_optimized_profile(self):
-        """Registry with optimized profile should have 10 tools."""
+        """Registry with optimized profile should have 12 tools."""
         registry = create_registry_with_profile("optimized")
         tool_names = [t.name for t in registry.list_all()]
-        assert len(tool_names) == 10
+        assert len(tool_names) == 12
         # Core tools present
         assert "read_file" in tool_names
         assert "run_command" in tool_names
@@ -77,10 +77,10 @@ class TestToolProfiles:
 
     @pytest.mark.unit
     def test_create_registry_with_minimal_profile(self):
-        """Registry with minimal profile should have 7 tools."""
+        """Registry with minimal profile should have 9 tools."""
         registry = create_registry_with_profile("minimal")
         tool_names = [t.name for t in registry.list_all()]
-        assert len(tool_names) == 7
+        assert len(tool_names) == 9
         # Essential tools only
         assert "read_file" in tool_names
         assert "codebase_search" in tool_names
@@ -153,8 +153,8 @@ class TestToolRegistryFactoryBehavior:
         """Default registry should have expected number of tools."""
         registry = create_default_registry()
 
-        # 3 file + 6 git + 2 search + 2 web + 1 command + 1 complete + 2 task = 17 tools
-        assert len(registry.list_all()) == 17
+        # 5 file + 6 git + 2 search + 2 web + 1 command + 1 complete + 2 task = 19 tools
+        assert len(registry.list_all()) == 19
 
     @pytest.mark.unit
     def test_all_tools_are_callable(self):
@@ -294,7 +294,7 @@ class TestToolRegistryFactoryCustomization:
 
         tool_names = [t.name for t in registry.list_all()]
         assert "custom_analysis" in tool_names
-        assert len(tool_names) == 18  # 17 default + 1 custom
+        assert len(tool_names) == 20  # 19 default + 1 custom
 
 
 class TestToolRegistryFactoryIntegration:
@@ -376,8 +376,8 @@ class TestToolRegistryFactoryIntegration:
             config=config,
         )
 
-        # Should have 10 tools (optimized profile)
-        assert len(agent.tools) == 10
+        # Should have 12 tools (optimized profile)
+        assert len(agent.tools) == 12
         # Should not have excluded tools
         assert "git_log" not in agent.tools
         assert "web_search" not in agent.tools
@@ -398,8 +398,8 @@ class TestToolRegistryFactoryIntegration:
             config=config,
         )
 
-        # Should have 7 tools (minimal profile)
-        assert len(agent.tools) == 7
+        # Should have 9 tools (minimal profile)
+        assert len(agent.tools) == 9
         # Should have core tools
         assert "read_file" in agent.tools
         assert "run_command" in agent.tools
