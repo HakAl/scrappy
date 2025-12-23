@@ -547,8 +547,9 @@ class TestNormalizePath:
             self.provider._normalize_path("../../../etc/passwd")
 
     def test_normalize_windows_path(self):
-        """Should normalize Windows-style paths."""
+        """Should normalize paths to POSIX style."""
         import tempfile
+        import sys
 
         with tempfile.TemporaryDirectory() as tmpdir:
             provider = LanceDBSearchProvider(
@@ -561,8 +562,14 @@ class TestNormalizePath:
             test_file.parent.mkdir(parents=True, exist_ok=True)
             test_file.write_text("# test")
 
-            result = provider._normalize_path("src\\main.py")
-            assert "/" in result or result == "src/main.py"
+            # Test with forward slashes (works on all platforms)
+            result = provider._normalize_path("src/main.py")
+            assert result == "src/main.py"
+
+            # On Windows, also test that backslashes are normalized to forward slashes
+            if sys.platform == "win32":
+                result = provider._normalize_path("src\\main.py")
+                assert result == "src/main.py"
 
 
 class TestComputeHash:
