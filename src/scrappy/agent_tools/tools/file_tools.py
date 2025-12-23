@@ -169,6 +169,192 @@ class ReadFilesTool(ToolBase):
         )
 
 
+class WriteFilesTool(ToolBase):
+    """Write content to multiple files in a single operation."""
+
+    # Maximum files per batch to prevent abuse
+    MAX_FILES_PER_BATCH = 20
+
+    # Extensions that require content validation
+    SUSPICIOUS_EXTENSIONS = [
+        '.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.cpp', '.go', '.rs',
+        '.html', '.css', '.scss', '.vue', '.svelte', '.rb', '.php', '.swift',
+        '.kt', '.scala', '.c', '.h', '.hpp', '.cs', '.sh', '.bash', '.zsh'
+    ]
+
+    @property
+    def name(self) -> str:
+        return "write_files"
+
+    @property
+    def description(self) -> str:
+        return "Write content to multiple files at once. More efficient than multiple write_file calls."
+
+    @property
+    def parameters(self) -> list[ToolParameter]:
+        return [
+            ToolParameter(
+                "files",
+                list,
+                "List of {path, content} objects to write",
+                required=True
+            )
+        ]
+
+    def _is_absolute_path_any_platform(self, path: str) -> bool:
+        """Check if path looks like an absolute path on ANY platform."""
+        if path.startswith('/'):
+            return True
+        if len(path) >= 2 and path[1] == ':' and path[0].isalpha():
+            return True
+        if path.startswith('\\\\'):
+            return True
+        return False
+
+    def _validate_file_spec(self, file_spec: dict, context: 'ToolContext') -> tuple[bool, str]:
+        """
+        Validate a single file specification.
+
+        Returns:
+            (is_valid, error_message) - error_message is empty if valid
+        """
+        if not isinstance(file_spec, dict):
+            return False, "File spec must be a dict with 'path' and 'content'"
+
+        path = file_spec.get('path')
+        content = file_spec.get('content')
+
+        if not path:
+            return False, "Missing 'path' in file spec"
+        if not isinstance(path, str):
+            return False, f"Path must be a string, got {type(path).__name__}"
+        if content is None:
+            return False, f"Missing 'content' for {path}"
+        if not isinstance(content, str):
+            return False, f"Content must be a string for {path}"
+
+        # Security: reject absolute paths
+        if self._is_absolute_path_any_platform(path):
+            return False, f"Absolute path '{path}' not allowed"
+
+        # Security: check path is within project
+        if not context.is_safe_path(path):
+            return False, f"Path '{path}' is outside project directory"
+
+        # Validate content is not empty
+        if not content or content.strip() == "":
+            return False, f"Empty content not allowed for {path}"
+
+        # Validate code files have meaningful content
+        if any(path.endswith(ext) for ext in self.SUSPICIOUS_EXTENSIONS):
+            if len(content.strip()) < 10:
+                return False, f"Content too short ({len(content)} chars) for {path}"
+
+        return True, ""
+
+    def execute(self, context: 'ToolContext', **kwargs) -> ToolResult:
+        files = kwargs.get("files", [])
+
+        if not files:
+            return ToolResult(False, "", "No files provided")
+
+        if not isinstance(files, list):
+            return ToolResult(False, "", "files must be a list of {path, content} objects")
+
+        if len(files) > self.MAX_FILES_PER_BATCH:
+            return ToolResult(
+                False, "",
+                f"Too many files ({len(files)}). Maximum is {self.MAX_FILES_PER_BATCH} per batch."
+            )
+
+        # Phase 1: Validate all files first (fail-fast)
+        validation_errors = []
+        for i, file_spec in enumerate(files):
+            is_valid, error = self._validate_file_spec(file_spec, context)
+            if not is_valid:
+                validation_errors.append(f"File {i+1}: {error}")
+
+        if validation_errors:
+            return ToolResult(
+                False, "",
+                "Validation failed:\n" + "\n".join(validation_errors)
+            )
+
+        # Phase 2: Dry run check
+        if context.dry_run:
+            paths = [f['path'] for f in files]
+            total_chars = sum(len(f['content']) for f in files)
+            return ToolResult(
+                True,
+                f"[DRY RUN] Would write {len(files)} files ({total_chars} chars total):\n" +
+                "\n".join(f"  - {p}" for p in paths),
+                metadata={"dry_run": True, "file_count": len(files)}
+            )
+
+        # Phase 3: Write all files
+        results = []
+        files_written = 0
+        files_failed = 0
+        total_chars = 0
+
+        for file_spec in files:
+            path = file_spec['path']
+            content = file_spec['content']
+            target = context.project_root / path
+
+            try:
+                # Create parent directories if needed
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(content, encoding='utf-8')
+
+                # Verify write succeeded
+                if not target.exists():
+                    results.append(f"[FAIL] {path}: File was not created")
+                    files_failed += 1
+                    continue
+
+                # Verify content matches
+                written = target.read_text(encoding='utf-8')
+                normalized_written = written.replace('\r\n', '\n')
+                normalized_content = content.replace('\r\n', '\n')
+
+                if normalized_written != normalized_content:
+                    results.append(f"[FAIL] {path}: Content verification failed")
+                    files_failed += 1
+                    continue
+
+                # Record in HUD working set
+                if context.working_set:
+                    context.working_set.record_write(path, context.turn)
+
+                results.append(f"[OK] {path} ({len(content)} chars)")
+                files_written += 1
+                total_chars += len(content)
+
+            except Exception as e:
+                results.append(f"[FAIL] {path}: {str(e)}")
+                files_failed += 1
+
+        # Build summary
+        if files_failed == 0:
+            summary = f"Successfully wrote {files_written} file(s) ({total_chars} chars total)"
+        else:
+            summary = f"Wrote {files_written} file(s), {files_failed} failed"
+
+        output = summary + "\n\n" + "\n".join(results)
+
+        return ToolResult(
+            success=(files_failed == 0),
+            output=output,
+            error="" if files_failed == 0 else f"{files_failed} file(s) failed to write",
+            metadata={
+                "files_written": files_written,
+                "files_failed": files_failed,
+                "total_chars": total_chars
+            }
+        )
+
+
 class WriteFileTool(ToolBase):
     """Write content to a file."""
 

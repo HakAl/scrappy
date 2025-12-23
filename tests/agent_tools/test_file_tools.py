@@ -7,6 +7,7 @@ from scrappy.agent_tools.tools.file_tools import (
     ReadFileTool,
     ReadFilesTool,
     WriteFileTool,
+    WriteFilesTool,
     ListFilesTool,
     ListDirectoryTool
 )
@@ -335,6 +336,151 @@ class TestWriteFileTool:
 
         assert not result.success
         assert "Content too short" in result.error
+
+
+# --- WriteFilesTool Tests ---
+
+class TestWriteFilesTool:
+    def test_write_multiple_files(self, mock_context):
+        """Should write multiple files successfully."""
+        tool = WriteFilesTool()
+        files = [
+            {"path": "a.txt", "content": "Content A"},
+            {"path": "b.txt", "content": "Content B"},
+            {"path": "c.txt", "content": "Content C"},
+        ]
+
+        result = tool.execute(mock_context, files=files)
+
+        assert result.success
+        assert result.metadata["files_written"] == 3
+        assert result.metadata["files_failed"] == 0
+        assert (mock_context.project_root / "a.txt").read_text() == "Content A"
+        assert (mock_context.project_root / "b.txt").read_text() == "Content B"
+        assert (mock_context.project_root / "c.txt").read_text() == "Content C"
+
+    def test_creates_parent_directories(self, mock_context):
+        """Should create parent directories as needed."""
+        tool = WriteFilesTool()
+        files = [
+            {"path": "deep/nested/dir/file.txt", "content": "Nested content"},
+        ]
+
+        result = tool.execute(mock_context, files=files)
+
+        assert result.success
+        assert (mock_context.project_root / "deep/nested/dir/file.txt").exists()
+
+    def test_validates_all_before_writing(self, mock_context):
+        """Should validate all files before writing any."""
+        tool = WriteFilesTool()
+        files = [
+            {"path": "valid.txt", "content": "Valid content"},
+            {"path": "invalid.py", "content": "x"},  # Too short for code file
+            {"path": "another.txt", "content": "Also valid"},
+        ]
+
+        result = tool.execute(mock_context, files=files)
+
+        assert not result.success
+        assert "Validation failed" in result.error
+        assert "Content too short" in result.error
+        # Should NOT have written the valid file because validation failed first
+        assert not (mock_context.project_root / "valid.txt").exists()
+
+    def test_rejects_empty_files_list(self, mock_context):
+        """Should fail with empty files list."""
+        tool = WriteFilesTool()
+
+        result = tool.execute(mock_context, files=[])
+
+        assert not result.success
+        assert "No files provided" in result.error
+
+    def test_rejects_invalid_files_type(self, mock_context):
+        """Should fail if files is not a list."""
+        tool = WriteFilesTool()
+
+        result = tool.execute(mock_context, files={"path": "x.txt", "content": "y"})
+
+        assert not result.success
+        assert "must be a list" in result.error
+
+    def test_rejects_absolute_paths(self, mock_context):
+        """Should reject absolute paths in batch."""
+        tool = WriteFilesTool()
+        files = [
+            {"path": "/etc/passwd", "content": "hacked"},
+        ]
+
+        result = tool.execute(mock_context, files=files)
+
+        assert not result.success
+        assert "Absolute path" in result.error
+
+    def test_rejects_unsafe_paths(self, mock_context):
+        """Should reject paths outside project directory."""
+        tool = WriteFilesTool()
+        mock_context.is_safe_path = Mock(return_value=False)
+        files = [
+            {"path": "../secret.txt", "content": "secret"},
+        ]
+
+        result = tool.execute(mock_context, files=files)
+
+        assert not result.success
+        assert "outside project directory" in result.error
+
+    def test_rejects_empty_content(self, mock_context):
+        """Should reject files with empty content."""
+        tool = WriteFilesTool()
+        files = [
+            {"path": "empty.txt", "content": ""},
+        ]
+
+        result = tool.execute(mock_context, files=files)
+
+        assert not result.success
+        assert "Empty content" in result.error
+
+    def test_dry_run_does_not_write(self, mock_context):
+        """Should not write files in dry run mode."""
+        tool = WriteFilesTool()
+        mock_context.dry_run = True
+        files = [
+            {"path": "test.txt", "content": "Test content"},
+        ]
+
+        result = tool.execute(mock_context, files=files)
+
+        assert result.success
+        assert "[DRY RUN]" in result.output
+        assert not (mock_context.project_root / "test.txt").exists()
+
+    def test_max_files_limit(self, mock_context):
+        """Should reject batches exceeding max files limit."""
+        tool = WriteFilesTool()
+        files = [{"path": f"file{i}.txt", "content": f"Content {i}"} for i in range(25)]
+
+        result = tool.execute(mock_context, files=files)
+
+        assert not result.success
+        assert "Too many files" in result.error
+        assert "Maximum is 20" in result.error
+
+    def test_reports_individual_results(self, mock_context):
+        """Should report success/failure for each file."""
+        tool = WriteFilesTool()
+        files = [
+            {"path": "a.txt", "content": "Content A"},
+            {"path": "b.txt", "content": "Content B"},
+        ]
+
+        result = tool.execute(mock_context, files=files)
+
+        assert result.success
+        assert "[OK] a.txt" in result.output
+        assert "[OK] b.txt" in result.output
 
 
 # --- ListFilesTool Tests ---

@@ -16,6 +16,7 @@ from .tools.file_tools import (
     ReadFileTool,
     ReadFilesTool,
     WriteFileTool,
+    WriteFilesTool,
     ListFilesTool,
 )
 from .tools.git_tools import (
@@ -43,8 +44,8 @@ if TYPE_CHECKING:
 # Tools not in profile are still in codebase but not registered
 TOOL_PROFILES: Dict[str, List[str]] = {
     "full": [
-        # All 18 tools - backward compatible
-        "read_file", "read_files", "write_file", "list_files",
+        # All 19 tools - backward compatible
+        "read_file", "read_files", "write_file", "write_files", "list_files",
         "git_log", "git_status", "git_diff", "git_blame", "git_show", "git_recent_changes",
         "find_exact_text", "codebase_search",
         "web_fetch", "web_search",
@@ -53,11 +54,11 @@ TOOL_PROFILES: Dict[str, List[str]] = {
         "task",
     ],
     "optimized": [
-        # 11 tools - 40% token savings, production default
+        # 12 tools - 40% token savings, production default
         # Agent uses run_command for git_log, git_blame, git_show, git_recent_changes
         # Agent uses web_fetch for web_search functionality
         # Task management via system prompt or TODO.md
-        "read_file", "read_files", "write_file", "list_files",
+        "read_file", "read_files", "write_file", "write_files", "list_files",
         "git_status", "git_diff",
         "find_exact_text", "codebase_search",
         "web_fetch",
@@ -65,9 +66,9 @@ TOOL_PROFILES: Dict[str, List[str]] = {
         "complete",
     ],
     "minimal": [
-        # 8 tools - maximum token savings
+        # 9 tools - maximum token savings
         # Only essential tools, agent relies heavily on run_command
-        "read_file", "read_files", "write_file", "list_files",
+        "read_file", "read_files", "write_file", "write_files", "list_files",
         "codebase_search",
         "git_status",
         "run_command",
@@ -120,6 +121,7 @@ def create_registry_with_profile(
         "read_file": lambda: ReadFileTool(),
         "read_files": lambda: ReadFilesTool(),
         "write_file": lambda: WriteFileTool(),
+        "write_files": lambda: WriteFilesTool(),
         "list_files": lambda: ListFilesTool(),
         # Git tools
         "git_log": lambda: GitLogTool(),
