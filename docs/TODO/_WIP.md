@@ -1,32 +1,3 @@
----
-# Config Scopes: User vs Project
-
-## Status: IMPLEMENTED
-
-Rate limits now stored in `~/.scrappy/rate_limits.json` (user-level).
-Migration: existing project-level files are auto-migrated on first use.
-
-See `src/scrappy/infrastructure/paths.py` for implementation.
-
----
-
-## Problem (Original)
-Rate limits should be per-user (API keys are user-level), not per-project.
-
-## Proposed Scope
-
-| USER (~/.scrappy/)  | PROJECT (.scrappy/) |
-|---------------------|---------------------|
-| rate_limits.json    | command_history     |
-| config/             | lancedb/            |
-|  - api keys         | conversations.db    |
-|  - disclaimer       | audit.json          |
-|                     | config.json         |
-|                     | debug.log           |
-|                     | fingerprints.json   |
-|                     | response_cache.json |
-|                     | session.json        |
-
 ## Implementation Plan
 
 **Scope: Minor (~25-30 lines)**
