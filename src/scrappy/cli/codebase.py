@@ -36,16 +36,16 @@ class CLICodebaseAnalysis:
         self.io = io
 
     def explore_codebase(self, path: str = ""):
-        """Explore and generate a comprehensive summary of a codebase.
+        """Explore and optionally generate a summary of a codebase.
 
-        Scans the directory structure, reads key files, and uses LLM to generate
-        a summary including project type, purpose, technologies, and architecture.
+        Scans the directory structure and reads key files. LLM summary generation
+        is lazy - only performed if user explicitly requests it.
 
         For the current project directory, uses context-aware exploration with
         persistence. For external directories, performs standalone exploration.
 
         Args:
-            path: Directory path to explore. If empty, prompts user for input.
+            path: Directory path to explore. If empty, uses current directory.
 
         State Changes:
             - Adds discovery to orchestrator working memory
@@ -53,7 +53,7 @@ class CLICodebaseAnalysis:
 
         Side Effects:
             - Reads files from disk to analyze codebase
-            - Makes LLM API call to generate summary
+            - Makes LLM API call ONLY if user confirms summary generation
             - Writes progress and summary to stdout via self.io
             - May write CODEBASE_SUMMARY.md file if user confirms
 
@@ -78,25 +78,16 @@ class CLICodebaseAnalysis:
         # Check if exploring current project or different directory
         is_current_project = path == self.orchestrator.context.project_path
 
+        summary = None
+        structure = None
+
         if is_current_project:
             # Use orchestrator's context system for proper persistence
             self.io.echo("Using context-aware exploration...")
 
-            # Step 1: Explore and scan files
+            # Step 1: Explore and scan files (NO LLM call)
             result = self.orchestrator.context.explore(force=True)
-
-            # Step 2: Generate summary with LLM (this saves to context)
-            def llm_summary(prompt):
-                response = self.orchestrator.delegate(
-                    self.orchestrator.brain,
-                    prompt,
-                    system_prompt="You are a code analysis expert. Analyze codebases and provide clear, actionable summaries. Be concise but thorough.",
-                    max_tokens=MAX_TOKENS_SUMMARY,
-                    temperature=TEMPERATURE_LOW
-                )
-                return response.content
-
-            summary = self.orchestrator.context.generate_summary(llm_summary)
+            structure = result
 
             # Add discovery to working memory
             self.orchestrator.working_memory.add_discovery(
@@ -108,8 +99,6 @@ class CLICodebaseAnalysis:
             self.io.echo("Exploring external directory (not persisted to context)...")
             source_files = self._find_source_files(path)
             structure = self._analyze_structure(path, source_files)
-            key_contents = self._read_key_files(path, source_files)
-            summary = self._generate_codebase_summary(path, structure, key_contents)
 
             # Still add to working memory as a discovery
             self.orchestrator.working_memory.add_discovery(
@@ -117,22 +106,88 @@ class CLICodebaseAnalysis:
                 str(path)
             )
 
+        # Display basic structure info (no LLM needed)
         self.io.echo()
-        self.io.secho("Codebase Summary:", bold=True)
+        self.io.secho("Codebase Structure:", bold=True)
         self.io.echo("-" * 50)
-        self.io.echo(summary)
+        self._display_basic_structure(structure, path)
 
         if is_current_project:
             self.io.secho("\nContext saved! Use /context to view status.", fg=self.io.theme.success)
 
-        # Offer to save summary
-        if self.io.confirm("\nSave summary to file?", default=False):
-            summary_file = path / "CODEBASE_SUMMARY.md"
-            with open(summary_file, 'w', encoding='utf-8') as f:
-                f.write("# Codebase Summary\n\n")
-                f.write(f"Generated: {datetime.now().isoformat()}\n\n")
-                f.write(summary)
-            self.io.secho(f"Saved to: {summary_file}", fg=self.io.theme.success)
+        # Lazy summary generation - only if user confirms
+        if self.io.confirm("\nGenerate detailed summary? (uses LLM)", default=False):
+            self.io.echo("\nGenerating summary...")
+
+            if is_current_project:
+                def llm_summary(prompt):
+                    response = self.orchestrator.delegate(
+                        self.orchestrator.brain,
+                        prompt,
+                        system_prompt="You are a code analysis expert. Analyze codebases and provide clear, actionable summaries. Be concise but thorough.",
+                        max_tokens=MAX_TOKENS_SUMMARY,
+                        temperature=TEMPERATURE_LOW
+                    )
+                    return response.content
+
+                summary = self.orchestrator.context.generate_summary(llm_summary)
+            else:
+                key_contents = self._read_key_files(path, source_files)
+                summary = self._generate_codebase_summary(path, structure, key_contents)
+
+            self.io.echo()
+            self.io.secho("Codebase Summary:", bold=True)
+            self.io.echo("-" * 50)
+            self.io.echo(summary)
+
+            # Offer to save summary (only if generated)
+            if self.io.confirm("\nSave summary to file?", default=False):
+                summary_file = path / "CODEBASE_SUMMARY.md"
+                with open(summary_file, 'w', encoding='utf-8') as f:
+                    f.write("# Codebase Summary\n\n")
+                    f.write(f"Generated: {datetime.now().isoformat()}\n\n")
+                    f.write(summary)
+                self.io.secho(f"Saved to: {summary_file}", fg=self.io.theme.success)
+
+    def _display_basic_structure(self, structure: dict, path: Path):
+        """Display basic codebase structure without LLM.
+
+        Args:
+            structure: Structure dict from explore() or _analyze_structure()
+            path: Project path for display
+        """
+        total_files = structure.get('total_files', 0)
+        self.io.echo(f"Total files: {total_files}")
+
+        # File types breakdown
+        by_type = structure.get('by_type', structure.get('file_types', {}))
+        if by_type:
+            type_parts = [f"{k}: {v}" for k, v in by_type.items() if v > 0]
+            if type_parts:
+                self.io.echo(f"File types: {', '.join(type_parts)}")
+
+        # Directories
+        directories = structure.get('directories', [])
+        if directories:
+            self.io.echo(f"Directories: {', '.join(directories[:10])}")
+            if len(directories) > 10:
+                self.io.echo(f"  ... and {len(directories) - 10} more")
+
+        # Project markers
+        markers = []
+        if structure.get('has_readme'):
+            markers.append("README")
+        if structure.get('has_pyproject'):
+            markers.append("pyproject.toml")
+        if structure.get('has_requirements'):
+            markers.append("requirements.txt")
+        if structure.get('has_package_json'):
+            markers.append("package.json")
+        if structure.get('has_git'):
+            markers.append("git repo")
+
+        if markers:
+            self.io.echo(f"Project markers: {', '.join(markers)}")
 
     def _find_source_files(self, path: Path) -> dict:
         """Find all source files organized by type/category.

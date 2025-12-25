@@ -9,9 +9,8 @@ Focuses on:
 - Summary generation
 """
 
-import pytest
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch, mock_open
+from unittest.mock import MagicMock, Mock, patch
 
 from scrappy.cli.codebase import CLICodebaseAnalysis
 from tests.helpers import MockIO
@@ -199,3 +198,200 @@ class TestGenerateCodebaseSummary:
         assert "Error generating summary" in summary
         assert "API error" in summary
         assert "Basic structure" in summary
+
+
+class TestLazySummaryGeneration:
+    """Test lazy summary generation behavior.
+
+    LLM calls should only be made when user explicitly requests a summary,
+    not during initial exploration.
+    """
+
+    def test_explore_displays_structure_without_llm_call(self, tmp_path):
+        """Should display basic structure without making LLM call."""
+        # Create test project structure
+        (tmp_path / "src").mkdir()
+        (tmp_path / "tests").mkdir()
+        (tmp_path / "main.py").write_text("# main")
+        (tmp_path / "README.md").write_text("# Test Project")
+
+        orchestrator = MagicMock()
+        orchestrator.context.project_path = tmp_path
+        orchestrator.context.explore.return_value = {
+            'status': 'explored',
+            'total_files': 2,
+            'file_types': {'python': 1, 'docs': 1},
+            'directories': ['src', 'tests'],
+            'has_readme': True,
+            'has_git': False,
+        }
+
+        io = MockIO(confirmations=[False])  # User declines summary generation
+
+        analyzer = CLICodebaseAnalysis(orchestrator, io)
+        analyzer.explore_codebase(str(tmp_path))
+
+        # Should call explore() but NOT generate_summary()
+        orchestrator.context.explore.assert_called_once()
+        orchestrator.context.generate_summary.assert_not_called()
+        orchestrator.delegate.assert_not_called()
+
+        # Should show structure info
+        output = io.get_output()
+        assert "Codebase Structure" in output
+        assert "Total files" in output
+
+    def test_llm_called_only_when_user_confirms_summary(self, tmp_path):
+        """Should call LLM only when user confirms summary generation."""
+        (tmp_path / "main.py").write_text("# main")
+
+        orchestrator = MagicMock()
+        orchestrator.context.project_path = tmp_path
+        orchestrator.context.explore.return_value = {
+            'status': 'explored',
+            'total_files': 1,
+            'file_types': {'python': 1},
+            'directories': [],
+        }
+        orchestrator.context.generate_summary.return_value = "Generated summary"
+
+        io = MockIO(confirmations=[True, False])  # Yes to summary, No to save
+
+        analyzer = CLICodebaseAnalysis(orchestrator, io)
+        analyzer.explore_codebase(str(tmp_path))
+
+        # Should call generate_summary when user confirms
+        orchestrator.context.generate_summary.assert_called_once()
+
+        # Should display the summary
+        output = io.get_output()
+        assert "Generated summary" in output
+
+    def test_save_option_not_shown_when_summary_declined(self, tmp_path):
+        """Should not offer save option when user declines summary."""
+        (tmp_path / "main.py").write_text("# main")
+
+        orchestrator = MagicMock()
+        orchestrator.context.project_path = tmp_path
+        orchestrator.context.explore.return_value = {
+            'status': 'explored',
+            'total_files': 1,
+            'file_types': {'python': 1},
+            'directories': [],
+        }
+
+        io = MockIO(confirmations=[False])  # Decline summary generation
+
+        analyzer = CLICodebaseAnalysis(orchestrator, io)
+        analyzer.explore_codebase(str(tmp_path))
+
+        # Should only ask one question (summary generation)
+        # confirm_index tracks how many confirms were processed
+        assert io._confirm_index == 1
+
+    def test_external_directory_lazy_summary(self, tmp_path):
+        """Should use lazy summary for external directories too."""
+        external_path = tmp_path / "external"
+        external_path.mkdir()
+        (external_path / "app.py").write_text("# app")
+
+        orchestrator = MagicMock()
+        orchestrator.context.project_path = tmp_path  # Different from external_path
+
+        io = MockIO(confirmations=[False])  # Decline summary
+
+        analyzer = CLICodebaseAnalysis(orchestrator, io)
+        analyzer.explore_codebase(str(external_path))
+
+        # Should NOT call _generate_codebase_summary (LLM)
+        orchestrator.delegate.assert_not_called()
+
+        # Should show structure
+        output = io.get_output()
+        assert "Codebase Structure" in output
+
+
+class TestDisplayBasicStructure:
+    """Test the basic structure display helper."""
+
+    def test_displays_total_files(self):
+        """Should display total file count."""
+        orchestrator = MagicMock()
+        io = MockIO()
+        analyzer = CLICodebaseAnalysis(orchestrator, io)
+
+        structure = {'total_files': 42, 'directories': []}
+        analyzer._display_basic_structure(structure, Path('/test'))
+
+        output = io.get_output()
+        assert "42" in output
+
+    def test_displays_file_types(self):
+        """Should display file type breakdown."""
+        orchestrator = MagicMock()
+        io = MockIO()
+        analyzer = CLICodebaseAnalysis(orchestrator, io)
+
+        structure = {
+            'total_files': 10,
+            'by_type': {'python': 5, 'javascript': 3, 'config': 2},
+            'directories': [],
+        }
+        analyzer._display_basic_structure(structure, Path('/test'))
+
+        output = io.get_output()
+        assert "python" in output.lower()
+        assert "5" in output
+
+    def test_displays_directories(self):
+        """Should display top-level directories."""
+        orchestrator = MagicMock()
+        io = MockIO()
+        analyzer = CLICodebaseAnalysis(orchestrator, io)
+
+        structure = {
+            'total_files': 10,
+            'directories': ['src', 'tests', 'docs'],
+        }
+        analyzer._display_basic_structure(structure, Path('/test'))
+
+        output = io.get_output()
+        assert "src" in output
+        assert "tests" in output
+
+    def test_displays_project_markers(self):
+        """Should display detected project markers."""
+        orchestrator = MagicMock()
+        io = MockIO()
+        analyzer = CLICodebaseAnalysis(orchestrator, io)
+
+        structure = {
+            'total_files': 10,
+            'directories': [],
+            'has_readme': True,
+            'has_pyproject': True,
+            'has_git': True,
+        }
+        analyzer._display_basic_structure(structure, Path('/test'))
+
+        output = io.get_output()
+        assert "README" in output
+        assert "pyproject.toml" in output
+        assert "git" in output.lower()
+
+    def test_handles_many_directories(self):
+        """Should truncate directory list when too many."""
+        orchestrator = MagicMock()
+        io = MockIO()
+        analyzer = CLICodebaseAnalysis(orchestrator, io)
+
+        structure = {
+            'total_files': 100,
+            'directories': [f'dir{i}' for i in range(15)],
+        }
+        analyzer._display_basic_structure(structure, Path('/test'))
+
+        output = io.get_output()
+        assert "dir0" in output
+        assert "dir9" in output
+        assert "5 more" in output  # Should indicate truncation
