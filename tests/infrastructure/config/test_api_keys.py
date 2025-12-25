@@ -4,7 +4,6 @@ Unit tests for API key configuration service.
 Tests ApiKeyConfig dataclass and ApiKeyConfigService with in-memory persistence.
 """
 
-import pytest
 from typing import Dict, Optional, Any
 
 from scrappy.infrastructure.config.api_keys import (
@@ -125,7 +124,8 @@ class TestApiKeyConfigService:
         persistence = InMemoryPersistence()
         service = ApiKeyConfigService(persistence)
 
-        config = service.load()
+        # Disable env migration for this test
+        config = service.load(migrate_env=False)
 
         assert config.api_keys == {}
 
@@ -247,6 +247,108 @@ class TestApiKeyConfigService:
         result = service.has_any_key(["CEREBRAS_API_KEY", "GROQ_API_KEY"])
 
         assert result
+
+
+class TestEnvMigration:
+    """Tests for environment variable migration behavior."""
+
+    def test_load_migrates_env_vars_to_config(self, monkeypatch):
+        """load() should migrate valid API keys from env vars to config."""
+        # Set up env var
+        monkeypatch.setenv("GROQ_API_KEY", "gsk_test_key_1234567890")
+
+        persistence = InMemoryPersistence()
+        service = ApiKeyConfigService(persistence)
+
+        # Load with migration
+        config = service.load(migrate_env=True)
+
+        # Key should be migrated to config
+        assert config.get_key("GROQ_API_KEY") == "gsk_test_key_1234567890"
+        # Should be persisted
+        assert persistence.data["api_keys"]["GROQ_API_KEY"] == "gsk_test_key_1234567890"
+
+    def test_load_does_not_overwrite_existing_config(self, monkeypatch):
+        """load() should not overwrite keys already in config."""
+        # Set up env var with different value
+        monkeypatch.setenv("GROQ_API_KEY", "env_key_12345678")
+
+        persistence = InMemoryPersistence()
+        persistence.data = {
+            "api_keys": {
+                "GROQ_API_KEY": "config_key_existing"
+            }
+        }
+        service = ApiKeyConfigService(persistence)
+
+        # Load with migration
+        config = service.load(migrate_env=True)
+
+        # Should keep config value, not env value
+        assert config.get_key("GROQ_API_KEY") == "config_key_existing"
+
+    def test_load_skips_invalid_env_keys(self, monkeypatch):
+        """load() should skip env vars with invalid API keys."""
+        # Set up invalid env var (too short)
+        monkeypatch.setenv("GROQ_API_KEY", "short")
+
+        persistence = InMemoryPersistence()
+        service = ApiKeyConfigService(persistence)
+
+        # Load with migration
+        config = service.load(migrate_env=True)
+
+        # Key should NOT be migrated
+        assert config.get_key("GROQ_API_KEY") is None
+
+    def test_load_skips_migration_when_disabled(self, monkeypatch):
+        """load(migrate_env=False) should not migrate env vars."""
+        # Set up env var
+        monkeypatch.setenv("GROQ_API_KEY", "gsk_test_key_1234567890")
+
+        persistence = InMemoryPersistence()
+        service = ApiKeyConfigService(persistence)
+
+        # Load without migration
+        config = service.load(migrate_env=False)
+
+        # Key should NOT be migrated
+        assert config.get_key("GROQ_API_KEY") is None
+
+    def test_migrate_returns_count_of_migrated_keys(self, monkeypatch):
+        """_migrate_from_env() should return count of migrated keys."""
+        # Set up two env vars
+        monkeypatch.setenv("GROQ_API_KEY", "gsk_test_key_1234567890")
+        monkeypatch.setenv("CEREBRAS_API_KEY", "csk_test_key_1234567890")
+
+        persistence = InMemoryPersistence()
+        service = ApiKeyConfigService(persistence)
+        service.load(migrate_env=False)  # Load without migration
+
+        # Migrate manually
+        count = service._migrate_from_env(["GROQ_API_KEY", "CEREBRAS_API_KEY"])
+
+        assert count == 2
+
+    def test_migrate_only_counts_new_keys(self, monkeypatch):
+        """_migrate_from_env() should not count already-existing keys."""
+        # Set up env var
+        monkeypatch.setenv("GROQ_API_KEY", "gsk_test_key_1234567890")
+
+        persistence = InMemoryPersistence()
+        persistence.data = {
+            "api_keys": {
+                "GROQ_API_KEY": "existing_config_key"
+            }
+        }
+        service = ApiKeyConfigService(persistence)
+        service.load(migrate_env=False)  # Load without migration
+
+        # Migrate manually
+        count = service._migrate_from_env(["GROQ_API_KEY"])
+
+        # Should not count the already-existing key
+        assert count == 0
 
 
 class TestCreateApiKeyService:

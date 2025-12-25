@@ -892,82 +892,23 @@ class ScrappyApp(App):
             pass
 
     def _check_and_migrate_providers(self) -> tuple[bool, int]:
-        """Check if any provider is configured and migrate env keys if needed.
+        """Check if any provider is configured.
+
+        Migration from environment variables to config now happens automatically
+        in ApiKeyConfigService.load(), so we just need to check for providers.
 
         Returns:
-            Tuple of (has_any_provider, env_keys_found_count)
+            Tuple of (has_any_provider, 0)
+            Note: Second value kept for API compatibility but always 0
         """
         from scrappy.infrastructure.config.api_keys import create_api_key_service
         from scrappy.orchestrator.provider_definitions import PROVIDERS
 
+        # Migration happens automatically in load() via _migrate_from_env()
         config_service = create_api_key_service()
         env_vars = [info.env_var for info in PROVIDERS.values()]
 
-        # Migrate any keys from environment variables to config
-        env_key_count = self._migrate_env_keys_to_config(config_service, env_vars)
-
-        return config_service.has_any_key(env_vars), env_key_count
-
-    def _migrate_env_keys_to_config(
-        self,
-        config_service,
-        env_vars: list[str]
-    ) -> int:
-        """
-        Migrate API keys from environment variables to config file.
-
-        This allows users with existing .env files to skip the setup wizard.
-        Keys are validated and copied from os.environ to the config service
-        if not already present. Invalid keys are skipped with a warning.
-
-        Args:
-            config_service: The API key config service
-            env_vars: List of environment variable names to check
-
-        Returns:
-            Number of valid keys found in environment (migrated or already in config)
-        """
-        import os
-        import logging
-        from scrappy.infrastructure.config.api_keys import ApiKeyValidationError
-        from scrappy.infrastructure.validation import validate_api_key
-
-        logger = logging.getLogger(__name__)
-        env_keys_found = 0
-        migrated = []
-        skipped = []
-
-        for env_var in env_vars:
-            env_value = os.environ.get(env_var)
-            if env_value:
-                # Validate the env value before counting/migrating
-                validation_result = validate_api_key(env_value)
-                if not validation_result.is_valid:
-                    skipped.append((env_var, validation_result.error))
-                    logger.warning(
-                        f"Skipping invalid {env_var} from environment: {validation_result.error}"
-                    )
-                    continue
-
-                env_keys_found += 1
-                config_value = config_service.get_key(env_var)
-                if not config_value:
-                    # Migrate from environment to config (uses sanitized value)
-                    try:
-                        config_service.set_key(env_var, validation_result.sanitized_value)
-                        migrated.append(env_var)
-                    except ApiKeyValidationError as e:
-                        # Should not happen since we pre-validated, but defense-in-depth
-                        logger.warning(f"Failed to migrate {env_var}: {e}")
-                        env_keys_found -= 1
-
-        if migrated:
-            logger.info(f"Migrated {len(migrated)} API key(s) from environment: {', '.join(migrated)}")
-
-        if skipped:
-            logger.warning(f"Skipped {len(skipped)} invalid key(s) from environment")
-
-        return env_keys_found
+        return config_service.has_any_key(env_vars), 0
 
     def _show_main_screen(self, env_key_count: int = 0) -> None:
         """Switch to main chat screen.
