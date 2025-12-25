@@ -559,6 +559,161 @@ def agent(ctx, task, dry_run, no_checkpoint, auto_confirm, max_iterations):
         sys.exit(1)
 
 
+# =============================================================================
+# Config Command Group - API Key Management
+# =============================================================================
+
+@cli.group()
+def config():
+    """Manage API key configuration.
+
+    Commands to list, add, and remove provider API keys.
+
+    Examples:
+        scrappy config list          # Show configured providers
+        scrappy config set groq      # Add/update Groq API key
+        scrappy config remove groq   # Remove Groq API key
+    """
+    pass
+
+
+@config.command('list')
+def config_list():
+    """List configured API providers.
+
+    Shows which providers have API keys configured, with masked key values
+    for security. Also shows unconfigured providers for reference.
+    """
+    from scrappy.infrastructure.config.api_keys import create_api_key_service
+    from scrappy.orchestrator.provider_definitions import PROVIDERS
+
+    config_service = create_api_key_service()
+
+    click.secho("\nAPI Key Configuration", bold=True)
+    click.echo("=" * 50)
+
+    configured = []
+    unconfigured = []
+
+    for name, info in sorted(PROVIDERS.items(), key=lambda x: x[1].priority):
+        key = config_service.get_key(info.env_var)
+        if key:
+            # Mask the key for display (show first 4 and last 4 chars)
+            if len(key) > 12:
+                masked = f"{key[:4]}...{key[-4:]}"
+            else:
+                masked = "****"
+            configured.append((name, info, masked))
+        else:
+            unconfigured.append((name, info))
+
+    if configured:
+        click.secho("\nConfigured providers:", fg="green")
+        for name, info, masked in configured:
+            click.echo(f"  {name:12} {masked:20} ({info.quota})")
+    else:
+        click.secho("\nNo providers configured.", fg="yellow")
+
+    if unconfigured:
+        click.secho("\nUnconfigured providers:", fg="yellow")
+        for name, info in unconfigured:
+            click.echo(f"  {name:12} {info.env_var:25} ({info.console_url})")
+
+    click.echo()
+
+
+@config.command('set')
+@click.argument('provider')
+def config_set(provider: str):
+    """Set API key for a provider.
+
+    Prompts for the API key interactively (hidden input for security).
+    The key is validated before saving.
+
+    PROVIDER is the name of the provider (e.g., groq, cerebras, gemini).
+    """
+    from scrappy.infrastructure.config.api_keys import (
+        create_api_key_service,
+        ApiKeyValidationError,
+    )
+    from scrappy.orchestrator.provider_definitions import PROVIDERS
+
+    provider = provider.lower()
+    if provider not in PROVIDERS:
+        click.secho(f"Unknown provider: {provider}", fg="red")
+        click.echo(f"Available providers: {', '.join(PROVIDERS.keys())}")
+        sys.exit(1)
+
+    info = PROVIDERS[provider]
+    click.echo(f"\nSetting API key for {provider}")
+    click.echo(f"Get your key from: {info.console_url}")
+    click.echo()
+
+    # Prompt for key (hidden input)
+    key = click.prompt(
+        f"Enter {info.env_var}",
+        hide_input=True,
+        confirmation_prompt=True
+    )
+
+    if not key or not key.strip():
+        click.secho("Cancelled - no key provided.", fg="yellow")
+        sys.exit(0)
+
+    config_service = create_api_key_service()
+    try:
+        config_service.set_key(info.env_var, key.strip())
+        click.secho(f"\nAPI key for {provider} saved successfully!", fg="green")
+    except ApiKeyValidationError as e:
+        click.secho(f"\nInvalid API key: {e}", fg="red")
+        sys.exit(1)
+
+
+@config.command('remove')
+@click.argument('provider')
+@click.option('--force', '-f', is_flag=True, help="Skip confirmation prompt")
+def config_remove(provider: str, force: bool):
+    """Remove API key for a provider.
+
+    PROVIDER is the name of the provider (e.g., groq, cerebras, gemini).
+    """
+    from scrappy.infrastructure.config.api_keys import create_api_key_service
+    from scrappy.orchestrator.provider_definitions import PROVIDERS
+
+    provider = provider.lower()
+    if provider not in PROVIDERS:
+        click.secho(f"Unknown provider: {provider}", fg="red")
+        click.echo(f"Available providers: {', '.join(PROVIDERS.keys())}")
+        sys.exit(1)
+
+    info = PROVIDERS[provider]
+    config_service = create_api_key_service()
+
+    # Check if key exists
+    if not config_service.get_key(info.env_var):
+        click.secho(f"No API key configured for {provider}.", fg="yellow")
+        sys.exit(0)
+
+    # Confirm removal
+    if not force:
+        if not click.confirm(f"Remove API key for {provider}?"):
+            click.echo("Cancelled.")
+            sys.exit(0)
+
+    # Remove by setting to empty and then removing from config
+    config = config_service.load(migrate_env=False)
+    if info.env_var in config.api_keys:
+        del config.api_keys[info.env_var]
+        config_service.save(config)
+        click.secho(f"API key for {provider} removed.", fg="green")
+    else:
+        click.secho(f"No API key found for {provider}.", fg="yellow")
+
+
+# =============================================================================
+# Main Entry Point
+# =============================================================================
+
 def main():
     """Main entry point."""
     # Ensure CLI mode is set (default, but explicit for safety)
