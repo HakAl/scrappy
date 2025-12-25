@@ -286,6 +286,137 @@ class TestSetupWizardFlow:
         assert error_shown
 
 
+class TestSetupWizardActionMenu:
+    """Test action menu for configured providers (update/remove)."""
+
+    def test_configured_provider_shows_action_menu(self):
+        """Selecting a configured provider should show action menu."""
+        io = MockIO()
+        mock_service = MockApiKeyConfigService()
+        # Configure the first provider (sorted by priority)
+        sorted_providers = sorted(PROVIDERS.items(), key=lambda x: x[1].priority)
+        first_provider = sorted_providers[0][0]
+        first_env_var = sorted_providers[0][1].env_var
+        mock_service.keys = {first_env_var: "existing_key_12345"}
+        mock_llm = MockLLMService()
+        wizard = SetupWizard(io, llm_service=mock_llm, config_service=mock_service)
+
+        wizard.start(allow_cancel=True)
+        wizard.handle_input("1")  # Select first (configured) provider
+
+        # Should be in action menu state
+        from scrappy.cli.setup_wizard import WizardState
+        assert wizard._state == WizardState.ACTION_MENU
+        assert "Update" in wizard.current_prompt or "1=" in wizard.current_prompt
+
+    def test_unconfigured_provider_goes_to_key_input(self):
+        """Selecting an unconfigured provider should go straight to key input."""
+        io = MockIO()
+        mock_service = MockApiKeyConfigService()
+        mock_llm = MockLLMService()
+        wizard = SetupWizard(io, llm_service=mock_llm, config_service=mock_service)
+
+        wizard.start(allow_cancel=True)
+        wizard.handle_input("1")  # Select first (unconfigured) provider
+
+        # Should be waiting for API key
+        from scrappy.cli.setup_wizard import WizardState
+        assert wizard._state == WizardState.AWAITING_KEY
+
+    def test_action_menu_update_goes_to_key_input(self):
+        """Selecting '1' (update) in action menu should go to key input."""
+        io = MockIO()
+        mock_service = MockApiKeyConfigService()
+        sorted_providers = sorted(PROVIDERS.items(), key=lambda x: x[1].priority)
+        first_env_var = sorted_providers[0][1].env_var
+        mock_service.keys = {first_env_var: "existing_key_12345"}
+        mock_llm = MockLLMService()
+        wizard = SetupWizard(io, llm_service=mock_llm, config_service=mock_service)
+
+        wizard.start(allow_cancel=True)
+        wizard.handle_input("1")  # Select configured provider
+        wizard.handle_input("1")  # Select update
+
+        from scrappy.cli.setup_wizard import WizardState
+        assert wizard._state == WizardState.AWAITING_KEY
+
+    def test_action_menu_remove_goes_to_confirm(self):
+        """Selecting '2' (remove) in action menu should go to confirmation."""
+        io = MockIO()
+        mock_service = MockApiKeyConfigService()
+        sorted_providers = sorted(PROVIDERS.items(), key=lambda x: x[1].priority)
+        first_env_var = sorted_providers[0][1].env_var
+        mock_service.keys = {first_env_var: "existing_key_12345"}
+        mock_llm = MockLLMService()
+        wizard = SetupWizard(io, llm_service=mock_llm, config_service=mock_service)
+
+        wizard.start(allow_cancel=True)
+        wizard.handle_input("1")  # Select configured provider
+        wizard.handle_input("2")  # Select remove
+
+        from scrappy.cli.setup_wizard import WizardState
+        assert wizard._state == WizardState.CONFIRM_REMOVE
+
+    def test_action_menu_quit_returns_to_menu(self):
+        """Selecting 'q' in action menu should return to main menu."""
+        io = MockIO()
+        mock_service = MockApiKeyConfigService()
+        sorted_providers = sorted(PROVIDERS.items(), key=lambda x: x[1].priority)
+        first_env_var = sorted_providers[0][1].env_var
+        mock_service.keys = {first_env_var: "existing_key_12345"}
+        mock_llm = MockLLMService()
+        wizard = SetupWizard(io, llm_service=mock_llm, config_service=mock_service)
+
+        wizard.start(allow_cancel=True)
+        wizard.handle_input("1")  # Select configured provider
+        wizard.handle_input("q")  # Back to menu
+
+        from scrappy.cli.setup_wizard import WizardState
+        assert wizard._state == WizardState.MENU
+
+    def test_confirm_remove_yes_deletes_key(self):
+        """Confirming removal with 'y' should delete the key."""
+        io = MockIO()
+        mock_service = MockApiKeyConfigService()
+        sorted_providers = sorted(PROVIDERS.items(), key=lambda x: x[1].priority)
+        first_env_var = sorted_providers[0][1].env_var
+        mock_service.keys = {first_env_var: "existing_key_12345"}
+        mock_llm = MockLLMService()
+        wizard = SetupWizard(io, llm_service=mock_llm, config_service=mock_service)
+
+        wizard.start(allow_cancel=True)
+        wizard.handle_input("1")  # Select configured provider
+        wizard.handle_input("2")  # Select remove
+        wizard.handle_input("y")  # Confirm
+
+        # Key should be removed
+        assert first_env_var not in mock_service.keys
+        # Should return to menu
+        from scrappy.cli.setup_wizard import WizardState
+        assert wizard._state == WizardState.MENU
+
+    def test_confirm_remove_no_cancels(self):
+        """Declining removal with 'n' should keep the key."""
+        io = MockIO()
+        mock_service = MockApiKeyConfigService()
+        sorted_providers = sorted(PROVIDERS.items(), key=lambda x: x[1].priority)
+        first_env_var = sorted_providers[0][1].env_var
+        mock_service.keys = {first_env_var: "existing_key_12345"}
+        mock_llm = MockLLMService()
+        wizard = SetupWizard(io, llm_service=mock_llm, config_service=mock_service)
+
+        wizard.start(allow_cancel=True)
+        wizard.handle_input("1")  # Select configured provider
+        wizard.handle_input("2")  # Select remove
+        wizard.handle_input("n")  # Decline
+
+        # Key should still exist
+        assert first_env_var in mock_service.keys
+        # Should return to menu
+        from scrappy.cli.setup_wizard import WizardState
+        assert wizard._state == WizardState.MENU
+
+
 class TestSetupWizardProviderTesting:
     """Test provider API key testing using llm_service.validate_key."""
 

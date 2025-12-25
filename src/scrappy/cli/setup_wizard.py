@@ -1,6 +1,5 @@
 """Provider setup wizard - TUI-based configuration."""
 import os
-import sys
 from contextlib import contextmanager
 from enum import Enum, auto
 from typing import Optional, Tuple, Callable, TYPE_CHECKING
@@ -64,7 +63,9 @@ class WizardState(Enum):
     """State machine states for non-blocking wizard operation."""
     DISCLAIMER = auto()    # Showing disclaimer (first-run only)
     MENU = auto()          # Showing provider menu
+    ACTION_MENU = auto()   # Showing action menu for configured provider
     AWAITING_KEY = auto()  # Waiting for API key input
+    CONFIRM_REMOVE = auto()  # Confirming key removal
     DONE = auto()          # Wizard complete
 
 
@@ -159,9 +160,13 @@ class SetupWizard:
         elif self._state == WizardState.MENU:
             # Always show "q" option - user can always exit
             return f"Select provider (1-{len(PROVIDERS)}) or q to exit"
+        elif self._state == WizardState.ACTION_MENU:
+            return "1=Update key, 2=Remove key, q=Back"
         elif self._state == WizardState.AWAITING_KEY:
             info = PROVIDERS[self._current_provider]
             return f"Enter {info.env_var} or q to cancel"
+        elif self._state == WizardState.CONFIRM_REMOVE:
+            return "Remove this API key? (y/n)"
         return ""
 
     def handle_input(self, user_input: str) -> None:
@@ -179,8 +184,12 @@ class SetupWizard:
             self._handle_disclaimer_input(user_input.lower())
         elif self._state == WizardState.MENU:
             self._handle_menu_input(user_input.lower())
+        elif self._state == WizardState.ACTION_MENU:
+            self._handle_action_input(user_input.lower())
         elif self._state == WizardState.AWAITING_KEY:
             self._handle_key_input(user_input)
+        elif self._state == WizardState.CONFIRM_REMOVE:
+            self._handle_confirm_remove_input(user_input.lower())
 
     def _handle_disclaimer_input(self, response: str) -> None:
         """Handle disclaimer acknowledgment input."""
@@ -223,10 +232,16 @@ class SetupWizard:
         provider_name = self._get_provider_by_index(choice)
         if provider_name:
             self._current_provider = provider_name
-            self._state = WizardState.AWAITING_KEY
-            info = PROVIDERS[provider_name]
-            self.io.echo(f"\nConfiguring {provider_name.replace('_', ' ').title()}")
-            self.io.echo(f"Get your API key from: {info.console_url}")
+            if self._is_configured(provider_name):
+                # Show action menu for configured providers
+                self._state = WizardState.ACTION_MENU
+                self._show_action_menu()
+            else:
+                # Go straight to key input for unconfigured providers
+                self._state = WizardState.AWAITING_KEY
+                info = PROVIDERS[provider_name]
+                self.io.echo(f"\nConfiguring {provider_name.replace('_', ' ').title()}")
+                self.io.echo(f"Get your API key from: {info.console_url}")
         else:
             self.io.secho("Invalid selection.", fg=self.io.theme.error)
             self._show_menu()
@@ -265,6 +280,80 @@ class SetupWizard:
 
         # Return to menu - screen will handle showing menu after clearing
         self._state = WizardState.MENU
+
+    def _show_action_menu(self) -> None:
+        """Display action menu for a configured provider."""
+        from rich.panel import Panel
+
+        provider_title = self._current_provider.replace('_', ' ').title()
+        info = PROVIDERS[self._current_provider]
+
+        # Mask the current key for display
+        current_key = self._config_service.get_key(info.env_var) or ""
+        if len(current_key) > 8:
+            masked = f"{current_key[:4]}...{current_key[-4:]}"
+        else:
+            masked = "****"
+
+        content = f"""[bold]{provider_title}[/bold]
+Current key: [dim]{masked}[/dim]
+
+  1. Update API key
+  2. Remove API key
+  q. Back to menu"""
+
+        panel = Panel(content, title="Manage Provider", border_style="blue", expand=False)
+
+        if hasattr(self.io, 'output_sink') and self.io.output_sink:
+            self.io.output_sink.post_renderable(panel)
+        else:
+            from rich.console import Console
+            console = Console()
+            console.print(panel)
+
+    def _handle_action_input(self, choice: str) -> None:
+        """Handle action menu selection."""
+        if choice == 'q':
+            self._state = WizardState.MENU
+            self._show_menu()
+            return
+
+        if choice == '1':
+            # Update key - same flow as adding a new key
+            self._state = WizardState.AWAITING_KEY
+            info = PROVIDERS[self._current_provider]
+            self.io.echo(f"\nUpdating {self._current_provider.replace('_', ' ').title()}")
+            self.io.echo(f"Get your API key from: {info.console_url}")
+        elif choice == '2':
+            # Remove key - confirm first
+            self._state = WizardState.CONFIRM_REMOVE
+            provider_title = self._current_provider.replace('_', ' ').title()
+            self.io.echo(f"\nRemove API key for {provider_title}?")
+        else:
+            self.io.secho("Invalid selection. Enter 1, 2, or q.", fg=self.io.theme.error)
+
+    def _handle_confirm_remove_input(self, response: str) -> None:
+        """Handle removal confirmation input."""
+        if response in ('y', 'yes'):
+            self._remove_key()
+            provider_title = self._current_provider.replace('_', ' ').title()
+            self.io.secho(f"{provider_title} API key removed.", fg=self.io.theme.success)
+            self._state = WizardState.MENU
+            # Screen will handle showing menu after clearing
+        elif response in ('n', 'no', 'q'):
+            self.io.secho("Removal cancelled.", fg="yellow")
+            self._state = WizardState.MENU
+            # Screen will handle showing menu after clearing
+        else:
+            self.io.secho("Please enter 'y' or 'n'.", fg=self.io.theme.error)
+
+    def _remove_key(self) -> None:
+        """Remove the current provider's API key."""
+        info = PROVIDERS[self._current_provider]
+        config = self._config_service.load()
+        if info.env_var in config.api_keys:
+            del config.api_keys[info.env_var]
+            self._config_service.save(config)
 
     def _finish(self) -> None:
         """Complete the wizard."""
