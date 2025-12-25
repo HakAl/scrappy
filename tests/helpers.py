@@ -455,6 +455,11 @@ class MockIO:
         # Enable color by default
         self.use_color = True
 
+        # Track rich output calls for specialized testing (e.g., AgentUI tests)
+        self.panel_calls: List[tuple] = []
+        self.rule_calls: List[Optional[str]] = []
+        self.table_calls: List[tuple] = []
+
     def echo(self, message: str = "", nl: bool = True) -> None:
         """Capture output to internal buffer."""
         if nl:
@@ -466,15 +471,29 @@ class MockIO:
         self,
         message: str,
         fg: Optional[str] = None,
+        bg: Optional[str] = None,
         bold: bool = False,
-        nl: bool = True
+        dim: bool = False,
+        underline: bool = False,
+        blink: bool = False,
+        reverse: bool = False,
+        reset: bool = True,
+        nl: bool = True,
+        err: bool = False
     ) -> None:
         """Capture styled output and record styling info."""
         self._styled_outputs.append({
             'text': message,
             'fg': fg,
+            'bg': bg,
             'bold': bold,
-            'nl': nl
+            'dim': dim,
+            'underline': underline,
+            'blink': blink,
+            'reverse': reverse,
+            'reset': reset,
+            'nl': nl,
+            'err': err
         })
 
         if nl:
@@ -486,13 +505,15 @@ class MockIO:
         self,
         text: str,
         fg: Optional[str] = None,
-        bold: bool = False
+        bg: Optional[str] = None,
+        bold: bool = False,
+        dim: bool = False
     ) -> str:
         """Return text unchanged (no actual styling in tests) or with ANSI codes if use_color=True."""
         if not self.use_color:
             return text
         # Add ANSI codes when color is enabled to simulate styled output
-        if fg or bold:
+        if fg or bold or bg or dim:
             return f"\x1b[1m{text}\x1b[0m" if bold else f"\x1b[32m{text}\x1b[0m"
         return text
 
@@ -567,6 +588,10 @@ class MockIO:
         """Get all captured output as a single string."""
         return "".join(self._output_buffer)
 
+    def get_all_output(self) -> str:
+        """Get all captured output as single string (alias for get_output)."""
+        return self.get_output()
+
     def get_output_lines(self) -> List[str]:
         """Get captured output as list of lines."""
         full_output = self.get_output()
@@ -579,6 +604,34 @@ class MockIO:
             List of dicts with 'text', 'fg', 'bold', 'nl' keys
         """
         return self._styled_outputs
+
+    @property
+    def secho_calls(self) -> List[tuple]:
+        """Get secho calls as list of (message, kwargs) tuples for compatibility.
+
+        This provides compatibility with tests that expect secho_calls in the
+        format [(message, {'fg': 'green', 'bold': True}), ...].
+        """
+        result = []
+        for s in self._styled_outputs:
+            message = s.get('text', '')
+            kwargs = {k: v for k, v in s.items() if k != 'text' and v is not None}
+            # Remove default values to match expected pattern
+            if 'nl' in kwargs and kwargs['nl'] is True:
+                del kwargs['nl']
+            if 'reset' in kwargs and kwargs['reset'] is True:
+                del kwargs['reset']
+            result.append((message, kwargs))
+        return result
+
+    @property
+    def echo_calls(self) -> List[str]:
+        """Get echo calls as list of messages for compatibility.
+
+        This provides compatibility with tests that expect echo_calls as a list
+        of strings.
+        """
+        return [line.rstrip('\n') for line in self._output_buffer]
 
     def clear_output(self) -> None:
         """Clear all captured output."""
@@ -607,6 +660,17 @@ class MockIO:
         self._styled_outputs = []
         self._input_index = 0
         self._confirm_index = 0
+        self.panel_calls = []
+        self.rule_calls = []
+        self.table_calls = []
+
+    def clear(self) -> None:
+        """Clear message buffers (alias for reset without input/confirm reset)."""
+        self._output_buffer = []
+        self._styled_outputs = []
+        self.panel_calls = []
+        self.rule_calls = []
+        self.table_calls = []
 
     def table(
         self,
@@ -614,7 +678,10 @@ class MockIO:
         rows: List[List[str]],
         title: Optional[str] = None
     ) -> None:
-        """Capture table output as formatted text."""
+        """Capture table output as formatted text and track calls."""
+        # Track the call for assertion
+        self.table_calls.append((headers, rows, title))
+
         if title:
             self._output_buffer.append(title + "\n")
         # Format as simple table
@@ -622,6 +689,26 @@ class MockIO:
         self._output_buffer.append("-" * 40 + "\n")
         for row in rows:
             self._output_buffer.append(" | ".join(str(cell) for cell in row) + "\n")
+
+    def panel(
+        self,
+        content: str,
+        title: str = "",
+        border_style: str = ""
+    ) -> None:
+        """Capture panel output and track calls for testing."""
+        self.panel_calls.append((content, title, border_style))
+        # Also add to output buffer for get_output() compatibility
+        if title:
+            self._output_buffer.append(f"[{title}]\n")
+        self._output_buffer.append(content + "\n")
+
+    def rule(self, title: Optional[str] = None) -> None:
+        """Capture rule output and track calls for testing."""
+        self.rule_calls.append(title)
+        # Add separator to output buffer
+        separator = f"--- {title} ---" if title else "---"
+        self._output_buffer.append(separator + "\n")
 
     def supports_color(self) -> bool:
         """Return True for mock (allows color-based formatting in tests)."""
@@ -2324,184 +2411,6 @@ class StubAgentUI:
     def get_shown_messages(self) -> List[str]:
         """Get all recorded messages for verification."""
         return self._shown_messages.copy()
-
-
-class MockIO:
-    """
-    Mock IO implementation for testing CLI handlers.
-
-    Captures all echo() and secho() calls for assertion in tests.
-    Implements CLIIOProtocol without requiring Rich or Click.
-    """
-
-    def __init__(
-        self,
-        inputs: Optional[List[str]] = None,
-        confirmations: Optional[List[bool]] = None
-    ):
-        """Initialize with empty message buffer."""
-        self.messages: List[str] = []
-        self.styled_messages: List[Dict[str, Any]] = []
-        self._inputs: List[str] = list(inputs) if inputs else []
-        self._confirmations: List[bool] = list(confirmations) if confirmations else []
-        self._input_index = 0
-        self._confirm_index = 0
-
-        # Add theme mock for color theming support (match ScrappyTheme defaults)
-        self.theme = Mock()
-        self.theme.primary = "#00ffff"
-        self.theme.success = "#00ff00"
-        self.theme.warning = "#ffff00"
-        self.theme.error = "#ff0000"
-        self.theme.info = "#0000ff"
-        self.theme.accent = "#ff9900"
-
-        # Enable color by default
-        self.use_color = True
-
-    def echo(self, message: str = "", nl: bool = True) -> None:
-        """Capture plain echo message."""
-        self.messages.append(message)
-
-    def secho(
-        self,
-        message: str,
-        fg: Optional[str] = None,
-        bg: Optional[str] = None,
-        bold: bool = False,
-        dim: bool = False,
-        underline: bool = False,
-        blink: bool = False,
-        reverse: bool = False,
-        reset: bool = True,
-        nl: bool = True,
-        err: bool = False
-    ) -> None:
-        """Capture styled echo message."""
-        self.styled_messages.append({
-            'message': message,
-            'fg': fg,
-            'bg': bg,
-            'bold': bold,
-            'dim': dim,
-            'underline': underline,
-            'blink': blink,
-            'reverse': reverse,
-            'reset': reset,
-            'nl': nl,
-            'err': err
-        })
-        self.messages.append(message)
-
-    def confirm(self, prompt: str, default: bool = False) -> bool:
-        """Mock confirm - returns preset confirmations or default."""
-        if self._confirm_index < len(self._confirmations):
-            result = self._confirmations[self._confirm_index]
-            self._confirm_index += 1
-            return result
-        return default
-
-    def prompt(self, text: str, default: str = "", show_default: bool = True) -> str:
-        """Mock prompt - returns preset input or default."""
-        if self._input_index < len(self._inputs):
-            result = self._inputs[self._input_index]
-            self._input_index += 1
-            return result
-        return default
-
-    def clear(self) -> None:
-        """Clear message buffers."""
-        self.messages = []
-        self.styled_messages = []
-
-    def clear_output(self) -> None:
-        """Clear all captured output (alias for clear)."""
-        self.clear()
-
-    def get_all_output(self) -> str:
-        """Get all captured output as single string."""
-        return "\n".join(self.messages)
-
-    def get_output(self) -> str:
-        """Get all captured output as single string (alias for get_all_output)."""
-        return self.get_all_output()
-
-    def reset(self) -> None:
-        """Reset all state for reuse between tests."""
-        self.clear()
-        self._input_index = 0
-        self._confirm_index = 0
-
-    def style(self, text: str, fg: Optional[str] = None, bg: Optional[str] = None,
-              bold: bool = False, dim: bool = False) -> str:
-        """Mock style - returns text with ANSI codes if use_color=True."""
-        if not self.use_color:
-            return text
-        # Add ANSI codes when color is enabled to simulate styled output
-        if fg or bold or bg or dim:
-            return f"\x1b[1m{text}\x1b[0m" if bold else f"\x1b[32m{text}\x1b[0m"
-        return text
-
-    def progress(self, total: int, description: str = "Progress"):
-        """Return a mock progress context manager.
-
-        Returns a context manager that provides a mock progress tracker
-        compatible with UnifiedIO.progress().
-
-        Args:
-            total: Total number of steps
-            description: Description text for the progress bar
-
-        Returns:
-            Context manager that yields a mock progress tracker
-        """
-        from contextlib import contextmanager
-
-        @contextmanager
-        def _progress_context():
-            # Create a simple mock progress tracker
-            class MockProgressTracker:
-                def __init__(self):
-                    self.current = 0
-
-                def advance(self, amount: int = 1):
-                    self.current += amount
-
-                def update_description(self, description: str):
-                    pass
-
-            yield MockProgressTracker()
-
-        return _progress_context()
-
-    def get_styled_outputs(self) -> List[Dict[str, Any]]:
-        """Get all styled messages with 'text' key for compatibility."""
-        # Convert 'message' to 'text' for compatibility with tests
-        return [{'text': s['message'], **{k: v for k, v in s.items() if k != 'message'}}
-                for s in self.styled_messages]
-
-    def get_output_lines(self) -> List[str]:
-        """Get all captured output as list of lines."""
-        return self.messages.copy()
-
-    def table(
-        self,
-        headers: List[str],
-        rows: List[List[str]],
-        title: Optional[str] = None
-    ) -> None:
-        """Capture table output as formatted text."""
-        if title:
-            self.messages.append(title)
-        # Format as simple table
-        self.messages.append(" | ".join(headers))
-        self.messages.append("-" * 40)
-        for row in rows:
-            self.messages.append(" | ".join(str(cell) for cell in row))
-
-    def supports_color(self) -> bool:
-        """Return True for mock (allows color-based formatting in tests)."""
-        return True
 
 
 # =============================================================================

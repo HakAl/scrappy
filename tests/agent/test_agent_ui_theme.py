@@ -4,46 +4,15 @@ Tests for AgentUI theme integration.
 Verifies that AgentUI correctly uses theme colors for display.
 """
 
-import pytest
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock
 
 from scrappy.agent.ui import AgentUI
 from scrappy.infrastructure.theme import (
     DEFAULT_THEME,
     LightTheme,
     NoColorTheme,
-    ScrappyTheme,
 )
-
-
-class MockIO:
-    """Mock IO interface for testing AgentUI."""
-
-    def __init__(self):
-        self.secho_calls = []
-        self.echo_calls = []
-        self.panel_calls = []
-        self.table_calls = []
-        self.rule_calls = []
-        self.confirm_return = True
-
-    def secho(self, message: str, **kwargs) -> None:
-        self.secho_calls.append((message, kwargs))
-
-    def echo(self, message: str) -> None:
-        self.echo_calls.append(message)
-
-    def panel(self, content: str, title: str = "", border_style: str = "") -> None:
-        self.panel_calls.append((content, title, border_style))
-
-    def table(self, headers: list, rows: list, title: str = "") -> None:
-        self.table_calls.append((headers, rows, title))
-
-    def rule(self, title: str = None) -> None:
-        self.rule_calls.append(title)
-
-    def confirm(self, message: str, default: bool = False) -> bool:
-        return self.confirm_return
+from tests.helpers import MockIO
 
 
 class TestAgentUIThemeIntegration:

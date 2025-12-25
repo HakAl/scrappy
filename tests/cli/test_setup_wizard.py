@@ -27,7 +27,12 @@ class MockTheme:
 
 
 class MockIO:
-    """Mock UnifiedIO for testing."""
+    """Mock UnifiedIO for testing SetupWizard.
+
+    Note: This is a specialized MockIO for wizard testing that uses a different
+    pattern (prompt_responses.pop()) than tests.helpers.MockIO. Keep separate
+    intentionally for wizard-specific testing needs.
+    """
 
     def __init__(self):
         """Initialize mock IO."""
