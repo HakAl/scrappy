@@ -5,7 +5,7 @@ Routes slash commands to appropriate handlers.
 """
 
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 from .io_interface import CLIIOProtocol
 from .state_manager import PlanStateManager
 from .session_context import SessionContextProtocol
@@ -71,6 +71,9 @@ class CommandRouter:
         self.agent_mgr = agent_mgr
         self.task_router = task_router
         self.state_manager = state_manager or PlanStateManager()
+
+        # Optional callback for TUI mode to launch wizard screen
+        self._setup_wizard_callback: Optional[Callable[[], None]] = None
 
         # Build command registry for dispatch
         self._command_registry = {
@@ -464,8 +467,22 @@ class CommandRouter:
             io.echo("  Clean output without metadata.")
         return True
 
+    def set_setup_wizard_callback(self, callback: Callable[[], None]) -> None:
+        """Set callback for launching setup wizard in TUI mode.
+
+        Args:
+            callback: Function to call to launch the wizard screen
+        """
+        self._setup_wizard_callback = callback
+
     def _handle_setup(self, args: str) -> bool:
         """Handle /setup command - launch provider setup wizard."""
+        # In TUI mode, use the dedicated wizard screen
+        if self._setup_wizard_callback is not None:
+            self._setup_wizard_callback()
+            return True
+
+        # CLI mode - use blocking wizard
         from .setup_wizard import SetupWizard
         io = self.io
 

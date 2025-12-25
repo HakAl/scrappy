@@ -813,6 +813,11 @@ class ScrappyApp(App):
         self._register_user_theme()
         OutputModeContext.set_tui_mode(True, self.output_adapter)
 
+        # Set up callback for /setup command to use wizard screen
+        self.interactive_mode.command_router.set_setup_wizard_callback(
+            self.launch_setup_wizard
+        )
+
         # Start worker thread to consume output queue
         self.consume_output_queue()
 
@@ -962,8 +967,12 @@ class ScrappyApp(App):
             self.call_later(self.exit)
 
     def launch_setup_wizard(self) -> None:
-        """Launch setup wizard (called by /setup command)."""
-        self._show_wizard_screen(allow_cancel=True)
+        """Launch setup wizard (called by /setup command).
+
+        Uses call_later() to ensure screen push happens on main thread,
+        since commands are processed in worker threads.
+        """
+        self.call_later(lambda: self._show_wizard_screen(allow_cancel=True))
 
     @work(exclusive=False, thread=True)
     def consume_output_queue(self) -> None:

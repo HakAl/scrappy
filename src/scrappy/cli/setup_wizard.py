@@ -385,11 +385,49 @@ Current key: [dim]{masked}[/dim]
 
             provider_name = self._get_provider_by_index(choice)
             if provider_name:
-                self._configure_provider(provider_name)
+                if self._is_configured(provider_name):
+                    # Show action menu for configured providers
+                    self._manage_provider(provider_name)
+                else:
+                    # Configure new provider
+                    self._configure_provider(provider_name)
             else:
                 self.io.secho("Invalid selection.", fg=self.io.theme.error)
 
         return self._has_any_provider()
+
+    def _manage_provider(self, name: str) -> None:
+        """Manage an already-configured provider (blocking mode).
+
+        Shows action menu with update/remove options.
+
+        Args:
+            name: Provider name
+        """
+        self._current_provider = name
+        self._show_action_menu()
+
+        while True:
+            choice = self.io.prompt("Select action (1/2/q)", default="").strip().lower()
+
+            if choice == 'q':
+                break
+            elif choice == '1':
+                # Update key
+                self._configure_provider(name)
+                break
+            elif choice == '2':
+                # Remove key with confirmation
+                confirm = self.io.prompt("Remove this API key? (y/n)", default="n").strip().lower()
+                if confirm in ('y', 'yes'):
+                    self._remove_key()
+                    provider_title = name.replace('_', ' ').title()
+                    self.io.secho(f"{provider_title} API key removed.", fg=self.io.theme.success)
+                else:
+                    self.io.secho("Removal cancelled.", fg="yellow")
+                break
+            else:
+                self.io.secho("Invalid selection. Enter 1, 2, or q.", fg=self.io.theme.error)
 
     def _show_menu(self) -> None:
         """Display provider menu in RichLog."""
