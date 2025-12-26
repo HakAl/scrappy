@@ -1,7 +1,13 @@
 # Multi-Provider LLM Agent Team
 # Extensible framework for orchestrating LLM agents across multiple providers
 
-__version__ = "0.1.0"
+from importlib.metadata import version, PackageNotFoundError
+
+try:
+    __version__ = version("scrappy-ai")
+except PackageNotFoundError:
+    # Package not installed (e.g., running from source)
+    __version__ = "dev"
 
 from .orchestrator_adapter import (
     OrchestratorAdapter,

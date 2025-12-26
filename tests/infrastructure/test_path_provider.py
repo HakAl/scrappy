@@ -229,3 +229,66 @@ class TestTempPathProviderUserDir:
         assert provider.user_data_dir().exists()
         assert provider.user_config_dir().exists()
         assert provider.user_cache_dir().exists()
+
+
+class TestScrappyPathProviderWorkspace:
+    """Tests for workspace_display() method."""
+
+    def test_project_root_returns_project_path(self, tmp_path: Path):
+        """project_root() should return the project root path."""
+        provider = ScrappyPathProvider(tmp_path)
+        assert provider.project_root() == tmp_path
+
+    def test_workspace_display_uses_forward_slashes(self, tmp_path: Path):
+        """workspace_display() should use forward slashes on all platforms."""
+        provider = ScrappyPathProvider(tmp_path)
+        display = provider.workspace_display()
+        assert "\\" not in display
+
+    def test_workspace_display_substitutes_home(self, tmp_path: Path, monkeypatch):
+        """workspace_display() should substitute ~ for home directory."""
+        # Create a fake home directory structure
+        fake_home = tmp_path / "fake_home"
+        fake_home.mkdir()
+        project = fake_home / "projects" / "myapp"
+        project.mkdir(parents=True)
+
+        # Monkeypatch Path.home() to return our fake home
+        monkeypatch.setattr(Path, "home", classmethod(lambda cls: fake_home))
+
+        provider = ScrappyPathProvider(project)
+        display = provider.workspace_display()
+
+        assert display == "~/projects/myapp"
+
+    def test_workspace_display_handles_path_outside_home(self, tmp_path: Path, monkeypatch):
+        """workspace_display() should return full path when outside home."""
+        # Create a fake home directory that doesn't contain the project
+        fake_home = tmp_path / "fake_home"
+        fake_home.mkdir()
+        project = tmp_path / "other_location" / "myapp"
+        project.mkdir(parents=True)
+
+        monkeypatch.setattr(Path, "home", classmethod(lambda cls: fake_home))
+
+        provider = ScrappyPathProvider(project)
+        display = provider.workspace_display()
+
+        # Should not start with ~ since it's outside home
+        assert not display.startswith("~")
+        assert "myapp" in display
+
+
+class TestTempPathProviderWorkspace:
+    """Tests for TempPathProvider workspace methods."""
+
+    def test_project_root_returns_temp_dir(self, tmp_path: Path):
+        """project_root() should return the temp directory."""
+        provider = TempPathProvider(tmp_path)
+        assert provider.project_root() == tmp_path
+
+    def test_workspace_display_uses_forward_slashes(self, tmp_path: Path):
+        """workspace_display() should use forward slashes."""
+        provider = TempPathProvider(tmp_path)
+        display = provider.workspace_display()
+        assert "\\" not in display

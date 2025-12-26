@@ -47,6 +47,26 @@ class ScrappyPathProvider:
         self._user_config_dir = Path(user_config_dir(APP_NAME))
         self._user_cache_dir = Path(user_cache_dir(APP_NAME))
 
+    def project_root(self) -> Path:
+        """Get the project root directory."""
+        return self._project_root
+
+    def workspace_display(self) -> str:
+        """
+        Get workspace path formatted for display.
+
+        Returns path with ~ substituted for home directory.
+        Uses forward slashes for consistent display across platforms.
+        """
+        try:
+            home = Path.home()
+            if self._project_root.is_relative_to(home):
+                relative = self._project_root.relative_to(home)
+                return "~/" + str(relative).replace("\\", "/")
+        except (ValueError, RuntimeError):
+            pass
+        return str(self._project_root).replace("\\", "/")
+
     def data_dir(self) -> Path:
         """Get the .scrappy/ directory (project-level)."""
         return self._data_dir
@@ -159,6 +179,18 @@ class TempPathProvider:
         self._user_dir = temp_dir / ".scrappy_user"  # Separate for test isolation
         self._user_config_dir = temp_dir / ".scrappy_config"
         self._user_cache_dir = temp_dir / ".scrappy_cache"
+
+    def project_root(self) -> Path:
+        """Get the project root directory (temp dir for tests)."""
+        return self._temp_dir
+
+    def workspace_display(self) -> str:
+        """
+        Get workspace path formatted for display.
+
+        For tests, returns the temp directory path with forward slashes.
+        """
+        return str(self._temp_dir).replace("\\", "/")
 
     def data_dir(self) -> Path:
         """Get the temporary data directory."""

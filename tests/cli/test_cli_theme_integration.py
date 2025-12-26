@@ -4,25 +4,19 @@ Tests for CLI theme integration (Phase 4).
 Verifies that CLI components properly accept and use theme parameters.
 """
 
-import pytest
-from unittest.mock import Mock, MagicMock, patch
-from io import StringIO
-from rich.console import Console
+from unittest.mock import Mock
 
 from scrappy.infrastructure.theme import (
-    ThemeProtocol,
     ScrappyTheme,
     LightTheme,
     NoColorTheme,
     DEFAULT_THEME,
 )
 from scrappy.cli.display_rich import (
-    show_help_table,
     show_status_rich,
     show_rate_limits_rich,
     show_plan_tree,
 )
-from scrappy.cli.interactive_banner import display_banner, render_welcome_banner
 from scrappy.cli.rich_dashboard import RichDashboard
 from scrappy.cli.task_router_handler import CLITaskRouterHandler
 from scrappy.cli.output_bridge import (

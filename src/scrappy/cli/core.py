@@ -137,7 +137,6 @@ class CLI:
         Returns:
             self (for method chaining)
         """
-        self.io.secho("Initializing...", fg=self.io.theme.primary)
 
         # Silently restore previous session (working memory: files, searches, etc.)
         if offer_session_restore:
