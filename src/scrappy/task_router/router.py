@@ -2,7 +2,6 @@
 Central task router that dispatches to appropriate execution strategies.
 """
 
-import json
 import time
 import warnings
 from dataclasses import replace
@@ -10,6 +9,8 @@ from pathlib import Path
 from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Tuple, Union
 
 from .classifier import ClassifiedTask, TaskClassifier, TaskType
+from ..llm.models import TaskClassification as LLMTaskClassification
+from ..llm.models import TaskType as LLMTaskType
 from .intent_clarifier import (
     AutoClarifier,
     InteractiveClarifier,
@@ -21,7 +22,6 @@ from .protocols import (
     IntentClarifierProtocol,
     TaskRouterInputProtocol,
 )
-from .json_extractor import JSONExtractor
 from .metrics_collector import MetricsCollector, RouterMetrics
 from .output_handler import (
     ConsoleOutputHandler,
@@ -35,7 +35,6 @@ from .pure_functions import (
     create_escalated_task,
     determine_execution_action,
     needs_clarification,
-    parse_llm_classification_response,
     should_escalate_confidence,
 )
 from .strategies import (
@@ -236,7 +235,7 @@ class TaskRouter:
         Use LLM to semantically classify ambiguous tasks.
 
         Called when rule-based classification has low confidence.
-        Uses a fast provider for quick disambiguation.
+        Uses Instructor for validated structured output.
 
         Args:
             task: Initially classified task with low confidence
@@ -250,7 +249,7 @@ class TaskRouter:
         if self.verbose:
             self.output_handler.log_info("Using LLM for semantic classification...")
 
-        # Build a focused prompt for classification
+        # Behavioral instructions go in system prompt (not Field descriptions)
         system_prompt = """You are a task classifier. Analyze the user's request and classify it into ONE of these categories:
 
 1. RESEARCH - User wants information, explanation, or analysis (reading/learning)
@@ -262,14 +261,7 @@ IMPORTANT: Focus on the user's PRIMARY INTENT:
 - "Explain X" or "How does X work?" = RESEARCH (they want to learn)
 - "Create X" or "Write X for me" = CODE_GENERATION (they want action)
 - "Explain how to create X" = RESEARCH (they want to learn how, not have you do it)
-- "Create X and explain it" = CODE_GENERATION (primary intent is creation)
-
-Respond with ONLY a JSON object:
-{
-  "task_type": "RESEARCH" | "CODE_GENERATION" | "DIRECT_COMMAND" | "CONVERSATION",
-  "confidence": 0.0-1.0,
-  "reasoning": "Brief explanation of why this classification"
-}"""
+- "Create X and explain it" = CODE_GENERATION (primary intent is creation)"""
 
         user_prompt = f"""Classify this user request:
 "{task.original_input}"
@@ -277,67 +269,53 @@ Respond with ONLY a JSON object:
 Current rule-based classification: {task.task_type.value} (confidence: {task.confidence:.2f})
 Rule-based reasoning: {task.reasoning}
 
-What is the user's PRIMARY intent? Respond with JSON only."""
+What is the user's PRIMARY intent?"""
+
+        # Map LLM TaskType enum to router TaskType enum
+        llm_to_router_type = {
+            LLMTaskType.RESEARCH: TaskType.RESEARCH,
+            LLMTaskType.CODE_GENERATION: TaskType.CODE_GENERATION,
+            LLMTaskType.DIRECT_COMMAND: TaskType.DIRECT_COMMAND,
+            LLMTaskType.CONVERSATION: TaskType.CONVERSATION,
+        }
 
         try:
-            # Use fast model group for quick classification (LiteLLM handles routing)
-            response = self.orchestrator.delegate(
+            # Use structured output for validated classification
+            result: LLMTaskClassification = self.orchestrator.delegate_structured(
                 provider_name="fast",  # Model group, not specific provider
                 prompt=user_prompt,
+                response_model=LLMTaskClassification,
                 system_prompt=system_prompt,
                 max_tokens=200,
                 temperature=0.1,  # Low temperature for consistent classification
-                use_context=False,
-                selection_type=ModelSelectionType.FAST
             )
 
-            # Parse response using pure function
-            response_text = response.content.strip()
-            result = parse_llm_classification_response(response_text)
-
-            if result is None:
+            # Map LLM TaskType to router TaskType
+            new_type = llm_to_router_type.get(result.task_type)
+            if new_type is None:
                 if self.verbose:
-                    self.output_handler.log_info("Failed to parse LLM classification response")
+                    self.output_handler.log_info(f"Unknown task type from LLM: {result.task_type}")
                 return task
 
-            # Update task based on LLM classification
-            llm_type_str = result['task_type']
-            llm_confidence = float(result['confidence'])
-            llm_reasoning = result['reasoning']
+            # Only accept LLM classification if it's confident
+            if result.confidence >= 0.7:
+                old_type = task.task_type.value
+                task = replace(
+                    task,
+                    task_type=new_type,
+                    confidence=result.confidence,
+                    reasoning=f"LLM semantic classification: {result.reasoning} (was {old_type}, confidence {result.confidence:.2f})"
+                )
 
-            # Map string to TaskType
-            type_map = {
-                'RESEARCH': TaskType.RESEARCH,
-                'CODE_GENERATION': TaskType.CODE_GENERATION,
-                'DIRECT_COMMAND': TaskType.DIRECT_COMMAND,
-                'CONVERSATION': TaskType.CONVERSATION,
-            }
+                if self.verbose:
+                    if old_type != new_type.value:
+                        self.output_handler.log_info(f"LLM reclassified: {old_type} -> {new_type.value} ({result.confidence:.0%})")
+                    else:
+                        self.output_handler.log_info(f"LLM confirmed: {new_type.value} ({result.confidence:.0%})")
+            else:
+                if self.verbose:
+                    self.output_handler.log_info(f"LLM uncertain ({result.confidence:.0%}), keeping rule-based classification")
 
-            if llm_type_str in type_map:
-                new_type = type_map[llm_type_str]
-
-                # Only accept LLM classification if it's confident
-                if llm_confidence >= 0.7:
-                    old_type = task.task_type.value
-                    task = replace(
-                        task,
-                        task_type=new_type,
-                        confidence=llm_confidence,
-                        reasoning=f"LLM semantic classification: {llm_reasoning} (was {old_type}, confidence {llm_confidence:.2f})"
-                    )
-
-                    if self.verbose:
-                        if old_type != new_type.value:
-                            self.output_handler.log_info(f"LLM reclassified: {old_type} -> {new_type.value} ({llm_confidence:.0%})")
-                        else:
-                            self.output_handler.log_info(f"LLM confirmed: {new_type.value} ({llm_confidence:.0%})")
-                else:
-                    if self.verbose:
-                        self.output_handler.log_info(f"LLM uncertain ({llm_confidence:.0%}), keeping rule-based classification")
-
-        except json.JSONDecodeError as e:
-            if self.verbose:
-                self.output_handler.log_info(f"Failed to parse LLM response: {e}")
         except Exception as e:
             if self.verbose:
                 self.output_handler.log_info(f"LLM classification failed: {e}")

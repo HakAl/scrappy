@@ -260,23 +260,26 @@ def determine_execution_action(
     return "execute"
 
 
-def parse_llm_classification_response(response_text: str) -> Optional[dict]:
+def extract_json_from_text(text: str) -> Optional[dict]:
     """
-    Parse LLM classification response JSON.
+    Extract and parse JSON from LLM response text.
 
-    Extracts task_type, confidence, and reasoning from LLM response.
-    Handles JSON wrapped in markdown code blocks.
+    Handles common LLM response patterns:
+    - JSON wrapped in ```json code blocks
+    - JSON wrapped in ``` code blocks
+    - JSON embedded in plain text
+    - Python-style booleans (True/False/None)
 
     Args:
-        response_text: The raw response text from LLM
+        text: Raw text that may contain JSON
 
     Returns:
-        Dictionary with task_type, confidence, reasoning or None if parsing fails
+        Parsed dictionary or None if no valid JSON found
     """
-    if not response_text:
+    if not text:
         return None
 
-    text = response_text.strip()
+    text = text.strip()
 
     # Try to extract JSON from markdown code blocks
     json_match = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', text, re.DOTALL)
@@ -286,25 +289,18 @@ def parse_llm_classification_response(response_text: str) -> Optional[dict]:
     # Try to find JSON object in text
     json_start = text.find('{')
     json_end = text.rfind('}')
-    if json_start != -1 and json_end != -1:
-        text = text[json_start:json_end + 1]
+    if json_start == -1 or json_end == -1 or json_end <= json_start:
+        return None
+
+    text = text[json_start:json_end + 1]
+
+    # Fix Python-style booleans/None
+    text = re.sub(r'\bTrue\b', 'true', text)
+    text = re.sub(r'\bFalse\b', 'false', text)
+    text = re.sub(r'\bNone\b', 'null', text)
 
     try:
-        result = json.loads(text)
-
-        # Validate required fields
-        if 'task_type' not in result:
-            return None
-        if 'confidence' not in result:
-            return None
-        if 'reasoning' not in result:
-            return None
-
-        # Normalize task_type to uppercase
-        result['task_type'] = result['task_type'].upper()
-
-        return result
-
+        return json.loads(text)
     except json.JSONDecodeError:
         return None
 
