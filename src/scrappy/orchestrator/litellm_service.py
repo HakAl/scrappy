@@ -341,9 +341,24 @@ class LiteLLMService:
         # NOTE: Router-level callbacks handle rate tracking.
         # The callback reference here is for escalation metrics only.
 
-        # Instructor clients for structured output
-        self._instructor_client = instructor.from_litellm(self._router.acompletion)
-        self._instructor_client_sync = instructor.from_litellm(self._router.completion)
+        # Instructor clients for structured output - separate clients per mode
+        # Mode must be set at client creation time, not call time
+        self._instructor_clients = {
+            instructor.Mode.TOOLS: instructor.from_litellm(
+                self._router.acompletion, mode=instructor.Mode.TOOLS
+            ),
+            instructor.Mode.JSON: instructor.from_litellm(
+                self._router.acompletion, mode=instructor.Mode.JSON
+            ),
+        }
+        self._instructor_clients_sync = {
+            instructor.Mode.TOOLS: instructor.from_litellm(
+                self._router.completion, mode=instructor.Mode.TOOLS
+            ),
+            instructor.Mode.JSON: instructor.from_litellm(
+                self._router.completion, mode=instructor.Mode.JSON
+            ),
+        }
 
     def is_configured(self) -> bool:
         """Check if service has been configured with API keys."""
@@ -1238,12 +1253,13 @@ class LiteLLMService:
         retries = max_retries if max_retries is not None else DEFAULT_INSTRUCTOR_RETRIES
         mode = mode_override if mode_override else self._pick_mode(model)
 
-        return await self._instructor_client.chat.completions.create(
+        # Select client initialized with the correct mode
+        client = self._instructor_clients[mode]
+        return await client.chat.completions.create(
             model=model,
             messages=messages,
             response_model=response_model,
             max_retries=retries,
-            mode=mode,
             **kwargs,
         )
 
@@ -1279,11 +1295,12 @@ class LiteLLMService:
         retries = max_retries if max_retries is not None else DEFAULT_INSTRUCTOR_RETRIES
         mode = mode_override if mode_override else self._pick_mode(model)
 
-        return self._instructor_client_sync.chat.completions.create(
+        # Select client initialized with the correct mode
+        client = self._instructor_clients_sync[mode]
+        return client.chat.completions.create(
             model=model,
             messages=messages,
             response_model=response_model,
             max_retries=retries,
-            mode=mode,
             **kwargs,
         )

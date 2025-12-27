@@ -539,10 +539,10 @@ class TestStructuredOutput:
         mock_output = MockOutputForLiteLLM()
         service = make_configured_service(router=mock_router, output=mock_output)
 
-        # Note: This tests the internal _instructor_client_sync attribute exists
+        # Note: This tests the internal instructor client dicts exist (keyed by mode)
         # The actual call would require complex mocking of Instructor
-        assert hasattr(service, '_instructor_client_sync')
-        assert hasattr(service, '_instructor_client')
+        assert hasattr(service, '_instructor_clients_sync')
+        assert hasattr(service, '_instructor_clients')
 
     def test_completion_structured_sync_exists(self):
         """Verify completion_structured_sync method is available."""
