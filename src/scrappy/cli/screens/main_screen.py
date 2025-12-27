@@ -1,6 +1,6 @@
 """Main chat interface screen for Scrappy TUI."""
 
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, cast
 import logging
 import os
 import time
@@ -26,6 +26,7 @@ if TYPE_CHECKING:
         ThreadSafeAsyncBridge,
         SemanticStatusComponent,
         ActivityStateChange,
+        ScrappyApp,
     )
 
 logger = logging.getLogger(__name__)
@@ -51,7 +52,7 @@ class MainAppScreen(Screen):
 
     def __init__(
         self,
-        interactive_mode: "InteractiveMode",
+        interactive_mode: Optional["InteractiveMode"],
         output_adapter: "TextualOutputAdapter",
         bridge: "ThreadSafeAsyncBridge",
         theme: ThemeProtocol,
@@ -59,7 +60,9 @@ class MainAppScreen(Screen):
         """Initialize main screen with dependencies.
 
         Args:
-            interactive_mode: The InteractiveMode instance for command processing
+            interactive_mode: The InteractiveMode instance for command processing.
+                Can be None in deferred initialization mode - commands are blocked
+                until app.ready becomes True.
             output_adapter: Adapter for thread-safe output routing
             bridge: Bridge for blocking prompts/confirms from worker threads
             theme: Theme for consistent styling
@@ -93,6 +96,12 @@ class MainAppScreen(Screen):
         self._elapsed_start_time: float = 0.0
 
     @property
+    def scrappy_app(self) -> "ScrappyApp":
+        """Get the typed ScrappyApp instance."""
+        from ..textual_app import ScrappyApp
+        return cast(ScrappyApp, self.app)
+
+    @property
     def semantic_status(self) -> "SemanticStatusComponent":
         """Lazy-load semantic status component."""
         if not hasattr(self, '_semantic_status'):
@@ -123,9 +132,9 @@ class MainAppScreen(Screen):
         status_bar.register_component(self.prompt_display)
         status_bar.register_component(self.semantic_status)
 
-        # Display welcome banner
-        from scrappy.cli.interactive_banner import display_banner
-        display_banner(self.interactive_mode.io)
+        # NOTE: Banner is now displayed immediately in textual_app._show_main_screen()
+        # using display_banner_header_tui(). Status lines are shown when CLI is ready.
+        # No "Starting up..." message needed since user sees banner immediately.
 
     def on_unmount(self) -> None:
         """Called when screen is unmounted - clean up resources."""
@@ -221,6 +230,20 @@ class MainAppScreen(Screen):
         if self._layout is None:
             return
 
+        # Gate: Block input until CLI is ready (deferred initialization)
+        # Silently ignore - user sees banner header immediately, status lines when ready
+        if not self.scrappy_app.ready:
+            return
+
+        # Gate: Block input if interactive_mode not wired up yet
+        # (This shouldn't happen if app.ready is True, but defensive check)
+        if self.interactive_mode is None:
+            # Try to get updated reference from app
+            self.interactive_mode = self.scrappy_app.interactive_mode
+            if self.interactive_mode is None:
+                self.write_output("Still initializing...\n")
+                return
+
         # Preserve multiline input as-is (Textual TextArea buffers paste correctly)
         user_input = self._layout.input.text.strip()
 
@@ -274,9 +297,11 @@ class MainAppScreen(Screen):
 
     def action_cancel_agent(self) -> None:
         """Handle Escape key to cancel running agent."""
-        # Access agent_mgr through the command router
-        agent_mgr = self.interactive_mode.command_router.agent_mgr
-        agent_mgr.cancel()
+        # Access agent_mgr through the command router (if available)
+        if self.interactive_mode is not None:
+            agent_mgr = self.interactive_mode.command_router.agent_mgr
+            if agent_mgr:
+                agent_mgr.cancel()
 
         # Stop the elapsed timer and hide activity indicator immediately
         # Don't wait for agent to finish - user has already requested cancellation
@@ -308,6 +333,9 @@ class MainAppScreen(Screen):
     def process_command(self, user_input: str) -> None:
         """Process command in worker thread."""
         from ..textual_app import ActivityStateChange
+
+        # This is called after action_submit_input validates interactive_mode exists
+        assert self.interactive_mode is not None, "process_command called before ready"
 
         try:
             self.app.post_message(ActivityStateChange(ActivityState.THINKING))
