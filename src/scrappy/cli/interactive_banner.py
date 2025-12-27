@@ -20,6 +20,19 @@ from scrappy.orchestrator.litellm_config import get_configured_models
 if TYPE_CHECKING:
     from scrappy.cli.protocols import UnifiedIOProtocol
 
+    from typing import Protocol as TypingProtocol
+
+    class OutputSinkProtocol(TypingProtocol):
+        """Minimal protocol for TUI output sink."""
+
+        def post_output(self, content: str) -> None:
+            """Post text content."""
+            ...
+
+        def post_renderable(self, obj: object) -> None:
+            """Post a Rich renderable."""
+            ...
+
 
 # ASCII art banner - SCRAPPY in block letters
 BANNER_ART = """\
@@ -90,6 +103,29 @@ def display_banner_header(io: "UnifiedIOProtocol") -> None:
     io.echo("Scrappy can write, test, and debug code right from your terminal.")
     _print_rich(io, "Describe a task to get started or enter [cyan]/help[/] for commands.")
     io.echo()
+
+
+def display_banner_header_tui(output_sink: "OutputSinkProtocol") -> None:
+    """Display banner header in TUI mode using output sink directly.
+
+    This can be called immediately on app mount, before CLI is ready.
+    Uses the output_adapter's post_output/post_renderable methods directly,
+    bypassing the need for a full UnifiedIO.
+
+    Args:
+        output_sink: TUI output adapter with post_output/post_renderable methods
+    """
+    # Display ASCII art banner
+    banner = BANNER_ART.format(version=__version__)
+    banner_text = Text.from_markup(banner)
+    output_sink.post_renderable(banner_text)
+    output_sink.post_output("")
+
+    # Tagline and help hint
+    output_sink.post_output("Scrappy can write, test, and debug code right from your terminal.")
+    help_text = Text.from_markup("Describe a task to get started or enter [cyan]/help[/] for commands.")
+    output_sink.post_renderable(help_text)
+    output_sink.post_output("")
 
 
 def display_banner_status(

@@ -11,7 +11,7 @@ from scrappy.infrastructure.config.api_keys import (
     create_api_key_service,
 )
 from scrappy.infrastructure.validation import validate_api_key
-from scrappy.orchestrator.protocols import LLMServiceProtocol
+from scrappy.orchestrator.protocols import KeyValidatorProtocol
 
 if TYPE_CHECKING:
     from .unified_io import UnifiedIO
@@ -104,7 +104,7 @@ class SetupWizard:
     def __init__(
         self,
         io: "UnifiedIO",
-        llm_service: LLMServiceProtocol,
+        key_validator: KeyValidatorProtocol,
         config_service: Optional[ApiKeyConfigServiceProtocol] = None,
     ):
         """
@@ -112,11 +112,11 @@ class SetupWizard:
 
         Args:
             io: Output interface for TUI
-            llm_service: LLM service for key validation
+            key_validator: Lightweight validator for testing API keys
             config_service: API key config service (uses default if None)
         """
         self.io = io
-        self._llm_service = llm_service
+        self._key_validator = key_validator
         self._config_service = config_service or create_api_key_service()
 
         # State machine for non-blocking TUI operation
@@ -535,10 +535,10 @@ Current key: [dim]{masked}[/dim]
 
     def _test_provider_key(self, name: str, key: str) -> Tuple[bool, str]:
         """
-        Test if a key works by using LLMService.validate_key().
+        Test if a key works by using KeyValidator.validate_key().
 
-        Uses LLMService for validation to ensure all LiteLLM interaction
-        goes through the service layer.
+        Uses lightweight KeyValidator for validation to enable instant
+        wizard startup (avoids heavy litellm import until needed).
 
         Args:
             name: Provider name
@@ -553,7 +553,7 @@ Current key: [dim]{masked}[/dim]
 
         try:
             with suppress_native_stderr():
-                is_valid, error_msg = self._llm_service.validate_key(model, key, timeout=10.0)
+                is_valid, error_msg = self._key_validator.validate_key(model, key, timeout=10.0)
 
             if is_valid:
                 return True, ""

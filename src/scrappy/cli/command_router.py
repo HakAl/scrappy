@@ -484,10 +484,12 @@ class CommandRouter:
 
         # CLI mode - use blocking wizard
         from .setup_wizard import SetupWizard
+        from scrappy.orchestrator.key_validator import create_key_validator
+
         io = self.io
 
         io.echo("Launching provider setup wizard...")
-        wizard = SetupWizard(io, self.orchestrator.llm_service)
+        wizard = SetupWizard(io, create_key_validator())
         wizard.run(allow_cancel=True)
         # Reconfigure llm_service after wizard saves new keys
         self.orchestrator.llm_service.configure()

@@ -9,6 +9,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 
 from .chat_layout import ChatLayout
+from scrappy.orchestrator.protocols import KeyValidatorProtocol
 
 if TYPE_CHECKING:
     from ..unified_io import UnifiedIO
@@ -54,7 +55,7 @@ class SetupWizardScreen(Screen):
     def __init__(
         self,
         io: "UnifiedIO",
-        llm_service,
+        key_validator: KeyValidatorProtocol,
         allow_cancel: bool = True,
         on_complete: Optional[Callable[[bool], None]] = None,
     ):
@@ -62,13 +63,13 @@ class SetupWizardScreen(Screen):
 
         Args:
             io: UnifiedIO for output routing
-            llm_service: LLM service for key validation
+            key_validator: Lightweight key validator for testing API keys
             allow_cancel: If False, user must configure at least one provider
             on_complete: Callback when wizard completes (receives has_provider bool)
         """
         super().__init__()
         self._io = io
-        self._llm_service = llm_service
+        self._key_validator = key_validator
         self._allow_cancel = allow_cancel
         self._on_complete = on_complete
 
@@ -102,7 +103,7 @@ class SetupWizardScreen(Screen):
         self._io.output_sink = WizardOutputSink(self._layout)
 
         # Create and start wizard
-        self._wizard = SetupWizard(self._io, self._llm_service)
+        self._wizard = SetupWizard(self._io, self._key_validator)
         self._wizard.start(
             allow_cancel=self._allow_cancel,
             on_complete=self._handle_wizard_complete

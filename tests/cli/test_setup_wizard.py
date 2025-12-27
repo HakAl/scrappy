@@ -71,7 +71,7 @@ class TestSetupWizardNonBlocking:
         io = MockIO()
         mock_service = MockApiKeyConfigService()
         mock_llm = MockLLMService()
-        wizard = SetupWizard(io, llm_service=mock_llm, config_service=mock_service)
+        wizard = SetupWizard(io, key_validator=mock_llm, config_service=mock_service)
 
         wizard.start(allow_cancel=True)
 
@@ -83,7 +83,7 @@ class TestSetupWizardNonBlocking:
         io = MockIO()
         mock_service = MockApiKeyConfigService()
         mock_llm = MockLLMService()
-        wizard = SetupWizard(io, llm_service=mock_llm, config_service=mock_service)
+        wizard = SetupWizard(io, key_validator=mock_llm, config_service=mock_service)
 
         wizard.start(allow_cancel=True)
         wizard.handle_input("1")  # Select first provider
@@ -98,7 +98,7 @@ class TestSetupWizardNonBlocking:
         mock_service = MockApiKeyConfigService()
         mock_service.keys = {"GROQ_API_KEY": "test"}  # Has provider
         mock_llm = MockLLMService()
-        wizard = SetupWizard(io, llm_service=mock_llm, config_service=mock_service)
+        wizard = SetupWizard(io, key_validator=mock_llm, config_service=mock_service)
 
         completed = []
         wizard.start(allow_cancel=True, on_complete=lambda hp: completed.append(hp))
@@ -149,7 +149,7 @@ class TestSetupWizardProviderConfiguration:
         mock_service = MockApiKeyConfigService()
         mock_service.keys = {"GROQ_API_KEY": "test_key"}
         mock_llm = MockLLMService()
-        wizard = SetupWizard(io, llm_service=mock_llm, config_service=mock_service)
+        wizard = SetupWizard(io, key_validator=mock_llm, config_service=mock_service)
 
         assert wizard._is_configured("groq") is True
 
@@ -158,7 +158,7 @@ class TestSetupWizardProviderConfiguration:
         io = MockIO()
         mock_service = MockApiKeyConfigService()
         mock_llm = MockLLMService()
-        wizard = SetupWizard(io, llm_service=mock_llm, config_service=mock_service)
+        wizard = SetupWizard(io, key_validator=mock_llm, config_service=mock_service)
 
         assert wizard._is_configured("groq") is False
 
@@ -168,7 +168,7 @@ class TestSetupWizardProviderConfiguration:
         mock_service = MockApiKeyConfigService()
         mock_service.keys = {"GROQ_API_KEY": "test_key"}
         mock_llm = MockLLMService()
-        wizard = SetupWizard(io, llm_service=mock_llm, config_service=mock_service)
+        wizard = SetupWizard(io, key_validator=mock_llm, config_service=mock_service)
 
         assert wizard._has_any_provider() is True
 
@@ -177,7 +177,7 @@ class TestSetupWizardProviderConfiguration:
         io = MockIO()
         mock_service = MockApiKeyConfigService()
         mock_llm = MockLLMService()
-        wizard = SetupWizard(io, llm_service=mock_llm, config_service=mock_service)
+        wizard = SetupWizard(io, key_validator=mock_llm, config_service=mock_service)
 
         assert wizard._has_any_provider() is False
 
@@ -185,7 +185,7 @@ class TestSetupWizardProviderConfiguration:
         """Returns provider name for valid index."""
         io = MockIO()
         mock_llm = MockLLMService()
-        wizard = SetupWizard(io, llm_service=mock_llm)
+        wizard = SetupWizard(io, key_validator=mock_llm)
 
         # Index 1 should return first provider by priority
         sorted_providers = sorted(PROVIDERS.items(), key=lambda x: x[1].priority)
@@ -197,7 +197,7 @@ class TestSetupWizardProviderConfiguration:
         """Returns None for invalid index."""
         io = MockIO()
         mock_llm = MockLLMService()
-        wizard = SetupWizard(io, llm_service=mock_llm)
+        wizard = SetupWizard(io, key_validator=mock_llm)
 
         assert wizard._get_provider_by_index("0") is None
         assert wizard._get_provider_by_index("999") is None
@@ -212,7 +212,7 @@ class TestSetupWizardSaveLoad:
         io = MockIO()
         mock_service = MockApiKeyConfigService()
         mock_llm = MockLLMService()
-        wizard = SetupWizard(io, llm_service=mock_llm, config_service=mock_service)
+        wizard = SetupWizard(io, key_validator=mock_llm, config_service=mock_service)
 
         wizard._save_key("TEST_API_KEY", "test_value")
 
@@ -225,7 +225,7 @@ class TestSetupWizardSaveLoad:
         mock_service = MockApiKeyConfigService()
         mock_service.keys = {"EXISTING_KEY": "existing_value"}
         mock_llm = MockLLMService()
-        wizard = SetupWizard(io, llm_service=mock_llm, config_service=mock_service)
+        wizard = SetupWizard(io, key_validator=mock_llm, config_service=mock_service)
 
         wizard._save_key("NEW_KEY", "new_value")
 
@@ -255,7 +255,7 @@ class TestSetupWizardFlow:
         io.prompt_responses = ["valid_test_key_123456"]
         mock_service = MockApiKeyConfigService()
         mock_llm = MockLLMService(validate_key_result=(True, None))
-        wizard = SetupWizard(io, llm_service=mock_llm, config_service=mock_service)
+        wizard = SetupWizard(io, key_validator=mock_llm, config_service=mock_service)
 
         result = wizard._configure_provider("groq")
 
@@ -268,7 +268,7 @@ class TestSetupWizardFlow:
         io = MockIO()
         io.prompt_responses = ["short"]  # Too short
         mock_llm = MockLLMService()
-        wizard = SetupWizard(io, llm_service=mock_llm)
+        wizard = SetupWizard(io, key_validator=mock_llm)
 
         result = wizard._configure_provider("groq")
 
@@ -282,7 +282,7 @@ class TestSetupWizardFlow:
         io = MockIO()
         io.prompt_responses = ["valid_format_key_1234567890"]
         mock_llm = MockLLMService(validate_key_result=(False, "Invalid API key"))
-        wizard = SetupWizard(io, llm_service=mock_llm)
+        wizard = SetupWizard(io, key_validator=mock_llm)
 
         result = wizard._configure_provider("groq")
 
@@ -304,7 +304,7 @@ class TestSetupWizardActionMenu:
         first_env_var = sorted_providers[0][1].env_var
         mock_service.keys = {first_env_var: "existing_key_12345"}
         mock_llm = MockLLMService()
-        wizard = SetupWizard(io, llm_service=mock_llm, config_service=mock_service)
+        wizard = SetupWizard(io, key_validator=mock_llm, config_service=mock_service)
 
         wizard.start(allow_cancel=True)
         wizard.handle_input("1")  # Select first (configured) provider
@@ -319,7 +319,7 @@ class TestSetupWizardActionMenu:
         io = MockIO()
         mock_service = MockApiKeyConfigService()
         mock_llm = MockLLMService()
-        wizard = SetupWizard(io, llm_service=mock_llm, config_service=mock_service)
+        wizard = SetupWizard(io, key_validator=mock_llm, config_service=mock_service)
 
         wizard.start(allow_cancel=True)
         wizard.handle_input("1")  # Select first (unconfigured) provider
@@ -336,7 +336,7 @@ class TestSetupWizardActionMenu:
         first_env_var = sorted_providers[0][1].env_var
         mock_service.keys = {first_env_var: "existing_key_12345"}
         mock_llm = MockLLMService()
-        wizard = SetupWizard(io, llm_service=mock_llm, config_service=mock_service)
+        wizard = SetupWizard(io, key_validator=mock_llm, config_service=mock_service)
 
         wizard.start(allow_cancel=True)
         wizard.handle_input("1")  # Select configured provider
@@ -353,7 +353,7 @@ class TestSetupWizardActionMenu:
         first_env_var = sorted_providers[0][1].env_var
         mock_service.keys = {first_env_var: "existing_key_12345"}
         mock_llm = MockLLMService()
-        wizard = SetupWizard(io, llm_service=mock_llm, config_service=mock_service)
+        wizard = SetupWizard(io, key_validator=mock_llm, config_service=mock_service)
 
         wizard.start(allow_cancel=True)
         wizard.handle_input("1")  # Select configured provider
@@ -370,7 +370,7 @@ class TestSetupWizardActionMenu:
         first_env_var = sorted_providers[0][1].env_var
         mock_service.keys = {first_env_var: "existing_key_12345"}
         mock_llm = MockLLMService()
-        wizard = SetupWizard(io, llm_service=mock_llm, config_service=mock_service)
+        wizard = SetupWizard(io, key_validator=mock_llm, config_service=mock_service)
 
         wizard.start(allow_cancel=True)
         wizard.handle_input("1")  # Select configured provider
@@ -387,7 +387,7 @@ class TestSetupWizardActionMenu:
         first_env_var = sorted_providers[0][1].env_var
         mock_service.keys = {first_env_var: "existing_key_12345"}
         mock_llm = MockLLMService()
-        wizard = SetupWizard(io, llm_service=mock_llm, config_service=mock_service)
+        wizard = SetupWizard(io, key_validator=mock_llm, config_service=mock_service)
 
         wizard.start(allow_cancel=True)
         wizard.handle_input("1")  # Select configured provider
@@ -408,7 +408,7 @@ class TestSetupWizardActionMenu:
         first_env_var = sorted_providers[0][1].env_var
         mock_service.keys = {first_env_var: "existing_key_12345"}
         mock_llm = MockLLMService()
-        wizard = SetupWizard(io, llm_service=mock_llm, config_service=mock_service)
+        wizard = SetupWizard(io, key_validator=mock_llm, config_service=mock_service)
 
         wizard.start(allow_cancel=True)
         wizard.handle_input("1")  # Select configured provider
@@ -423,13 +423,13 @@ class TestSetupWizardActionMenu:
 
 
 class TestSetupWizardProviderTesting:
-    """Test provider API key testing using llm_service.validate_key."""
+    """Test provider API key testing using key_validator.validate_key."""
 
     def test_test_provider_key_success(self):
-        """Valid API key returns True when llm_service.validate_key succeeds."""
+        """Valid API key returns True when key_validator.validate_key succeeds."""
         io = MockIO()
         mock_llm = MockLLMService(validate_key_result=(True, None))
-        wizard = SetupWizard(io, llm_service=mock_llm)
+        wizard = SetupWizard(io, key_validator=mock_llm)
 
         success, error = wizard._test_provider_key("groq", "test_key")
 
@@ -442,7 +442,7 @@ class TestSetupWizardProviderTesting:
         """Unauthorized error returns False with friendly message."""
         io = MockIO()
         mock_llm = MockLLMService(validate_key_result=(False, "Invalid API key"))
-        wizard = SetupWizard(io, llm_service=mock_llm)
+        wizard = SetupWizard(io, key_validator=mock_llm)
 
         success, error = wizard._test_provider_key("groq", "test_key")
 
@@ -453,7 +453,7 @@ class TestSetupWizardProviderTesting:
         """Unknown provider returns False."""
         io = MockIO()
         mock_llm = MockLLMService()
-        wizard = SetupWizard(io, llm_service=mock_llm)
+        wizard = SetupWizard(io, key_validator=mock_llm)
 
         success, error = wizard._test_provider_key("unknown_provider", "test_key")
 

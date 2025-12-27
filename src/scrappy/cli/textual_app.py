@@ -5,7 +5,7 @@ Provides an interactive terminal UI using the Textual framework,
 wrapping the existing InteractiveMode with a modern UI.
 """
 
-from typing import TYPE_CHECKING, Any, Optional, Dict, List
+from typing import TYPE_CHECKING, Any, Optional, Dict, List, Callable
 import logging
 import threading
 import time
@@ -26,6 +26,7 @@ from .protocols import StatusComponentProtocol
 
 if TYPE_CHECKING:
     from .interactive import InteractiveMode
+    from .core import CLI
     from ..context.codebase_context import CodebaseContext
 
 logger = logging.getLogger(__name__)
@@ -123,6 +124,23 @@ class TasksUpdated(Message):
     def __init__(self, tasks: list) -> None:
         super().__init__()
         self.tasks = tasks
+
+
+class CLIReady(Message):
+    """Message posted when CLI initialization completes in background thread.
+
+    Used by deferred initialization to signal that CLI is ready for use.
+    Posted via call_from_thread() to safely update state on main thread.
+
+    Args:
+        cli: The fully initialized CLI instance
+        error: Error message if initialization failed, None on success
+    """
+
+    def __init__(self, cli: Optional["CLI"] = None, error: Optional[str] = None) -> None:
+        super().__init__()
+        self.cli = cli
+        self.error = error
 
 
 # =============================================================================
@@ -733,6 +751,10 @@ class ScrappyApp(App):
     - MainAppScreen: Chat interface
     - SetupWizardScreen: Provider configuration
 
+    Supports two initialization modes:
+    - Immediate: Pass interactive_mode directly (legacy, used by tests)
+    - Deferred: Pass cli_factory for background initialization (fast startup)
+
     Responsibilities:
     - Screen navigation (push/pop/switch)
     - Theme registration
@@ -743,24 +765,49 @@ class ScrappyApp(App):
 
     CSS_PATH = "scrappy.tcss"
 
+    # Ready state for deferred initialization
+    # When using cli_factory, this is False until CLI is ready
+    ready = reactive(True)
+
     def __init__(
         self,
-        interactive_mode: "InteractiveMode",
-        output_adapter: TextualOutputAdapter,
+        interactive_mode: Optional["InteractiveMode"] = None,
+        output_adapter: Optional[TextualOutputAdapter] = None,
         theme: Optional[ThemeProtocol] = None,
+        cli_factory: Optional[Callable[[], "CLI"]] = None,
     ):
         """Initialize the Textual app controller.
 
+        Two modes of operation:
+        1. Immediate mode (legacy): Pass interactive_mode directly
+        2. Deferred mode: Pass cli_factory for background initialization
+
         Args:
-            interactive_mode: The InteractiveMode instance with UnifiedIO
+            interactive_mode: The InteractiveMode instance (immediate mode)
             output_adapter: The TextualOutputAdapter to consume messages from
             theme: Optional theme for consistent styling
+            cli_factory: Factory function to create CLI (deferred mode)
         """
         super().__init__()
-        self.interactive_mode = interactive_mode
-        self.output_adapter = output_adapter
         self._theme = theme or DEFAULT_THEME
         self._should_stop_consumer = False
+
+        # Deferred initialization mode
+        self._cli_factory = cli_factory
+        self._cli: Optional["CLI"] = None
+
+        # In deferred mode, create output adapter now (needed for skeleton screen)
+        if cli_factory is not None:
+            self.output_adapter = output_adapter or TextualOutputAdapter()
+            self.interactive_mode: Optional["InteractiveMode"] = None
+            self.ready = False  # Will be set True when CLI is ready
+        else:
+            # Immediate mode (legacy)
+            if interactive_mode is None:
+                raise ValueError("Must provide either interactive_mode or cli_factory")
+            self.interactive_mode = interactive_mode
+            self.output_adapter = output_adapter or TextualOutputAdapter()
+            self.ready = True
 
         # Thread-safe async bridge for prompts/confirms
         self.bridge = ThreadSafeAsyncBridge(self)
@@ -813,11 +860,6 @@ class ScrappyApp(App):
         self._register_user_theme()
         OutputModeContext.set_tui_mode(True, self.output_adapter)
 
-        # Set up callback for /setup command to use wizard screen
-        self.interactive_mode.command_router.set_setup_wizard_callback(
-            self.launch_setup_wizard
-        )
-
         # Start worker thread to consume output queue
         self.consume_output_queue()
 
@@ -831,12 +873,152 @@ class ScrappyApp(App):
 
         if not has_provider or not disclaimer_acknowledged:
             # Show wizard if no provider OR disclaimer not acknowledged
-            # Allow cancel only if they already have a provider (just need to ack disclaimer)
+            # In deferred mode, wizard needs CLI - create it synchronously
+            # (user needs to configure before using anyway, no benefit to defer)
+            if self._cli_factory is not None:
+                self._create_cli_sync_for_wizard()
             self._show_wizard_screen(allow_cancel=has_provider)
         else:
+            # Show main screen immediately (skeleton in deferred mode)
             self._show_main_screen(env_key_count=env_key_count)
 
-    def exit(
+            # In deferred mode, start background CLI initialization
+            if self._cli_factory is not None:
+                self.initialize_cli()
+
+        # Set up callback for /setup command (only if interactive_mode exists)
+        if self.interactive_mode is not None:
+            self.interactive_mode.command_router.set_setup_wizard_callback(
+                self.launch_setup_wizard
+            )
+
+    def _create_cli_sync_for_wizard(self) -> None:
+        """Create CLI synchronously for wizard screen.
+
+        When no provider is configured, we need CLI for the wizard.
+        No benefit to defer since user must configure before using.
+        """
+        if self._cli_factory is None:
+            return
+
+        try:
+            self._cli = self._cli_factory()
+            self._setup_interactive_mode()
+            self.ready = True
+        except Exception as e:
+            logger.exception("Failed to create CLI for wizard: %s", e)
+
+    @work(thread=True)
+    def initialize_cli(self) -> None:
+        """Initialize CLI in background thread.
+
+        CRITICAL: Uses thread=True to run in ThreadPoolExecutor.
+        CLI creation is CPU-bound (imports) and blocking I/O (disk reads),
+        which would freeze the UI if run on the main event loop.
+
+        Posts CLIReady message directly (Textual handles thread safety for @work).
+        """
+        if self._cli_factory is None:
+            return
+
+        try:
+            # This is the slow part - runs in thread pool
+            cli = self._cli_factory()
+
+            # Post message directly - Textual's @work handles thread safety
+            self.post_message(CLIReady(cli=cli))
+        except Exception as e:
+            error_msg = str(e)
+            logger.exception("Failed to initialize CLI: %s", e)
+            self.post_message(CLIReady(error=error_msg))
+
+    def on_cliready(self, message: CLIReady) -> None:
+        """Handle CLI initialization completion.
+
+        Called on main thread after background worker finishes.
+        Wires up InteractiveMode and sets ready=True.
+
+        Note: Handler name is 'on_cliready' (not 'on_cli_ready') because
+        Textual converts 'CLIReady' to 'cliready' (all lowercase, no underscores).
+        """
+        if message.error:
+            # Show error in status bar - user can /setup to fix
+            self.output_adapter.post_output(
+                f"Startup error: {message.error}\nUse /setup to configure providers.\n"
+            )
+            # Still mark as ready so user can interact
+            self.ready = True
+            return
+
+        if message.cli is None:
+            return
+
+        self._cli = message.cli
+        self._setup_interactive_mode()
+        self.ready = True
+
+        # Display status lines now that CLI is ready (header already shown on mount)
+        from scrappy.cli.interactive_banner import display_banner_status
+
+        display_banner_status(self._cli.io)
+
+    def _setup_interactive_mode(self) -> None:
+        """Wire up InteractiveMode from CLI.
+
+        Called after CLI is created (either sync or async).
+        Sets up the interactive_mode and related callbacks.
+        """
+        if self._cli is None:
+            return
+
+        # Create InteractiveMode from CLI
+        # This mirrors what TextualInteractiveMode.run() does
+        from .interactive import InteractiveMode
+        from .output_bridge import OutputBridge
+
+        # Inject output bridge to route orchestrator output through Textual
+        orchestrator_output = OutputBridge(self.output_adapter)
+        self._cli.orchestrator.output = orchestrator_output
+
+        # Create InteractiveMode with CLI's dependencies
+        self.interactive_mode = InteractiveMode(
+            io=self._cli.io,
+            orchestrator=self._cli.orchestrator,
+            session_context=self._cli.session_context,
+            state_manager=self._cli.state_manager,
+            input_handler=self._cli.input_handler,
+            command_router=self._cli._create_command_router(),
+            display=self._cli.display,
+            smart=self._cli.smart,
+            task_router=self._cli.task_router,
+            tasks=self._cli.tasks,
+            logger=self._cli.logger
+        )
+
+        # Pass session_context to task_router for verbose_mode access
+        self.interactive_mode.task_router.session_context = self.interactive_mode.session_context
+
+        # Set up codebase context for semantic search
+        if hasattr(self._cli.orchestrator, 'context_manager'):
+            context_manager = self._cli.orchestrator.context_manager
+            if hasattr(context_manager, 'context'):
+                self.set_codebase_context(context_manager.context)
+
+        # Inject bridge into UnifiedIO for modal dialogs
+        self._cli.io.set_bridge(self.bridge)
+
+        # Reinitialize handlers with bridge for TUI-aware user interaction
+        self._cli.reinitialize_handlers_with_bridge(self.bridge)
+
+        # Update command router's references to the new handlers
+        self.interactive_mode.command_router.agent_mgr = self._cli.agent_mgr
+
+        # Set up callback for /setup command
+        self.interactive_mode.command_router.set_setup_wizard_callback(
+            self.launch_setup_wizard
+        )
+
+    def exit(  # type: ignore[override]
         self,
         result: object = None,
         return_code: int = 0,
@@ -857,7 +1039,8 @@ class ScrappyApp(App):
             if agent_mgr:
                 agent_mgr.cancel()
 
-        super().exit(result, return_code, message)
+        # Cast message to satisfy type checker (parent expects RenderableType | None)
+        super().exit(result, return_code, str(message) if message else None)
 
     def on_unmount(self) -> None:
         """Called when app is about to close."""
@@ -918,33 +1101,50 @@ class ScrappyApp(App):
     def _show_main_screen(self, env_key_count: int = 0) -> None:
         """Switch to main chat screen.
 
+        In deferred mode, interactive_mode may be None. MainAppScreen handles
+        this by showing a skeleton UI and checking app.ready before processing.
+
         Args:
             env_key_count: Number of API keys found in environment (for welcome message)
         """
         from .screens import MainAppScreen
 
         screen = MainAppScreen(
-            interactive_mode=self.interactive_mode,
+            interactive_mode=self.interactive_mode,  # May be None in deferred mode
             output_adapter=self.output_adapter,
             bridge=self.bridge,
             theme=self._theme,
         )
         self.push_screen(screen)
 
+        # Display banner header immediately (doesn't need CLI)
+        from scrappy.cli.interactive_banner import display_banner_header_tui
+
+        display_banner_header_tui(self.output_adapter)
+
         # Show welcome message if keys were found in environment
         if env_key_count > 0:
             key_word = "key" if env_key_count == 1 else "keys"
             self.output_adapter.post_output(
-                f"Found {env_key_count} API {key_word} in environment. Use /setup to add more. Ready to go!\n"
+                f"Found {env_key_count} API {key_word} in environment. Use /setup to add more.\n"
             )
 
     def _show_wizard_screen(self, allow_cancel: bool = True) -> None:
-        """Push wizard screen."""
+        """Push wizard screen.
+
+        Uses lightweight KeyValidator for instant startup - doesn't require CLI.
+        interactive_mode may be None in deferred mode.
+        """
         from .screens import SetupWizardScreen
+        from scrappy.orchestrator.key_validator import create_key_validator
+
+        if self.interactive_mode is None:
+            logger.error("Cannot show wizard: interactive_mode not initialized")
+            return
 
         screen = SetupWizardScreen(
             io=self.interactive_mode.io,
-            llm_service=self.interactive_mode.orchestrator.llm_service,
+            key_validator=create_key_validator(),
             allow_cancel=allow_cancel,
             on_complete=self._on_wizard_complete,
         )
@@ -957,9 +1157,10 @@ class ScrappyApp(App):
             has_provider: True if at least one provider is configured
         """
         if has_provider:
-            self.interactive_mode.orchestrator._auto_register_providers()
-            # Configure LLM service now that API keys are saved
-            self.interactive_mode.orchestrator.llm_service.configure()
+            if self.interactive_mode is not None:
+                self.interactive_mode.orchestrator._auto_register_providers()
+                # Configure LLM service now that API keys are saved
+                self.interactive_mode.orchestrator.llm_service.configure()
             # Show main screen after wizard
             self.call_later(self._show_main_screen)
         else:
