@@ -6,13 +6,26 @@ conversation history, and response processing.
 """
 
 import json
-from typing import List, Dict, Optional, Tuple
+from dataclasses import dataclass
+from typing import List, Dict, Optional, Tuple, Any
 from ..classifier import ClassifiedTask
 from ..pure_functions import extract_json_from_text
+from .base import OrchestratorLike
 from .research_protocols import (
     ToolBundleProtocol,
     ResponseCleanerProtocol
 )
+
+
+@dataclass
+class HistoryEntry:
+    """Structured history entry preserving message semantics."""
+    iteration: int
+    assistant_content: str      # Agent's response text - NEVER MASK (may be "")
+    tool_call: Dict[str, Any]   # {tool, parameters}
+    tool_call_id: str           # Required for API validation
+    tool_result: str            # Raw output - CAN BE MASKED
+    result_length: int          # For masked placeholder
 
 
 class ResearchLoop:
@@ -22,7 +35,17 @@ class ResearchLoop:
     Single responsibility: Orchestrate the iterative conversation between
     the LLM and tools, managing conversation history and determining when
     to stop.
+
+    Uses observation masking to manage context window:
+    - Recent tool results kept in full
+    - Older tool results masked to "[X chars returned]"
+    - Assistant reasoning (content) is NEVER masked
     """
+
+    # Context management constants
+    FULL_CONTEXT_WINDOW = 2     # Keep last N iterations with full tool results
+    CONTEXT_THRESHOLD = 0.8     # Compact aggressively when at 80% of limit
+    DEFAULT_CONTEXT_LIMIT = 65536  # Conservative default if model limit unknown
 
     def __init__(
         self,
@@ -67,40 +90,46 @@ class ResearchLoop:
         Returns:
             Tuple of (final_response, tool_calls_made, total_tokens)
         """
-        conversation_history: List[str] = []
+        history: List[HistoryEntry] = []
         final_response = ""
         tool_calls_made: List[Dict[str, object]] = []
         total_tokens = 0
+        last_input_tokens = 0
+        current_window = self.FULL_CONTEXT_WINDOW
+
+        # Get context limit for the model (if available)
+        context_limit = self._get_context_limit(provider)
 
         for iteration in range(max_iterations + 1):
-            # Build full prompt with history
-            if conversation_history:
-                full_prompt = initial_prompt + "\n\n" + "\n".join(conversation_history)
-            else:
-                full_prompt = initial_prompt
-
-            # Estimate token count for context-aware model selection
-            # Rough estimate: 1 token per 4 chars (conservative for safety)
-            prompt_chars = len(full_prompt) + len(system_prompt)
-            estimated_tokens = (prompt_chars // 4) + 2000  # Add buffer for response
-
-            # Delegate to provider with min_context for large prompts
-            response = self.orchestrator.delegate(
-                provider,
-                full_prompt,
-                system_prompt=system_prompt,
-                max_tokens=2000,
-                temperature=0.3,
-                use_context=True,
-                min_context=estimated_tokens if estimated_tokens > 30000 else 0,
+            # Build structured messages with observation masking
+            messages = self._build_messages(
+                initial_prompt,
+                system_prompt,
+                history,
+                keep_full=current_window,
+                remaining_iterations=max_iterations - iteration
             )
 
-            # Extract response
-            if hasattr(response, 'content'):
-                response_text = response.content
-                total_tokens += getattr(response, 'tokens_used', 0)
-            else:
-                response_text = str(response)
+            # Delegate using messages parameter
+            response = self.orchestrator.delegate(
+                provider,
+                prompt="",  # Empty - using messages instead
+                messages=messages,
+                system_prompt=None,  # Included in messages
+                max_tokens=2000,
+                temperature=0.3,
+            )
+
+            # Track token usage from API response
+            last_input_tokens = getattr(response, 'input_tokens', 0)
+            total_tokens += getattr(response, 'tokens_used', 0)
+
+            # Check if we need aggressive compaction for next iteration
+            if last_input_tokens > context_limit * self.CONTEXT_THRESHOLD:
+                current_window = 1  # Aggressive: keep only 1 iteration full
+
+            # Extract response content (handle null)
+            response_text = response.content or "" if hasattr(response, 'content') else str(response)
 
             # Check for tool call
             tool_call = self._parse_tool_call(response_text) if self.tool_bundle.has_tools() else None
@@ -109,37 +138,28 @@ class ResearchLoop:
             if tool_call and allowed_tools is not None:
                 tool_name = tool_call.get('tool')
                 if tool_name not in allowed_tools:
-                    # Tool not allowed - treat as if no tool call was made
                     tool_call = None
 
             if tool_call and iteration < max_iterations:
                 # Execute tool
                 tool_result = self.tool_bundle.execute_tool(tool_call)
+                tool_call_id = f"call_{iteration}"
+
                 tool_calls_made.append({
                     'tool': tool_call.get('tool'),
                     'parameters': tool_call.get('parameters', {}),
                     'result_length': len(tool_result)
                 })
 
-                # Add to conversation history
-                conversation_history.append(f"\nTool Call: {json.dumps(tool_call)}")
-                conversation_history.append(f"\nTool Result:\n{tool_result}")
-
-                # Adjust continuation prompt based on remaining iterations
-                remaining = max_iterations - iteration - 1
-                if remaining > 0:
-                    conversation_history.append(
-                        f"\nYou have {remaining} tool call(s) remaining. "
-                        f"If you have enough information to answer the user's question, "
-                        f"provide your FINAL ANSWER now (no JSON, just plain text). "
-                        f"Otherwise, make another tool call."
-                    )
-                else:
-                    conversation_history.append(
-                        "\nThis is your LAST tool call. You MUST now provide your FINAL ANSWER "
-                        "in plain text (no JSON, no tool calls). Summarize what you found from "
-                        "the tool results above."
-                    )
+                # Store structured history entry
+                history.append(HistoryEntry(
+                    iteration=iteration,
+                    assistant_content=response_text,  # Full reasoning - NEVER MASK
+                    tool_call=tool_call,
+                    tool_call_id=tool_call_id,
+                    tool_result=tool_result,
+                    result_length=len(tool_result)
+                ))
             else:
                 # No tool call or max iterations reached - this is the final response
                 final_response = self.response_cleaner.clean_response(response_text)
@@ -148,18 +168,134 @@ class ResearchLoop:
                 if not final_response:
                     if tool_calls_made:
                         # Tools were executed but LLM didn't summarize
+                        # Convert history to legacy format for fallback
+                        legacy_history = self._history_to_legacy(history)
                         final_response = self.response_cleaner.generate_fallback_response(
                             task,
                             tool_calls_made,
-                            conversation_history
+                            legacy_history
                         )
                     else:
-                        # LLM responded with only tool-call JSON that was not executed
                         final_response = self._generate_no_response_fallback(response_text)
 
                 break
 
         return final_response, tool_calls_made, total_tokens
+
+    def _build_messages(
+        self,
+        initial_prompt: str,
+        system_prompt: str,
+        history: List[HistoryEntry],
+        keep_full: int,
+        remaining_iterations: int
+    ) -> List[Dict[str, Any]]:
+        """
+        Build structured message list with native tool protocol.
+
+        Uses observation masking: older tool results are replaced with
+        "[X chars returned]" while assistant reasoning is preserved.
+
+        Args:
+            initial_prompt: Initial user prompt
+            system_prompt: System prompt with instructions
+            history: List of history entries from previous iterations
+            keep_full: Number of recent iterations to keep full results
+            remaining_iterations: How many iterations remain
+
+        Returns:
+            List of messages in native tool protocol format
+        """
+        messages: List[Dict[str, Any]] = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": initial_prompt},
+        ]
+
+        for i, entry in enumerate(history):
+            is_recent = i >= len(history) - keep_full
+
+            # Assistant message WITH tool_calls field (required for tool protocol)
+            messages.append({
+                "role": "assistant",
+                "content": entry.assistant_content,  # May be "" - that's valid
+                "tool_calls": [{
+                    "id": entry.tool_call_id,
+                    "type": "function",
+                    "function": {
+                        "name": entry.tool_call['tool'],
+                        "arguments": json.dumps(entry.tool_call.get('parameters', {}))
+                    }
+                }]
+            })
+
+            # Tool result with role: "tool" and matching ID
+            if is_recent:
+                result_content = entry.tool_result
+            else:
+                # Observation masking: replace with placeholder
+                result_content = f"[{entry.result_length} chars returned]"
+
+            messages.append({
+                "role": "tool",
+                "tool_call_id": entry.tool_call_id,
+                "content": result_content
+            })
+
+        # Add continuation prompt if we have history
+        if history and remaining_iterations > 0:
+            if remaining_iterations > 1:
+                continuation = (
+                    f"You have {remaining_iterations} tool call(s) remaining. "
+                    f"If you have enough information to answer the user's question, "
+                    f"provide your FINAL ANSWER now (no JSON, just plain text). "
+                    f"Otherwise, make another tool call."
+                )
+            else:
+                continuation = (
+                    "This is your LAST tool call. You MUST now provide your FINAL ANSWER "
+                    "in plain text (no JSON, no tool calls). Summarize what you found."
+                )
+            messages.append({"role": "user", "content": continuation})
+
+        return messages
+
+    def _get_context_limit(self, provider: str) -> int:
+        """
+        Get context limit for the provider/model.
+
+        Args:
+            provider: Provider name
+
+        Returns:
+            Context limit in tokens
+        """
+        try:
+            from ...orchestrator.litellm_config import MODEL_METADATA
+            # Try to find a matching model for this provider
+            for model_id, metadata in MODEL_METADATA.items():
+                if model_id.startswith(provider + "/"):
+                    return metadata.context_length
+        except ImportError:
+            pass
+        return self.DEFAULT_CONTEXT_LIMIT
+
+    def _history_to_legacy(self, history: List[HistoryEntry]) -> List[str]:
+        """
+        Convert structured history to legacy string format.
+
+        Used for backward compatibility with response_cleaner.generate_fallback_response().
+
+        Args:
+            history: Structured history entries
+
+        Returns:
+            Legacy format: list of strings
+        """
+        legacy: List[str] = []
+        for entry in history:
+            legacy.append(f"\nTool Call: {json.dumps(entry.tool_call)}")
+            legacy.append(f"\nTool Result:\n{entry.tool_result}")
+        return legacy
 
     def _generate_no_response_fallback(self, original_response: str) -> str:
         """
@@ -176,7 +312,6 @@ class ResearchLoop:
         Returns:
             User-friendly fallback message
         """
-        # Check if original response contained tool-call-like JSON
         if '{"tool"' in original_response or '"tool":' in original_response:
             return (
                 "I attempted to use a tool that is not available for this query type. "
@@ -202,7 +337,6 @@ class ResearchLoop:
         """
         result = extract_json_from_text(response)
 
-        # Verify it's a tool call (has 'tool' key)
         if result and 'tool' in result:
             return result
 

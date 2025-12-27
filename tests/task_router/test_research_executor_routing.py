@@ -5,13 +5,12 @@ Verifies that the subclassifier result is correctly used to route
 queries to codebase vs general research execution paths.
 """
 
-import pytest
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import Mock
 
 from scrappy.task_router.classifier import ClassifiedTask, TaskType
 from scrappy.task_router.strategies.research_executor import ResearchExecutor
 from scrappy.task_router.strategies.research_subtype import ResearchSubtype
-from scrappy.task_router.strategies.research_subclassifier import ResearchSubclassifier
+from tests.helpers import make_mock_llm_response
 
 
 class TestResearchExecutorSubtypeRouting:
@@ -38,11 +37,8 @@ class TestResearchExecutorSubtypeRouting:
         providers.get_provider.return_value = Mock()
         orchestrator.providers = providers
 
-        # Mock delegate to return a response
-        response = Mock()
-        response.content = "Test response"
-        response.tokens_used = 100
-        orchestrator.delegate.return_value = response
+        # Mock delegate to return a response with all required attributes
+        orchestrator.delegate.return_value = make_mock_llm_response("Test response")
 
         return orchestrator
 
@@ -240,10 +236,7 @@ class TestResearchExecutorSemanticReadiness:
         providers.get_provider.return_value = Mock()
         orchestrator.providers = providers
 
-        response = Mock()
-        response.content = "Test response"
-        response.tokens_used = 100
-        orchestrator.delegate.return_value = response
+        orchestrator.delegate.return_value = make_mock_llm_response("Test response")
 
         return orchestrator
 
@@ -323,10 +316,7 @@ class TestResearchExecutorEdgeCases:
         providers.get_provider.return_value = Mock()
         orchestrator.providers = providers
 
-        response = Mock()
-        response.content = "Test response"
-        response.tokens_used = 100
-        orchestrator.delegate.return_value = response
+        orchestrator.delegate.return_value = make_mock_llm_response("Test response")
 
         return orchestrator
 
@@ -412,8 +402,8 @@ class TestResearchExecutorEdgeCases:
         # Verify file_index starts empty
         assert context.file_index == {}, "file_index should start empty"
 
-        # Execute the task
-        result = executor.execute(task)
+        # Execute the task (result unused - we're testing side effects)
+        executor.execute(task)
 
         # Verify get_cached_file_index was called (never-block version)
         context.get_cached_file_index.assert_called_once()

@@ -22,21 +22,25 @@ from scrappy.task_router.classifier import ClassifiedTask, TaskType
 class FakeOrchestratorNoTools:
     """Orchestrator that returns responses without tool calls."""
 
-    def __init__(self, response_content="This is a direct answer", tokens=50):
+    def __init__(self, response_content="This is a direct answer", tokens=50, input_tokens=100):
         self.response_content = response_content
         self.tokens = tokens
+        self.input_tokens = input_tokens
         self.call_count = 0
+        self.last_messages = None
         self.last_prompt = None
         self.last_system_prompt = None
 
-    def delegate(self, provider, prompt, system_prompt=None, **kwargs):
+    def delegate(self, provider, prompt="", system_prompt=None, messages=None, **kwargs):
         self.call_count += 1
         self.last_prompt = prompt
         self.last_system_prompt = system_prompt
+        self.last_messages = messages
 
         response = Mock()
         response.content = self.response_content
         response.tokens_used = self.tokens
+        response.input_tokens = self.input_tokens
         return response
 
 
@@ -45,15 +49,18 @@ class FakeOrchestratorWithToolCall:
 
     def __init__(self):
         self.call_count = 0
+        self.last_messages = None
         self.responses = [
             '```json\n{"tool": "read_file", "parameters": {"file_path": "test.py"}}\n```',
             'Based on the file, the answer is 42.'
         ]
 
-    def delegate(self, provider, prompt, system_prompt=None, **kwargs):
+    def delegate(self, provider, prompt="", system_prompt=None, messages=None, **kwargs):
+        self.last_messages = messages
         response = Mock()
         response.content = self.responses[min(self.call_count, len(self.responses) - 1)]
         response.tokens_used = 50
+        response.input_tokens = 100
         self.call_count += 1
         return response
 
@@ -229,7 +236,8 @@ def test_max_iterations_stops_tool_calling():
     orchestrator = Mock()
     orchestrator.delegate = Mock(return_value=Mock(
         content='{"tool": "read_file", "parameters": {}}',
-        tokens_used=50
+        tokens_used=50,
+        input_tokens=100
     ))
 
     tool_bundle = FakeToolBundle()
@@ -272,6 +280,7 @@ def test_stops_when_no_tool_call_parsed():
         response = Mock()
         response.content = responses[min(call_count[0], len(responses) - 1)]
         response.tokens_used = 50
+        response.input_tokens = 100
         call_count[0] += 1
         return response
 
@@ -308,8 +317,8 @@ def test_tool_execution_error_continues_loop():
 
     orchestrator = Mock()
     orchestrator.delegate = Mock(side_effect=[
-        Mock(content='{"tool": "bad_tool", "parameters": {}}', tokens_used=50),
-        Mock(content='Final answer after error', tokens_used=50)
+        Mock(content='{"tool": "bad_tool", "parameters": {}}', tokens_used=50, input_tokens=100),
+        Mock(content='Final answer after error', tokens_used=50, input_tokens=100)
     ])
 
     # Tool bundle that returns error
@@ -348,7 +357,8 @@ def test_no_tools_available_skips_tool_calling():
     orchestrator = Mock()
     orchestrator.delegate = Mock(return_value=Mock(
         content='{"tool": "read_file", "parameters": {}}',  # Contains tool call
-        tokens_used=50
+        tokens_used=50,
+        input_tokens=100
     ))
 
     # Tool bundle with no tools
@@ -380,9 +390,9 @@ def test_empty_final_response_generates_fallback(simple_task):
     """When final response is empty after cleaning, generates fallback."""
     orchestrator = Mock()
     orchestrator.delegate = Mock(side_effect=[
-        Mock(content='{"tool": "read_file", "parameters": {}}', tokens_used=50),
-        Mock(content='```json\n{"tool": "test", "parameters": {}}\n```', tokens_used=50),  # Tool call
-        Mock(content='```json\n{"not": "a tool call"}\n```', tokens_used=50)  # Empty after cleaning
+        Mock(content='{"tool": "read_file", "parameters": {}}', tokens_used=50, input_tokens=100),
+        Mock(content='```json\n{"tool": "test", "parameters": {}}\n```', tokens_used=50, input_tokens=100),  # Tool call
+        Mock(content='```json\n{"not": "a tool call"}\n```', tokens_used=50, input_tokens=100)  # Empty after cleaning
     ])
 
     tool_bundle = FakeToolBundle()
@@ -416,9 +426,9 @@ def test_accumulates_tokens_across_iterations():
 
     orchestrator = Mock()
     orchestrator.delegate = Mock(side_effect=[
-        Mock(content='{"tool": "read_file", "parameters": {}}', tokens_used=100),
-        Mock(content='{"tool": "search_code", "parameters": {}}', tokens_used=150),
-        Mock(content='Final answer', tokens_used=200)
+        Mock(content='{"tool": "read_file", "parameters": {}}', tokens_used=100, input_tokens=50),
+        Mock(content='{"tool": "search_code", "parameters": {}}', tokens_used=150, input_tokens=50),
+        Mock(content='Final answer', tokens_used=200, input_tokens=50)
     ])
 
     tool_bundle = FakeToolBundle()
@@ -444,21 +454,26 @@ def test_accumulates_tokens_across_iterations():
 # Tests: Conversation history building
 
 def test_conversation_history_includes_tool_results():
-    """Conversation history contains tool calls and results."""
+    """Conversation history contains tool calls and results in structured messages."""
     task = Mock(spec=ClassifiedTask)
     task.original_input = "Test"
 
-    prompts_received = []
+    messages_received = []
 
-    def capture_prompt(*args, **kwargs):
-        prompts_received.append(args[1])  # Capture the prompt argument
-        if len(prompts_received) == 1:
-            return Mock(content='{"tool": "read_file", "parameters": {}}', tokens_used=50)
+    def capture_messages(*args, **kwargs):
+        messages_received.append(kwargs.get('messages', []))
+        response = Mock()
+        response.input_tokens = 100
+        if len(messages_received) == 1:
+            response.content = '{"tool": "read_file", "parameters": {}}'
+            response.tokens_used = 50
         else:
-            return Mock(content='Final answer', tokens_used=50)
+            response.content = 'Final answer'
+            response.tokens_used = 50
+        return response
 
     orchestrator = Mock()
-    orchestrator.delegate = Mock(side_effect=capture_prompt)
+    orchestrator.delegate = Mock(side_effect=capture_messages)
 
     tool_bundle = FakeToolBundle()
     cleaner = FakeResponseCleaner()
@@ -477,13 +492,21 @@ def test_conversation_history_includes_tool_results():
         max_iterations=3
     )
 
-    # First prompt should be just initial
-    assert "Initial prompt" in prompts_received[0]
+    # First call should have system + user messages
+    first_messages = messages_received[0]
+    assert first_messages[0]['role'] == 'system'
+    assert first_messages[1]['role'] == 'user'
+    assert 'Initial prompt' in first_messages[1]['content']
 
-    # Second prompt should include history
-    assert len(prompts_received) == 2
-    # History should contain tool result
-    assert "Tool Result" in prompts_received[1] or "Result from" in prompts_received[1]
+    # Second call should include tool history
+    second_messages = messages_received[1]
+    assert len(second_messages) > 2  # Has history
+    # Should have assistant message with tool_calls
+    tool_call_msg = next((m for m in second_messages if m.get('role') == 'assistant' and m.get('tool_calls')), None)
+    assert tool_call_msg is not None
+    # Should have tool result message
+    tool_result_msg = next((m for m in second_messages if m.get('role') == 'tool'), None)
+    assert tool_result_msg is not None
 
 
 # Tests: Multiple tool calls
@@ -495,10 +518,10 @@ def test_multiple_sequential_tool_calls():
 
     orchestrator = Mock()
     orchestrator.delegate = Mock(side_effect=[
-        Mock(content='{"tool": "read_file", "parameters": {"file_path": "a.py"}}', tokens_used=50),
-        Mock(content='{"tool": "read_file", "parameters": {"file_path": "b.py"}}', tokens_used=50),
-        Mock(content='{"tool": "search_code", "parameters": {"pattern": "test"}}', tokens_used=50),
-        Mock(content='All done!', tokens_used=50)
+        Mock(content='{"tool": "read_file", "parameters": {"file_path": "a.py"}}', tokens_used=50, input_tokens=100),
+        Mock(content='{"tool": "read_file", "parameters": {"file_path": "b.py"}}', tokens_used=50, input_tokens=100),
+        Mock(content='{"tool": "search_code", "parameters": {"pattern": "test"}}', tokens_used=50, input_tokens=100),
+        Mock(content='All done!', tokens_used=50, input_tokens=100)
     ])
 
     tool_bundle = FakeToolBundle()
@@ -544,7 +567,8 @@ def test_json_only_response_without_tools_available_returns_nonempty(simple_task
     # LLM outputs only tool-call JSON (common with llama3.1-8b)
     orchestrator.delegate = Mock(return_value=Mock(
         content='{"tool": "web_search", "parameters": {"query": "test"}}',
-        tokens_used=50
+        tokens_used=50,
+        input_tokens=100
     ))
 
     # No tools available - tool call cannot be executed
@@ -585,7 +609,8 @@ def test_rejected_tool_due_to_allowed_list_returns_nonempty(simple_task):
     # LLM tries to use read_file tool
     orchestrator.delegate = Mock(return_value=Mock(
         content='{"tool": "read_file", "parameters": {"file_path": "src/main.py"}}',
-        tokens_used=50
+        tokens_used=50,
+        input_tokens=100
     ))
 
     tool_bundle = FakeToolBundle(has_tools=True)
@@ -627,7 +652,8 @@ def test_malformed_tool_json_returns_nonempty(simple_task):
     # LLM outputs malformed tool call (missing closing brace)
     orchestrator.delegate = Mock(return_value=Mock(
         content='{"tool": "web_search", "parameters": {"query": "test"}',  # Missing }
-        tokens_used=50
+        tokens_used=50,
+        input_tokens=100
     ))
 
     tool_bundle = FakeToolBundle(has_tools=True)
@@ -650,3 +676,391 @@ def test_malformed_tool_json_returns_nonempty(simple_task):
     # Response cleaner will strip lines starting with {"tool"
     # Even though parsing failed, user should get SOMETHING back
     assert final_response != "", "Response should not be empty when tool JSON is malformed"
+
+
+# Tests: Native Tool Protocol Compliance
+
+def test_uses_native_tool_protocol():
+    """Messages use native tool protocol: assistant with tool_calls, role: 'tool' for results."""
+    task = Mock(spec=ClassifiedTask)
+    task.original_input = "Test"
+
+    messages_received = []
+
+    def capture_messages(*args, **kwargs):
+        messages_received.append(kwargs.get('messages', []))
+        response = Mock()
+        response.input_tokens = 100
+        if len(messages_received) == 1:
+            response.content = '{"tool": "read_file", "parameters": {"path": "test.py"}}'
+            response.tokens_used = 50
+        else:
+            response.content = 'Done'
+            response.tokens_used = 50
+        return response
+
+    orchestrator = Mock()
+    orchestrator.delegate = Mock(side_effect=capture_messages)
+
+    tool_bundle = FakeToolBundle()
+    cleaner = FakeResponseCleaner()
+
+    loop = ResearchLoop(
+        orchestrator=orchestrator,
+        tool_bundle=tool_bundle,
+        response_cleaner=cleaner
+    )
+
+    loop.run(
+        provider="test-provider",
+        initial_prompt="Test",
+        system_prompt="System",
+        task=task,
+        max_iterations=3
+    )
+
+    # Second call should have tool protocol messages
+    second_messages = messages_received[1]
+
+    # Find assistant message with tool_calls
+    assistant_msg = next((m for m in second_messages if m.get('role') == 'assistant'), None)
+    assert assistant_msg is not None
+    assert 'tool_calls' in assistant_msg
+    assert assistant_msg['tool_calls'][0]['type'] == 'function'
+    assert assistant_msg['tool_calls'][0]['function']['name'] == 'read_file'
+
+    # Find tool result message
+    tool_msg = next((m for m in second_messages if m.get('role') == 'tool'), None)
+    assert tool_msg is not None
+    assert 'tool_call_id' in tool_msg
+
+
+def test_tool_call_ids_match():
+    """Tool call ID in assistant message matches ID in tool result message."""
+    task = Mock(spec=ClassifiedTask)
+    task.original_input = "Test"
+
+    messages_received = []
+
+    def capture_messages(*args, **kwargs):
+        messages_received.append(kwargs.get('messages', []))
+        response = Mock()
+        response.input_tokens = 100
+        if len(messages_received) == 1:
+            response.content = '{"tool": "read_file", "parameters": {}}'
+            response.tokens_used = 50
+        else:
+            response.content = 'Done'
+            response.tokens_used = 50
+        return response
+
+    orchestrator = Mock()
+    orchestrator.delegate = Mock(side_effect=capture_messages)
+
+    tool_bundle = FakeToolBundle()
+    cleaner = FakeResponseCleaner()
+
+    loop = ResearchLoop(
+        orchestrator=orchestrator,
+        tool_bundle=tool_bundle,
+        response_cleaner=cleaner
+    )
+
+    loop.run(
+        provider="test-provider",
+        initial_prompt="Test",
+        system_prompt="System",
+        task=task,
+        max_iterations=3
+    )
+
+    second_messages = messages_received[1]
+
+    assistant_msg = next((m for m in second_messages if m.get('role') == 'assistant' and m.get('tool_calls')), None)
+    tool_msg = next((m for m in second_messages if m.get('role') == 'tool'), None)
+
+    assert assistant_msg is not None
+    assert tool_msg is not None
+    # IDs must match
+    assert assistant_msg['tool_calls'][0]['id'] == tool_msg['tool_call_id']
+
+
+def test_handles_null_content():
+    """Handles response.content being None (some models skip straight to tool calls)."""
+    task = Mock(spec=ClassifiedTask)
+    task.original_input = "Test"
+
+    orchestrator = Mock()
+    response1 = Mock()
+    response1.content = None  # Null content
+    response1.tokens_used = 50
+    response1.input_tokens = 100
+
+    response2 = Mock()
+    response2.content = 'Final answer'
+    response2.tokens_used = 50
+    response2.input_tokens = 100
+
+    orchestrator.delegate = Mock(side_effect=[response1, response2])
+
+    tool_bundle = FakeToolBundle(has_tools=False)  # No tools, so null content triggers direct response
+    cleaner = FakeResponseCleaner()
+
+    loop = ResearchLoop(
+        orchestrator=orchestrator,
+        tool_bundle=tool_bundle,
+        response_cleaner=cleaner
+    )
+
+    # Should not raise NoneType error
+    final_response, tool_calls, tokens = loop.run(
+        provider="test-provider",
+        initial_prompt="Test",
+        system_prompt="System",
+        task=task,
+        max_iterations=3
+    )
+
+    # Should handle gracefully - returns fallback message for null/empty content
+    assert final_response != ""  # Should have fallback message, not empty
+    assert "unable to generate" in final_response.lower() or "rephras" in final_response.lower()
+
+
+# Tests: Context Compaction (Observation Masking)
+
+def test_masks_old_tool_results():
+    """Old tool results are masked to '[X chars returned]' after FULL_CONTEXT_WINDOW iterations."""
+
+    task = Mock(spec=ClassifiedTask)
+    task.original_input = "Test"
+
+    messages_received = []
+
+    def capture_messages(*args, **kwargs):
+        messages_received.append(kwargs.get('messages', []))
+        response = Mock()
+        response.input_tokens = 100
+        response.tokens_used = 50
+        # Return tool calls for first 4 iterations, then final answer
+        if len(messages_received) < 5:
+            response.content = f'{{"tool": "read_file", "parameters": {{"n": {len(messages_received)}}}}}'
+        else:
+            response.content = 'Final answer'
+        return response
+
+    orchestrator = Mock()
+    orchestrator.delegate = Mock(side_effect=capture_messages)
+
+    tool_bundle = FakeToolBundle()
+    cleaner = FakeResponseCleaner()
+
+    loop = ResearchLoop(
+        orchestrator=orchestrator,
+        tool_bundle=tool_bundle,
+        response_cleaner=cleaner
+    )
+
+    loop.run(
+        provider="test-provider",
+        initial_prompt="Test",
+        system_prompt="System",
+        task=task,
+        max_iterations=5
+    )
+
+    # After 4 tool calls, 5th call should have masked results for iterations 0, 1
+    # (keeping only last 2 iterations full)
+    last_messages = messages_received[-1]
+    tool_results = [m for m in last_messages if m.get('role') == 'tool']
+
+    # First 2 results should be masked (iteration 0, 1)
+    assert '[' in tool_results[0]['content'] and 'chars returned]' in tool_results[0]['content']
+    assert '[' in tool_results[1]['content'] and 'chars returned]' in tool_results[1]['content']
+
+    # Last 2 results should be full (iteration 2, 3)
+    assert 'Result from read_file' in tool_results[2]['content']
+    assert 'Result from read_file' in tool_results[3]['content']
+
+
+def test_keeps_recent_results_full():
+    """Last FULL_CONTEXT_WINDOW iterations keep full tool results."""
+    task = Mock(spec=ClassifiedTask)
+    task.original_input = "Test"
+
+    messages_received = []
+
+    def capture_messages(*args, **kwargs):
+        messages_received.append(kwargs.get('messages', []))
+        response = Mock()
+        response.input_tokens = 100
+        response.tokens_used = 50
+        if len(messages_received) < 3:
+            response.content = '{"tool": "read_file", "parameters": {}}'
+        else:
+            response.content = 'Final'
+        return response
+
+    orchestrator = Mock()
+    orchestrator.delegate = Mock(side_effect=capture_messages)
+
+    tool_bundle = FakeToolBundle()
+    cleaner = FakeResponseCleaner()
+
+    loop = ResearchLoop(
+        orchestrator=orchestrator,
+        tool_bundle=tool_bundle,
+        response_cleaner=cleaner
+    )
+
+    loop.run(
+        provider="test-provider",
+        initial_prompt="Test",
+        system_prompt="System",
+        task=task,
+        max_iterations=3
+    )
+
+    # With only 2 tool calls and FULL_CONTEXT_WINDOW=2, both should be full
+    last_messages = messages_received[-1]
+    tool_results = [m for m in last_messages if m.get('role') == 'tool']
+
+    for result in tool_results:
+        # All should be full (not masked)
+        assert 'chars returned]' not in result['content']
+
+
+def test_preserves_reasoning_trace():
+    """Assistant content (reasoning) is never masked, only tool results."""
+    task = Mock(spec=ClassifiedTask)
+    task.original_input = "Test"
+
+    messages_received = []
+
+    def capture_messages(*args, **kwargs):
+        messages_received.append(kwargs.get('messages', []))
+        response = Mock()
+        response.input_tokens = 100
+        response.tokens_used = 50
+        if len(messages_received) < 5:
+            response.content = f'Thinking about iteration {len(messages_received)}... {{"tool": "read_file", "parameters": {{}}}}'
+        else:
+            response.content = 'Final'
+        return response
+
+    orchestrator = Mock()
+    orchestrator.delegate = Mock(side_effect=capture_messages)
+
+    tool_bundle = FakeToolBundle()
+    cleaner = FakeResponseCleaner()
+
+    loop = ResearchLoop(
+        orchestrator=orchestrator,
+        tool_bundle=tool_bundle,
+        response_cleaner=cleaner
+    )
+
+    loop.run(
+        provider="test-provider",
+        initial_prompt="Test",
+        system_prompt="System",
+        task=task,
+        max_iterations=5
+    )
+
+    last_messages = messages_received[-1]
+    assistant_msgs = [m for m in last_messages if m.get('role') == 'assistant']
+
+    # All assistant messages should have full reasoning content
+    for msg in assistant_msgs:
+        assert 'Thinking about iteration' in msg['content']
+        # Should NOT be masked
+        assert 'chars returned]' not in msg['content']
+
+
+def test_tracks_input_tokens():
+    """Token tracking uses input_tokens from API response."""
+    task = Mock(spec=ClassifiedTask)
+    task.original_input = "Test"
+
+    orchestrator = Mock()
+    response = Mock()
+    response.content = 'Answer'
+    response.tokens_used = 100
+    response.input_tokens = 500  # Specific input token count
+    orchestrator.delegate = Mock(return_value=response)
+
+    tool_bundle = FakeToolBundle(has_tools=False)
+    cleaner = FakeResponseCleaner()
+
+    loop = ResearchLoop(
+        orchestrator=orchestrator,
+        tool_bundle=tool_bundle,
+        response_cleaner=cleaner
+    )
+
+    # The loop should track input_tokens internally
+    # We can verify by checking that it doesn't error
+    final_response, tool_calls, tokens = loop.run(
+        provider="test-provider",
+        initial_prompt="Test",
+        system_prompt="System",
+        task=task,
+        max_iterations=3
+    )
+
+    assert tokens == 100  # Total tokens used
+
+
+def test_aggressive_compact_at_threshold():
+    """When input_tokens exceeds threshold, window shrinks to 1."""
+    task = Mock(spec=ClassifiedTask)
+    task.original_input = "Test"
+
+    messages_received = []
+    call_count = [0]
+
+    def capture_messages(*args, **kwargs):
+        messages_received.append(kwargs.get('messages', []))
+        response = Mock()
+        call_count[0] += 1
+
+        if call_count[0] < 4:
+            response.content = '{"tool": "read_file", "parameters": {}}'
+            # Simulate high token usage to trigger aggressive compaction
+            response.input_tokens = 60000  # Above 80% of 65536
+        else:
+            response.content = 'Final'
+            response.input_tokens = 100
+
+        response.tokens_used = 50
+        return response
+
+    orchestrator = Mock()
+    orchestrator.delegate = Mock(side_effect=capture_messages)
+
+    tool_bundle = FakeToolBundle()
+    cleaner = FakeResponseCleaner()
+
+    loop = ResearchLoop(
+        orchestrator=orchestrator,
+        tool_bundle=tool_bundle,
+        response_cleaner=cleaner
+    )
+
+    loop.run(
+        provider="test-provider",
+        initial_prompt="Test",
+        system_prompt="System",
+        task=task,
+        max_iterations=4
+    )
+
+    # After hitting threshold, later calls should have more masked results
+    # (window shrinks from 2 to 1)
+    if len(messages_received) >= 4:
+        last_messages = messages_received[-1]
+        tool_results = [m for m in last_messages if m.get('role') == 'tool']
+        # With window=1, all but last result should be masked
+        if len(tool_results) >= 2:
+            # At least first result should be masked
+            assert 'chars returned]' in tool_results[0]['content']

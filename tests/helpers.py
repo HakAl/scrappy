@@ -2735,6 +2735,51 @@ class MockApiKeyService:
         """Set API key for testing."""
         self._keys[name] = value
 
+    def reload(self) -> None:
+        """Reload keys - no-op for mock."""
+        pass
+
+
+def make_mock_llm_response(
+    content: str = "Test response",
+    tokens_used: int = 100,
+    input_tokens: int = 100,
+    output_tokens: int = 0,
+    model: str = "test-model",
+    provider: str = "test-provider",
+    tool_calls: Optional[List[Any]] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> LLMResponse:
+    """
+    Create a mock LLMResponse with sensible defaults.
+
+    Use this instead of Mock() when you need a response object that
+    has all required attributes (especially input_tokens).
+
+    Args:
+        content: Response text
+        tokens_used: Total tokens (input + output)
+        input_tokens: Input/prompt tokens (CRITICAL - needed for context tracking)
+        output_tokens: Output/completion tokens
+        model: Model identifier
+        provider: Provider name
+        tool_calls: Optional list of ToolCall objects
+        metadata: Optional metadata dict
+
+    Returns:
+        LLMResponse with all attributes set
+    """
+    return LLMResponse(
+        content=content,
+        model=model,
+        provider=provider,
+        tokens_used=tokens_used,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens or (tokens_used - input_tokens),
+        tool_calls=tool_calls,
+        metadata=metadata or {},
+    )
+
 
 class MockProviderStatusTracker:
     """

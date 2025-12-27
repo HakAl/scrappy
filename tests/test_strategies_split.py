@@ -321,6 +321,7 @@ class TestResearchExecutorBehavior:
         mock_response = Mock()
         mock_response.content = "This is a research answer about Python."
         mock_response.tokens_used = 100
+        mock_response.input_tokens = 100
         mock.delegate.return_value = mock_response
 
         return mock
