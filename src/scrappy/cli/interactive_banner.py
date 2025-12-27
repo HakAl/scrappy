@@ -72,24 +72,15 @@ def _get_configured_provider_names(
     return providers
 
 
-def display_banner(
-    io: "UnifiedIOProtocol",
-    api_key_service: Optional[ApiKeyConfigServiceProtocol] = None,
-    path_provider: Optional[ScrappyPathProvider] = None,
-) -> None:
-    """Display welcome banner with ASCII art, providers, and workspace.
+def display_banner_header(io: "UnifiedIOProtocol") -> None:
+    """Display banner header (ASCII art + tagline) without any CLI dependencies.
+
+    This can be called immediately on app mount, before CLI is ready.
+    No external service dependencies - just needs IO.
 
     Args:
-        io: UnifiedIO instance with console property and theme
-        api_key_service: Optional service for checking API keys (for testing)
-        path_provider: Optional path provider (for testing)
+        io: UnifiedIO instance with console property
     """
-    # Use provided dependencies or create defaults
-    if api_key_service is None:
-        api_key_service = create_api_key_service()
-    if path_provider is None:
-        path_provider = ScrappyPathProvider(Path.cwd())
-
     # Display ASCII art banner
     banner = BANNER_ART.format(version=__version__)
     _print_rich(io, banner)
@@ -99,6 +90,28 @@ def display_banner(
     io.echo("Scrappy can write, test, and debug code right from your terminal.")
     _print_rich(io, "Describe a task to get started or enter [cyan]/help[/] for commands.")
     io.echo()
+
+
+def display_banner_status(
+    io: "UnifiedIOProtocol",
+    api_key_service: Optional[ApiKeyConfigServiceProtocol] = None,
+    path_provider: Optional[ScrappyPathProvider] = None,
+) -> None:
+    """Display banner status lines (providers + workspace).
+
+    This should be called after CLI is ready, as it needs api_key_service
+    to check configured providers.
+
+    Args:
+        io: UnifiedIO instance with console property
+        api_key_service: Optional service for checking API keys (for testing)
+        path_provider: Optional path provider (for testing)
+    """
+    # Use provided dependencies or create defaults
+    if api_key_service is None:
+        api_key_service = create_api_key_service()
+    if path_provider is None:
+        path_provider = ScrappyPathProvider(Path.cwd())
 
     # Show configured providers
     providers = _get_configured_provider_names(api_key_service)
@@ -112,3 +125,23 @@ def display_banner(
     workspace = path_provider.workspace_display()
     _print_rich(io, f"[green]●[/] Workspace: [cyan]{workspace}[/]")
     io.echo()
+
+
+def display_banner(
+    io: "UnifiedIOProtocol",
+    api_key_service: Optional[ApiKeyConfigServiceProtocol] = None,
+    path_provider: Optional[ScrappyPathProvider] = None,
+) -> None:
+    """Display welcome banner with ASCII art, providers, and workspace.
+
+    This is the original combined function for backwards compatibility.
+    For deferred startup, use display_banner_header() on mount and
+    display_banner_status() when CLI is ready.
+
+    Args:
+        io: UnifiedIO instance with console property and theme
+        api_key_service: Optional service for checking API keys (for testing)
+        path_provider: Optional path provider (for testing)
+    """
+    display_banner_header(io)
+    display_banner_status(io, api_key_service, path_provider)

@@ -5,11 +5,15 @@ Defines abstract interfaces (Protocols) for orchestrator implementations,
 enabling loose coupling and better testability throughout the codebase.
 """
 
-from typing import Protocol, Optional, Dict, Any, List, runtime_checkable, AsyncIterator
-from datetime import datetime
+from typing import Protocol, Optional, Dict, Any, List, runtime_checkable, AsyncIterator, Type, TypeVar
+
+from pydantic import BaseModel
 
 from ..providers.base import LLMResponse, LLMProviderBase, ProviderLimits
 from .types import StreamChunk
+
+# Type variable for generic structured output responses
+T = TypeVar("T", bound=BaseModel)
 
 
 @runtime_checkable
@@ -947,5 +951,107 @@ class StreamingCompletionProtocol(Protocol):
             AllProvidersRateLimitedError: When all providers exhausted
             ContextWindowExceededError: When quality tier also exceeds context (fatal)
             StreamStuckError: When stream stalls or times out
+        """
+        ...
+
+
+@runtime_checkable
+class KeyValidatorProtocol(Protocol):
+    """
+    Protocol for API key validation.
+
+    Provides a lightweight interface for validating API keys without
+    requiring the full LLMService. Used by the setup wizard to test
+    keys before saving.
+
+    This protocol enables instant wizard startup by avoiding heavy
+    litellm imports until validation is actually needed.
+
+    Implementations:
+    - LiteLLMKeyValidator: Production implementation with lazy imports
+    - MockKeyValidator: Test double for unit tests
+
+    Example:
+        validator: KeyValidatorProtocol = LiteLLMKeyValidator()
+        is_valid, error = validator.validate_key("groq/llama-3.1-8b", "gsk_...")
+        if is_valid:
+            save_key(...)
+    """
+
+    def validate_key(
+        self,
+        model: str,
+        api_key: str,
+        timeout: float = 10.0,
+    ) -> tuple[bool, Optional[str]]:
+        """
+        Validate an API key by making a minimal completion call.
+
+        Args:
+            model: LiteLLM model ID (e.g., "groq/llama-3.1-8b-instant")
+            api_key: API key to validate
+            timeout: Timeout in seconds
+
+        Returns:
+            Tuple of (is_valid, error_message)
+            - (True, None) if key is valid
+            - (False, "error description") if invalid
+        """
+        ...
+
+
+@runtime_checkable
+class StructuredOutputProtocol(Protocol):
+    """
+    Protocol for structured output with Pydantic validation.
+
+    Provides async structured output capabilities using Instructor,
+    returning validated Pydantic model instances instead of raw text.
+
+    Usage:
+    - model parameter is a model GROUP name ("fast" or "quality")
+    - response_model is a Pydantic model class for validation
+    - Returns validated instance of response_model
+
+    Implementations:
+    - LiteLLMService: Production implementation with Instructor
+    - MockStructuredService: Test double for unit tests
+
+    Example:
+        class TaskClassification(BaseModel):
+            task_type: str
+            confidence: float
+
+        service: StructuredOutputProtocol = ...
+        result = await service.completion_structured(
+            model="fast",
+            messages=[{"role": "user", "content": "Classify this task"}],
+            response_model=TaskClassification,
+        )
+        # result is a validated TaskClassification instance
+    """
+
+    async def completion_structured(
+        self,
+        model: str,
+        messages: list[dict],
+        response_model: Type[T],
+        **kwargs,
+    ) -> T:
+        """
+        Execute async structured completion with Pydantic validation.
+
+        Args:
+            model: Model group name ("fast" or "quality")
+            messages: Chat messages [{"role": "user", "content": "..."}]
+            response_model: Pydantic model class to validate response against
+            **kwargs: Additional params (max_retries, mode_override, etc.)
+
+        Returns:
+            Validated instance of response_model
+
+        Raises:
+            pydantic.ValidationError: If response cannot be validated after retries
+            AllProvidersRateLimitedError: When all providers exhausted
         """
         ...

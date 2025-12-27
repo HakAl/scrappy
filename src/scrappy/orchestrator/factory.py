@@ -48,7 +48,8 @@ from .context_coordinator import ContextCoordinator
 from .config import OrchestratorConfig
 from .litellm_service import LiteLLMService
 from .litellm_config import create_litellm_router
-from .litellm_callbacks import RateTrackingCallback
+# NOTE: litellm_callbacks imports litellm at top level, so we import it lazily
+# in create_llm_service() to avoid 2s startup delay
 from .provider_status import ProviderStatusTracker
 from .model_selection import ModelSelectionService, ModelSelectionServiceProtocol
 from .manager_protocols import (
@@ -479,8 +480,11 @@ class OrchestratorFactory:
         immediately. Otherwise, configure() must be called after wizard
         saves keys.
         """
+        # Lazy import to avoid 2s litellm startup delay
+        from .litellm_callbacks import create_rate_tracking_callback
+
         # Create callback for usage tracking (D9) and status display (D10)
-        callback = RateTrackingCallback(
+        callback = create_rate_tracking_callback(
             rate_tracker=rate_tracker,
             status_tracker=status_tracker,
         )

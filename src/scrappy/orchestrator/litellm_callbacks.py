@@ -4,6 +4,7 @@ LiteLLM callback implementations for usage tracking and monitoring.
 Provides:
 - RateTrackingCallback: LiteLLM callback for usage tracking and provider status
 - EscalationMetrics: Tracks context window escalation events
+- create_rate_tracking_callback: Factory for lazy callback creation
 
 Architecture:
 - Callbacks are wired at Router creation time (see litellm_config.py)
@@ -13,6 +14,9 @@ Architecture:
 Implements:
 - D9: Usage tracking records actual provider/model (not group name)
 - D10: Status tracking for provider health monitoring
+
+NOTE: This module uses lazy imports for litellm to avoid 2s+ startup delay.
+The CustomLogger base class is imported inside create_rate_tracking_callback().
 """
 
 from collections import defaultdict
@@ -21,7 +25,8 @@ from datetime import datetime
 import re
 from typing import Optional, Any, Dict, TYPE_CHECKING
 
-from litellm.integrations.custom_logger import CustomLogger
+# NOTE: CustomLogger is imported lazily in create_rate_tracking_callback()
+# to avoid slow litellm import at module load time.
 
 if TYPE_CHECKING:
     from ..orchestrator.protocols import RateLimitTrackerProtocol
@@ -118,23 +123,17 @@ class EscalationMetrics:
         }
 
 
-class RateTrackingCallback(CustomLogger):
+class RateTrackingCallbackBase:
     """
-    LiteLLM callback for usage tracking and provider status.
+    Base implementation for rate tracking callback logic.
 
-    Inherits from CustomLogger to ensure compatibility with LiteLLM Router.
-    CustomLogger provides default no-op implementations for unused methods.
+    This class contains all the callback logic but doesn't inherit from
+    CustomLogger. The actual RateTrackingCallback class is created lazily
+    via create_rate_tracking_callback() to avoid importing litellm at
+    module load time.
 
     Implements D9 (usage tracking) and D10 (status display).
     Also tracks escalation metrics (context window fallbacks).
-
-    This callback is registered with the LiteLLM Router at creation time.
-    It receives callbacks for successful and failed requests, extracting
-    the actual provider/model from the response (not the group name).
-
-    Usage:
-        callback = RateTrackingCallback(rate_tracker=tracker)
-        router = create_litellm_router(api_key_service, callbacks=[callback])
     """
 
     def __init__(
@@ -367,3 +366,63 @@ class RateTrackingCallback(CustomLogger):
 
         # 5. Fall back to unknown
         return "unknown"
+
+
+# Cache for the lazily-created class
+_RateTrackingCallback = None
+
+
+def create_rate_tracking_callback(
+    rate_tracker: Optional["RateLimitTrackerProtocol"] = None,
+    status_tracker: Optional["ProviderStatusTracker"] = None,
+    escalation_metrics: Optional[EscalationMetrics] = None,
+) -> "RateTrackingCallbackBase":
+    """
+    Factory function for creating RateTrackingCallback with lazy litellm import.
+
+    This function imports litellm.CustomLogger only when called, avoiding
+    the 2s+ startup delay that would occur if imported at module level.
+
+    The actual RateTrackingCallback class inherits from both
+    RateTrackingCallbackBase (our logic) and CustomLogger (LiteLLM interface).
+
+    Args:
+        rate_tracker: Optional tracker for rate limit monitoring
+        status_tracker: Optional tracker for provider health status
+        escalation_metrics: Optional metrics for escalation tracking
+
+    Returns:
+        RateTrackingCallback instance (inherits from CustomLogger)
+
+    Usage:
+        callback = create_rate_tracking_callback(rate_tracker=tracker)
+        router = create_litellm_router(callbacks=[callback])
+    """
+    global _RateTrackingCallback
+
+    if _RateTrackingCallback is None:
+        # Lazy import - only pay the cost when actually creating a callback
+        from litellm.integrations.custom_logger import CustomLogger
+
+        # Create the class that inherits from both our base and CustomLogger
+        class RateTrackingCallback(RateTrackingCallbackBase, CustomLogger):
+            """
+            LiteLLM callback for usage tracking and provider status.
+
+            Inherits from CustomLogger for LiteLLM Router compatibility.
+            All logic is in RateTrackingCallbackBase.
+            """
+            pass
+
+        _RateTrackingCallback = RateTrackingCallback
+
+    return _RateTrackingCallback(
+        rate_tracker=rate_tracker,
+        status_tracker=status_tracker,
+        escalation_metrics=escalation_metrics,
+    )
+
+
+# Backwards compatibility alias - imports will trigger lazy class creation
+# when instantiated, not when imported
+RateTrackingCallback = RateTrackingCallbackBase
