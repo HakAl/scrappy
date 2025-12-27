@@ -10,6 +10,8 @@ from scrappy.task_router.classifier import TaskClassifier, ClassifiedTask, TaskT
 from scrappy.task_router.config import ClarificationConfig
 from scrappy.task_router.strategies import ExecutionResult
 from scrappy.task_router.intent_clarifier import NullClarifier
+from scrappy.llm.models import TaskClassification as LLMTaskClassification
+from scrappy.llm.models import TaskType as LLMTaskType
 
 
 class TestConfidenceEscalation:
@@ -132,12 +134,15 @@ class TestLLMClassification:
         )
 
     @pytest.mark.unit
-    def test_llm_classification_calls_delegate_with_fast_model(self, router_with_orchestrator, mock_orchestrator):
-        """Test that LLM classification uses fast model group via delegate."""
-        # Setup mock response
-        mock_response = Mock()
-        mock_response.content = '{"task_type": "RESEARCH", "confidence": 0.9, "reasoning": "This is asking for information"}'
-        mock_orchestrator.delegate.return_value = mock_response
+    def test_llm_classification_calls_delegate_structured_with_fast_model(self, router_with_orchestrator, mock_orchestrator):
+        """Test that LLM classification uses fast model group via delegate_structured."""
+        # Setup mock response - returns TaskClassification object
+        mock_classification = LLMTaskClassification(
+            task_type=LLMTaskType.RESEARCH,
+            confidence=0.9,
+            reasoning="This is asking for information"
+        )
+        mock_orchestrator.delegate_structured.return_value = mock_classification
 
         # Create low-confidence task that would trigger LLM classification
         task = ClassifiedTask(
@@ -150,20 +155,24 @@ class TestLLMClassification:
         # Call LLM classification
         result = router_with_orchestrator._classify_with_llm(task)
 
-        # Verify delegate was called
-        mock_orchestrator.delegate.assert_called_once()
+        # Verify delegate_structured was called
+        mock_orchestrator.delegate_structured.assert_called_once()
 
         # Check the call used 'fast' provider
-        call_kwargs = mock_orchestrator.delegate.call_args
-        assert call_kwargs.kwargs.get('provider_name') == 'fast' or call_kwargs.args[0] == 'fast'
+        call_kwargs = mock_orchestrator.delegate_structured.call_args
+        assert call_kwargs.kwargs.get('provider_name') == 'fast'
+        assert call_kwargs.kwargs.get('response_model') == LLMTaskClassification
 
     @pytest.mark.unit
     def test_llm_classification_reclassifies_to_research(self, router_with_orchestrator, mock_orchestrator):
         """Test that LLM can reclassify code_generation to research."""
         # Setup mock response - LLM says this is research
-        mock_response = Mock()
-        mock_response.content = '{"task_type": "RESEARCH", "confidence": 0.95, "reasoning": "User wants information about historical figures"}'
-        mock_orchestrator.delegate.return_value = mock_response
+        mock_classification = LLMTaskClassification(
+            task_type=LLMTaskType.RESEARCH,
+            confidence=0.95,
+            reasoning="User wants information about historical figures"
+        )
+        mock_orchestrator.delegate_structured.return_value = mock_classification
 
         # Create misclassified task
         task = ClassifiedTask(
@@ -185,9 +194,12 @@ class TestLLMClassification:
     def test_llm_classification_keeps_original_when_uncertain(self, router_with_orchestrator, mock_orchestrator):
         """Test that uncertain LLM response keeps original classification."""
         # Setup mock response - LLM is uncertain
-        mock_response = Mock()
-        mock_response.content = '{"task_type": "RESEARCH", "confidence": 0.5, "reasoning": "Could be either"}'
-        mock_orchestrator.delegate.return_value = mock_response
+        mock_classification = LLMTaskClassification(
+            task_type=LLMTaskType.RESEARCH,
+            confidence=0.5,
+            reasoning="Could be either"
+        )
+        mock_orchestrator.delegate_structured.return_value = mock_classification
 
         task = ClassifiedTask(
             original_input="some ambiguous input",

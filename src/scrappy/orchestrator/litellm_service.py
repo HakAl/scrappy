@@ -23,7 +23,12 @@ import json
 import logging
 import time
 import threading
-from typing import Optional, TYPE_CHECKING, AsyncIterator
+from typing import Optional, TYPE_CHECKING, AsyncIterator, Type, TypeVar
+
+from pydantic import BaseModel
+
+# NOTE: litellm and instructor are imported lazily in LiteLLMService.__init__
+# to avoid 4s startup delay. They are accessed via local imports in methods.
 
 from ..infrastructure.logging import StructuredLogger
 from ..providers.base import LLMResponse, ToolCall
@@ -40,20 +45,26 @@ from ..infrastructure.config.api_keys import ApiKeyConfigServiceProtocol
 from .types import StreamChunk, ToolCallFragment
 from .litellm_config import build_model_list
 
-import litellm
-from litellm import ContextWindowExceededError
-from litellm import RateLimitError as LiteLLMRateLimitError
-
 if TYPE_CHECKING:
+    import instructor
+    import litellm
     from .litellm_callbacks import RateTrackingCallback
 
 logger = logging.getLogger(__name__)
 
+# Type variable for generic structured output responses
+T = TypeVar("T", bound=BaseModel)
+
 # Force httpx transport for LiteLLM streaming
 # aiohttp has issues with session lifecycle that cause incomplete streams
 # and "unclosed client session" warnings on exit
+_transport_configured = False
+
 def _configure_litellm_transport():
-    """Configure LiteLLM to use httpx instead of aiohttp."""
+    """Configure LiteLLM to use httpx instead of aiohttp. Called lazily on first use."""
+    global _transport_configured
+    if _transport_configured:
+        return
     try:
         import litellm
         import httpx
@@ -61,10 +72,9 @@ def _configure_litellm_transport():
         litellm.use_aiohttp_transport = False
         litellm.client_session = httpx.Client()
         litellm.aclient_session = httpx.AsyncClient()
+        _transport_configured = True
     except ImportError:
         pass  # litellm or httpx not installed, skip
-
-_configure_litellm_transport()
 
 
 # Maximum escalation depth to prevent infinite recursion
@@ -87,6 +97,9 @@ PROVIDER_THROTTLE_DELAYS = {
     "sambanova": 0.5,
 }
 DEFAULT_THROTTLE_DELAY = 0.5  # Default for unknown providers
+
+# Instructor retry limit - keep low since LiteLLM Router already handles retries
+DEFAULT_INSTRUCTOR_RETRIES = 1
 
 
 class RequestThrottle:
@@ -143,8 +156,15 @@ class RequestThrottle:
             self._last_request[provider] = time.time()
 
 
-# Global throttle instance
-_request_throttle = RequestThrottle()
+# Global throttle instance (lazy singleton)
+_request_throttle: Optional[RequestThrottle] = None
+
+def _get_throttle() -> RequestThrottle:
+    """Get or create the global throttle instance."""
+    global _request_throttle
+    if _request_throttle is None:
+        _request_throttle = RequestThrottle()
+    return _request_throttle
 
 
 def _map_litellm_error(error: Exception, provider: str = "", model: str = "") -> Exception:
@@ -308,6 +328,10 @@ class LiteLLMService:
             callback: Optional callback for escalation tracking
             logger: Optional structured logger for API request/response debugging
         """
+        # Lazy import of heavy dependencies (saves ~4s on startup)
+        import instructor
+        _configure_litellm_transport()
+
         self._router = router
         self._api_key_service = api_key_service
         self._output = output
@@ -316,6 +340,10 @@ class LiteLLMService:
         self._configured = False
         # NOTE: Router-level callbacks handle rate tracking.
         # The callback reference here is for escalation metrics only.
+
+        # Instructor clients for structured output
+        self._instructor_client = instructor.from_litellm(self._router.acompletion)
+        self._instructor_client_sync = instructor.from_litellm(self._router.completion)
 
     def is_configured(self) -> bool:
         """Check if service has been configured with API keys."""
@@ -350,6 +378,8 @@ class LiteLLMService:
         Call on app shutdown. Closes httpx clients we created and any
         aiohttp sessions that LiteLLM may have created internally.
         """
+        import litellm  # Lazy import (fast after first __init__)
+
         # Close httpx sync client we created at module level
         if hasattr(litellm, 'client_session') and litellm.client_session is not None:
             try:
@@ -378,6 +408,8 @@ class LiteLLMService:
 
     async def aclose(self) -> None:
         """Async version of close for async contexts."""
+        import litellm  # Lazy import (fast after first __init__)
+
         # Close httpx sync client
         if hasattr(litellm, 'client_session') and litellm.client_session is not None:
             try:
@@ -482,6 +514,8 @@ class LiteLLMService:
             ContextWindowExceededError: When quality tier also exceeds context (fatal)
             RuntimeError: When max escalation depth exceeded (safety guard)
         """
+        import litellm  # Lazy import (fast after first __init__)
+
         if not self._configured:
             raise NotConfiguredError("LLM service not configured. Run setup wizard first.")
 
@@ -511,7 +545,7 @@ class LiteLLMService:
                 )
 
         # Throttle requests to avoid rate limits (especially for Groq)
-        await _request_throttle.wait_async(model)
+        await _get_throttle().wait_async(model)
 
         try:
             response = await self._router.acompletion(
@@ -534,7 +568,7 @@ class LiteLLMService:
 
             return self._convert_response(response, elapsed, escalated_from=_escalated_from)
 
-        except ContextWindowExceededError as e:
+        except litellm.ContextWindowExceededError:
             # Smart recovery: fast tier -> try quality tier (has larger context models)
             next_tier = ESCALATION_PATH.get(model)
             if next_tier:
@@ -554,7 +588,7 @@ class LiteLLMService:
             # No escalation path available - fatal, re-raise
             raise
 
-        except LiteLLMRateLimitError as e:
+        except litellm.RateLimitError as e:
             provider = getattr(e, 'llm_provider', None)
             raise AllProvidersRateLimitedError(
                 message=str(e),
@@ -591,6 +625,8 @@ class LiteLLMService:
             ContextWindowExceededError: When quality tier also exceeds context (fatal)
             RuntimeError: When max escalation depth exceeded (safety guard)
         """
+        import litellm  # Lazy import (fast after first __init__)
+
         if not self._configured:
             raise NotConfiguredError("LLM service not configured. Run setup wizard first.")
 
@@ -619,7 +655,7 @@ class LiteLLMService:
                 )
 
         # Throttle requests to avoid rate limits (especially for Groq)
-        _request_throttle.wait_sync(model)
+        _get_throttle().wait_sync(model)
 
         try:
             response = self._router.completion(
@@ -642,7 +678,7 @@ class LiteLLMService:
 
             return self._convert_response(response, elapsed, escalated_from=_escalated_from)
 
-        except ContextWindowExceededError as e:
+        except litellm.ContextWindowExceededError:
             # Smart recovery: fast tier -> try quality tier (has larger context models)
             next_tier = ESCALATION_PATH.get(model)
             if next_tier:
@@ -662,7 +698,7 @@ class LiteLLMService:
             # No escalation path available - fatal, re-raise
             raise
 
-        except LiteLLMRateLimitError as e:
+        except litellm.RateLimitError as e:
             provider = getattr(e, 'llm_provider', None)
             raise AllProvidersRateLimitedError(
                 message=str(e),
@@ -704,6 +740,7 @@ class LiteLLMService:
             StreamCancelledError: When cancellation_token is set
         """
         import asyncio
+        import litellm  # Lazy import (fast after first __init__)
 
         if not self._configured:
             raise NotConfiguredError("LLM service not configured. Run setup wizard first.")
@@ -721,7 +758,7 @@ class LiteLLMService:
         timeout_seconds = timeout_ms / 1000.0
 
         # Throttle requests to avoid rate limits (especially for Groq)
-        await _request_throttle.wait_async(model)
+        await _get_throttle().wait_async(model)
 
         try:
             # Call LiteLLM Router's async streaming method
@@ -774,7 +811,7 @@ class LiteLLMService:
 
                 yield converted
 
-        except ContextWindowExceededError as e:
+        except litellm.ContextWindowExceededError:
             # Smart recovery: fast tier -> try quality tier (has larger context models)
             next_tier = ESCALATION_PATH.get(model)
             if next_tier:
@@ -799,7 +836,7 @@ class LiteLLMService:
             # No escalation path available - fatal, re-raise
             raise
 
-        except LiteLLMRateLimitError as e:
+        except litellm.RateLimitError as e:
             provider = getattr(e, 'llm_provider', None)
             raise AllProvidersRateLimitedError(
                 message=str(e),
@@ -1101,6 +1138,8 @@ class LiteLLMService:
             pre-stream escalation detection. The stream_completion method still
             handles mid-stream errors and normal streaming logic.
         """
+        import litellm  # Lazy import (fast after first __init__)
+
         # Safety guard against infinite recursion
         if _escalation_depth >= MAX_ESCALATION_DEPTH:
             raise RuntimeError(
@@ -1119,7 +1158,7 @@ class LiteLLMService:
             ):
                 yield chunk
 
-        except ContextWindowExceededError as e:
+        except litellm.ContextWindowExceededError:
             # Context window exceeded before first chunk
             next_tier = ESCALATION_PATH.get(model)
             if next_tier:
@@ -1144,3 +1183,107 @@ class LiteLLMService:
 
             # No escalation path available - fatal, re-raise
             raise
+
+    def _pick_mode(self, model: str) -> "instructor.Mode":
+        """
+        Derive instructor mode from model string.
+
+        TOOLS mode is more reliable for models that support function calling.
+        JSON mode is the fallback for models without native tool support.
+
+        Args:
+            model: The model identifier (e.g., "groq/llama-3.1-8b", "openai/gpt-4")
+
+        Returns:
+            instructor.Mode.TOOLS for models with function calling support,
+            instructor.Mode.JSON otherwise
+        """
+        import instructor  # Lazy import (fast after first __init__)
+
+        model_lower = model.lower()
+        # Models with reliable function/tool calling support
+        if any(x in model_lower for x in {"gpt-4", "gpt-3.5", "claude", "command-r"}):
+            return instructor.Mode.TOOLS
+        return instructor.Mode.JSON
+
+    async def completion_structured(
+        self,
+        model: str,
+        messages: list[dict],
+        response_model: Type[T],
+        max_retries: Optional[int] = None,
+        mode_override: Optional["instructor.Mode"] = None,
+        **kwargs,
+    ) -> T:
+        """
+        Async structured output with validation retries.
+
+        Uses Instructor to get validated Pydantic model responses from LLM.
+        Inherits all router benefits: caching, rate limiting, provider fallback.
+
+        Args:
+            model: Model identifier (e.g., "fast", "quality", "groq/llama-3.1-8b")
+            messages: List of message dicts with role/content
+            response_model: Pydantic model class to validate response against
+            max_retries: Override retry count (default: DEFAULT_INSTRUCTOR_RETRIES)
+            mode_override: Override auto-detected instructor mode (escape hatch)
+            **kwargs: Additional params passed to completion
+
+        Returns:
+            Validated instance of response_model
+
+        Raises:
+            pydantic.ValidationError: If response cannot be validated after retries
+        """
+        retries = max_retries if max_retries is not None else DEFAULT_INSTRUCTOR_RETRIES
+        mode = mode_override if mode_override else self._pick_mode(model)
+
+        return await self._instructor_client.chat.completions.create(
+            model=model,
+            messages=messages,
+            response_model=response_model,
+            max_retries=retries,
+            mode=mode,
+            **kwargs,
+        )
+
+    def completion_structured_sync(
+        self,
+        model: str,
+        messages: list[dict],
+        response_model: Type[T],
+        max_retries: Optional[int] = None,
+        mode_override: Optional["instructor.Mode"] = None,
+        **kwargs,
+    ) -> T:
+        """
+        Sync structured output with validation retries.
+
+        Uses Instructor to get validated Pydantic model responses from LLM.
+        This is the sync version for non-async contexts (like TaskRouter.classify).
+
+        Args:
+            model: Model identifier (e.g., "fast", "quality", "groq/llama-3.1-8b")
+            messages: List of message dicts with role/content
+            response_model: Pydantic model class to validate response against
+            max_retries: Override retry count (default: DEFAULT_INSTRUCTOR_RETRIES)
+            mode_override: Override auto-detected instructor mode (escape hatch)
+            **kwargs: Additional params passed to completion
+
+        Returns:
+            Validated instance of response_model
+
+        Raises:
+            pydantic.ValidationError: If response cannot be validated after retries
+        """
+        retries = max_retries if max_retries is not None else DEFAULT_INSTRUCTOR_RETRIES
+        mode = mode_override if mode_override else self._pick_mode(model)
+
+        return self._instructor_client_sync.chat.completions.create(
+            model=model,
+            messages=messages,
+            response_model=response_model,
+            max_retries=retries,
+            mode=mode,
+            **kwargs,
+        )

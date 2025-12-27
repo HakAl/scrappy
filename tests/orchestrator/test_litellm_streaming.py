@@ -22,6 +22,7 @@ from tests.helpers import (
     MockApiKeyService,
     CapturingStreamOutput,
     make_stream_chunk,
+    make_mock_litellm_response,
 )
 
 
@@ -643,6 +644,11 @@ async def test_stream_completion_stuck_stream_detection(mock_api_keys, capturing
                 yield make_mock_litellm_chunk(content="Never reached")
             return slow_generator()
 
+        def completion(self, **kwargs):
+            """Sync completion for Instructor integration."""
+            self.calls.append(kwargs)
+            return make_mock_litellm_response(content="test response")
+
     router = SlowStreamRouter()
     service = LiteLLMService(
         router=router,
@@ -754,6 +760,11 @@ async def test_stream_completion_mid_stream_error_preserves_content(mock_api_key
                 yield make_mock_litellm_chunk(content="content ")
                 raise RuntimeError("Connection lost")
             return error_generator()
+
+        def completion(self, **kwargs):
+            """Sync completion for Instructor integration."""
+            self.calls.append(kwargs)
+            return make_mock_litellm_response(content="test response")
 
     router = ErrorMidStreamRouter()
     service = LiteLLMService(

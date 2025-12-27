@@ -117,17 +117,54 @@ def cli(ctx, brain, auto_explore, no_context, resume, no_save, show_providers, v
     config = get_config()
     theme = config.theme
 
-    # If no subcommand, start interactive mode
+    # If no subcommand, start interactive mode with deferred initialization
     if ctx.invoked_subcommand is None:
-        # Create CLI with theme from config
-        cli_instance = create_cli_from_context(ctx, theme=theme)
-        cli_instance.auto_save = ctx.obj['auto_save']
+        start_tui_deferred(ctx, theme, resume)
+
+
+def start_tui_deferred(ctx, theme, resume: bool = False) -> None:
+    """Start TUI immediately with deferred CLI initialization.
+
+    Shows the TUI skeleton instantly while CLI/orchestrator loads in background.
+    This provides sub-500ms startup time for the UI.
+
+    The factory pattern ensures CLI creation happens in a background thread
+    via @work(thread=True), preventing UI freezes from blocking I/O.
+
+    Args:
+        ctx: Click context with configuration
+        theme: Theme for styling
+        resume: Whether to restore previous session
+    """
+    from .textual_app import ScrappyApp, TextualOutputAdapter
+    from .unified_io import UnifiedIO
+
+    # Create output adapter first (needed for skeleton screen)
+    # CRITICAL: This same adapter must be used by CLI so output goes to the right place
+    output_adapter = TextualOutputAdapter()
+
+    # Create IO with this adapter - will be passed to CLI
+    io = UnifiedIO(output_sink=output_adapter, theme=theme)
+
+    def cli_factory():
+        """Factory function called in background thread."""
+        # Pass the shared IO so CLI uses the same output adapter
+        cli_instance = create_cli_from_context(ctx, io=io, theme=theme)
+        cli_instance.auto_save = ctx.obj.get('auto_save', True)
 
         # Resume previous session if requested
         if resume:
             restore_session_to_cli(cli_instance, cli_instance.io)
 
-        cli_instance.interactive_mode()
+        return cli_instance
+
+    # Create app with factory - TUI shows immediately
+    app = ScrappyApp(
+        cli_factory=cli_factory,
+        output_adapter=output_adapter,
+        theme=theme,
+    )
+    app.run()
 
 
 @cli.command()

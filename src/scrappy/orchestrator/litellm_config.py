@@ -366,10 +366,22 @@ def create_litellm_router(callbacks: list = None):
     if callbacks:
         litellm.callbacks = callbacks
 
+    # Context window fallbacks: when a model hits context limit, try larger models
+    # Order: small context -> medium -> large (Gemini has 1M context)
+    context_fallbacks = [
+        {"cerebras/qwen-3-235b-a22b-instruct-2507": ["groq/moonshotai/kimi-k2-instruct", "gemini/gemini-2.5-flash"]},
+        {"cerebras/llama-3.3-70b": ["groq/moonshotai/kimi-k2-instruct", "gemini/gemini-2.5-flash"]},
+        {"cerebras/llama3.1-8b": ["groq/llama-3.1-8b-instant", "gemini/gemini-2.5-flash"]},
+        {"groq/moonshotai/kimi-k2-instruct": ["gemini/gemini-2.5-flash"]},
+        {"groq/meta-llama/llama-4-scout-17b-16e-instruct": ["gemini/gemini-2.5-flash"]},
+        {"groq/llama-3.3-70b-versatile": ["gemini/gemini-2.5-flash"]},
+    ]
+
     return litellm.Router(
         model_list=[],  # Empty - configured via set_model_list() later
         routing_strategy="simple-shuffle",
         num_retries=3,
         timeout=60,
         retry_after=5,
+        context_window_fallbacks=context_fallbacks,
     )

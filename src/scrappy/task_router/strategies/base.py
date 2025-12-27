@@ -5,9 +5,11 @@ All strategies implement the ExecutionStrategyProtocol from protocols.py.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Protocol, runtime_checkable, AsyncIterator
+from typing import Any, Dict, List, Optional, Protocol, runtime_checkable, AsyncIterator, Type, TypeVar
 
-from ..classifier import ClassifiedTask
+from pydantic import BaseModel
+
+T = TypeVar("T", bound=BaseModel)
 
 
 @dataclass
@@ -92,6 +94,17 @@ class OrchestratorLike(Protocol):
         use_context: bool = False
     ) -> LLMResponseLike:
         """Delegate prompt to a provider."""
+        ...
+
+    def delegate_structured(
+        self,
+        provider_name: str,
+        prompt: str,
+        response_model: Type[T],
+        system_prompt: Optional[str] = None,
+        **kwargs
+    ) -> T:
+        """Delegate with structured output validation."""
         ...
 
     async def stream_delegate(

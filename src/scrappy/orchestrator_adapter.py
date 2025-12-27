@@ -227,6 +227,35 @@ class AgentOrchestratorAdapter:
         if hasattr(self._orch, 'working_memory'):
             self._orch.working_memory.remember_git_operation(operation, result)
 
+    def delegate_structured(
+        self,
+        provider_name: str,
+        prompt: str,
+        response_model: type,
+        system_prompt: Optional[str] = None,
+        **kwargs
+    ):
+        """
+        Delegate with structured output validation.
+
+        Args:
+            provider_name: Provider name or model group
+            prompt: The prompt to send
+            response_model: Pydantic model class for response validation
+            system_prompt: Optional system prompt
+            **kwargs: Additional arguments passed to orchestrator
+
+        Returns:
+            Validated Pydantic model instance
+        """
+        return self._orch.delegate_structured(
+            provider_name=provider_name,
+            prompt=prompt,
+            response_model=response_model,
+            system_prompt=system_prompt,
+            **kwargs
+        )
+
     def _resolve_model_group(self, provider_or_group: Optional[str]) -> str:
         """
         Resolve provider name or group to a model group.

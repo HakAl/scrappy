@@ -8,7 +8,7 @@ conversation history, and response processing.
 import json
 from typing import List, Dict, Optional, Tuple
 from ..classifier import ClassifiedTask
-from ..json_extractor import JSONExtractor
+from ..pure_functions import extract_json_from_text
 from .research_protocols import (
     ToolBundleProtocol,
     ResponseCleanerProtocol
@@ -41,7 +41,6 @@ class ResearchLoop:
         self.orchestrator = orchestrator
         self.tool_bundle = tool_bundle
         self.response_cleaner = response_cleaner
-        self._json_extractor = JSONExtractor()
 
     def run(
         self,
@@ -80,14 +79,20 @@ class ResearchLoop:
             else:
                 full_prompt = initial_prompt
 
-            # Delegate to provider
+            # Estimate token count for context-aware model selection
+            # Rough estimate: 1 token per 4 chars (conservative for safety)
+            prompt_chars = len(full_prompt) + len(system_prompt)
+            estimated_tokens = (prompt_chars // 4) + 2000  # Add buffer for response
+
+            # Delegate to provider with min_context for large prompts
             response = self.orchestrator.delegate(
                 provider,
                 full_prompt,
                 system_prompt=system_prompt,
                 max_tokens=2000,
                 temperature=0.3,
-                use_context=True
+                use_context=True,
+                min_context=estimated_tokens if estimated_tokens > 30000 else 0,
             )
 
             # Extract response
@@ -186,8 +191,8 @@ class ResearchLoop:
         """
         Parse tool call from LLM response.
 
-        Uses JSONExtractor to extract and parse JSON from various formats
-        including code blocks, plain text, and Python-style booleans.
+        Extracts and parses JSON from various formats including
+        code blocks, plain text, and Python-style booleans.
 
         Args:
             response: Raw LLM response text
@@ -195,7 +200,7 @@ class ResearchLoop:
         Returns:
             Parsed tool call dict with 'tool' and 'parameters' keys, or None
         """
-        result = self._json_extractor.parse(response)
+        result = extract_json_from_text(response)
 
         # Verify it's a tool call (has 'tool' key)
         if result and 'tool' in result:

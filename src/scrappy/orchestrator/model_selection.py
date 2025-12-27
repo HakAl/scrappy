@@ -152,6 +152,7 @@ class ModelSelectionServiceProtocol(Protocol):
     def select(
         self,
         selection_type: ModelSelectionType,
+        min_context: int = 0,
         session_preferred: Optional[str] = None,
     ) -> str:
         """
@@ -159,13 +160,14 @@ class ModelSelectionServiceProtocol(Protocol):
 
         Args:
             selection_type: FAST, QUALITY, INSTRUCT, or EMBED
+            min_context: Minimum context window required (0 = no requirement)
             session_preferred: Previously selected model for session stickiness
 
         Returns:
             Specific model ID (e.g., 'groq/llama-3.1-8b-instant')
 
         Raises:
-            AllModelsRateLimitedError: If all models are rate limited
+            AllModelsRateLimitedError: If all models are rate limited or no model has sufficient context
         """
         ...
 
@@ -216,6 +218,7 @@ class ModelSelectionService:
     def select(
         self,
         selection_type: ModelSelectionType,
+        min_context: int = 0,
         session_preferred: Optional[str] = None,
     ) -> str:
         """
@@ -223,6 +226,7 @@ class ModelSelectionService:
 
         Args:
             selection_type: What kind of model is needed
+            min_context: Minimum context window required (0 = no requirement)
             session_preferred: Previously selected model for session stickiness
 
         Returns:
@@ -230,10 +234,23 @@ class ModelSelectionService:
 
         Raises:
             ValueError: If no models configured for selection type
-            AllModelsRateLimitedError: If all configured models are rate limited
+            AllModelsRateLimitedError: If all configured models are rate limited or no model has sufficient context
         """
         # Get configured models for this type
         configured = self.get_models_for_type(selection_type)
+
+        # Filter by context requirement if specified
+        if min_context > 0:
+            from .litellm_config import MODEL_METADATA
+            configured = [
+                m for m in configured
+                if MODEL_METADATA.get(m) and MODEL_METADATA[m].context_length >= min_context
+            ]
+            if not configured:
+                raise AllModelsRateLimitedError(
+                    f"No models with >= {min_context} token context available. "
+                    f"Try reducing prompt size or configure a larger context model."
+                )
 
         if not configured:
             # Get expected models for this type

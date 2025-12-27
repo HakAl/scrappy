@@ -12,9 +12,14 @@ After LiteLLM integration (Phase 3):
 - provider_name is now a model GROUP name ("fast" or "quality")
 """
 
-from typing import Optional, Callable, AsyncIterator, Any
+from typing import Optional, Callable, AsyncIterator, Any, Type, TypeVar
 from datetime import datetime
 import asyncio
+
+from pydantic import BaseModel
+
+# Type variable for generic structured output responses
+T = TypeVar("T", bound=BaseModel)
 
 try:
     from ..providers import LLMResponse
@@ -26,7 +31,7 @@ try:
         BatchSchedulerProtocol,
         INTERNAL_KWARGS,
     )
-    from ..orchestrator.protocols import LLMServiceProtocol, StreamingCompletionProtocol
+    from ..orchestrator.protocols import LLMServiceProtocol, StreamingCompletionProtocol, StructuredOutputProtocol
     from ..orchestrator.types import StreamChunk
     from ..orchestrator.rate_limiting.protocols import (
         EnforcementAction,
@@ -51,7 +56,7 @@ except ImportError:
         PromptAugmenterProtocol,
         BatchSchedulerProtocol,
     )
-    from orchestrator.protocols import LLMServiceProtocol, StreamingCompletionProtocol
+    from orchestrator.protocols import LLMServiceProtocol, StreamingCompletionProtocol, StructuredOutputProtocol
     from orchestrator.types import StreamChunk
     from orchestrator.rate_limiting.protocols import (
         EnforcementAction,
@@ -101,6 +106,41 @@ def _resolve_model_group(provider_name: str) -> str:
 
     # Default to "fast" for unknown providers
     return "fast"
+
+
+def _select_model_for_context(min_context: int, prefer_group: str = "quality") -> Optional[str]:
+    """
+    Select a specific model with sufficient context window.
+
+    Used for proactive model selection when caller knows they need large context.
+    Falls back to Gemini (1M context) for very large contexts.
+
+    Args:
+        min_context: Minimum required context window in tokens
+        prefer_group: Preferred model group ("fast" or "quality")
+
+    Returns:
+        Specific model ID with sufficient context, or None if none found
+    """
+    from .litellm_config import MODEL_METADATA
+
+    # Models ordered by context size (largest first for this use case)
+    # Prefer models with good context that are also fast/reliable
+    large_context_models = [
+        ("gemini/gemini-2.5-flash", 1000000),
+        ("groq/moonshotai/kimi-k2-instruct", 131072),
+        ("groq/meta-llama/llama-4-scout-17b-16e-instruct", 131072),
+        ("groq/llama-3.1-8b-instant", 131072),
+        ("cerebras/qwen-3-235b-a22b-instruct-2507", 65536),
+    ]
+
+    for model_id, context_size in large_context_models:
+        if context_size >= min_context:
+            # Verify model is in metadata (configured)
+            if model_id in MODEL_METADATA:
+                return model_id
+
+    return None
 
 
 class DelegationManager:
@@ -378,6 +418,10 @@ class DelegationManager:
         elif model:
             # Specific model ID - use directly (e.g., "cerebras/qwen-3-235b-a22b-instruct-2507")
             effective_model = model
+        elif min_context > 0:
+            # Caller specified min context - select model with sufficient context
+            context_model = _select_model_for_context(min_context)
+            effective_model = context_model if context_model else _resolve_model_group(effective_provider)
         else:
             # Resolve to model group for LiteLLM Router (e.g., "fast", "quality")
             effective_model = _resolve_model_group(effective_provider)
@@ -519,6 +563,10 @@ class DelegationManager:
         elif model:
             # Specific model ID - use directly (e.g., "cerebras/qwen-3-235b-a22b-instruct-2507")
             effective_model = model
+        elif min_context > 0:
+            # Caller specified min context - select model with sufficient context
+            context_model = _select_model_for_context(min_context)
+            effective_model = context_model if context_model else _resolve_model_group(effective_provider)
         else:
             # Resolve to model group for LiteLLM Router (e.g., "fast", "quality")
             effective_model = _resolve_model_group(effective_provider)
@@ -704,6 +752,7 @@ class DelegationManager:
         temperature: float = DEFAULT_TEMPERATURE,
         use_context: Optional[bool] = None,
         use_cache: Optional[bool] = None,
+        min_context: int = 0,
         **kwargs
     ) -> AsyncIterator[StreamChunk]:
         """
@@ -789,6 +838,10 @@ class DelegationManager:
         elif model:
             # Specific model ID - use directly (e.g., "cerebras/qwen-3-235b-a22b-instruct-2507")
             effective_model = model
+        elif min_context > 0:
+            # Caller specified min context - select model with sufficient context
+            context_model = _select_model_for_context(min_context)
+            effective_model = context_model if context_model else _resolve_model_group(effective_provider)
         else:
             # Resolve to model group for LiteLLM Router (e.g., "fast", "quality")
             effective_model = _resolve_model_group(effective_provider)
@@ -854,3 +907,123 @@ class DelegationManager:
                 max_tokens,
                 temperature
             )
+
+    async def delegate_structured(
+        self,
+        provider_name: str,
+        prompt: str,
+        response_model: Type[T],
+        system_prompt: Optional[str] = None,
+        **kwargs,
+    ) -> T:
+        """
+        Async delegate with structured output validation using Instructor.
+
+        Returns a validated Pydantic model instance instead of raw text.
+        Uses the LLM service's completion_structured method which wraps
+        Instructor for automatic validation and retry on parse failures.
+
+        Note: This method does NOT use caching or prompt augmentation.
+        It's designed for structured extraction tasks like classification
+        where caching semantics differ from free-form text generation.
+
+        Args:
+            provider_name: Provider/model group to use ("fast", "quality", or legacy provider name)
+            prompt: The user prompt to send
+            response_model: Pydantic model class to validate response against
+            system_prompt: Optional system prompt for behavioral instructions
+            **kwargs: Additional params (max_retries, mode_override, etc.)
+
+        Returns:
+            Validated instance of response_model
+
+        Raises:
+            pydantic.ValidationError: If response cannot be validated after retries
+            AllProvidersRateLimitedError: When all providers exhausted
+
+        Example:
+            from scrappy.llm.models import TaskClassification
+
+            result = await delegation_manager.delegate_structured(
+                provider_name="fast",
+                prompt="Classify: 'write a function to sort a list'",
+                response_model=TaskClassification,
+                system_prompt="Classify the user intent...",
+            )
+            # result is a validated TaskClassification instance
+        """
+        # Check if service supports structured output
+        if not isinstance(self._llm_service, StructuredOutputProtocol):
+            raise NotImplementedError(
+                "LLM service does not support structured output. "
+                "Ensure LiteLLMService is used instead of a mock."
+            )
+
+        # Resolve provider_name to model group for LiteLLM Router
+        effective_model = _resolve_model_group(provider_name)
+
+        # Build messages list for LiteLLM
+        messages: list[dict] = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+
+        # Delegate to LLM service's structured output method
+        return await self._llm_service.completion_structured(
+            model=effective_model,
+            messages=messages,
+            response_model=response_model,
+            **kwargs,
+        )
+
+    def delegate_structured_sync(
+        self,
+        provider_name: str,
+        prompt: str,
+        response_model: Type[T],
+        system_prompt: Optional[str] = None,
+        **kwargs,
+    ) -> T:
+        """
+        Sync delegate with structured output validation using Instructor.
+
+        This is the sync version for non-async contexts (like TaskRouter.classify).
+        See delegate_structured for full documentation.
+
+        Args:
+            provider_name: Provider/model group to use ("fast", "quality", or legacy provider name)
+            prompt: The user prompt to send
+            response_model: Pydantic model class to validate response against
+            system_prompt: Optional system prompt for behavioral instructions
+            **kwargs: Additional params (max_retries, mode_override, etc.)
+
+        Returns:
+            Validated instance of response_model
+
+        Raises:
+            pydantic.ValidationError: If response cannot be validated after retries
+            AllProvidersRateLimitedError: When all providers exhausted
+        """
+        # Check if service supports structured output
+        if not hasattr(self._llm_service, 'completion_structured_sync'):
+            raise NotImplementedError(
+                "LLM service does not support sync structured output. "
+                "Ensure LiteLLMService is used instead of a mock."
+            )
+
+        # Resolve provider_name to model group for LiteLLM Router
+        effective_model = _resolve_model_group(provider_name)
+
+        # Build messages list for LiteLLM
+        messages: list[dict] = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+
+        # Delegate to LLM service's sync structured output method
+        return self._llm_service.completion_structured_sync(
+            model=effective_model,
+            messages=messages,
+            response_model=response_model,
+            **kwargs,
+        )

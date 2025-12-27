@@ -626,6 +626,42 @@ class AgentOrchestrator:
             raise last_error
         raise AllProvidersRateLimitedError("Delegation failed after max attempts")
 
+    def delegate_structured(
+        self,
+        provider_name: str,
+        prompt: str,
+        response_model: type,
+        system_prompt: Optional[str] = None,
+        **kwargs
+    ):
+        """
+        Delegate with structured output validation using Instructor.
+
+        Returns a validated Pydantic model instance instead of raw text.
+        Uses Instructor for automatic validation and retry on parse failures.
+
+        Args:
+            provider_name: Provider/group hint (e.g., "fast", "quality")
+            prompt: The user prompt to send
+            response_model: Pydantic model class to validate response against
+            system_prompt: Optional system prompt for behavioral instructions
+            **kwargs: Additional params (max_retries, mode_override, etc.)
+
+        Returns:
+            Validated instance of response_model
+
+        Raises:
+            pydantic.ValidationError: If response cannot be validated after retries
+            AllProvidersRateLimitedError: When all providers exhausted
+        """
+        return self.delegation_manager.delegate_structured_sync(
+            provider_name=provider_name,
+            prompt=prompt,
+            response_model=response_model,
+            system_prompt=system_prompt,
+            **kwargs,
+        )
+
     async def stream_delegate(
         self,
         provider_name: Optional[str] = None,

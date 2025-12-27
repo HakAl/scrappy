@@ -2870,6 +2870,24 @@ class MockStreamingRouter:
             # Non-streaming mode - return single response
             return make_mock_litellm_response(content="test response")
 
+    def completion(self, model: str, messages: list, **kwargs):
+        """
+        Sync completion for Instructor integration.
+
+        Returns a mock response object. Instructor wraps this method
+        for structured output support.
+        """
+        self.calls.append({
+            'model': model,
+            'messages': messages,
+            **kwargs
+        })
+
+        if self._exception:
+            raise self._exception
+
+        return make_mock_litellm_response(content="test response")
+
 
 def make_stream_chunk(
     content: str = "",

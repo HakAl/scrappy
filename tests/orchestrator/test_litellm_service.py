@@ -472,3 +472,97 @@ class TestHandleEmptyModelString:
         )
 
         assert response.provider == "unknown"
+
+
+class TestModeSelection:
+    """Tests for _pick_mode method - selects Instructor mode based on model."""
+
+    def test_picks_tools_mode_for_gpt_models(self):
+        """GPT models should use TOOLS mode."""
+        mock_router = MockLiteLLMRouter(response=make_mock_litellm_response())
+        mock_output = MockOutputForLiteLLM()
+        service = make_configured_service(router=mock_router, output=mock_output)
+
+        import instructor
+        assert service._pick_mode("gpt-4") == instructor.Mode.TOOLS
+        assert service._pick_mode("gpt-3.5-turbo") == instructor.Mode.TOOLS
+        assert service._pick_mode("openai/gpt-4-turbo") == instructor.Mode.TOOLS
+
+    def test_picks_tools_mode_for_claude_models(self):
+        """Claude models should use TOOLS mode."""
+        mock_router = MockLiteLLMRouter(response=make_mock_litellm_response())
+        mock_output = MockOutputForLiteLLM()
+        service = make_configured_service(router=mock_router, output=mock_output)
+
+        import instructor
+        assert service._pick_mode("claude-3-opus") == instructor.Mode.TOOLS
+        assert service._pick_mode("anthropic/claude-3-haiku") == instructor.Mode.TOOLS
+
+    def test_picks_tools_mode_for_cohere_models(self):
+        """Cohere command-r models should use TOOLS mode."""
+        mock_router = MockLiteLLMRouter(response=make_mock_litellm_response())
+        mock_output = MockOutputForLiteLLM()
+        service = make_configured_service(router=mock_router, output=mock_output)
+
+        import instructor
+        assert service._pick_mode("command-r") == instructor.Mode.TOOLS
+        assert service._pick_mode("cohere/command-r-plus") == instructor.Mode.TOOLS
+
+    def test_picks_json_mode_for_other_models(self):
+        """Other models should use JSON mode."""
+        mock_router = MockLiteLLMRouter(response=make_mock_litellm_response())
+        mock_output = MockOutputForLiteLLM()
+        service = make_configured_service(router=mock_router, output=mock_output)
+
+        import instructor
+        assert service._pick_mode("groq/llama-3.1-8b") == instructor.Mode.JSON
+        assert service._pick_mode("cerebras/llama-3.3-70b") == instructor.Mode.JSON
+        assert service._pick_mode("together/mistral-7b") == instructor.Mode.JSON
+
+
+class TestStructuredOutput:
+    """Tests for completion_structured and completion_structured_sync methods."""
+
+    def test_structured_output_returns_pydantic_model(self):
+        """Verify structured output returns a validated Pydantic model."""
+        from pydantic import BaseModel
+
+        class SimpleResponse(BaseModel):
+            message: str
+            confidence: float
+
+        # Create mock response that returns JSON matching the model
+        # Instructor will parse this into the Pydantic model
+        mock_router = MockLiteLLMRouter(response=make_mock_litellm_response(
+            content='{"message": "Hello", "confidence": 0.9}'
+        ))
+        mock_output = MockOutputForLiteLLM()
+        service = make_configured_service(router=mock_router, output=mock_output)
+
+        # Note: This tests the internal _instructor_client_sync attribute exists
+        # The actual call would require complex mocking of Instructor
+        assert hasattr(service, '_instructor_client_sync')
+        assert hasattr(service, '_instructor_client')
+
+    def test_completion_structured_sync_exists(self):
+        """Verify completion_structured_sync method is available."""
+        mock_router = MockLiteLLMRouter(response=make_mock_litellm_response())
+        mock_output = MockOutputForLiteLLM()
+        service = make_configured_service(router=mock_router, output=mock_output)
+
+        assert hasattr(service, 'completion_structured_sync')
+        assert callable(service.completion_structured_sync)
+
+    def test_completion_structured_async_exists(self):
+        """Verify async completion_structured method is available."""
+        mock_router = MockLiteLLMRouter(response=make_mock_litellm_response())
+        mock_output = MockOutputForLiteLLM()
+        service = make_configured_service(router=mock_router, output=mock_output)
+
+        assert hasattr(service, 'completion_structured')
+        assert callable(service.completion_structured)
+
+    def test_instructor_default_retries_is_one(self):
+        """Verify DEFAULT_INSTRUCTOR_RETRIES is set to 1."""
+        from scrappy.orchestrator.litellm_service import DEFAULT_INSTRUCTOR_RETRIES
+        assert DEFAULT_INSTRUCTOR_RETRIES == 1

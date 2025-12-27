@@ -26,6 +26,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
+    "instructor>=1.7.0",
     "litellm>=1.80.10",
     "python-dotenv>=1.0.0",
     "openai>=1.0.0",
