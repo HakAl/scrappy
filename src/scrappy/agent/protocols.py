@@ -2,7 +2,8 @@
 Agent component protocols.
 
 Defines abstract interfaces for agent components including audit logging,
-response parsing, prompt building, tool management, and checkpointing.
+response parsing, prompt building, tool management, checkpointing,
+planning, and verification.
 """
 
 from typing import Protocol, Dict, Any, List, Optional, Tuple, runtime_checkable, TYPE_CHECKING
@@ -16,6 +17,14 @@ if TYPE_CHECKING:
         EvaluationResult,
         ConversationState,
         AgentContext,
+    )
+    from .models import (
+        Plan,
+        Step,
+        VerificationResult,
+        UnitTestResult,
+        LintResult,
+        TypecheckResult,
     )
     from ..agent_tools.tools.base import ToolResult
 
@@ -1091,5 +1100,220 @@ class AgentContextFactoryProtocol(Protocol):
 
         Returns:
             AgentContext with system prompt, active tools, and passive RAG context
+        """
+        ...
+
+
+# =============================================================================
+# Planning and Verification Protocols (Phase 0.5)
+# =============================================================================
+
+
+@runtime_checkable
+class PlannerProtocol(Protocol):
+    """
+    Contract for plan generation.
+
+    Abstracts planning operations to enable testing with controlled
+    plan generation and support different planning strategies.
+
+    Implementations:
+    - LLMPlanner: Uses LLM to generate plans from user requests
+    - StaticPlanner: Returns preset plans for testing
+    - HybridPlanner: Combines LLM with templates for common patterns
+
+    Example:
+        async def create_task_plan(
+            planner: PlannerProtocol,
+            user_request: str
+        ) -> Plan:
+            plan = await planner.create_plan(user_request)
+            return plan
+
+        async def iterate_on_plan(
+            planner: PlannerProtocol,
+            plan: Plan,
+            feedback: str
+        ) -> Plan:
+            revised = await planner.revise_plan(plan, feedback)
+            return revised
+    """
+
+    async def create_plan(
+        self,
+        user_input: str,
+        context: Optional[str] = None,
+    ) -> "Plan":
+        """
+        Create an execution plan from user input.
+
+        Analyzes the user's request and generates a structured plan
+        with steps to accomplish the goal.
+
+        Args:
+            user_input: The user's request or goal
+            context: Optional additional context (e.g., file contents, errors)
+
+        Returns:
+            Plan with steps to execute
+
+        Raises:
+            PlanCreationError: If plan generation fails
+        """
+        ...
+
+    async def revise_plan(
+        self,
+        plan: "Plan",
+        feedback: str,
+    ) -> "Plan":
+        """
+        Revise an existing plan based on feedback.
+
+        Takes feedback (from verification failures, user input, or
+        execution results) and generates an updated plan.
+
+        Args:
+            plan: The existing plan to revise
+            feedback: Feedback explaining what needs to change
+
+        Returns:
+            Revised Plan with updated steps
+
+        Raises:
+            PlanCreationError: If revision fails
+            MaxRetriesExceededError: If revision count exceeds hard cap
+        """
+        ...
+
+
+@runtime_checkable
+class VerifierProtocol(Protocol):
+    """
+    Contract for verification operations.
+
+    Abstracts verification to enable testing with controlled
+    verification results and support different verification strategies.
+
+    Implementations:
+    - RealVerifier: Runs actual lint, type check, and tests
+    - MockVerifier: Returns preset results for testing
+    - StrictVerifier: Fails on any issue (for testing)
+    - PermissiveVerifier: Always passes (for testing)
+
+    Example:
+        async def verify_changes(
+            verifier: VerifierProtocol,
+            step: Step,
+            files: list[str]
+        ) -> VerificationResult:
+            result = await verifier.verify_step(step, files)
+            if not result.success:
+                # Handle verification failure
+                pass
+            return result
+    """
+
+    async def verify_step(
+        self,
+        step: "Step",
+        changed_files: list[str],
+    ) -> "VerificationResult":
+        """
+        Verify a completed step.
+
+        Runs appropriate verification (lint, type check, tests) based
+        on the step's configuration and changed files.
+
+        Args:
+            step: The completed step to verify
+            changed_files: List of files that were modified
+
+        Returns:
+            VerificationResult with success status and any errors
+
+        Raises:
+            VerificationError: If verification process itself fails
+        """
+        ...
+
+    async def verify_plan(
+        self,
+        plan: "Plan",
+    ) -> "VerificationResult":
+        """
+        Verify an entire completed plan.
+
+        Runs comprehensive verification after all steps complete,
+        including integration tests if configured.
+
+        Args:
+            plan: The completed plan to verify
+
+        Returns:
+            VerificationResult with overall success status
+
+        Raises:
+            VerificationError: If verification process itself fails
+        """
+        ...
+
+    async def run_tests(
+        self,
+        test_paths: list[str],
+    ) -> "UnitTestResult":
+        """
+        Run tests for specified paths.
+
+        Executes pytest or equivalent for the given test files or directories.
+
+        Args:
+            test_paths: List of test file or directory paths
+
+        Returns:
+            TestResult with pass/fail counts and output
+
+        Raises:
+            VerificationError: If test runner fails to execute
+        """
+        ...
+
+    async def run_lint(
+        self,
+        file_paths: list[str],
+    ) -> "LintResult":
+        """
+        Run linting for specified files.
+
+        Executes ruff or equivalent linter on the given files.
+
+        Args:
+            file_paths: List of files to lint
+
+        Returns:
+            LintResult with error/warning counts
+
+        Raises:
+            VerificationError: If linter fails to execute
+        """
+        ...
+
+    async def run_typecheck(
+        self,
+        file_paths: list[str],
+    ) -> "TypecheckResult":
+        """
+        Run type checking for specified files.
+
+        Executes mypy or equivalent type checker on the given files.
+
+        Args:
+            file_paths: List of files to type check
+
+        Returns:
+            TypecheckResult with error/warning counts
+
+        Raises:
+            VerificationError: If type checker fails to execute
         """
         ...

@@ -11,6 +11,25 @@ from .types import (
     EvaluationResult,
     ConversationState
 )
+from .models import (
+    Step,
+    StepStatus,
+    Plan,
+    VerificationResult,
+    UnitTestResult,
+    LintResult,
+    TypecheckResult,
+    VerificationPolicy,
+    ApprovalPolicy,
+)
+from .exceptions import (
+    AgentLoopError,
+    PlanCreationError,
+    PlanRejectedError,
+    VerificationError,
+    MaxRetriesExceededError,
+    StepExecutionError,
+)
 from .audit import AuditLogger
 from .cancellation import CancellationToken
 from .checkpoint import create_git_checkpoint, rollback_to_checkpoint
@@ -22,7 +41,10 @@ from .protocols import (
     ToolRegistryProtocol,
     ToolContextProtocol,
     CheckpointManagerProtocol,
+    PlannerProtocol,
+    VerifierProtocol,
 )
+from .verifier import Verifier
 from ..infrastructure.protocols import FileSystemProtocol
 from ..infrastructure.file_system import RealFileSystem, InMemoryFileSystem
 
@@ -35,6 +57,23 @@ __all__ = [
     'ActionResult',
     'EvaluationResult',
     'ConversationState',
+    # Models (Phase 0.5)
+    'Step',
+    'StepStatus',
+    'Plan',
+    'VerificationResult',
+    'UnitTestResult',
+    'LintResult',
+    'TypecheckResult',
+    'VerificationPolicy',
+    'ApprovalPolicy',
+    # Exceptions (Phase 0.5)
+    'AgentLoopError',
+    'PlanCreationError',
+    'PlanRejectedError',
+    'VerificationError',
+    'MaxRetriesExceededError',
+    'StepExecutionError',
     # Response parsing
     'JSONResponseParser',
     'ParseResult',
@@ -51,8 +90,12 @@ __all__ = [
     'ToolRegistryProtocol',
     'ToolContextProtocol',
     'CheckpointManagerProtocol',
+    'PlannerProtocol',
+    'VerifierProtocol',
     'FileSystemProtocol',
     # File system implementations
     'RealFileSystem',
     'InMemoryFileSystem',
+    # Verifier implementation
+    'Verifier',
 ]
