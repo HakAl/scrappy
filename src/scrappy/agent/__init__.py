@@ -15,6 +15,7 @@ from .models import (
     Step,
     StepStatus,
     Plan,
+    PlanExecutionState,
     VerificationResult,
     UnitTestResult,
     LintResult,
@@ -26,6 +27,7 @@ from .exceptions import (
     AgentLoopError,
     PlanCreationError,
     PlanRejectedError,
+    PlanRevisionLimitError,
     VerificationError,
     MaxRetriesExceededError,
     StepExecutionError,
@@ -45,12 +47,15 @@ from .protocols import (
     VerifierProtocol,
 )
 from .verifier import Verifier
+from .planner import Planner
+from .agent_loop import AgentLoop
 from ..infrastructure.protocols import FileSystemProtocol
 from ..infrastructure.file_system import RealFileSystem, InMemoryFileSystem
 
 __all__ = [
     # Core agent
     'CodeAgent',
+    'AgentLoop',
     # Types
     'AgentThought',
     'AgentAction',
@@ -61,6 +66,7 @@ __all__ = [
     'Step',
     'StepStatus',
     'Plan',
+    'PlanExecutionState',
     'VerificationResult',
     'UnitTestResult',
     'LintResult',
@@ -71,6 +77,7 @@ __all__ = [
     'AgentLoopError',
     'PlanCreationError',
     'PlanRejectedError',
+    'PlanRevisionLimitError',
     'VerificationError',
     'MaxRetriesExceededError',
     'StepExecutionError',
@@ -98,4 +105,6 @@ __all__ = [
     'InMemoryFileSystem',
     # Verifier implementation
     'Verifier',
+    # Planner implementation
+    'Planner',
 ]

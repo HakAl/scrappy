@@ -734,6 +734,53 @@ class TestApprovalPolicy:
         assert policy.is_dangerous("dropdown menu") is False
         assert policy.is_dangerous("determine value") is False
 
+    # Security tests for command injection/bypass prevention
+    def test_is_dangerous_command_chaining_semicolon(self):
+        """Command chaining with semicolon should be dangerous."""
+        policy = ApprovalPolicy()
+        assert policy.is_dangerous("echo foo; rm -rf /") is True
+        assert policy.is_dangerous("ls; cat /etc/passwd") is True
+
+    def test_is_dangerous_command_chaining_ampersand(self):
+        """Command chaining with && should be dangerous."""
+        policy = ApprovalPolicy()
+        assert policy.is_dangerous("echo foo && rm -rf /") is True
+        assert policy.is_dangerous("ls && cat /etc/passwd") is True
+
+    def test_is_dangerous_command_chaining_pipe(self):
+        """Command chaining with pipe should be dangerous."""
+        policy = ApprovalPolicy()
+        assert policy.is_dangerous("cat file | sh") is True
+        assert policy.is_dangerous("echo 'rm -rf /' | bash") is True
+
+    def test_is_dangerous_command_chaining_or(self):
+        """Command chaining with || should be dangerous."""
+        policy = ApprovalPolicy()
+        assert policy.is_dangerous("false || rm -rf /") is True
+
+    def test_is_dangerous_backtick_substitution(self):
+        """Backtick command substitution should be dangerous."""
+        policy = ApprovalPolicy()
+        assert policy.is_dangerous("echo `whoami`") is True
+        assert policy.is_dangerous("cat `ls`") is True
+
+    def test_is_dangerous_dollar_substitution(self):
+        """Dollar command substitution should be dangerous."""
+        policy = ApprovalPolicy()
+        assert policy.is_dangerous("echo $(whoami)") is True
+        assert policy.is_dangerous("cat $(ls)") is True
+
+    def test_is_dangerous_hex_escapes(self):
+        """Hex escape sequences should be dangerous (bypass attempts)."""
+        policy = ApprovalPolicy()
+        # Trying to encode 'rm' as hex
+        assert policy.is_dangerous(r"echo \x72\x6d") is True
+
+    def test_is_dangerous_unicode_escapes(self):
+        """Unicode escape sequences should be dangerous (bypass attempts)."""
+        policy = ApprovalPolicy()
+        assert policy.is_dangerous(r"echo \u0072\u006d") is True
+
 
 # =============================================================================
 # Exception Hierarchy Tests

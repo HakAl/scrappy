@@ -387,6 +387,15 @@ class ApprovalPolicy(BaseModel):
         description="Commands that always require explicit approval",
     )
 
+    # Patterns that indicate command chaining/substitution (security risk)
+    _DANGEROUS_PATTERNS: list[str] = [
+        r'[;&|]',          # Command chaining: ; && || |
+        r'`',              # Backtick command substitution
+        r'\$\(',           # Dollar command substitution $(...)
+        r'\\x[0-9a-fA-F]{2}',  # Hex escapes \x00
+        r'\\u[0-9a-fA-F]{4}',  # Unicode escapes \u0000
+    ]
+
     def is_dangerous(self, command: str) -> bool:
         """
         Check if a command contains dangerous patterns.
@@ -394,13 +403,23 @@ class ApprovalPolicy(BaseModel):
         Uses word boundary detection for single-word patterns to avoid
         false positives (e.g., "firmware" should not match "rm").
 
+        Also detects command chaining, substitution, and encoding bypass attempts.
+
         Args:
             command: The command string to check
 
         Returns:
             True if the command contains any dangerous pattern
         """
+        # First check for command chaining/substitution patterns
+        # These can be used to bypass simple command detection
+        for pattern in self._DANGEROUS_PATTERNS:
+            if re.search(pattern, command):
+                return True
+
         command_lower = command.lower()
+
+        # Check for configured dangerous commands
         for danger in self.dangerous_commands:
             danger_lower = danger.lower()
             # Use word boundaries for single-word patterns

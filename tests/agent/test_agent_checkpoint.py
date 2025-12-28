@@ -2,6 +2,7 @@
 Comprehensive tests for src/agent/checkpoint.py
 
 Tests git checkpoint creation and rollback functionality with mocked subprocess calls.
+Includes security tests for command injection prevention.
 """
 
 import subprocess
@@ -9,7 +10,57 @@ from datetime import datetime
 from unittest.mock import Mock, patch, MagicMock
 import pytest
 
-from scrappy.agent.checkpoint import create_git_checkpoint, rollback_to_checkpoint
+from scrappy.agent.checkpoint import (
+    create_git_checkpoint,
+    rollback_to_checkpoint,
+    _is_valid_commit_hash,
+)
+
+
+class TestCommitHashValidation:
+    """Test suite for commit hash validation (security feature)."""
+
+    def test_valid_7_char_hash(self):
+        """Test valid 7-character short hash."""
+        assert _is_valid_commit_hash("abc1234") is True
+
+    def test_valid_40_char_hash(self):
+        """Test valid 40-character full hash."""
+        assert _is_valid_commit_hash("abc123def456abc123def456abc123def456abc1") is True
+
+    def test_invalid_hash_with_uppercase(self):
+        """Test that uppercase letters fail (git uses lowercase)."""
+        assert _is_valid_commit_hash("ABC1234") is False
+
+    def test_invalid_hash_too_short(self):
+        """Test that hash shorter than 7 chars fails."""
+        assert _is_valid_commit_hash("abc123") is False
+
+    def test_invalid_hash_too_long(self):
+        """Test that hash longer than 40 chars fails."""
+        assert _is_valid_commit_hash("a" * 41) is False
+
+    def test_invalid_hash_with_special_chars(self):
+        """Test that special characters fail."""
+        assert _is_valid_commit_hash("abc123; rm -rf /") is False
+        assert _is_valid_commit_hash("abc123`echo foo`") is False
+        assert _is_valid_commit_hash("abc123$(whoami)") is False
+
+    def test_invalid_hash_with_spaces(self):
+        """Test that spaces fail."""
+        assert _is_valid_commit_hash("abc123 def456") is False
+
+    def test_invalid_hash_with_newlines(self):
+        """Test that newlines fail."""
+        assert _is_valid_commit_hash("abc123\ndef456") is False
+
+    def test_invalid_empty_string(self):
+        """Test that empty string fails."""
+        assert _is_valid_commit_hash("") is False
+
+    def test_invalid_non_hex_chars(self):
+        """Test that non-hex chars fail."""
+        assert _is_valid_commit_hash("ghijklm") is False
 
 
 class TestCreateGitCheckpoint:
@@ -37,25 +88,12 @@ class TestCreateGitCheckpoint:
             assert result == mock_commit_hash
             assert mock_run.call_count == 4
 
-            # Verify the calls were made with correct arguments
-            calls = [
-                (("git rev-parse --is-inside-work-tree",),
-                 {"shell": True, "cwd": ".", "capture_output": True, "text": True}),
-                (("git add -A",), {"shell": True, "cwd": ".", "capture_output": True}),
-                (("git commit -m \"Agent checkpoint",),
-                 {"shell": True, "cwd": ".", "capture_output": True, "text": True}),
-                (("git rev-parse HEAD",), {"shell": True, "cwd": ".", "capture_output": True, "text": True})
-            ]
-
-            for i, (expected_args, expected_kwargs) in enumerate(calls):
-                actual_call = mock_run.call_args_list[i]
-                if i == 2:  # Special handling for timestamp in commit message
-                    assert actual_call[0][0].startswith("git commit -m \"Agent checkpoint")
-                    assert actual_call[1]["shell"] == expected_kwargs["shell"]
-                    assert actual_call[1]["cwd"] == expected_kwargs["cwd"]
-                else:
-                    assert actual_call[0] == expected_args
-                    assert actual_call[1] == expected_kwargs
+            # Verify the calls were made with argument lists (no shell=True)
+            for call in mock_run.call_args_list:
+                # All calls should use shell=False (secure)
+                assert call[1]["shell"] is False
+                # All calls should pass args as a list
+                assert isinstance(call[0][0], list)
 
     def test_create_checkpoint_not_git_repo(self):
         """Test checkpoint creation when not in a git repository."""
@@ -68,8 +106,8 @@ class TestCreateGitCheckpoint:
             assert result is None
             assert mock_run.call_count == 1
             mock_run.assert_called_with(
-                "git rev-parse --is-inside-work-tree",
-                shell=True,
+                ["git", "rev-parse", "--is-inside-work-tree"],
+                shell=False,
                 cwd=".",
                 capture_output=True,
                 text=True
@@ -173,8 +211,8 @@ class TestRollbackToCheckpoint:
 
             assert result is True
             mock_run.assert_called_once_with(
-                f"git reset --hard {commit_hash}",
-                shell=True,
+                ["git", "reset", "--hard", commit_hash],
+                shell=False,
                 cwd=".",
                 capture_output=True,
                 text=True
@@ -182,7 +220,7 @@ class TestRollbackToCheckpoint:
 
     def test_rollback_custom_path(self):
         """Test rollback with custom project path."""
-        commit_hash = "def456ghi789"
+        commit_hash = "def456abc789def1"  # Valid hex hash
         custom_path = "/custom/project/path"
 
         with patch('subprocess.run') as mock_run:
@@ -192,8 +230,8 @@ class TestRollbackToCheckpoint:
 
             assert result is True
             mock_run.assert_called_once_with(
-                f"git reset --hard {commit_hash}",
-                shell=True,
+                ["git", "reset", "--hard", "def456abc789def1"],
+                shell=False,
                 cwd=custom_path,
                 capture_output=True,
                 text=True
@@ -221,16 +259,27 @@ class TestRollbackToCheckpoint:
 
             assert result is False
 
-    def test_rollback_invalid_commit_hash(self):
-        """Test rollback with invalid commit hash format."""
+    def test_rollback_invalid_commit_hash_raises_valueerror(self):
+        """Test rollback with invalid commit hash raises ValueError."""
         invalid_hash = "invalid-hash-format"
 
-        with patch('subprocess.run') as mock_run:
-            mock_run.return_value = Mock(returncode=1)  # Git should fail with invalid hash
+        # Should raise ValueError before even calling subprocess
+        with pytest.raises(ValueError, match="Invalid commit hash"):
+            rollback_to_checkpoint(invalid_hash)
 
-            result = rollback_to_checkpoint(invalid_hash)
+    def test_rollback_command_injection_prevented(self):
+        """Test that command injection via commit hash is prevented."""
+        malicious_hashes = [
+            "abc123; rm -rf /",  # Shell command chaining
+            "abc123`whoami`",  # Backtick command substitution
+            "abc123$(cat /etc/passwd)",  # Dollar command substitution
+            "abc123 --help",  # Argument injection
+            "abc123\n--help",  # Newline injection
+        ]
 
-            assert result is False
+        for malicious_hash in malicious_hashes:
+            with pytest.raises(ValueError, match="Invalid commit hash"):
+                rollback_to_checkpoint(malicious_hash)
 
 
 class TestCheckpointIntegration:
@@ -238,7 +287,7 @@ class TestCheckpointIntegration:
 
     def test_full_checkpoint_lifecycle(self):
         """Test complete checkpoint creation and rollback workflow."""
-        mock_commit_hash = "lifecycle123"
+        mock_commit_hash = "abc123def456abc1"  # Valid 16-char hex hash
 
         with patch('subprocess.run') as mock_run:
             # Setup sequence for create checkpoint
@@ -269,7 +318,7 @@ class TestCheckpointIntegration:
     def test_checkpoint_with_special_characters_in_path(self):
         """Test checkpoint operations with paths containing special characters."""
         special_path = "/path/with spaces/and-dashes/and_underscores"
-        mock_commit_hash = "special123"
+        mock_commit_hash = "abc123def456abc1"  # Valid hex hash
 
         with patch('subprocess.run') as mock_run:
             # Create checkpoint
@@ -314,21 +363,20 @@ class TestCheckpointErrorHandling:
     ])
     def test_rollback_various_exceptions(self, exception_type):
         """Test handling of various exception types in rollback_to_checkpoint."""
+        valid_hash = "abc123def456abc1"  # Valid hex hash
+
         with patch('subprocess.run') as mock_run:
             mock_run.side_effect = exception_type
 
-            result = rollback_to_checkpoint("some-hash")
+            result = rollback_to_checkpoint(valid_hash)
 
             assert result is False
 
     def test_empty_commit_hash(self):
-        """Test behavior with empty commit hash."""
-        with patch('subprocess.run') as mock_run:
-            mock_run.return_value = Mock(returncode=1)  # Git should fail
-
-            result = rollback_to_checkpoint("")
-
-            assert result is False
+        """Test behavior with empty commit hash raises ValueError."""
+        # Empty hash should raise ValueError (security validation)
+        with pytest.raises(ValueError, match="Invalid commit hash"):
+            rollback_to_checkpoint("")
 
 # todo
     # def test_none_commit_hash(self):
@@ -343,16 +391,16 @@ class TestCheckpointErrorHandling:
 
 
 class TestCheckpointCommandValidation:
-    """Tests to validate git command construction."""
+    """Tests to validate git command construction (security: no shell=True)."""
 
     def test_checkpoint_command_structure(self):
-        """Test that git commands are properly structured."""
+        """Test that git commands are properly structured as lists."""
         with patch('subprocess.run') as mock_run:
             mock_run.side_effect = [
                 Mock(returncode=0, stdout="true\n"),  # git rev-parse --is-inside-work-tree
                 Mock(returncode=0),  # git add -A
                 Mock(returncode=0),  # git commit
-                Mock(returncode=0, stdout="hash123\n")  # git rev-parse HEAD
+                Mock(returncode=0, stdout="abc123def456abc1\n")  # git rev-parse HEAD
             ]
 
             create_git_checkpoint()
@@ -360,18 +408,37 @@ class TestCheckpointCommandValidation:
             # Verify command structure
             calls = mock_run.call_args_list
 
-            # First call should be git repository check
-            assert "git rev-parse --is-inside-work-tree" in calls[0][0][0]
+            # First call should be git repository check - as a list
+            assert calls[0][0][0] == ["git", "rev-parse", "--is-inside-work-tree"]
 
-            # Second call should be git add
-            assert calls[1][0][0] == "git add -A"
+            # Second call should be git add - as a list
+            assert calls[1][0][0] == ["git", "add", "-A"]
 
-            # Third call should be git commit with message
-            assert calls[2][0][0].startswith("git commit -m \"Agent checkpoint")
-            assert "--allow-empty" in calls[2][0][0]
+            # Third call should be git commit with message - as a list
+            commit_args = calls[2][0][0]
+            assert commit_args[0] == "git"
+            assert commit_args[1] == "commit"
+            assert commit_args[2] == "-m"
+            assert commit_args[3].startswith("Agent checkpoint")
+            assert commit_args[4] == "--allow-empty"
 
-            # Fourth call should get commit hash
-            assert calls[3][0][0] == "git rev-parse HEAD"
+            # Fourth call should get commit hash - as a list
+            assert calls[3][0][0] == ["git", "rev-parse", "HEAD"]
+
+    def test_no_shell_in_any_command(self):
+        """Test that all subprocess calls use shell=False."""
+        with patch('subprocess.run') as mock_run:
+            mock_run.side_effect = [
+                Mock(returncode=0, stdout="true\n"),
+                Mock(returncode=0),
+                Mock(returncode=0),
+                Mock(returncode=0, stdout="abc123def456abc1\n")
+            ]
+
+            create_git_checkpoint()
+
+            for call in mock_run.call_args_list:
+                assert call[1]["shell"] is False, "All calls must use shell=False"
 
 
 
@@ -381,7 +448,8 @@ class TestCheckpointPerformance:
 
     def test_multiple_checkpoints_same_session(self):
         """Test creating multiple checkpoints in same session."""
-        commit_hashes = ["hash1", "hash2", "hash3"]
+        # Use valid hex hashes (only a-f0-9)
+        commit_hashes = ["abc1234def5678", "bcd2345efa6789", "cde3456fab7890"]
 
         with patch('subprocess.run') as mock_run:
             # Setup responses for multiple checkpoints
@@ -407,7 +475,8 @@ class TestCheckpointPerformance:
 
     def test_rollback_to_same_checkpoint_multiple_times(self):
         """Test rolling back to the same checkpoint multiple times."""
-        commit_hash = "same_hash"
+        # Use valid hex hash
+        commit_hash = "abc123def456abc1"
 
         with patch('subprocess.run') as mock_run:
             mock_run.return_value = Mock(returncode=0)

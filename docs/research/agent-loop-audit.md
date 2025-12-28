@@ -251,31 +251,64 @@ class AgentLoop:
         return ExecutionResult(success=True, output=self._summarize(plan))
 ```
 
-## Implementation Phases
+## Implementation Phases (FINALIZED)
 
-### Phase 0: Fix Blockers
-- [ ] scrappy-cij: Fix Instructor mode bug
-- [ ] Delete dead code (adapters.py, protocols.py, testing.py, tests)
+Status updated: 2025-12-27
 
-### Phase 1: Structured Planning
-- [ ] Define Plan model (Pydantic)
-- [ ] Define Step model with dependencies
-- [ ] Create Planner that outputs structured plans
-- [ ] User approval flow
+### Phase 0: Fix Blockers - COMPLETED
+- [x] scrappy-cij: Fix Instructor mode bug - CLOSED
+- [x] scrappy-2pg: Delete dead code - CLOSED
 
-### Phase 2: Verification Integration
-- [ ] Create Verifier protocol
-- [ ] Integrate pytest runner
-- [ ] Integrate ruff/mypy
-- [ ] Add verification step after execution
+### Phase 0.5: Protocol Definitions (scrappy-022) - READY
+- [ ] PlannerProtocol, VerifierProtocol
+- [ ] VerificationPolicy, ApprovalPolicy
+- [ ] Error hierarchy (AgentLoopError, etc.)
 
-### Phase 3: Feedback Loop
-- [ ] Detect failures from verifier
-- [ ] Generate fix attempts
-- [ ] Retry logic with backoff
-- [ ] User escalation when stuck
+### Phase 1: Models (scrappy-y8p)
+- [ ] StepType, StepStatus, PlanStatus enums
+- [ ] Step model with fix_attempts, is_modifying
+- [ ] Plan model with progress tracking
+- [ ] VerificationResult model
 
-### Phase 4: Consolidation
-- [ ] Merge research + code_gen paths where sensible
-- [ ] Remove redundant code paths
-- [ ] Update /classify to use full pipeline
+### Phase 2: Planner (scrappy-ixw)
+- [ ] Planner implementing PlannerProtocol
+- [ ] Structured plan via Instructor
+- [ ] Dangerous command detection
+- [ ] Revision logic (soft 2, hard 5)
+
+### Phase 3: Verifier (scrappy-8h6)
+- [ ] Verifier implementing VerifierProtocol
+- [ ] pytest, ruff, mypy integration
+- [ ] Test discovery heuristics
+- [ ] Policy-based pass/fail
+
+### Phase 4: Integration (scrappy-qhq)
+- [ ] solve() method on AgentLoop
+- [ ] Git checkpoint before modifying steps
+- [ ] Escape hatch: [E]dit/[S]kip/[R]ollback/[A]bort
+- [ ] Progress visibility: "Step 2/5: ..."
+- [ ] Partial success handling
+
+## Locked Decisions
+
+| Decision | Resolution | Authority |
+|----------|------------|-----------|
+| Which paths? | CODE_GENERATION only | Neo |
+| Enhance or replace? | ENHANCE existing AgentLoop | Neo |
+| When verify? | After modifying steps + plan end | Neo |
+| What fails? | Errors fatal, warnings not (configurable) | Neo |
+| Playwright? | P2, deferred | Neo |
+| Plan approval | ALWAYS required | Reba (override) |
+| Retry limits | 3/step, soft 2, hard 5 revisions | Peter + Reba |
+| Git checkpoints | Before each modifying step | Reba |
+| Execution model | Linear only (no parallelism v1) | Peter |
+| Escape hatch | [E]dit/[S]kip/[R]ollback/[A]bort | Reba |
+| Partial success | Keep completed, offer rollback | Reba |
+
+## Out of Scope (P2)
+- Playwright/web endpoint verification
+- Plan persistence across sessions
+- Plan diffing on revision
+- DAG step dependencies
+- Concurrent step execution
+- Token budgets per step/plan

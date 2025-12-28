@@ -26,6 +26,11 @@ from .models import (
 DEFAULT_TIMEOUT_SECONDS = 30
 
 
+class PathValidationError(ValueError):
+    """Raised when a path fails security validation."""
+    pass
+
+
 class Verifier:
     """
     Runs verification tools (pytest, ruff, mypy) and evaluates results.
@@ -72,6 +77,56 @@ class Verifier:
     def project_root(self) -> Path:
         """Get the project root directory."""
         return self._project_root
+
+    def _validate_path(self, path: str) -> bool:
+        """
+        Validate that a path is within the project root.
+
+        Security: Prevents path traversal attacks where user-provided paths
+        could escape the project directory.
+
+        Args:
+            path: Path to validate
+
+        Returns:
+            True if path is within project root, False otherwise
+        """
+        try:
+            resolved = Path(path).resolve()
+            project_resolved = self._project_root.resolve()
+            # Check if the path is under the project root
+            return resolved == project_resolved or project_resolved in resolved.parents
+        except (OSError, ValueError):
+            return False
+
+    def _validate_paths(self, paths: list[str]) -> list[str]:
+        """
+        Validate and filter paths to ensure they are within project root.
+
+        Args:
+            paths: List of paths to validate
+
+        Returns:
+            List of valid paths (paths outside project root are filtered out)
+
+        Raises:
+            PathValidationError: If any path is outside the project root
+        """
+        validated = []
+        invalid = []
+
+        for path in paths:
+            if self._validate_path(path):
+                validated.append(path)
+            else:
+                invalid.append(path)
+
+        if invalid:
+            raise PathValidationError(
+                f"Path(s) outside project root: {invalid}"
+            )
+
+        return validated
 
     async def verify_step(
         self,
@@ -256,8 +311,11 @@ class Verifier:
             )
 
         try:
+            # Security: Validate paths are within project root
+            validated_paths = self._validate_paths(test_paths)
+
             # Run pytest with short traceback and quiet output
-            args = ["pytest"] + test_paths + ["--tb=short", "-q"]
+            args = ["pytest"] + validated_paths + ["--tb=short", "-q"]
             result = await self._run_subprocess(args)
 
             if result is None:
@@ -295,6 +353,15 @@ class Verifier:
                 errors=["pytest timed out"],
                 output="Test execution timed out",
             )
+        except PathValidationError as e:
+            return UnitTestResult(
+                success=False,
+                passed=0,
+                failed=0,
+                skipped=0,
+                errors=[f"Path validation failed: {e}"],
+                output=str(e),
+            )
 
     async def run_lint(self, file_paths: list[str]) -> LintResult:
         """
@@ -317,8 +384,11 @@ class Verifier:
             )
 
         try:
+            # Security: Validate paths are within project root
+            validated_paths = self._validate_paths(file_paths)
+
             # Run ruff with JSON output for easy parsing
-            args = ["ruff", "check"] + file_paths + ["--output-format=json"]
+            args = ["ruff", "check"] + validated_paths + ["--output-format=json"]
             result = await self._run_subprocess(args)
 
             if result is None:
@@ -355,6 +425,15 @@ class Verifier:
                 warnings=[],
                 files_checked=file_paths,
             )
+        except PathValidationError as e:
+            return LintResult(
+                success=False,
+                error_count=1,
+                warning_count=0,
+                errors=[f"Path validation failed: {e}"],
+                warnings=[],
+                files_checked=file_paths,
+            )
 
     async def run_typecheck(self, file_paths: list[str]) -> TypecheckResult:
         """
@@ -377,8 +456,11 @@ class Verifier:
             )
 
         try:
+            # Security: Validate paths are within project root
+            validated_paths = self._validate_paths(file_paths)
+
             # Run mypy
-            args = ["mypy"] + file_paths
+            args = ["mypy"] + validated_paths
             result = await self._run_subprocess(args)
 
             if result is None:
@@ -413,6 +495,15 @@ class Verifier:
                 error_count=1,
                 warning_count=0,
                 errors=["mypy timed out"],
+                warnings=[],
+                files_checked=file_paths,
+            )
+        except PathValidationError as e:
+            return TypecheckResult(
+                success=False,
+                error_count=1,
+                warning_count=0,
+                errors=[f"Path validation failed: {e}"],
                 warnings=[],
                 files_checked=file_paths,
             )

@@ -5,6 +5,9 @@ This module extracts the core agent loop logic from CodeAgent into
 a focused class following Single Responsibility Principle.
 
 Single Responsibility: Run the agent loop, nothing else.
+
+Extended in Phase 4 to support high-level plan-execute-verify loop
+via the solve() method, integrating Planner and Verifier components.
 """
 
 import time
@@ -30,6 +33,21 @@ from .protocols import (
     ProviderSelectionStrategyProtocol,
     DenialHandlerProtocol,
     AgentContextFactoryProtocol,
+    PlannerProtocol,
+    VerifierProtocol,
+)
+from .models import (
+    Plan,
+    Step,
+    StepStatus,
+    PlanExecutionState,
+    VerificationResult,
+    VerificationPolicy,
+    ApprovalPolicy,
+)
+from .exceptions import (
+    PlanRejectedError,
+    StepExecutionError,
 )
 from .cancellation import CancellationTokenProtocol
 from .stop_condition import AgentStopCondition, StopReason
@@ -37,7 +55,7 @@ from .completion_validator import (
     CompletionValidator,
     CompletionValidatorProtocol,
 )
-from .checkpoint import create_git_checkpoint
+from .checkpoint import create_git_checkpoint, rollback_to_checkpoint
 
 if TYPE_CHECKING:
     from ..orchestrator_adapter import OrchestratorAdapter
@@ -78,6 +96,11 @@ class AgentLoop:
         tool_context: Optional[Any] = None,  # ToolContext for HUD turn tracking
         completion_validator: Optional[CompletionValidatorProtocol] = None,
         project_root: Optional[str] = None,  # For git checkpoints
+        # Phase 4: Planner and Verifier integration
+        planner: Optional[PlannerProtocol] = None,
+        verifier: Optional[VerifierProtocol] = None,
+        verification_policy: Optional[VerificationPolicy] = None,
+        approval_policy: Optional[ApprovalPolicy] = None,
     ):
         """
         Initialize AgentLoop with injected dependencies.
@@ -99,6 +122,10 @@ class AgentLoop:
             tool_context: Optional ToolContext for HUD turn tracking
             completion_validator: Validator for task completion (created if not provided)
             project_root: Project root path for git checkpoints
+            planner: Optional Planner for creating execution plans
+            verifier: Optional Verifier for running pytest/ruff/mypy
+            verification_policy: Policy controlling verification strictness
+            approval_policy: Policy controlling plan/step approval
         """
         self._orchestrator = orchestrator
         self._project_root = project_root or "."
@@ -128,6 +155,12 @@ class AgentLoop:
 
         # Track current dry_run state
         self._dry_run = False
+
+        # Phase 4: Planner and Verifier for plan-execute-verify loop
+        self._planner = planner
+        self._verifier = verifier
+        self._verification_policy = verification_policy or VerificationPolicy()
+        self._approval_policy = approval_policy or ApprovalPolicy()
 
     def think(self, state: ConversationState, context: AgentContext) -> AgentThought:
         """
@@ -1016,3 +1049,625 @@ class AgentLoop:
                 'iterations': state.iteration,
                 'stop_reason': StopReason.USER_CANCELLED.value,
             }
+
+    # =========================================================================
+    # Phase 4: Plan-Execute-Verify Loop (solve method)
+    # =========================================================================
+
+    async def solve(
+        self,
+        user_input: str,
+        context: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        High-level plan-execute-verify loop.
+
+        This is the main entry point for structured task execution with
+        planning, user approval, step execution, and verification.
+
+        Flow:
+        1. Create plan via Planner
+        2. Get user approval (ALWAYS required)
+        3. For each step:
+           a. Show progress: "[Step 2/5] Writing login endpoint..."
+           b. Git checkpoint if modifying step
+           c. Execute step
+           d. Verify step if modifying
+           e. On failure: retry up to 3x
+           f. On max retries: escape hatch prompt
+        4. Final plan verification
+        5. Return results
+
+        Args:
+            user_input: The user's request or goal
+            context: Optional additional context (e.g., file contents, errors)
+
+        Returns:
+            Dict with:
+                - success: bool
+                - plan: Plan object
+                - completed_steps: list of completed step IDs
+                - failed_steps: list of failed step IDs
+                - verification_result: final verification result if any
+                - stop_reason: why execution stopped
+
+        Raises:
+            ValueError: If planner is not configured
+            PlanRejectedError: If user rejects the plan
+
+        Note:
+            This is an async method. Callers must run it within an async context
+            (e.g., via asyncio.run() or from another async function). A synchronous
+            solve_sync() wrapper may be added in a future release.
+        """
+        if self._planner is None:
+            raise ValueError("Planner is required for solve(). Pass planner to AgentLoop.__init__.")
+
+        # Step 1: Create plan
+        self._ui.show_progress("Creating execution plan...")
+        plan = await self._planner.create_plan(user_input, context)
+
+        # Step 2: Get user approval (ALWAYS required)
+        approved = await self._get_plan_approval(plan)
+        if not approved:
+            raise PlanRejectedError(plan_id=plan.id, reason="User declined to execute plan")
+
+        # Mark plan as approved
+        from datetime import datetime, timezone
+        plan.approved_at = datetime.now(timezone.utc)
+
+        # Initialize execution state
+        execution_state = PlanExecutionState(
+            plan=plan,
+            current_step_index=0,
+            checkpoint_hash=None,
+            step_checkpoints={},
+            started_at=datetime.now(timezone.utc),
+        )
+
+        # Create initial checkpoint before execution starts
+        initial_checkpoint = await self._checkpoint_if_needed(
+            Step(id="initial", description="Initial checkpoint", is_read_only=False)
+        )
+        if initial_checkpoint:
+            execution_state.checkpoint_hash = initial_checkpoint
+
+        completed_steps: List[str] = []
+        failed_steps: List[str] = []
+
+        # Step 3: Execute each step
+        for i, step in enumerate(plan.steps):
+            # Show progress
+            self._show_step_progress(plan, step)
+
+            # Track files that may be changed by this step
+            changed_files: List[str] = []
+
+            # Create checkpoint for modifying steps
+            step_checkpoint = None
+            if not step.is_read_only:
+                step_checkpoint = await self._checkpoint_if_needed(step)
+                if step_checkpoint:
+                    execution_state.step_checkpoints[step.id] = step_checkpoint
+
+            # Execute with retry logic
+            max_retries = self._verification_policy.max_fix_attempts
+            retry_count = 0
+            step_success = False
+
+            while retry_count < max_retries:
+                try:
+                    # Mark step as in progress
+                    step.mark_started()
+
+                    # Execute the step
+                    result = await self._execute_step(step)
+                    step.execution_result = result
+
+                    # Track changed files (extract from step parameters or result)
+                    changed_files = self._extract_changed_files(step, result)
+
+                    # Verify if needed
+                    if not step.is_read_only and self._verifier is not None:
+                        verification = await self._verify_step(step, changed_files)
+                        step.verification_result = verification
+
+                        if not verification.success:
+                            retry_count += 1
+                            step.retry_count = retry_count
+
+                            if retry_count >= max_retries:
+                                # Max retries exceeded - escape hatch
+                                choice = await self._handle_step_failure(
+                                    step, verification.message
+                                )
+
+                                if choice == "edit":
+                                    # Future: allow plan editing
+                                    self._ui.show_warning("Plan editing not yet implemented. Aborting.")
+                                    step.mark_failed("User requested plan edit")
+                                    failed_steps.append(step.id)
+                                    return self._make_solve_result(
+                                        success=False,
+                                        plan=plan,
+                                        completed_steps=completed_steps,
+                                        failed_steps=failed_steps,
+                                        stop_reason="edit_requested",
+                                    )
+
+                                elif choice == "skip":
+                                    step.status = StepStatus.SKIPPED
+                                    self._ui.show_info(f"Skipping step: {step.description}")
+                                    break  # Exit retry loop
+
+                                elif choice == "rollback":
+                                    if step_checkpoint:
+                                        await self._rollback_to_checkpoint(step_checkpoint)
+                                        self._ui.show_info(f"Rolled back to checkpoint: {step_checkpoint[:8]}")
+                                    else:
+                                        self._ui.show_warning("No checkpoint available for rollback")
+                                    step.mark_failed("Rolled back after failures")
+                                    failed_steps.append(step.id)
+                                    return self._make_solve_result(
+                                        success=False,
+                                        plan=plan,
+                                        completed_steps=completed_steps,
+                                        failed_steps=failed_steps,
+                                        stop_reason="rollback",
+                                    )
+
+                                else:  # abort
+                                    step.mark_failed("User aborted after failures")
+                                    failed_steps.append(step.id)
+                                    return self._make_solve_result(
+                                        success=False,
+                                        plan=plan,
+                                        completed_steps=completed_steps,
+                                        failed_steps=failed_steps,
+                                        stop_reason="abort",
+                                    )
+
+                            else:
+                                # Retry - show message and continue loop
+                                self._ui.show_warning(
+                                    f"Step verification failed (attempt {retry_count}/{max_retries}): "
+                                    f"{verification.message}"
+                                )
+                                continue
+
+                    # Step completed successfully
+                    step.mark_completed(result)
+                    completed_steps.append(step.id)
+                    step_success = True
+                    break
+
+                except StepExecutionError as e:
+                    retry_count += 1
+                    step.retry_count = retry_count
+
+                    if retry_count > max_retries:
+                        choice = await self._handle_step_failure(step, str(e))
+
+                        if choice == "skip":
+                            step.status = StepStatus.SKIPPED
+                            break
+                        elif choice == "rollback" and step_checkpoint:
+                            await self._rollback_to_checkpoint(step_checkpoint)
+                            step.mark_failed(f"Rolled back: {e}")
+                            failed_steps.append(step.id)
+                            return self._make_solve_result(
+                                success=False,
+                                plan=plan,
+                                completed_steps=completed_steps,
+                                failed_steps=failed_steps,
+                                stop_reason="rollback",
+                            )
+                        else:
+                            step.mark_failed(str(e))
+                            failed_steps.append(step.id)
+                            return self._make_solve_result(
+                                success=False,
+                                plan=plan,
+                                completed_steps=completed_steps,
+                                failed_steps=failed_steps,
+                                stop_reason="abort",
+                            )
+                    else:
+                        self._ui.show_warning(
+                            f"Step execution failed (attempt {retry_count}/{max_retries}): {e}"
+                        )
+                        continue
+
+            # If step was neither completed nor skipped, it failed
+            if not step_success and step.status != StepStatus.SKIPPED:
+                step.mark_failed("Max retries exceeded")
+                failed_steps.append(step.id)
+
+        # Step 4: Final plan verification
+        final_verification = None
+        if self._verifier is not None and completed_steps:
+            self._ui.show_progress("Running final verification...")
+            final_verification = await self._verifier.verify_plan(plan)
+
+            if not final_verification.success:
+                self._ui.show_warning(f"Plan verification failed: {final_verification.message}")
+                return self._make_solve_result(
+                    success=False,
+                    plan=plan,
+                    completed_steps=completed_steps,
+                    failed_steps=failed_steps,
+                    verification_result=final_verification,
+                    stop_reason="verification_failed",
+                )
+
+        # Step 5: Return results
+        execution_state.completed_at = datetime.now(timezone.utc)
+        all_success = len(failed_steps) == 0 and len(completed_steps) == len(plan.steps)
+
+        return self._make_solve_result(
+            success=all_success,
+            plan=plan,
+            completed_steps=completed_steps,
+            failed_steps=failed_steps,
+            verification_result=final_verification,
+            stop_reason="completed" if all_success else "partial_success",
+        )
+
+    async def _get_plan_approval(self, plan: Plan) -> bool:
+        """
+        Show plan and get user approval. Returns True if approved.
+
+        Displays the plan with all steps and prompts the user with:
+        "Execute this plan? [Y]es / [N]o / [E]dit"
+
+        Args:
+            plan: The plan to display and get approval for
+
+        Returns:
+            True if user approved, False otherwise
+        """
+        # Display the plan
+        self._ui.show_rule("Execution Plan")
+        self._ui.show_info(f"Goal: {plan.goal}")
+        self._ui.show_info("")
+
+        for i, step in enumerate(plan.steps, 1):
+            tool_info = f" [{step.tool}]" if step.tool else ""
+            read_only_marker = " (read-only)" if step.is_read_only else ""
+            self._ui.show_info(f"  {i}. {step.description}{tool_info}{read_only_marker}")
+
+        self._ui.show_info("")
+
+        # Prompt for approval
+        # Use confirm method which handles Y/N responses
+        response = self._ui.confirm(
+            "Execute this plan? (Y=yes, N=no, E=edit - edit not yet supported)",
+            default=True
+        )
+
+        return response
+
+    def _validate_step_parameters(self, step: Step) -> None:
+        """
+        Validate step parameters before execution.
+
+        Security: Validates LLM-generated parameters to prevent:
+        - Path traversal attacks in file paths
+        - Shell metacharacters in filenames
+        - Dangerous commands that bypassed plan approval
+
+        Args:
+            step: The step to validate
+
+        Raises:
+            StepExecutionError: If validation fails
+        """
+        from pathlib import Path
+        import re
+
+        # Validate file paths for write_file and edit_file
+        if step.tool in ("write_file", "edit_file", "read_file"):
+            path = step.parameters.get("path", "")
+            if not isinstance(path, str):
+                raise StepExecutionError(
+                    message=f"Invalid path parameter type: {type(path)}",
+                    step_id=step.id,
+                    tool_name=step.tool,
+                )
+
+            # Check for path traversal
+            if ".." in path:
+                raise StepExecutionError(
+                    message=f"Path traversal detected in path: {path}",
+                    step_id=step.id,
+                    tool_name=step.tool,
+                )
+
+            # Check for shell metacharacters in filename
+            # (Could be used to break out of quoted paths)
+            dangerous_chars = re.compile(r'[;&|`$(){}[\]<>\'\"\\]')
+            filename = Path(path).name
+            if dangerous_chars.search(filename):
+                raise StepExecutionError(
+                    message=f"Dangerous characters in filename: {filename}",
+                    step_id=step.id,
+                    tool_name=step.tool,
+                )
+
+        # Validate commands for run_command
+        if step.tool == "run_command":
+            command = step.parameters.get("command", "")
+            if not isinstance(command, str):
+                raise StepExecutionError(
+                    message=f"Invalid command parameter type: {type(command)}",
+                    step_id=step.id,
+                    tool_name=step.tool,
+                )
+            # Note: Dangerous command check is done in _execute_step
+            # where we can prompt the user for confirmation
+
+    async def _execute_step(self, step: Step) -> str:
+        """
+        Execute a single step and return the result.
+
+        Uses the existing agent loop's run() method for single-tool execution,
+        or directly executes if tool is simple.
+
+        Args:
+            step: The step to execute
+
+        Returns:
+            String result from execution
+
+        Raises:
+            StepExecutionError: If step execution fails
+        """
+        if step.tool is None:
+            # Think step or no-op - just return description
+            return f"Completed: {step.description}"
+
+        # Security: Validate step parameters before execution
+        self._validate_step_parameters(step)
+
+        try:
+            # Build a minimal task for the step
+            # This uses the existing action executor infrastructure
+            action = AgentAction(
+                thought=f"Executing step: {step.description}",
+                action=step.tool,
+                parameters=step.parameters,
+                is_complete=False,
+            )
+
+            # Security: Even after plan approval, dangerous commands need confirmation
+            # (Issue scrappy-cbu3)
+            auto_confirm = True
+            if step.tool == "run_command":
+                command = step.parameters.get("command", "")
+                if self._approval_policy.is_dangerous(command):
+                    # Prompt user for dangerous commands even in approved plans
+                    if not self._ui.confirm(f"Execute dangerous command: {command}?"):
+                        raise StepExecutionError(
+                            message="User declined dangerous command",
+                            step_id=step.id,
+                            tool_name=step.tool,
+                        )
+
+            # Create minimal state for execution
+            state = ConversationState(
+                messages=[],
+                system_prompt="",
+                iteration=1,
+                auto_confirm=auto_confirm,  # Steps in approved plan are auto-confirmed
+            )
+
+            result = self.execute(action, state)
+
+            if not result.success:
+                raise StepExecutionError(
+                    message=f"Step execution failed: {result.output}",
+                    step_id=step.id,
+                    tool_name=step.tool,
+                )
+
+            return result.output
+
+        except Exception as e:
+            if isinstance(e, StepExecutionError):
+                raise
+            raise StepExecutionError(
+                message=str(e),
+                step_id=step.id,
+                tool_name=step.tool,
+                original_error=e,
+            ) from e
+
+    async def _verify_step(
+        self,
+        step: Step,
+        changed_files: List[str],
+    ) -> VerificationResult:
+        """
+        Run verification on step if needed.
+
+        Args:
+            step: The completed step to verify
+            changed_files: List of files that were modified
+
+        Returns:
+            VerificationResult with success status and any errors
+        """
+        if self._verifier is None:
+            return VerificationResult(
+                success=True,
+                message="Verification skipped (no verifier configured)",
+                files_checked=changed_files,
+            )
+
+        return await self._verifier.verify_step(step, changed_files)
+
+    async def _handle_step_failure(self, step: Step, error: str) -> str:
+        """
+        Escape hatch when step fails after max retries.
+
+        Prompts the user with options:
+        "[E]dit plan, [S]kip step, [R]ollback, [A]bort?"
+
+        Args:
+            step: The step that failed
+            error: Error message from the failure
+
+        Returns:
+            User choice: "edit", "skip", "rollback", or "abort"
+        """
+        self._ui.show_rule("Step Failed")
+        self._ui.show_error(f"Step '{step.description}' failed after {step.retry_count} attempts.")
+        self._ui.show_error(f"Error: {error}")
+        self._ui.show_info("")
+        self._ui.show_info("[E]dit plan  [S]kip step  [R]ollback  [A]bort")
+
+        # Use Python's built-in input() with try/except wrapper
+        # This avoids duck-typing the UI protocol
+        while True:
+            try:
+                choice = input("> ").strip().lower()
+
+                if choice in ('e', 'edit'):
+                    return "edit"
+                elif choice in ('s', 'skip'):
+                    return "skip"
+                elif choice in ('r', 'rollback'):
+                    return "rollback"
+                elif choice in ('a', 'abort', ''):
+                    return "abort"
+                else:
+                    self._ui.show_warning("Invalid choice. Please enter E, S, R, or A.")
+            except (EOFError, KeyboardInterrupt):
+                return "abort"
+
+    def _show_step_progress(self, plan: Plan, step: Step) -> None:
+        """
+        Display step progress: "[Step 2/5] Writing login endpoint..."
+
+        Args:
+            plan: The plan containing the step
+            step: The current step being executed
+        """
+        try:
+            step_index = plan.steps.index(step) + 1
+        except ValueError:
+            step_index = 1
+        total_steps = len(plan.steps)
+
+        self._ui.show_progress(f"[Step {step_index}/{total_steps}] {step.description}")
+
+    async def _checkpoint_if_needed(self, step: Step) -> Optional[str]:
+        """
+        Create git checkpoint before modifying steps.
+
+        Only creates checkpoint for non-read-only steps.
+
+        Args:
+            step: The step about to be executed
+
+        Returns:
+            Commit hash of the checkpoint, or None if not needed/failed
+        """
+        if step.is_read_only:
+            return None
+
+        try:
+            commit_hash = create_git_checkpoint(self._project_root)
+            if commit_hash:
+                self._ui.show_info(f"Checkpoint: {commit_hash[:8]}")
+            return commit_hash
+        except Exception as e:
+            self._ui.show_warning(f"Could not create checkpoint: {e}")
+            return None
+
+    async def _rollback_to_checkpoint(self, commit_hash: str) -> None:
+        """
+        Git reset --hard to checkpoint.
+
+        Args:
+            commit_hash: The commit hash to roll back to
+        """
+        success = rollback_to_checkpoint(commit_hash, self._project_root)
+        if success:
+            self._ui.show_info(f"Rolled back to: {commit_hash[:8]}")
+        else:
+            self._ui.show_error(f"Failed to rollback to: {commit_hash}")
+
+    def _extract_changed_files(self, step: Step, result: str) -> List[str]:
+        """
+        Extract list of changed files from step parameters or result.
+
+        Args:
+            step: The executed step
+            result: The execution result string
+
+        Returns:
+            List of file paths that were potentially modified
+        """
+        changed_files: List[str] = []
+
+        # Check step parameters for file paths
+        if step.tool in ("write_file", "edit_file"):
+            path = step.parameters.get("path")
+            if path and isinstance(path, str):
+                changed_files.append(path)
+
+        # For run_command, we can't easily know what files changed
+        # The result might contain file paths, but parsing is unreliable
+
+        return changed_files
+
+    def _make_solve_result(
+        self,
+        success: bool,
+        plan: Plan,
+        completed_steps: List[str],
+        failed_steps: List[str],
+        verification_result: Optional[VerificationResult] = None,
+        stop_reason: str = "completed",
+    ) -> Dict[str, Any]:
+        """
+        Create a standardized result dictionary for solve().
+
+        Args:
+            success: Whether the overall operation succeeded
+            plan: The execution plan
+            completed_steps: List of completed step IDs
+            failed_steps: List of failed step IDs
+            verification_result: Final verification result if any
+            stop_reason: Why execution stopped
+
+        Returns:
+            Dict with solve results
+        """
+        result: Dict[str, Any] = {
+            "success": success,
+            "plan": plan,
+            "completed_steps": completed_steps,
+            "failed_steps": failed_steps,
+            "stop_reason": stop_reason,
+        }
+
+        if verification_result is not None:
+            result["verification_result"] = verification_result
+
+        # Add summary
+        total = len(plan.steps)
+        completed = len(completed_steps)
+        failed = len(failed_steps)
+        skipped = total - completed - failed
+
+        if success:
+            result["summary"] = f"Plan completed successfully ({completed}/{total} steps)"
+        else:
+            result["summary"] = (
+                f"Plan execution stopped: {stop_reason} "
+                f"({completed} completed, {failed} failed, {skipped} skipped)"
+            )
+
+        return result

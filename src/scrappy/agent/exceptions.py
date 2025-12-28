@@ -208,6 +208,53 @@ class MaxRetriesExceededError(AgentLoopError):
         self.last_error = last_error
 
 
+class PlanRevisionLimitError(AgentLoopError):
+    """
+    Raised when plan revision hits the soft limit.
+
+    This is raised to give the user a chance to intervene before
+    hitting the hard cap. The user can choose to continue or stop.
+
+    Attributes:
+        plan_id: ID of the plan that hit the limit
+        revision_count: Current number of revisions
+        soft_limit: The soft limit that was reached
+        feedback: The feedback that triggered the revision attempt
+    """
+
+    def __init__(
+        self,
+        plan_id: str,
+        revision_count: int,
+        soft_limit: int,
+        feedback: str,
+        context: Optional[dict[str, Any]] = None,
+    ):
+        """
+        Initialize plan revision limit error.
+
+        Args:
+            plan_id: ID of the plan
+            revision_count: Current revision count
+            soft_limit: The soft limit value
+            feedback: Feedback that would trigger revision
+            context: Additional context
+        """
+        ctx = context or {}
+        ctx["plan_id"] = plan_id
+        ctx["revision_count"] = revision_count
+        ctx["soft_limit"] = soft_limit
+        message = (
+            f"Plan '{plan_id}' has been revised {revision_count} times "
+            f"(soft limit: {soft_limit}). User intervention required."
+        )
+        super().__init__(message, ctx)
+        self.plan_id = plan_id
+        self.revision_count = revision_count
+        self.soft_limit = soft_limit
+        self.feedback = feedback
+
+
 class StepExecutionError(AgentLoopError):
     """
     Raised when a step fails to execute.

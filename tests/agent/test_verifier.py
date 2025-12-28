@@ -122,29 +122,31 @@ class TestRunTests:
         assert "No test paths" in result.output
 
     @pytest.mark.asyncio
-    async def test_run_tests_all_passed(self, verifier: Verifier):
+    async def test_run_tests_all_passed(self, verifier: Verifier, tmp_path: Path):
         """run_tests should report success when all tests pass."""
         mock_output = "5 passed in 0.5s"
+        test_path = str(tmp_path / "tests")
 
         with patch.object(verifier, "_run_subprocess") as mock_subprocess:
             mock_subprocess.return_value = (mock_output, "", 0)
-            result = await verifier.run_tests(["tests/"])
+            result = await verifier.run_tests([test_path])
 
         assert result.success is True
         assert result.passed == 5
         assert result.failed == 0
 
     @pytest.mark.asyncio
-    async def test_run_tests_some_failed(self, verifier: Verifier):
+    async def test_run_tests_some_failed(self, verifier: Verifier, tmp_path: Path):
         """run_tests should report failure when tests fail."""
         mock_output = """
         FAILED tests/test_foo.py::test_bar - AssertionError
         3 passed, 2 failed, 1 skipped
         """
+        test_path = str(tmp_path / "tests")
 
         with patch.object(verifier, "_run_subprocess") as mock_subprocess:
             mock_subprocess.return_value = (mock_output, "", 1)
-            result = await verifier.run_tests(["tests/"])
+            result = await verifier.run_tests([test_path])
 
         assert result.success is False
         assert result.passed == 3
@@ -154,22 +156,26 @@ class TestRunTests:
         assert "FAILED" in result.errors[0]
 
     @pytest.mark.asyncio
-    async def test_run_tests_tool_not_found(self, verifier: Verifier):
+    async def test_run_tests_tool_not_found(self, verifier: Verifier, tmp_path: Path):
         """run_tests should handle pytest not being installed."""
+        test_path = str(tmp_path / "tests")
+
         with patch.object(verifier, "_run_subprocess") as mock_subprocess:
             mock_subprocess.return_value = None  # Indicates tool not found
-            result = await verifier.run_tests(["tests/"])
+            result = await verifier.run_tests([test_path])
 
         assert result.success is True
         assert result.passed == 0
         assert "not installed" in result.output
 
     @pytest.mark.asyncio
-    async def test_run_tests_timeout(self, verifier: Verifier):
+    async def test_run_tests_timeout(self, verifier: Verifier, tmp_path: Path):
         """run_tests should handle timeout gracefully."""
+        test_path = str(tmp_path / "tests")
+
         with patch.object(verifier, "_run_subprocess") as mock_subprocess:
             mock_subprocess.side_effect = asyncio.TimeoutError()
-            result = await verifier.run_tests(["tests/"])
+            result = await verifier.run_tests([test_path])
 
         assert result.success is False
         assert "timed out" in result.errors[0]
@@ -193,19 +199,22 @@ class TestRunLint:
         assert result.warning_count == 0
 
     @pytest.mark.asyncio
-    async def test_run_lint_no_issues(self, verifier: Verifier):
+    async def test_run_lint_no_issues(self, verifier: Verifier, tmp_path: Path):
         """run_lint should report success when no issues found."""
+        src_path = str(tmp_path / "src" / "foo.py")
+
         with patch.object(verifier, "_run_subprocess") as mock_subprocess:
             mock_subprocess.return_value = ("[]", "", 0)
-            result = await verifier.run_lint(["src/foo.py"])
+            result = await verifier.run_lint([src_path])
 
         assert result.success is True
         assert result.error_count == 0
         assert result.warning_count == 0
 
     @pytest.mark.asyncio
-    async def test_run_lint_with_errors(self, verifier: Verifier):
+    async def test_run_lint_with_errors(self, verifier: Verifier, tmp_path: Path):
         """run_lint should parse errors from JSON output."""
+        src_path = str(tmp_path / "src" / "foo.py")
         ruff_output = json.dumps([
             {
                 "filename": "src/foo.py",
@@ -223,7 +232,7 @@ class TestRunLint:
 
         with patch.object(verifier, "_run_subprocess") as mock_subprocess:
             mock_subprocess.return_value = (ruff_output, "", 1)
-            result = await verifier.run_lint(["src/foo.py"])
+            result = await verifier.run_lint([src_path])
 
         assert result.success is False
         assert result.error_count == 2
@@ -232,8 +241,9 @@ class TestRunLint:
         assert "F401" in result.errors[1]
 
     @pytest.mark.asyncio
-    async def test_run_lint_with_warnings(self, verifier: Verifier):
+    async def test_run_lint_with_warnings(self, verifier: Verifier, tmp_path: Path):
         """run_lint should separate warnings from errors."""
+        src_path = str(tmp_path / "src" / "foo.py")
         ruff_output = json.dumps([
             {
                 "filename": "src/foo.py",
@@ -245,7 +255,7 @@ class TestRunLint:
 
         with patch.object(verifier, "_run_subprocess") as mock_subprocess:
             mock_subprocess.return_value = (ruff_output, "", 0)
-            result = await verifier.run_lint(["src/foo.py"])
+            result = await verifier.run_lint([src_path])
 
         assert result.success is True  # Warnings don't cause failure
         assert result.error_count == 0
@@ -253,32 +263,38 @@ class TestRunLint:
         assert "W503" in result.warnings[0]
 
     @pytest.mark.asyncio
-    async def test_run_lint_tool_not_found(self, verifier: Verifier):
+    async def test_run_lint_tool_not_found(self, verifier: Verifier, tmp_path: Path):
         """run_lint should handle ruff not being installed."""
+        src_path = str(tmp_path / "src" / "foo.py")
+
         with patch.object(verifier, "_run_subprocess") as mock_subprocess:
             mock_subprocess.return_value = None
-            result = await verifier.run_lint(["src/foo.py"])
+            result = await verifier.run_lint([src_path])
 
         assert result.success is True
         assert result.error_count == 0
 
     @pytest.mark.asyncio
-    async def test_run_lint_timeout(self, verifier: Verifier):
+    async def test_run_lint_timeout(self, verifier: Verifier, tmp_path: Path):
         """run_lint should handle timeout gracefully."""
+        src_path = str(tmp_path / "src" / "foo.py")
+
         with patch.object(verifier, "_run_subprocess") as mock_subprocess:
             mock_subprocess.side_effect = asyncio.TimeoutError()
-            result = await verifier.run_lint(["src/foo.py"])
+            result = await verifier.run_lint([src_path])
 
         assert result.success is False
         assert result.error_count == 1
         assert "timed out" in result.errors[0]
 
     @pytest.mark.asyncio
-    async def test_run_lint_invalid_json(self, verifier: Verifier):
+    async def test_run_lint_invalid_json(self, verifier: Verifier, tmp_path: Path):
         """run_lint should handle invalid JSON output."""
+        src_path = str(tmp_path / "src" / "foo.py")
+
         with patch.object(verifier, "_run_subprocess") as mock_subprocess:
             mock_subprocess.return_value = ("not valid json", "", 1)
-            result = await verifier.run_lint(["src/foo.py"])
+            result = await verifier.run_lint([src_path])
 
         assert result.success is False
         assert result.error_count == 1
@@ -302,29 +318,31 @@ class TestRunTypecheck:
         assert result.error_count == 0
 
     @pytest.mark.asyncio
-    async def test_run_typecheck_no_errors(self, verifier: Verifier):
+    async def test_run_typecheck_no_errors(self, verifier: Verifier, tmp_path: Path):
         """run_typecheck should report success when no errors found."""
         mock_output = "Success: no issues found in 5 source files"
+        src_path = str(tmp_path / "src")
 
         with patch.object(verifier, "_run_subprocess") as mock_subprocess:
             mock_subprocess.return_value = (mock_output, "", 0)
-            result = await verifier.run_typecheck(["src/"])
+            result = await verifier.run_typecheck([src_path])
 
         assert result.success is True
         assert result.error_count == 0
 
     @pytest.mark.asyncio
-    async def test_run_typecheck_with_errors(self, verifier: Verifier):
+    async def test_run_typecheck_with_errors(self, verifier: Verifier, tmp_path: Path):
         """run_typecheck should parse errors from output."""
         mock_output = """
         src/foo.py:10: error: Incompatible return type
         src/foo.py:20: error: Argument has incompatible type
         Found 2 errors in 1 file
         """
+        src_path = str(tmp_path / "src")
 
         with patch.object(verifier, "_run_subprocess") as mock_subprocess:
             mock_subprocess.return_value = (mock_output, "", 1)
-            result = await verifier.run_typecheck(["src/"])
+            result = await verifier.run_typecheck([src_path])
 
         assert result.success is False
         assert result.error_count == 2
@@ -332,16 +350,17 @@ class TestRunTypecheck:
         assert "Argument has incompatible type" in result.errors[1]
 
     @pytest.mark.asyncio
-    async def test_run_typecheck_with_notes(self, verifier: Verifier):
+    async def test_run_typecheck_with_notes(self, verifier: Verifier, tmp_path: Path):
         """run_typecheck should treat notes as warnings."""
         mock_output = """
         src/foo.py:10: note: Consider using Optional
         Success: no issues found
         """
+        src_path = str(tmp_path / "src")
 
         with patch.object(verifier, "_run_subprocess") as mock_subprocess:
             mock_subprocess.return_value = (mock_output, "", 0)
-            result = await verifier.run_typecheck(["src/"])
+            result = await verifier.run_typecheck([src_path])
 
         assert result.success is True
         assert result.error_count == 0
@@ -349,21 +368,25 @@ class TestRunTypecheck:
         assert "Optional" in result.warnings[0]
 
     @pytest.mark.asyncio
-    async def test_run_typecheck_tool_not_found(self, verifier: Verifier):
+    async def test_run_typecheck_tool_not_found(self, verifier: Verifier, tmp_path: Path):
         """run_typecheck should handle mypy not being installed."""
+        src_path = str(tmp_path / "src")
+
         with patch.object(verifier, "_run_subprocess") as mock_subprocess:
             mock_subprocess.return_value = None
-            result = await verifier.run_typecheck(["src/"])
+            result = await verifier.run_typecheck([src_path])
 
         assert result.success is True
         assert result.error_count == 0
 
     @pytest.mark.asyncio
-    async def test_run_typecheck_timeout(self, verifier: Verifier):
+    async def test_run_typecheck_timeout(self, verifier: Verifier, tmp_path: Path):
         """run_typecheck should handle timeout gracefully."""
+        src_path = str(tmp_path / "src")
+
         with patch.object(verifier, "_run_subprocess") as mock_subprocess:
             mock_subprocess.side_effect = asyncio.TimeoutError()
-            result = await verifier.run_typecheck(["src/"])
+            result = await verifier.run_typecheck([src_path])
 
         assert result.success is False
         assert result.error_count == 1
@@ -878,3 +901,75 @@ class TestParseMypyOutput:
         assert len(errors) == 0
         assert len(warnings) == 1
         assert "Optional" in warnings[0]
+
+
+# =============================================================================
+# Path Validation Security Tests
+# =============================================================================
+
+
+class TestPathValidation:
+    """Security tests for path traversal prevention."""
+
+    def test_validate_path_within_project(self, verifier: Verifier, tmp_path: Path):
+        """Valid paths within project root should pass."""
+        valid_path = str(tmp_path / "src" / "foo.py")
+        assert verifier._validate_path(valid_path) is True
+
+    def test_validate_path_project_root_itself(self, verifier: Verifier, tmp_path: Path):
+        """Project root itself should be valid."""
+        assert verifier._validate_path(str(tmp_path)) is True
+
+    def test_validate_path_traversal_attack(self, verifier: Verifier, tmp_path: Path):
+        """Path traversal attempts should be rejected."""
+        # Attempt to escape project root
+        malicious_paths = [
+            str(tmp_path / ".." / "etc" / "passwd"),
+            str(tmp_path / "src" / ".." / ".." / "etc" / "passwd"),
+            "/etc/passwd",
+            "C:\\Windows\\System32\\config",
+        ]
+
+        for malicious_path in malicious_paths:
+            assert verifier._validate_path(malicious_path) is False, \
+                f"Path traversal not blocked: {malicious_path}"
+
+    def test_validate_path_absolute_outside_project(self, verifier: Verifier):
+        """Absolute paths outside project should be rejected."""
+        # Use a path that definitely isn't in the project
+        assert verifier._validate_path("/tmp/malicious.py") is False
+        assert verifier._validate_path("/etc/hosts") is False
+
+    def test_validate_paths_filters_invalid(self, verifier: Verifier, tmp_path: Path):
+        """_validate_paths should raise on invalid paths."""
+        from scrappy.agent.verifier import PathValidationError
+
+        valid = str(tmp_path / "src" / "foo.py")
+        invalid = "/etc/passwd"
+
+        with pytest.raises(PathValidationError):
+            verifier._validate_paths([valid, invalid])
+
+    @pytest.mark.asyncio
+    async def test_run_tests_rejects_traversal(self, verifier: Verifier):
+        """run_tests should reject path traversal attempts."""
+        result = await verifier.run_tests(["/etc/passwd", "../../../etc/shadow"])
+
+        assert result.success is False
+        assert "Path validation failed" in result.errors[0]
+
+    @pytest.mark.asyncio
+    async def test_run_lint_rejects_traversal(self, verifier: Verifier):
+        """run_lint should reject path traversal attempts."""
+        result = await verifier.run_lint(["/etc/passwd"])
+
+        assert result.success is False
+        assert "Path validation failed" in result.errors[0]
+
+    @pytest.mark.asyncio
+    async def test_run_typecheck_rejects_traversal(self, verifier: Verifier):
+        """run_typecheck should reject path traversal attempts."""
+        result = await verifier.run_typecheck(["/etc/passwd"])
+
+        assert result.success is False
+        assert "Path validation failed" in result.errors[0]
