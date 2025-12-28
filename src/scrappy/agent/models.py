@@ -323,6 +323,11 @@ class VerificationPolicy(BaseModel):
         ge=1,
         description="Hard limit on plan revisions (fail after this)",
     )
+    min_revision_interval_seconds: float = Field(
+        default=5.0,
+        ge=0.0,
+        description="Minimum seconds between plan revisions (rate limiting)",
+    )
 
     def should_fail(
         self,

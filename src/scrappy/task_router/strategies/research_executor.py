@@ -475,7 +475,7 @@ class ResearchExecutor(ProviderAwareStrategy):
         await output.stream_start(metadata={"provider": provider_to_use, "task_type": "research"})
 
         # Estimate tokens for context-aware model selection
-        prompt_chars = len(task.original_input) + len(system_prompt)
+        prompt_chars = len(task.original_input) + len(system_prompt or "")
         estimated_tokens = (prompt_chars // 4) + 2000  # Buffer for response
 
         try:
@@ -485,7 +485,7 @@ class ResearchExecutor(ProviderAwareStrategy):
                 system_prompt=system_prompt,
                 max_tokens=2000,
                 temperature=0.3,
-                min_context=estimated_tokens if estimated_tokens > 30000 else 0,
+                min_context=estimated_tokens if estimated_tokens and estimated_tokens > 30000 else 0,
             ):
                 if chunk.content:
                     full_content += chunk.content

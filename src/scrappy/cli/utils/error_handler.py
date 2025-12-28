@@ -4,16 +4,98 @@ Consistent error handling utilities for CLI operations.
 This module provides a unified approach to error handling across the CLI,
 ensuring consistent user messaging, appropriate styling, and actionable
 suggestions for common error types.
+
+Security: This module sanitizes error messages to prevent information disclosure.
+Sensitive data (API keys, tokens, passwords, home paths) is redacted before display.
+Full stack traces are only shown in debug mode (SCRAPPY_DEBUG=1).
 """
 
 from enum import IntEnum
+import os
 from pathlib import Path
-from typing import Any, Callable, Optional, Tuple, Union, Dict, Type
+import re
+from typing import Any, Callable, Optional, Tuple, Dict, Type
 import json
 import traceback
 
 from ..io_interface import CLIIOProtocol
 from ..validators import is_empty_or_whitespace
+
+
+# Redaction placeholder
+_REDACTED = "[REDACTED]"
+
+# Patterns for detecting sensitive data in error messages
+_SECRET_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    # OpenAI/Anthropic API keys: sk-..., sk-proj-..., etc.
+    (re.compile(r'\bsk-[a-zA-Z0-9_-]{20,}\b'), _REDACTED),
+    # Generic API key patterns in key=value format
+    (re.compile(r'(?i)(api[_-]?key|apikey)\s*[=:]\s*["\']?[a-zA-Z0-9_-]{10,}["\']?'), r'\1=' + _REDACTED),
+    # Bearer tokens
+    (re.compile(r'(?i)bearer\s+[a-zA-Z0-9_.-]{10,}'), 'Bearer ' + _REDACTED),
+    # Authorization headers with tokens
+    (re.compile(r'(?i)(authorization)\s*[=:]\s*["\']?[a-zA-Z0-9_.-]{10,}["\']?'), r'\1=' + _REDACTED),
+    # Password patterns in key=value format
+    (re.compile(r'(?i)(password|passwd|pwd|secret)\s*[=:]\s*["\']?[^\s"\']{1,}["\']?'), r'\1=' + _REDACTED),
+    # AWS access keys
+    (re.compile(r'\b(AKIA|ABIA|ACCA|ASIA)[A-Z0-9]{16}\b'), _REDACTED),
+    # AWS secret keys (40 char base64-ish)
+    (re.compile(r'(?i)(aws[_-]?secret[_-]?access[_-]?key)\s*[=:]\s*["\']?[a-zA-Z0-9/+=]{40}["\']?'), r'\1=' + _REDACTED),
+    # Generic tokens in key=value format
+    (re.compile(r'(?i)(token|access[_-]?token|auth[_-]?token)\s*[=:]\s*["\']?[a-zA-Z0-9_.-]{10,}["\']?'), r'\1=' + _REDACTED),
+]
+
+# Patterns for home directory paths (platform-aware)
+_HOME_PATH_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    # Unix home paths: /home/username/..., /Users/username/...
+    (re.compile(r'/(?:home|Users)/[^/\s]+'), '~'),
+    # Windows home paths: C:\Users\username\...
+    (re.compile(r'[A-Za-z]:\\Users\\[^\\]+'), '~'),
+]
+
+
+def is_debug_mode() -> bool:
+    """
+    Check if debug mode is enabled via SCRAPPY_DEBUG environment variable.
+
+    Returns:
+        True if SCRAPPY_DEBUG is set to a truthy value (1, true, yes)
+    """
+    debug_val = os.environ.get('SCRAPPY_DEBUG', '').lower()
+    return debug_val in ('1', 'true', 'yes')
+
+
+def sanitize_message(message: str) -> str:
+    """
+    Remove sensitive information from an error message.
+
+    Detects and redacts:
+    - API keys (sk-*, api_key=*, etc.)
+    - Bearer tokens
+    - Password patterns
+    - AWS credentials
+    - Home directory paths
+
+    Args:
+        message: The raw error message
+
+    Returns:
+        Sanitized message with sensitive data redacted
+    """
+    if not message:
+        return message
+
+    result = message
+
+    # Apply secret patterns
+    for pattern, replacement in _SECRET_PATTERNS:
+        result = pattern.sub(replacement, result)
+
+    # Apply home path patterns
+    for pattern, replacement in _HOME_PATH_PATTERNS:
+        result = pattern.sub(replacement, result)
+
+    return result
 
 
 class ErrorSeverity(IntEnum):
@@ -121,12 +203,15 @@ def format_error(
     """
     Convert an exception to a user-friendly error message.
 
+    Security: Messages are always sanitized to remove sensitive data.
+    Tracebacks are only included in debug mode (SCRAPPY_DEBUG=1).
+
     Args:
         exception: The exception to format
-        include_traceback: Whether to include the full traceback
+        include_traceback: Whether to include the full traceback (only in debug mode)
 
     Returns:
-        A user-friendly error message string
+        A user-friendly, sanitized error message string
     """
     if exception is None:
         return "An unexpected error occurred. Please try again."
@@ -156,10 +241,13 @@ def format_error(
         # Very short messages need more context
         message = f"{_get_descriptive_message(exception)}: {message}"
 
-    # Include traceback if requested
-    if include_traceback:
+    # Include traceback only in debug mode (security: prevents path/env disclosure)
+    if include_traceback and is_debug_mode():
         tb = traceback.format_exception(type(exception), exception, exception.__traceback__)
         message = "".join(tb)
+
+    # Sanitize message to remove sensitive data (API keys, tokens, passwords, paths)
+    message = sanitize_message(message)
 
     # Truncate very long messages
     max_length = 500

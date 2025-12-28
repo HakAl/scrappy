@@ -4,6 +4,7 @@ Tests for the Planner component.
 Tests plan generation, revision, and policy enforcement with mocked LLM.
 """
 
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import pytest
@@ -25,6 +26,7 @@ from scrappy.agent.exceptions import (
     PlanCreationError,
     PlanRevisionLimitError,
     MaxRetriesExceededError,
+    RevisionThrottleError,
 )
 
 
@@ -481,7 +483,12 @@ class TestRevisionFlow:
     @pytest.mark.asyncio
     async def test_revision_flow_auto_revisions(self, simple_plan_response: PlanResponse):
         """Plan should allow auto-revisions up to soft limit."""
-        policy = VerificationPolicy(max_plan_revisions=2, hard_revision_cap=5)
+        # Disable throttle to test revision count limits
+        policy = VerificationPolicy(
+            max_plan_revisions=2,
+            hard_revision_cap=5,
+            min_revision_interval_seconds=0.0,
+        )
         client = MockLLMClient(response=simple_plan_response)
         planner = Planner(client=client, verification_policy=policy)
 
@@ -595,7 +602,7 @@ class TestPlanRevisionLimitError:
         assert error.feedback == "Step failed"
 
     def test_error_message(self):
-        """Error should have informative message."""
+        """Error should have informative message with cost warning."""
         error = PlanRevisionLimitError(
             plan_id="plan-123",
             revision_count=3,
@@ -607,7 +614,9 @@ class TestPlanRevisionLimitError:
         assert "plan-123" in message
         assert "3" in message
         assert "2" in message
-        assert "intervention" in message.lower()
+        # Message should warn about costs
+        assert "cost" in message.lower()
+        assert "credit" in message.lower()
 
     def test_error_context(self):
         """Error should include context dict."""
@@ -707,3 +716,173 @@ class TestPlannerEdgeCases:
 
         # Should be the same error, not wrapped
         assert exc_info.value is original_error
+
+
+# =============================================================================
+# Time-Based Throttling Tests
+# =============================================================================
+
+
+class TestRevisionThrottling:
+    """Tests for time-based revision rate limiting."""
+
+    @pytest.mark.asyncio
+    async def test_first_revision_not_throttled(self, simple_plan_response: PlanResponse):
+        """First revision should not be throttled (no previous revision time)."""
+        policy = VerificationPolicy(min_revision_interval_seconds=5.0)
+        client = MockLLMClient(response=simple_plan_response)
+        planner = Planner(client=client, verification_policy=policy)
+
+        plan = Plan(id="plan-test", goal="Fix bug", steps=[], revision_count=0)
+
+        # Should succeed - no previous revision time set
+        revised = await planner.revise_plan(plan, feedback="Try again")
+        assert revised.revision_count == 1
+
+    @pytest.mark.asyncio
+    async def test_rapid_revision_is_throttled(self, simple_plan_response: PlanResponse):
+        """Rapid successive revisions should be throttled."""
+        policy = VerificationPolicy(min_revision_interval_seconds=5.0)
+        client = MockLLMClient(response=simple_plan_response)
+        planner = Planner(client=client, verification_policy=policy)
+
+        plan = Plan(id="plan-test", goal="Fix bug", steps=[], revision_count=0)
+
+        # First revision succeeds
+        revised = await planner.revise_plan(plan, feedback="First attempt")
+
+        # Immediate second revision should be throttled
+        with pytest.raises(RevisionThrottleError) as exc_info:
+            await planner.revise_plan(revised, feedback="Second attempt")
+
+        error = exc_info.value
+        assert error.plan_id == "plan-test"
+        assert error.min_interval == 5.0
+        assert error.seconds_remaining > 0
+
+    @pytest.mark.asyncio
+    async def test_throttle_respects_zero_interval(self, simple_plan_response: PlanResponse):
+        """Zero interval should disable throttling."""
+        policy = VerificationPolicy(min_revision_interval_seconds=0.0)
+        client = MockLLMClient(response=simple_plan_response)
+        planner = Planner(client=client, verification_policy=policy)
+
+        plan = Plan(id="plan-test", goal="Fix bug", steps=[], revision_count=0)
+
+        # Both revisions should succeed immediately
+        revised = await planner.revise_plan(plan, feedback="First")
+        revised2 = await planner.revise_plan(revised, feedback="Second")
+        assert revised2.revision_count == 2
+
+    @pytest.mark.asyncio
+    async def test_throttle_allows_after_interval(self, simple_plan_response: PlanResponse):
+        """Revision should be allowed after interval passes."""
+        policy = VerificationPolicy(min_revision_interval_seconds=0.1)  # Short interval for test
+        client = MockLLMClient(response=simple_plan_response)
+        planner = Planner(client=client, verification_policy=policy)
+
+        plan = Plan(id="plan-test", goal="Fix bug", steps=[], revision_count=0)
+
+        # First revision
+        revised = await planner.revise_plan(plan, feedback="First")
+
+        # Simulate time passing by manipulating _last_revision_time
+        planner._last_revision_time = datetime.now(timezone.utc) - timedelta(seconds=1)
+
+        # Second revision should now succeed
+        revised2 = await planner.revise_plan(revised, feedback="Second")
+        assert revised2.revision_count == 2
+
+    @pytest.mark.asyncio
+    async def test_throttle_error_attributes(self, simple_plan_response: PlanResponse):
+        """RevisionThrottleError should have correct attributes."""
+        policy = VerificationPolicy(min_revision_interval_seconds=10.0)
+        client = MockLLMClient(response=simple_plan_response)
+        planner = Planner(client=client, verification_policy=policy)
+
+        plan = Plan(id="plan-test", goal="Fix bug", steps=[], revision_count=0)
+
+        await planner.revise_plan(plan, feedback="First")
+
+        with pytest.raises(RevisionThrottleError) as exc_info:
+            await planner.revise_plan(plan, feedback="Second")
+
+        error = exc_info.value
+        assert error.plan_id == "plan-test"
+        assert error.min_interval == 10.0
+        assert 0 < error.seconds_remaining <= 10.0
+        assert "throttled" in str(error).lower()
+        assert error.context["plan_id"] == "plan-test"
+
+    @pytest.mark.asyncio
+    async def test_throttle_checked_before_limits(self, simple_plan_response: PlanResponse):
+        """Throttle should be checked before soft/hard limits."""
+        # If throttle is checked first, we get throttle error even at limit
+        policy = VerificationPolicy(
+            min_revision_interval_seconds=5.0,
+            max_plan_revisions=1,  # At limit after first revision
+        )
+        client = MockLLMClient(response=simple_plan_response)
+        planner = Planner(client=client, verification_policy=policy)
+
+        plan = Plan(id="plan-test", goal="Fix bug", steps=[], revision_count=0)
+
+        # First revision succeeds (reaches soft limit)
+        revised = await planner.revise_plan(plan, feedback="First")
+        assert revised.revision_count == 1
+
+        # Immediate second revision hits throttle (checked first)
+        with pytest.raises(RevisionThrottleError):
+            await planner.revise_plan(revised, feedback="Second")
+
+
+class TestRevisionThrottleError:
+    """Tests for RevisionThrottleError exception."""
+
+    def test_error_message_format(self):
+        """Error message should include key information."""
+        error = RevisionThrottleError(
+            plan_id="plan-abc",
+            seconds_remaining=3.5,
+            min_interval=5.0,
+        )
+
+        message = str(error)
+        assert "plan-abc" in message
+        assert "3.5" in message
+        assert "5" in message
+        assert "wait" in message.lower()
+
+    def test_error_context(self):
+        """Error should include context dict."""
+        error = RevisionThrottleError(
+            plan_id="plan-xyz",
+            seconds_remaining=2.0,
+            min_interval=10.0,
+        )
+
+        assert error.context["plan_id"] == "plan-xyz"
+        assert error.context["seconds_remaining"] == 2.0
+        assert error.context["min_interval"] == 10.0
+
+
+# =============================================================================
+# Updated Soft Limit Message Tests
+# =============================================================================
+
+
+class TestCostWarningMessage:
+    """Tests for cost warning in soft limit message."""
+
+    def test_soft_limit_message_warns_about_costs(self):
+        """PlanRevisionLimitError message should warn about API costs."""
+        error = PlanRevisionLimitError(
+            plan_id="plan-123",
+            revision_count=2,
+            soft_limit=2,
+            feedback="Step failed",
+        )
+
+        message = str(error)
+        assert "cost" in message.lower()
+        assert "credit" in message.lower()

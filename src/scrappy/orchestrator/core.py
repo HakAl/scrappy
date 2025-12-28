@@ -540,7 +540,7 @@ class AgentOrchestrator:
                 session_preferred = self._preferred_models.get(selection_type)
 
                 # Select specific model (deterministic, priority-based)
-                model = self.model_selector.select(selection_type, session_preferred)
+                model = self.model_selector.select(selection_type, session_preferred=session_preferred)
 
                 # Update session preference (sticky for this session)
                 self._preferred_models[selection_type] = model
@@ -721,7 +721,7 @@ class AgentOrchestrator:
                 session_preferred = self._preferred_models.get(selection_type)
 
                 # Select specific model (deterministic, priority-based)
-                model = self.model_selector.select(selection_type, session_preferred)
+                model = self.model_selector.select(selection_type, session_preferred=session_preferred)
 
                 # Update session preference (sticky for this session)
                 self._preferred_models[selection_type] = model

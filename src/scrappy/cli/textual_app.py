@@ -826,12 +826,21 @@ class ScrappyApp(App):
         def progress_callback(
             message: str, progress: int = 0, total: int = 0
         ) -> None:
-            if self.is_running and not self._should_stop_consumer:
+            # Always try to post the message - post_message is thread-safe in Textual
+            # Remove is_running check as it may reject valid messages during startup race
+            if not self._should_stop_consumer:
+                logger.debug(f"Posting indexing progress: {message}")
                 self.post_message(IndexingProgress(
                     message=message, progress=progress, total=total
                 ))
 
         context.set_indexing_progress_callback(progress_callback)
+
+        # Check if semantic search is already ready (init completed before callback was set)
+        # If so, send a ready message to update the UI directly (bypass is_running check)
+        if hasattr(context, 'is_semantic_search_ready') and context.is_semantic_search_ready():
+            logger.info("Semantic search already ready when callback registered, posting ready message")
+            self.post_message(IndexingProgress(message="Semantic search ready", progress=0, total=0))
 
     def _register_user_theme(self) -> None:
         """Register theme from ThemeProtocol with Textual."""

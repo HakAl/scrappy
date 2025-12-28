@@ -407,6 +407,7 @@ class MainAppScreen(Screen):
             or message.startswith("Indexing failed")
             or message == "Semantic search ready"
             or message == "Index up to date - no changes detected"
+            or message == "Incremental update complete"
             or message == "No files to index"
             or message == "Indexing cancelled"
             or message == "No file collector available"

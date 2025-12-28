@@ -5,6 +5,7 @@ Uses LLM with Instructor to generate structured Plan objects from
 natural language requests.
 """
 
+from datetime import datetime, timezone
 from typing import Any, Optional, Protocol, runtime_checkable
 import uuid
 
@@ -21,6 +22,7 @@ from .exceptions import (
     PlanCreationError,
     PlanRevisionLimitError,
     MaxRetriesExceededError,
+    RevisionThrottleError,
 )
 
 
@@ -171,6 +173,7 @@ class Planner:
         self._policy = policy or ApprovalPolicy()
         self._verification_policy = verification_policy or VerificationPolicy()
         self._model = model
+        self._last_revision_time: Optional[datetime] = None
 
     @property
     def policy(self) -> ApprovalPolicy:
@@ -241,7 +244,7 @@ class Planner:
         Revise plan based on failure feedback.
 
         Respects soft limit (max_plan_revisions) and hard cap (hard_revision_cap)
-        from VerificationPolicy.
+        from VerificationPolicy. Also enforces time-based rate limiting.
 
         Args:
             plan: The existing plan to revise
@@ -251,10 +254,24 @@ class Planner:
             Revised Plan with incremented revision_count
 
         Raises:
+            RevisionThrottleError: If revision attempted too soon
             PlanRevisionLimitError: If at soft limit (ask user)
             MaxRetriesExceededError: If at hard cap
             PlanCreationError: If revision fails
         """
+        # Check time-based throttle first
+        min_interval = self._verification_policy.min_revision_interval_seconds
+        if min_interval > 0 and self._last_revision_time is not None:
+            now = datetime.now(timezone.utc)
+            elapsed = (now - self._last_revision_time).total_seconds()
+            if elapsed < min_interval:
+                seconds_remaining = min_interval - elapsed
+                raise RevisionThrottleError(
+                    plan_id=plan.id,
+                    seconds_remaining=seconds_remaining,
+                    min_interval=min_interval,
+                )
+
         # Check hard cap first
         if plan.revision_count >= self._verification_policy.hard_revision_cap:
             raise MaxRetriesExceededError(
@@ -306,10 +323,13 @@ class Planner:
             # Post-process the revised plan
             revised_plan = self._post_process_plan(revised_plan)
 
+            # Track revision time for rate limiting
+            self._last_revision_time = datetime.now(timezone.utc)
+
             return revised_plan
 
-        except (PlanRevisionLimitError, MaxRetriesExceededError):
-            # Re-raise limit errors
+        except (RevisionThrottleError, PlanRevisionLimitError, MaxRetriesExceededError):
+            # Re-raise limit/throttle errors
             raise
         except Exception as e:
             if isinstance(e, PlanCreationError):

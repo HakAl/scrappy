@@ -220,9 +220,15 @@ class SemanticSearchManager:
                     self.index_files(file_collector, progress_reporter=None)
                 else:
                     logger.debug("File collector callback returned None")
+                    # Model is ready but no files to index - notify ready state
+                    self._notify_progress("Semantic search ready")
             except Exception as e:
                 logger.warning(f"Auto-indexing failed: {e}")
                 self._notify_progress(f"Indexing failed: {e}")
+        else:
+            # No file collector configured - model is ready without indexing
+            logger.debug("No file collector callback configured")
+            self._notify_progress("Semantic search ready")
 
     def _set_cancellation_from_initializer(self) -> None:
         """Wire up cancellation check to initializer's shutdown state."""

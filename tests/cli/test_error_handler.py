@@ -44,9 +44,12 @@ class TestFormatError:
         # Should not include traceback by default
         assert "Traceback" not in result
 
-    def test_format_error_with_traceback(self):
-        """format_error can include traceback when requested."""
+    def test_format_error_with_traceback(self, monkeypatch):
+        """format_error includes traceback only in debug mode (security)."""
         from scrappy.cli.utils.error_handler import format_error
+
+        # Tracebacks require debug mode for security reasons
+        monkeypatch.setenv("SCRAPPY_DEBUG", "1")
 
         try:
             raise ValueError("Test error")
@@ -609,3 +612,228 @@ class TestEdgeCases:
 
         output = io.get_output()
         assert "Outermost" in output or len(output) > 0
+
+
+class TestSanitizeMessage:
+    """Tests for sensitive data sanitization in error messages."""
+
+    def test_sanitize_openai_api_key(self):
+        """sanitize_message redacts OpenAI API keys (sk-...)."""
+        from scrappy.cli.utils.error_handler import sanitize_message
+
+        message = "Error: Invalid API key sk-proj-abcdefghij1234567890abcdef"
+        result = sanitize_message(message)
+
+        assert "sk-proj-" not in result
+        assert "[REDACTED]" in result
+        assert "Error: Invalid API key" in result
+
+    def test_sanitize_generic_api_key(self):
+        """sanitize_message redacts api_key=... patterns."""
+        from scrappy.cli.utils.error_handler import sanitize_message
+
+        message = "Request failed: api_key=my_secret_api_key_12345"
+        result = sanitize_message(message)
+
+        assert "my_secret_api_key" not in result
+        assert "[REDACTED]" in result
+
+    def test_sanitize_bearer_token(self):
+        """sanitize_message redacts Bearer tokens."""
+        from scrappy.cli.utils.error_handler import sanitize_message
+
+        message = "Auth header: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
+        result = sanitize_message(message)
+
+        assert "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9" not in result
+        assert "[REDACTED]" in result
+
+    def test_sanitize_password_pattern(self):
+        """sanitize_message redacts password=... patterns."""
+        from scrappy.cli.utils.error_handler import sanitize_message
+
+        message = "Connection failed: password=super_secret_123"
+        result = sanitize_message(message)
+
+        assert "super_secret_123" not in result
+        assert "[REDACTED]" in result
+
+    def test_sanitize_unix_home_path(self):
+        """sanitize_message redacts Unix home directory paths."""
+        from scrappy.cli.utils.error_handler import sanitize_message
+
+        message = "File not found: /home/johndoe/secrets/config.json"
+        result = sanitize_message(message)
+
+        assert "johndoe" not in result
+        assert "~" in result
+
+    def test_sanitize_macos_home_path(self):
+        """sanitize_message redacts macOS home directory paths."""
+        from scrappy.cli.utils.error_handler import sanitize_message
+
+        message = "Error reading /Users/alice/Documents/api.key"
+        result = sanitize_message(message)
+
+        assert "alice" not in result
+        assert "~" in result
+
+    def test_sanitize_windows_home_path(self):
+        """sanitize_message redacts Windows home directory paths."""
+        from scrappy.cli.utils.error_handler import sanitize_message
+
+        message = r"File error: C:\Users\bob\AppData\config.json"
+        result = sanitize_message(message)
+
+        assert "bob" not in result
+        assert "~" in result
+
+    def test_sanitize_aws_access_key(self):
+        """sanitize_message redacts AWS access key IDs."""
+        from scrappy.cli.utils.error_handler import sanitize_message
+
+        message = "AWS error: AKIAIOSFODNN7EXAMPLE"
+        result = sanitize_message(message)
+
+        assert "AKIAIOSFODNN7EXAMPLE" not in result
+        assert "[REDACTED]" in result
+
+    def test_sanitize_multiple_secrets(self):
+        """sanitize_message handles multiple secrets in one message."""
+        from scrappy.cli.utils.error_handler import sanitize_message
+
+        message = "Error: api_key=secret123456 password=mypassword token=abc123xyz789"
+        result = sanitize_message(message)
+
+        assert "secret123456" not in result
+        assert "mypassword" not in result
+        assert "abc123xyz789" not in result
+
+    def test_sanitize_preserves_safe_content(self):
+        """sanitize_message preserves non-sensitive content."""
+        from scrappy.cli.utils.error_handler import sanitize_message
+
+        message = "Connection timeout after 30 seconds to api.example.com"
+        result = sanitize_message(message)
+
+        assert result == message  # No change expected
+
+    def test_sanitize_empty_message(self):
+        """sanitize_message handles empty messages."""
+        from scrappy.cli.utils.error_handler import sanitize_message
+
+        assert sanitize_message("") == ""
+        assert sanitize_message(None) is None
+
+    def test_sanitize_authorization_header(self):
+        """sanitize_message redacts authorization header values."""
+        from scrappy.cli.utils.error_handler import sanitize_message
+
+        message = "Header: authorization=Bearer_eyJhbGciOiJIUzI1"
+        result = sanitize_message(message)
+
+        assert "eyJhbGciOiJIUzI1" not in result
+        assert "[REDACTED]" in result
+
+
+class TestFormatErrorSanitization:
+    """Tests for sanitization in format_error."""
+
+    def test_format_error_sanitizes_api_key(self):
+        """format_error sanitizes API keys in exception messages."""
+        from scrappy.cli.utils.error_handler import format_error
+
+        error = ValueError("Invalid key: sk-proj-abcdefghij1234567890abcdef")
+        result = format_error(error)
+
+        assert "sk-proj-" not in result
+        assert "[REDACTED]" in result
+
+    def test_format_error_sanitizes_paths(self):
+        """format_error sanitizes home directory paths."""
+        from scrappy.cli.utils.error_handler import format_error
+
+        error = FileNotFoundError("/home/developer/secrets/key.pem")
+        result = format_error(error)
+
+        assert "developer" not in result
+        assert "~" in result
+
+
+class TestDebugMode:
+    """Tests for debug mode behavior."""
+
+    def test_is_debug_mode_false_by_default(self, monkeypatch):
+        """is_debug_mode returns False when SCRAPPY_DEBUG is not set."""
+        from scrappy.cli.utils.error_handler import is_debug_mode
+
+        monkeypatch.delenv("SCRAPPY_DEBUG", raising=False)
+        assert is_debug_mode() is False
+
+    def test_is_debug_mode_true_when_set(self, monkeypatch):
+        """is_debug_mode returns True when SCRAPPY_DEBUG=1."""
+        from scrappy.cli.utils.error_handler import is_debug_mode
+
+        monkeypatch.setenv("SCRAPPY_DEBUG", "1")
+        assert is_debug_mode() is True
+
+    def test_is_debug_mode_true_for_truthy_values(self, monkeypatch):
+        """is_debug_mode accepts various truthy values."""
+        from scrappy.cli.utils.error_handler import is_debug_mode
+
+        for val in ["1", "true", "TRUE", "yes", "YES"]:
+            monkeypatch.setenv("SCRAPPY_DEBUG", val)
+            assert is_debug_mode() is True
+
+    def test_is_debug_mode_false_for_other_values(self, monkeypatch):
+        """is_debug_mode returns False for non-truthy values."""
+        from scrappy.cli.utils.error_handler import is_debug_mode
+
+        for val in ["0", "false", "no", "maybe", ""]:
+            monkeypatch.setenv("SCRAPPY_DEBUG", val)
+            assert is_debug_mode() is False
+
+    def test_traceback_not_shown_without_debug(self, monkeypatch):
+        """format_error does not include traceback when SCRAPPY_DEBUG is not set."""
+        from scrappy.cli.utils.error_handler import format_error
+
+        monkeypatch.delenv("SCRAPPY_DEBUG", raising=False)
+
+        try:
+            raise ValueError("Test error")
+        except ValueError as e:
+            result = format_error(e, include_traceback=True)
+
+        # Should not have traceback without debug mode
+        assert "Traceback" not in result
+        assert "Test error" in result
+
+    def test_traceback_shown_with_debug(self, monkeypatch):
+        """format_error includes traceback when SCRAPPY_DEBUG=1."""
+        from scrappy.cli.utils.error_handler import format_error
+
+        monkeypatch.setenv("SCRAPPY_DEBUG", "1")
+
+        try:
+            raise ValueError("Test debug error")
+        except ValueError as e:
+            result = format_error(e, include_traceback=True)
+
+        # Should have traceback in debug mode
+        assert "Traceback" in result or "ValueError" in result
+        assert "Test debug error" in result
+
+    def test_traceback_sanitized_in_debug_mode(self, monkeypatch):
+        """format_error sanitizes tracebacks even in debug mode."""
+        from scrappy.cli.utils.error_handler import format_error
+
+        monkeypatch.setenv("SCRAPPY_DEBUG", "1")
+
+        try:
+            raise ValueError("API key: sk-proj-abcdefghij1234567890abcdef")
+        except ValueError as e:
+            result = format_error(e, include_traceback=True)
+
+        # API key should still be redacted even in traceback
+        assert "sk-proj-" not in result
+        assert "[REDACTED]" in result

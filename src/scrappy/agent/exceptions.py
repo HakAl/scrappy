@@ -246,13 +246,56 @@ class PlanRevisionLimitError(AgentLoopError):
         ctx["soft_limit"] = soft_limit
         message = (
             f"Plan '{plan_id}' has been revised {revision_count} times "
-            f"(soft limit: {soft_limit}). User intervention required."
+            f"(soft limit: {soft_limit}). Each revision incurs API costs. "
+            f"Continue revising or stop to save credits?"
         )
         super().__init__(message, ctx)
         self.plan_id = plan_id
         self.revision_count = revision_count
         self.soft_limit = soft_limit
         self.feedback = feedback
+
+
+class RevisionThrottleError(AgentLoopError):
+    """
+    Raised when plan revision is attempted too quickly.
+
+    This prevents rapid-fire API calls that could exhaust credits.
+
+    Attributes:
+        plan_id: ID of the plan
+        seconds_remaining: Seconds until next revision is allowed
+        min_interval: Configured minimum interval between revisions
+    """
+
+    def __init__(
+        self,
+        plan_id: str,
+        seconds_remaining: float,
+        min_interval: float,
+        context: Optional[dict[str, Any]] = None,
+    ):
+        """
+        Initialize revision throttle error.
+
+        Args:
+            plan_id: ID of the plan
+            seconds_remaining: Seconds until next revision is allowed
+            min_interval: Configured minimum interval
+            context: Additional context
+        """
+        ctx = context or {}
+        ctx["plan_id"] = plan_id
+        ctx["seconds_remaining"] = seconds_remaining
+        ctx["min_interval"] = min_interval
+        message = (
+            f"Revision throttled: wait {seconds_remaining:.1f}s before revising "
+            f"plan '{plan_id}' (min interval: {min_interval}s)"
+        )
+        super().__init__(message, ctx)
+        self.plan_id = plan_id
+        self.seconds_remaining = seconds_remaining
+        self.min_interval = min_interval
 
 
 class StepExecutionError(AgentLoopError):
