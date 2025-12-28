@@ -55,7 +55,7 @@ from .completion_validator import (
     CompletionValidator,
     CompletionValidatorProtocol,
 )
-from .checkpoint import create_git_checkpoint, rollback_to_checkpoint
+from scrappy.undo import create_undo_point, undo as undo_to_point, UndoError
 
 if TYPE_CHECKING:
     from ..orchestrator_adapter import OrchestratorAdapter
@@ -1007,7 +1007,7 @@ class AgentLoop:
         """
         Handle safety checkpoint with multi-option prompt.
 
-        Prompts user with options to continue, create git checkpoint,
+        Prompts user with options to continue, create undo point,
         enable allow-all mode, or stop. Works even in auto_confirm mode.
 
         Args:
@@ -1025,14 +1025,14 @@ class AgentLoop:
             return None
 
         elif choice == 'g':
-            # Git checkpoint then continue
-            self._ui.show_progress("Creating git checkpoint...")
-            commit_hash = create_git_checkpoint(self._project_root)
-            if commit_hash:
-                state.last_checkpoint_hash = commit_hash
-                self._ui.show_info(f"Checkpoint created: {commit_hash[:8]}")
-            else:
-                self._ui.show_warning("Could not create git checkpoint (not a git repo?)")
+            # Create undo point then continue
+            self._ui.show_progress("Creating undo point...")
+            try:
+                undo_state = create_undo_point()
+                state.last_checkpoint_hash = undo_state.ref
+                self._ui.show_info(f"Undo point created: {undo_state.ref.split('/')[-1]}")
+            except UndoError as e:
+                self._ui.show_warning(f"Could not create undo point: {e}")
             return None
 
         elif choice == 'a':
@@ -1563,7 +1563,7 @@ class AgentLoop:
 
     async def _checkpoint_if_needed(self, step: Step) -> Optional[str]:
         """
-        Create git checkpoint before modifying steps.
+        Create undo point before modifying steps.
 
         Only creates checkpoint for non-read-only steps.
 
@@ -1571,32 +1571,36 @@ class AgentLoop:
             step: The step about to be executed
 
         Returns:
-            Commit hash of the checkpoint, or None if not needed/failed
+            Undo ref of the checkpoint, or None if not needed/failed
         """
         if step.is_read_only:
             return None
 
         try:
-            commit_hash = create_git_checkpoint(self._project_root)
-            if commit_hash:
-                self._ui.show_info(f"Checkpoint: {commit_hash[:8]}")
-            return commit_hash
-        except Exception as e:
-            self._ui.show_warning(f"Could not create checkpoint: {e}")
+            undo_state = create_undo_point()
+            self._ui.show_info(f"Undo point: {undo_state.ref.split('/')[-1]}")
+            return undo_state.ref
+        except UndoError as e:
+            self._ui.show_warning(f"Could not create undo point: {e}")
             return None
 
-    async def _rollback_to_checkpoint(self, commit_hash: str) -> None:
+    async def _rollback_to_checkpoint(self, undo_ref: str) -> None:
         """
-        Git reset --hard to checkpoint.
+        Restore to undo point.
+
+        Note: This uses the undo system which provides safer rollback.
 
         Args:
-            commit_hash: The commit hash to roll back to
+            undo_ref: The undo ref to roll back to (refs/scrappy/undo/...)
         """
-        success = rollback_to_checkpoint(commit_hash, self._project_root)
-        if success:
-            self._ui.show_info(f"Rolled back to: {commit_hash[:8]}")
-        else:
-            self._ui.show_error(f"Failed to rollback to: {commit_hash}")
+        try:
+            # Use undo(1) to restore to the most recent undo point
+            # In the context of Phase 4 solve(), we've just created an undo point
+            undo_to_point(n=1, force=True)
+            short_ref = undo_ref.split('/')[-1] if '/' in undo_ref else undo_ref[:8]
+            self._ui.show_info(f"Rolled back to: {short_ref}")
+        except UndoError as e:
+            self._ui.show_error(f"Failed to rollback: {e}")
 
     def _extract_changed_files(self, step: Step, result: str) -> List[str]:
         """

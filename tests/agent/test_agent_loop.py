@@ -880,10 +880,12 @@ class TestSafetyCheckpoint:
             checkpoint_interval=15,
         )
 
-        # Mock the git checkpoint function
-        with patch('scrappy.agent.agent_loop.create_git_checkpoint', return_value="abc123"):
+        # Mock the undo point function
+        mock_undo_state = Mock()
+        mock_undo_state.ref = "refs/scrappy/undo/20231201-120000-123456"
+        with patch('scrappy.agent.agent_loop.create_undo_point', return_value=mock_undo_state):
             result = agent_loop._handle_safety_checkpoint(state)
 
             assert result is None  # Continue
-            assert state.last_checkpoint_hash == "abc123"
+            assert state.last_checkpoint_hash == mock_undo_state.ref
             mock_ui.show_info.assert_called()

@@ -423,14 +423,19 @@ summary = orch.synthesize(
 ### Pattern 6: Code Agent with Human Approval
 
 ```python
-from src.agent import CodeAgent, create_git_checkpoint
+from src.agent import CodeAgent
+from scrappy.undo import create_undo_point, undo, UndoError
 
 # Setup
 orch = AgentOrchestrator(auto_explore=True)
 agent = CodeAgent(orch)
 
-# Create safety checkpoint
-checkpoint = create_git_checkpoint(".")
+# Create safety undo point (automatically done by CLI)
+try:
+    undo_state = create_undo_point()
+    print(f"Undo point created: {undo_state.ref}")
+except UndoError as e:
+    print(f"Warning: Could not create undo point: {e}")
 
 # Run agent (human approves each action)
 result = agent.run(
@@ -445,8 +450,12 @@ if result['success']:
     for entry in result['audit_log']:
         print(f"  {entry['action']} - {entry['approved']}")
 else:
-    # Rollback if needed
-    rollback_to_checkpoint(checkpoint)
+    # Rollback if needed using the undo system
+    try:
+        undo(n=1)  # Undo most recent agent run
+        print("Rolled back to pre-agent state")
+    except UndoError as e:
+        print(f"Rollback failed: {e}")
 ```
 
 **CLI Usage:**

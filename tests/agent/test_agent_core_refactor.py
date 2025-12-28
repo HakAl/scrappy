@@ -12,15 +12,10 @@ These tests verify observable behavior, not implementation details.
 After refactoring, these same behaviors should be preserved.
 """
 import pytest
-from unittest.mock import Mock, MagicMock, patch, call
-from pathlib import Path
-import json
-import subprocess
+from unittest.mock import Mock, MagicMock, patch
 
 from scrappy.agent.core import CodeAgent
 from scrappy.agent_config import AgentConfig
-from scrappy.agent_tools.tools import ToolRegistry
-from scrappy.agent_tools.tools.command_tool import ShellCommandExecutor
 from scrappy.orchestrator_adapter import OrchestratorAdapter
 
 
@@ -63,38 +58,10 @@ class TestRegistryCreation:
 
     Note: Direct factory tests are in test_tool_registry_factory.py.
     These tests verify CodeAgent correctly uses the factory.
+
+    Basic registry initialization tests are in test_agent.py::TestCodeAgentInitialization.
+    This class contains granular tests for specific tool categories.
     """
-
-    @pytest.mark.unit
-    def test_agent_uses_default_registry(self, agent_with_config):
-        """Agent should have registry from factory."""
-        # Agent should have a registry
-        assert agent_with_config.tool_registry is not None
-
-        tool_names = [t.name for t in agent_with_config.tool_registry.list_all()]
-
-        # Should have tools from default factory
-        assert "read_file" in tool_names
-        assert "write_file" in tool_names
-        assert "git_status" in tool_names
-
-    @pytest.mark.unit
-    def test_agent_accepts_custom_registry(self, mock_orchestrator_adapter, minimal_config, tmp_path):
-        """Agent should accept injected registry."""
-        from scrappy.agent_tools.registry_factory import create_minimal_registry
-
-        custom_registry = create_minimal_registry()
-
-        agent = CodeAgent(
-            orchestrator=mock_orchestrator_adapter,
-            project_path=str(tmp_path),
-            config=minimal_config,
-            tool_registry=custom_registry
-        )
-
-        # Should use injected registry
-        assert agent.tool_registry is custom_registry
-        assert len(agent.tool_registry.list_all()) < 14  # Less than default
 
     @pytest.mark.unit
     def test_agent_registry_has_file_tools(self, agent_with_config):

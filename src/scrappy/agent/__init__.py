@@ -34,6 +34,9 @@ from .exceptions import (
 )
 from .audit import AuditLogger
 from .cancellation import CancellationToken
+# DEPRECATED: checkpoint module is deprecated in favor of scrappy.undo
+# These exports are kept for backward compatibility but will be removed
+# Use: from scrappy.undo import create_undo_point, undo, UndoError
 from .checkpoint import create_git_checkpoint, rollback_to_checkpoint
 from .core import CodeAgent
 from .response_parser import JSONResponseParser, ParseResult
@@ -88,9 +91,9 @@ __all__ = [
     'AuditLogger',
     # Cancellation
     'CancellationToken',
-    # Checkpoint
-    'create_git_checkpoint',
-    'rollback_to_checkpoint',
+    # Checkpoint (DEPRECATED - use scrappy.undo instead)
+    'create_git_checkpoint',  # DEPRECATED
+    'rollback_to_checkpoint',  # DEPRECATED
     # Protocols
     'AuditLoggerProtocol',
     'ResponseParserProtocol',

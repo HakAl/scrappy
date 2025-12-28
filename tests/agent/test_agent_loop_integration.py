@@ -26,6 +26,13 @@ from scrappy.agent.exceptions import (
 from scrappy.agent_config import AgentConfig
 
 
+
+def _make_mock_undo_state(ref_suffix='abc123def456'):
+    """Create a mock UndoState object for testing."""
+    mock_state = Mock()
+    mock_state.ref = f'refs/scrappy/undo/{ref_suffix}'
+    return mock_state
+
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -213,8 +220,8 @@ def agent_loop(
 async def test_solve_full_flow_success(agent_loop, mock_planner, mock_ui):
     """Test successful execution of full solve() flow."""
     # Mock git checkpoint to avoid real git operations
-    with patch('scrappy.agent.agent_loop.create_git_checkpoint') as mock_checkpoint:
-        mock_checkpoint.return_value = "abc123def456"
+    with patch('scrappy.agent.agent_loop.create_undo_point') as mock_undo:
+        mock_undo.return_value = _make_mock_undo_state("abc123def456")
 
         result = await agent_loop.solve("Write a test file")
 
@@ -235,8 +242,8 @@ async def test_solve_full_flow_success(agent_loop, mock_planner, mock_ui):
 @pytest.mark.asyncio
 async def test_solve_with_context(agent_loop, mock_planner):
     """Test solve() passes context to planner."""
-    with patch('scrappy.agent.agent_loop.create_git_checkpoint') as mock_checkpoint:
-        mock_checkpoint.return_value = "abc123"
+    with patch('scrappy.agent.agent_loop.create_undo_point') as mock_undo:
+        mock_undo.return_value = _make_mock_undo_state("abc123")
 
         await agent_loop.solve("Fix the bug", context="Error: IndexError at line 42")
 
@@ -265,8 +272,8 @@ async def test_solve_plan_rejected(agent_loop, mock_ui):
 @pytest.mark.asyncio
 async def test_solve_plan_approval_shows_steps(agent_loop, mock_ui, mock_planner):
     """Test that plan approval displays all steps to user."""
-    with patch('scrappy.agent.agent_loop.create_git_checkpoint') as mock_checkpoint:
-        mock_checkpoint.return_value = "abc123"
+    with patch('scrappy.agent.agent_loop.create_undo_point') as mock_undo:
+        mock_undo.return_value = _make_mock_undo_state("abc123")
 
         await agent_loop.solve("Test task")
 
@@ -293,8 +300,8 @@ async def test_solve_step_failure_triggers_retry(agent_loop, mock_verifier, mock
         VerificationResult(success=True, message="Passed"),
     ])
 
-    with patch('scrappy.agent.agent_loop.create_git_checkpoint') as mock_checkpoint:
-        mock_checkpoint.return_value = "abc123"
+    with patch('scrappy.agent.agent_loop.create_undo_point') as mock_undo:
+        mock_undo.return_value = _make_mock_undo_state("abc123")
 
         result = await agent_loop.solve("Write code")
 
@@ -318,9 +325,9 @@ async def test_solve_max_retries_exceeded_abort(
         message="Persistent lint error",
     ))
 
-    with patch('scrappy.agent.agent_loop.create_git_checkpoint') as mock_checkpoint, \
+    with patch('scrappy.agent.agent_loop.create_undo_point') as mock_undo, \
          patch('builtins.input', return_value="a"):  # User chooses abort
-        mock_checkpoint.return_value = "abc123"
+        mock_undo.return_value = _make_mock_undo_state("abc123")
 
         result = await agent_loop.solve("Write code")
 
@@ -355,9 +362,9 @@ async def test_solve_max_retries_exceeded_skip(
         message="Persistent error",
     ))
 
-    with patch('scrappy.agent.agent_loop.create_git_checkpoint') as mock_checkpoint, \
+    with patch('scrappy.agent.agent_loop.create_undo_point') as mock_undo, \
          patch('builtins.input', return_value="s"):  # User chooses skip
-        mock_checkpoint.return_value = "abc123"
+        mock_undo.return_value = _make_mock_undo_state("abc123")
 
         result = await agent_loop.solve("Write code")
 
@@ -389,16 +396,16 @@ async def test_solve_max_retries_exceeded_rollback(
         message="Persistent error",
     ))
 
-    with patch('scrappy.agent.agent_loop.create_git_checkpoint') as mock_checkpoint, \
-         patch('scrappy.agent.agent_loop.rollback_to_checkpoint') as mock_rollback, \
+    with patch('scrappy.agent.agent_loop.create_undo_point') as mock_undo, \
+         patch('scrappy.agent.agent_loop.undo_to_point') as mock_undo_fn, \
          patch('builtins.input', return_value="r"):  # User chooses rollback
-        mock_checkpoint.return_value = "abc123def456"
-        mock_rollback.return_value = True
+        mock_undo.return_value = _make_mock_undo_state("abc123def456")
+        # undo_to_point returns None on success (it modifies git state in place)
 
         result = await agent_loop.solve("Write code")
 
-    # Should have attempted rollback
-    mock_rollback.assert_called()
+    # Should have attempted rollback via undo
+    mock_undo_fn.assert_called()
     assert result["stop_reason"] == "rollback"
 
 
@@ -434,9 +441,9 @@ async def test_solve_partial_success(agent_loop, mock_planner, mock_verifier, mo
 
     mock_verifier.verify_step = AsyncMock(side_effect=verify_side_effect)
 
-    with patch('scrappy.agent.agent_loop.create_git_checkpoint') as mock_checkpoint, \
+    with patch('scrappy.agent.agent_loop.create_undo_point') as mock_undo, \
          patch('builtins.input', return_value="a"):  # User aborts on failure
-        mock_checkpoint.return_value = "abc123"
+        mock_undo.return_value = _make_mock_undo_state("abc123")
 
         result = await agent_loop.solve("Multi-step task")
 
@@ -469,13 +476,13 @@ async def test_solve_creates_checkpoints_for_modifying_steps(agent_loop, mock_pl
         ],
     ))
 
-    with patch('scrappy.agent.agent_loop.create_git_checkpoint') as mock_checkpoint:
-        mock_checkpoint.return_value = "abc123def"
+    with patch('scrappy.agent.agent_loop.create_undo_point') as mock_undo:
+        mock_undo.return_value = _make_mock_undo_state("abc123def")
 
         await agent_loop.solve("Test")
 
     # Checkpoint should be called for initial + the modifying step
-    assert mock_checkpoint.call_count >= 1
+    assert mock_undo.call_count >= 1
 
 
 @pytest.mark.asyncio
@@ -492,14 +499,14 @@ async def test_solve_no_checkpoint_for_read_only_steps(agent_loop, mock_planner)
         ],
     ))
 
-    with patch('scrappy.agent.agent_loop.create_git_checkpoint') as mock_checkpoint:
-        mock_checkpoint.return_value = "abc123"
+    with patch('scrappy.agent.agent_loop.create_undo_point') as mock_undo:
+        mock_undo.return_value = _make_mock_undo_state("abc123")
 
         await agent_loop.solve("Read files")
 
     # Checkpoint only called once for initial checkpoint
     # (which is created for the synthetic "initial" step)
-    assert mock_checkpoint.call_count == 1
+    assert mock_undo.call_count == 1
 
 
 # =============================================================================
@@ -519,8 +526,8 @@ async def test_solve_runs_step_verification(agent_loop, mock_verifier, mock_plan
         ],
     ))
 
-    with patch('scrappy.agent.agent_loop.create_git_checkpoint') as mock_checkpoint:
-        mock_checkpoint.return_value = "abc123"
+    with patch('scrappy.agent.agent_loop.create_undo_point') as mock_undo:
+        mock_undo.return_value = _make_mock_undo_state("abc123")
 
         await agent_loop.solve("Test")
 
@@ -531,8 +538,8 @@ async def test_solve_runs_step_verification(agent_loop, mock_verifier, mock_plan
 @pytest.mark.asyncio
 async def test_solve_runs_final_plan_verification(agent_loop, mock_verifier):
     """Test that final plan verification is run after all steps complete."""
-    with patch('scrappy.agent.agent_loop.create_git_checkpoint') as mock_checkpoint:
-        mock_checkpoint.return_value = "abc123"
+    with patch('scrappy.agent.agent_loop.create_undo_point') as mock_undo:
+        mock_undo.return_value = _make_mock_undo_state("abc123")
 
         await agent_loop.solve("Test")
 
@@ -554,8 +561,8 @@ async def test_solve_skips_verification_for_read_only_steps(
         ],
     ))
 
-    with patch('scrappy.agent.agent_loop.create_git_checkpoint') as mock_checkpoint:
-        mock_checkpoint.return_value = "abc123"
+    with patch('scrappy.agent.agent_loop.create_undo_point') as mock_undo:
+        mock_undo.return_value = _make_mock_undo_state("abc123")
 
         await agent_loop.solve("Read files")
 
@@ -614,9 +621,9 @@ async def test_solve_handles_step_execution_error(
         executed=True,
     )
 
-    with patch('scrappy.agent.agent_loop.create_git_checkpoint') as mock_checkpoint, \
+    with patch('scrappy.agent.agent_loop.create_undo_point') as mock_undo, \
          patch('builtins.input', return_value="a"):  # User aborts on failure
-        mock_checkpoint.return_value = "abc123"
+        mock_undo.return_value = _make_mock_undo_state("abc123")
 
         result = await agent_loop.solve("Test")
 
@@ -643,8 +650,8 @@ async def test_solve_shows_step_progress(agent_loop, mock_ui, mock_planner):
         ],
     ))
 
-    with patch('scrappy.agent.agent_loop.create_git_checkpoint') as mock_checkpoint:
-        mock_checkpoint.return_value = "abc123"
+    with patch('scrappy.agent.agent_loop.create_undo_point') as mock_undo:
+        mock_undo.return_value = _make_mock_undo_state("abc123")
 
         await agent_loop.solve("Test")
 
@@ -678,8 +685,8 @@ async def test_solve_works_without_verifier(mock_planner, mock_ui):
         verifier=None,  # No verifier
     )
 
-    with patch('scrappy.agent.agent_loop.create_git_checkpoint') as mock_checkpoint:
-        mock_checkpoint.return_value = "abc123"
+    with patch('scrappy.agent.agent_loop.create_undo_point') as mock_undo:
+        mock_undo.return_value = _make_mock_undo_state("abc123")
 
         result = await loop.solve("Test")
 

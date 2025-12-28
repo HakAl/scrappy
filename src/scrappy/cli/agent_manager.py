@@ -5,7 +5,8 @@ Handles running and managing code execution agents with human approval.
 
 from typing import TYPE_CHECKING, Optional
 
-from ..agent import CodeAgent, CancellationToken, create_git_checkpoint, rollback_to_checkpoint
+from ..agent import CodeAgent, CancellationToken
+from scrappy.undo import create_undo_point, UndoError
 from ..agent_config import AgentConfig
 from .io_interface import CLIIOProtocol
 from .display_manager import DisplayManager
@@ -118,24 +119,24 @@ class CLIAgentManager:
             dashboard.update_thought_process(f"Task: {task}")
 
         # Safety options - use injected interaction handler for mode-aware prompts
-        create_checkpoint = self._interaction.confirm(
-            "Create git checkpoint before running?", default=True
+        create_undo = self._interaction.confirm(
+            "Create undo point before running?", default=True
         )
 
-        # Check if user cancelled during checkpoint prompt
+        # Check if user cancelled during undo point prompt
         if self._cancellation_token.is_cancelled():
             io.secho("Agent cancelled.", fg=io.theme.warning)
             self._cancellation_token = None
             return
 
-        checkpoint_hash = None
-        if create_checkpoint:
-            io.echo("Creating git checkpoint...")
-            checkpoint_hash = create_git_checkpoint(str(self.orchestrator.context.project_path))
-            if checkpoint_hash:
-                io.secho(f"Checkpoint created: {checkpoint_hash[:8]}", fg=io.theme.success)
-            else:
-                io.secho("Could not create checkpoint (not a git repo?)", fg=io.theme.warning)
+        undo_state = None
+        if create_undo:
+            io.echo("Creating undo point...")
+            try:
+                undo_state = create_undo_point()
+                io.secho(f"Undo point created: {undo_state.ref.split('/')[-1]}", fg=io.theme.success)
+            except UndoError as e:
+                io.secho(f"Could not create undo point: {e}", fg=io.theme.warning)
 
         # Create config with verbose setting
         config = AgentConfig()
@@ -181,13 +182,9 @@ class CLIAgentManager:
             if audit_path.exists():
                 io.secho(f"Audit log: {audit_path}", fg=io.theme.primary)
 
-            # Offer rollback if checkpoint was created
-            if checkpoint_hash and not dry_run:
-                if self._interaction.confirm("Rollback to checkpoint?", default=False):
-                    if rollback_to_checkpoint(checkpoint_hash, str(agent.project_root)):
-                        io.secho(f"Rolled back to {checkpoint_hash[:8]}", fg=io.theme.success)
-                    else:
-                        io.secho("Rollback failed", fg=io.theme.error)
+            # Inform user about undo option
+            if undo_state and not dry_run:
+                io.echo("\nTo undo changes: scrappy undo")
 
             # Save agent task result to working memory
             self.orchestrator.working_memory.add_discovery(

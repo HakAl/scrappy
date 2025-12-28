@@ -23,6 +23,13 @@ from tests.helpers import (
 )
 
 
+def _make_mock_undo_state(ref_suffix='20231201-120000-123456'):
+    """Create a mock UndoState object for testing."""
+    mock_state = Mock()
+    mock_state.ref = f'refs/scrappy/undo/{ref_suffix}'
+    return mock_state
+
+
 class TestCLITaskRouterHandler:
     """Tests for CLI task router handler."""
 
@@ -250,12 +257,12 @@ class TestCLIAgentManager:
 
     @pytest.mark.unit
     @patch('scrappy.cli.agent_manager.CodeAgent')
-    @patch('scrappy.cli.agent_manager.create_git_checkpoint')
-    def test_run_agent_success_shows_result(self, mock_checkpoint, mock_agent_class, mock_orchestrator):
+    @patch('scrappy.cli.agent_manager.create_undo_point')
+    def test_run_agent_success_shows_result(self, mock_undo, mock_agent_class, mock_orchestrator):
         """Test run_agent displays success result."""
         from scrappy.cli.agent_manager import CLIAgentManager
 
-        mock_checkpoint.return_value = None
+        mock_undo.return_value = None
         mock_agent = Mock()
         mock_agent.run.return_value = {
             "success": True,
@@ -281,12 +288,12 @@ class TestCLIAgentManager:
 
     @pytest.mark.unit
     @patch('scrappy.cli.agent_manager.CodeAgent')
-    @patch('scrappy.cli.agent_manager.create_git_checkpoint')
-    def test_run_agent_dry_run_mode(self, mock_checkpoint, mock_agent_class, mock_orchestrator):
+    @patch('scrappy.cli.agent_manager.create_undo_point')
+    def test_run_agent_dry_run_mode(self, mock_undo, mock_agent_class, mock_orchestrator):
         """Test run_agent respects dry run mode."""
         from scrappy.cli.agent_manager import CLIAgentManager
 
-        mock_checkpoint.return_value = None
+        mock_undo.return_value = _make_mock_undo_state()
         mock_agent = Mock()
         mock_agent.run.return_value = {
             "success": True,
@@ -312,12 +319,12 @@ class TestCLIAgentManager:
 
     @pytest.mark.unit
     @patch('scrappy.cli.agent_manager.CodeAgent')
-    @patch('scrappy.cli.agent_manager.create_git_checkpoint')
-    def test_run_agent_handles_exception(self, mock_checkpoint, mock_agent_class, mock_orchestrator):
+    @patch('scrappy.cli.agent_manager.create_undo_point')
+    def test_run_agent_handles_exception(self, mock_undo, mock_agent_class, mock_orchestrator):
         """Test run_agent handles exceptions gracefully."""
         from scrappy.cli.agent_manager import CLIAgentManager
 
-        mock_checkpoint.return_value = None
+        mock_undo.return_value = None
         mock_agent = Mock()
         mock_agent.run.side_effect = RuntimeError("Agent crashed")
         mock_agent.planner = "cerebras"
@@ -343,12 +350,12 @@ class TestCLIAgentManager:
 
     @pytest.mark.unit
     @patch('scrappy.cli.agent_manager.CodeAgent')
-    @patch('scrappy.cli.agent_manager.create_git_checkpoint')
-    def test_run_agent_records_discovery(self, mock_checkpoint, mock_agent_class, mock_orchestrator):
+    @patch('scrappy.cli.agent_manager.create_undo_point')
+    def test_run_agent_records_discovery(self, mock_undo, mock_agent_class, mock_orchestrator):
         """Test run_agent records task result as discovery."""
         from scrappy.cli.agent_manager import CLIAgentManager
 
-        mock_checkpoint.return_value = None
+        mock_undo.return_value = None
         mock_agent = Mock()
         mock_agent.run.return_value = {
             "success": True,

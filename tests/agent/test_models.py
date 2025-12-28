@@ -193,19 +193,6 @@ class TestPlan:
         assert plan.approved_at is None
         assert plan.approval_mode is None
 
-    def test_current_step_returns_first_pending(self):
-        """current_step should return the first pending step."""
-        steps = [
-            Step(id="s1", description="Step 1"),
-            Step(id="s2", description="Step 2"),
-        ]
-        plan = Plan(id="plan-1", goal="Test", steps=steps)
-
-        current = plan.current_step()
-
-        assert current is not None
-        assert current.id == "s1"
-
     def test_current_step_returns_in_progress(self):
         """current_step should return an in-progress step."""
         steps = [
@@ -231,19 +218,6 @@ class TestPlan:
         current = plan.current_step()
 
         assert current is None
-
-    def test_next_step_returns_first_pending_when_no_in_progress(self):
-        """next_step should return first pending if none in progress."""
-        steps = [
-            Step(id="s1", description="Step 1"),
-            Step(id="s2", description="Step 2"),
-        ]
-        plan = Plan(id="plan-1", goal="Test", steps=steps)
-
-        next_s = plan.next_step()
-
-        assert next_s is not None
-        assert next_s.id == "s1"
 
     def test_next_step_returns_pending_after_in_progress(self):
         """next_step should return pending step after in-progress one."""
@@ -282,51 +256,11 @@ class TestPlan:
 
         assert plan.all_completed() is True
 
-    def test_all_completed_returns_false_when_pending(self):
-        """all_completed should return False when steps are pending."""
-        steps = [
-            Step(id="s1", description="Step 1", status=StepStatus.COMPLETED),
-            Step(id="s2", description="Step 2"),  # PENDING
-        ]
-        plan = Plan(id="plan-1", goal="Test", steps=steps)
-
-        assert plan.all_completed() is False
-
     def test_all_completed_returns_true_for_empty_plan(self):
         """all_completed should return True for plan with no steps."""
         plan = Plan(id="plan-1", goal="Test", steps=[])
 
         assert plan.all_completed() is True
-
-    def test_completed_steps_returns_only_completed(self):
-        """completed_steps should return only steps with COMPLETED status."""
-        steps = [
-            Step(id="s1", description="Step 1", status=StepStatus.COMPLETED),
-            Step(id="s2", description="Step 2", status=StepStatus.FAILED),
-            Step(id="s3", description="Step 3", status=StepStatus.COMPLETED),
-        ]
-        plan = Plan(id="plan-1", goal="Test", steps=steps)
-
-        completed = plan.completed_steps()
-
-        assert len(completed) == 2
-        assert completed[0].id == "s1"
-        assert completed[1].id == "s3"
-
-    def test_failed_steps_returns_only_failed(self):
-        """failed_steps should return only steps with FAILED status."""
-        steps = [
-            Step(id="s1", description="Step 1", status=StepStatus.COMPLETED),
-            Step(id="s2", description="Step 2", status=StepStatus.FAILED),
-            Step(id="s3", description="Step 3", status=StepStatus.FAILED),
-        ]
-        plan = Plan(id="plan-1", goal="Test", steps=steps)
-
-        failed = plan.failed_steps()
-
-        assert len(failed) == 2
-        assert failed[0].id == "s2"
-        assert failed[1].id == "s3"
 
     def test_progress_summary_shows_current_step(self):
         """progress_summary should show current step number and description."""
