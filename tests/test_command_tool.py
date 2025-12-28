@@ -424,6 +424,97 @@ class TestShellCommandExecutorLongRunning:
         assert executor._is_long_running_command("cat file.txt") is False
 
 
+class TestShellCommandExecutorTimeouts:
+    """Tests for command timeout behavior."""
+
+    def test_default_timeout_is_60_seconds(self):
+        """Default command timeout should be 60 seconds (safe default)."""
+        from scrappy.agent_tools.constants import DEFAULT_COMMAND_TIMEOUT
+
+        assert DEFAULT_COMMAND_TIMEOUT == 60
+
+    def test_long_running_timeout_is_300_seconds(self):
+        """Long-running command timeout should be 300 seconds."""
+        from scrappy.agent_tools.constants import LONG_RUNNING_COMMAND_TIMEOUT
+
+        assert LONG_RUNNING_COMMAND_TIMEOUT == 300
+
+    def test_effective_timeout_uses_default_for_regular_commands(self):
+        """Regular commands should use the default timeout."""
+        from scrappy.agent_tools.tools.command_tool import ShellCommandExecutor
+        from scrappy.agent_tools.constants import DEFAULT_COMMAND_TIMEOUT
+
+        executor = ShellCommandExecutor(timeout=DEFAULT_COMMAND_TIMEOUT)
+
+        assert executor._get_effective_timeout("echo hello") == DEFAULT_COMMAND_TIMEOUT
+        assert executor._get_effective_timeout("ls -la") == DEFAULT_COMMAND_TIMEOUT
+        assert executor._get_effective_timeout("git status") == DEFAULT_COMMAND_TIMEOUT
+
+    def test_effective_timeout_uses_extended_for_long_running(self):
+        """Long-running commands should use extended timeout."""
+        from scrappy.agent_tools.tools.command_tool import ShellCommandExecutor
+        from scrappy.agent_tools.constants import LONG_RUNNING_COMMAND_TIMEOUT
+
+        executor = ShellCommandExecutor()
+
+        assert executor._get_effective_timeout("npm install") == LONG_RUNNING_COMMAND_TIMEOUT
+        assert executor._get_effective_timeout("pip install requests") == LONG_RUNNING_COMMAND_TIMEOUT
+        assert executor._get_effective_timeout("cargo build") == LONG_RUNNING_COMMAND_TIMEOUT
+        assert executor._get_effective_timeout("docker build .") == LONG_RUNNING_COMMAND_TIMEOUT
+
+    def test_effective_timeout_case_insensitive(self):
+        """Long-running detection should be case insensitive."""
+        from scrappy.agent_tools.tools.command_tool import ShellCommandExecutor
+        from scrappy.agent_tools.constants import LONG_RUNNING_COMMAND_TIMEOUT
+
+        executor = ShellCommandExecutor()
+
+        assert executor._get_effective_timeout("NPM INSTALL") == LONG_RUNNING_COMMAND_TIMEOUT
+        assert executor._get_effective_timeout("Pip Install") == LONG_RUNNING_COMMAND_TIMEOUT
+
+    def test_uses_centralized_long_running_commands_list(self):
+        """Should use DEFAULT_LONG_RUNNING_COMMANDS from constants."""
+        from scrappy.agent_tools.tools.command_tool import ShellCommandExecutor
+        from scrappy.agent_tools.constants import (
+            DEFAULT_LONG_RUNNING_COMMANDS,
+            LONG_RUNNING_COMMAND_TIMEOUT,
+        )
+
+        executor = ShellCommandExecutor()
+
+        # All commands in the centralized list should get extended timeout
+        for pattern in DEFAULT_LONG_RUNNING_COMMANDS:
+            # Use the pattern in a realistic command context
+            cmd = f"{pattern} some-package"
+            assert executor._get_effective_timeout(cmd) == LONG_RUNNING_COMMAND_TIMEOUT, (
+                f"Expected extended timeout for command containing '{pattern}'"
+            )
+
+    def test_timeout_passed_to_runner(self):
+        """Effective timeout should be passed to subprocess runner."""
+        from scrappy.agent_tools.tools.command_tool import ShellCommandExecutor
+        from scrappy.agent_tools.constants import LONG_RUNNING_COMMAND_TIMEOUT
+
+        mock_runner = Mock()
+        mock_runner.execute.return_value = Mock(stdout="success")
+        mock_security = Mock()
+        mock_security.validate.return_value = None
+
+        executor = ShellCommandExecutor(
+            security=mock_security,
+            runner=mock_runner,
+            timeout=60  # Default timeout
+        )
+
+        project_root = Path("/test/project")
+        executor.run("npm install", project_root)
+
+        # Verify runner was called with extended timeout
+        mock_runner.execute.assert_called()
+        call_kwargs = mock_runner.execute.call_args
+        assert call_kwargs.kwargs.get('timeout') == LONG_RUNNING_COMMAND_TIMEOUT
+
+
 class TestShellCommandExecutorCategorization:
     """Tests for command categorization."""
 

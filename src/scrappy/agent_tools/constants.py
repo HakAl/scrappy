@@ -16,7 +16,8 @@ DEFAULT_MAX_FILE_LISTING = 100  # files - prevents overwhelming output
 DEFAULT_MAX_DIRECTORY_TREE_LINES = 200  # lines - keeps tree output manageable
 
 # Command execution limits
-DEFAULT_COMMAND_TIMEOUT = 300  # seconds (5 minutes) - allows long builds/installs
+DEFAULT_COMMAND_TIMEOUT = 60  # seconds (1 minute) - safe default for most commands
+LONG_RUNNING_COMMAND_TIMEOUT = 300  # seconds (5 minutes) - for builds/installs only
 DEFAULT_MAX_COMMAND_OUTPUT = 10000  # bytes - prevents memory issues with verbose commands
 
 # Commands known to be long-running (pattern matches)

@@ -19,7 +19,12 @@ if TYPE_CHECKING:
         OutputParserProtocol,
     )
     from scrappy.protocols.io import CLIIOProtocol
-from ..constants import DEFAULT_COMMAND_TIMEOUT, DEFAULT_MAX_COMMAND_OUTPUT
+from ..constants import (
+    DEFAULT_COMMAND_TIMEOUT,
+    DEFAULT_MAX_COMMAND_OUTPUT,
+    DEFAULT_LONG_RUNNING_COMMANDS,
+    LONG_RUNNING_COMMAND_TIMEOUT,
+)
 
 # Import platform utilities
 from scrappy.platform import (
@@ -193,16 +198,17 @@ class ShellCommandExecutor:
         if advice and self._io:
             self._io.echo(f"   [ADVICE] {advice}")
 
-        # 6. Check for long-running commands
+        # 6. Check for long-running commands and get effective timeout
         is_long_running = self._is_long_running_command(command)
+        effective_timeout = self._get_effective_timeout(command)
         if is_long_running and self._io:
             self._io.echo("Long-running command detected")
-            self._io.echo(f"   Timeout: {self.timeout}s | Streaming output enabled")
+            self._io.echo(f"   Timeout: {effective_timeout}s | Streaming output enabled")
 
-        # 7. Execute with retry logic
+        # 7. Execute with retry logic using effective timeout
         try:
             show_progress = is_long_running
-            output = self._run_command_with_retry(command, self.timeout, show_progress=show_progress, cwd=project_root)
+            output = self._run_command_with_retry(command, effective_timeout, show_progress=show_progress, cwd=project_root)
 
             # 8. Parse and enrich output
             parsed_output = self._parser.parse(output, max_length=self.max_output)
@@ -220,6 +226,9 @@ class ShellCommandExecutor:
         """
         Check if command is expected to be long-running.
 
+        Uses the centralized DEFAULT_LONG_RUNNING_COMMANDS list from constants
+        to determine if a command should have an extended timeout.
+
         Args:
             command: Command to check
 
@@ -227,21 +236,30 @@ class ShellCommandExecutor:
             True if long-running
         """
         cmd_lower = command.lower()
-        long_running_patterns = [
-            'npm install',
-            'docker build',
-            'pip install',
-            'yarn install',
-            'cargo build',
-            'mvn package',
-            'gradle build',
-        ]
 
-        for pattern in long_running_patterns:
-            if pattern in cmd_lower:
+        for pattern in DEFAULT_LONG_RUNNING_COMMANDS:
+            if pattern.lower() in cmd_lower:
                 return True
 
         return False
+
+    def _get_effective_timeout(self, command: str) -> int:
+        """
+        Get the effective timeout for a command.
+
+        Long-running commands (npm install, cargo build, etc.) get an extended
+        timeout (LONG_RUNNING_COMMAND_TIMEOUT), while regular commands use the
+        default timeout (DEFAULT_COMMAND_TIMEOUT).
+
+        Args:
+            command: Command to check
+
+        Returns:
+            Timeout in seconds
+        """
+        if self._is_long_running_command(command):
+            return LONG_RUNNING_COMMAND_TIMEOUT
+        return self.timeout
 
     def _run_command_with_retry(
         self,
