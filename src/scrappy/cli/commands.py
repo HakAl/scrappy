@@ -22,7 +22,8 @@ from .exceptions import (
     FileOperationError,
 )
 from .logging import get_logger
-from ..agent import CodeAgent, create_git_checkpoint
+from ..agent import CodeAgent
+from scrappy.undo import create_undo_point, UndoError
 from .config_factory import get_config
 from scrappy.infrastructure.output_mode import OutputModeContext
 from .utils.cli_factory import create_cli_from_context
@@ -527,14 +528,14 @@ def agent(ctx, task, dry_run, no_checkpoint, auto_confirm, max_iterations):
     click.secho(f"\nCode Agent - Task: {task}", bold=True)
     click.echo("-" * 60)
 
-    checkpoint_hash = None
+    undo_state = None
     if not no_checkpoint:
-        click.echo("Creating git checkpoint...")
-        checkpoint_hash = create_git_checkpoint(str(orchestrator.context.project_path))
-        if checkpoint_hash:
-            click.secho(f"Checkpoint created: {checkpoint_hash[:8]}", fg="green")
-        else:
-            click.secho("Could not create checkpoint (not a git repo?)", fg="yellow")
+        click.echo("Creating undo point...")
+        try:
+            undo_state = create_undo_point()
+            click.secho(f"Undo point created: {undo_state.ref.split('/')[-1]}", fg="green")
+        except UndoError as e:
+            click.secho(f"Could not create undo point: {e}", fg="yellow")
 
     code_agent = CodeAgent(orchestrator)
     code_agent.dry_run = dry_run
@@ -571,8 +572,8 @@ def agent(ctx, task, dry_run, no_checkpoint, auto_confirm, max_iterations):
         log_path = code_agent.save_audit_log()
         click.secho(f"Audit log: {log_path}", fg="cyan")
 
-        if checkpoint_hash and not dry_run:
-            click.echo(f"\nTo rollback changes: git reset --hard {checkpoint_hash}")
+        if undo_state and not dry_run:
+            click.echo("\nTo undo changes: scrappy undo")
 
     except KeyboardInterrupt:
         click.echo("\n\nAgent interrupted by user.")
@@ -745,6 +746,75 @@ def config_remove(provider: str, force: bool):
         click.secho(f"API key for {provider} removed.", fg="green")
     else:
         click.secho(f"No API key found for {provider}.", fg="yellow")
+
+
+# =============================================================================
+# Undo Commands - Safe rollback of agent changes
+# =============================================================================
+
+@cli.command()
+@click.argument("n", default=1, type=int)
+@click.option("--force", is_flag=True, help="Bypass worktree path check (if directory was moved)")
+def undo(n: int, force: bool):
+    """Undo the last N agent runs.
+
+    Restores the repository state from before the agent ran.
+    Use --force if you moved the project directory since the agent run.
+
+    Note: Staged vs unstaged file status is not preserved.
+
+    Examples:
+        scrappy undo        # Undo most recent agent run
+        scrappy undo 2      # Undo 2nd most recent
+        scrappy undo --force  # Bypass path check
+    """
+    from scrappy import undo as undo_module
+
+    try:
+        undo_module.undo(n, force=force)
+        click.secho(f"Restored to state before agent run #{n}", fg="green")
+    except undo_module.UndoError as e:
+        click.secho(f"Undo failed: {e}", fg="red")
+        sys.exit(1)
+
+
+@cli.command("undo-list")
+def undo_list():
+    """List available undo points.
+
+    Shows all saved snapshots that can be restored with 'scrappy undo'.
+    """
+    from scrappy import undo as undo_module
+
+    states = undo_module.load_undo_states()
+
+    if not states:
+        click.echo("No undo points available")
+        return
+
+    click.echo(f"Available undo points ({len(states)}):\n")
+    for i, state in enumerate(reversed(states), 1):
+        branch_info = state.branch or f"detached@{state.original_head[:7] if state.original_head else 'unknown'}"
+        wip_marker = " [dirty]" if state.is_wip else ""
+        click.echo(f"  {i}. {state.created_at:%Y-%m-%d %H:%M:%S} on {branch_info}{wip_marker}")
+
+
+@cli.command("undo-gc")
+@click.option("--keep", default=None, type=int, help="Number of undo points to keep (default: SCRAPPY_UNDO_LIMIT or 10)")
+def undo_gc(keep: int):
+    """Clean up old undo points.
+
+    Removes the oldest undo points, keeping the most recent N.
+    Default is controlled by SCRAPPY_UNDO_LIMIT env var (default: 10).
+    """
+    from scrappy import undo as undo_module
+
+    before = len(undo_module.load_undo_states())
+    undo_module.prune_old_undo_states(keep=keep)
+    after = len(undo_module.load_undo_states())
+
+    removed = before - after
+    click.echo(f"Removed {removed} undo points, kept {after}")
 
 
 # =============================================================================

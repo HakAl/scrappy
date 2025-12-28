@@ -3,12 +3,26 @@ Git checkpoint operations for the Code Agent.
 
 Provides functionality to create and rollback to git checkpoints
 for safe agent operations.
+
+DEPRECATED: This module is deprecated in favor of scrappy.undo.
+Use create_undo_point() and undo() from scrappy.undo instead.
+The undo system provides safer rollback via shadow refs without
+creating visible checkpoint commits in the git history.
+
+This module will be removed in a future release.
 """
 
 import re
 import subprocess
+import warnings
 from datetime import datetime
 from typing import Optional
+
+_DEPRECATION_MESSAGE = (
+    "scrappy.agent.checkpoint is deprecated. Use scrappy.undo instead. "
+    "The undo system provides safer rollback via shadow refs. "
+    "See 'scrappy undo --help' for usage."
+)
 
 
 # Pattern for valid git commit hashes (7-40 hex characters)
@@ -32,12 +46,16 @@ def create_git_checkpoint(project_path: str = ".") -> Optional[str]:
     """
     Create a git checkpoint before agent operations.
 
+    DEPRECATED: Use scrappy.undo.create_undo_point() instead.
+    The undo system provides safer rollback via shadow refs.
+
     Args:
         project_path: Path to the project directory
 
     Returns:
         Commit hash of the checkpoint, or None if not in a git repo
     """
+    warnings.warn(_DEPRECATION_MESSAGE, DeprecationWarning, stacklevel=2)
     try:
         # Security: Use argument list instead of shell=True to prevent command injection
         result = subprocess.run(
@@ -89,6 +107,9 @@ def rollback_to_checkpoint(commit_hash: str, project_path: str = ".") -> bool:
     """
     Rollback to a git checkpoint.
 
+    DEPRECATED: Use scrappy.undo.undo() instead.
+    The undo system provides safer rollback via shadow refs.
+
     Args:
         commit_hash: The commit hash to rollback to
         project_path: Path to the project directory
@@ -99,6 +120,7 @@ def rollback_to_checkpoint(commit_hash: str, project_path: str = ".") -> bool:
     Raises:
         ValueError: If commit_hash is not a valid git commit hash format
     """
+    warnings.warn(_DEPRECATION_MESSAGE, DeprecationWarning, stacklevel=2)
     # Security: Validate commit hash format to prevent command injection
     if not _is_valid_commit_hash(commit_hash):
         raise ValueError(f"Invalid commit hash: {commit_hash}")
