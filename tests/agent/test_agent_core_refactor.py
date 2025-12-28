@@ -132,126 +132,45 @@ class TestRegistryCreation:
 
 
 class TestCommandCategorization:
-    """Tests for _categorize_command_approach behavior."""
+    """Tests for _categorize_command_approach behavior.
+
+    Uses parameterized tests to cover all command categorization patterns
+    without repetitive test methods.
+    """
 
     @pytest.mark.unit
-    def test_categorizes_spring_initializr(self, agent_with_config):
-        """Should categorize Spring Initializr downloads."""
-        cmd = "curl https://start.spring.io/starter.zip -d dependencies=web"
+    @pytest.mark.parametrize("cmd,expected", [
+        # Spring Initializr downloads
+        ("curl https://start.spring.io/starter.zip -d dependencies=web", "spring_initializr_download"),
+        ("CURL https://START.SPRING.IO/starter.zip", "spring_initializr_download"),  # case insensitive
+        # Curl/wget downloads
+        ("curl -o file.zip https://example.com/file.zip", "curl_download"),
+        ("wget https://example.com/file.zip", "curl_download"),
+        # PowerShell downloads
+        ("Invoke-WebRequest -Uri https://example.com/file.zip", "powershell_download"),
+        ("(New-Object Net.WebClient).DownloadFile('url', 'file')", "powershell_download"),
+        # npm create/npx create
+        ("npm create vite@latest my-app", "npm_create_project"),
+        ("npx create-react-app my-app", "npm_create_project"),
+        # npm init
+        ("npm init -y", "npm_init"),
+        # mkdir variations
+        ("mkdir -p src/components/ui", "mkdir_unix_style"),
+        ("mkdir src\\components\\ui", "mkdir"),
+        # npm install
+        ("npm install express", "npm_install"),
+        ("npm i express", "npm_install"),
+        # Unix commands
+        ("grep -r 'pattern' .", "unix_command"),
+        ("cat file.txt", "unix_command"),
+        ("find . -name '*.py'", "unix_command"),
+        # Generic shell commands
+        ("python script.py", "shell_command"),
+    ])
+    def test_categorizes_commands(self, agent_with_config, cmd, expected):
+        """Should categorize commands correctly based on pattern matching."""
         result = agent_with_config._categorize_command_approach(cmd)
-        assert result == "spring_initializr_download"
-
-    @pytest.mark.unit
-    def test_categorizes_curl_download(self, agent_with_config):
-        """Should categorize curl downloads."""
-        cmd = "curl -o file.zip https://example.com/file.zip"
-        result = agent_with_config._categorize_command_approach(cmd)
-        assert result == "curl_download"
-
-    @pytest.mark.unit
-    def test_categorizes_wget_as_curl_download(self, agent_with_config):
-        """Should categorize wget as curl_download."""
-        cmd = "wget https://example.com/file.zip"
-        result = agent_with_config._categorize_command_approach(cmd)
-        assert result == "curl_download"
-
-    @pytest.mark.unit
-    def test_categorizes_powershell_download(self, agent_with_config):
-        """Should categorize PowerShell downloads."""
-        cmd = "Invoke-WebRequest -Uri https://example.com/file.zip"
-        result = agent_with_config._categorize_command_approach(cmd)
-        assert result == "powershell_download"
-
-    @pytest.mark.unit
-    def test_categorizes_downloadfile_method(self, agent_with_config):
-        """Should categorize DownloadFile method."""
-        cmd = "(New-Object Net.WebClient).DownloadFile('url', 'file')"
-        result = agent_with_config._categorize_command_approach(cmd)
-        assert result == "powershell_download"
-
-    @pytest.mark.unit
-    def test_categorizes_npm_create(self, agent_with_config):
-        """Should categorize npm create commands."""
-        cmd = "npm create vite@latest my-app"
-        result = agent_with_config._categorize_command_approach(cmd)
-        assert result == "npm_create_project"
-
-    @pytest.mark.unit
-    def test_categorizes_npx_create(self, agent_with_config):
-        """Should categorize npx create commands."""
-        cmd = "npx create-react-app my-app"
-        result = agent_with_config._categorize_command_approach(cmd)
-        assert result == "npm_create_project"
-
-    @pytest.mark.unit
-    def test_categorizes_npm_init(self, agent_with_config):
-        """Should categorize npm init commands."""
-        cmd = "npm init -y"
-        result = agent_with_config._categorize_command_approach(cmd)
-        assert result == "npm_init"
-
-    @pytest.mark.unit
-    def test_categorizes_mkdir_unix_style(self, agent_with_config):
-        """Should detect unix-style mkdir (forward slashes)."""
-        cmd = "mkdir -p src/components/ui"
-        result = agent_with_config._categorize_command_approach(cmd)
-        assert result == "mkdir_unix_style"
-
-    @pytest.mark.unit
-    def test_categorizes_mkdir_windows_style(self, agent_with_config):
-        """Should detect windows-style mkdir (backslashes)."""
-        cmd = "mkdir src\\components\\ui"
-        result = agent_with_config._categorize_command_approach(cmd)
-        assert result == "mkdir"
-
-    @pytest.mark.unit
-    def test_categorizes_npm_install(self, agent_with_config):
-        """Should categorize npm install commands."""
-        cmd = "npm install express"
-        result = agent_with_config._categorize_command_approach(cmd)
-        assert result == "npm_install"
-
-    @pytest.mark.unit
-    def test_categorizes_npm_i_shorthand(self, agent_with_config):
-        """Should categorize npm i shorthand."""
-        cmd = "npm i express"
-        result = agent_with_config._categorize_command_approach(cmd)
-        assert result == "npm_install"
-
-    @pytest.mark.unit
-    def test_categorizes_unix_command_grep(self, agent_with_config):
-        """Should categorize grep as unix command."""
-        cmd = "grep -r 'pattern' ."
-        result = agent_with_config._categorize_command_approach(cmd)
-        assert result == "unix_command"
-
-    @pytest.mark.unit
-    def test_categorizes_unix_command_cat(self, agent_with_config):
-        """Should categorize cat as unix command."""
-        cmd = "cat file.txt"
-        result = agent_with_config._categorize_command_approach(cmd)
-        assert result == "unix_command"
-
-    @pytest.mark.unit
-    def test_categorizes_unix_command_find(self, agent_with_config):
-        """Should categorize find as unix command."""
-        cmd = "find . -name '*.py'"
-        result = agent_with_config._categorize_command_approach(cmd)
-        assert result == "unix_command"
-
-    @pytest.mark.unit
-    def test_categorizes_generic_shell_command(self, agent_with_config):
-        """Should categorize unknown commands as shell_command."""
-        cmd = "python script.py"
-        result = agent_with_config._categorize_command_approach(cmd)
-        assert result == "shell_command"
-
-    @pytest.mark.unit
-    def test_case_insensitive_categorization(self, agent_with_config):
-        """Categorization should be case insensitive."""
-        cmd = "CURL https://START.SPRING.IO/starter.zip"
-        result = agent_with_config._categorize_command_approach(cmd)
-        assert result == "spring_initializr_download"
+        assert result == expected
 
 
 class TestRetryPatternDetection:

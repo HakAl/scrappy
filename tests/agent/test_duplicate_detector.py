@@ -14,63 +14,36 @@ class TestDuplicateDetectorSkipActions:
     """Tests for actions that should never be flagged as duplicates."""
 
     @pytest.mark.unit
-    def test_read_file_never_duplicate(self):
-        """read_file should never be flagged as duplicate (normal to re-read)."""
+    @pytest.mark.parametrize("action_name,params", [
+        ('read_file', {"path": "test.py"}),
+        ('write_file', {"path": "test.py", "content": "code"}),
+        ('list_files', {"directory": "/src"}),
+        ('list_directory', {"path": "/src"}),
+        ('search_code', {"query": "def foo"}),
+        ('find_exact_text', {"text": "hello"}),
+        ('codebase_search', {"query": "class Bar"}),
+        ('git_status', {}),
+        ('git_diff', {"ref": "HEAD"}),
+        ('task', {"operation": "update"}),
+        ('complete', {"result": "Done"}),
+    ])
+    def test_skip_actions_never_duplicate(self, action_name, params):
+        """Actions in SKIP_DUPLICATE_CHECK should never be flagged as duplicates."""
         detector = DuplicateDetector()
         state = ConversationState()
-        state.last_action = {"action": "read_file", "parameters": {"path": "test.py"}}
+        state.last_action = {"action": action_name, "parameters": params}
 
         action = AgentAction(
-            action="read_file",
-            parameters={"path": "test.py"},
-            thought="Reading file again",
-            is_complete=False
+            action=action_name,
+            parameters=params,
+            thought=f"Repeating {action_name}",
+            is_complete=(action_name == 'complete')
         )
 
         is_dup, msg = detector.check_duplicate(action, state)
 
         assert is_dup is False
         assert msg == ""
-
-    @pytest.mark.unit
-    def test_write_file_never_duplicate(self):
-        """write_file should never be flagged as duplicate (normal to overwrite)."""
-        detector = DuplicateDetector()
-        state = ConversationState()
-        state.last_action = {
-            "action": "write_file",
-            "parameters": {"path": "test.py", "content": "code"}
-        }
-
-        action = AgentAction(
-            action="write_file",
-            parameters={"path": "test.py", "content": "code"},
-            thought="Writing again",
-            is_complete=False
-        )
-
-        is_dup, msg = detector.check_duplicate(action, state)
-
-        assert is_dup is False
-        assert msg == ""
-
-    @pytest.mark.unit
-    def test_task_never_duplicate(self):
-        """task should never be flagged as duplicate (internal tracking)."""
-        detector = DuplicateDetector()
-        state = ConversationState()
-        state.last_action = {"action": "task", "parameters": {"operation": "update"}}
-
-        action = AgentAction(
-            action="task",
-            parameters={"operation": "update"},
-            thought="Updating task",
-            is_complete=False
-        )
-
-        is_dup, msg = detector.check_duplicate(action, state)
-
-        assert is_dup is False
 
     @pytest.mark.unit
     def test_skip_list_includes_expected_actions(self):
@@ -81,24 +54,6 @@ class TestDuplicateDetectorSkipActions:
             'git_status', 'git_diff', 'task', 'complete'
         }
         assert expected.issubset(DuplicateDetector.SKIP_DUPLICATE_CHECK)
-
-    @pytest.mark.unit
-    def test_complete_never_duplicate(self):
-        """complete should never be flagged as duplicate (let validator handle it)."""
-        detector = DuplicateDetector()
-        state = ConversationState()
-        state.last_action = {"action": "complete", "parameters": {"result": "Done"}}
-
-        action = AgentAction(
-            action="complete",
-            parameters={"result": "Done"},
-            thought="Completing again",
-            is_complete=True
-        )
-
-        is_dup, msg = detector.check_duplicate(action, state)
-
-        assert is_dup is False
 
 
 class TestDuplicateDetectorBasics:
@@ -274,92 +229,38 @@ class TestDuplicateDetectorCommandFailures:
     """Tests for command failure tracking."""
 
     @pytest.mark.unit
-    def test_command_not_blocked_with_no_failures(self):
-        """Command with no failure history should not be blocked."""
+    @pytest.mark.parametrize("failure_count,expected_blocked,expected_msg_fragment", [
+        (0, False, None),  # No failures - not blocked
+        (1, False, None),  # 1 failure - not blocked
+        (2, False, None),  # 2 failures - not blocked (under threshold)
+        (3, True, "failed 3 times"),  # At threshold - blocked
+        (5, True, "failed 5 times"),  # Over threshold - blocked
+    ])
+    def test_command_blocking_by_failure_count(
+        self, failure_count, expected_blocked, expected_msg_fragment
+    ):
+        """Commands should be blocked after MAX_COMMAND_FAILURES (3) failures."""
         detector = DuplicateDetector()
         state = ConversationState()
-        state.failed_commands = []
-
-        action = AgentAction(
-            action="run_command",
-            parameters={"command": "pytest tests/"},
-            thought="Running tests",
-            is_complete=False
-        )
-
-        is_dup, msg = detector.check_duplicate(action, state)
-
-        assert is_dup is False
-
-    @pytest.mark.unit
-    def test_command_not_blocked_under_threshold(self):
-        """Command with fewer than MAX failures should not be blocked."""
-        detector = DuplicateDetector()
-        state = ConversationState()
+        command = "pytest tests/"
         state.failed_commands = [
-            {"command": "pytest tests/", "error": "failed"},
-            {"command": "pytest tests/", "error": "failed again"},
+            {"command": command, "error": f"failed {i}"}
+            for i in range(failure_count)
         ]
 
         action = AgentAction(
             action="run_command",
-            parameters={"command": "pytest tests/"},
+            parameters={"command": command},
             thought="Running tests",
             is_complete=False
         )
 
         is_dup, msg = detector.check_duplicate(action, state)
 
-        assert is_dup is False
-
-    @pytest.mark.unit
-    def test_command_blocked_at_threshold(self):
-        """Command with MAX failures should be blocked."""
-        detector = DuplicateDetector()
-        state = ConversationState()
-        state.failed_commands = [
-            {"command": "pytest tests/", "error": "failed 1"},
-            {"command": "pytest tests/", "error": "failed 2"},
-            {"command": "pytest tests/", "error": "failed 3"},
-        ]
-
-        action = AgentAction(
-            action="run_command",
-            parameters={"command": "pytest tests/"},
-            thought="Running tests",
-            is_complete=False
-        )
-
-        is_dup, msg = detector.check_duplicate(action, state)
-
-        assert is_dup is True
-        assert "failed 3 times" in msg
-        assert "infinite loop" in msg
-
-    @pytest.mark.unit
-    def test_command_blocked_over_threshold(self):
-        """Command with more than MAX failures should be blocked."""
-        detector = DuplicateDetector()
-        state = ConversationState()
-        state.failed_commands = [
-            {"command": "npm test", "error": "failed"},
-            {"command": "npm test", "error": "failed"},
-            {"command": "npm test", "error": "failed"},
-            {"command": "npm test", "error": "failed"},
-            {"command": "npm test", "error": "failed"},
-        ]
-
-        action = AgentAction(
-            action="run_command",
-            parameters={"command": "npm test"},
-            thought="Running tests",
-            is_complete=False
-        )
-
-        is_dup, msg = detector.check_duplicate(action, state)
-
-        assert is_dup is True
-        assert "failed 5 times" in msg
+        assert is_dup is expected_blocked
+        if expected_msg_fragment:
+            assert expected_msg_fragment in msg
+            assert "infinite loop" in msg
 
     @pytest.mark.unit
     def test_different_command_not_blocked(self):
