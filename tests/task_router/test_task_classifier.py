@@ -261,3 +261,137 @@ class TestIntentClarification:
             # Medium/low confidence with question + action = needs clarification
             needs_clarify = router._needs_intent_clarification(task)
             assert needs_clarify, "Medium confidence with question+action needs clarification"
+
+
+class TestShortFollowUpMessages:
+    """Tests for short follow-up message classification.
+
+    These patterns handle context-dependent messages like "update it" or "do it"
+    that typically follow an assistant offer to perform an action.
+    """
+
+    @pytest.mark.unit
+    def test_action_pronoun_patterns_classified_as_code_generation(self, classifier):
+        """Test that action + pronoun patterns are CODE_GENERATION."""
+        action_pronoun_cases = [
+            "update it",
+            "fix it",
+            "create it",
+            "delete it",
+            "modify it",
+            "edit it",
+            "update that",
+            "fix that",
+        ]
+
+        for input_text in action_pronoun_cases:
+            result = classifier.classify(input_text)
+            assert result.task_type == TaskType.CODE_GENERATION, f"Failed for: {input_text}"
+            assert result.confidence >= 0.8, f"Confidence too low for: {input_text}"
+
+    @pytest.mark.unit
+    def test_do_it_classified_as_code_generation(self, classifier):
+        """Test that 'do it' is CODE_GENERATION (slightly lower confidence)."""
+        result = classifier.classify("do it")
+        assert result.task_type == TaskType.CODE_GENERATION
+        assert result.confidence >= 0.75
+
+    @pytest.mark.unit
+    def test_bare_affirmatives_not_code_generation(self, classifier):
+        """Test that bare affirmatives without context don't become CODE_GENERATION.
+
+        These need conversation context to determine intent - they could confirm
+        anything (search, chat, code, etc.). Without context, they should NOT
+        be classified as CODE_GENERATION with high confidence.
+        """
+        bare_affirmatives = [
+            "yes",
+            "ok",
+            "okay",
+            "sure",
+            "go ahead",
+            "1",
+            "2",
+        ]
+
+        for input_text in bare_affirmatives:
+            result = classifier.classify(input_text)
+            # Should NOT be CODE_GENERATION (these need context)
+            if result.task_type == TaskType.CODE_GENERATION:
+                assert result.confidence < 0.7, f"Too confident for context-free: {input_text}"
+
+
+class TestCreativeWritingVsCodeGeneration:
+    """Tests to ensure creative writing requests don't get classified as CODE_GENERATION.
+
+    This prevents false positives where generic verbs like "create" or "write"
+    match code patterns when the user actually wants creative content.
+    """
+
+    @pytest.mark.unit
+    def test_creative_writing_not_code_generation(self, classifier):
+        """Test that creative writing requests are NOT CODE_GENERATION.
+
+        Note: "Make a list" is ambiguous - "list" is both a data structure
+        and everyday language, so it's excluded from this test. See existing
+        tests that expect "create a list" to be CODE_GENERATION.
+        """
+        creative_cases = [
+            "Create a story about dragons",
+            "Write a summary of this PDF",
+            "Generate a poem about spring",
+            "Write an essay about climate change",
+        ]
+
+        for input_text in creative_cases:
+            result = classifier.classify(input_text)
+            assert result.task_type != TaskType.CODE_GENERATION, \
+                f"Should NOT be code_generation: {input_text}"
+
+    @pytest.mark.unit
+    def test_code_specific_objects_are_code_generation(self, classifier):
+        """Test that requests with code-specific objects ARE CODE_GENERATION."""
+        code_cases = [
+            "Create a python script",
+            "Write a function to parse JSON",
+            "Make a new component",
+            "Generate an API endpoint",
+            "Create a utility to compress files",
+            "Write app.py",
+            "Create main.js",
+        ]
+
+        for input_text in code_cases:
+            result = classifier.classify(input_text)
+            assert result.task_type == TaskType.CODE_GENERATION, f"Failed for: {input_text}"
+            assert result.confidence >= 0.8, f"Confidence too low for: {input_text}"
+
+    @pytest.mark.unit
+    def test_file_extension_whitelist(self, classifier):
+        """Test that only recognized source file extensions trigger CODE_GENERATION."""
+        # Should match - known source extensions
+        source_files = [
+            "create main.py",
+            "write index.js",
+            "generate config.json",
+            "create style.css",
+        ]
+
+        for input_text in source_files:
+            result = classifier.classify(input_text)
+            assert result.task_type == TaskType.CODE_GENERATION, f"Failed for: {input_text}"
+
+    @pytest.mark.unit
+    def test_ambiguous_extensions_lower_confidence(self, classifier):
+        """Test that ambiguous patterns don't get high CODE_GENERATION confidence."""
+        # These might look like files but are actually common English
+        ambiguous_cases = [
+            "See fig. 1",  # Not a file
+            "Mr. Smith",   # Not a file
+        ]
+
+        for input_text in ambiguous_cases:
+            result = classifier.classify(input_text)
+            # Either not CODE_GENERATION or low confidence
+            if result.task_type == TaskType.CODE_GENERATION:
+                assert result.confidence < 0.8, f"Too confident for ambiguous: {input_text}"
