@@ -6,7 +6,6 @@ extracting configuration from Click contexts.
 """
 
 from datetime import datetime
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Dict
 
 from ..io_interface import CLIIOProtocol, TestIO
@@ -23,14 +22,13 @@ from ..cache_manager import CacheManager
 from ..rate_limiter import RateLimiter
 from ..persistence import SessionPersistence
 from ..user_interaction import get_user_interaction
-from ..protocols import UserInteractionProtocol
 from ..conversation_store import ConversationStore
 from scrappy.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
 
 if TYPE_CHECKING:
     from ..core import CLI
     from ...orchestrator.protocols import Orchestrator
-    from ..textual_app import ThreadSafeAsyncBridge
+    from ..textual import ThreadSafeAsyncBridge
 
 
 def create_conversation_store(orchestrator: "Orchestrator") -> Optional[ConversationStore]:
@@ -80,7 +78,7 @@ def get_io_interface(
 
     # CLI === Textual (interactive mode)
     # Create UnifiedIO with OutputSink for Textual routing
-    from ..textual_app import TextualOutputAdapter
+    from ..textual import TextualOutputAdapter
     output_adapter = TextualOutputAdapter()
     return UnifiedIO(output_sink=output_adapter, theme=theme or DEFAULT_THEME)
 

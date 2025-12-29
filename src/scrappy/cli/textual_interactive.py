@@ -6,7 +6,7 @@ Provides a clean TUI interface using Textual framework.
 
 from typing import TYPE_CHECKING
 
-from .textual_app import ScrappyApp, TextualOutputAdapter
+from .textual import ScrappyApp
 from .unified_io import UnifiedIO
 from .interactive import InteractiveMode
 from .output_bridge import OutputBridge

@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import Mock
 
-from scrappy.cli.textual_app import ThreadSafeAsyncBridge
+from scrappy.cli.textual import ThreadSafeAsyncBridge
 
 
 class TestThreadSafeAsyncBridge:

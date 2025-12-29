@@ -15,17 +15,24 @@ from .chat_layout import ChatLayout
 from ..input_capture import InputCaptureManager, InputRequest
 from ..command_history import CommandHistory, get_default_history_path
 from ..widgets.selectable_log import SelectableLog
+from ..textual import (
+    ProgressIndicator,
+    TokenCounter,
+    PromptDisplay,
+    SemanticStatusComponent,
+    StatusBar,
+    ActivityIndicator,
+    ActivityStateChange,
+)
 
 from scrappy.infrastructure.theme import ThemeProtocol
 from scrappy.protocols.activity import ActivityState
 
 if TYPE_CHECKING:
     from ..interactive import InteractiveMode
-    from ..textual_app import (
+    from ..textual import (
         TextualOutputAdapter,
         ThreadSafeAsyncBridge,
-        SemanticStatusComponent,
-        ActivityStateChange,
         ScrappyApp,
     )
 
@@ -73,9 +80,6 @@ class MainAppScreen(Screen):
         self.bridge = bridge
         self._theme = theme
 
-        # Import here to avoid circular imports
-        from ..textual_app import ProgressIndicator, TokenCounter, PromptDisplay
-
         # Status bar components
         self.progress_indicator = ProgressIndicator()
         self.token_counter = TokenCounter()
@@ -98,14 +102,13 @@ class MainAppScreen(Screen):
     @property
     def scrappy_app(self) -> "ScrappyApp":
         """Get the typed ScrappyApp instance."""
-        from ..textual_app import ScrappyApp
+        from ..textual import ScrappyApp
         return cast(ScrappyApp, self.app)
 
     @property
-    def semantic_status(self) -> "SemanticStatusComponent":
+    def semantic_status(self) -> SemanticStatusComponent:
         """Lazy-load semantic status component."""
         if not hasattr(self, '_semantic_status'):
-            from ..textual_app import SemanticStatusComponent
             self._semantic_status = SemanticStatusComponent()
         return self._semantic_status
 
@@ -119,8 +122,6 @@ class MainAppScreen(Screen):
 
     def on_mount(self) -> None:
         """Called when screen is mounted."""
-        from ..textual_app import StatusBar
-
         # Get layout and focus input
         self._layout = self.query_one(ChatLayout)
         self._layout.focus_input()
@@ -132,7 +133,7 @@ class MainAppScreen(Screen):
         status_bar.register_component(self.prompt_display)
         status_bar.register_component(self.semantic_status)
 
-        # NOTE: Banner is now displayed immediately in textual_app._show_main_screen()
+        # NOTE: Banner is now displayed immediately in app._show_main_screen()
         # using display_banner_header_tui(). Status lines are shown when CLI is ready.
         # No "Starting up..." message needed since user sees banner immediately.
 
@@ -307,7 +308,6 @@ class MainAppScreen(Screen):
         # Don't wait for agent to finish - user has already requested cancellation
         self._stop_elapsed_timer()
         try:
-            from ..textual_app import ActivityIndicator
             indicator = self.query_one(ActivityIndicator)
             indicator.hide()
         except Exception:
@@ -332,8 +332,6 @@ class MainAppScreen(Screen):
     @work(exclusive=True, thread=True)
     def process_command(self, user_input: str) -> None:
         """Process command in worker thread."""
-        from ..textual_app import ActivityStateChange
-
         # This is called after action_submit_input validates interactive_mode exists
         assert self.interactive_mode is not None, "process_command called before ready"
 
@@ -398,8 +396,6 @@ class MainAppScreen(Screen):
             total: Total number of items to process
             complete: Whether the operation is complete
         """
-        from ..textual_app import StatusBar
-
         # Detect completion from message content
         is_complete = (
             complete
@@ -433,8 +429,6 @@ class MainAppScreen(Screen):
 
     def _update_capture_ui(self, request: "InputRequest") -> None:
         """Update UI for capture mode."""
-        from ..textual_app import StatusBar, ActivityIndicator
-
         if self._layout is None:
             return
 
@@ -471,8 +465,6 @@ class MainAppScreen(Screen):
 
     def _exit_capture_ui(self) -> None:
         """Clean up capture mode UI state."""
-        from ..textual_app import StatusBar, ActivityStateChange
-
         if self._layout is None:
             return
 
@@ -490,14 +482,12 @@ class MainAppScreen(Screen):
         # The THINKING state will be replaced by IDLE when process_command ends.
         self.app.post_message(ActivityStateChange(ActivityState.THINKING))
 
-    def update_activity(self, message: "ActivityStateChange") -> None:
+    def update_activity(self, message: ActivityStateChange) -> None:
         """Update activity indicator based on state change message.
 
         Args:
             message: ActivityStateChange message with state, message, and elapsed_ms
         """
-        from ..textual_app import ActivityIndicator
-
         try:
             indicator = self.query_one(ActivityIndicator)
         except Exception:
@@ -542,8 +532,6 @@ class MainAppScreen(Screen):
 
     def _update_elapsed(self) -> None:
         """Update elapsed time in the activity indicator."""
-        from ..textual_app import ActivityIndicator
-
         if self._elapsed_start_time == 0.0:
             return
 

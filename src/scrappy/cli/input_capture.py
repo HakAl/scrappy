@@ -11,7 +11,7 @@ from typing import Any, Optional, Protocol, TYPE_CHECKING
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from .textual_app import ThreadSafeAsyncBridge
+    from .textual import ThreadSafeAsyncBridge
 
 
 class InputCaptureProtocol(Protocol):

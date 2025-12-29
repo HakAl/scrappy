@@ -137,7 +137,7 @@ def start_tui_deferred(ctx, theme, resume: bool = False) -> None:
         theme: Theme for styling
         resume: Whether to restore previous session
     """
-    from .textual_app import ScrappyApp, TextualOutputAdapter
+    from .textual import ScrappyApp, TextualOutputAdapter
     from .unified_io import UnifiedIO
 
     # Create output adapter first (needed for skeleton screen)

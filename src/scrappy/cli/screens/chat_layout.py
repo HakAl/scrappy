@@ -9,6 +9,7 @@ from textual.widgets import TextArea, Label
 from textual.containers import Container
 
 from ..widgets import SelectableLog, TaskProgressWidget
+from ..textual import StatusBar, ActivityIndicator
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +48,6 @@ class ChatLayout(Widget):
 
     def compose(self) -> ComposeResult:
         """Create the chat layout widgets."""
-        from ..textual_app import StatusBar, ActivityIndicator
-
         # Scrollable output area (with text selection support)
         with Container(id="output_container"):
             yield SelectableLog(id="output", auto_scroll=True)

@@ -7,10 +7,9 @@ import sys
 from datetime import datetime
 from typing import Optional, TYPE_CHECKING
 
-from ..infrastructure.protocols import BackgroundInitializerProtocol
 
 if TYPE_CHECKING:
-    from .textual_app import ThreadSafeAsyncBridge
+    from .textual import ThreadSafeAsyncBridge
 
 from ..orchestrator import AgentOrchestrator
 from .io_interface import CLIIOProtocol
@@ -158,7 +157,7 @@ class CLI:
         CLI always uses Textual, so this creates UnifiedIO with OutputSink.
         Uses the configured theme for styling.
         """
-        from .textual_app import TextualOutputAdapter
+        from .textual import TextualOutputAdapter
         output_adapter = TextualOutputAdapter()
         return UnifiedIO(output_sink=output_adapter, theme=self._theme)
 
@@ -269,7 +268,7 @@ class CLI:
             else:
                 self.io.secho("Semantic search loading in background...", fg="yellow")
 
-        except Exception as e:
+        except Exception:
             # Gracefully handle any errors
             if not self.orchestrator.context.is_semantic_search_ready():
                 status = self.orchestrator.context.get_semantic_initialization_status()

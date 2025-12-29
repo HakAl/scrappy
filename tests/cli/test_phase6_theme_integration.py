@@ -23,6 +23,7 @@ from scrappy.infrastructure.theme import (
     DEFAULT_THEME,
     SYNTAX_COLORS,
 )
+from scrappy.cli.textual import ScrappyApp, TextualOutputAdapter
 
 
 class TestContextCommandsThemeIntegration:
@@ -352,8 +353,6 @@ class TestTextualAppThemeIntegration:
 
     def test_accepts_theme_parameter(self):
         """ScrappyApp accepts theme parameter."""
-        from scrappy.cli.textual_app import ScrappyApp, TextualOutputAdapter
-
         interactive_mode = Mock()
         output_adapter = TextualOutputAdapter()
         theme = ScrappyTheme()
@@ -367,8 +366,6 @@ class TestTextualAppThemeIntegration:
 
     def test_uses_default_theme_when_not_provided(self):
         """ScrappyApp uses DEFAULT_THEME when not provided."""
-        from scrappy.cli.textual_app import ScrappyApp, TextualOutputAdapter
-
         interactive_mode = Mock()
         output_adapter = TextualOutputAdapter()
 
@@ -567,8 +564,6 @@ class TestNoColorThemePhase6Integration:
 
     def test_textual_app_with_no_color_theme(self):
         """ScrappyApp works with NoColorTheme."""
-        from scrappy.cli.textual_app import ScrappyApp, TextualOutputAdapter
-
         interactive_mode = Mock()
         output_adapter = TextualOutputAdapter()
 
