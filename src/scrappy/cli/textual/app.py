@@ -7,6 +7,7 @@ wrapping the existing InteractiveMode with a modern UI.
 
 from typing import TYPE_CHECKING, Optional, Callable
 import logging
+import os
 from pathlib import Path
 
 from textual.app import App
@@ -25,6 +26,7 @@ from .messages import (
     ActivityStateChange,
     TasksUpdated,
     CLIReady,
+    CancelRequested,
 )
 from .bridge import ThreadSafeAsyncBridge
 from .output_adapter import TextualOutputAdapter
@@ -564,3 +566,50 @@ class ScrappyApp(App):
         screen = self.screen
         if isinstance(screen, MainAppScreen):
             screen.update_tasks(message.tasks)
+
+    # =========================================================================
+    # Global Key Handlers
+    # =========================================================================
+
+    def on_key(self, event) -> None:
+        """Global key handler for app-wide shortcuts.
+
+        Handles keys that should work consistently across all screens:
+        - ctrl+q: Hard exit (immediate, no cleanup)
+        - escape: Cancel running operations (agent, capture mode)
+
+        Screen-specific keys (ctrl+c for copy) are handled by screens.
+        """
+        if event.key == "ctrl+q":
+            os._exit(0)
+
+        if event.key == "escape":
+            self._handle_escape()
+            event.stop()
+
+    def _handle_escape(self) -> None:
+        """Handle ESC key: cancel whatever is running.
+
+        Cancellation cascade:
+        1. Cancel capture mode if active (prompts/confirms)
+        2. Cancel running agent if any
+        3. Notify screens to update UI (hide indicators)
+        """
+        from ..screens import MainAppScreen
+
+        screen = self.screen
+
+        # 1. Cancel capture mode if active
+        if isinstance(screen, MainAppScreen):
+            if screen.capture_manager.is_capturing:
+                screen.capture_manager.cancel()
+                screen._exit_capture_ui()
+
+        # 2. Cancel running agent
+        if self.interactive_mode:
+            agent_mgr = self.interactive_mode.command_router.agent_mgr
+            if agent_mgr:
+                agent_mgr.cancel()
+
+        # 3. Notify screens to handle cleanup
+        self.post_message(CancelRequested())

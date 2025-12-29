@@ -2,7 +2,6 @@
 
 from typing import TYPE_CHECKING, Any, Optional, cast
 import logging
-import os
 import time
 
 from textual.screen import Screen
@@ -23,6 +22,7 @@ from ..textual import (
     StatusBar,
     ActivityIndicator,
     ActivityStateChange,
+    CancelRequested,
 )
 
 from scrappy.infrastructure.theme import ThemeProtocol
@@ -54,7 +54,7 @@ class MainAppScreen(Screen):
         Binding("enter", "submit_input", "Submit", priority=True),
         Binding("up", "history_previous", "Previous", priority=True),
         Binding("down", "history_next", "Next", priority=True),
-        Binding("escape", "cancel_agent", "Cancel", priority=True),
+        # Note: escape is handled at app level (ScrappyApp.on_key)
     ]
 
     def __init__(
@@ -176,11 +176,11 @@ class MainAppScreen(Screen):
             self.call_after_refresh(clear_selection)
 
     def on_key(self, event) -> None:
-        """Handle key events."""
-        # Handle Ctrl+Q to exit - must intercept before Input consumes it
-        if event.key == "ctrl+q":
-            os._exit(0)
+        """Handle screen-specific key events.
 
+        Note: ctrl+q and escape are handled at app level (ScrappyApp.on_key).
+        This handler only deals with screen-specific keys like ctrl+c for copy.
+        """
         if self._layout is None:
             return
 
@@ -192,12 +192,11 @@ class MainAppScreen(Screen):
                 event.stop()
                 return
 
-        # Handle Escape or Ctrl+C in capture mode
+        # Handle Ctrl+C in capture mode - cancel capture and agent
         if self.capture_manager.is_capturing:
-            if event.key == "escape" or event.key == "ctrl+c":
+            if event.key == "ctrl+c":
                 self.capture_manager.cancel()
                 self._exit_capture_ui()
-                # Also cancel the agent - don't just cancel the current prompt
                 self.action_cancel_agent()
                 event.stop()
                 return
@@ -297,15 +296,29 @@ class MainAppScreen(Screen):
                 self._history_temp_input = ""
 
     def action_cancel_agent(self) -> None:
-        """Handle Escape key to cancel running agent."""
+        """Cancel running agent and update UI.
+
+        Called by ctrl+c handler (screen-level) to cancel agent.
+        Note: ESC is handled at app level and posts CancelRequested.
+        """
         # Access agent_mgr through the command router (if available)
         if self.interactive_mode is not None:
             agent_mgr = self.interactive_mode.command_router.agent_mgr
             if agent_mgr:
                 agent_mgr.cancel()
 
-        # Stop the elapsed timer and hide activity indicator immediately
-        # Don't wait for agent to finish - user has already requested cancellation
+        # Update UI immediately
+        self._cancel_ui_cleanup()
+
+    def on_cancel_requested(self, message: CancelRequested) -> None:
+        """Handle CancelRequested message from app-level ESC handler.
+
+        The app has already cancelled the agent; we just need to update the UI.
+        """
+        self._cancel_ui_cleanup()
+
+    def _cancel_ui_cleanup(self) -> None:
+        """Stop timer and hide activity indicator after cancellation."""
         self._stop_elapsed_timer()
         try:
             indicator = self.query_one(ActivityIndicator)

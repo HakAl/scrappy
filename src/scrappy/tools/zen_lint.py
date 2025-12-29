@@ -59,7 +59,7 @@ QUALITY_RULES = [
     Rule("POSSIBLE_SECRET", r"\b(passwd|password|secret|api_?key)\s*=\s*['\"][^'\"]{8,}['\"]",
          CODE, "HIGH", ignore_case=False),
     Rule("CONFLICT_MARKER", r"^[<>=]{7}", ALL, "HIGH"),
-    Rule("TRUNCATION_MARKER", r"(\.{3}|...)\s*(rest of|remaining|more|etc|continues|implementation)", ALL, "HIGH"),
+    Rule("TRUNCATION_MARKER", r"\.{3}\s*(rest of|remaining|more|etc|continues|implementation)", ALL, "HIGH"),
     Rule("INCOMPLETE_IMPL", r"#\s*(TODO|FIXME):\s*(implement|finish|complete|add)\b", ALL, "HIGH"),
     Rule("OVERLY_GENERIC_EXCEPT", r"except\s*:\s*$", CODE, "HIGH"),
     Rule("BARE_RETURN_IN_CATCH", r"catch\s*\([^)]*\)\s*\{\s*return\s*;?\s*\}", CODE, "HIGH"),

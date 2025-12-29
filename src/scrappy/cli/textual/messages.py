@@ -121,3 +121,12 @@ class CLIReady(Message):
         super().__init__()
         self.cli = cli
         self.error = error
+
+
+class CancelRequested(Message):
+    """Message posted when user presses ESC to cancel operations.
+
+    Screens handle this to perform cleanup (hide activity indicators, etc.).
+    The app-level on_key handler posts this after cancelling the agent.
+    """
+    pass

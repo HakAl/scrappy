@@ -2,7 +2,6 @@
 
 from typing import TYPE_CHECKING, Optional, Callable, Any
 import logging
-import os
 
 from textual.screen import Screen
 from textual.app import ComposeResult
@@ -182,7 +181,4 @@ class SetupWizardScreen(Screen):
         if prompt and self._layout:
             self._layout.input.placeholder = prompt
 
-    def on_key(self, event) -> None:
-        """Handle key events - intercept Ctrl+Q before Input consumes it."""
-        if event.key == "ctrl+q":
-            os._exit(0)
+    # Note: ctrl+q and escape are handled at app level (ScrappyApp.on_key)

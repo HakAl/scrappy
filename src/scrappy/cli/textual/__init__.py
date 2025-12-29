@@ -15,6 +15,7 @@ from .messages import (
     ActivityStateChange,
     TasksUpdated,
     CLIReady,
+    CancelRequested,
 )
 from .status_components import (
     ProgressIndicator,
@@ -40,6 +41,7 @@ __all__ = [
     "ActivityStateChange",
     "TasksUpdated",
     "CLIReady",
+    "CancelRequested",
     # Status components
     "ProgressIndicator",
     "TokenCounter",
