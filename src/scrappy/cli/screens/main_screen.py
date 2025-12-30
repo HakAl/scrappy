@@ -13,7 +13,6 @@ from textual import work
 from .chat_layout import ChatLayout
 from ..input_capture import InputCaptureManager, InputRequest
 from ..command_history import CommandHistory, get_default_history_path
-from ..widgets.selectable_log import SelectableLog
 from ..textual import (
     ProgressIndicator,
     TokenCounter,
@@ -22,7 +21,6 @@ from ..textual import (
     StatusBar,
     ActivityIndicator,
     ActivityStateChange,
-    CancelRequested,
 )
 
 from scrappy.infrastructure.theme import ThemeProtocol
@@ -178,39 +176,17 @@ class MainAppScreen(Screen):
     def on_key(self, event) -> None:
         """Handle screen-specific key events.
 
-        Note: ctrl+q and escape are handled at app level (ScrappyApp.on_key).
-        This handler only deals with screen-specific keys like ctrl+c for copy.
+        Note: ctrl+q, ctrl+c, and escape are handled at app level (ScrappyApp.on_key).
+        This handler only deals with screen-specific keys like up-arrow blocking.
         """
         if self._layout is None:
             return
 
-        # Handle Ctrl+C for copy from SelectableLog (works in any mode)
-        if event.key == "ctrl+c":
-            output = self._layout.output
-            if isinstance(output, SelectableLog) and output._has_selection():
-                output.action_copy_selection()
-                event.stop()
-                return
-
-        # Handle Ctrl+C in capture mode - cancel capture and agent
+        # Block up-arrow history during capture mode
         if self.capture_manager.is_capturing:
-            if event.key == "ctrl+c":
-                self.capture_manager.cancel()
-                self._exit_capture_ui()
-                self.action_cancel_agent()
-                event.stop()
-                return
-
-            # Block up-arrow history during capture mode
             if event.key == "up":
                 event.stop()
                 return
-
-        # Handle Ctrl+C to cancel running agent (no selection, not in capture mode)
-        if event.key == "ctrl+c":
-            self.action_cancel_agent()
-            event.stop()
-            return
 
         # Already focused on input, let it handle naturally
         if self._layout.input.has_focus:
@@ -294,28 +270,6 @@ class MainAppScreen(Screen):
             if self._history_temp_input:
                 self._layout.input.insert(self._history_temp_input)
                 self._history_temp_input = ""
-
-    def action_cancel_agent(self) -> None:
-        """Cancel running agent and update UI.
-
-        Called by ctrl+c handler (screen-level) to cancel agent.
-        Note: ESC is handled at app level and posts CancelRequested.
-        """
-        # Access agent_mgr through the command router (if available)
-        if self.interactive_mode is not None:
-            agent_mgr = self.interactive_mode.command_router.agent_mgr
-            if agent_mgr:
-                agent_mgr.cancel()
-
-        # Update UI immediately
-        self._cancel_ui_cleanup()
-
-    def on_cancel_requested(self, message: CancelRequested) -> None:
-        """Handle CancelRequested message from app-level ESC handler.
-
-        The app has already cancelled the agent; we just need to update the UI.
-        """
-        self._cancel_ui_cleanup()
 
     def _cancel_ui_cleanup(self) -> None:
         """Stop timer and hide activity indicator after cancellation."""

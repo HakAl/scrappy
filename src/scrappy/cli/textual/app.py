@@ -8,6 +8,7 @@ wrapping the existing InteractiveMode with a modern UI.
 from typing import TYPE_CHECKING, Optional, Callable
 import logging
 import os
+import time
 from pathlib import Path
 
 from textual.app import App
@@ -26,7 +27,6 @@ from .messages import (
     ActivityStateChange,
     TasksUpdated,
     CLIReady,
-    CancelRequested,
 )
 from .bridge import ThreadSafeAsyncBridge
 from .output_adapter import TextualOutputAdapter
@@ -60,6 +60,9 @@ class ScrappyApp(App):
 
     # Point to scrappy.tcss in parent directory (cli/)
     CSS_PATH = Path(__file__).parent.parent / "scrappy.tcss"
+
+    # Double-tap threshold for Ctrl+C exit (seconds)
+    _CTRL_C_DOUBLE_TAP_THRESHOLD = 0.5
 
     # Ready state for deferred initialization
     # When using cli_factory, this is False until CLI is ready
@@ -107,6 +110,9 @@ class ScrappyApp(App):
 
         # Thread-safe async bridge for prompts/confirms
         self.bridge = ThreadSafeAsyncBridge(self)
+
+        # Track last Ctrl+C time for double-tap exit
+        self._last_ctrl_c_time: float = 0.0
 
         # Codebase context for semantic search indexing
         self._codebase_context: Optional["CodebaseContext"] = None
@@ -575,41 +581,107 @@ class ScrappyApp(App):
         """Global key handler for app-wide shortcuts.
 
         Handles keys that should work consistently across all screens:
-        - ctrl+q: Hard exit (immediate, no cleanup)
+        - ctrl+q: Hard exit (immediate, no cleanup - emergency only)
+        - ctrl+c: Copy selection, cancel operations, or double-tap for clean exit
         - escape: Cancel running operations (agent, capture mode)
-
-        Screen-specific keys (ctrl+c for copy) are handled by screens.
         """
         if event.key == "ctrl+q":
             os._exit(0)
+
+        if event.key == "ctrl+c":
+            self._handle_ctrl_c()
+            event.stop()
 
         if event.key == "escape":
             self._handle_escape()
             event.stop()
 
-    def _handle_escape(self) -> None:
-        """Handle ESC key: cancel whatever is running.
+    def _cancel_operation(self) -> bool:
+        """Cancel any running operation and clean up UI.
+
+        Returns True if something was cancelled, False if nothing was running.
 
         Cancellation cascade:
         1. Cancel capture mode if active (prompts/confirms)
         2. Cancel running agent if any
-        3. Notify screens to update UI (hide indicators)
+        3. Clean up UI directly (stop timer, hide indicators)
         """
         from ..screens import MainAppScreen
 
         screen = self.screen
+        did_cancel = False
 
-        # 1. Cancel capture mode if active
+        # 1. Cancel capture mode if active (but don't call _exit_capture_ui
+        # which restarts the timer - we'll clean up UI below)
         if isinstance(screen, MainAppScreen):
             if screen.capture_manager.is_capturing:
                 screen.capture_manager.cancel()
-                screen._exit_capture_ui()
+                # Full UI cleanup without restarting timer
+                if screen._layout:
+                    screen._layout.input.placeholder = "Type your message or command..."
+                screen.prompt_display.hide_prompt()
+                try:
+                    from ..textual import StatusBar
+                    status_bar = screen.query_one(StatusBar)
+                    status_bar.refresh_display()
+                    input_container = screen.query_one("#input_container")
+                    input_container.remove_class("capture-mode")
+                except Exception:
+                    pass  # UI elements might not be mounted
+                did_cancel = True
 
-        # 2. Cancel running agent
+        # 2. Cancel running agent (always try, let agent_mgr handle state)
         if self.interactive_mode:
             agent_mgr = self.interactive_mode.command_router.agent_mgr
             if agent_mgr:
+                # Check if agent has active work
+                if agent_mgr._cancellation_token is not None:
+                    did_cancel = True
                 agent_mgr.cancel()
 
-        # 3. Notify screens to handle cleanup
-        self.post_message(CancelRequested())
+        # 3. Clean up UI directly (synchronous, not via message)
+        if isinstance(screen, MainAppScreen):
+            screen._cancel_ui_cleanup()
+
+        return did_cancel
+
+    def _handle_escape(self) -> None:
+        """Handle ESC key: cancel whatever is running."""
+        self._cancel_operation()
+
+    def _handle_ctrl_c(self) -> None:
+        """Handle Ctrl+C with context-aware behavior.
+
+        Priority:
+        1. Double-tap always exits (escape hatch when stuck)
+        2. Copy selection if text is selected
+        3. Cancel operations and clean up UI
+        4. Single tap shows hint
+        """
+        from ..screens import MainAppScreen
+        from ..widgets.selectable_log import SelectableLog
+
+        screen = self.screen
+        now = time.time()
+
+        # 1. Double-tap ALWAYS exits (escape hatch when agent is stuck)
+        if now - self._last_ctrl_c_time < self._CTRL_C_DOUBLE_TAP_THRESHOLD:
+            self.exit()
+            return
+
+        # Update timestamp for double-tap detection
+        self._last_ctrl_c_time = now
+
+        # 2. Copy selection if available (only action that doesn't show hint)
+        if isinstance(screen, MainAppScreen) and screen._layout is not None:
+            output = screen._layout.output
+            if isinstance(output, SelectableLog) and output._has_selection():
+                output.action_copy_selection()
+                return
+
+        # 3. Cancel any running operations
+        did_cancel = self._cancel_operation()
+
+        # 4. Show hint if nothing was cancelled
+        if not did_cancel:
+            self.notify("Press Ctrl+C again to exit", timeout=2)

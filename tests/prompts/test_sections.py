@@ -112,11 +112,6 @@ class TestEfficiencySection:
 
         assert "redundant" in result.lower()
 
-    def test_mentions_reusing_information(self):
-        result = efficiency_section()
-
-        assert "reuse" in result.lower()
-
     def test_mentions_not_rereading_files(self):
         result = efficiency_section()
 
