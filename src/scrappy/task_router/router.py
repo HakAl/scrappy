@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Tuple, Union
 
 from .classifier import ClassifiedTask, TaskClassifier, TaskType
+from .factory import create_task_classifier
 from ..llm.models import TaskClassification as LLMTaskClassification
 from ..llm.models import TaskType as LLMTaskType
 from .intent_clarifier import (
@@ -117,7 +118,8 @@ class TaskRouter:
         )
         self.validator = validator or InputValidator()
 
-        self.classifier = classifier or TaskClassifier()
+        # Use factory to get classifier with SemanticRouter (lazy init, no warm_up here)
+        self.classifier = classifier or create_task_classifier(warm_up=False)
         self.metrics_collector = metrics_collector or MetricsCollector()
         self.provider_resolver = provider_resolver or ProviderResolver(orchestrator=orchestrator)
 
@@ -142,7 +144,9 @@ class TaskRouter:
         self._clarification_config = clarification_config
 
         # Intent clarification settings
-        self.clarify_on_low_confidence = True
+        # Intent clarification disabled: Semantic router + auto-escalation
+        # handles ambiguity without interrupting user flow
+        self.clarify_on_low_confidence = False
         self.escalate_on_low_confidence = True
         self.use_llm_classification = True  # Use LLM for low-confidence cases
 

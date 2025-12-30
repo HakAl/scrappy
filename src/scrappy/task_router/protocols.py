@@ -888,3 +888,63 @@ class ExecutionStrategyProtocol(Protocol):
             True if strategy can handle task, False otherwise
         """
         ...
+
+
+@runtime_checkable
+class SemanticRouterProtocol(Protocol):
+    """
+    Protocol for semantic-based task classification.
+
+    Uses vector embeddings to classify user input by finding
+    nearest neighbors among canonical examples.
+
+    This is the primary classification method, with regex as fallback.
+
+    Implementations:
+    - SemanticRouter: K-nearest neighbors in vector space
+    - MockSemanticRouter: Fixed results for testing
+
+    Example:
+        def classify_task(router: SemanticRouterProtocol, input: str) -> Optional[RouteResult]:
+            result = router.classify(input)
+            if result and result.confidence > 0.6:
+                return result
+            return None  # Fall back to regex
+    """
+
+    def classify(self, user_input: str) -> Optional[Any]:
+        """
+        Classify user input semantically.
+
+        Args:
+            user_input: Raw user input string
+
+        Returns:
+            RouteResult with task_type, confidence, nearest_example, distance
+            or None if unavailable/low confidence
+
+        Note:
+            Returns RouteResult (not Tuple) for richer context.
+        """
+        ...
+
+    def is_ready(self) -> bool:
+        """
+        Check if router is initialized and ready.
+
+        Returns:
+            True if model is loaded and examples are embedded
+        """
+        ...
+
+    def warm_up(self) -> bool:
+        """
+        Pre-initialize the router (load model, embed examples).
+
+        Call this during application startup, NOT on first request.
+        This avoids cold-start latency for the first user.
+
+        Returns:
+            True if warm-up succeeded, False otherwise
+        """
+        ...

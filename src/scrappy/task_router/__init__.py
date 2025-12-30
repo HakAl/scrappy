@@ -39,7 +39,10 @@ from .protocols import (
     DefaultConsoleInput,
     OutputHandlerProtocol,
     ExecutionStrategyProtocol,
+    SemanticRouterProtocol,
 )
+from .semantic_router import SemanticRouter, RouteResult, ROUTE_EXAMPLES
+from .factory import create_task_classifier, create_test_classifier
 
 __all__ = [
     # Classification
@@ -55,6 +58,14 @@ __all__ = [
     "ClarificationConfig",
     # Router
     "TaskRouter",
+    # Semantic Router
+    "SemanticRouter",
+    "RouteResult",
+    "ROUTE_EXAMPLES",
+    "SemanticRouterProtocol",
+    # Factories
+    "create_task_classifier",
+    "create_test_classifier",
     # Intent Clarification
     "InteractiveClarifier",
     "AutoClarifier",

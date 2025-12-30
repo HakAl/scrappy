@@ -2,11 +2,12 @@
 Task classification for routing to appropriate execution strategies.
 
 Refactored to use Strategy Pattern for better maintainability and extensibility.
+Now supports SemanticRouter as primary classifier with regex fallback.
 """
 
 import re
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Set, Tuple
+from typing import List, Optional, Tuple
 
 from scrappy.platform.protocols.detection import PlatformDetectorProtocol
 from scrappy.platform import create_platform_detector, create_command_validator
@@ -17,6 +18,7 @@ from .classification_strategies import (
     ResearchStrategy,
     ConversationStrategy,
 )
+from .protocols import SemanticRouterProtocol
 
 
 @dataclass(frozen=True)
@@ -54,7 +56,9 @@ class TaskClassifier:
     def __init__(
         self,
         strategies: Optional[List] = None,
-        platform_detector: Optional[PlatformDetectorProtocol] = None
+        platform_detector: Optional[PlatformDetectorProtocol] = None,
+        semantic_router: Optional[SemanticRouterProtocol] = None,
+        enable_semantic_routing: bool = True,
     ):
         """
         Initialize classifier with strategies.
@@ -63,6 +67,9 @@ class TaskClassifier:
             strategies: Optional list of custom strategies to use.
                        If None, uses default strategies.
             platform_detector: Platform detector for OS-specific behavior (optional)
+            semantic_router: SemanticRouter for primary classification (optional)
+            enable_semantic_routing: Feature flag to enable/disable semantic routing.
+                                    Default True. Set False to fall back to regex-only.
         """
         if strategies is None:
             self.strategies = [
@@ -77,6 +84,10 @@ class TaskClassifier:
         # Inject platform detector with default if not provided
         self._platform_detector = platform_detector or create_platform_detector()
         self._command_validator = create_command_validator()
+
+        # Semantic router (primary classifier)
+        self._semantic_router = semantic_router
+        self._enable_semantic_routing = enable_semantic_routing
 
         # Keep backward compatibility by initializing pattern lists
         self._init_patterns()
@@ -107,15 +118,63 @@ class TaskClassifier:
 
     def classify(self, user_input: str) -> ClassifiedTask:
         """
-        Classify user input using pluggable strategies.
+        Classify user input using semantic router with regex fallback.
 
-        Each strategy evaluates the input and returns a score.
-        The strategy with the highest score determines the task type.
+        Classification priority:
+        1. Semantic router (if enabled and ready)
+        2. Regex-based strategies (fallback)
 
         Returns ClassifiedTask with type, confidence, and metadata.
         """
+        # Guard against None input (defensive programming)
+        if user_input is None:
+            user_input = ""
         input_stripped = user_input.strip()
 
+        # Try semantic router first (if feature flag enabled)
+        if self._enable_semantic_routing and self._semantic_router is not None:
+            semantic_result = self._semantic_router.classify(input_stripped)
+            if semantic_result is not None:
+                # Extract command for DIRECT_COMMAND type
+                extracted_cmd = None
+                if semantic_result.task_type == TaskType.DIRECT_COMMAND:
+                    extracted_cmd = input_stripped
+
+                # Calculate complexity
+                complexity = self._calculate_complexity(input_stripped, semantic_result.task_type)
+
+                # Determine if planning/tools are needed
+                requires_planning = semantic_result.task_type == TaskType.CODE_GENERATION and complexity >= 7
+                requires_tools = semantic_result.task_type in [TaskType.CODE_GENERATION, TaskType.RESEARCH]
+
+                # Suggest provider based on task type
+                suggested_provider = self._suggest_provider(semantic_result.task_type, complexity)
+
+                # Override to quality provider if task requires codebase analysis
+                reasoning = f"Semantic: nearest to '{semantic_result.nearest_example}'"
+                if semantic_result.task_type == TaskType.CODE_GENERATION and self._requires_analysis(input_stripped):
+                    suggested_provider = "quality"
+                    reasoning += " [Requires codebase analysis - using quality provider]"
+
+                # Extract file and directory references
+                extracted_files, extracted_dirs = self._extract_file_references(input_stripped)
+
+                return ClassifiedTask(
+                    original_input=input_stripped,
+                    task_type=semantic_result.task_type,
+                    confidence=semantic_result.confidence,
+                    reasoning=reasoning,
+                    extracted_command=extracted_cmd,
+                    suggested_provider=suggested_provider,
+                    complexity_score=complexity,
+                    requires_planning=requires_planning,
+                    requires_tools=requires_tools,
+                    matched_patterns=("semantic_router",),
+                    extracted_files=tuple(extracted_files),
+                    extracted_directories=tuple(extracted_dirs)
+                )
+
+        # Fallback to regex strategies
         # Evaluate input with all strategies
         results = {}
         for strategy in self.strategies:
