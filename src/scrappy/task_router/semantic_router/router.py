@@ -214,22 +214,29 @@ class SemanticRouter:
         k_indices = np.argsort(distances)[:self._k]
         k_distances = distances[k_indices]
 
-        # Vote on task type
-        votes: Dict[str, List[float]] = {}
-        for idx, dist in zip(k_indices, k_distances):
-            label = self._examples[idx]["label"]
-            if label not in votes:
-                votes[label] = []
-            votes[label].append(float(dist))
+        # Strong match shortcut: if nearest neighbor is very close, trust it
+        # This prevents K-NN voting from overriding near-exact matches
+        STRONG_MATCH_THRESHOLD = 0.15  # ~85% cosine similarity
+        nearest_idx = int(k_indices[0])
+        nearest_dist = float(k_distances[0])
 
-        # Find winner (most votes, then smallest average distance)
-        def vote_key(label: str) -> Tuple[int, float]:
-            return (len(votes[label]), -sum(votes[label]) / len(votes[label]))
-        winner = max(votes.keys(), key=vote_key)
+        if nearest_dist < STRONG_MATCH_THRESHOLD:
+            winner = self._examples[nearest_idx]["label"]
+            confidence = 1.0 - nearest_dist
+        else:
+            # Vote on task type (weighted by inverse distance)
+            votes: Dict[str, float] = {}
+            for idx, dist in zip(k_indices, k_distances):
+                label = self._examples[idx]["label"]
+                # Weight: closer = higher weight (avoid div by zero)
+                weight = 1.0 / (dist + 0.01)
+                votes[label] = votes.get(label, 0.0) + weight
 
-        # Calculate confidence (inverse of average distance to winner)
-        avg_dist = sum(votes[winner]) / len(votes[winner])
-        confidence = 1.0 - min(avg_dist, 1.0)  # Convert distance to similarity
+            # Find winner by total weighted votes
+            winner = max(votes.keys(), key=lambda k: votes[k])
+
+            # Calculate confidence from nearest neighbor distance
+            confidence = 1.0 - min(nearest_dist, 1.0)
 
         # Return None if below threshold
         if confidence < self._threshold:
@@ -247,12 +254,11 @@ class SemanticRouter:
         if task_type is None:
             return None
 
-        nearest_idx = int(k_indices[0])
         return RouteResult(
             task_type=task_type,
             confidence=confidence,
             nearest_example=self._examples[nearest_idx]["text"],
-            distance=float(k_distances[0]),
+            distance=nearest_dist,
         )
 
     @staticmethod
