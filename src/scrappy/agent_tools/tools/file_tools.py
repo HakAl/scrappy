@@ -327,7 +327,8 @@ class WriteFilesTool(ToolBase):
                 if context.working_set:
                     context.working_set.record_write(path, context.turn)
 
-                results.append(f"[OK] {path} ({len(content)} chars)")
+                line_count = content.count('\n') + (1 if content and not content.endswith('\n') else 0)
+                results.append(f"[OK] {path} ({line_count} lines, {len(content)} chars)")
                 files_written += 1
                 total_chars += len(content)
 
@@ -527,10 +528,11 @@ class WriteFileTool(ToolBase):
             if context.working_set:
                 context.working_set.record_write(path, context.turn)
 
+            line_count = content.count('\n') + (1 if content and not content.endswith('\n') else 0)
             return ToolResult(
                 True,
-                f"Successfully wrote {len(content)} characters to {path}",
-                metadata={"chars": len(content), "path": path, "verified": True}
+                f"Successfully wrote {line_count} lines ({len(content)} chars) to {path}",
+                metadata={"lines": line_count, "chars": len(content), "path": path, "verified": True}
             )
         except Exception as e:
             return ToolResult(False, "", f"Error writing file: {str(e)}")

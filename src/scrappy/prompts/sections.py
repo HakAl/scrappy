@@ -191,14 +191,21 @@ def efficiency_section() -> str:
     """Generate efficiency guidelines.
 
     Returns:
-        Efficiency section with redundancy avoidance rules
+        Efficiency section with redundancy avoidance and file system trust rules
     """
-    return """## Efficiency
+    return """## Efficiency & Flow Control
 
-Skip redundant operations. Reuse information already gathered.
-Don't re-read files you've already seen in this conversation.
-Don't re-run searches for information you already have.
-Batch related operations when possible."""
+SKIP REDUNDANT OPERATIONS:
+- Don't re-read files you've already seen in this conversation
+- Don't re-run searches for information you already have
+- Batch related operations when possible
+
+TRUST THE FILE SYSTEM:
+- If write_file returns success, the write succeeded - no need to verify by reading
+- File writes are atomic at this level of abstraction
+- Exception: Only read back if you need to verify against external system state
+
+Think: "I just wrote this file, so I know its contents." """
 
 
 def self_review_section() -> str:
@@ -275,6 +282,42 @@ def quality_section() -> str:
 - Consider edge cases
 - Prefer simple solutions over complex ones
 - Test your changes when possible"""
+
+
+def security_awareness_section() -> str:
+    """Generate security awareness guidelines.
+
+    Returns:
+        Security section with secure code practices and dependency rules
+    """
+    return """## Security & Dependencies
+
+SECURE CODE PRACTICES:
+
+BAD - SQL injection:
+  query = f"SELECT * FROM users WHERE id = {user_id}"
+GOOD - Parameterized query:
+  query = "SELECT * FROM users WHERE id = ?"
+  cursor.execute(query, (user_id,))
+
+BAD - Hardcoded secrets:
+  api_key = "sk-1234567890abcdef"
+GOOD - Environment variable:
+  api_key = os.environ.get("API_KEY")
+
+BAD - Command injection:
+  os.system(f"grep {user_input} file.txt")
+GOOD - Safe subprocess:
+  subprocess.run(["grep", user_input, "file.txt"])
+
+EXTERNAL DEPENDENCIES:
+
+BAD - Silent external dependency:
+  fetch("https://api.allorigins.win/raw?url=" + targetUrl)
+GOOD - Flag and ask:
+  "SECURITY NOTE: This requires allorigins.win proxy. Risks: data exposure, availability. Proceed?"
+
+If asked to write insecure code, REFUSE and explain the risks."""
 
 
 def codebase_hint_section(
