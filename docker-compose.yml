@@ -1,75 +1,55 @@
-version: '3.8'
+# Docker Compose for Scrappy development services
+# Langfuse for observability (self-hosted, free)
 
 services:
-  # Main development environment
-  scrappy:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    volumes:
-      # Mount source code for live development
-      - ./src:/app/src
-      - ./tests:/app/tests
-      - ./scripts:/app/scripts
-      # Persist data directories
-      - scrappy-data:/app/.scrappy
+  # PostgreSQL database for Langfuse
+  langfuse-db:
+    image: postgres:15-alpine
+    container_name: scrappy-langfuse-db
+    restart: unless-stopped
     environment:
-      - PYTHONUNBUFFERED=1
-      - PYTHONDONTWRITEBYTECODE=1
-    command: bash
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: langfuse
+      POSTGRES_DB: langfuse
+    volumes:
+      - langfuse-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
-  # Run tests
-  test:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    volumes:
-      - ./src:/app/src
-      - ./tests:/app/tests
+  # Langfuse server for tracing and observability
+  langfuse:
+    # v2 only needs PostgreSQL; v3 requires ClickHouse (more complex)
+    # Check https://hub.docker.com/r/langfuse/langfuse/tags for available versions
+    image: langfuse/langfuse:2
+    container_name: scrappy-langfuse
+    restart: unless-stopped
+    depends_on:
+      langfuse-db:
+        condition: service_healthy
+    ports:
+      # NETWORK EXPOSURE: Port 3000 exposes the Langfuse web UI.
+      # - For local dev: accessible at http://localhost:3000
+      # - For production: Use reverse proxy (nginx/traefik) with TLS
+      # - Contains traces with potentially sensitive data - restrict access appropriately
+      - "3000:3000"
     environment:
-      - PYTHONUNBUFFERED=1
-    command: python -m pytest tests/ -v --tb=short
-
-  # Run semantic search tests specifically
-  test-semantic:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    volumes:
-      - ./src:/app/src
-      - ./tests:/app/tests
-      - ./scripts:/app/scripts
-      - scrappy-data:/app/.scrappy
-    environment:
-      - PYTHONUNBUFFERED=1
-    command: python -m pytest tests/test_semantic_fixtures.py -v
-
-  # Run integration demo
-  demo:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    volumes:
-      - ./src:/app/src
-      - ./scripts:/app/scripts
-      - scrappy-data:/app/.scrappy
-    environment:
-      - PYTHONUNBUFFERED=1
-    command: python scripts/demo_integration.py
-
-  # Run semantic search POC
-  demo-semantic:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    volumes:
-      - ./src:/app/src
-      - ./scripts:/app/scripts
-      - scrappy-data:/app/.scrappy
-    environment:
-      - PYTHONUNBUFFERED=1
-    command: python scripts/test_semantic_search.py
+      DATABASE_URL: postgresql://langfuse:langfuse@langfuse-db:5432/langfuse
+      NEXTAUTH_URL: http://localhost:3000
+      # SECURITY: These MUST be set via environment variables in production
+      # For local dev, set LANGFUSE_NEXTAUTH_SECRET and LANGFUSE_SALT in your shell
+      # or create a .env file (not committed to git)
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-dev-secret-do-not-use-in-production}
+      SALT: ${LANGFUSE_SALT:-dev-salt-do-not-use-in-production}
+      TELEMETRY_ENABLED: "false"
+      NEXT_PUBLIC_SIGN_UP_DISABLED: "false"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/public/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
-  scrappy-data:
-    driver: local
+  langfuse-db-data:
