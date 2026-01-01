@@ -10,10 +10,13 @@ from .command_security import CommandSecurity
 from .output_parser import OutputParser
 from .command_advisor import CommandAdvisor
 from .subprocess_runner import SubprocessRunner
+from .sandboxed_runner import SandboxedSubprocessRunner, create_sandboxed_runner
 
 __all__ = [
     'CommandSecurity',
     'OutputParser',
     'CommandAdvisor',
     'SubprocessRunner',
+    'SandboxedSubprocessRunner',
+    'create_sandboxed_runner',
 ]

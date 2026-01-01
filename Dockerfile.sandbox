@@ -1,0 +1,30 @@
+# Sandbox container for scrappy command execution
+#
+# Build: docker build -f Dockerfile.sandbox -t scrappy-sandbox:latest .
+# Usage: Created automatically by DockerExecutor
+#
+# This container provides:
+# - Python 3.11 runtime
+# - Common development tools (git, make, etc.)
+# - Isolated execution environment
+# - Project mounted at /workspace
+
+FROM python:3.11-slim
+
+# Install common development tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    make \
+    curl \
+    jq \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set up working directory
+WORKDIR /workspace
+
+# Create non-root user for safer execution
+RUN useradd -m -s /bin/bash sandbox
+USER sandbox
+
+# Default command (overridden by executor)
+CMD ["sleep", "infinity"]
