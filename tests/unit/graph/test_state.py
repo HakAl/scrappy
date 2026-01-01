@@ -143,3 +143,112 @@ class TestAgentStateValidation:
         """Test that required fields must be provided."""
         with pytest.raises(Exception):  # ValidationError
             AgentState()  # Missing input and original_task
+
+
+class TestAgentStateEdgeCases:
+    """Edge case tests for unusual or boundary inputs."""
+
+    def test_empty_task_string_is_allowed(self) -> None:
+        """Empty task string is allowed (may be intentional)."""
+        state = AgentState.create_initial("", "/tmp")
+        assert state.input == ""
+        assert state.original_task == ""
+
+    def test_whitespace_only_task_is_allowed(self) -> None:
+        """Whitespace-only task is allowed."""
+        state = AgentState.create_initial("   ", "/tmp")
+        assert state.input == "   "
+
+    def test_unicode_in_task(self) -> None:
+        """Unicode characters in task are handled correctly."""
+        unicode_task = "Implement feature for users"
+        state = AgentState.create_initial(unicode_task, "/tmp")
+        assert state.input == unicode_task
+
+    def test_emoji_in_task(self) -> None:
+        """Emoji in task are handled correctly."""
+        emoji_task = "Fix the bug in main.py"
+        state = AgentState.create_initial(emoji_task, "/tmp")
+        assert state.input == emoji_task
+
+    def test_very_long_task_string(self) -> None:
+        """Very long task strings are handled."""
+        long_task = "x" * 10000
+        state = AgentState.create_initial(long_task, "/tmp")
+        assert len(state.input) == 10000
+
+    def test_empty_working_dir_raises(self) -> None:
+        """Empty working_dir should raise ValidationError."""
+        with pytest.raises(Exception):  # ValidationError
+            AgentState.create_initial("task", "")
+
+    def test_whitespace_only_working_dir_raises(self) -> None:
+        """Whitespace-only working_dir should raise ValidationError."""
+        with pytest.raises(Exception):  # ValidationError
+            AgentState.create_initial("task", "   ")
+
+    def test_unicode_path_in_working_dir(self) -> None:
+        """Unicode paths in working_dir are allowed."""
+        state = AgentState.create_initial("task", "/home/user/project")
+        assert "project" in state.working_dir
+
+    def test_unicode_in_messages(self) -> None:
+        """Unicode in message content is preserved."""
+        state = AgentState(
+            input="test",
+            original_task="test",
+            messages=[{"role": "user", "content": "Hello"}],
+        )
+        assert state.messages[0]["content"] == "Hello"
+
+    def test_newlines_in_task(self) -> None:
+        """Newlines in task are preserved."""
+        multiline = "Line 1\nLine 2\nLine 3"
+        state = AgentState.create_initial(multiline, "/tmp")
+        assert "\n" in state.input
+
+    def test_null_bytes_in_task(self) -> None:
+        """Null bytes in task are handled (though unusual)."""
+        with_null = "before\x00after"
+        state = AgentState.create_initial(with_null, "/tmp")
+        assert "\x00" in state.input
+
+    def test_message_with_empty_content(self) -> None:
+        """Messages with empty content are allowed."""
+        state = AgentState(
+            input="test",
+            original_task="test",
+            messages=[{"role": "assistant", "content": ""}],
+        )
+        assert state.messages[0]["content"] == ""
+
+    def test_tool_result_with_only_name(self) -> None:
+        """Tool results with only name (no result or error) are valid."""
+        state = AgentState(
+            input="test",
+            original_task="test",
+            tool_results=[{"name": "test_tool"}],
+        )
+        assert state.tool_results[0]["name"] == "test_tool"
+
+    def test_files_changed_with_special_chars(self) -> None:
+        """Files with special characters in names are allowed."""
+        state = AgentState(
+            input="test",
+            original_task="test",
+            files_changed=["file with spaces.py", "file-with-dashes.py"],
+        )
+        assert len(state.files_changed) == 2
+
+    def test_json_serialization_with_unicode(self) -> None:
+        """JSON serialization preserves unicode correctly."""
+        state = AgentState(
+            input="Unicode test",
+            original_task="Unicode test",
+            messages=[{"role": "user", "content": "Hello world"}],
+        )
+        json_dict = state.model_dump_json_safe()
+        json_str = json.dumps(json_dict)
+        restored = AgentState(**json.loads(json_str))
+        assert "" in restored.input
+        assert "" in restored.messages[0]["content"]

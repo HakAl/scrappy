@@ -1,10 +1,12 @@
 """
-Backwards compatibility re-export.
+Persistence layer for scrappy.
 
-DEPRECATED: Import from scrappy.persistence instead.
+This package provides storage abstractions for conversation history,
+agent state, and other persistent data.
 
-This module re-exports conversation_store components from their new home
-in scrappy.persistence for backwards compatibility with existing code.
+Components:
+- ConversationStore: SQLite-backed conversation persistence
+- ConversationStoreProtocol: Protocol for conversation storage implementations
 """
 
 from scrappy.persistence.conversation_store import (

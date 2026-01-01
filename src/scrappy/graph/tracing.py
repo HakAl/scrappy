@@ -18,12 +18,16 @@ Usage:
 import functools
 import logging
 import os
+import threading
 from contextlib import contextmanager
 from typing import Any, Callable, Generator, Optional, Protocol, TypeVar, runtime_checkable
 
 from typing_extensions import ParamSpec
 
 logger = logging.getLogger(__name__)
+
+# Thread-safe lock for global tracer access
+_tracer_lock = threading.Lock()
 
 # Type variables for decorated functions with proper signature preservation
 P = ParamSpec("P")
@@ -200,6 +204,8 @@ def set_tracer(tracer: Optional[TracerProtocol]) -> None:
     This function enables dependency injection for tests. In production code,
     use get_tracer() which handles lazy initialization automatically.
 
+    Thread-safe: Uses lock to prevent race conditions.
+
     Args:
         tracer: Tracer instance to use, or None to reset to default behavior
 
@@ -215,7 +221,8 @@ def set_tracer(tracer: Optional[TracerProtocol]) -> None:
                 set_tracer(None)  # Reset for other tests
     """
     global _tracer
-    _tracer = tracer
+    with _tracer_lock:
+        _tracer = tracer
 
 
 def get_tracer() -> TracerProtocol:
@@ -225,6 +232,7 @@ def get_tracer() -> TracerProtocol:
     Returns Langfuse tracer if configured, otherwise returns no-op tracer.
     This allows code to use tracing unconditionally without checking availability.
 
+    Thread-safe: Uses double-checked locking pattern for efficiency.
     For production use. In tests, prefer set_tracer() for explicit control.
 
     Returns:
@@ -232,21 +240,28 @@ def get_tracer() -> TracerProtocol:
     """
     global _tracer
 
+    # Fast path: tracer already initialized (no lock needed)
     if _tracer is not None:
         return _tracer
 
-    # Check if Langfuse is configured
-    if os.getenv("LANGFUSE_PUBLIC_KEY") and os.getenv("LANGFUSE_SECRET_KEY"):
-        langfuse_tracer = LangfuseTracer()
-        if langfuse_tracer.available:
-            _tracer = langfuse_tracer
-        else:
-            _tracer = NoOpTracer()
-    else:
-        logger.debug("Langfuse not configured (missing API keys). Tracing disabled.")
-        _tracer = NoOpTracer()
+    # Slow path: acquire lock and check again (double-checked locking)
+    with _tracer_lock:
+        # Check again inside lock in case another thread initialized it
+        if _tracer is not None:
+            return _tracer
 
-    return _tracer
+        # Check if Langfuse is configured
+        if os.getenv("LANGFUSE_PUBLIC_KEY") and os.getenv("LANGFUSE_SECRET_KEY"):
+            langfuse_tracer = LangfuseTracer()
+            if langfuse_tracer.available:
+                _tracer = langfuse_tracer
+            else:
+                _tracer = NoOpTracer()
+        else:
+            logger.debug("Langfuse not configured (missing API keys). Tracing disabled.")
+            _tracer = NoOpTracer()
+
+        return _tracer
 
 
 def is_tracing_enabled() -> bool:
@@ -310,8 +325,10 @@ def shutdown_tracing() -> None:
     Flush and shutdown tracing.
 
     Call this when the agent completes to ensure all traces are sent.
+    Thread-safe: Uses lock to prevent race conditions.
     """
     global _tracer
-    if _tracer is not None:
-        _tracer.flush()
-        _tracer = None
+    with _tracer_lock:
+        if _tracer is not None:
+            _tracer.flush()
+            _tracer = None

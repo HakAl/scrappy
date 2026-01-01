@@ -262,3 +262,91 @@ class TestModuleLevelConstants:
     def test_max_retries_is_reasonable(self) -> None:
         """MAX_RETRIES should be in a reasonable range."""
         assert 1 <= MAX_RETRIES <= 10
+
+
+class TestEdgeCasesNegativeValues:
+    """Tests for edge cases with negative or unusual values."""
+
+    def test_negative_iteration_continues_to_think(self) -> None:
+        """Negative iteration values should continue (not hit limit)."""
+        state = AgentState(
+            input="test",
+            original_task="test",
+            iteration=-1,
+        )
+        assert should_continue(state) == "think"
+
+    def test_negative_error_count_continues_to_think(self) -> None:
+        """Negative error_count values should continue (not hit limit)."""
+        state = AgentState(
+            input="test",
+            original_task="test",
+            error_count=-1,
+        )
+        assert should_continue(state) == "think"
+
+    def test_zero_iteration_continues(self) -> None:
+        """Zero iteration should continue to think."""
+        state = AgentState(
+            input="test",
+            original_task="test",
+            iteration=0,
+        )
+        assert should_continue(state) == "think"
+
+    def test_zero_error_count_continues(self) -> None:
+        """Zero error_count should continue to think."""
+        state = AgentState(
+            input="test",
+            original_task="test",
+            error_count=0,
+        )
+        assert should_continue(state) == "think"
+
+    def test_empty_string_last_error_routes_to_error(self) -> None:
+        """Empty string last_error routes to error (is not None check)."""
+        state = AgentState(
+            input="test",
+            original_task="test",
+            last_error="",
+        )
+        # The check is `is not None`, so empty string DOES route to error
+        # This documents current behavior - may want to change to truthiness check
+        assert should_continue(state) == "error"
+
+    def test_whitespace_only_last_error_routes_to_error(self) -> None:
+        """Whitespace-only last_error routes to error."""
+        state = AgentState(
+            input="test",
+            original_task="test",
+            last_error="   ",
+        )
+        assert should_continue(state) == "error"
+
+    def test_none_last_error_does_not_route_to_error(self) -> None:
+        """None last_error does not route to error."""
+        state = AgentState(
+            input="test",
+            original_task="test",
+            last_error=None,
+        )
+        assert should_continue(state) == "think"
+
+    def test_empty_files_changed_list_does_not_verify(self) -> None:
+        """Empty files_changed list should not route to verify."""
+        state = AgentState(
+            input="test",
+            original_task="test",
+            files_changed=[],
+            files_verified=False,
+        )
+        assert should_continue(state) == "think"
+
+    def test_none_pending_confirmation_does_not_route_to_confirm(self) -> None:
+        """None pending_confirmation does not route to confirm."""
+        state = AgentState(
+            input="test",
+            original_task="test",
+            pending_confirmation=None,
+        )
+        assert should_continue(state) == "think"

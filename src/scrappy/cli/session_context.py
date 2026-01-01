@@ -8,7 +8,7 @@ between CLI, CommandRouter, and InteractiveMode components.
 from typing import Any, Dict, List, Optional, Protocol, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from scrappy.cli.conversation_store import ConversationStoreProtocol
+    from scrappy.persistence import ConversationStoreProtocol
 
 
 class SessionContextProtocol(Protocol):

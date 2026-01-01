@@ -139,6 +139,10 @@ class AgentState(BaseModel):
         default=None,
         description="Data awaiting human confirmation (command, file overwrite, etc.)"
     )
+    confirmation_response: Optional[bool] = Field(
+        default=None,
+        description="Response to pending_confirmation (True=confirmed, False=denied, None=pending)"
+    )
 
     # Tool results (separate from messages for easier access)
     tool_results: list[ToolResult] = Field(
