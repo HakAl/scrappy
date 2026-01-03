@@ -27,7 +27,6 @@ import logging
 from typing import Literal, Optional
 
 from scrappy.graph.state import AgentState, Message, PendingConfirmation
-from scrappy.graph.tracing import trace_node
 
 logger = logging.getLogger(__name__)
 
@@ -136,7 +135,6 @@ def build_confirmation_message(
     return Message(role="system", content=f"{formatted}. Proceeding.")
 
 
-@trace_node("confirm")
 def confirm_node(state: AgentState) -> AgentState:
     """
     Confirm node - processes human confirmation response.

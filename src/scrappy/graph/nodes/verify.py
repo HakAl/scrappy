@@ -23,7 +23,6 @@ import subprocess
 from pathlib import Path
 
 from scrappy.graph.state import AgentState
-from scrappy.graph.tracing import trace_node
 
 logger = logging.getLogger(__name__)
 
@@ -149,7 +148,6 @@ def run_mypy(files: list[str], working_dir: str) -> tuple[bool, str]:
         return False, "mypy check timed out after 120 seconds"
 
 
-@trace_node("verify")
 def verify_node(
     state: AgentState,
     run_mypy_check: bool = True,

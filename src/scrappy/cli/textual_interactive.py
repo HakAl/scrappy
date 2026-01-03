@@ -143,10 +143,28 @@ class TextualInteractiveMode:
         # This enables prompt() and confirm() to show modals instead of auto-approving
         self.io.set_bridge(app.bridge)
 
+        # Phase 3.3: Create LangGraphBridge for new agent architecture
+        # This bridges LangGraph async execution to Textual worker pattern
+        langgraph_bridge = None
+        llm_service = getattr(self.orchestrator, 'llm_service', None)
+        if self._cli is not None and llm_service is not None:
+            from .textual.langgraph_bridge import LangGraphBridge
+            langgraph_bridge = LangGraphBridge(
+                app=app,
+                bridge=app.bridge,
+                output_adapter=output_adapter,
+                llm_service=llm_service,
+            )
+        # Temporary assertion to catch wiring issues
+        assert langgraph_bridge is not None, (
+            f"LangGraphBridge not created: _cli={self._cli is not None}, "
+            f"llm_service={llm_service is not None}"
+        )
+
         # Phase 2: Reinitialize handlers with bridge for TUI-aware user interaction
-        # This allows CLIAgentManager to use modal dialogs
+        # This allows CLIAgentManager to use modal dialogs and LangGraph agent
         if self._cli is not None:
-            self._cli.reinitialize_handlers_with_bridge(app.bridge)
+            self._cli.reinitialize_handlers_with_bridge(app.bridge, langgraph_bridge)
             # Update command router's references to the new handlers
             self.command_router.agent_mgr = self._cli.agent_mgr
 

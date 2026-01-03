@@ -414,9 +414,9 @@ class TestToolCallAccumulation:
 
         assert len(result) == 2
         assert result[0]["id"] == "call_1"
-        assert result[0]["name"] == "read_file"
+        assert result[0]["function"]["name"] == "read_file"
         assert result[1]["id"] == "call_2"
-        assert result[1]["name"] == "write_file"
+        assert result[1]["function"]["name"] == "write_file"
 
     def test_fragments_skips_empty_names(self):
         """Tool calls without names should be skipped."""
@@ -428,7 +428,7 @@ class TestToolCallAccumulation:
         result = fragments_to_tool_calls(accumulated)
 
         assert len(result) == 1
-        assert result[0]["name"] == "valid_tool"
+        assert result[0]["function"]["name"] == "valid_tool"
 
 
 # =============================================================================
@@ -511,7 +511,7 @@ class TestThinkNode:
         assert len(result.messages) == 1
         assert "tool_calls" in result.messages[0]
         assert len(result.messages[0]["tool_calls"]) == 1
-        assert result.messages[0]["tool_calls"][0]["name"] == "read_file"
+        assert result.messages[0]["tool_calls"][0]["function"]["name"] == "read_file"
 
         # Should NOT be done (has tool calls)
         assert result.done is False
@@ -654,7 +654,7 @@ class TestThinkNodeStreaming:
 
         # Should have tool calls
         assert "tool_calls" in result.messages[0]
-        assert result.messages[0]["tool_calls"][0]["name"] == "read_file"
+        assert result.messages[0]["tool_calls"][0]["function"]["name"] == "read_file"
         assert result.done is False
 
     @pytest.mark.asyncio

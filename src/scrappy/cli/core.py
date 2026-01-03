@@ -10,6 +10,7 @@ from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .textual import ThreadSafeAsyncBridge
+    from .textual.langgraph_bridge import LangGraphBridge
 
 from ..orchestrator import AgentOrchestrator
 from .io_interface import CLIIOProtocol
@@ -368,7 +369,11 @@ class CLI:
             io.secho("Starting fresh session.", fg="yellow")
             self.logger.info("Session restore skipped (non-interactive)")
 
-    def reinitialize_handlers_with_bridge(self, bridge: "ThreadSafeAsyncBridge") -> None:
+    def reinitialize_handlers_with_bridge(
+        self,
+        bridge: "ThreadSafeAsyncBridge",
+        langgraph_bridge: "Optional[LangGraphBridge]" = None,
+    ) -> None:
         """
         Re-initialize handlers that need the TUI bridge for modal dialogs.
 
@@ -378,9 +383,10 @@ class CLI:
 
         Args:
             bridge: The ThreadSafeAsyncBridge from ScrappyApp
+            langgraph_bridge: Optional LangGraphBridge for new agent architecture
 
         Side Effects:
-            - Recreates agent_mgr with TUI-aware interaction
+            - Recreates agent_mgr with TUI-aware interaction and LangGraph bridge
         """
         from .user_interaction import get_user_interaction
 
@@ -390,7 +396,12 @@ class CLI:
         # Re-create handlers that use user interaction
         from .agent_manager import CLIAgentManager
 
-        self.agent_mgr = CLIAgentManager(self.orchestrator, self.io, interaction)
+        self.agent_mgr = CLIAgentManager(
+            self.orchestrator,
+            self.io,
+            interaction,
+            langgraph_bridge=langgraph_bridge,
+        )
 
     def interactive_mode(self):
         """

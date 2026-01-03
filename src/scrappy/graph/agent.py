@@ -42,6 +42,7 @@ from scrappy.graph.nodes import (
 )
 from scrappy.graph.state import AgentState
 from scrappy.graph.tools import ToolAdapter, ToolAdapterProtocol
+from scrappy.graph.tracing import get_langfuse_callback
 
 logger = logging.getLogger(__name__)
 
@@ -219,6 +220,12 @@ def build_graph(
         interrupt_before=["confirm"],
     )
 
+    # Add Langfuse tracing if configured
+    langfuse_handler = get_langfuse_callback()
+    if langfuse_handler:
+        compiled = compiled.with_config({"callbacks": [langfuse_handler]})
+        logger.debug("Langfuse tracing enabled for graph")
+
     logger.debug("Agent graph compiled successfully")
 
     return compiled
@@ -268,7 +275,14 @@ def run_agent(
         thread_id = str(uuid.uuid4())
 
     # Config for checkpointing
-    config = {"configurable": {"thread_id": thread_id}}
+    # Note: recursion_limit counts TOTAL node invocations, not iterations.
+    # With think->execute pattern, each iteration = 2 nodes.
+    # MAX_ITERATIONS (from edges.py) = 50, so need at least 100 nodes.
+    # Set to 150 to allow for error recovery loops.
+    config = {
+        "configurable": {"thread_id": thread_id},
+        "recursion_limit": 150,
+    }
 
     logger.info("Starting agent run for task: %s", task[:100])
 

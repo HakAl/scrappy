@@ -13,12 +13,35 @@ from typing_extensions import NotRequired, TypedDict
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-class ToolCall(TypedDict):
-    """Structure for a tool call within a message."""
+class FunctionCall(TypedDict):
+    """Function details within a tool call (OpenAI format)."""
 
-    id: str
     name: str
-    arguments: NotRequired[str]
+    arguments: str
+
+
+class ToolCall(TypedDict):
+    """
+    OpenAI-format tool call structure.
+
+    This matches the standard format used by OpenAI, Groq, Cerebras, and other
+    LLM providers. Using the standard format avoids conversion bugs and ensures
+    messages can be sent directly to any provider.
+
+    Example:
+        {
+            "type": "function",
+            "id": "call_abc123",
+            "function": {
+                "name": "read_file",
+                "arguments": "{\"path\": \"/tmp/foo.txt\"}"
+            }
+        }
+    """
+
+    type: str  # Always "function" for now
+    id: str
+    function: FunctionCall
 
 
 class Message(TypedDict):

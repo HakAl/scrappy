@@ -44,6 +44,7 @@ dependencies = [
     "textual>=0.47.0",
     # LangGraph migration (Phase 0)
     "langgraph>=0.2.0",
+    "langchain>=0.3.0",  # Needed for langfuse.langchain CallbackHandler
     "langfuse>=2.0.0,<3.0.0",  # Pin to v2 to match docker server
     "docker>=7.0.0",
 ]

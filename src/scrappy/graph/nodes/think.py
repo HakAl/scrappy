@@ -18,7 +18,6 @@ from typing import Any, AsyncIterator, Callable, Optional, Protocol, runtime_che
 
 from scrappy.graph.state import AgentState, Message, ToolCall
 from scrappy.graph.tools import ToolAdapterProtocol
-from scrappy.graph.tracing import trace_node
 from scrappy.orchestrator.types import StreamChunk, ToolCallFragment
 
 logger = logging.getLogger(__name__)
@@ -261,6 +260,7 @@ def build_system_prompt(state: AgentState, tool_names: list[str]) -> str:
 3. If a task requires multiple steps, break it down
 4. Verify your work when appropriate
 5. Ask for clarification if the task is ambiguous
+6. When the task is complete, call the `complete` tool with a summary of what you accomplished
 
 ## Working Directory
 {state.working_dir}
@@ -324,13 +324,13 @@ def accumulate_tool_calls(fragments: list[ToolCallFragment]) -> dict[int, dict]:
 
 def fragments_to_tool_calls(accumulated: dict[int, dict]) -> list[ToolCall]:
     """
-    Convert accumulated fragments to ToolCall dicts.
+    Convert accumulated fragments to ToolCall dicts in OpenAI format.
 
     Args:
         accumulated: Dict from accumulate_tool_calls
 
     Returns:
-        List of ToolCall TypedDicts
+        List of ToolCall TypedDicts in OpenAI format
     """
     tool_calls: list[ToolCall] = []
 
@@ -339,16 +339,18 @@ def fragments_to_tool_calls(accumulated: dict[int, dict]) -> list[ToolCall]:
         if tc_data["name"]:  # Only include if we have a name
             tool_calls.append(
                 ToolCall(
+                    type="function",
                     id=tc_data["id"],
-                    name=tc_data["name"],
-                    arguments=tc_data["arguments"],
+                    function={
+                        "name": tc_data["name"],
+                        "arguments": tc_data["arguments"],
+                    },
                 )
             )
 
     return tool_calls
 
 
-@trace_node("think")
 def think_node(
     state: AgentState,
     llm_service: LLMServiceProtocol,
@@ -421,21 +423,31 @@ def think_node(
         if stream_callback and content:
             stream_callback(content)
 
-        # Extract tool calls if present
+        # Extract tool calls if present, converting to OpenAI format
         tool_calls: list[ToolCall] = []
         if hasattr(response, "tool_calls") and response.tool_calls:
             for tc in response.tool_calls:
-                # Handle both dict and object tool calls
+                # Handle both dict and object tool calls, normalize to OpenAI format
                 if isinstance(tc, dict):
-                    tool_calls.append(
-                        ToolCall(
-                            id=tc.get("id", ""),
-                            name=tc.get("name", ""),
-                            arguments=json.dumps(tc.get("arguments", {}))
-                            if isinstance(tc.get("arguments"), dict)
-                            else tc.get("arguments", "{}"),
+                    # Could be OpenAI format or flat format
+                    if "function" in tc:
+                        # Already OpenAI format
+                        tool_calls.append(tc)  # type: ignore[arg-type]
+                    else:
+                        # Flat format - convert to OpenAI
+                        args = tc.get("arguments", {})
+                        if isinstance(args, dict):
+                            args = json.dumps(args)
+                        tool_calls.append(
+                            ToolCall(
+                                type="function",
+                                id=tc.get("id", ""),
+                                function={
+                                    "name": tc.get("name", ""),
+                                    "arguments": args if args else "{}",
+                                },
+                            )
                         )
-                    )
                 else:
                     # Object with id, name, arguments attributes
                     args = tc.arguments
@@ -443,11 +455,26 @@ def think_node(
                         args = json.dumps(args)
                     tool_calls.append(
                         ToolCall(
+                            type="function",
                             id=tc.id,
-                            name=tc.name,
-                            arguments=args if isinstance(args, str) else "{}",
+                            function={
+                                "name": tc.name,
+                                "arguments": args if isinstance(args, str) else "{}",
+                            },
                         )
                     )
+
+        # Check for empty response (no content AND no tool calls)
+        # This is an error condition - LLM should return either content or tool calls
+        if not tool_calls and not content.strip():
+            logger.warning("LLM returned empty response (no content, no tool calls)")
+            return state.model_copy(
+                update={
+                    "iteration": state.iteration + 1,
+                    "error_count": state.error_count + 1,
+                    "last_error": "LLM returned empty response. This may indicate an API issue or rate limiting.",
+                }
+            )
 
         # Build new assistant message
         new_message: Message = {
@@ -461,7 +488,8 @@ def think_node(
         new_messages = list(state.messages) + [new_message]
 
         # Check if we should mark as done (no tool calls = final response)
-        is_done = len(tool_calls) == 0 and content.strip() != ""
+        # Note: We already handled empty content case above, so content is non-empty here
+        is_done = len(tool_calls) == 0
 
         return state.model_copy(
             update={

@@ -29,6 +29,18 @@ from scrappy.graph.nodes.execute import (
 )
 
 
+def make_tool_call(id: str, name: str, arguments: str = "{}") -> ToolCall:
+    """Create a ToolCall in OpenAI format for testing."""
+    return {
+        "type": "function",
+        "id": id,
+        "function": {
+            "name": name,
+            "arguments": arguments,
+        },
+    }
+
+
 # =============================================================================
 # Test Doubles
 # =============================================================================
@@ -61,7 +73,7 @@ class MockToolAdapter:
         if self.results:
             return self.results
         return [
-            ToolResult(name=tc["name"], result="mock result")
+            ToolResult(name=tc["function"]["name"], result="mock result")
             for tc in tool_calls
         ]
 
@@ -78,6 +90,7 @@ def create_test_state(
     messages: Optional[list[Message]] = None,
     files_changed: Optional[list[str]] = None,
     files_verified: bool = True,
+    done: bool = False,
 ) -> AgentState:
     """Create a test AgentState."""
     return AgentState(
@@ -87,6 +100,7 @@ def create_test_state(
         messages=messages or [],
         files_changed=files_changed or [],
         files_verified=files_verified,
+        done=done,
     )
 
 
@@ -236,11 +250,7 @@ class TestExtractToolCalls:
 
     def test_extract_single_tool_call(self):
         """Should extract single tool call."""
-        tool_call: ToolCall = {
-            "id": "call_1",
-            "name": "read_file",
-            "arguments": '{"path": "/test"}',
-        }
+        tool_call = make_tool_call("call_1", "read_file", '{"path": "/test"}')
         state = create_test_state(
             messages=[{
                 "role": "assistant",
@@ -252,13 +262,13 @@ class TestExtractToolCalls:
         result = extract_tool_calls(state)
 
         assert len(result) == 1
-        assert result[0]["name"] == "read_file"
+        assert result[0]["function"]["name"] == "read_file"
 
     def test_extract_multiple_tool_calls(self):
         """Should extract multiple tool calls."""
         tool_calls: list[ToolCall] = [
-            {"id": "call_1", "name": "read_file", "arguments": "{}"},
-            {"id": "call_2", "name": "write_file", "arguments": "{}"},
+            make_tool_call("call_1", "read_file"),
+            make_tool_call("call_2", "write_file"),
         ]
         state = create_test_state(
             messages=[{
@@ -271,13 +281,13 @@ class TestExtractToolCalls:
         result = extract_tool_calls(state)
 
         assert len(result) == 2
-        assert result[0]["name"] == "read_file"
-        assert result[1]["name"] == "write_file"
+        assert result[0]["function"]["name"] == "read_file"
+        assert result[1]["function"]["name"] == "write_file"
 
     def test_only_extracts_from_last_message(self):
         """Should only extract from the last message."""
-        old_tool_call: ToolCall = {"id": "old", "name": "old_tool"}
-        new_tool_call: ToolCall = {"id": "new", "name": "new_tool"}
+        old_tool_call = make_tool_call("old", "old_tool")
+        new_tool_call = make_tool_call("new", "new_tool")
 
         state = create_test_state(
             messages=[
@@ -290,7 +300,7 @@ class TestExtractToolCalls:
         result = extract_tool_calls(state)
 
         assert len(result) == 1
-        assert result[0]["name"] == "new_tool"
+        assert result[0]["function"]["name"] == "new_tool"
 
 
 # =============================================================================
@@ -349,11 +359,7 @@ class TestTrackFileChanges:
 
     def test_ignores_read_operations(self):
         """Read operations should not track changes."""
-        tool_call: ToolCall = {
-            "id": "1",
-            "name": "read_file",
-            "arguments": '{"path": "/test/file.py"}',
-        }
+        tool_call = make_tool_call("1", "read_file", '{"path": "/test/file.py"}')
 
         result = track_file_changes(tool_call, [])
 
@@ -361,11 +367,7 @@ class TestTrackFileChanges:
 
     def test_tracks_write_file(self):
         """write_file should track file path."""
-        tool_call: ToolCall = {
-            "id": "1",
-            "name": "write_file",
-            "arguments": '{"path": "/test/new_file.py"}',
-        }
+        tool_call = make_tool_call("1", "write_file", '{"path": "/test/new_file.py"}')
 
         result = track_file_changes(tool_call, [])
 
@@ -373,11 +375,7 @@ class TestTrackFileChanges:
 
     def test_tracks_edit_file(self):
         """edit_file should track file path."""
-        tool_call: ToolCall = {
-            "id": "1",
-            "name": "edit_file",
-            "arguments": '{"file_path": "/test/edited.py"}',
-        }
+        tool_call = make_tool_call("1", "edit_file", '{"file_path": "/test/edited.py"}')
 
         result = track_file_changes(tool_call, [])
 
@@ -385,11 +383,7 @@ class TestTrackFileChanges:
 
     def test_no_duplicate_tracking(self):
         """Should not add duplicate file paths."""
-        tool_call: ToolCall = {
-            "id": "1",
-            "name": "write_file",
-            "arguments": '{"path": "/test/file.py"}',
-        }
+        tool_call = make_tool_call("1", "write_file", '{"path": "/test/file.py"}')
 
         result = track_file_changes(tool_call, ["/test/file.py"])
 
@@ -397,11 +391,7 @@ class TestTrackFileChanges:
 
     def test_handles_invalid_json(self):
         """Should handle invalid JSON arguments gracefully."""
-        tool_call: ToolCall = {
-            "id": "1",
-            "name": "write_file",
-            "arguments": "not valid json",
-        }
+        tool_call = make_tool_call("1", "write_file", "not valid json")
 
         result = track_file_changes(tool_call, [])
 
@@ -410,11 +400,7 @@ class TestTrackFileChanges:
 
     def test_preserves_existing_files(self):
         """Should preserve existing tracked files."""
-        tool_call: ToolCall = {
-            "id": "1",
-            "name": "write_file",
-            "arguments": '{"path": "/new_file.py"}',
-        }
+        tool_call = make_tool_call("1", "write_file", '{"path": "/new_file.py"}')
 
         result = track_file_changes(tool_call, ["/old_file.py"])
 
@@ -432,7 +418,7 @@ class TestBuildToolMessage:
 
     def test_builds_message_with_result(self):
         """Should build message with result content."""
-        tool_call: ToolCall = {"id": "call_123", "name": "read_file"}
+        tool_call = make_tool_call("call_123", "read_file")
         result = ToolResult(name="read_file", result="File content here")
 
         message = build_tool_message(tool_call, result)
@@ -443,7 +429,7 @@ class TestBuildToolMessage:
 
     def test_builds_message_with_error(self):
         """Should build message with error content."""
-        tool_call: ToolCall = {"id": "call_456", "name": "write_file"}
+        tool_call = make_tool_call("call_456", "write_file")
         result = ToolResult(name="write_file", error="Permission denied")
 
         message = build_tool_message(tool_call, result)
@@ -476,11 +462,7 @@ class TestExecuteNode:
 
     def test_executes_single_tool_call(self):
         """Should execute a single tool call."""
-        tool_call: ToolCall = {
-            "id": "call_1",
-            "name": "read_file",
-            "arguments": '{"path": "/test.py"}',
-        }
+        tool_call = make_tool_call("call_1", "read_file", '{"path": "/test.py"}')
         state = create_test_state(
             messages=[{
                 "role": "assistant",
@@ -507,8 +489,8 @@ class TestExecuteNode:
     def test_executes_multiple_tool_calls_sequentially(self):
         """Should execute multiple tool calls in order."""
         tool_calls: list[ToolCall] = [
-            {"id": "call_1", "name": "read_file", "arguments": "{}"},
-            {"id": "call_2", "name": "write_file", "arguments": "{}"},
+            make_tool_call("call_1", "read_file"),
+            make_tool_call("call_2", "write_file"),
         ]
         state = create_test_state(
             messages=[{
@@ -538,11 +520,7 @@ class TestExecuteNode:
 
     def test_tracks_file_changes(self):
         """Should track file changes from write operations."""
-        tool_call: ToolCall = {
-            "id": "call_1",
-            "name": "write_file",
-            "arguments": '{"path": "/new_file.py"}',
-        }
+        tool_call = make_tool_call("call_1", "write_file", '{"path": "/new_file.py"}')
         state = create_test_state(
             messages=[{
                 "role": "assistant",
@@ -564,11 +542,7 @@ class TestExecuteNode:
 
     def test_preserves_existing_file_changes(self):
         """Should preserve existing files_changed."""
-        tool_call: ToolCall = {
-            "id": "call_1",
-            "name": "write_file",
-            "arguments": '{"path": "/new.py"}',
-        }
+        tool_call = make_tool_call("call_1", "write_file", '{"path": "/new.py"}')
         state = create_test_state(
             messages=[{
                 "role": "assistant",
@@ -589,7 +563,7 @@ class TestExecuteNode:
 
     def test_stores_tool_results(self):
         """Should store tool results in state."""
-        tool_call: ToolCall = {"id": "call_1", "name": "test_tool"}
+        tool_call = make_tool_call("call_1", "test_tool")
         state = create_test_state(
             messages=[{
                 "role": "assistant",
@@ -608,7 +582,7 @@ class TestExecuteNode:
 
     def test_creates_default_context(self):
         """Should create default context if none provided."""
-        tool_call: ToolCall = {"id": "call_1", "name": "test_tool"}
+        tool_call = make_tool_call("call_1", "test_tool")
         state = create_test_state(
             working_dir="/project/root",
             messages=[{
@@ -630,7 +604,7 @@ class TestExecuteNode:
 
     def test_handles_tool_errors(self):
         """Should handle tool execution errors."""
-        tool_call: ToolCall = {"id": "call_1", "name": "failing_tool"}
+        tool_call = make_tool_call("call_1", "failing_tool")
         state = create_test_state(
             messages=[{
                 "role": "assistant",
@@ -652,7 +626,7 @@ class TestExecuteNode:
     def test_truncates_long_tool_output(self):
         """Should truncate long tool output."""
         long_output = "x" * (OUTPUT_TRUNCATION_LIMIT + 5000)
-        tool_call: ToolCall = {"id": "call_1", "name": "verbose_tool"}
+        tool_call = make_tool_call("call_1", "verbose_tool")
         state = create_test_state(
             messages=[{
                 "role": "assistant",
@@ -674,7 +648,7 @@ class TestExecuteNode:
     def test_handles_binary_output(self):
         """Should replace binary output with placeholder."""
         binary_output = "Hello\x00World\x00Binary"
-        tool_call: ToolCall = {"id": "call_1", "name": "binary_tool"}
+        tool_call = make_tool_call("call_1", "binary_tool")
         state = create_test_state(
             messages=[{
                 "role": "assistant",
@@ -704,8 +678,8 @@ class TestExecuteNodeIntegration:
         """Test complete flow from assistant message to tool results."""
         # Simulate assistant requesting multiple tools
         tool_calls: list[ToolCall] = [
-            {"id": "call_1", "name": "read_file", "arguments": '{"path": "/src/main.py"}'},
-            {"id": "call_2", "name": "write_file", "arguments": '{"path": "/src/new.py"}'},
+            make_tool_call("call_1", "read_file", '{"path": "/src/main.py"}'),
+            make_tool_call("call_2", "write_file", '{"path": "/src/new.py"}'),
         ]
 
         state = create_test_state(
@@ -740,11 +714,7 @@ class TestExecuteNodeIntegration:
 
     def test_read_only_operations_preserve_verified(self):
         """Read-only operations should not invalidate verification."""
-        tool_call: ToolCall = {
-            "id": "call_1",
-            "name": "read_file",
-            "arguments": '{"path": "/src/main.py"}',
-        }
+        tool_call = make_tool_call("call_1", "read_file", '{"path": "/src/main.py"}')
         state = create_test_state(
             messages=[{
                 "role": "assistant",
@@ -762,3 +732,48 @@ class TestExecuteNodeIntegration:
 
         # Verified should still be True (no writes)
         assert result.files_verified is True
+
+    def test_complete_tool_sets_done_true(self):
+        """Complete tool should set done=True to stop the agent loop."""
+        tool_call = make_tool_call(
+            "call_1",
+            "complete",
+            '{"result": "Task completed successfully"}'
+        )
+        state = create_test_state(
+            messages=[{
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [tool_call],
+            }],
+            done=False,
+        )
+        adapter = MockToolAdapter(
+            results=[ToolResult(name="complete", result="Task completed successfully")]
+        )
+        context = create_test_context()
+
+        result = execute_node(state, adapter, context)
+
+        # done should be True after complete tool is called
+        assert result.done is True
+
+    def test_complete_tool_preserves_done_if_already_true(self):
+        """If done is already True, complete tool should preserve it."""
+        tool_call = make_tool_call("call_1", "complete", '{"result": "Done"}')
+        state = create_test_state(
+            messages=[{
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [tool_call],
+            }],
+            done=True,  # Already done
+        )
+        adapter = MockToolAdapter(
+            results=[ToolResult(name="complete", result="Done")]
+        )
+        context = create_test_context()
+
+        result = execute_node(state, adapter, context)
+
+        assert result.done is True

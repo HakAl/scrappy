@@ -346,7 +346,7 @@ def build_model_list(api_key_service: ApiKeyConfigServiceProtocol) -> list[dict]
     return model_list
 
 
-def create_litellm_router(callbacks: list = None):
+def create_litellm_router(callbacks: Optional[list] = None):
     """
     Create empty LiteLLM Router.
 
@@ -361,10 +361,20 @@ def create_litellm_router(callbacks: list = None):
         Empty litellm.Router instance ready to be configured
     """
     import litellm
+    from scrappy.graph.tracing import is_tracing_enabled
 
     # Set callbacks globally for litellm (Router doesn't accept callbacks param)
     if callbacks:
         litellm.callbacks = callbacks
+
+    # Enable Langfuse for LLM call tracing if configured
+    if is_tracing_enabled():
+        litellm.success_callback = litellm.success_callback or []
+        if "langfuse" not in litellm.success_callback:
+            litellm.success_callback.append("langfuse")
+        litellm.failure_callback = litellm.failure_callback or []
+        if "langfuse" not in litellm.failure_callback:
+            litellm.failure_callback.append("langfuse")
 
     # Context window fallbacks: when a model hits context limit, try larger models
     # Order: small context -> medium -> large (Gemini has 1M context)

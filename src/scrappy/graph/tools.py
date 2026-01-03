@@ -13,6 +13,7 @@ import json
 import logging
 from typing import Any, Protocol, runtime_checkable
 
+from scrappy.agent_tools.registry_factory import create_default_registry
 from scrappy.agent_tools.tools.base import ToolContext
 from scrappy.agent_tools.tools.registry import ToolRegistry
 from scrappy.graph.state import ToolCall, ToolResult
@@ -147,16 +148,18 @@ class ToolAdapter:
         Execute a single tool call.
 
         Args:
-            tool_call: Tool call with id, name, and optional arguments
+            tool_call: Tool call in OpenAI format with type, id, and function
             context: ToolContext for tool execution
 
         Returns:
             ToolResult with name and either result or error
         """
-        tool_name = tool_call["name"]
+        # Extract from OpenAI format: {"type": "function", "id": "...", "function": {"name": "...", "arguments": "..."}}
+        function_data = tool_call.get("function", {})
+        tool_name = function_data.get("name", "")
 
         # Parse arguments (may be JSON string or already parsed)
-        arguments = tool_call.get("arguments", "{}")
+        arguments = function_data.get("arguments", "{}")
         if isinstance(arguments, str):
             try:
                 kwargs = json.loads(arguments) if arguments else {}
@@ -210,15 +213,19 @@ class ToolAdapter:
         return self._registry.list_tools()
 
     @classmethod
-    def create_default(cls) -> "ToolAdapter":
+    def create_default(cls, profile: str = "full") -> "ToolAdapter":
         """
         Create a ToolAdapter with the default tool registry.
 
         Convenience factory that creates a registry with all standard tools
-        and wraps it in an adapter.
+        and wraps it in an adapter. Uses registry_factory which includes
+        the complete tool for signaling task completion.
+
+        Args:
+            profile: Tool profile ("full", "optimized", "minimal")
 
         Returns:
             ToolAdapter with default tools registered
         """
-        registry = ToolRegistry.create_default()
+        registry = create_default_registry(profile=profile)
         return cls(registry)

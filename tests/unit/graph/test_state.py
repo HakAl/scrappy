@@ -76,7 +76,7 @@ class TestAgentStateJsonSerialization:
             original_task="test",
             messages=[
                 {"role": "user", "content": "hello"},
-                {"role": "assistant", "content": "hi", "tool_calls": [{"id": "1", "name": "read"}]},
+                {"role": "assistant", "content": "hi", "tool_calls": [{"type": "function", "id": "1", "function": {"name": "read", "arguments": "{}"}}]},
             ],
             pending_confirmation={"type": "command", "command": "rm -rf /"},
         )

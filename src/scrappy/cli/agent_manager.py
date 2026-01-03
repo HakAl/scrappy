@@ -15,6 +15,7 @@ from .utils.error_handler import handle_error
 
 if TYPE_CHECKING:
     from .protocols import UserInteractionProtocol
+    from .textual.langgraph_bridge import LangGraphBridge
 
 
 class CLIAgentManager:
@@ -25,6 +26,7 @@ class CLIAgentManager:
         orchestrator,
         io: CLIIOProtocol,
         user_interaction: Optional["UserInteractionProtocol"] = None,
+        langgraph_bridge: Optional["LangGraphBridge"] = None,
     ):
         """Initialize agent manager.
 
@@ -33,6 +35,8 @@ class CLIAgentManager:
             io: I/O interface for output (stored directly for DI)
             user_interaction: Optional interaction handler for prompts/confirms.
                 Defaults to CLIUserInteraction if not provided.
+            langgraph_bridge: Optional LangGraph bridge for TUI mode.
+                When provided, run_agent uses LangGraph instead of CodeAgent.
         """
         self.orchestrator = orchestrator
         self.io = io  # Store directly per CLAUDE.md DI principles
@@ -41,13 +45,24 @@ class CLIAgentManager:
         self._interaction = user_interaction or CLIUserInteraction(io)
         # Cancellation token for current agent run (None when no agent running)
         self._cancellation_token: Optional[CancellationToken] = None
+        # LangGraph bridge for TUI mode (None in CLI mode)
+        self._langgraph_bridge = langgraph_bridge
 
     def cancel(self) -> None:
         """Cancel the currently running agent if any.
 
         First cancel: graceful (waits for current step)
         Second cancel: force (marks for immediate termination)
+
+        Works for both CodeAgent (via _cancellation_token) and
+        LangGraph (via _langgraph_bridge.cancel()).
         """
+        # Cancel LangGraph bridge if active (TUI mode)
+        if self._langgraph_bridge is not None:
+            self._langgraph_bridge.cancel()
+            self.io.secho("Cancelling agent...", fg=self.io.theme.warning)
+
+        # Cancel CodeAgent if active (CLI mode)
         if self._cancellation_token:
             was_force_cancelled = self._cancellation_token.is_force_cancelled()
             self._cancellation_token.cancel()
@@ -138,6 +153,12 @@ class CLIAgentManager:
             except UndoError as e:
                 io.secho(f"Could not create undo point: {e}", fg=io.theme.warning)
 
+        # Use LangGraph agent if bridge is available (TUI mode)
+        if self._langgraph_bridge is not None:
+            self._run_langgraph_agent(task, undo_state, dry_run, dashboard)
+            return
+
+        # Fallback to CodeAgent (CLI mode or when bridge not available)
         # Create config with verbose setting
         config = AgentConfig()
         config.verbose = verbose
@@ -207,6 +228,102 @@ class CLIAgentManager:
             )
         finally:
             # Clear cancellation token after run completes
+            self._cancellation_token = None
+            # Clear task progress widget
+            output_sink = getattr(io, "output_sink", None)
+            if output_sink is not None and hasattr(output_sink, "post_tasks_updated"):
+                output_sink.post_tasks_updated([])
+
+    def _run_langgraph_agent(
+        self,
+        task: str,
+        undo_state,
+        dry_run: bool,
+        dashboard,
+    ) -> None:
+        """
+        Run the LangGraph agent via the bridge.
+
+        This method is called when a LangGraphBridge is available (TUI mode).
+        It delegates execution to the bridge which runs the agent in a
+        worker thread with proper HITL confirmation support.
+
+        Args:
+            task: The task to run
+            undo_state: Undo state if checkpoint was created
+            dry_run: Whether this is a dry run (currently ignored for LangGraph)
+            dashboard: Dashboard instance if enabled
+        """
+        import os
+
+        io = self.io
+
+        io.echo("\nLangGraph Agent Configuration:")
+        io.echo("  Mode: LangGraph (new architecture)")
+        io.echo(f"  Working directory: {os.getcwd()}")
+        if dry_run:
+            io.secho("  Note: dry_run not yet implemented for LangGraph", fg=io.theme.warning)
+        io.echo()
+
+        if dashboard:
+            dashboard.set_state("executing", "Running LangGraph agent...")
+            dashboard.update_thought_process(f"Executing task: {task}\n\nLangGraph agent processing...")
+
+        try:
+            # Run agent via bridge (synchronous call that runs in current thread)
+            # The bridge handles all HITL confirmations via ThreadSafeAsyncBridge
+            assert self._langgraph_bridge is not None  # Type guard for mypy
+            result = self._langgraph_bridge.run_agent(
+                task=task,
+                working_dir=os.getcwd(),
+            )
+
+            if dashboard:
+                dashboard.set_state("idle", "Task completed")
+
+            io.echo("\n" + "=" * 60)
+
+            if result.cancelled:
+                io.secho("Task Cancelled", fg=io.theme.warning, bold=True)
+                self.orchestrator.working_memory.add_discovery(
+                    f"Agent task '{task[:50]}...' cancelled by user",
+                    "agent_task"
+                )
+            elif result.success:
+                io.secho("Task Completed Successfully!", fg=io.theme.success, bold=True)
+                iterations = result.final_state.iteration if result.final_state else 0
+                self.orchestrator.working_memory.add_discovery(
+                    f"Agent task '{task[:50]}...': completed in {iterations} iterations",
+                    "agent_task"
+                )
+            else:
+                io.secho("Task Did Not Complete", fg=io.theme.warning, bold=True)
+                if result.error:
+                    io.secho(f"Error: {result.error}", fg=io.theme.error)
+                self.orchestrator.working_memory.add_discovery(
+                    f"Agent task '{task[:50]}...' failed: {result.error or 'unknown'}",
+                    "agent_task"
+                )
+
+            # Inform user about undo option
+            if undo_state and not dry_run:
+                io.echo("\nTo undo changes: scrappy undo")
+
+        except KeyboardInterrupt:
+            io.echo("\n\nAgent interrupted by user.")
+            self.orchestrator.working_memory.add_discovery(
+                f"Agent task '{task[:50]}...' interrupted by user",
+                "agent_task"
+            )
+        except Exception as e:
+            io.echo()  # Newline before error
+            handle_error(e, io, context="LangGraph agent execution")
+            self.orchestrator.working_memory.add_discovery(
+                f"Agent task '{task[:50]}...' failed: {str(e)[:50]}",
+                "agent_task"
+            )
+        finally:
+            # Clear cancellation token
             self._cancellation_token = None
             # Clear task progress widget
             output_sink = getattr(io, "output_sink", None)

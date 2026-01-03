@@ -318,8 +318,21 @@ class ScrappyApp(App):
         # Inject bridge into UnifiedIO for modal dialogs
         self._cli.io.set_bridge(self.bridge)
 
+        # Create LangGraphBridge for new agent architecture
+        # This bridges LangGraph async execution to Textual worker pattern
+        langgraph_bridge = None
+        llm_service = getattr(self._cli.orchestrator, 'llm_service', None)
+        if llm_service is not None:
+            from .langgraph_bridge import LangGraphBridge
+            langgraph_bridge = LangGraphBridge(
+                app=self,
+                bridge=self.bridge,
+                output_adapter=self.output_adapter,
+                llm_service=llm_service,
+            )
+
         # Reinitialize handlers with bridge for TUI-aware user interaction
-        self._cli.reinitialize_handlers_with_bridge(self.bridge)
+        self._cli.reinitialize_handlers_with_bridge(self.bridge, langgraph_bridge)
 
         # Update command router's references to the new handlers
         self.interactive_mode.command_router.agent_mgr = self._cli.agent_mgr

@@ -17,6 +17,18 @@ from scrappy.graph.state import ToolCall
 from scrappy.graph.tools import ToolAdapter, ToolAdapterProtocol
 
 
+def make_tool_call(id: str, name: str, arguments: str = "{}") -> ToolCall:
+    """Create a ToolCall in OpenAI format for testing."""
+    return {
+        "type": "function",
+        "id": id,
+        "function": {
+            "name": name,
+            "arguments": arguments,
+        },
+    }
+
+
 class MockTool(ToolBase):
     """A simple mock tool for testing."""
 
@@ -151,7 +163,7 @@ class TestToolAdapterExecute:
         context = create_test_context()
 
         tool_calls: list[ToolCall] = [
-            {"id": "call_1", "name": "echo", "arguments": '{"input": "hello"}'}
+            make_tool_call("call_1", "echo", '{"input": "hello"}')
         ]
 
         results = adapter.execute(tool_calls, context)
@@ -170,8 +182,8 @@ class TestToolAdapterExecute:
         context = create_test_context()
 
         tool_calls: list[ToolCall] = [
-            {"id": "call_1", "name": "tool_a"},
-            {"id": "call_2", "name": "tool_b"},
+            make_tool_call("call_1", "tool_a"),
+            make_tool_call("call_2", "tool_b"),
         ]
 
         results = adapter.execute(tool_calls, context)
@@ -190,7 +202,7 @@ class TestToolAdapterExecute:
         context = create_test_context()
 
         tool_calls: list[ToolCall] = [
-            {"id": "call_1", "name": "no_args"}
+            make_tool_call("call_1", "no_args")
         ]
 
         results = adapter.execute(tool_calls, context)
@@ -206,7 +218,7 @@ class TestToolAdapterExecute:
         context = create_test_context()
 
         tool_calls: list[ToolCall] = [
-            {"id": "call_1", "name": "nonexistent_tool"}
+            make_tool_call("call_1", "nonexistent_tool")
         ]
 
         results = adapter.execute(tool_calls, context)
@@ -224,7 +236,7 @@ class TestToolAdapterExecute:
         context = create_test_context()
 
         tool_calls: list[ToolCall] = [
-            {"id": "call_1", "name": "test", "arguments": "not valid json"}
+            make_tool_call("call_1", "test", "not valid json")
         ]
 
         results = adapter.execute(tool_calls, context)
@@ -242,8 +254,8 @@ class TestToolAdapterExecute:
         context = create_test_context()
 
         tool_calls: list[ToolCall] = [
-            {"id": "call_1", "name": "will_fail"},
-            {"id": "call_2", "name": "will_succeed"},
+            make_tool_call("call_1", "will_fail"),
+            make_tool_call("call_2", "will_succeed"),
         ]
 
         results = adapter.execute(tool_calls, context)
@@ -324,7 +336,7 @@ class TestToolResultFormat:
         adapter = ToolAdapter(registry)
         context = create_test_context()
 
-        tool_calls: list[ToolCall] = [{"id": "1", "name": "test"}]
+        tool_calls: list[ToolCall] = [make_tool_call("1", "test")]
         results = adapter.execute(tool_calls, context)
 
         assert "name" in results[0]
@@ -336,7 +348,7 @@ class TestToolResultFormat:
         adapter = ToolAdapter(registry)
         context = create_test_context()
 
-        tool_calls: list[ToolCall] = [{"id": "1", "name": "test"}]
+        tool_calls: list[ToolCall] = [make_tool_call("1", "test")]
         results = adapter.execute(tool_calls, context)
 
         assert "result" in results[0]
@@ -348,7 +360,7 @@ class TestToolResultFormat:
         adapter = ToolAdapter(registry)
         context = create_test_context()
 
-        tool_calls: list[ToolCall] = [{"id": "1", "name": "nonexistent"}]
+        tool_calls: list[ToolCall] = [make_tool_call("1", "nonexistent")]
         results = adapter.execute(tool_calls, context)
 
         assert "error" in results[0]
@@ -363,7 +375,7 @@ class TestToolAdapterEdgeCases:
         adapter = ToolAdapter(registry)
         context = create_test_context()
 
-        tool_calls: list[ToolCall] = [{"id": "1", "name": ""}]
+        tool_calls: list[ToolCall] = [make_tool_call("1", "")]
         results = adapter.execute(tool_calls, context)
 
         assert "error" in results[0]
@@ -375,7 +387,7 @@ class TestToolAdapterEdgeCases:
         adapter = ToolAdapter(registry)
         context = create_test_context()
 
-        tool_calls: list[ToolCall] = [{"id": "1", "name": "   "}]
+        tool_calls: list[ToolCall] = [make_tool_call("1", "   ")]
         results = adapter.execute(tool_calls, context)
 
         assert "error" in results[0]
@@ -388,7 +400,7 @@ class TestToolAdapterEdgeCases:
         context = create_test_context()
 
         tool_calls: list[ToolCall] = [
-            {"id": "1", "name": "unicode_test", "arguments": '{"input": "Hello world"}'}
+            make_tool_call("1", "unicode_test", '{"input": "Hello world"}')
         ]
         results = adapter.execute(tool_calls, context)
 
@@ -402,7 +414,7 @@ class TestToolAdapterEdgeCases:
         context = create_test_context()
 
         tool_calls: list[ToolCall] = [
-            {"id": "1", "name": "test", "arguments": "{}"}
+            make_tool_call("1", "test", "{}")
         ]
         results = adapter.execute(tool_calls, context)
 
@@ -416,7 +428,7 @@ class TestToolAdapterEdgeCases:
         context = create_test_context()
 
         tool_calls: list[ToolCall] = [
-            {"id": "1", "name": "test", "arguments": ""}
+            make_tool_call("1", "test", "")
         ]
         results = adapter.execute(tool_calls, context)
 
@@ -430,7 +442,7 @@ class TestToolAdapterEdgeCases:
         context = create_test_context()
 
         tool_calls: list[ToolCall] = [
-            {"id": "1", "name": "test", "arguments": '{"input": null}'}
+            make_tool_call("1", "test", '{"input": null}')
         ]
         results = adapter.execute(tool_calls, context)
 
@@ -444,7 +456,7 @@ class TestToolAdapterEdgeCases:
         context = create_test_context()
 
         tool_calls: list[ToolCall] = [
-            {"id": "1", "name": "test", "arguments": '{"input": {"nested": "value"}}'}
+            make_tool_call("1", "test", '{"input": {"nested": "value"}}')
         ]
         results = adapter.execute(tool_calls, context)
 
@@ -460,7 +472,7 @@ class TestToolAdapterEdgeCases:
 
         long_input = "x" * 10000
         tool_calls: list[ToolCall] = [
-            {"id": "1", "name": "test", "arguments": f'{{"input": "{long_input}"}}'}
+            make_tool_call("1", "test", f'{{"input": "{long_input}"}}')
         ]
         results = adapter.execute(tool_calls, context)
 
@@ -474,7 +486,7 @@ class TestToolAdapterEdgeCases:
         context = create_test_context()
 
         tool_calls: list[ToolCall] = [
-            {"id": "1", "name": "test", "arguments": '{"input": "line1\\nline2\\ttab"}'}
+            make_tool_call("1", "test", '{"input": "line1\\nline2\\ttab"}')
         ]
         results = adapter.execute(tool_calls, context)
 
@@ -488,7 +500,7 @@ class TestToolAdapterEdgeCases:
         context = create_test_context()
 
         tool_calls: list[ToolCall] = [
-            {"id": "1", "name": "test", "arguments": "[1, 2, 3]"}
+            make_tool_call("1", "test", "[1, 2, 3]")
         ]
         results = adapter.execute(tool_calls, context)
 
@@ -504,9 +516,9 @@ class TestToolAdapterEdgeCases:
         context = create_test_context()
 
         tool_calls: list[ToolCall] = [
-            {"id": "1", "name": "test"},
-            {"id": "2", "name": "test"},
-            {"id": "3", "name": "test"},
+            make_tool_call("1", "test"),
+            make_tool_call("2", "test"),
+            make_tool_call("3", "test"),
         ]
         results = adapter.execute(tool_calls, context)
 
@@ -520,7 +532,7 @@ class TestToolAdapterEdgeCases:
         adapter = ToolAdapter(registry)
         context = create_test_context()
 
-        tool_calls: list[ToolCall] = [{"id": "", "name": "test"}]
+        tool_calls: list[ToolCall] = [make_tool_call("", "test")]
         results = adapter.execute(tool_calls, context)
 
         assert "result" in results[0]

@@ -133,7 +133,7 @@ class TestLoadHistoryIntoState:
 
     def test_preserves_tool_calls_in_messages(self) -> None:
         """Tool calls are preserved when loading messages."""
-        tool_calls = [{"id": "tc1", "name": "test_tool", "arguments": "{}"}]
+        tool_calls = [{"type": "function", "id": "tc1", "function": {"name": "test_tool", "arguments": "{}"}}]
         messages = [
             {"role": "assistant", "content": "calling tool", "tool_calls": tool_calls},
             {"role": "tool", "content": "result", "tool_call_id": "tc1"},

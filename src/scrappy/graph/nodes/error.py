@@ -15,7 +15,6 @@ import logging
 from typing import Literal
 
 from scrappy.graph.state import AgentState
-from scrappy.graph.tracing import trace_node
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +75,6 @@ def should_escalate_tier(error_count: int, current_tier: Literal["fast", "qualit
     )
 
 
-@trace_node("error")
 def error_node(state: AgentState) -> AgentState:
     """
     Error node - handles tool failures and prepares context for retry.

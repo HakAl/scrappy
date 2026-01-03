@@ -20,7 +20,6 @@ from typing import Optional
 from scrappy.agent_tools.tools.base import ToolContext
 from scrappy.graph.state import AgentState, Message, ToolCall, ToolResult
 from scrappy.graph.tools import ToolAdapterProtocol
-from scrappy.graph.tracing import trace_node
 
 logger = logging.getLogger(__name__)
 
@@ -191,13 +190,15 @@ def track_file_changes(
     Detects write operations and extracts file paths.
 
     Args:
-        tool_call: The tool call that was executed
+        tool_call: The tool call in OpenAI format
         files_changed: Current list of changed files
 
     Returns:
         Updated list of changed files
     """
-    tool_name = tool_call.get("name", "")
+    # Extract from OpenAI format
+    function_data = tool_call.get("function", {})
+    tool_name = function_data.get("name", "")
 
     if tool_name not in WRITE_TOOL_NAMES:
         return files_changed
@@ -205,7 +206,7 @@ def track_file_changes(
     # Parse arguments to extract file path
     import json
 
-    arguments = tool_call.get("arguments", "{}")
+    arguments = function_data.get("arguments", "{}")
     try:
         if isinstance(arguments, str):
             args = json.loads(arguments) if arguments else {}
@@ -251,7 +252,6 @@ def build_tool_message(tool_call: ToolCall, result: ToolResult) -> Message:
     return message
 
 
-@trace_node("execute")
 def execute_node(
     state: AgentState,
     tool_adapter: ToolAdapterProtocol,
@@ -295,6 +295,7 @@ def execute_node(
     new_messages = list(state.messages)
     files_changed = list(state.files_changed)
     files_modified = False
+    task_complete = False
 
     for tool_call, raw_result in zip(tool_calls, raw_results):
         # Process result (truncation, binary guard)
@@ -310,23 +311,31 @@ def execute_node(
         tool_message = build_tool_message(tool_call, processed_result)
         new_messages.append(tool_message)
 
-        # Log execution
+        # Log execution (extract name from OpenAI format)
+        func_name = tool_call.get("function", {}).get("name", "unknown")
         if "error" in processed_result and processed_result.get("error"):
             logger.warning(
                 "Tool %s failed: %s",
-                tool_call.get("name"),
+                func_name,
                 processed_result.get("error"),
             )
         else:
-            logger.debug("Tool %s executed successfully", tool_call.get("name"))
+            logger.debug("Tool %s executed successfully", func_name)
+
+        # Check if complete tool was called (signals task completion)
+        if func_name == "complete":
+            task_complete = True
+            logger.info("Task marked complete via complete tool")
 
     # Update state
     # files_verified = False when files change (triggers verify node)
+    # done = True when complete tool was called
     return state.model_copy(
         update={
             "messages": new_messages,
             "files_changed": files_changed,
             "files_verified": not files_modified,
             "tool_results": raw_results,  # Store raw results for easier access
+            "done": task_complete or state.done,  # Preserve if already done
         }
     )

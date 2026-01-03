@@ -23,6 +23,7 @@ from contextlib import contextmanager
 from typing import Any, Callable, Generator, Optional, Protocol, TypeVar, runtime_checkable
 
 from typing_extensions import ParamSpec
+from langfuse.callback import CallbackHandler as LangfuseCallbackHandler
 
 logger = logging.getLogger(__name__)
 
@@ -191,6 +192,12 @@ class LangfuseTracer:
             except Exception as e:
                 logger.warning(f"Failed to flush Langfuse traces: {e}")
 
+    def get_callback_handler(self) -> Optional[LangfuseCallbackHandler]:
+        """Get CallbackHandler for LangGraph integration."""
+        if not self._available:
+            return None
+        return LangfuseCallbackHandler()
+
 
 # Global tracer instance (lazy singleton)
 # Use set_tracer() for testing, get_tracer() for production
@@ -332,3 +339,20 @@ def shutdown_tracing() -> None:
         if _tracer is not None:
             _tracer.flush()
             _tracer = None
+
+
+def get_langfuse_callback() -> Optional[LangfuseCallbackHandler]:
+    """
+    Get Langfuse CallbackHandler for LangGraph integration.
+
+    Returns handler if Langfuse is configured, None otherwise.
+
+    Usage:
+        handler = get_langfuse_callback()
+        if handler:
+            graph = compiled.with_config({"callbacks": [handler]})
+    """
+    tracer = get_tracer()
+    if isinstance(tracer, LangfuseTracer):
+        return tracer.get_callback_handler()
+    return None
