@@ -574,9 +574,12 @@ class ScrappyApp(App):
         """Route activity state changes to active screen."""
         from ..screens import MainAppScreen
 
+        logger.debug("on_activity_state_change: state=%s, screen=%s", message.state, type(self.screen).__name__)
         screen = self.screen
         if isinstance(screen, MainAppScreen):
             screen.update_activity(message)
+        else:
+            logger.warning("on_activity_state_change: screen is not MainAppScreen, ignoring")
 
     def on_tasks_updated(self, message: TasksUpdated) -> None:
         """Route task updates to active screen."""
@@ -602,8 +605,9 @@ class ScrappyApp(App):
             os._exit(0)
 
         if event.key == "ctrl+c":
-            self._handle_ctrl_c()
-            event.stop()
+            should_stop = self._handle_ctrl_c()
+            if should_stop:
+                event.stop()
 
         if event.key == "escape":
             self._handle_escape()

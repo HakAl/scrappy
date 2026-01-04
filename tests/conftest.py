@@ -3,10 +3,9 @@ Pytest configuration and shared fixtures.
 """
 import pytest
 import sys
-import os
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import Mock
 from dataclasses import dataclass
 
 from scrappy.task_router.config import ClarificationConfig
@@ -114,10 +113,21 @@ def prevent_real_api_calls(monkeypatch):
         'GITHUB_TOKEN',
         'OPENAI_API_KEY',
         'ANTHROPIC_API_KEY',
+        # Langfuse tracing - prevent polluting observability data in tests
+        'LANGFUSE_PUBLIC_KEY',
+        'LANGFUSE_SECRET_KEY',
+        'LANGFUSE_HOST',
     ]
 
     for key in api_keys_to_block:
         monkeypatch.delenv(key, raising=False)
+
+    # Reset Langfuse tracer singleton to ensure tests don't use cached real tracer
+    try:
+        from scrappy.graph.tracing import set_tracer, NoOpTracer
+        set_tracer(NoOpTracer())
+    except ImportError:
+        pass  # Tracing module not available
 
 
 def pytest_deselected(items):

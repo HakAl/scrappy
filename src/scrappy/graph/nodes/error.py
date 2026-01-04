@@ -7,6 +7,7 @@ This node is reached when last_error is set (via routing in edges.py).
 Features:
 - Formats error context for the LLM to understand and retry
 - Clears last_error after processing to avoid looping on same error
+- Preserves last_error when terminating (MAX_RETRIES reached) for diagnostics
 - Optionally escalates to quality tier on repeated errors
 - Langfuse tracing integration
 """
@@ -14,6 +15,7 @@ Features:
 import logging
 from typing import Literal
 
+from scrappy.graph.edges import MAX_RETRIES
 from scrappy.graph.state import AgentState
 
 logger = logging.getLogger(__name__)
@@ -126,10 +128,13 @@ def error_node(state: AgentState) -> AgentState:
         )
 
     # Clear last_error so routing goes back to think
+    # BUT preserve it if we've hit MAX_RETRIES (about to terminate) for diagnostics
+    should_preserve_error = state.error_count >= MAX_RETRIES
+
     return state.model_copy(
         update={
             "messages": new_messages,
-            "last_error": None,  # Clear to avoid looping on same error
+            "last_error": error if should_preserve_error else None,
             "current_tier": new_tier,
         }
     )

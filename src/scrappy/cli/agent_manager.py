@@ -57,10 +57,13 @@ class CLIAgentManager:
         Works for both CodeAgent (via _cancellation_token) and
         LangGraph (via _langgraph_bridge.cancel()).
         """
-        # Cancel LangGraph bridge if active (TUI mode)
-        if self._langgraph_bridge is not None:
+        # Cancel LangGraph bridge if active AND running (TUI mode)
+        if self._langgraph_bridge is not None and self._langgraph_bridge.is_running:
             self._langgraph_bridge.cancel()
-            self.io.secho("Cancelling agent...", fg=self.io.theme.warning)
+            self.io.secho(
+                "Cancelling... waiting for current LLM call to finish",
+                fg=self.io.theme.warning
+            )
 
         # Cancel CodeAgent if active (CLI mode)
         if self._cancellation_token:
@@ -121,8 +124,11 @@ class CLIAgentManager:
         io = self.io  # Use stored reference directly
         dashboard = self.display.get_dashboard()
 
-        io.secho(f"\nCode Agent - Task: {task}", bold=True)
-        io.echo("-" * 60)
+        # Header differs by mode - LangGraph shows task via bridge
+        if self._langgraph_bridge is None:
+            # CodeAgent mode - show header here
+            io.secho(f"\nCode Agent - Task: {task}", bold=True)
+            io.echo("-" * 60)
 
         # Create cancellation token FIRST so Escape works during any prompt
         self.reset_cancel_state()
@@ -258,18 +264,19 @@ class CLIAgentManager:
 
         io = self.io
 
-        io.echo("\nLangGraph Agent Configuration:")
-        io.echo("  Mode: LangGraph (new architecture)")
-        io.echo(f"  Working directory: {os.getcwd()}")
+        # Minimal config output - task is shown by the bridge
         if dry_run:
-            io.secho("  Note: dry_run not yet implemented for LangGraph", fg=io.theme.warning)
-        io.echo()
+            io.secho("Note: dry_run not yet implemented for LangGraph", fg=io.theme.warning)
 
         if dashboard:
             dashboard.set_state("executing", "Running LangGraph agent...")
             dashboard.update_thought_process(f"Executing task: {task}\n\nLangGraph agent processing...")
 
         try:
+            import logging
+            lgr = logging.getLogger(__name__)
+            lgr.debug("_run_langgraph_agent: calling bridge.run_agent")
+
             # Run agent via bridge (synchronous call that runs in current thread)
             # The bridge handles all HITL confirmations via ThreadSafeAsyncBridge
             assert self._langgraph_bridge is not None  # Type guard for mypy
@@ -277,6 +284,9 @@ class CLIAgentManager:
                 task=task,
                 working_dir=os.getcwd(),
             )
+
+            lgr.debug("_run_langgraph_agent: bridge.run_agent returned, result.success=%s, result.cancelled=%s",
+                     result.success, result.cancelled)
 
             if dashboard:
                 dashboard.set_state("idle", "Task completed")
@@ -310,12 +320,14 @@ class CLIAgentManager:
                 io.echo("\nTo undo changes: scrappy undo")
 
         except KeyboardInterrupt:
+            lgr.debug("_run_langgraph_agent: KeyboardInterrupt")
             io.echo("\n\nAgent interrupted by user.")
             self.orchestrator.working_memory.add_discovery(
                 f"Agent task '{task[:50]}...' interrupted by user",
                 "agent_task"
             )
         except Exception as e:
+            lgr.debug("_run_langgraph_agent: Exception: %s", e)
             io.echo()  # Newline before error
             handle_error(e, io, context="LangGraph agent execution")
             self.orchestrator.working_memory.add_discovery(
@@ -323,9 +335,11 @@ class CLIAgentManager:
                 "agent_task"
             )
         finally:
+            lgr.debug("_run_langgraph_agent: finally block, cleaning up")
             # Clear cancellation token
             self._cancellation_token = None
             # Clear task progress widget
             output_sink = getattr(io, "output_sink", None)
             if output_sink is not None and hasattr(output_sink, "post_tasks_updated"):
                 output_sink.post_tasks_updated([])
+            lgr.debug("_run_langgraph_agent: returning")

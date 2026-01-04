@@ -114,6 +114,9 @@ class LangGraphBridge:
         # Track current worker for cancellation
         self._current_worker: Optional[Worker[AgentResult]] = None
 
+        # Concurrency guard - prevent multiple simultaneous runs
+        self._is_running: bool = False
+
     def _confirm_callback(self, question: str) -> bool:
         """
         Confirmation callback that routes through ThreadSafeAsyncBridge.
@@ -157,6 +160,28 @@ class LangGraphBridge:
             # Not running in a worker context
             return False
 
+    def _output_tool_executions(self, node_output: dict[str, Any]) -> None:
+        """
+        Output tool execution info from execute node output.
+
+        Extracts tool names from tool_results and displays them to the user.
+
+        Args:
+            node_output: The execute node's output dict containing state updates
+        """
+        tool_results = node_output.get("tool_results", [])
+        if not tool_results:
+            return
+
+        for result in tool_results:
+            if isinstance(result, dict):
+                name = result.get("name", "unknown")
+                self._output_callback(f"[Tool: {name}]\n")
+                # Show brief error if any
+                if result.get("error"):
+                    error_preview = str(result["error"])[:100]
+                    self._output_callback(f"  Error: {error_preview}\n")
+
     def run_agent(
         self,
         task: str,
@@ -183,6 +208,19 @@ class LangGraphBridge:
         """
         from scrappy.graph.agent import create_agent_runner
         from scrappy.graph.state import AgentState
+
+        # Concurrency guard - reject if already running
+        if self._is_running:
+            logger.warning("Agent run rejected: another run is already in progress")
+            return AgentResult(
+                success=False,
+                final_state=None,
+                error="Another agent run is already in progress. Cancel it first.",
+                cancelled=False,
+            )
+
+        # Mark as running
+        self._is_running = True
 
         # Capture current worker for cancellation support
         try:
@@ -215,7 +253,7 @@ class LangGraphBridge:
             }
 
             logger.info("Starting agent run for task: %s", task[:100])
-            self._output_callback(f"Starting task: {task[:100]}...\n")
+            self._output_callback(f"Task: {task}\n")
 
             # Use stream() instead of invoke() to allow cancellation between nodes
             final_state = self._run_with_streaming(
@@ -237,6 +275,7 @@ class LangGraphBridge:
                 final_state.iteration,
                 final_state.last_error,
             )
+            logger.debug("run_agent: preparing AgentResult")
 
             # Check if agent actually completed successfully
             # done=False means it hit iteration limit without completing
@@ -247,6 +286,7 @@ class LangGraphBridge:
             if final_state.last_error:
                 self._output_callback(f"\nLast error: {final_state.last_error}\n")
 
+            logger.debug("run_agent: returning success=%s", is_success)
             return AgentResult(
                 success=is_success,
                 final_state=final_state,
@@ -270,6 +310,10 @@ class LangGraphBridge:
                 error=str(e),
                 cancelled=False,
             )
+        finally:
+            # Clear running state to allow new runs
+            self._is_running = False
+            self._current_worker = None
 
     def _run_with_streaming(
         self,
@@ -322,6 +366,10 @@ class LangGraphBridge:
                         except Exception:
                             # Node output might be partial, get full state
                             pass
+
+                        # Output tool executions when execute node completes
+                        if node_name == "execute":
+                            self._output_tool_executions(node_output)
 
                     logger.debug("Node %s completed", node_name)
 
@@ -437,3 +485,13 @@ class LangGraphBridge:
         if self._current_worker is not None:
             self._current_worker.cancel()
             logger.info("Agent run cancellation requested")
+
+    @property
+    def is_running(self) -> bool:
+        """
+        Check if an agent run is currently in progress.
+
+        Returns:
+            True if agent is running, False otherwise
+        """
+        return self._is_running

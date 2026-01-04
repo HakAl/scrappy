@@ -23,6 +23,7 @@ from scrappy.graph.nodes.think import (
     accumulate_tool_calls,
     fragments_to_tool_calls,
 )
+from scrappy.orchestrator.litellm_service import NotConfiguredError
 from scrappy.orchestrator.types import StreamChunk, ToolCallFragment
 
 
@@ -557,6 +558,31 @@ class TestThinkNode:
         # Iteration should still increment
         assert result.iteration == 1
 
+    def test_handles_not_configured_error(self):
+        """Think node should handle NotConfiguredError specially - sets done=True."""
+        state = create_test_state()
+        llm_service = MockLLMService(
+            exception=NotConfiguredError("LLM service not configured")
+        )
+
+        result = think_node(state, llm_service)
+
+        # Should not crash
+        assert result is not None
+
+        # Should set done=True to stop the graph (no point retrying)
+        assert result.done is True
+
+        # Should have clear error message directing user to setup
+        assert result.last_error is not None
+        assert "/setup" in result.last_error
+
+        # error_count should NOT be incremented (not a retryable error)
+        assert result.error_count == 0
+
+        # Iteration should still increment
+        assert result.iteration == 1
+
     def test_resets_error_count_on_success(self):
         """Successful completion should reset error count."""
         state = create_test_state()
@@ -669,6 +695,26 @@ class TestThinkNodeStreaming:
 
         assert result.error_count == 1
         assert "timeout" in result.last_error.lower()
+
+    @pytest.mark.asyncio
+    async def test_streaming_handles_not_configured_error(self):
+        """Streaming should handle NotConfiguredError specially - sets done=True."""
+        state = create_test_state()
+        llm_service = MockStreamingLLMService(
+            exception=NotConfiguredError("LLM service not configured")
+        )
+
+        result = await think_node_streaming(state, llm_service)
+
+        # Should set done=True to stop the graph
+        assert result.done is True
+
+        # Should have clear error message
+        assert result.last_error is not None
+        assert "/setup" in result.last_error
+
+        # error_count should NOT be incremented
+        assert result.error_count == 0
 
     @pytest.mark.asyncio
     async def test_streaming_uses_model_tier(self):

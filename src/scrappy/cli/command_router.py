@@ -285,9 +285,14 @@ class CommandRouter:
         if not self._handle_existing_tasks(io, clear_tasks):
             return True  # User cancelled
 
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.debug("[_handle_agent] Calling agent_mgr.run_agent")
         self.agent_mgr.run_agent(args, dry_run=dry_run, verbose=verbose)
+        logger.debug("[_handle_agent] agent_mgr.run_agent returned")
         if self.state_manager.plan_active:
             self.state_manager.prompt_task_progression(io)
+        logger.debug("[_handle_agent] returning True")
         return True
 
     def _handle_existing_tasks(self, io: CLIIOProtocol, clear_tasks: bool) -> bool:

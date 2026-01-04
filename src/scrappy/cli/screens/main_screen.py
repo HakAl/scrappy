@@ -302,9 +302,12 @@ class MainAppScreen(Screen):
         # This is called after action_submit_input validates interactive_mode exists
         assert self.interactive_mode is not None, "process_command called before ready"
 
+        logger.debug("process_command: starting for input: %s", user_input[:50])
         try:
             self.app.post_message(ActivityStateChange(ActivityState.THINKING))
+            logger.debug("process_command: posted THINKING, calling _process_input")
             should_continue = self.interactive_mode._process_input(user_input)
+            logger.debug("process_command: _process_input returned %s", should_continue)
             if not should_continue:
                 self.app.exit()
         except Exception as e:
@@ -321,7 +324,9 @@ class MainAppScreen(Screen):
             self.output_adapter.post_renderable(error_text)
             logger.exception("Error processing command")
         finally:
+            logger.debug("process_command: finally block, posting IDLE")
             self.app.post_message(ActivityStateChange(ActivityState.IDLE))
+            logger.debug("process_command: IDLE posted, exiting")
 
     def write_output(self, content: str) -> None:
         """Write plain text to output area."""
@@ -455,12 +460,15 @@ class MainAppScreen(Screen):
         Args:
             message: ActivityStateChange message with state, message, and elapsed_ms
         """
+        logger.debug("update_activity: state=%s, elapsed_ms=%d", message.state, message.elapsed_ms)
         try:
             indicator = self.query_one(ActivityIndicator)
-        except Exception:
+        except Exception as e:
+            logger.warning("update_activity: ActivityIndicator not found: %s", e)
             return
 
         if message.state == ActivityState.IDLE:
+            logger.debug("update_activity: hiding indicator")
             indicator.hide()
             self._stop_elapsed_timer()
         else:
@@ -469,6 +477,7 @@ class MainAppScreen(Screen):
             else:
                 indicator.show(message.state, message.message)
                 self._start_elapsed_timer()
+        logger.debug("update_activity: done")
 
     def update_tasks(self, tasks: list) -> None:
         """Update task progress widget with new tasks.

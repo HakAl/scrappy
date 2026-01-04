@@ -4,20 +4,23 @@ LangGraph agent assembly and entry point.
 Wires all nodes and edges into a StateGraph for agent execution.
 
 Graph Structure:
-    START -> think -> execute -> (conditional)
-                         |
-             +-----------+-----------+-----------+
-             |           |           |           |
-          verify      confirm      error        end
-             |           |           |
-             +-----------+-----------+
-                         |
-                      think
+    START -> think -> (conditional) -> execute -> (conditional)
+                |                          |
+                |              +-----------+-----------+-----------+
+                |              |           |           |           |
+                |           verify      confirm      error        end
+                |              |           |           |
+                |              +-----------+-----------+
+                |                          |
+                +-------------<------------+
+                |
+            error/end (if think failed)
 
 Features:
 - Entry point: think (no separate classify)
+- Conditional edges from think using edges.route_after_think() (error bypass)
 - Conditional edges from execute using edges.should_continue()
-- Error node handles tool failures, routes back to think
+- Error node handles failures, routes back to think
 - Compiled with MemorySaver checkpointer
 - interrupt_before=["confirm"] for human-in-the-loop
 """
@@ -32,7 +35,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
-from scrappy.graph.edges import RouteDestination, should_continue
+from scrappy.graph.edges import MAX_RETRIES, Route, route_after_think, should_continue
 from scrappy.graph.nodes import (
     confirm_node,
     error_node,
@@ -115,7 +118,7 @@ def _wrap_verify_node(run_mypy_check: bool = True) -> Any:
     return wrapped
 
 
-def _route_after_execute(state: AgentState) -> RouteDestination:
+def _route_after_execute(state: AgentState) -> Route:
     """
     Route after execute node using should_continue logic.
 
@@ -129,6 +132,42 @@ def _route_after_execute(state: AgentState) -> RouteDestination:
         Destination node name
     """
     return should_continue(state)
+
+
+def _route_after_error(state: AgentState) -> Route:
+    """
+    Route after error node.
+
+    Checks if we've hit MAX_RETRIES before routing back to think.
+    This prevents wasting an LLM call when we're about to terminate anyway.
+
+    Args:
+        state: Current agent state
+
+    Returns:
+        Route.END if max retries reached, Route.THINK otherwise
+    """
+    if state.error_count >= MAX_RETRIES:
+        return Route.END
+    return Route.THINK
+
+
+def _route_after_confirm(state: AgentState) -> Route:
+    """
+    Route after confirm node.
+
+    Checks if user denied confirmation (done=True) before routing back to think.
+    This prevents wasting an LLM call when the user meant to abort.
+
+    Args:
+        state: Current agent state
+
+    Returns:
+        Route.END if done (user aborted), Route.THINK otherwise
+    """
+    if state.done:
+        return Route.END
+    return Route.THINK
 
 
 def build_graph(
@@ -184,9 +223,17 @@ def build_graph(
     # Set entry point to think
     builder.set_entry_point("think")
 
-    # Add edge from think to execute
-    # (think produces tool calls, execute runs them)
-    builder.add_edge("think", "execute")
+    # Add conditional edge from think to execute (or error if think failed)
+    # This allows think errors to route directly to error node without going through execute
+    builder.add_conditional_edges(
+        "think",
+        route_after_think,
+        {
+            Route.EXECUTE: "execute",
+            Route.ERROR: "error",
+            Route.END: END,
+        },
+    )
 
     # Add conditional edges from execute
     # This is the main routing logic after tool execution
@@ -194,11 +241,11 @@ def build_graph(
         "execute",
         _route_after_execute,
         {
-            "think": "think",
-            "verify": "verify",
-            "confirm": "confirm",
-            "error": "error",
-            "end": END,
+            Route.THINK: "think",
+            Route.VERIFY: "verify",
+            Route.CONFIRM: "confirm",
+            Route.ERROR: "error",
+            Route.END: END,
         },
     )
 
@@ -206,13 +253,27 @@ def build_graph(
     # (after verification, continue reasoning)
     builder.add_edge("verify", "think")
 
-    # Add edges from confirm back to think
-    # (after confirmation processed, continue or abort based on state.done)
-    builder.add_edge("confirm", "think")
+    # Add conditional edges from confirm
+    # Check done flag before routing to think to avoid wasting LLM call on abort
+    builder.add_conditional_edges(
+        "confirm",
+        _route_after_confirm,
+        {
+            Route.THINK: "think",
+            Route.END: END,
+        },
+    )
 
-    # Add edges from error back to think
-    # (after error processing, retry with error context)
-    builder.add_edge("error", "think")
+    # Add conditional edges from error
+    # Check MAX_RETRIES before routing to think to avoid wasting LLM call
+    builder.add_conditional_edges(
+        "error",
+        _route_after_error,
+        {
+            Route.THINK: "think",
+            Route.END: END,
+        },
+    )
 
     # Compile with checkpointer and interrupt support
     compiled = builder.compile(
@@ -343,7 +404,7 @@ def create_agent_runner(
 
         # Check if interrupted at confirm
         snapshot = graph.get_state(config)
-        if snapshot.next == ("confirm",):
+        if snapshot.next == (CONFIRM,):
             # Handle confirmation
             user_response = get_user_confirmation()
             graph.update_state(config, {"confirmation_response": user_response})

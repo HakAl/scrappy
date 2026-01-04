@@ -18,6 +18,7 @@ from typing import Any, AsyncIterator, Callable, Optional, Protocol, runtime_che
 
 from scrappy.graph.state import AgentState, Message, ToolCall
 from scrappy.graph.tools import ToolAdapterProtocol
+from scrappy.orchestrator.litellm_service import NotConfiguredError
 from scrappy.orchestrator.types import StreamChunk, ToolCallFragment
 
 logger = logging.getLogger(__name__)
@@ -501,6 +502,16 @@ def think_node(
             }
         )
 
+    except NotConfiguredError:
+        # LLM not configured - fatal error, stop the graph immediately
+        logger.error("LLM not configured. User needs to run setup.")
+        return state.model_copy(
+            update={
+                "iteration": state.iteration + 1,
+                "done": True,  # Stop the graph, no point in retrying
+                "last_error": "LLM not configured. Run /setup",
+            }
+        )
     except (ConnectionError, TimeoutError, OSError) as e:
         # Network/connection errors - expected in distributed systems
         logger.warning("Network error in think node: %s", e)
@@ -613,6 +624,18 @@ async def think_node_streaming(
         accumulated_tc = accumulate_tool_calls(all_fragments)
         tool_calls = fragments_to_tool_calls(accumulated_tc)
 
+        # Check for empty response (no content AND no tool calls)
+        # This is an error condition - LLM should return either content or tool calls
+        if not tool_calls and not accumulated_content.strip():
+            logger.warning("LLM returned empty response (no content, no tool calls)")
+            return state.model_copy(
+                update={
+                    "iteration": state.iteration + 1,
+                    "error_count": state.error_count + 1,
+                    "last_error": "LLM returned empty response. This may indicate an API issue or rate limiting.",
+                }
+            )
+
         # Build new assistant message
         new_message: Message = {
             "role": "assistant",
@@ -637,6 +660,16 @@ async def think_node_streaming(
             }
         )
 
+    except NotConfiguredError:
+        # LLM not configured - fatal error, stop the graph immediately
+        logger.error("LLM not configured. User needs to run setup.")
+        return state.model_copy(
+            update={
+                "iteration": state.iteration + 1,
+                "done": True,  # Stop the graph, no point in retrying
+                "last_error": "LLM not configured. Run /setup",
+            }
+        )
     except (ConnectionError, TimeoutError, OSError) as e:
         # Network/connection errors - expected in distributed systems
         logger.warning("Network error in streaming think node: %s", e)

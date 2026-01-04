@@ -387,6 +387,11 @@ class ToolBase:
                 "type": type_map.get(param.param_type, "string"),
                 "description": param.description
             }
+
+            # Array types require 'items' field for Cerebras/Gemini compatibility
+            if param.param_type is list:
+                param_schema["items"] = {"type": "string"}
+
             properties[param.name] = param_schema
 
             if param.required:

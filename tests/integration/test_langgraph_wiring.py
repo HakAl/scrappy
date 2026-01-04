@@ -426,8 +426,8 @@ class TestCancellationBug:
 class TestAgentManagerCancelWiring:
     """Test that CLIAgentManager.cancel() calls langgraph_bridge.cancel()."""
 
-    def test_cancel_calls_langgraph_bridge_cancel(self):
-        """CLIAgentManager.cancel() should call langgraph_bridge.cancel()."""
+    def test_cancel_calls_langgraph_bridge_cancel_when_running(self):
+        """CLIAgentManager.cancel() should call langgraph_bridge.cancel() when agent is running."""
         from scrappy.cli.agent_manager import CLIAgentManager
 
         # Create mocks
@@ -437,8 +437,9 @@ class TestAgentManagerCancelWiring:
         mock_io.theme.warning = "yellow"
         mock_io.secho = Mock()
 
-        # Create mock LangGraphBridge
+        # Create mock LangGraphBridge with is_running=True
         mock_bridge = Mock()
+        mock_bridge.is_running = True
 
         # Create agent manager with bridge
         agent_mgr = CLIAgentManager(
@@ -451,8 +452,39 @@ class TestAgentManagerCancelWiring:
         # Call cancel
         agent_mgr.cancel()
 
-        # Verify bridge.cancel() was called
+        # Verify bridge.cancel() was called and message printed
         mock_bridge.cancel.assert_called_once()
+        mock_io.secho.assert_called_once()
+
+    def test_cancel_does_not_spam_when_not_running(self):
+        """CLIAgentManager.cancel() should NOT call bridge.cancel() or print when agent is not running."""
+        from scrappy.cli.agent_manager import CLIAgentManager
+
+        # Create mocks
+        mock_orchestrator = Mock()
+        mock_io = Mock()
+        mock_io.theme = Mock()
+        mock_io.theme.warning = "yellow"
+        mock_io.secho = Mock()
+
+        # Create mock LangGraphBridge with is_running=False (completed/idle)
+        mock_bridge = Mock()
+        mock_bridge.is_running = False
+
+        # Create agent manager with bridge
+        agent_mgr = CLIAgentManager(
+            orchestrator=mock_orchestrator,
+            io=mock_io,
+            user_interaction=Mock(),
+            langgraph_bridge=mock_bridge,
+        )
+
+        # Call cancel (simulates user pressing Escape after completion)
+        agent_mgr.cancel()
+
+        # Verify bridge.cancel() was NOT called and NO message printed
+        mock_bridge.cancel.assert_not_called()
+        mock_io.secho.assert_not_called()
 
 
 class TestStreamingCancellation:
