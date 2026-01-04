@@ -270,7 +270,6 @@ class ScrappyApp(App):
 
         # Display status lines now that CLI is ready (header already shown on mount)
         from scrappy.cli.interactive_banner import display_banner_status
-
         display_banner_status(self._cli.io)
 
     def _setup_interactive_mode(self) -> None:
@@ -604,10 +603,11 @@ class ScrappyApp(App):
         if event.key == "ctrl+q":
             os._exit(0)
 
+        # Handle Ctrl+C
         if event.key == "ctrl+c":
-            should_stop = self._handle_ctrl_c()
-            if should_stop:
+            if self._handle_ctrl_c():
                 event.stop()
+                event.prevent_default()
 
         if event.key == "escape":
             self._handle_escape()
@@ -666,7 +666,7 @@ class ScrappyApp(App):
         """Handle ESC key: cancel whatever is running."""
         self._cancel_operation()
 
-    def _handle_ctrl_c(self) -> None:
+    def _handle_ctrl_c(self) -> bool:
         """Handle Ctrl+C with context-aware behavior.
 
         Priority:
@@ -674,6 +674,9 @@ class ScrappyApp(App):
         2. Copy selection if text is selected
         3. Cancel operations and clean up UI
         4. Single tap shows hint
+
+        Returns:
+            True to stop event propagation, False to let it bubble.
         """
         from ..screens import MainAppScreen
         from ..widgets.selectable_log import SelectableLog
@@ -684,7 +687,7 @@ class ScrappyApp(App):
         # 1. Double-tap ALWAYS exits (escape hatch when agent is stuck)
         if now - self._last_ctrl_c_time < self._CTRL_C_DOUBLE_TAP_THRESHOLD:
             self.exit()
-            return
+            return True
 
         # Update timestamp for double-tap detection
         self._last_ctrl_c_time = now
@@ -694,7 +697,7 @@ class ScrappyApp(App):
             output = screen._layout.output
             if isinstance(output, SelectableLog) and output._has_selection():
                 output.action_copy_selection()
-                return
+                return True
 
         # 3. Cancel any running operations
         did_cancel = self._cancel_operation()
@@ -702,3 +705,5 @@ class ScrappyApp(App):
         # 4. Show hint if nothing was cancelled
         if not did_cancel:
             self.notify("Press Ctrl+C again to exit", timeout=2)
+
+        return True

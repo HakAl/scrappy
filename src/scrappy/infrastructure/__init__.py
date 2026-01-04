@@ -20,6 +20,7 @@ from .file_system import (
     RealFileSystem,
     InMemoryFileSystem,
 )
+from .suppress_output import suppress_output
 
 # Exception and error recovery are available via submodules:
 # - infrastructure.exceptions
@@ -32,4 +33,5 @@ __all__ = [
     "ConfigLoaderProtocol",
     "RealFileSystem",
     "InMemoryFileSystem",
+    "suppress_output",
 ]

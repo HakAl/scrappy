@@ -11,6 +11,7 @@ from textual.widgets import TextArea
 from textual import work
 
 from .chat_layout import ChatLayout
+from ..widgets import SelectableLog
 from ..input_capture import InputCaptureManager, InputRequest
 from ..command_history import CommandHistory, get_default_history_path
 from ..textual import (
@@ -165,7 +166,7 @@ class MainAppScreen(Screen):
         clicked_widget = event.widget if hasattr(event, 'widget') else None
 
         # Refocus input if clicking anything except the input or log
-        if clicked_widget is not None and not isinstance(clicked_widget, TextArea):
+        if clicked_widget is not None and not isinstance(clicked_widget, (TextArea, SelectableLog)):
             self._layout.focus_input()
             # Clear selection by moving to end
             def clear_selection():
@@ -192,9 +193,10 @@ class MainAppScreen(Screen):
         if self._layout.input.has_focus:
             return
 
-        # Don't steal focus from other interactive widgets
+        # Don't steal focus from other interactive widgets (except SelectableLog
+        # which doesn't use keyboard input - it only uses mouse for selection)
         focused = self.focused
-        if focused is not None and focused != self:
+        if focused is not None and focused != self and not isinstance(focused, SelectableLog):
             return
 
         # Auto-focus on printable characters

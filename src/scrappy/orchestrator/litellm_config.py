@@ -360,8 +360,31 @@ def create_litellm_router(callbacks: Optional[list] = None):
     Returns:
         Empty litellm.Router instance ready to be configured
     """
+    import os
+    import logging
+
+    # === CRITICAL: Suppress LiteLLM/Langfuse output BEFORE imports ===
+    # These libraries are "chatty" and can corrupt terminal escape sequences
+    # used by Textual for mouse tracking. Must silence BEFORE importing.
+
+    # 1. Disable LiteLLM telemetry (prevents network calls and output)
+    os.environ["LITELLM_TELEMETRY"] = "False"
+
+    # 2. Silence loggers BEFORE importing (they set up handlers on import)
+    logging.getLogger("LiteLLM").setLevel(logging.WARNING)
+    logging.getLogger("LiteLLM Router").setLevel(logging.WARNING)
+    logging.getLogger("LiteLLM Proxy").setLevel(logging.WARNING)
+    logging.getLogger("langfuse").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+
+    # Now safe to import
     import litellm
     from scrappy.graph.tracing import is_tracing_enabled
+
+    # 3. Also set litellm's internal flags
+    litellm.suppress_debug_info = True
+    litellm.set_verbose = False
 
     # Set callbacks globally for litellm (Router doesn't accept callbacks param)
     if callbacks:

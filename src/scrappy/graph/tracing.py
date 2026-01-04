@@ -20,10 +20,14 @@ import logging
 import os
 import threading
 from contextlib import contextmanager
-from typing import Any, Callable, Generator, Optional, Protocol, TypeVar, runtime_checkable
+from typing import Any, Callable, Generator, Optional, Protocol, TypeVar, runtime_checkable, TYPE_CHECKING
 
 from typing_extensions import ParamSpec
-from langfuse.callback import CallbackHandler as LangfuseCallbackHandler
+
+# Lazy import to avoid loading langfuse at module import time
+# This prevents langfuse from corrupting terminal state in TUI apps
+if TYPE_CHECKING:
+    from langfuse.callback import CallbackHandler as LangfuseCallbackHandler
 
 logger = logging.getLogger(__name__)
 
@@ -192,11 +196,13 @@ class LangfuseTracer:
             except Exception as e:
                 logger.warning(f"Failed to flush Langfuse traces: {e}")
 
-    def get_callback_handler(self) -> Optional[LangfuseCallbackHandler]:
+    def get_callback_handler(self) -> Optional["LangfuseCallbackHandler"]:
         """Get CallbackHandler for LangGraph integration."""
         if not self._available:
             return None
-        return LangfuseCallbackHandler()
+        # Lazy import to avoid loading at module import time
+        from langfuse.callback import CallbackHandler
+        return CallbackHandler()
 
 
 # Global tracer instance (lazy singleton)
@@ -341,7 +347,7 @@ def shutdown_tracing() -> None:
             _tracer = None
 
 
-def get_langfuse_callback() -> Optional[LangfuseCallbackHandler]:
+def get_langfuse_callback() -> Optional["LangfuseCallbackHandler"]:
     """
     Get Langfuse CallbackHandler for LangGraph integration.
 
