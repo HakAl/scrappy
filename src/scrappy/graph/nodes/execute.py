@@ -15,9 +15,10 @@ Features:
 """
 
 import logging
+from pathlib import Path
 from typing import Optional
 
-from scrappy.agent_tools.tools.base import ToolContext
+from scrappy.graph.protocols import ToolContextFactory, ToolContextProtocol
 from scrappy.graph.state import AgentState, Message, ToolCall, ToolResult
 from scrappy.graph.tools import ToolAdapterProtocol
 
@@ -180,21 +181,53 @@ def process_tool_result(result: ToolResult) -> ToolResult:
     )
 
 
+def normalize_file_path(file_path: str, working_dir: str) -> str:
+    """
+    Normalize a file path to be relative to working_dir.
+
+    Handles both absolute and relative paths, resolving them to a
+    consistent relative path within working_dir.
+
+    Args:
+        file_path: The file path to normalize (absolute or relative)
+        working_dir: The working directory to make paths relative to
+
+    Returns:
+        Normalized relative path string
+    """
+    try:
+        working_path = Path(working_dir).resolve()
+        file_abs = Path(working_dir, file_path).resolve()
+
+        # Make relative to working_dir if within it
+        try:
+            return str(file_abs.relative_to(working_path))
+        except ValueError:
+            # Path is outside working_dir, keep as-is
+            return file_path
+    except (OSError, ValueError):
+        # Invalid path, return as-is
+        return file_path
+
+
 def track_file_changes(
     tool_call: ToolCall,
     files_changed: list[str],
+    working_dir: str,
 ) -> list[str]:
     """
     Track file changes based on tool call.
 
     Detects write operations and extracts file paths.
+    Normalizes paths to relative form to prevent duplicates.
 
     Args:
         tool_call: The tool call in OpenAI format
         files_changed: Current list of changed files
+        working_dir: Working directory for path normalization
 
     Returns:
-        Updated list of changed files
+        Updated list of changed files (all paths normalized to relative)
     """
     # Extract from OpenAI format
     function_data = tool_call.get("function", {})
@@ -223,8 +256,16 @@ def track_file_changes(
         or args.get("file")
     )
 
-    if file_path and file_path not in files_changed:
-        return files_changed + [file_path]
+    if not file_path:
+        return files_changed
+
+    # Normalize to relative path for deduplication
+    normalized_path = normalize_file_path(file_path, working_dir)
+
+    # Check against normalized versions of existing paths
+    normalized_existing = [normalize_file_path(f, working_dir) for f in files_changed]
+    if normalized_path not in normalized_existing:
+        return files_changed + [normalized_path]
 
     return files_changed
 
@@ -252,10 +293,24 @@ def build_tool_message(tool_call: ToolCall, result: ToolResult) -> Message:
     return message
 
 
+def _default_context_factory(working_dir: str) -> ToolContextProtocol:
+    """
+    Default factory for creating tool contexts.
+
+    Creates a ToolContext from the agent_tools package.
+    This is used when no factory is injected.
+    """
+    from scrappy.agent_tools.tools.base import ToolContext
+    return ToolContext(
+        project_root=Path(working_dir),
+        dry_run=False,
+    )
+
+
 def execute_node(
     state: AgentState,
     tool_adapter: ToolAdapterProtocol,
-    context: Optional[ToolContext] = None,
+    context_factory: Optional[ToolContextFactory] = None,
 ) -> AgentState:
     """
     Execute node - tool execution step.
@@ -266,7 +321,7 @@ def execute_node(
     Args:
         state: Current agent state
         tool_adapter: Tool adapter for executing tools
-        context: Optional ToolContext (creates default if not provided)
+        context_factory: Factory to create ToolContext (uses default if not provided)
 
     Returns:
         Updated AgentState with tool results appended to messages
@@ -275,34 +330,58 @@ def execute_node(
     tool_calls = extract_tool_calls(state)
 
     if not tool_calls:
+        # Check if last message has tool_calls field but extraction returned empty
+        # This indicates malformed tool calls that should be treated as an error
+        if state.messages:
+            last_msg = state.messages[-1]
+            if last_msg.get("role") == "assistant" and "tool_calls" in last_msg:
+                logger.warning(
+                    "Last message has tool_calls field but extraction returned empty. "
+                    "Tool calls may be malformed."
+                )
+                return state.model_copy(
+                    update={
+                        "error_count": state.error_count + 1,
+                        "last_error": "Tool call extraction failed: malformed tool_calls in response",
+                    }
+                )
         logger.debug("No tool calls to execute")
         return state
 
     logger.info("Executing %d tool call(s)", len(tool_calls))
 
-    # Create context if not provided
-    if context is None:
-        from pathlib import Path
-        context = ToolContext(
-            project_root=Path(state.working_dir),
-            dry_run=False,
-        )
+    # Create context using factory
+    factory = context_factory or _default_context_factory
+    context = factory(state.working_dir)
 
     # Execute tools sequentially (not parallel to avoid file conflicts)
-    raw_results = tool_adapter.execute(tool_calls, context)
+    # Wrap in try/except to prevent graph crash on tool adapter failures
+    try:
+        raw_results = tool_adapter.execute(tool_calls, context)
+    except Exception as e:
+        # Tool adapter crashed - increment error count and set last_error
+        # so routing goes to error node for recovery
+        logger.exception("Tool adapter crashed: %s: %s", type(e).__name__, e)
+        return state.model_copy(
+            update={
+                "error_count": state.error_count + 1,
+                "last_error": f"Tool execution failed: {type(e).__name__}: {e}",
+            }
+        )
 
     # Process results and build messages
     new_messages = list(state.messages)
     files_changed = list(state.files_changed)
     files_modified = False
     task_complete = False
+    tool_errors: list[str] = []
 
     for tool_call, raw_result in zip(tool_calls, raw_results):
         # Process result (truncation, binary guard)
         processed_result = process_tool_result(raw_result)
 
-        # Track file changes
-        new_files = track_file_changes(tool_call, files_changed)
+        # Track file changes (paths normalized to relative)
+        new_files = track_file_changes(tool_call, files_changed, state.working_dir)
         if new_files != files_changed:
             files_changed = new_files
             files_modified = True
@@ -314,11 +393,9 @@ def execute_node(
         # Log execution (extract name from OpenAI format)
         func_name = tool_call.get("function", {}).get("name", "unknown")
         if "error" in processed_result and processed_result.get("error"):
-            logger.warning(
-                "Tool %s failed: %s",
-                func_name,
-                processed_result.get("error"),
-            )
+            error_msg = processed_result.get("error", "Unknown error")
+            logger.warning("Tool %s failed: %s", func_name, error_msg)
+            tool_errors.append(f"{func_name}: {error_msg}")
         else:
             logger.debug("Tool %s executed successfully", func_name)
 
@@ -327,15 +404,20 @@ def execute_node(
             task_complete = True
             logger.info("Task marked complete via complete tool")
 
-    # Update state
-    # files_verified = False when files change (triggers verify node)
-    # done = True when complete tool was called
-    return state.model_copy(
-        update={
-            "messages": new_messages,
-            "files_changed": files_changed,
-            "files_verified": not files_modified,
-            "tool_results": raw_results,  # Store raw results for easier access
-            "done": task_complete or state.done,  # Preserve if already done
-        }
-    )
+    # Build update dict
+    update: dict[str, object] = {
+        "messages": new_messages,
+        "files_changed": files_changed,
+        "files_verified": not files_modified,
+        "tool_results": raw_results,
+        "done": task_complete or state.done,
+    }
+
+    # If any tools failed, track errors so routing goes to error node
+    if tool_errors:
+        error_summary = "; ".join(tool_errors)
+        update["error_count"] = state.error_count + 1
+        update["last_error"] = f"Tool error(s): {error_summary}"
+        logger.info("Tool errors detected, routing to error node for recovery")
+
+    return state.model_copy(update=update)  # type: ignore[arg-type]

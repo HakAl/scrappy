@@ -100,18 +100,23 @@ class ToolAdapter:
             registry: ToolRegistry instance to wrap
         """
         self._registry = registry
+        # Cache tool schemas at init - they don't change during session
+        # Avoids O(n log n) schema regeneration on every think_node call
+        self._cached_schemas: list[dict[str, Any]] | None = None
 
     def get_tool_schemas(self) -> list[dict[str, Any]]:
         """
         Get OpenAI-compatible tool schemas for function calling.
 
-        Delegates to ToolRegistry.to_openai_schema() which returns schemas
-        in the format expected by OpenAI, Groq, and Instructor.
+        Returns cached schemas (generated once at first call).
+        Tool schemas are immutable during a session.
 
         Returns:
             List of tool definitions in OpenAI format
         """
-        return self._registry.to_openai_schema()
+        if self._cached_schemas is None:
+            self._cached_schemas = self._registry.to_openai_schema()
+        return self._cached_schemas
 
     def execute(
         self,

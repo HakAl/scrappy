@@ -166,10 +166,19 @@ def confirm_node(state: AgentState) -> AgentState:
         return state
 
     # Response not yet provided (shouldn't happen after resume, but be defensive)
+    # This can occur if:
+    # 1. Graph resumed without calling update_state() with confirmation_response
+    # 2. State serialization/deserialization lost confirmation_response
+    # 3. Race condition in HITL handling
+    # Treating as denial is safe - user can retry if needed.
     if response is None:
+        confirmation_type = pending.get("type", "unknown")
         logger.warning(
-            "confirm_node: pending_confirmation exists but no confirmation_response. "
-            "This may indicate the graph resumed without updating state."
+            "confirm_node: pending_confirmation (type=%s) exists but no confirmation_response. "
+            "This may indicate the graph resumed without updating state. "
+            "Treating as denial for safety. Pending details: %s",
+            confirmation_type,
+            pending,
         )
         # Treat as denial for safety
         response = False

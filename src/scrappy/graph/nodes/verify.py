@@ -92,6 +92,37 @@ def filter_python_files(files: list[str]) -> list[str]:
     return [f for f in files if f.endswith(".py")]
 
 
+def _revalidate_paths(files: list[str], working_dir: str) -> list[str]:
+    """
+    Re-validate file paths immediately before subprocess execution.
+
+    This mitigates TOCTOU (time-of-check-time-of-use) vulnerabilities where
+    a symlink could be created between initial validation and use.
+
+    Args:
+        files: List of file paths to re-validate
+        working_dir: Working directory files must be within
+
+    Returns:
+        List of files that are still valid (within working_dir)
+    """
+    working_path = Path(working_dir).resolve()
+    valid_files: list[str] = []
+
+    for file_path in files:
+        try:
+            # Re-resolve to catch any symlink changes
+            resolved = Path(file_path).resolve()
+            # Verify still within working_dir
+            resolved.relative_to(working_path)
+            valid_files.append(str(resolved))
+        except (ValueError, OSError):
+            # Path is now outside working_dir or invalid - skip silently
+            logger.warning("TOCTOU: Path %r no longer within working_dir, skipping", file_path)
+
+    return valid_files
+
+
 def run_ruff(files: list[str], working_dir: str) -> tuple[bool, str]:
     """
     Run ruff check on files.
@@ -103,9 +134,14 @@ def run_ruff(files: list[str], working_dir: str) -> tuple[bool, str]:
     Returns:
         Tuple of (success, output)
     """
+    # Re-validate paths immediately before subprocess (TOCTOU mitigation)
+    safe_files = _revalidate_paths(files, working_dir)
+    if not safe_files:
+        return True, ""  # No valid files to check
+
     try:
         result = subprocess.run(
-            ["ruff", "check"] + files,
+            ["ruff", "check"] + safe_files,
             capture_output=True,
             text=True,
             cwd=working_dir,
@@ -131,9 +167,14 @@ def run_mypy(files: list[str], working_dir: str) -> tuple[bool, str]:
     Returns:
         Tuple of (success, output)
     """
+    # Re-validate paths immediately before subprocess (TOCTOU mitigation)
+    safe_files = _revalidate_paths(files, working_dir)
+    if not safe_files:
+        return True, ""  # No valid files to check
+
     try:
         result = subprocess.run(
-            ["mypy"] + files,
+            ["mypy"] + safe_files,
             capture_output=True,
             text=True,
             cwd=working_dir,

@@ -21,6 +21,7 @@ Architecture:
 import asyncio
 import json
 import logging
+import re
 import time
 import threading
 from typing import Optional, TYPE_CHECKING, AsyncIterator, Type, TypeVar
@@ -953,8 +954,19 @@ class LiteLLMService:
         if escalated_from:
             metadata["escalated_from"] = escalated_from
 
+        # Extract tool calls first (may come from malformed content field)
+        tool_calls = self._extract_tool_calls(choice.message)
+
+        # Normalize content: if it's a dict (malformed tool call), use empty string
+        # since we already extracted the tool call from it
+        raw_content = choice.message.content
+        if isinstance(raw_content, dict):
+            content = ""  # Tool call was in content, extracted above
+        else:
+            content = raw_content or ""
+
         llm_response = LLMResponse(
-            content=choice.message.content or "",
+            content=content,
             model=model_str,
             provider=provider,
             tokens_used=prompt_tokens + completion_tokens,
@@ -963,7 +975,7 @@ class LiteLLMService:
             latency_ms=elapsed * 1000,
             raw_response=response,
             metadata=metadata,
-            tool_calls=self._extract_tool_calls(choice.message),
+            tool_calls=tool_calls,
         )
 
         task_record = {
@@ -980,24 +992,97 @@ class LiteLLMService:
         """
         Extract tool calls from response message if present.
 
+        Handles three formats:
+        1. Standard: message.tool_calls contains array of tool call objects
+        2. Malformed dict: message.content is a dict with name/arguments (some providers)
+        3. XML tags: message.content contains <tool_name>{...}</tool_name> (some models)
+
         Args:
             message: LiteLLM message object
 
         Returns:
             List of ToolCall objects, or None if no tool calls
         """
-        if not hasattr(message, 'tool_calls') or not message.tool_calls:
+        # Standard format: tool_calls array
+        if hasattr(message, 'tool_calls') and message.tool_calls:
+            tool_calls = []
+            for tc in message.tool_calls:
+                arguments = self._parse_tool_arguments(tc.function.arguments, tc.function.name)
+
+                tool_calls.append(
+                    ToolCall(
+                        id=tc.id,
+                        name=tc.function.name,
+                        arguments=arguments
+                    )
+                )
+            return tool_calls if tool_calls else None
+
+        # Malformed format: content is dict with name/arguments
+        # Some providers return tool calls in content field instead of tool_calls
+        content = getattr(message, 'content', None)
+        if isinstance(content, dict) and 'name' in content:
+            logger.warning(
+                "Provider returned tool call in content field (malformed): %s",
+                content.get('name')
+            )
+            arguments = content.get('arguments', {})
+            if isinstance(arguments, str):
+                arguments = self._parse_tool_arguments(arguments, content['name'])
+            return [
+                ToolCall(
+                    id=f"malformed_{content['name']}",
+                    name=content['name'],
+                    arguments=arguments if isinstance(arguments, dict) else {}
+                )
+            ]
+
+        # XML tag format: <tool_name>{...json...}</tool_name>
+        # Some models output tool calls as XML tags instead of using function calling
+        if isinstance(content, str) and '<' in content:
+            xml_tool_calls = self._extract_xml_tool_calls(content)
+            if xml_tool_calls:
+                logger.warning(
+                    "Provider returned tool calls as XML tags in content (malformed): %s",
+                    [tc.name for tc in xml_tool_calls]
+                )
+                return xml_tool_calls
+
+        return None
+
+    def _extract_xml_tool_calls(self, content: str) -> Optional[list[ToolCall]]:
+        """
+        Extract tool calls from XML-style tags in content.
+
+        Handles format like: <write_file>{"path": "...", "content": "..."}</write_file>
+
+        Args:
+            content: String content that may contain XML-style tool calls
+
+        Returns:
+            List of ToolCall objects, or None if no tool calls found
+        """
+        # Pattern matches <tool_name>{...json...}</tool_name>
+        # Uses non-greedy match and handles multiline JSON
+        pattern = r'<(\w+)>\s*(\{[^}]*\}|\{[\s\S]*?\})\s*</\1>'
+        matches = re.findall(pattern, content)
+
+        if not matches:
             return None
 
         tool_calls = []
-        for tc in message.tool_calls:
-            arguments = self._parse_tool_arguments(tc.function.arguments, tc.function.name)
+        for i, (tool_name, json_str) in enumerate(matches):
+            try:
+                arguments = json.loads(json_str)
+            except json.JSONDecodeError:
+                # Try to fix common JSON issues
+                arguments = self._parse_tool_arguments(json_str, tool_name)
 
             tool_calls.append(
                 ToolCall(
-                    id=tc.id,
-                    name=tc.function.name,
-                    arguments=arguments
+                    id=f"xml_{tool_name}_{i}",
+                    name=tool_name,
+                    arguments=arguments if isinstance(arguments, dict) else {}
                 )
             )
 

@@ -17,7 +17,8 @@ class CommandSecurity:
     It does NOT execute commands or handle platform-specific logic.
     """
 
-    DEFAULT_DANGEROUS_PATTERNS = [
+    # Destructive command patterns
+    DESTRUCTIVE_PATTERNS = [
         r'rm\s+-rf\s+/',
         r'rm\s+-rf\s+\*',
         r'format\s+[A-Za-z]:',
@@ -26,6 +27,24 @@ class CommandSecurity:
         r':\(\)\s*\{.*\}',  # Fork bomb
         r'sudo\s+rm',
     ]
+
+    # Command injection patterns - block shell metacharacters used for injection
+    INJECTION_PATTERNS = [
+        r'\$\(',           # $(command) substitution
+        r'`[^`]+`',        # `command` backtick substitution
+        r'\$\{[^}]+\}',    # ${var} expansion with commands
+        r';\s*\w',         # ; followed by command (chaining)
+        r'\n',             # Newline injection
+        r'\|\s*(nc|netcat|bash|sh|curl\s+-o|wget\s+-O)',  # Pipe to dangerous commands
+        r'>\s*/etc/',      # Redirect to /etc/
+        r'>\s*/dev/',      # Redirect to /dev/
+        r'>\s*~/',         # Redirect to home dir
+        r'2>&1\s*\|\s*(nc|netcat)',  # Stderr redirect to netcat
+        r'eval\s+',        # eval command
+        r'exec\s+',        # exec command
+    ]
+
+    DEFAULT_DANGEROUS_PATTERNS = DESTRUCTIVE_PATTERNS + INJECTION_PATTERNS
 
     def __init__(self, dangerous_patterns: Optional[List[str]] = None):
         """

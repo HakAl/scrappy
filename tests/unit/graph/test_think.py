@@ -452,10 +452,11 @@ class TestThinkNode:
         # Should have called LLM
         assert len(llm_service.calls) == 1
 
-        # State should be updated
-        assert len(result.messages) == 1
-        assert result.messages[0]["role"] == "assistant"
-        assert "Here is your function" in result.messages[0]["content"]
+        # State should be updated - includes user message + assistant response
+        assert len(result.messages) == 2
+        assert result.messages[0]["role"] == "user"
+        assert result.messages[1]["role"] == "assistant"
+        assert "Here is your function" in result.messages[1]["content"]
 
         # Iteration should increment
         assert result.iteration == 1
@@ -508,11 +509,12 @@ class TestThinkNode:
 
         result = think_node(state, llm_service)
 
-        # Should have tool calls in message
-        assert len(result.messages) == 1
-        assert "tool_calls" in result.messages[0]
-        assert len(result.messages[0]["tool_calls"]) == 1
-        assert result.messages[0]["tool_calls"][0]["function"]["name"] == "read_file"
+        # Should have user message + assistant with tool calls
+        assert len(result.messages) == 2
+        assert result.messages[0]["role"] == "user"
+        assert "tool_calls" in result.messages[1]
+        assert len(result.messages[1]["tool_calls"]) == 1
+        assert result.messages[1]["tool_calls"][0]["function"]["name"] == "read_file"
 
         # Should NOT be done (has tool calls)
         assert result.done is False
@@ -584,14 +586,20 @@ class TestThinkNode:
         assert result.iteration == 1
 
     def test_resets_error_count_on_success(self):
-        """Successful completion should reset error count."""
+        """Successful completion should reset error count and clear last_error.
+
+        error_count tracks consecutive errors for retry logic.
+        Resetting on success prevents premature termination from transient errors.
+        """
         state = create_test_state()
-        state = state.model_copy(update={"error_count": 3, "last_error": "Previous error"})
+        state = state.model_copy(update={"error_count": 2, "last_error": "Previous error"})
         llm_service = MockLLMService()
 
         result = think_node(state, llm_service)
 
+        # error_count is reset (tracks consecutive errors)
         assert result.error_count == 0
+        # last_error is cleared (no current error)
         assert result.last_error is None
 
     def test_stream_callback_receives_content(self):
@@ -632,9 +640,10 @@ class TestThinkNodeStreaming:
 
         result = await think_node_streaming(state, llm_service)
 
-        # Should have accumulated content
-        assert len(result.messages) == 1
-        assert "Hello, world!" in result.messages[0]["content"]
+        # Should have user message + accumulated assistant content
+        assert len(result.messages) == 2
+        assert result.messages[0]["role"] == "user"
+        assert "Hello, world!" in result.messages[1]["content"]
 
     @pytest.mark.asyncio
     async def test_streaming_callback(self):
@@ -678,9 +687,11 @@ class TestThinkNodeStreaming:
 
         result = await think_node_streaming(state, llm_service)
 
-        # Should have tool calls
-        assert "tool_calls" in result.messages[0]
-        assert result.messages[0]["tool_calls"][0]["function"]["name"] == "read_file"
+        # Should have user message + assistant with tool calls
+        assert len(result.messages) == 2
+        assert result.messages[0]["role"] == "user"
+        assert "tool_calls" in result.messages[1]
+        assert result.messages[1]["tool_calls"][0]["function"]["name"] == "read_file"
         assert result.done is False
 
     @pytest.mark.asyncio
@@ -747,6 +758,9 @@ class TestThinkNodeIntegration:
 
         state = think_node(state, llm_service)
 
+        # After turn 1: [user1, assistant1]
+        assert len(state.messages) == 2
+
         # Turn 2 - user follow-up
         state = state.model_copy(update={
             "input": "What are its main features?",
@@ -761,8 +775,12 @@ class TestThinkNodeIntegration:
 
         state = think_node(state, llm_service)
 
-        # Should have 3 messages total (assistant + user + assistant)
-        assert len(state.messages) == 3
+        # Should have 4 messages total (user1 + assistant1 + user2 + assistant2)
+        assert len(state.messages) == 4
+        assert state.messages[0]["role"] == "user"
+        assert state.messages[1]["role"] == "assistant"
+        assert state.messages[2]["role"] == "user"
+        assert state.messages[3]["role"] == "assistant"
         assert state.iteration == 2
 
     def test_tool_use_flow(self):
@@ -788,8 +806,10 @@ class TestThinkNodeIntegration:
 
         state = think_node(state, llm_service, tool_adapter=tool_adapter)
 
-        # Should have tool call, not be done
-        assert "tool_calls" in state.messages[0]
+        # Should have [user, assistant_with_tool_calls], not be done
+        assert len(state.messages) == 2
+        assert state.messages[0]["role"] == "user"
+        assert "tool_calls" in state.messages[1]
         assert state.done is False
 
         # Step 2: After tool execution, LLM provides final answer
@@ -805,8 +825,9 @@ class TestThinkNodeIntegration:
 
         state = think_node(state, llm_service, tool_adapter=tool_adapter)
 
-        # Now should be done
+        # Now should be done with [user, assistant_tool, tool_result, assistant_final]
         assert state.done is True
+        assert len(state.messages) == 4
         assert "config contains" in state.messages[-1]["content"]
 
     def test_error_recovery_flow(self):
@@ -823,9 +844,9 @@ class TestThinkNodeIntegration:
 
         result = think_node(state, llm_service)
 
-        # Should have recovered
-        assert result.error_count == 0
-        assert result.last_error is None
+        # error_count reset on successful recovery, last_error cleared
+        assert result.error_count == 0  # Reset on success
+        assert result.last_error is None  # Cleared on success
 
         # LLM should have received error context
         call_messages = llm_service.calls[0]["messages"]

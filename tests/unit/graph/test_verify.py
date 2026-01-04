@@ -200,8 +200,9 @@ class TestSanitizeFilePaths:
 class TestRunRuff:
     """Tests for ruff execution."""
 
+    @patch("scrappy.graph.nodes.verify._revalidate_paths", side_effect=lambda f, w: f)
     @patch("scrappy.graph.nodes.verify.subprocess.run")
-    def test_ruff_success(self, mock_run: MagicMock):
+    def test_ruff_success(self, mock_run: MagicMock, mock_revalidate: MagicMock):
         """Successful ruff check should return (True, output)."""
         mock_run.return_value = MagicMock(
             returncode=0,
@@ -215,8 +216,9 @@ class TestRunRuff:
         assert "All checks passed" in output
         mock_run.assert_called_once()
 
+    @patch("scrappy.graph.nodes.verify._revalidate_paths", side_effect=lambda f, w: f)
     @patch("scrappy.graph.nodes.verify.subprocess.run")
-    def test_ruff_failure(self, mock_run: MagicMock):
+    def test_ruff_failure(self, mock_run: MagicMock, mock_revalidate: MagicMock):
         """Failed ruff check should return (False, output)."""
         mock_run.return_value = MagicMock(
             returncode=1,
@@ -229,8 +231,9 @@ class TestRunRuff:
         assert success is False
         assert "E501" in output
 
+    @patch("scrappy.graph.nodes.verify._revalidate_paths", side_effect=lambda f, w: f)
     @patch("scrappy.graph.nodes.verify.subprocess.run")
-    def test_ruff_not_installed(self, mock_run: MagicMock):
+    def test_ruff_not_installed(self, mock_run: MagicMock, mock_revalidate: MagicMock):
         """Missing ruff should return (True, '') - graceful skip."""
         mock_run.side_effect = FileNotFoundError()
 
@@ -239,8 +242,9 @@ class TestRunRuff:
         assert success is True
         assert output == ""
 
+    @patch("scrappy.graph.nodes.verify._revalidate_paths", side_effect=lambda f, w: f)
     @patch("scrappy.graph.nodes.verify.subprocess.run")
-    def test_ruff_timeout(self, mock_run: MagicMock):
+    def test_ruff_timeout(self, mock_run: MagicMock, mock_revalidate: MagicMock):
         """Timeout should return (False, error message)."""
         mock_run.side_effect = subprocess.TimeoutExpired(cmd="ruff", timeout=60)
 
@@ -258,8 +262,9 @@ class TestRunRuff:
 class TestRunMypy:
     """Tests for mypy execution."""
 
+    @patch("scrappy.graph.nodes.verify._revalidate_paths", side_effect=lambda f, w: f)
     @patch("scrappy.graph.nodes.verify.subprocess.run")
-    def test_mypy_success(self, mock_run: MagicMock):
+    def test_mypy_success(self, mock_run: MagicMock, mock_revalidate: MagicMock):
         """Successful mypy check should return (True, output)."""
         mock_run.return_value = MagicMock(
             returncode=0,
@@ -272,8 +277,9 @@ class TestRunMypy:
         assert success is True
         assert "Success" in output
 
+    @patch("scrappy.graph.nodes.verify._revalidate_paths", side_effect=lambda f, w: f)
     @patch("scrappy.graph.nodes.verify.subprocess.run")
-    def test_mypy_failure(self, mock_run: MagicMock):
+    def test_mypy_failure(self, mock_run: MagicMock, mock_revalidate: MagicMock):
         """Failed mypy check should return (False, output)."""
         mock_run.return_value = MagicMock(
             returncode=1,
@@ -286,8 +292,9 @@ class TestRunMypy:
         assert success is False
         assert "error" in output
 
+    @patch("scrappy.graph.nodes.verify._revalidate_paths", side_effect=lambda f, w: f)
     @patch("scrappy.graph.nodes.verify.subprocess.run")
-    def test_mypy_not_installed(self, mock_run: MagicMock):
+    def test_mypy_not_installed(self, mock_run: MagicMock, mock_revalidate: MagicMock):
         """Missing mypy should return (True, '') - graceful skip."""
         mock_run.side_effect = FileNotFoundError()
 
@@ -296,8 +303,9 @@ class TestRunMypy:
         assert success is True
         assert output == ""
 
+    @patch("scrappy.graph.nodes.verify._revalidate_paths", side_effect=lambda f, w: f)
     @patch("scrappy.graph.nodes.verify.subprocess.run")
-    def test_mypy_timeout(self, mock_run: MagicMock):
+    def test_mypy_timeout(self, mock_run: MagicMock, mock_revalidate: MagicMock):
         """Timeout should return (False, error message)."""
         mock_run.side_effect = subprocess.TimeoutExpired(cmd="mypy", timeout=120)
 

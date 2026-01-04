@@ -14,21 +14,39 @@ Key components:
 - persistence.py: ConversationStore integration helpers
 """
 
-from scrappy.graph.agent import build_graph, create_agent_runner, run_agent
+from scrappy.graph.agent import (
+    WorkingDirectoryError,
+    build_graph,
+    create_agent_runner,
+    run_agent,
+    validate_working_dir,
+)
 from scrappy.graph.persistence import (
     create_persistent_agent_state,
     load_history_into_state,
     persist_new_messages,
 )
+from scrappy.graph.protocols import (
+    LLMServiceProtocol,
+    StreamingLLMServiceProtocol,
+    ToolContextFactory,
+    ToolContextProtocol,
+)
 from scrappy.graph.tools import ToolAdapter, ToolAdapterProtocol
 
 __all__ = [
+    "LLMServiceProtocol",
+    "StreamingLLMServiceProtocol",
     "ToolAdapter",
     "ToolAdapterProtocol",
+    "ToolContextFactory",
+    "ToolContextProtocol",
+    "WorkingDirectoryError",
     "build_graph",
     "create_agent_runner",
     "create_persistent_agent_state",
     "load_history_into_state",
     "persist_new_messages",
     "run_agent",
+    "validate_working_dir",
 ]

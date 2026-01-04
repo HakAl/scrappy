@@ -125,6 +125,39 @@ class TestResponseConversion:
         assert response.tool_calls[0].name == "get_weather"
         assert response.tool_calls[0].arguments == {"location": "NYC"}
 
+    def test_extracts_tool_calls_from_malformed_content(self):
+        """Verify tool calls in content field (malformed format) are extracted.
+
+        Some providers return tool calls in the content field as a dict
+        instead of the standard tool_calls array. This is malformed but
+        we handle it gracefully.
+        """
+        # Create response with tool call in content field (malformed)
+        mock_response = MockLiteLLMResponse(content="")
+        # Simulate malformed response: content is dict, tool_calls is None
+        mock_response.choices[0].message.content = {
+            "name": "write_file",
+            "arguments": {"path": "test.txt", "content": "hello"}
+        }
+        mock_response.choices[0].message.tool_calls = None
+
+        mock_router = MockLiteLLMRouter(response=mock_response)
+        mock_output = MockOutputForLiteLLM()
+        service = make_configured_service(router=mock_router, output=mock_output)
+
+        response, task_record = service.completion_sync(
+            model="fast",
+            messages=[{"role": "user", "content": "Write a file"}]
+        )
+
+        # Tool call should be extracted from malformed content
+        assert response.tool_calls is not None
+        assert len(response.tool_calls) == 1
+        assert response.tool_calls[0].name == "write_file"
+        assert response.tool_calls[0].arguments == {"path": "test.txt", "content": "hello"}
+        # Content should be normalized to empty string
+        assert response.content == ""
+
     def test_returns_task_record_with_metadata(self):
         """Verify task_record contains provider, model, tokens, latency."""
         mock_router = MockLiteLLMRouter(
@@ -435,6 +468,89 @@ class TestParseToolArguments:
         call_args = mock_logger.warning.call_args[0][0]
         assert "write_file" in call_args
         assert "failed to parse" in call_args
+
+
+class TestExtractXmlToolCalls:
+    """Tests for _extract_xml_tool_calls method - handles XML-style tool calls in content."""
+
+    def test_extracts_single_xml_tool_call(self):
+        """Single XML-style tool call should be extracted."""
+        mock_router = MockLiteLLMRouter(response=make_mock_litellm_response())
+        mock_output = MockOutputForLiteLLM()
+        service = make_configured_service(router=mock_router, output=mock_output)
+
+        content = '<write_file>{"path": "test.py", "content": "code"}</write_file>'
+        result = service._extract_xml_tool_calls(content)
+
+        assert result is not None
+        assert len(result) == 1
+        assert result[0].name == "write_file"
+        assert result[0].arguments == {"path": "test.py", "content": "code"}
+
+    def test_extracts_multiple_xml_tool_calls(self):
+        """Multiple XML-style tool calls should all be extracted."""
+        mock_router = MockLiteLLMRouter(response=make_mock_litellm_response())
+        mock_output = MockOutputForLiteLLM()
+        service = make_configured_service(router=mock_router, output=mock_output)
+
+        content = '''<write_file>{"path": "a.py", "content": "foo"}</write_file>
+<run_command>{"command": "python a.py"}</run_command>'''
+        result = service._extract_xml_tool_calls(content)
+
+        assert result is not None
+        assert len(result) == 2
+        assert result[0].name == "write_file"
+        assert result[1].name == "run_command"
+
+    def test_handles_multiline_json(self):
+        """XML tool calls with multiline JSON should parse correctly."""
+        mock_router = MockLiteLLMRouter(response=make_mock_litellm_response())
+        mock_output = MockOutputForLiteLLM()
+        service = make_configured_service(router=mock_router, output=mock_output)
+
+        content = '''<write_file>{
+    "path": "test.py",
+    "content": "def hello():\\n    print('hi')"
+}</write_file>'''
+        result = service._extract_xml_tool_calls(content)
+
+        assert result is not None
+        assert len(result) == 1
+        assert result[0].arguments["path"] == "test.py"
+
+    def test_returns_none_for_no_matches(self):
+        """Content without XML tool calls should return None."""
+        mock_router = MockLiteLLMRouter(response=make_mock_litellm_response())
+        mock_output = MockOutputForLiteLLM()
+        service = make_configured_service(router=mock_router, output=mock_output)
+
+        content = "Just regular text without any tool calls"
+        result = service._extract_xml_tool_calls(content)
+
+        assert result is None
+
+    def test_returns_none_for_malformed_xml(self):
+        """Malformed XML (mismatched tags) should not match."""
+        mock_router = MockLiteLLMRouter(response=make_mock_litellm_response())
+        mock_output = MockOutputForLiteLLM()
+        service = make_configured_service(router=mock_router, output=mock_output)
+
+        content = '<write_file>{"path": "test.py"}</read_file>'
+        result = service._extract_xml_tool_calls(content)
+
+        assert result is None
+
+    def test_handles_escaped_json_in_content(self):
+        """JSON with escaped characters should parse correctly."""
+        mock_router = MockLiteLLMRouter(response=make_mock_litellm_response())
+        mock_output = MockOutputForLiteLLM()
+        service = make_configured_service(router=mock_router, output=mock_output)
+
+        content = '<write_file>{"path": "test.py", "content": "print(\\"hello\\")"}</write_file>'
+        result = service._extract_xml_tool_calls(content)
+
+        assert result is not None
+        assert result[0].arguments["content"] == 'print("hello")'
 
 
 class TestHandleEmptyModelString:

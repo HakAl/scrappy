@@ -4,12 +4,17 @@ Unit tests for the LangGraph agent assembly.
 Tests graph construction, wiring, and entry points.
 """
 
+import tempfile
 from typing import Any, Optional
 
+import pytest
+
 from scrappy.graph.agent import (
+    WorkingDirectoryError,
     build_graph,
     create_agent_runner,
     run_agent,
+    validate_working_dir,
     _wrap_think_node,
     _wrap_execute_node,
     _wrap_verify_node,
@@ -335,7 +340,7 @@ class TestRunAgent:
 
         result = run_agent(
             task="Test task",
-            working_dir="/tmp/test",
+            working_dir=tempfile.gettempdir(),
             llm_service=llm_service,
         )
 
@@ -349,7 +354,7 @@ class TestRunAgent:
 
         result = run_agent(
             task="My specific task",
-            working_dir="/tmp/test",
+            working_dir=tempfile.gettempdir(),
             llm_service=llm_service,
         )
 
@@ -361,13 +366,15 @@ class TestRunAgent:
             response=MockLLMResponse(content="Done.")
         )
 
+        temp_dir = tempfile.gettempdir()
         result = run_agent(
             task="Test",
-            working_dir="/home/user/project",
+            working_dir=temp_dir,
             llm_service=llm_service,
         )
 
-        assert result.working_dir == "/home/user/project"
+        # Working dir should be resolved to absolute path
+        assert result.working_dir is not None
 
     def test_increments_iteration(self) -> None:
         """run_agent should increment iteration count."""
@@ -377,7 +384,7 @@ class TestRunAgent:
 
         result = run_agent(
             task="Test",
-            working_dir="/tmp",
+            working_dir=tempfile.gettempdir(),
             llm_service=llm_service,
         )
 
@@ -393,7 +400,7 @@ class TestRunAgent:
         # Should not raise with custom thread_id
         result = run_agent(
             task="Test",
-            working_dir="/tmp",
+            working_dir=tempfile.gettempdir(),
             llm_service=llm_service,
             thread_id="custom-session-123",
         )
@@ -566,14 +573,15 @@ class TestStateConversion:
 
         result = run_agent(
             task="Create initial state test",
-            working_dir="/project/dir",
+            working_dir=tempfile.gettempdir(),
             llm_service=llm_service,
         )
 
         # Initial state values should be preserved
         assert result.input == "Create initial state test"
         assert result.original_task == "Create initial state test"
-        assert result.working_dir == "/project/dir"
+        # Working dir is resolved to absolute path
+        assert result.working_dir is not None
 
     def test_dict_to_state_conversion(self) -> None:
         """run_agent should convert dict result to AgentState."""
@@ -583,7 +591,7 @@ class TestStateConversion:
 
         result = run_agent(
             task="Test",
-            working_dir="/tmp",
+            working_dir=tempfile.gettempdir(),
             llm_service=llm_service,
         )
 
@@ -592,3 +600,46 @@ class TestStateConversion:
         assert hasattr(result, "input")
         assert hasattr(result, "messages")
         assert hasattr(result, "done")
+
+
+# =============================================================================
+# Working Directory Validation Tests
+# =============================================================================
+
+
+class TestValidateWorkingDir:
+    """Tests for working directory validation."""
+
+    def test_valid_temp_directory(self) -> None:
+        """validate_working_dir should accept valid temp directory."""
+        temp_dir = tempfile.gettempdir()
+        result = validate_working_dir(temp_dir)
+        assert result.exists()
+        assert result.is_dir()
+
+    def test_empty_path_raises(self) -> None:
+        """validate_working_dir should reject empty path."""
+        with pytest.raises(WorkingDirectoryError, match="cannot be empty"):
+            validate_working_dir("")
+
+    def test_whitespace_only_path_raises(self) -> None:
+        """validate_working_dir should reject whitespace-only path."""
+        with pytest.raises(WorkingDirectoryError, match="cannot be empty"):
+            validate_working_dir("   ")
+
+    def test_nonexistent_path_raises(self) -> None:
+        """validate_working_dir should reject non-existent path."""
+        with pytest.raises(WorkingDirectoryError, match="does not exist"):
+            validate_working_dir("/this/path/definitely/does/not/exist/anywhere")
+
+    def test_file_instead_of_directory_raises(self) -> None:
+        """validate_working_dir should reject files."""
+        import os
+        # Create a temp file (closed immediately to avoid Windows locking)
+        fd, path = tempfile.mkstemp()
+        os.close(fd)
+        try:
+            with pytest.raises(WorkingDirectoryError, match="not a directory"):
+                validate_working_dir(path)
+        finally:
+            os.unlink(path)

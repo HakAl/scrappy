@@ -24,6 +24,7 @@ from scrappy.graph.nodes.execute import (
     format_binary_placeholder,
     process_tool_result,
     track_file_changes,
+    normalize_file_path,
     build_tool_message,
     OUTPUT_TRUNCATION_LIMIT,
 )
@@ -110,6 +111,16 @@ def create_test_context() -> ToolContext:
         project_root=Path("/tmp/test"),
         dry_run=True,
     )
+
+
+def create_test_context_factory():
+    """Create a factory that returns a test ToolContext."""
+    def factory(working_dir: str) -> ToolContext:
+        return ToolContext(
+            project_root=Path(working_dir),
+            dry_run=True,
+        )
+    return factory
 
 
 # =============================================================================
@@ -354,6 +365,25 @@ class TestProcessToolResult:
 # =============================================================================
 
 
+class TestNormalizeFilePath:
+    """Tests for path normalization."""
+
+    def test_relative_path_stays_relative(self):
+        """Relative paths within working_dir should stay relative."""
+        result = normalize_file_path("src/main.py", "/project")
+        assert result == "src\\main.py" or result == "src/main.py"
+
+    def test_absolute_path_outside_working_dir(self):
+        """Absolute paths outside working_dir should be returned as-is."""
+        result = normalize_file_path("/other/path/file.py", "/project")
+        assert result == "/other/path/file.py"
+
+    def test_handles_invalid_paths(self):
+        """Invalid paths should be returned as-is."""
+        result = normalize_file_path("", "/project")
+        assert result == "" or result == "."
+
+
 class TestTrackFileChanges:
     """Tests for file change tracking."""
 
@@ -361,51 +391,64 @@ class TestTrackFileChanges:
         """Read operations should not track changes."""
         tool_call = make_tool_call("1", "read_file", '{"path": "/test/file.py"}')
 
-        result = track_file_changes(tool_call, [])
+        result = track_file_changes(tool_call, [], "/tmp/test")
 
         assert result == []
 
     def test_tracks_write_file(self):
         """write_file should track file path."""
-        tool_call = make_tool_call("1", "write_file", '{"path": "/test/new_file.py"}')
+        tool_call = make_tool_call("1", "write_file", '{"path": "new_file.py"}')
 
-        result = track_file_changes(tool_call, [])
+        result = track_file_changes(tool_call, [], "/tmp/test")
 
-        assert "/test/new_file.py" in result
+        assert "new_file.py" in result
 
     def test_tracks_edit_file(self):
         """edit_file should track file path."""
-        tool_call = make_tool_call("1", "edit_file", '{"file_path": "/test/edited.py"}')
+        tool_call = make_tool_call("1", "edit_file", '{"file_path": "edited.py"}')
 
-        result = track_file_changes(tool_call, [])
+        result = track_file_changes(tool_call, [], "/tmp/test")
 
-        assert "/test/edited.py" in result
+        assert "edited.py" in result
 
     def test_no_duplicate_tracking(self):
         """Should not add duplicate file paths."""
-        tool_call = make_tool_call("1", "write_file", '{"path": "/test/file.py"}')
+        tool_call = make_tool_call("1", "write_file", '{"path": "file.py"}')
 
-        result = track_file_changes(tool_call, ["/test/file.py"])
+        result = track_file_changes(tool_call, ["file.py"], "/tmp/test")
 
-        assert result.count("/test/file.py") == 1
+        assert result.count("file.py") == 1
+
+    def test_normalizes_absolute_and_relative_duplicates(self):
+        """Absolute and relative paths to same file should deduplicate."""
+        # First add via relative path
+        tool_call1 = make_tool_call("1", "write_file", '{"path": "src/main.py"}')
+        result1 = track_file_changes(tool_call1, [], "/tmp/test")
+
+        # Try to add via different relative path (should dedupe)
+        tool_call2 = make_tool_call("2", "write_file", '{"path": "./src/main.py"}')
+        result2 = track_file_changes(tool_call2, result1, "/tmp/test")
+
+        # Should still only have one entry for this file
+        assert len(result2) == 1
 
     def test_handles_invalid_json(self):
         """Should handle invalid JSON arguments gracefully."""
         tool_call = make_tool_call("1", "write_file", "not valid json")
 
-        result = track_file_changes(tool_call, [])
+        result = track_file_changes(tool_call, [], "/tmp/test")
 
         # Should not crash, just return unchanged
         assert result == []
 
     def test_preserves_existing_files(self):
         """Should preserve existing tracked files."""
-        tool_call = make_tool_call("1", "write_file", '{"path": "/new_file.py"}')
+        tool_call = make_tool_call("1", "write_file", '{"path": "new_file.py"}')
 
-        result = track_file_changes(tool_call, ["/old_file.py"])
+        result = track_file_changes(tool_call, ["old_file.py"], "/tmp/test")
 
-        assert "/old_file.py" in result
-        assert "/new_file.py" in result
+        assert "old_file.py" in result
+        assert "new_file.py" in result
 
 
 # =============================================================================
@@ -453,12 +496,33 @@ class TestExecuteNode:
             messages=[{"role": "assistant", "content": "Hello"}]
         )
         adapter = MockToolAdapter()
-        context = create_test_context()
+        context_factory = create_test_context_factory()
 
-        result = execute_node(state, adapter, context)
+        result = execute_node(state, adapter, context_factory)
 
         assert result.messages == state.messages
         assert len(adapter.executed_calls) == 0
+
+    def test_malformed_tool_calls_sets_error(self):
+        """Malformed tool_calls (present but empty after extraction) should set error."""
+        # Simulate a message with tool_calls field that extract_tool_calls can't parse
+        # In real usage, tool_calls would be malformed; here we use empty list to simulate
+        state = create_test_state(
+            messages=[{
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [],  # Empty list - present but no valid calls
+            }]
+        )
+        adapter = MockToolAdapter()
+        context_factory = create_test_context_factory()
+
+        result = execute_node(state, adapter, context_factory)
+
+        # Should set error because tool_calls field exists but extraction failed
+        assert result.error_count == 1
+        assert result.last_error is not None
+        assert "malformed" in result.last_error.lower()
 
     def test_executes_single_tool_call(self):
         """Should execute a single tool call."""
@@ -473,9 +537,9 @@ class TestExecuteNode:
         adapter = MockToolAdapter(
             results=[ToolResult(name="read_file", result="file contents")]
         )
-        context = create_test_context()
+        context_factory = create_test_context_factory()
 
-        result = execute_node(state, adapter, context)
+        result = execute_node(state, adapter, context_factory)
 
         # Should have called adapter
         assert len(adapter.executed_calls) == 1
@@ -505,9 +569,9 @@ class TestExecuteNode:
                 ToolResult(name="write_file", result="write result"),
             ]
         )
-        context = create_test_context()
+        context_factory = create_test_context_factory()
 
-        result = execute_node(state, adapter, context)
+        result = execute_node(state, adapter, context_factory)
 
         # Should have one batch call (sequential in adapter.execute)
         assert len(adapter.executed_calls) == 1
@@ -533,9 +597,9 @@ class TestExecuteNode:
         adapter = MockToolAdapter(
             results=[ToolResult(name="write_file", result="written")]
         )
-        context = create_test_context()
+        context_factory = create_test_context_factory()
 
-        result = execute_node(state, adapter, context)
+        result = execute_node(state, adapter, context_factory)
 
         assert "/new_file.py" in result.files_changed
         assert result.files_verified is False  # Should be invalidated
@@ -554,9 +618,9 @@ class TestExecuteNode:
         adapter = MockToolAdapter(
             results=[ToolResult(name="write_file", result="ok")]
         )
-        context = create_test_context()
+        context_factory = create_test_context_factory()
 
-        result = execute_node(state, adapter, context)
+        result = execute_node(state, adapter, context_factory)
 
         assert "/old.py" in result.files_changed
         assert "/new.py" in result.files_changed
@@ -573,9 +637,9 @@ class TestExecuteNode:
         )
         expected_result = ToolResult(name="test_tool", result="output")
         adapter = MockToolAdapter(results=[expected_result])
-        context = create_test_context()
+        context_factory = create_test_context_factory()
 
-        result = execute_node(state, adapter, context)
+        result = execute_node(state, adapter, context_factory)
 
         assert len(result.tool_results) == 1
         assert result.tool_results[0]["name"] == "test_tool"
@@ -615,13 +679,17 @@ class TestExecuteNode:
         adapter = MockToolAdapter(
             results=[ToolResult(name="failing_tool", error="Tool failed")]
         )
-        context = create_test_context()
+        context_factory = create_test_context_factory()
 
-        result = execute_node(state, adapter, context)
+        result = execute_node(state, adapter, context_factory)
 
         # Should still add message with error
         assert len(result.messages) == 2
         assert result.messages[1]["content"] == "Tool failed"
+        # Should increment error_count and set last_error for routing to error node
+        assert result.error_count == 1
+        assert result.last_error is not None
+        assert "failing_tool" in result.last_error
 
     def test_truncates_long_tool_output(self):
         """Should truncate long tool output."""
@@ -637,9 +705,9 @@ class TestExecuteNode:
         adapter = MockToolAdapter(
             results=[ToolResult(name="verbose_tool", result=long_output)]
         )
-        context = create_test_context()
+        context_factory = create_test_context_factory()
 
-        result = execute_node(state, adapter, context)
+        result = execute_node(state, adapter, context_factory)
 
         # Message content should be truncated
         assert len(result.messages[1]["content"]) <= OUTPUT_TRUNCATION_LIMIT
@@ -659,9 +727,9 @@ class TestExecuteNode:
         adapter = MockToolAdapter(
             results=[ToolResult(name="binary_tool", result=binary_output)]
         )
-        context = create_test_context()
+        context_factory = create_test_context_factory()
 
-        result = execute_node(state, adapter, context)
+        result = execute_node(state, adapter, context_factory)
 
         assert "Binary file" in result.messages[1]["content"]
 
@@ -696,9 +764,9 @@ class TestExecuteNodeIntegration:
                 ToolResult(name="write_file", result="File created"),
             ]
         )
-        context = create_test_context()
+        context_factory = create_test_context_factory()
 
-        result = execute_node(state, adapter, context)
+        result = execute_node(state, adapter, context_factory)
 
         # Check messages
         assert len(result.messages) == 3
@@ -726,9 +794,9 @@ class TestExecuteNodeIntegration:
         adapter = MockToolAdapter(
             results=[ToolResult(name="read_file", result="content")]
         )
-        context = create_test_context()
+        context_factory = create_test_context_factory()
 
-        result = execute_node(state, adapter, context)
+        result = execute_node(state, adapter, context_factory)
 
         # Verified should still be True (no writes)
         assert result.files_verified is True
@@ -751,9 +819,9 @@ class TestExecuteNodeIntegration:
         adapter = MockToolAdapter(
             results=[ToolResult(name="complete", result="Task completed successfully")]
         )
-        context = create_test_context()
+        context_factory = create_test_context_factory()
 
-        result = execute_node(state, adapter, context)
+        result = execute_node(state, adapter, context_factory)
 
         # done should be True after complete tool is called
         assert result.done is True
@@ -772,8 +840,8 @@ class TestExecuteNodeIntegration:
         adapter = MockToolAdapter(
             results=[ToolResult(name="complete", result="Done")]
         )
-        context = create_test_context()
+        context_factory = create_test_context_factory()
 
-        result = execute_node(state, adapter, context)
+        result = execute_node(state, adapter, context_factory)
 
         assert result.done is True

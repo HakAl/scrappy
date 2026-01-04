@@ -28,8 +28,10 @@ Features:
 from __future__ import annotations
 
 import logging
+import os
 import uuid
-from typing import Any, Optional, Protocol, runtime_checkable
+from pathlib import Path
+from typing import Any, Optional
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
@@ -43,25 +45,87 @@ from scrappy.graph.nodes import (
     think_node,
     verify_node,
 )
+from scrappy.graph.protocols import LLMServiceProtocol
 from scrappy.graph.state import AgentState
 from scrappy.graph.tools import ToolAdapter, ToolAdapterProtocol
 from scrappy.graph.tracing import get_langfuse_callback
 
 logger = logging.getLogger(__name__)
 
+# System directories that should never be used as working_dir
+# These are dangerous because file operations would affect critical system files
+FORBIDDEN_DIRECTORIES = frozenset({
+    "/",
+    "/bin",
+    "/boot",
+    "/dev",
+    "/etc",
+    "/lib",
+    "/lib64",
+    "/proc",
+    "/root",
+    "/sbin",
+    "/sys",
+    "/usr",
+    "/var",
+    "C:\\",
+    "C:\\Windows",
+    "C:\\Windows\\System32",
+    "C:\\Program Files",
+    "C:\\Program Files (x86)",
+})
 
-@runtime_checkable
-class LLMServiceProtocol(Protocol):
-    """Protocol for LLM service used by think node."""
 
-    def completion_sync(
-        self,
-        model: str,
-        messages: list[dict],
-        **kwargs: Any,
-    ) -> tuple[Any, dict]:
-        """Sync completion call."""
-        ...
+class WorkingDirectoryError(ValueError):
+    """Raised when working_dir validation fails."""
+
+
+def validate_working_dir(working_dir: str) -> Path:
+    """
+    Validate working directory for safety.
+
+    Checks:
+    - Path is not empty
+    - Path exists
+    - Path is a directory (not a file)
+    - Path is not a critical system directory
+
+    Args:
+        working_dir: Path to validate
+
+    Returns:
+        Resolved Path object
+
+    Raises:
+        WorkingDirectoryError: If validation fails
+    """
+    if not working_dir or not working_dir.strip():
+        raise WorkingDirectoryError("working_dir cannot be empty")
+
+    try:
+        path = Path(working_dir).resolve()
+    except (OSError, ValueError) as e:
+        raise WorkingDirectoryError(f"Invalid working_dir path: {e}") from e
+
+    if not path.exists():
+        raise WorkingDirectoryError(f"working_dir does not exist: {path}")
+
+    if not path.is_dir():
+        raise WorkingDirectoryError(f"working_dir is not a directory: {path}")
+
+    # Check against forbidden system directories
+    path_str = str(path)
+    # Normalize for comparison (handle Windows case-insensitivity)
+    path_lower = path_str.lower() if os.name == "nt" else path_str
+
+    for forbidden in FORBIDDEN_DIRECTORIES:
+        forbidden_lower = forbidden.lower() if os.name == "nt" else forbidden
+        if path_lower == forbidden_lower:
+            raise WorkingDirectoryError(
+                f"working_dir cannot be a system directory: {path}"
+            )
+
+    return path
 
 
 def _wrap_think_node(
@@ -88,18 +152,20 @@ def _wrap_think_node(
 
 def _wrap_execute_node(
     tool_adapter: ToolAdapterProtocol,
+    context_factory: Optional[Any] = None,
 ) -> Any:
     """
     Create a wrapped execute node with injected dependencies.
 
     Args:
         tool_adapter: Tool adapter for execution
+        context_factory: Optional factory for creating ToolContext
 
     Returns:
         Node function compatible with LangGraph
     """
     def wrapped(state: AgentState) -> AgentState:
-        return execute_node(state, tool_adapter)
+        return execute_node(state, tool_adapter, context_factory)
     return wrapped
 
 
@@ -175,6 +241,8 @@ def build_graph(
     tool_adapter: Optional[ToolAdapterProtocol] = None,
     checkpointer: Optional[MemorySaver] = None,
     run_mypy_check: bool = True,
+    enable_hitl: bool = True,
+    context_factory: Optional[Any] = None,
 ) -> CompiledStateGraph:
     """
     Build and compile the agent graph.
@@ -198,6 +266,9 @@ def build_graph(
         tool_adapter: Tool adapter for execute node (default: create default)
         checkpointer: MemorySaver for checkpointing (default: create new)
         run_mypy_check: Whether to run mypy in verify node
+        enable_hitl: Whether to enable human-in-the-loop interrupts at confirm
+                     node. Set False for autonomous execution (default: True)
+        context_factory: Factory for creating ToolContext (default: uses agent_tools ToolContext)
 
     Returns:
         Compiled StateGraph ready for execution
@@ -215,7 +286,7 @@ def build_graph(
 
     # Add nodes with wrapped functions that have dependencies injected
     builder.add_node("think", _wrap_think_node(llm_service, tool_adapter))
-    builder.add_node("execute", _wrap_execute_node(tool_adapter))
+    builder.add_node("execute", _wrap_execute_node(tool_adapter, context_factory))
     builder.add_node("verify", _wrap_verify_node(run_mypy_check))
     builder.add_node("confirm", confirm_node)
     builder.add_node("error", error_node)
@@ -250,7 +321,12 @@ def build_graph(
     )
 
     # Add edges from verify back to think
-    # (after verification, continue reasoning)
+    # Design: verify always routes to think, even on failure.
+    # When verify fails, it sets error_count and last_error, but the LLM in think
+    # sees the error in messages and can reason about how to fix it.
+    # If think succeeds, it resets error_count=0 and last_error=None, so the
+    # stale verify error doesn't affect subsequent routing.
+    # This is intentional: let the LLM see and fix verification errors.
     builder.add_edge("verify", "think")
 
     # Add conditional edges from confirm
@@ -276,17 +352,15 @@ def build_graph(
     )
 
     # Compile with checkpointer and interrupt support
+    # Only interrupt at confirm node if HITL is enabled
+    interrupt_nodes = ["confirm"] if enable_hitl else []
     compiled = builder.compile(
         checkpointer=checkpointer,
-        interrupt_before=["confirm"],
+        interrupt_before=interrupt_nodes,
     )
 
-    # Add Langfuse tracing if configured
-    langfuse_handler = get_langfuse_callback()
-    if langfuse_handler:
-        compiled = compiled.with_config({"callbacks": [langfuse_handler]})
-        logger.debug("Langfuse tracing enabled for graph")
-
+    # Note: Langfuse callbacks are added at runtime in run_agent() config
+    # to avoid mutation issues when callers pass their own callbacks
     logger.debug("Agent graph compiled successfully")
 
     return compiled
@@ -320,15 +394,24 @@ def run_agent(
 
     Returns:
         Final AgentState after execution completes
+
+    Raises:
+        WorkingDirectoryError: If working_dir validation fails
     """
-    # Create initial state
-    initial_state = AgentState.create_initial(task, working_dir)
+    # Validate working_dir for safety before any operations
+    validated_path = validate_working_dir(working_dir)
+    logger.debug("Working directory validated: %s", validated_path)
+
+    # Create initial state with validated path
+    initial_state = AgentState.create_initial(task, str(validated_path))
 
     # Build and compile graph
+    # Disable HITL - run_agent runs to completion without interrupts
     graph = build_graph(
         llm_service=llm_service,
         tool_adapter=tool_adapter,
         checkpointer=checkpointer,
+        enable_hitl=False,
     )
 
     # Generate thread ID if not provided
@@ -340,10 +423,16 @@ def run_agent(
     # With think->execute pattern, each iteration = 2 nodes.
     # MAX_ITERATIONS (from edges.py) = 50, so need at least 100 nodes.
     # Set to 150 to allow for error recovery loops.
-    config = {
+    config: dict[str, Any] = {
         "configurable": {"thread_id": thread_id},
         "recursion_limit": 150,
     }
+
+    # Add Langfuse tracing at runtime (not compile time) to avoid callback mutation
+    langfuse_handler = get_langfuse_callback()
+    if langfuse_handler:
+        config["callbacks"] = [langfuse_handler]
+        logger.debug("Langfuse tracing enabled for agent run")
 
     logger.info("Starting agent run for task: %s", task[:100])
 
@@ -371,6 +460,7 @@ def create_agent_runner(
     llm_service: LLMServiceProtocol,
     tool_adapter: Optional[ToolAdapterProtocol] = None,
     run_mypy_check: bool = True,
+    enable_hitl: bool = True,
 ) -> tuple[CompiledStateGraph, MemorySaver]:
     """
     Create an agent runner with shared checkpointer.
@@ -390,6 +480,7 @@ def create_agent_runner(
         llm_service: LLM service for completions
         tool_adapter: Tool adapter (default: create default)
         run_mypy_check: Whether to run mypy in verify node
+        enable_hitl: Whether to enable human-in-the-loop interrupts (default: True)
 
     Returns:
         Tuple of (compiled_graph, checkpointer)
@@ -417,6 +508,7 @@ def create_agent_runner(
         tool_adapter=tool_adapter,
         checkpointer=checkpointer,
         run_mypy_check=run_mypy_check,
+        enable_hitl=enable_hitl,
     )
 
     return graph, checkpointer
