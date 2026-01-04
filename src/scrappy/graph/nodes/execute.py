@@ -300,10 +300,12 @@ def _default_context_factory(working_dir: str) -> ToolContextProtocol:
     Creates a ToolContext from the agent_tools package.
     This is used when no factory is injected.
     """
+    from scrappy.agent_config import AgentConfig
     from scrappy.agent_tools.tools.base import ToolContext
     return ToolContext(
         project_root=Path(working_dir),
         dry_run=False,
+        config=AgentConfig(),
     )
 
 
@@ -405,11 +407,13 @@ def execute_node(
             logger.info("Task marked complete via complete tool")
 
     # Build update dict
+    # Include pending_tool_calls for UX display (bridge extracts key params)
     update: dict[str, object] = {
         "messages": new_messages,
         "files_changed": files_changed,
         "files_verified": not files_modified,
         "tool_results": raw_results,
+        "pending_tool_calls": tool_calls,  # For UX display
         "done": task_complete or state.done,
     }
 

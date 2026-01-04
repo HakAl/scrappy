@@ -21,7 +21,7 @@ class TestAgentStateCreation:
         assert state.error_count == 0
         assert state.messages == []
         assert state.files_changed == []
-        assert state.current_tier == "fast"
+        assert state.current_tier == "quality"
 
     def test_create_with_defaults(self) -> None:
         """Test creating state with minimal required fields."""
@@ -29,7 +29,7 @@ class TestAgentStateCreation:
 
         assert state.input == "test"
         assert state.working_dir == "."
-        assert state.current_tier == "fast"
+        assert state.current_tier == "quality"
 
     def test_all_fields_have_meaningful_descriptions(self) -> None:
         """Verify all fields have non-trivial documentation (>10 chars)."""

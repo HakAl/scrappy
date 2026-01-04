@@ -5,10 +5,13 @@ This adapter allows non-Textual code to post output to the TUI
 via a thread-safe queue that the main Textual event loop consumes.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, TYPE_CHECKING
 import threading
 import uuid
 from queue import Queue, Empty
+
+if TYPE_CHECKING:
+    from scrappy.protocols.activity import ActivityState
 
 
 class TextualOutputAdapter:
@@ -32,6 +35,23 @@ class TextualOutputAdapter:
             tasks: List of Task objects to display.
         """
         self._queue.put(('tasks', tasks))
+
+    def post_activity(
+        self,
+        state: "ActivityState",
+        message: str = "",
+        elapsed_ms: int = 0,
+    ) -> None:
+        """Post activity state change to UI.
+
+        Thread-safe method to update the activity indicator from worker threads.
+
+        Args:
+            state: Current activity state (IDLE, THINKING, TOOL_EXECUTION, etc.)
+            message: Optional descriptive message
+            elapsed_ms: Elapsed time in milliseconds
+        """
+        self._queue.put(('activity', (state, message, elapsed_ms)))
 
     def flush(self, timeout: float = 5.0) -> bool:
         """Wait for all pending output to be processed.

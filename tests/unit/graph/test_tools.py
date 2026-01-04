@@ -365,6 +365,25 @@ class TestToolResultFormat:
 
         assert "error" in results[0]
 
+    def test_tool_returning_error_result_puts_error_in_error_field(self):
+        """Tool returning ToolResult(success=False, error=...) should have error in error field.
+
+        This is critical for error visibility - errors must be in the 'error' field,
+        not hidden in the 'result' field as a string.
+        """
+        registry = ToolRegistry()
+        registry.register(MockTool(name="failing_tool", should_fail=True))
+        adapter = ToolAdapter(registry)
+        context = create_test_context()
+
+        tool_calls: list[ToolCall] = [make_tool_call("1", "failing_tool")]
+        results = adapter.execute(tool_calls, context)
+
+        # Error should be in 'error' field, not 'result' field
+        assert "error" in results[0], "Error should be in error field"
+        assert results[0]["error"] == "Mock failure"
+        assert results[0].get("result") is None, "Error should not be in result field"
+
 
 class TestToolAdapterEdgeCases:
     """Edge case tests for unusual or malformed inputs."""
@@ -435,9 +454,12 @@ class TestToolAdapterEdgeCases:
         assert "result" in results[0]
 
     def test_null_in_json_arguments(self):
-        """JSON with null value should be handled."""
+        """JSON with null value should be validated.
+
+        When a tool expects string but receives null, validation should fail.
+        """
         registry = ToolRegistry()
-        registry.register(MockTool(name="test"))
+        registry.register(MockTool(name="test"))  # MockTool expects string input
         adapter = ToolAdapter(registry)
         context = create_test_context()
 
@@ -446,12 +468,17 @@ class TestToolAdapterEdgeCases:
         ]
         results = adapter.execute(tool_calls, context)
 
-        assert "result" in results[0]
+        # Null is not a valid string, so validation should fail
+        assert "error" in results[0]
+        assert "must be string" in results[0]["error"]
 
     def test_nested_json_arguments(self):
-        """Nested JSON in arguments should be handled."""
+        """Nested JSON in arguments should be validated.
+
+        When a tool expects string but receives nested object, validation fails.
+        """
         registry = ToolRegistry()
-        registry.register(MockTool(name="test"))
+        registry.register(MockTool(name="test"))  # MockTool expects string input
         adapter = ToolAdapter(registry)
         context = create_test_context()
 
@@ -460,8 +487,9 @@ class TestToolAdapterEdgeCases:
         ]
         results = adapter.execute(tool_calls, context)
 
-        # The mock tool will receive the nested dict as input
-        assert "result" in results[0]
+        # Nested object is not a valid string, so validation should fail
+        assert "error" in results[0]
+        assert "must be string" in results[0]["error"]
 
     def test_very_long_arguments(self):
         """Very long argument strings should be handled."""

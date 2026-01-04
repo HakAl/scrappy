@@ -125,8 +125,8 @@ class AgentState(BaseModel):
 
     # Model selection
     current_tier: Literal["fast", "quality"] = Field(
-        default="fast",
-        description="Model tier: 'fast' for speed, 'quality' for complex tasks"
+        default="quality",
+        description="Model tier: 'fast' for speed, 'quality' for complex tasks (default: quality for better tool following)"
     )
 
     # File tracking
@@ -171,6 +171,12 @@ class AgentState(BaseModel):
     tool_results: list[ToolResult] = Field(
         default_factory=list,
         description="Recent tool execution results"
+    )
+
+    # Pending tool calls for UX display (set by execute node)
+    pending_tool_calls: list[ToolCall] = Field(
+        default_factory=list,
+        description="Tool calls from last assistant message, for UX display"
     )
 
     # Pydantic configuration

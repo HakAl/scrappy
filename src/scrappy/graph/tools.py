@@ -177,19 +177,41 @@ class ToolAdapter:
             # Already a dict (shouldn't happen per TypedDict, but handle it)
             kwargs = arguments if arguments else {}
 
-        # Check if tool exists
-        if not self._registry.exists(tool_name):
+        # Ensure kwargs is a dict (JSON array would parse to list)
+        if not isinstance(kwargs, dict):
+            return ToolResult(
+                name=tool_name,
+                error=f"Invalid arguments: expected object, got {type(kwargs).__name__}",
+            )
+
+        # Get the tool directly (not via execute() which returns string)
+        tool = self._registry.get(tool_name)
+        if not tool:
             return ToolResult(
                 name=tool_name,
                 error=f"Tool '{tool_name}' not found",
             )
 
-        # Execute the tool
-        try:
-            output = self._registry.execute(tool_name, context, **kwargs)
+        # Validate parameters first
+        is_valid, validation_error = tool.validate(**kwargs)
+        if not is_valid:
             return ToolResult(
                 name=tool_name,
-                result=str(output),
+                error=validation_error or "Parameter validation failed",
+            )
+
+        # Execute the tool directly to get ToolResult dataclass (not string)
+        try:
+            tool_result = tool.execute(context, **kwargs)
+            # tool_result is a ToolResult dataclass with success, output, error
+            if not tool_result.success:
+                return ToolResult(
+                    name=tool_name,
+                    error=tool_result.error or tool_result.output or "Tool execution failed",
+                )
+            return ToolResult(
+                name=tool_name,
+                result=tool_result.output,
             )
         except (OSError, IOError, ValueError, TypeError, RuntimeError) as e:
             # Expected errors from tool execution (file ops, validation, etc.)

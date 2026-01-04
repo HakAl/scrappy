@@ -114,16 +114,46 @@ def validate_working_dir(working_dir: str) -> Path:
         raise WorkingDirectoryError(f"working_dir is not a directory: {path}")
 
     # Check against forbidden system directories
-    path_str = str(path)
-    # Normalize for comparison (handle Windows case-insensitivity)
-    path_lower = path_str.lower() if os.name == "nt" else path_str
-
+    # Must check if path IS or is WITHIN any forbidden directory
+    # (e.g., /etc/cron.d is within /etc and must be blocked)
     for forbidden in FORBIDDEN_DIRECTORIES:
-        forbidden_lower = forbidden.lower() if os.name == "nt" else forbidden
-        if path_lower == forbidden_lower:
-            raise WorkingDirectoryError(
-                f"working_dir cannot be a system directory: {path}"
-            )
+        try:
+            forbidden_path = Path(forbidden)
+            if os.name == "nt":
+                # Windows: case-insensitive comparison
+                # Drive roots (e.g., C:\) should only block exact match
+                # Subdirs (e.g., C:\Windows) should block containment
+                is_drive_root = (
+                    len(forbidden_path.parts) == 1
+                    and len(forbidden_path.drive) > 0
+                )
+                if is_drive_root:
+                    # Only block exact drive root match
+                    if path.drive.lower() == forbidden_path.drive.lower() and len(path.parts) == 1:
+                        raise WorkingDirectoryError(
+                            f"working_dir cannot be system directory {forbidden}: {path}"
+                        )
+                else:
+                    # Block if path is within forbidden subdirectory
+                    path_parts = [p.lower() for p in path.parts]
+                    forbidden_parts = [p.lower() for p in forbidden_path.parts]
+                    if path_parts[:len(forbidden_parts)] == forbidden_parts:
+                        raise WorkingDirectoryError(
+                            f"working_dir cannot be within system directory {forbidden}: {path}"
+                        )
+            else:
+                # Unix: use relative_to for proper path containment check
+                try:
+                    path.relative_to(forbidden_path)
+                    raise WorkingDirectoryError(
+                        f"working_dir cannot be within system directory {forbidden}: {path}"
+                    )
+                except ValueError:
+                    pass  # path is not within forbidden - this is good
+        except WorkingDirectoryError:
+            raise  # Re-raise our own exceptions
+        except (OSError, ValueError):
+            continue  # Invalid forbidden path, skip
 
     return path
 

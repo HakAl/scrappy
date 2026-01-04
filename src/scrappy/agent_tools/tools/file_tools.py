@@ -31,6 +31,16 @@ class ReadFileTool(ToolBase):
     def execute(self, context: ToolContext, **kwargs) -> ToolResult:
         path = kwargs["path"]
 
+        # Handle absolute paths: convert to relative if inside project root
+        if Path(path).is_absolute():
+            try:
+                abs_path = Path(path).resolve()
+                project_root = context.project_root.resolve()
+                rel_path = abs_path.relative_to(project_root)
+                path = str(rel_path)
+            except (ValueError, OSError):
+                return ToolResult(False, "", f"Absolute path '{path}' is outside project directory.")
+
         if not context.is_safe_path(path):
             return ToolResult(False, "", f"Path '{path}' is outside project directory")
 
@@ -401,11 +411,18 @@ class WriteFileTool(ToolBase):
         path = kwargs["path"]
         content = kwargs["content"]
 
-        # Explicitly reject absolute paths in ANY format (Unix OR Windows)
-        # This is critical security validation - must reject paths that look
-        # absolute on ANY platform, not just the current one
+        # Handle absolute paths: convert to relative if inside project root
         if self._is_absolute_path_any_platform(path):
-            return ToolResult(False, "", f"Absolute path '{path}' not allowed. Use relative paths only.")
+            try:
+                from pathlib import Path
+                abs_path = Path(path).resolve()
+                project_root = context.project_root.resolve()
+                # Check if path is inside project root
+                rel_path = abs_path.relative_to(project_root)
+                path = str(rel_path)
+            except (ValueError, OSError):
+                # Path is outside project root or invalid
+                return ToolResult(False, "", f"Absolute path '{path}' is outside project directory.")
 
         if not context.is_safe_path(path):
             return ToolResult(False, "", f"Path '{path}' is outside project directory")

@@ -291,33 +291,28 @@ class CLIAgentManager:
             if dashboard:
                 dashboard.set_state("idle", "Task completed")
 
-            io.echo("\n" + "=" * 60)
-
+            # Completion summary is output by the bridge
+            # Just record to working memory for context
             if result.cancelled:
-                io.secho("Task Cancelled", fg=io.theme.warning, bold=True)
                 self.orchestrator.working_memory.add_discovery(
                     f"Agent task '{task[:50]}...' cancelled by user",
                     "agent_task"
                 )
             elif result.success:
-                io.secho("Task Completed Successfully!", fg=io.theme.success, bold=True)
                 iterations = result.final_state.iteration if result.final_state else 0
                 self.orchestrator.working_memory.add_discovery(
                     f"Agent task '{task[:50]}...': completed in {iterations} iterations",
                     "agent_task"
                 )
             else:
-                io.secho("Task Did Not Complete", fg=io.theme.warning, bold=True)
-                if result.error:
-                    io.secho(f"Error: {result.error}", fg=io.theme.error)
                 self.orchestrator.working_memory.add_discovery(
                     f"Agent task '{task[:50]}...' failed: {result.error or 'unknown'}",
                     "agent_task"
                 )
 
-            # Inform user about undo option
-            if undo_state and not dry_run:
-                io.echo("\nTo undo changes: scrappy undo")
+            # Inform user about undo option (if files were changed)
+            if undo_state and not dry_run and result.final_state and result.final_state.files_changed:
+                io.echo("To undo changes: scrappy undo")
 
         except KeyboardInterrupt:
             lgr.debug("_run_langgraph_agent: KeyboardInterrupt")

@@ -516,6 +516,10 @@ class ScrappyApp(App):
                     self.post_message(WriteRenderable(content))
                 elif msg_type == 'tasks':
                     self.post_message(TasksUpdated(content))
+                elif msg_type == 'activity':
+                    # Unpack activity tuple: (state, message, elapsed_ms)
+                    state, msg, elapsed_ms = content
+                    self.post_message(ActivityStateChange(state, msg, elapsed_ms))
                 elif msg_type == 'flush':
                     # Acknowledge flush - all prior items processed
                     self.output_adapter.acknowledge_flush(content)
