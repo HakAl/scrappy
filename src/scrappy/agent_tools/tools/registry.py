@@ -65,6 +65,20 @@ class ToolRegistry:
         """
         return self._tools.get(name)
 
+    def cleanup(self) -> None:
+        """
+        Clean up all tools that have cleanup methods.
+
+        Calls cleanup() on any tool that defines it (e.g., CommandTool
+        stops Docker containers). Best-effort: continues on errors.
+        """
+        for tool in self._tools.values():
+            if hasattr(tool, 'cleanup') and callable(getattr(tool, 'cleanup')):
+                try:
+                    tool.cleanup()
+                except Exception:
+                    pass  # Best effort cleanup
+
     def exists(self, name: str) -> bool:
         """
         Check if a tool is registered.

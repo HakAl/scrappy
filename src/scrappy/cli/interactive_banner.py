@@ -16,6 +16,7 @@ from scrappy.infrastructure.config.api_keys import (
 )
 from scrappy.infrastructure.paths import ScrappyPathProvider
 from scrappy.orchestrator.litellm_config import get_configured_models
+from scrappy.sandbox.docker_executor import DockerExecutor
 
 if TYPE_CHECKING:
     from scrappy.cli.protocols import UnifiedIOProtocol
@@ -128,6 +129,24 @@ def display_banner_header_tui(output_sink: "OutputSinkProtocol") -> None:
     output_sink.post_output("")
 
 
+def _get_docker_status(project_dir: str) -> dict:
+    """Check Docker availability for sandbox execution.
+
+    Args:
+        project_dir: Project directory path
+
+    Returns:
+        Dict with 'available' bool, 'image' name, and optional 'error' message
+    """
+    try:
+        executor = DockerExecutor(project_dir=project_dir)
+        available = executor.is_available()
+        image = executor.get_resolved_image() if available else None
+        return {"available": available, "image": image}
+    except Exception as e:
+        return {"available": False, "image": None, "error": str(e)}
+
+
 def display_banner_status(
     io: "UnifiedIOProtocol",
     api_key_service: Optional[ApiKeyConfigServiceProtocol] = None,
@@ -160,6 +179,14 @@ def display_banner_status(
     # Show workspace
     workspace = path_provider.workspace_display()
     _print_rich(io, f"[green]●[/] Workspace: [cyan]{workspace}[/]")
+
+    # Show Docker/sandbox status
+    docker_status = _get_docker_status(str(path_provider.project_root))
+    if docker_status["available"]:
+        image = docker_status.get("image", "unknown")
+        _print_rich(io, f"[green]●[/] Docker: [cyan]{image}[/]")
+    else:
+        _print_rich(io, "[yellow]●[/] Docker: [yellow]unavailable[/] (commands run on host)")
     io.echo()
 
 

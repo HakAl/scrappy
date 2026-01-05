@@ -68,6 +68,7 @@ class ToolResult(TypedDict):
     name: str
     result: NotRequired[str]
     error: NotRequired[str]
+    metadata: NotRequired[dict[str, object]]
 
 
 class AgentState(BaseModel):

@@ -323,11 +323,18 @@ class ScrappyApp(App):
         llm_service = getattr(self._cli.orchestrator, 'llm_service', None)
         if llm_service is not None:
             from .langgraph_bridge import LangGraphBridge
+            from scrappy.graph.tools import ToolAdapter
+
+            # Create tool adapter - owned by app, passed to bridge
+            # This ensures proper cleanup and reuse across agent runs
+            self._tool_adapter = ToolAdapter.create_default()
+
             langgraph_bridge = LangGraphBridge(
                 app=self,
                 bridge=self.bridge,
                 output_adapter=self.output_adapter,
                 llm_service=llm_service,
+                tool_adapter=self._tool_adapter,
             )
 
         # Reinitialize handlers with bridge for TUI-aware user interaction
@@ -375,6 +382,13 @@ class ScrappyApp(App):
 
         if self._codebase_context is not None:
             self._codebase_context.shutdown()
+
+        # Clean up tool adapter (stops Docker containers)
+        if hasattr(self, '_tool_adapter') and self._tool_adapter is not None:
+            try:
+                self._tool_adapter.cleanup()
+            except Exception as e:
+                logger.debug("Error cleaning up tool adapter: %s", e)
 
         # Close LLM service HTTP sessions
         if hasattr(self, 'interactive_mode') and self.interactive_mode:

@@ -19,6 +19,9 @@ if TYPE_CHECKING:
         OutputParserProtocol,
     )
     from scrappy.protocols.io import CLIIOProtocol
+else:
+    # Runtime import for type annotation
+    from ..protocols import SubprocessRunnerProtocol
 from ..constants import (
     DEFAULT_COMMAND_TIMEOUT,
     DEFAULT_MAX_COMMAND_OUTPUT,
@@ -43,12 +46,14 @@ from ..components import (
     SubprocessRunner,
     OutputParser,
 )
+from ..components.sandboxed_runner import SandboxedSubprocessRunner
 
 
 def create_shell_executor(
     command_timeout: int = DEFAULT_COMMAND_TIMEOUT,
     max_command_output: int = DEFAULT_MAX_COMMAND_OUTPUT,
-    dangerous_commands: Optional[list[str]] = None
+    dangerous_commands: Optional[list[str]] = None,
+    runner: Optional["SubprocessRunnerProtocol"] = None,
 ) -> "ShellCommandExecutor":
     """
     Factory function for creating ShellCommandExecutor with default dependencies.
@@ -60,6 +65,7 @@ def create_shell_executor(
         command_timeout: Timeout for command execution in seconds
         max_command_output: Maximum output size to capture in bytes
         dangerous_commands: List of dangerous command patterns to block
+        runner: Optional subprocess runner (default: SubprocessRunner)
 
     Returns:
         Fully configured ShellCommandExecutor instance
@@ -70,7 +76,8 @@ def create_shell_executor(
 
     # Create other components
     advisor = CommandAdvisor()
-    runner = SubprocessRunner()
+    if runner is None:
+        runner = SubprocessRunner()
     parser = OutputParser()
 
     # Wire everything together
@@ -529,7 +536,8 @@ class CommandTool(ToolBase):
     Tool wrapper for shell command execution.
 
     Provides the Tool interface for command execution with all
-    security, platform, and convenience features.
+    security, platform, and convenience features. Supports Docker
+    sandbox for isolated execution.
     """
 
     def __init__(
@@ -537,7 +545,8 @@ class CommandTool(ToolBase):
         timeout: int = DEFAULT_COMMAND_TIMEOUT,
         max_output: int = DEFAULT_MAX_COMMAND_OUTPUT,
         dangerous_patterns: Optional[list[str]] = None,
-        executor: Optional[ShellCommandExecutor] = None
+        executor: Optional[ShellCommandExecutor] = None,
+        use_sandbox: bool = True,
     ):
         """
         Initialize CommandTool with configuration.
@@ -547,19 +556,61 @@ class CommandTool(ToolBase):
             max_output: Maximum output size to capture in bytes
             dangerous_patterns: List of dangerous command patterns to block
             executor: Injectable shell command executor (default: creates new ShellCommandExecutor)
+            use_sandbox: Use Docker sandbox when available (default: True)
         """
         self._timeout = timeout
         self._max_output = max_output
         self._dangerous_patterns = dangerous_patterns  # Keep None to let CommandSecurity use defaults
-        self._executor = executor or self._create_default_executor()
+        self._use_sandbox = use_sandbox
+        self._executor = executor  # May be None, created lazily per project
+        self._sandboxed_runners: dict[str, SandboxedSubprocessRunner] = {}  # Cache per project
 
-    def _create_default_executor(self) -> ShellCommandExecutor:
-        """Create default shell command executor using factory function."""
-        return create_shell_executor(
+    def _get_executor_for_project(self, project_dir: str) -> tuple[ShellCommandExecutor, str]:
+        """Get or create executor for a project directory.
+
+        Args:
+            project_dir: Project directory path
+
+        Returns:
+            Tuple of (executor, executor_type) where executor_type is 'docker' or 'host'
+        """
+        if self._executor is not None:
+            # User-provided executor, assume host
+            return self._executor, "host"
+
+        if not self._use_sandbox:
+            # Sandbox disabled, use default host executor
+            return create_shell_executor(
+                command_timeout=self._timeout,
+                max_command_output=self._max_output,
+                dangerous_commands=self._dangerous_patterns,
+            ), "host"
+
+        # Get or create sandboxed runner for this project
+        if project_dir not in self._sandboxed_runners:
+            self._sandboxed_runners[project_dir] = SandboxedSubprocessRunner(
+                project_dir=project_dir,
+                prefer_docker=True,
+                network_enabled=False,
+            )
+
+        runner = self._sandboxed_runners[project_dir]
+        executor = create_shell_executor(
             command_timeout=self._timeout,
             max_command_output=self._max_output,
-            dangerous_commands=self._dangerous_patterns  # Pass None to use CommandSecurity defaults
+            dangerous_commands=self._dangerous_patterns,
+            runner=runner,
         )
+        return executor, runner.executor_type
+
+    def cleanup(self) -> None:
+        """Clean up all sandboxed runners (stops Docker containers)."""
+        for runner in self._sandboxed_runners.values():
+            try:
+                runner.cleanup()
+            except Exception:
+                pass  # Best effort cleanup
+        self._sandboxed_runners.clear()
 
     @property
     def name(self) -> str:
@@ -585,7 +636,8 @@ class CommandTool(ToolBase):
         Execute shell command.
 
         All validation, platform fixes, and execution logic is handled
-        by the injected ShellCommandExecutor and its components.
+        by the injected ShellCommandExecutor and its components. Uses
+        Docker sandbox when available for isolated execution.
 
         Args:
             context: ToolContext with project root and settings
@@ -600,22 +652,25 @@ class CommandTool(ToolBase):
             return ToolResult(False, "", "No command specified")
 
         try:
+            # Get executor for this project (may use Docker sandbox)
+            executor, executor_type = self._get_executor_for_project(str(context.project_root))
+
             # Execute command - all security checks, platform fixes, and
             # validation are handled by the executor and its components
-            output = self._executor.run(command, context.project_root, dry_run=context.dry_run)
+            output = executor.run(command, context.project_root, dry_run=context.dry_run)
 
             # Check if output indicates an error
             if output.startswith("Error"):
-                return ToolResult(False, "", output)
+                return ToolResult(False, "", output, metadata={"executor_type": executor_type})
 
             # Check for dry run indicator
             if output.startswith("[DRY RUN]"):
-                return ToolResult(True, output, metadata={"dry_run": True, "command": command})
+                return ToolResult(True, output, metadata={"dry_run": True, "command": command, "executor_type": executor_type})
 
             return ToolResult(
                 True,
                 output,
-                metadata={"command": command}
+                metadata={"command": command, "executor_type": executor_type}
             )
         except Exception as e:
             return ToolResult(False, "", f"Error executing command: {str(e)}")

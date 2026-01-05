@@ -135,13 +135,15 @@ class TestBuildGraph:
     def test_builds_without_error(self) -> None:
         """build_graph should complete without errors."""
         llm_service = MockLLMService()
-        graph = build_graph(llm_service)
+        tool_adapter = MockToolAdapter()
+        graph = build_graph(llm_service, tool_adapter)
         assert graph is not None
 
     def test_returns_compiled_graph(self) -> None:
         """build_graph should return a CompiledStateGraph."""
         llm_service = MockLLMService()
-        graph = build_graph(llm_service)
+        tool_adapter = MockToolAdapter()
+        graph = build_graph(llm_service, tool_adapter)
         # CompiledStateGraph has invoke method
         assert hasattr(graph, "invoke")
         assert callable(graph.invoke)
@@ -150,7 +152,7 @@ class TestBuildGraph:
         """build_graph should accept custom tool adapter."""
         llm_service = MockLLMService()
         tool_adapter = MockToolAdapter(tool_names=["custom_tool"])
-        graph = build_graph(llm_service, tool_adapter=tool_adapter)
+        graph = build_graph(llm_service, tool_adapter)
         assert graph is not None
 
     def test_accepts_custom_checkpointer(self) -> None:
@@ -158,14 +160,16 @@ class TestBuildGraph:
         from langgraph.checkpoint.memory import MemorySaver
 
         llm_service = MockLLMService()
+        tool_adapter = MockToolAdapter()
         checkpointer = MemorySaver()
-        graph = build_graph(llm_service, checkpointer=checkpointer)
+        graph = build_graph(llm_service, tool_adapter, checkpointer=checkpointer)
         assert graph is not None
 
     def test_has_think_as_entry_point(self) -> None:
         """Graph entry point should be 'think' node."""
         llm_service = MockLLMService()
-        graph = build_graph(llm_service)
+        tool_adapter = MockToolAdapter()
+        graph = build_graph(llm_service, tool_adapter)
 
         # The graph should have think node
         # We can verify by checking the graph structure
@@ -176,7 +180,8 @@ class TestBuildGraph:
     def test_has_required_nodes(self) -> None:
         """Graph should have all required nodes."""
         llm_service = MockLLMService()
-        graph = build_graph(llm_service)
+        tool_adapter = MockToolAdapter()
+        graph = build_graph(llm_service, tool_adapter)
 
         # Get node names from the compiled graph
         node_names = set(graph.nodes.keys())
@@ -188,7 +193,8 @@ class TestBuildGraph:
     def test_interrupt_before_confirm(self) -> None:
         """Graph should be compiled with interrupt_before on confirm."""
         llm_service = MockLLMService()
-        graph = build_graph(llm_service)
+        tool_adapter = MockToolAdapter()
+        graph = build_graph(llm_service, tool_adapter)
 
         # LangGraph stores interrupt configuration
         # The graph should pause before confirm node
@@ -289,7 +295,8 @@ class TestCreateAgentRunner:
     def test_returns_graph_and_checkpointer(self) -> None:
         """create_agent_runner should return tuple of graph and checkpointer."""
         llm_service = MockLLMService()
-        result = create_agent_runner(llm_service)
+        tool_adapter = MockToolAdapter()
+        result = create_agent_runner(llm_service, tool_adapter)
 
         assert isinstance(result, tuple)
         assert len(result) == 2
@@ -305,7 +312,7 @@ class TestCreateAgentRunner:
 
         graph, checkpointer = create_agent_runner(
             llm_service,
-            tool_adapter=tool_adapter,
+            tool_adapter,
         )
 
         assert graph is not None
@@ -314,9 +321,11 @@ class TestCreateAgentRunner:
     def test_accepts_mypy_config(self) -> None:
         """create_agent_runner should accept run_mypy_check config."""
         llm_service = MockLLMService()
+        tool_adapter = MockToolAdapter()
 
         graph, checkpointer = create_agent_runner(
             llm_service,
+            tool_adapter,
             run_mypy_check=False,
         )
 
@@ -533,27 +542,30 @@ class TestGraphIntegration:
 class TestGraphConfiguration:
     """Tests for graph configuration options."""
 
-    def test_default_tool_adapter_creation(self) -> None:
-        """Graph should create default tool adapter if not provided."""
+    def test_tool_adapter_is_required(self) -> None:
+        """Graph requires tool_adapter parameter."""
         llm_service = MockLLMService()
+        tool_adapter = MockToolAdapter()
 
-        # Should not raise even without tool_adapter
-        graph = build_graph(llm_service)
+        # tool_adapter is required - graph should build successfully
+        graph = build_graph(llm_service, tool_adapter)
         assert graph is not None
 
     def test_default_checkpointer_creation(self) -> None:
         """Graph should create default checkpointer if not provided."""
         llm_service = MockLLMService()
+        tool_adapter = MockToolAdapter()
 
         # Should not raise even without checkpointer
-        graph = build_graph(llm_service)
+        graph = build_graph(llm_service, tool_adapter)
         assert graph is not None
 
     def test_mypy_check_disabled(self) -> None:
         """Graph should accept run_mypy_check=False."""
         llm_service = MockLLMService()
+        tool_adapter = MockToolAdapter()
 
-        graph = build_graph(llm_service, run_mypy_check=False)
+        graph = build_graph(llm_service, tool_adapter, run_mypy_check=False)
         assert graph is not None
 
 

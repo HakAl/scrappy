@@ -47,7 +47,7 @@ from scrappy.graph.nodes import (
 )
 from scrappy.graph.protocols import LLMServiceProtocol
 from scrappy.graph.state import AgentState
-from scrappy.graph.tools import ToolAdapter, ToolAdapterProtocol
+from scrappy.graph.tools import ToolAdapterProtocol
 from scrappy.graph.tracing import get_langfuse_callback
 
 logger = logging.getLogger(__name__)
@@ -268,7 +268,7 @@ def _route_after_confirm(state: AgentState) -> Route:
 
 def build_graph(
     llm_service: LLMServiceProtocol,
-    tool_adapter: Optional[ToolAdapterProtocol] = None,
+    tool_adapter: ToolAdapterProtocol,
     checkpointer: Optional[MemorySaver] = None,
     run_mypy_check: bool = True,
     enable_hitl: bool = True,
@@ -293,7 +293,7 @@ def build_graph(
 
     Args:
         llm_service: LLM service for think node
-        tool_adapter: Tool adapter for execute node (default: create default)
+        tool_adapter: Tool adapter for execute node (required)
         checkpointer: MemorySaver for checkpointing (default: create new)
         run_mypy_check: Whether to run mypy in verify node
         enable_hitl: Whether to enable human-in-the-loop interrupts at confirm
@@ -303,10 +303,6 @@ def build_graph(
     Returns:
         Compiled StateGraph ready for execution
     """
-    # Default tool adapter if not provided
-    if tool_adapter is None:
-        tool_adapter = ToolAdapter.create_default()
-
     # Default checkpointer if not provided
     if checkpointer is None:
         checkpointer = MemorySaver()
@@ -488,7 +484,7 @@ def run_agent(
 
 def create_agent_runner(
     llm_service: LLMServiceProtocol,
-    tool_adapter: Optional[ToolAdapterProtocol] = None,
+    tool_adapter: ToolAdapterProtocol,
     run_mypy_check: bool = True,
     enable_hitl: bool = True,
 ) -> tuple[CompiledStateGraph, MemorySaver]:

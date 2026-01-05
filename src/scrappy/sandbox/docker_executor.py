@@ -345,6 +345,24 @@ class DockerExecutor:
         """Return executor type identifier."""
         return "docker"
 
+    def get_resolved_image(self) -> str:
+        """Get the image name that will actually be used.
+
+        Checks if custom image exists, otherwise returns fallback.
+
+        Returns:
+            Image name (e.g., 'python:3.11-slim')
+        """
+        if not self.is_available():
+            return self.FALLBACK_IMAGE
+
+        try:
+            client = self._get_client()
+            client.images.get(self._image)
+            return self._image
+        except Exception:
+            return self.FALLBACK_IMAGE
+
     def __enter__(self):
         """Context manager entry."""
         return self

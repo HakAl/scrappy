@@ -282,7 +282,13 @@ def build_tool_message(tool_call: ToolCall, result: ToolResult) -> Message:
         Message dict in tool message format
     """
     # Get content from result or error
-    content = result.get("result", "") or result.get("error", "Tool execution failed")
+    # Note: Check key existence, not truthiness - empty result is valid (e.g., no files found)
+    if "result" in result:
+        content = result["result"] if result["result"] else "(empty result)"
+    elif "error" in result:
+        content = result["error"] or "Tool execution failed"
+    else:
+        content = "Tool execution failed"
 
     message: Message = {
         "role": "tool",

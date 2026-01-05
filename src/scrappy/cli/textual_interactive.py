@@ -149,11 +149,18 @@ class TextualInteractiveMode:
         llm_service = getattr(self.orchestrator, 'llm_service', None)
         if self._cli is not None and llm_service is not None:
             from .textual.langgraph_bridge import LangGraphBridge
+            from scrappy.graph.tools import ToolAdapter
+
+            # Create tool adapter - owned by app, passed to bridge
+            # This ensures proper cleanup and reuse across agent runs
+            app._tool_adapter = ToolAdapter.create_default()
+
             langgraph_bridge = LangGraphBridge(
                 app=app,
                 bridge=app.bridge,
                 output_adapter=output_adapter,
                 llm_service=llm_service,
+                tool_adapter=app._tool_adapter,
             )
         # Temporary assertion to catch wiring issues
         assert langgraph_bridge is not None, (

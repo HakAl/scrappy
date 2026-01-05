@@ -481,6 +481,20 @@ class TestBuildToolMessage:
         assert message["content"] == "Permission denied"
         assert message["tool_call_id"] == "call_456"
 
+    def test_builds_message_with_empty_result(self):
+        """Should handle empty result (e.g., no files found) without showing error."""
+        tool_call = make_tool_call("call_789", "list_files")
+        # Empty result is valid - e.g., no files matched the pattern
+        result = ToolResult(name="list_files", result="")
+
+        message = build_tool_message(tool_call, result)
+
+        assert message["role"] == "tool"
+        assert message["content"] == "(empty result)"
+        assert message["tool_call_id"] == "call_789"
+        # Should NOT say "Tool execution failed"
+        assert "failed" not in message["content"].lower()
+
 
 # =============================================================================
 # Execute Node Tests

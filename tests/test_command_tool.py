@@ -34,7 +34,7 @@ class TestCommandToolInterface:
         """CommandTool must have name, description, and parameters."""
         from scrappy.agent_tools.tools.command_tool import CommandTool
 
-        tool = CommandTool()
+        tool = CommandTool(use_sandbox=False)
 
         assert tool.name == "run_command"
         assert "shell" in tool.description.lower() or "command" in tool.description.lower()
@@ -48,7 +48,7 @@ class TestCommandToolInterface:
         """Execute must return a ToolResult object."""
         from scrappy.agent_tools.tools.command_tool import CommandTool
 
-        tool = CommandTool()
+        tool = CommandTool(use_sandbox=False)
 
         with patch('subprocess.Popen') as mock_popen:
             mock_process = MagicMock()
@@ -65,7 +65,7 @@ class TestCommandToolInterface:
         """Dry run mode should not execute commands."""
         from scrappy.agent_tools.tools.command_tool import CommandTool
 
-        tool = CommandTool()
+        tool = CommandTool(use_sandbox=False)
         dry_run_context = ToolContext(
             project_root=self.project_root,
             dry_run=True,
@@ -82,7 +82,7 @@ class TestCommandToolInterface:
         """Missing required command parameter should fail validation."""
         from scrappy.agent_tools.tools.command_tool import CommandTool
 
-        tool = CommandTool()
+        tool = CommandTool(use_sandbox=False)
 
         is_valid, error = tool.validate()
 
@@ -120,7 +120,7 @@ class TestCommandSecurityValidation:
         """Should block format/disk destruction commands."""
         from scrappy.agent_tools.tools.command_tool import CommandTool
 
-        tool = CommandTool()
+        tool = CommandTool(use_sandbox=False)
 
         result = tool.execute(self.context, command="format C:")
 
@@ -143,7 +143,7 @@ class TestCommandSecurityValidation:
         """Should allow safe commands like echo."""
         from scrappy.agent_tools.tools.command_tool import CommandTool
 
-        tool = CommandTool()
+        tool = CommandTool(use_sandbox=False)
 
         with patch('subprocess.Popen') as mock_popen:
             mock_process = MagicMock()
@@ -175,7 +175,7 @@ class TestPlatformSpecificFixes:
         """Should block Spring Initializr downloads on Windows."""
         from scrappy.agent_tools.tools.command_tool import CommandTool
 
-        tool = CommandTool()
+        tool = CommandTool(use_sandbox=False)
 
         result = tool.execute(
             self.context,
@@ -204,7 +204,8 @@ class TestErrorHandling:
         """Should handle exceptions gracefully."""
         from scrappy.agent_tools.tools.command_tool import CommandTool
 
-        tool = CommandTool()
+        # Disable sandbox to ensure subprocess.Popen is used (not Docker)
+        tool = CommandTool(use_sandbox=False)
 
         # Mock subprocess to raise an exception
         with patch('subprocess.Popen', side_effect=OSError("Permission denied")):
@@ -217,7 +218,8 @@ class TestErrorHandling:
         """Should return failure when command output starts with Error."""
         from scrappy.agent_tools.tools.command_tool import CommandTool
 
-        tool = CommandTool()
+        # Disable sandbox to ensure subprocess.Popen is used (not Docker)
+        tool = CommandTool(use_sandbox=False)
 
         with patch('subprocess.Popen') as mock_popen:
             mock_process = MagicMock()
@@ -794,7 +796,8 @@ class TestCommandToolExecuteEntry:
         """Empty command should return error result."""
         from scrappy.agent_tools.tools.command_tool import CommandTool
 
-        tool = CommandTool()
+        # Disable sandbox - not testing sandbox behavior
+        tool = CommandTool(use_sandbox=False)
 
         result = tool.execute(self.context, command="")
 

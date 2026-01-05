@@ -97,7 +97,7 @@ class LangGraphBridge:
         bridge: "ThreadSafeAsyncBridge",
         output_adapter: "TextualOutputAdapter",
         llm_service: "LLMServiceProtocol",
-        tool_adapter: Optional["ToolAdapterProtocol"] = None,
+        tool_adapter: "ToolAdapterProtocol",
     ) -> None:
         """
         Initialize the LangGraph bridge.
@@ -107,7 +107,7 @@ class LangGraphBridge:
             bridge: ThreadSafeAsyncBridge for blocking confirmations
             output_adapter: TextualOutputAdapter for thread-safe output
             llm_service: LLM service for agent completions
-            tool_adapter: Optional tool adapter (default: create default)
+            tool_adapter: Tool adapter for agent tool execution (required)
         """
         self.app = app
         self._bridge = bridge
@@ -231,7 +231,27 @@ class LangGraphBridge:
                 self._output_callback("\n")
 
             # Format output with bullet and styled tool name
-            if key_param:
+            # For run_command, use shell prompt style to show execution environment
+            if name == "run_command":
+                # Get executor type from result metadata
+                exec_type = None
+                if i < len(tool_results):
+                    result = tool_results[i]
+                    if isinstance(result, dict):
+                        metadata = result.get("metadata", {})
+                        if isinstance(metadata, dict):
+                            exec_type = metadata.get("executor_type")
+
+                # Shell prompt style: docker> or host>
+                if exec_type == "docker":
+                    prompt = "[cyan]docker>[/cyan]"
+                elif exec_type == "host":
+                    prompt = "[yellow]host>[/yellow]"
+                else:
+                    prompt = "[dim]>[/dim]"
+
+                self._output_callback(f"{prompt} {key_param or '(no command)'}\n")
+            elif key_param:
                 self._output_callback(f"[dim]>[/dim] [bold]{name}[/bold]: {key_param}\n")
             else:
                 self._output_callback(f"[dim]>[/dim] [bold]{name}[/bold]\n")
@@ -572,6 +592,14 @@ class LangGraphBridge:
             # Clear running state to allow new runs
             self._is_running = False
             self._current_worker = None
+            # Clean up tool resources (e.g., Docker containers)
+            # Note: Per-run cleanup ensures containers are stopped after each task.
+            # The tool_adapter is owned by the app and reused across runs.
+            if hasattr(self._tool_adapter, 'cleanup'):
+                try:
+                    self._tool_adapter.cleanup()
+                except Exception:
+                    pass  # Best effort cleanup
 
     def _run_with_streaming(
         self,

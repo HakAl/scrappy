@@ -203,16 +203,22 @@ class ToolAdapter:
         # Execute the tool directly to get ToolResult dataclass (not string)
         try:
             tool_result = tool.execute(context, **kwargs)
-            # tool_result is a ToolResult dataclass with success, output, error
+            # tool_result is a ToolResult dataclass with success, output, error, metadata
             if not tool_result.success:
-                return ToolResult(
-                    name=tool_name,
-                    error=tool_result.error or tool_result.output or "Tool execution failed",
-                )
-            return ToolResult(
+                result: ToolResult = {
+                    "name": tool_name,
+                    "error": tool_result.error or tool_result.output or "Tool execution failed",
+                }
+                if tool_result.metadata:
+                    result["metadata"] = tool_result.metadata
+                return result
+            result = ToolResult(
                 name=tool_name,
                 result=tool_result.output,
             )
+            if tool_result.metadata:
+                result["metadata"] = tool_result.metadata
+            return result
         except (OSError, IOError, ValueError, TypeError, RuntimeError) as e:
             # Expected errors from tool execution (file ops, validation, etc.)
             logger.debug("Tool '%s' raised expected error: %s", tool_name, e)
@@ -238,6 +244,15 @@ class ToolAdapter:
             List of registered tool names
         """
         return self._registry.list_tools()
+
+    def cleanup(self) -> None:
+        """
+        Clean up tool resources.
+
+        Calls cleanup on the underlying registry which cleans up
+        any tools with resources (e.g., CommandTool's Docker containers).
+        """
+        self._registry.cleanup()
 
     @classmethod
     def create_default(cls, profile: str = "full") -> "ToolAdapter":
