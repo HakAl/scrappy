@@ -129,6 +129,10 @@ class AgentState(BaseModel):
         default="quality",
         description="Model tier: 'fast' for speed, 'quality' for complex tasks (default: quality for better tool following)"
     )
+    current_model: Optional[str] = Field(
+        default=None,
+        description="Specific model being used (for fallback tracking). None = use tier default."
+    )
 
     # File tracking
     files_changed: list[str] = Field(

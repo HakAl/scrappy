@@ -4,7 +4,8 @@ Interactive mode module for CLI.
 Handles input processing for the interactive chat.
 """
 
-from typing import Optional
+import os
+from typing import TYPE_CHECKING, Optional
 
 from .io_interface import CLIIOProtocol
 from .state_manager import PlanStateManager
@@ -20,6 +21,9 @@ from .error_recovery import graceful_degrade
 from .logging import CLILogger
 from ..orchestrator.protocols import Orchestrator
 from scrappy.infrastructure.theme import ThemeProtocol
+
+if TYPE_CHECKING:
+    from .textual.langgraph_bridge import LangGraphBridge
 
 
 class InteractiveMode:
@@ -71,6 +75,67 @@ class InteractiveMode:
         self.tasks = tasks
         self.logger = logger
         self._theme = theme or DEFAULT_THEME
+        # LangGraph bridge for unified chat (set later via set_langgraph_bridge)
+        self._langgraph_bridge: Optional["LangGraphBridge"] = None
+
+    def set_langgraph_bridge(self, bridge: "LangGraphBridge") -> None:
+        """
+        Set the LangGraph bridge for unified chat handling.
+
+        When set, ALL non-command input routes through LangGraph instead of TaskRouter.
+        The LLM decides whether to use tools based on the query.
+
+        Args:
+            bridge: The LangGraphBridge instance
+        """
+        self._langgraph_bridge = bridge
+
+    def _process_via_langgraph(self, user_input: str) -> str:
+        """
+        Process input through LangGraph for unified chat.
+
+        Routes ALL input through the LangGraph agent. The LLM decides whether
+        to use tools based on the query:
+        - Simple conversation: responds directly (no tools)
+        - Code tasks: uses file tools
+        - Research: uses search/read tools
+
+        Args:
+            user_input: The user's input string
+
+        Returns:
+            Response content string
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        assert self._langgraph_bridge is not None
+
+        try:
+            # Run through LangGraph - bridge handles streaming output
+            result = self._langgraph_bridge.run_agent(
+                task=user_input,
+                working_dir=os.getcwd(),
+            )
+
+            # Extract response from final state
+            if result.cancelled:
+                return "(cancelled by user)"
+            elif result.success and result.final_state:
+                # Get last assistant message content
+                messages = result.final_state.messages
+                for msg in reversed(messages):
+                    if msg.get("role") == "assistant":
+                        content = msg.get("content", "")
+                        if content:
+                            return content
+                return "(no response)"
+            else:
+                return f"Error: {result.error or 'unknown error'}"
+
+        except Exception as e:
+            logger.exception("LangGraph processing failed: %s", e)
+            return f"Error: {e}"
 
     def _process_input(self, user_input: str) -> bool:
         """
@@ -131,30 +196,33 @@ class InteractiveMode:
         # Echo user query
         io.secho(f"> {user_input}", fg=self._theme.text)
 
-        # Use streaming auto-routing (task router handles classification and execution)
-        # Streaming displays tokens as they arrive via CLIStreamingOutput
-        result = self.task_router.handle_auto_route_streaming_sync(user_input)
-        response_content = result.output if result.success else f"Error: {result.error}"
+        # Route through LangGraph if bridge available (unified chat)
+        # Otherwise fall back to TaskRouter (legacy path)
+        if self._langgraph_bridge is not None:
+            response_content = self._process_via_langgraph(user_input)
+        else:
+            # Legacy: Use streaming auto-routing via TaskRouter
+            result = self.task_router.handle_auto_route_streaming_sync(user_input)
+            response_content = result.output if result.success else f"Error: {result.error}"
 
-        # For streaming, output was already displayed during stream
-        # Only show non-streamed content (errors or fallback responses)
-        if not result.metadata.get("streaming"):
-            io.echo()
-            io.echo(f"| {response_content}")
+            # For streaming, output was already displayed during stream
+            if not result.metadata.get("streaming"):
+                io.echo()
+                io.echo(f"| {response_content}")
 
-        # Verbose mode: show metadata
-        if self.session_context.verbose_mode:
-            classification = result.metadata.get('classification', {})
-            provider = classification.get('resolved_provider') or result.provider_used or 'local'
-            model = classification.get('resolved_model', '')
-            tokens = result.tokens_used
-            time_ms = result.execution_time * 1000
-            if model:
-                provider_str = provider + " (" + model + ")"
-            else:
-                provider_str = provider
-            time_str = f"{time_ms:.1f}"
-            io.echo(f"  {provider_str} | {tokens} tokens | {time_str}ms")
+            # Verbose mode: show metadata
+            if self.session_context.verbose_mode:
+                classification = result.metadata.get('classification', {})
+                provider = classification.get('resolved_provider') or result.provider_used or 'local'
+                model = classification.get('resolved_model', '')
+                tokens = result.tokens_used
+                time_ms = result.execution_time * 1000
+                if model:
+                    provider_str = provider + " (" + model + ")"
+                else:
+                    provider_str = provider
+                time_str = f"{time_ms:.1f}"
+                io.echo(f"  {provider_str} | {tokens} tokens | {time_str}ms")
 
         io.echo()
 

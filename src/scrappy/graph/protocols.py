@@ -63,6 +63,27 @@ class LLMServiceProtocol(Protocol):
         """
         ...
 
+    def completion_direct(
+        self,
+        model: str,
+        messages: list[dict],
+        **kwargs: Any,
+    ) -> tuple[Any, dict]:
+        """
+        Direct completion call to a specific model (bypasses Router).
+
+        Use for fallback calls when Router's model group is exhausted.
+
+        Args:
+            model: Specific model name (e.g., "gemini/gemini-2.5-flash")
+            messages: Chat messages
+            **kwargs: Additional params (tools, tool_choice, max_tokens, etc.)
+
+        Returns:
+            Tuple of (LLMResponse, task_record)
+        """
+        ...
+
 
 @runtime_checkable
 class StreamingLLMServiceProtocol(Protocol):

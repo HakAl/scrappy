@@ -101,7 +101,6 @@ def display_banner_header(io: "UnifiedIOProtocol") -> None:
     io.echo()
 
     # Tagline and help hint
-    io.echo("Scrappy can write, test, and debug code right from your terminal.")
     _print_rich(io, "Describe a task to get started or enter [cyan]/help[/] for commands.")
     io.echo()
 
@@ -123,7 +122,6 @@ def display_banner_header_tui(output_sink: "OutputSinkProtocol") -> None:
     output_sink.post_output("")
 
     # Tagline and help hint
-    output_sink.post_output("Scrappy can write, test, and debug code right from your terminal.")
     help_text = Text.from_markup("Describe a task to get started or enter [cyan]/help[/] for commands.")
     output_sink.post_renderable(help_text)
     output_sink.post_output("")

@@ -410,6 +410,14 @@ def create_litellm_router(callbacks: Optional[list] = None):
         {"groq/llama-3.3-70b-versatile": ["gemini/gemini-2.5-flash"]},
     ]
 
+    # NOTE: Model fallbacks for rate limiting are NOT configured here.
+    # LiteLLM's global fallbacks don't distinguish between agent (needs tool-calling)
+    # and chat (any model). Agent tasks require instruct models (qwen, gemini) -
+    # Llama models don't properly use tools.
+    #
+    # Fallback logic should be handled at graph level where we know the request type.
+    # See: scrappy-oikp (Integrate tier escalation into graph package)
+
     return litellm.Router(
         model_list=[],  # Empty - configured via set_model_list() later
         routing_strategy="simple-shuffle",

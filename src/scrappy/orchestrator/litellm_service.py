@@ -722,6 +722,92 @@ class LiteLLMService:
             )
         # NOTE: AuthenticationError is NOT caught here. See async version for rationale.
 
+    def completion_direct(
+        self,
+        model: str,
+        messages: list[dict],
+        **kwargs
+    ) -> tuple[LLMResponse, dict]:
+        """
+        Execute completion directly with a specific model (bypasses Router).
+
+        Use this for fallback calls when you need to try a specific model
+        after Router's model group is exhausted. This calls litellm.completion
+        directly instead of going through the Router.
+
+        Args:
+            model: Specific model name (e.g., "gemini/gemini-2.5-flash")
+            messages: Chat messages
+            **kwargs: Additional params (max_tokens, temperature, tools, etc.)
+
+        Returns:
+            Tuple of (LLMResponse, task_record dict)
+
+        Raises:
+            NotConfiguredError: When service not configured with API keys
+            AllProvidersRateLimitedError: When model is rate limited
+        """
+        import litellm  # Lazy import (fast after first __init__)
+
+        if not self._configured:
+            raise NotConfiguredError("LLM service not configured. Run setup wizard first.")
+
+        # Extract provider from model string to get API key
+        provider = model.split("/")[0] if "/" in model else model
+
+        # Map provider to API key name
+        provider_key_map = {
+            "cerebras": "CEREBRAS_API_KEY",
+            "groq": "GROQ_API_KEY",
+            "gemini": "GEMINI_API_KEY",
+            "sambanova": "SAMBANOVA_API_KEY",
+        }
+
+        key_name = provider_key_map.get(provider)
+        if not key_name:
+            raise ValueError(f"Unknown provider: {provider}")
+
+        api_key = self._api_key_service.get_key(key_name)
+        if not api_key:
+            raise NotConfiguredError(f"API key not configured for {provider}")
+
+        start = time.time()
+
+        # Log request
+        if self._logger:
+            tools = kwargs.get("tools") if kwargs else None
+            self._logger.debug(
+                f"Direct API request: model={model}, messages={len(messages)}, "
+                f"tools={len(tools) if tools else 0}"
+            )
+
+        try:
+            response = litellm.completion(
+                model=model,
+                messages=messages,
+                api_key=api_key,
+                **kwargs
+            )
+            elapsed = time.time() - start
+
+            # Log response
+            if self._logger and response and response.choices:
+                msg = response.choices[0].message
+                tc = getattr(msg, "tool_calls", None)
+                if tc:
+                    for t in tc:
+                        self._logger.debug(
+                            f"Tool call: {t.function.name} args={t.function.arguments}"
+                        )
+
+            return self._convert_response(response, elapsed)
+
+        except litellm.RateLimitError as e:
+            raise AllProvidersRateLimitedError(
+                message=str(e),
+                attempted_providers=[provider],
+            )
+
     async def stream_completion(
         self,
         model: str,

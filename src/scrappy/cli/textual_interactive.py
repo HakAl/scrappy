@@ -175,5 +175,9 @@ class TextualInteractiveMode:
             # Update command router's references to the new handlers
             self.command_router.agent_mgr = self._cli.agent_mgr
 
+        # Phase 3.5: Wire LangGraph for ALL chat (not just agent tasks)
+        # This enables unified chat where LLM decides tool usage
+        interactive_mode.set_langgraph_bridge(langgraph_bridge)
+
         # Launch the TUI
         app.run()
