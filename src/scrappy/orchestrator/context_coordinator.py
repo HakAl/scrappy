@@ -11,12 +11,9 @@ try:
     from ..context import CodebaseContext
     from ..context.protocols import CodebaseContextProtocol
 except ImportError:
-    from context import CodebaseContext
     from context.protocols import CodebaseContextProtocol
 
-from .protocols import BaseOutputProtocol
-
-from .output import ConsoleOutput
+from .output import BaseOutputProtocol, ConsoleOutput
 
 
 class ContextCoordinator:

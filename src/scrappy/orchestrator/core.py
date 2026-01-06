@@ -6,8 +6,6 @@ Central coordinator for multi-provider LLM agent team using composition.
 
 from typing import Optional, AsyncIterator
 from datetime import datetime
-import asyncio
-import time
 
 try:
     from ..providers import ProviderRegistry, LLMResponse
@@ -16,25 +14,11 @@ try:
     from ..infrastructure.exceptions import RateLimitError, AllProvidersRateLimitedError
 except ImportError:
     from providers import ProviderRegistry, LLMResponse
-    from context import CodebaseContext
     from exceptions.delegation import ProviderNotFoundError
     from infrastructure.exceptions import RateLimitError, AllProvidersRateLimitedError
 
-from .cache import ResponseCache
-from .rate_limiting import RateLimitTracker
-from .memory import WorkingMemory
-from .session import SessionManager
-from .task_executor import TaskExecutor
-from .provider_selector import ProviderSelector
-from .output import BaseOutputProtocol, ConsoleOutput
-from .delegation import DelegationManager
+from .output import BaseOutputProtocol
 from .types import StreamChunk
-from .prompt_augmenter import PromptAugmenter
-from .batch_scheduler import BatchScheduler
-from .background import BackgroundTaskManager
-from .status_reporter import ProviderStatusReporter
-from .usage_reporter import UsageReporter
-from .context_coordinator import ContextCoordinator
 from .model_selection import ModelSelectionType, AllModelsRateLimitedError
 from .manager_protocols import (
     ContextManagerProtocol,
@@ -44,7 +28,7 @@ from .manager_protocols import (
     UsageReporterProtocol,
     StatusReporterProtocol,
 )
-from .factory import OrchestratorFactory, OrchestratorComponents
+from .factory import OrchestratorFactory
 from .model_selection import ModelSelectionServiceProtocol
 
 # Import protocols for type hints (Dependency Inversion Principle)
@@ -517,7 +501,7 @@ class AgentOrchestrator:
             intent_classification: Intent data for semantic caching
             auto_fallback: Automatically try other providers on rate limit (default True)
             max_retries: Maximum retry attempts per provider (default 3)
-            selection_type: What kind of model to use (FAST, QUALITY, etc.)
+            selection_type: What kind of model to use (FAST, CHAT, INSTRUCT, etc.)
             **kwargs: Additional provider-specific arguments
 
         Returns:
@@ -530,7 +514,7 @@ class AgentOrchestrator:
         """
         # Determine selection type based on quality_mode if not explicitly provided
         if selection_type is None:
-            selection_type = ModelSelectionType.QUALITY if self.quality_mode else ModelSelectionType.FAST
+            selection_type = ModelSelectionType.CHAT if self.quality_mode else ModelSelectionType.FAST
 
         # Use ModelSelectionService for deterministic model selection
         # Only if model not explicitly provided
@@ -562,8 +546,8 @@ class AgentOrchestrator:
         # Determine cache setting
         should_use_cache = use_cache if use_cache is not None else self.caching_enabled
 
-        # Determine min_context based on selection type (32k for QUALITY mode)
-        min_context = 32768 if selection_type == ModelSelectionType.QUALITY else 0
+        # Determine min_context based on selection type (32k for CHAT mode)
+        min_context = 32768 if selection_type == ModelSelectionType.CHAT else 0
 
         # Delegate with rate limit handling and fallback
         max_attempts = 3  # Limit fallback attempts
@@ -691,7 +675,7 @@ class AgentOrchestrator:
             temperature: Sampling temperature
             use_context: Override context augmentation setting
             use_cache: Override cache setting
-            selection_type: What kind of model to use (FAST, QUALITY, etc.)
+            selection_type: What kind of model to use (FAST, CHAT, INSTRUCT, etc.)
             **kwargs: Additional provider-specific arguments
 
         Yields:
@@ -711,7 +695,7 @@ class AgentOrchestrator:
         """
         # Determine selection type based on quality_mode if not explicitly provided
         if selection_type is None:
-            selection_type = ModelSelectionType.QUALITY if self.quality_mode else ModelSelectionType.FAST
+            selection_type = ModelSelectionType.CHAT if self.quality_mode else ModelSelectionType.FAST
 
         # Use ModelSelectionService for deterministic model selection
         # Only if model not explicitly provided

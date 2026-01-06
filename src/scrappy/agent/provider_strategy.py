@@ -45,11 +45,11 @@ class DynamicProviderStrategy:
         """
         Get recommended provider for planning/reasoning tasks.
 
-        Uses QUALITY selection for best reasoning capability.
+        Uses CHAT selection for best reasoning capability.
         Planning requires strong reasoning to analyze problems and create solutions.
         """
         if hasattr(self._orchestrator, 'get_recommended_provider'):
-            provider = self._orchestrator.get_recommended_provider(ModelSelectionType.QUALITY)
+            provider = self._orchestrator.get_recommended_provider(ModelSelectionType.CHAT)
             self._cached_planner = provider
             return provider
         return self._cached_planner

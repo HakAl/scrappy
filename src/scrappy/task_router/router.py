@@ -358,8 +358,8 @@ What is the user's PRIMARY intent?"""
         # Map legacy hints to new enum values
         if hint_lower in ['fast', 'high_volume', 'general']:
             return ModelSelectionType.FAST
-        elif hint_lower == 'quality':
-            return ModelSelectionType.QUALITY
+        elif hint_lower in ['quality', 'chat']:
+            return ModelSelectionType.CHAT
         elif hint_lower == 'planning':
             return ModelSelectionType.INSTRUCT
         elif hint_lower == 'embed':

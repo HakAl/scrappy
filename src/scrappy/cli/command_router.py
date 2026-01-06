@@ -155,45 +155,56 @@ class CommandRouter:
         return True
 
     def _handle_model(self, args: str) -> bool:
-        """Handle /model command to toggle between fast and quality modes."""
+        """Handle /model command to set model tier.
+
+        Model Tiers:
+        - fast: 8B models, speed priority
+        - chat: 70B models, conversation (maps to quality_mode=True for backwards compat)
+        - instruct: Instruction-tuned models for agent/tools (maps to quality_mode=True)
+        """
         io = self.io
         arg = args.strip().lower()
 
-        if arg == "fast":
-            self.orchestrator.quality_mode = False
+        # Map tier names to selection types and quality_mode
+        tier_map = {
+            "fast": (ModelSelectionType.FAST, False),
+            "chat": (ModelSelectionType.CHAT, True),
+            "instruct": (ModelSelectionType.INSTRUCT, True),
+            # Backwards compatibility
+            "quality": (ModelSelectionType.CHAT, True),
+        }
+
+        tier_descriptions = {
+            "fast": "8B models, high throughput",
+            "chat": "70B models, conversation",
+            "instruct": "Instruction-tuned models (agent/tools)",
+        }
+
+        if arg in tier_map:
+            selection_type, quality_mode = tier_map[arg]
+            self.orchestrator.quality_mode = quality_mode
             # Get actual model being used for feedback
             try:
-                provider, model = self.orchestrator.provider_selector.get_model(ModelSelectionType.FAST)
-                io.secho("Switched to FAST mode", fg=io.theme.success, bold=True)
+                provider, model = self.orchestrator.provider_selector.get_model(selection_type)
+                io.secho(f"Switched to {arg.upper()} tier", fg=io.theme.success, bold=True)
                 io.echo(f"  Using: {provider}/{model}")
-                io.echo("  High throughput, cost efficient.")
+                io.echo(f"  {tier_descriptions.get(arg, '')}")
             except Exception as e:
-                io.secho("Switched to FAST mode", fg=io.theme.success)
-                io.secho(f"  Warning: Could not determine model - {e}", fg=io.theme.warning)
-        elif arg == "quality":
-            self.orchestrator.quality_mode = True
-            # Get actual model being used for feedback
-            try:
-                provider, model = self.orchestrator.provider_selector.get_model(ModelSelectionType.QUALITY)
-                io.secho("Switched to QUALITY mode", fg=io.theme.success, bold=True)
-                io.echo(f"  Using: {provider}/{model}")
-                io.echo("  Enhanced reasoning.")
-            except Exception as e:
-                io.secho("Switched to QUALITY mode", fg=io.theme.success)
+                io.secho(f"Switched to {arg.upper()} tier", fg=io.theme.success)
                 io.secho(f"  Warning: Could not determine model - {e}", fg=io.theme.warning)
         else:
             # Show current mode
-            mode = "QUALITY" if self.orchestrator.quality_mode else "FAST"
-            selection_type = ModelSelectionType.QUALITY if self.orchestrator.quality_mode else ModelSelectionType.FAST
+            mode = "CHAT" if self.orchestrator.quality_mode else "FAST"
+            selection_type = ModelSelectionType.CHAT if self.orchestrator.quality_mode else ModelSelectionType.FAST
             try:
                 provider, model = self.orchestrator.provider_selector.get_model(selection_type)
-                io.echo(f"Current mode: {io.style(mode, fg=io.theme.success, bold=True)}")
+                io.echo(f"Current tier: {io.style(mode, fg=io.theme.success, bold=True)}")
                 io.echo(f"  Using: {provider}/{model}")
             except Exception as e:
-                io.echo(f"Current mode: {io.style(mode, fg=io.theme.success, bold=True)}")
+                io.echo(f"Current tier: {io.style(mode, fg=io.theme.success, bold=True)}")
                 io.secho(f"  Warning: Could not determine model - {e}", fg=io.theme.warning)
             io.echo()
-            io.echo("Usage: /model fast | /model quality")
+            io.echo("Usage: /model fast | /model chat | /model instruct")
         return True
 
     def _handle_context(self, args: str) -> bool:

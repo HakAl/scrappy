@@ -75,8 +75,8 @@ class ProviderSelector:
         """
         Return the model group to use for brain/reasoning.
 
-        After LiteLLM integration, this always returns "quality" since
-        brain tasks require high-quality models with large context windows.
+        After LiteLLM integration, this returns "instruct" since
+        brain tasks require instruction-tuned models with tool use support.
 
         Args:
             preferred_provider: Preferred provider name (mapped to group if legacy name)
@@ -89,17 +89,21 @@ class ProviderSelector:
         # If user explicitly requested a provider, map to group
         if preferred_provider:
             self._log(f"User requested: {preferred_provider}")
-            # Check if it's already a group name
-            if preferred_provider in ("fast", "quality"):
+            # Check if it's already a valid group name
+            if preferred_provider in ("fast", "chat", "instruct"):
                 self._log(f"Using model group: {preferred_provider}", "SELECTED")
                 return (preferred_provider, None)
-            # Legacy provider name - map to quality for brain tasks
-            self._log(f"Legacy provider '{preferred_provider}' -> 'quality' group", "SELECTED")
-            return ("quality", None)
+            # Legacy "quality" name maps to "instruct" for brain tasks
+            if preferred_provider == "quality":
+                self._log("Legacy 'quality' -> 'instruct' group", "SELECTED")
+                return ("instruct", None)
+            # Legacy provider name - map to instruct for brain tasks
+            self._log(f"Legacy provider '{preferred_provider}' -> 'instruct' group", "SELECTED")
+            return ("instruct", None)
 
-        # Default: brain always uses quality tier
-        self._log("Auto-selected brain: quality group", "SELECTED")
-        return ("quality", None)
+        # Default: brain always uses instruct tier
+        self._log("Auto-selected brain: instruct group", "SELECTED")
+        return ("instruct", None)
 
     def get_model(self, selection_type: ModelSelectionType) -> tuple[str, None]:
         """
@@ -160,19 +164,19 @@ class ProviderSelector:
         """
         Select model group for planning/agent tasks.
 
-        DEPRECATED: Use setup_brain() or pass "quality" directly.
+        DEPRECATED: Use setup_brain() or pass "instruct" directly.
 
         Returns:
-            Tuple of ("quality", None)
+            Tuple of ("instruct", None) - instruction-tuned models for planning
         """
-        self._log("Planning tasks use quality group", "SELECTED")
-        return ("quality", None)
+        self._log("Planning tasks use instruct group", "SELECTED")
+        return ("instruct", None)
 
     def recommend(self, requirements: dict) -> str:
         """
         Recommend model group based on requirements.
 
-        Simplified: returns "fast" or "quality" based on requirements.
+        Simplified: returns "fast" or "chat" based on requirements.
 
         Args:
             requirements: Dict with keys like:
@@ -180,11 +184,11 @@ class ProviderSelector:
                 - 'quality': 'moderate' | 'good' | 'excellent'
 
         Returns:
-            Model group name ("fast" or "quality")
+            Model group name ("fast" or "chat")
         """
-        # Quality priority -> quality group
+        # Quality priority -> chat group (70B models)
         if requirements.get('quality') == 'excellent':
-            return 'quality'
+            return 'chat'
 
         # Speed priority or default -> fast group
         if requirements.get('speed') == 'fast':

@@ -8,7 +8,7 @@ Provides utilities for:
 
 import json
 from typing import Dict, List, Optional
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from .types import ToolCallFragment
 

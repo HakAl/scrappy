@@ -52,35 +52,35 @@ class TestBuildModelList:
             for m in fast_models
         )
 
-    def test_adds_quality_models_when_gemini_key_present(self):
-        """Verify gemini key adds quality tier model."""
+    def test_adds_instruct_models_when_gemini_key_present(self):
+        """Verify gemini key adds instruct tier model."""
         api_key_service = MockApiKeyService(keys={
             "GEMINI_API_KEY": "test-gemini-key",
         })
 
         model_list = build_model_list(api_key_service)
 
-        quality_models = [m for m in model_list if m["model_name"] == "quality"]
-        assert len(quality_models) >= 1
+        instruct_models = [m for m in model_list if m["model_name"] == "instruct"]
+        assert len(instruct_models) >= 1
         assert any(
             m["litellm_params"]["model"] == "gemini/gemini-2.5-flash"
-            for m in quality_models
+            for m in instruct_models
         )
 
-    def test_adds_quality_models_when_groq_key_present(self):
-        """Verify groq key adds quality tier models (llama-4 and kimi-k2)."""
+    def test_adds_instruct_models_when_groq_key_present(self):
+        """Verify groq key adds instruct tier models (llama-4 and kimi-k2)."""
         api_key_service = MockApiKeyService(keys={
             "GROQ_API_KEY": "test-groq-key",
         })
 
         model_list = build_model_list(api_key_service)
 
-        quality_models = [m for m in model_list if m["model_name"] == "quality"]
-        # Groq adds llama-4-scout and kimi-k2 to quality tier
-        assert len(quality_models) >= 2
+        instruct_models = [m for m in model_list if m["model_name"] == "instruct"]
+        # Groq adds llama-4-scout and kimi-k2 to instruct tier
+        assert len(instruct_models) >= 2
         assert any(
             m["litellm_params"]["model"] == "groq/meta-llama/llama-4-scout-17b-16e-instruct"
-            for m in quality_models
+            for m in instruct_models
         )
 
     def test_skips_models_when_api_key_missing(self):
@@ -133,8 +133,8 @@ class TestBuildModelList:
         )
         assert groq_idx < cerebras_idx
 
-    def test_quality_tier_includes_cerebras_qwen(self):
-        """Verify cerebras qwen-235b IS in quality tier (instruction-tuned)."""
+    def test_instruct_tier_includes_cerebras_qwen(self):
+        """Verify cerebras qwen-235b IS in instruct tier (instruction-tuned)."""
         api_key_service = MockApiKeyService(keys={
             "CEREBRAS_API_KEY": "test-cerebras-key",
             "GROQ_API_KEY": "test-groq-key",
@@ -142,11 +142,11 @@ class TestBuildModelList:
 
         model_list = build_model_list(api_key_service)
 
-        quality_models = [m for m in model_list if m["model_name"] == "quality"]
-        # Cerebras qwen-235b is in quality tier
+        instruct_models = [m for m in model_list if m["model_name"] == "instruct"]
+        # Cerebras qwen-235b is in instruct tier
         assert any(
             "qwen-3-235b" in m["litellm_params"]["model"]
-            for m in quality_models
+            for m in instruct_models
         )
 
 
@@ -204,12 +204,12 @@ class TestGetModelsForGroup:
         assert len(fast_models) >= 1
         assert all(m.group == "fast" for m in fast_models)
 
-    def test_returns_quality_models(self):
-        """Verify returns only quality tier models."""
-        quality_models = get_models_for_group("quality")
+    def test_returns_instruct_models(self):
+        """Verify returns only instruct tier models."""
+        instruct_models = get_models_for_group("instruct")
 
-        assert len(quality_models) >= 1
-        assert all(m.group == "quality" for m in quality_models)
+        assert len(instruct_models) >= 1
+        assert all(m.group == "instruct" for m in instruct_models)
 
 
 
@@ -260,27 +260,27 @@ class TestGetAvailableGroups:
 
         assert "fast" in groups
 
-    def test_returns_quality_when_gemini_configured(self):
-        """Verify quality group available when gemini key present."""
+    def test_returns_instruct_when_gemini_configured(self):
+        """Verify instruct group available when gemini key present."""
         api_key_service = MockApiKeyService(keys={
             "GEMINI_API_KEY": "test-key",
         })
 
         groups = get_available_groups(api_key_service)
 
-        assert "quality" in groups
+        assert "instruct" in groups
 
-    def test_returns_both_when_groq_configured(self):
-        """Verify both groups available when groq key present (has models in both)."""
+    def test_returns_multiple_when_groq_configured(self):
+        """Verify multiple groups available when groq key present (has models in fast, chat, instruct)."""
         api_key_service = MockApiKeyService(keys={
             "GROQ_API_KEY": "test-key",
         })
 
         groups = get_available_groups(api_key_service)
 
-        # Groq has models in both fast and quality tiers
+        # Groq has models in fast, chat, and instruct tiers
         assert "fast" in groups
-        assert "quality" in groups
+        assert "instruct" in groups
 
     def test_returns_empty_when_no_keys(self):
         """Verify empty when no keys configured."""
@@ -300,31 +300,31 @@ class TestModelMetadata:
 
         assert len(fast_models) >= 2  # At least groq and cerebras 8B
 
-    def test_all_quality_models_have_quality_group(self):
-        """Verify quality models are correctly tagged."""
-        quality_models = [m for m in MODEL_METADATA.values() if m.group == "quality"]
+    def test_all_instruct_models_have_instruct_group(self):
+        """Verify instruct models are correctly tagged."""
+        instruct_models = [m for m in MODEL_METADATA.values() if m.group == "instruct"]
 
-        assert len(quality_models) >= 2  # At least gemini and groq 70B
+        assert len(instruct_models) >= 2  # At least gemini and qwen-235b
 
-    def test_quality_models_used_for_agent_have_reasonable_context(self):
-        """Verify quality models used for agent routing have reasonable context.
+    def test_instruct_models_used_for_agent_have_reasonable_context(self):
+        """Verify instruct models used for agent routing have reasonable context.
 
         Note: MODEL_METADATA includes all models for status display, but
         build_model_list() controls actual agent routing. Models in metadata
         may have varying context lengths.
         """
-        # Models actually used for agent quality tier (from build_model_list)
-        agent_quality_models = [
+        # Models actually used for agent instruct tier (from build_model_list)
+        agent_instruct_models = [
             "cerebras/qwen-3-235b-a22b-instruct-2507",
             "groq/meta-llama/llama-4-scout-17b-16e-instruct",
             "groq/moonshotai/kimi-k2-instruct",
             "gemini/gemini-2.5-flash",
         ]
 
-        for model_id in agent_quality_models:
+        for model_id in agent_instruct_models:
             if model_id in MODEL_METADATA:
                 model = MODEL_METADATA[model_id]
-                # Agent quality models should have reasonable context (8k+)
+                # Agent instruct models should have reasonable context (8k+)
                 assert model.context_length >= 8192, (
                     f"{model.model_id} has only {model.context_length} context"
                 )
@@ -334,7 +334,7 @@ class TestModelMetadata:
         for model_id, metadata in MODEL_METADATA.items():
             assert metadata.model_id == model_id
             assert metadata.provider in ["groq", "cerebras", "gemini", "sambanova"]
-            assert metadata.group in ["fast", "quality"]
+            assert metadata.group in ["fast", "chat", "instruct"]
             assert metadata.context_length > 0
             assert metadata.rpd > 0
             assert metadata.tpm > 0

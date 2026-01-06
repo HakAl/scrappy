@@ -5,11 +5,9 @@ Defines abstract interfaces for orchestrator manager components that handle
 specific concerns like delegation, task execution, background tasks, and reporting.
 """
 
-from typing import Protocol, Dict, Any, List, Optional, Callable, Coroutine, runtime_checkable
-from datetime import datetime
-from pathlib import Path
+from typing import Protocol, Dict, Any, List, Optional, Coroutine, runtime_checkable
 
-from ..providers.base import LLMResponse, LLMProviderBase
+from ..providers.base import LLMResponse
 
 try:
     from ..context import CodebaseContextProtocol

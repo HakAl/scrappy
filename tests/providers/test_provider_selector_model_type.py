@@ -2,8 +2,8 @@
 Tests for ProviderSelector after LiteLLM integration.
 
 After LiteLLM integration:
-- ProviderSelector returns model groups ("fast", "quality") not provider names
-- select_for_planning() returns "quality" group (instruction-tuned models are in quality tier)
+- ProviderSelector returns model groups ("fast", "chat", "instruct") not provider names
+- select_for_planning() returns "instruct" group (for instruction-tuned models)
 - get_model() maps ModelSelectionType to groups
 - Methods like get_best_instruct_model() are REMOVED - LiteLLM handles model selection
 """
@@ -17,20 +17,20 @@ from scrappy.orchestrator.model_selection import ModelSelectionType, SELECTION_T
 class TestProviderSelectorInstructModels:
     """Test instruction-tuned model selection via model groups."""
 
-    def test_select_for_planning_returns_quality_group(self):
-        """Planning tasks return 'quality' model group (contains instruction-tuned models)."""
+    def test_select_for_planning_returns_instruct_group(self):
+        """Planning tasks return 'instruct' model group (contains instruction-tuned models)."""
         selector = ProviderSelector()
         group, model = selector.select_for_planning()
 
-        assert group == "quality"
+        assert group == "instruct"
         assert model is None  # Router picks actual model
 
-    def test_instruct_selection_type_returns_quality_group(self):
-        """INSTRUCT selection type maps to 'quality' group."""
+    def test_instruct_selection_type_returns_instruct_group(self):
+        """INSTRUCT selection type maps to 'instruct' group."""
         selector = ProviderSelector()
         group, model = selector.get_model(ModelSelectionType.INSTRUCT)
 
-        assert group == "quality"
+        assert group == "instruct"
         assert model is None
 
     def test_select_for_planning_logs_decision(self):
@@ -40,7 +40,7 @@ class TestProviderSelectorInstructModels:
 
         log = selector.get_selection_log()
         assert len(log) > 0
-        assert any("planning" in entry.lower() or "quality" in entry.lower() for entry in log)
+        assert any("planning" in entry.lower() or "instruct" in entry.lower() for entry in log)
 
 
 class TestProviderSelectorModelGroups:
@@ -54,12 +54,12 @@ class TestProviderSelectorModelGroups:
         assert group == "fast"
         assert model is None
 
-    def test_get_model_quality_returns_quality_group(self):
-        """get_model with QUALITY returns 'quality' model group."""
+    def test_get_model_chat_returns_chat_group(self):
+        """get_model with CHAT returns 'chat' model group."""
         selector = ProviderSelector()
-        group, model = selector.get_model(ModelSelectionType.QUALITY)
+        group, model = selector.get_model(ModelSelectionType.CHAT)
 
-        assert group == "quality"
+        assert group == "chat"
         assert model is None
 
     def test_get_model_embed_returns_fast_group(self):
@@ -76,8 +76,8 @@ class TestProviderSelectorPlanningIntegration:
 
     @pytest.mark.parametrize("selection_type,expected_group", [
         (ModelSelectionType.FAST, "fast"),
-        (ModelSelectionType.QUALITY, "quality"),
-        (ModelSelectionType.INSTRUCT, "quality"),
+        (ModelSelectionType.CHAT, "chat"),
+        (ModelSelectionType.INSTRUCT, "instruct"),
         (ModelSelectionType.EMBED, "fast"),
     ])
     def test_all_selection_types_return_valid_groups(self, selection_type, expected_group):

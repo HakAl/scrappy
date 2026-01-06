@@ -278,13 +278,14 @@ async def test_execute_multi_provider_basic():
     scheduler = BatchScheduler(llm_service=llm_service, output=output)
 
     request = LLMRequest(prompt="Test prompt", provider="fast")
-    model_groups = ["fast", "quality"]
+    model_groups = ["fast", "chat", "instruct"]
 
     results = await scheduler.execute_multi_provider(request, model_groups)
 
-    assert len(results) == 2
+    assert len(results) == 3
     assert "fast" in results
-    assert "quality" in results
+    assert "chat" in results
+    assert "instruct" in results
 
     # Verify each model group got a response
     for group, (response, metadata) in results.items():
@@ -299,15 +300,15 @@ async def test_execute_multi_provider_excludes_failures():
     scheduler = BatchScheduler(llm_service=llm_service, output=output)
 
     request = LLMRequest(prompt="Test prompt", provider="fast")
-    model_groups = ["fast", "quality"]
+    model_groups = ["fast", "chat", "instruct"]
 
     results = await scheduler.execute_multi_provider(request, model_groups)
 
     # All groups failed, so results should be empty
     assert len(results) == 0
 
-    # Errors should be logged
-    assert len(output.errors) == 2
+    # Errors should be logged (one per model group)
+    assert len(output.errors) == 3
 
 
 @pytest.mark.asyncio
@@ -348,12 +349,12 @@ async def test_execute_multi_provider_disables_fallback():
     scheduler = BatchScheduler(llm_service=llm_service, output=output)
 
     request = LLMRequest(prompt="Test prompt", provider="fast", auto_fallback=True)
-    model_groups = ["fast", "quality"]
+    model_groups = ["fast", "chat", "instruct"]
 
     results = await scheduler.execute_multi_provider(request, model_groups)
 
-    # Should complete successfully
-    assert len(results) == 2
+    # Should complete successfully (one result per model group)
+    assert len(results) == 3
 
 
 def test_batch_scheduler_requires_injected_dependencies():
@@ -416,13 +417,13 @@ async def test_execute_multi_provider_parallel_execution():
     scheduler = BatchScheduler(llm_service=llm_service, output=output)
 
     request = LLMRequest(prompt="Test prompt", provider="fast")
-    model_groups = ["fast", "quality"]
+    model_groups = ["fast", "chat", "instruct"]
 
     import time
     start = time.time()
     results = await scheduler.execute_multi_provider(request, model_groups)
     elapsed = time.time() - start
 
-    # If parallel, should take ~100ms. If sequential, would take ~200ms.
+    # If parallel, should take ~100ms. If sequential, would take ~300ms.
     assert elapsed < 0.3, f"Took {elapsed}s, expected < 0.3s for parallel execution"
-    assert len(results) == 2
+    assert len(results) == 3

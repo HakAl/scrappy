@@ -10,7 +10,7 @@ try:
 except ImportError:
     _AIO = False
 
-from .protocols import StorageProtocol, FileSystemProtocol
+from .protocols import FileSystemProtocol
 
 
 class FileSystemAdapter:

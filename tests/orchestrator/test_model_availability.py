@@ -173,25 +173,25 @@ class TestModelSelectionServiceFallbackChain:
         service = ModelSelectionService(
             configured_models={"model-1", "model-2", "model-3"},
             model_priorities={
-                ModelSelectionType.QUALITY: ["model-1", "model-2", "model-3"]
+                ModelSelectionType.CHAT: ["model-1", "model-2", "model-3"]
             }
         )
 
         # All available - select first
-        assert service.select(ModelSelectionType.QUALITY) == "model-1"
+        assert service.select(ModelSelectionType.CHAT) == "model-1"
 
         # Rate limit first
         service.mark_rate_limited("model-1")
-        assert service.select(ModelSelectionType.QUALITY) == "model-2"
+        assert service.select(ModelSelectionType.CHAT) == "model-2"
 
         # Rate limit second
         service.mark_rate_limited("model-2")
-        assert service.select(ModelSelectionType.QUALITY) == "model-3"
+        assert service.select(ModelSelectionType.CHAT) == "model-3"
 
         # Rate limit third - should raise
         service.mark_rate_limited("model-3")
         with pytest.raises(AllModelsRateLimitedError):
-            service.select(ModelSelectionType.QUALITY)
+            service.select(ModelSelectionType.CHAT)
 
     def test_error_message_includes_cooldown_time(self):
         """AllModelsRateLimitedError includes time to retry."""

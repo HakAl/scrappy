@@ -2,10 +2,10 @@
 Tests for ProviderResolver utility.
 
 After LiteLLM integration, ProviderResolver directly maps ModelSelectionType
-to model groups ("fast", "quality"). No orchestrator/ProviderSelector needed.
+to model groups ("fast", "chat", "instruct"). No orchestrator/ProviderSelector needed.
 
 Tests:
-- Direct mapping: FAST -> "fast", QUALITY -> "quality", INSTRUCT -> "quality", EMBED -> "fast"
+- Direct mapping: FAST -> "fast", CHAT -> "chat", INSTRUCT -> "instruct", EMBED -> "fast"
 - None selection type returns (None, None)
 - Model is always None (Router picks actual model)
 """
@@ -54,38 +54,38 @@ class TestFastHintResolution:
         assert SELECTION_TYPE_TO_GROUP[ModelSelectionType.FAST] == "fast"
 
 
-class TestQualityHintResolution:
-    """Test resolution of QUALITY hint to 'quality' model group."""
+class TestChatHintResolution:
+    """Test resolution of CHAT hint."""
 
-    def test_quality_hint_returns_quality_group(self):
-        """QUALITY hint should return 'quality' model group."""
+    def test_chat_hint_returns_chat_group(self):
+        """CHAT hint should return 'chat' model group."""
         resolver = ProviderResolver()
-        provider, model = resolver.resolve(ModelSelectionType.QUALITY)
+        provider, model = resolver.resolve(ModelSelectionType.CHAT)
 
-        assert provider == "quality"
+        assert provider == "chat"
         assert model is None  # Router picks actual model
 
-    def test_quality_group_is_in_mapping(self):
-        """Verify QUALITY is in the selection mapping."""
-        assert ModelSelectionType.QUALITY in SELECTION_TYPE_TO_GROUP
-        assert SELECTION_TYPE_TO_GROUP[ModelSelectionType.QUALITY] == "quality"
+    def test_chat_group_is_in_mapping(self):
+        """Verify CHAT is in the selection mapping."""
+        assert ModelSelectionType.CHAT in SELECTION_TYPE_TO_GROUP
+        assert SELECTION_TYPE_TO_GROUP[ModelSelectionType.CHAT] == "chat"
 
 
 class TestInstructHintResolution:
     """Test resolution of INSTRUCT hint."""
 
-    def test_instruct_hint_returns_quality_group(self):
-        """INSTRUCT hint maps to 'quality' group (best instruction-following models)."""
+    def test_instruct_hint_returns_instruct_group(self):
+        """INSTRUCT hint maps to 'instruct' group (best instruction-following models)."""
         resolver = ProviderResolver()
         provider, model = resolver.resolve(ModelSelectionType.INSTRUCT)
 
-        assert provider == "quality"
+        assert provider == "instruct"
         assert model is None
 
     def test_instruct_group_is_in_mapping(self):
         """Verify INSTRUCT is in the selection mapping."""
         assert ModelSelectionType.INSTRUCT in SELECTION_TYPE_TO_GROUP
-        assert SELECTION_TYPE_TO_GROUP[ModelSelectionType.INSTRUCT] == "quality"
+        assert SELECTION_TYPE_TO_GROUP[ModelSelectionType.INSTRUCT] == "instruct"
 
 
 class TestEmbedHintResolution:
@@ -126,10 +126,10 @@ class TestResolverReusability:
 
         # Resolve multiple hints
         fast_group, _ = resolver.resolve(ModelSelectionType.FAST)
-        quality_group, _ = resolver.resolve(ModelSelectionType.QUALITY)
+        chat_group, _ = resolver.resolve(ModelSelectionType.CHAT)
 
         assert fast_group == "fast"
-        assert quality_group == "quality"
+        assert chat_group == "chat"
 
     def test_consistent_results(self):
         """Same input always produces same output."""
@@ -155,7 +155,7 @@ class TestSelectionMappingComplete:
 
     def test_all_mappings_are_valid_groups(self):
         """All mapped values should be valid model groups."""
-        valid_groups = {"fast", "quality"}
+        valid_groups = {"fast", "chat", "instruct"}
         for selection_type, group in SELECTION_TYPE_TO_GROUP.items():
             assert group in valid_groups, (
                 f"Invalid group '{group}' for {selection_type}"

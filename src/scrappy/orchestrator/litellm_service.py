@@ -7,9 +7,14 @@ LiteLLM handles retry, fallback, and rate limits internally via Router configura
 This module handles:
 - Response normalization to LLMResponse
 - Exception mapping to our types
-- ContextWindowExceededError -> escalate fast->quality (with depth guard)
+- ContextWindowExceededError -> escalate fast->chat->instruct (with depth guard)
 - Request/response logging
 - API key validation (for wizard)
+
+Model Tiers:
+- "fast": 8B models, speed priority
+- "chat": 70B models, conversation
+- "instruct": Instruction-tuned models (Qwen 235B, Gemini) for agent/tools
 
 Architecture:
 - LiteLLMService implements LLMServiceProtocol
@@ -79,11 +84,14 @@ def _configure_litellm_transport():
 
 
 # Maximum escalation depth to prevent infinite recursion
-MAX_ESCALATION_DEPTH = 2
+# 3 tiers: fast -> chat -> instruct
+MAX_ESCALATION_DEPTH = 3
 
-# Escalation path: fast -> quality
+# Escalation path: fast -> chat -> instruct
+# When context window exceeded, try tier with larger context models
 ESCALATION_PATH = {
-    "fast": "quality",
+    "fast": "chat",       # 8B -> 70B (more context options)
+    "chat": "instruct",   # 70B -> instruction-tuned (Gemini has 1M context)
 }
 
 # Default timeout for stuck stream detection (ms)
@@ -303,9 +311,14 @@ class LiteLLMService:
     We handle:
     - Response normalization to LLMResponse
     - Exception mapping to our types
-    - ContextWindowExceededError -> escalate fast->quality (with depth guard)
+    - ContextWindowExceededError -> escalate fast->chat->instruct (with depth guard)
     - Request/response logging
     - API key validation (for wizard)
+
+    Model Tiers:
+    - "fast": 8B models, speed priority
+    - "chat": 70B models, conversation
+    - "instruct": Instruction-tuned models (Qwen 235B, Gemini) for agent/tools
 
     NOTE: Rate tracking is handled by RateTrackingCallback (see litellm_callbacks.py),
     NOT by methods on this class. Callbacks are wired at Router creation time.
@@ -514,7 +527,7 @@ class LiteLLMService:
         Execute completion via LiteLLM Router.
 
         Args:
-            model: Model group name ("fast" or "quality")
+            model: Model group name ("fast", "chat", or "instruct")
             messages: Chat messages
             _escalation_depth: Internal counter to prevent infinite recursion (do not set)
             _escalated_from: Internal tracking of original tier (do not set)
@@ -585,7 +598,7 @@ class LiteLLMService:
             return self._convert_response(response, elapsed, escalated_from=_escalated_from)
 
         except litellm.ContextWindowExceededError:
-            # Smart recovery: fast tier -> try quality tier (has larger context models)
+            # Smart recovery: escalate to next tier (has larger context models)
             next_tier = ESCALATION_PATH.get(model)
             if next_tier:
                 self._output.warn(
@@ -626,7 +639,7 @@ class LiteLLMService:
         Sync version for non-async contexts (Textual workers).
 
         Args:
-            model: Model group name ("fast" or "quality")
+            model: Model group name ("fast", "chat", or "instruct")
             messages: Chat messages
             _escalation_depth: Internal counter to prevent infinite recursion (do not set)
             _escalated_from: Internal tracking of original tier (do not set)
@@ -695,7 +708,7 @@ class LiteLLMService:
             return self._convert_response(response, elapsed, escalated_from=_escalated_from)
 
         except litellm.ContextWindowExceededError:
-            # Smart recovery: fast tier -> try quality tier (has larger context models)
+            # Smart recovery: escalate to next tier (has larger context models)
             next_tier = ESCALATION_PATH.get(model)
             if next_tier:
                 self._output.warn(
@@ -822,7 +835,7 @@ class LiteLLMService:
         Execute streaming completion via LiteLLM Router.
 
         Args:
-            model: Model group name ("fast" or "quality")
+            model: Model group name ("fast", "chat", or "instruct")
             messages: Chat messages
             _escalation_depth: Internal counter to prevent infinite recursion (do not set)
             _escalated_from: Internal tracking of original tier (do not set)
@@ -914,7 +927,7 @@ class LiteLLMService:
                 yield converted
 
         except litellm.ContextWindowExceededError:
-            # Smart recovery: fast tier -> try quality tier (has larger context models)
+            # Smart recovery: escalate to next tier (has larger context models)
             next_tier = ESCALATION_PATH.get(model)
             if next_tier:
                 self._output.warn(
@@ -1305,7 +1318,7 @@ class LiteLLMService:
         by catching errors during chunk iteration.
 
         Args:
-            model: Model group name ("fast" or "quality")
+            model: Model group name ("fast", "chat", or "instruct")
             messages: Chat messages
             _escalation_depth: Internal counter to prevent infinite recursion
             _escalated_from: Internal tracking of original tier
@@ -1408,7 +1421,7 @@ class LiteLLMService:
         Inherits all router benefits: caching, rate limiting, provider fallback.
 
         Args:
-            model: Model identifier (e.g., "fast", "quality", "groq/llama-3.1-8b")
+            model: Model identifier (e.g., "fast", "chat", "instruct", "groq/llama-3.1-8b")
             messages: List of message dicts with role/content
             response_model: Pydantic model class to validate response against
             max_retries: Override retry count (default: DEFAULT_INSTRUCTOR_RETRIES)
@@ -1450,7 +1463,7 @@ class LiteLLMService:
         This is the sync version for non-async contexts (like TaskRouter.classify).
 
         Args:
-            model: Model identifier (e.g., "fast", "quality", "groq/llama-3.1-8b")
+            model: Model identifier (e.g., "fast", "chat", "instruct", "groq/llama-3.1-8b")
             messages: List of message dicts with role/content
             response_model: Pydantic model class to validate response against
             max_retries: Override retry count (default: DEFAULT_INSTRUCTOR_RETRIES)

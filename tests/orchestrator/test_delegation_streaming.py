@@ -530,8 +530,8 @@ async def test_stream_delegate_resolves_fast_model_group(delegation_manager_stre
 
 
 @pytest.mark.asyncio
-async def test_stream_delegate_resolves_quality_model_group(delegation_manager_streaming):
-    """Test that quality tier is passed through."""
+async def test_stream_delegate_resolves_quality_to_chat(delegation_manager_streaming):
+    """Test that legacy 'quality' maps to 'chat' model group."""
     chunks = [
         make_stream_chunk(content="test", finish_reason="stop", model="test", provider="test")
     ]
@@ -539,14 +539,14 @@ async def test_stream_delegate_resolves_quality_model_group(delegation_manager_s
 
     collected_chunks = []
     async for chunk in manager.stream_delegate(
-        provider_name="quality",
+        provider_name="quality",  # Legacy name
         prompt="test prompt",
     ):
         collected_chunks.append(chunk)
 
-    # Verify model group was passed to service
+    # Verify legacy "quality" maps to "chat" model group
     llm_service = manager._llm_service
-    assert llm_service.stream_calls[0]['model'] == "quality"
+    assert llm_service.stream_calls[0]['model'] == "chat"
 
 
 @pytest.mark.asyncio

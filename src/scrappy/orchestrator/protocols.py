@@ -624,7 +624,6 @@ class WorkingMemoryProtocol(Protocol):
 
 
 # Import the unified output protocol from the central protocols module
-from ..protocols.output import BaseOutputProtocol
 
 
 

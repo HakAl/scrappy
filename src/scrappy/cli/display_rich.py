@@ -50,7 +50,7 @@ def show_help_table(
         'Provider Management': [
             ('/setup', 'Configure API keys'),
             ('/models [filter]', 'List available models'),
-            ('/model [mode]', 'Toggle quality/fast mode'),
+            ('/model [mode]', 'Set model tier (fast/chat/instruct)'),
             ('/status', 'Show system status'),
             ('/usage', 'Show usage statistics'),
         ],
@@ -119,8 +119,8 @@ def show_status_rich(
     # Build status content
     tasks = status.get('tasks_executed', 0)
     duration = datetime.now() - session_start
-    quality_mode = status.get('quality_mode', True)
-    mode_str = "QUALITY" if quality_mode else "FAST"
+    current_tier = status.get('current_tier', 'instruct')
+    mode_str = current_tier.upper()
 
     # Model groups info (LiteLLM)
     model_groups = status.get('model_groups', [])
@@ -129,7 +129,8 @@ def show_status_rich(
 
     # Build models by group
     fast_models = [m for m in configured_models if m.get('group') == 'fast']
-    quality_models = [m for m in configured_models if m.get('group') == 'quality']
+    chat_models = [m for m in configured_models if m.get('group') == 'chat']
+    instruct_models = [m for m in configured_models if m.get('group') == 'instruct']
 
     # Format model list with health indicators
     def format_model(m: dict) -> str:
@@ -156,18 +157,25 @@ def show_status_rich(
     ]
 
     if fast_models:
-        lines.append("  FAST (speed priority):")
+        lines.append("  FAST (8B, speed priority):")
         for m in fast_models:
             lines.append(format_model(m))
     else:
         lines.append("  FAST: No models configured")
 
-    if quality_models:
-        lines.append("  QUALITY (reasoning priority):")
-        for m in quality_models:
+    if chat_models:
+        lines.append("  CHAT (70B, conversation):")
+        for m in chat_models:
             lines.append(format_model(m))
     else:
-        lines.append("  QUALITY: No models configured")
+        lines.append("  CHAT: No models configured")
+
+    if instruct_models:
+        lines.append("  INSTRUCT (agent/tools):")
+        for m in instruct_models:
+            lines.append(format_model(m))
+    else:
+        lines.append("  INSTRUCT: No models configured")
 
     # Add health summary if any requests have been made
     if provider_health:

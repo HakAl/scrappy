@@ -16,9 +16,9 @@ class AllModelsRateLimitedError(Exception):
 
 class ModelSelectionType(Enum):
     """Types of model selection strategies."""
-    FAST = "fast"        # Quick responses, high throughput
-    QUALITY = "quality"  # Best output quality
-    INSTRUCT = "instruct"  # Instruction-tuned for JSON/structured output
+    FAST = "fast"        # Quick responses, 8B models
+    CHAT = "chat"        # Conversation, 70B models
+    INSTRUCT = "instruct"  # Agent/tools, instruction-tuned (Qwen 235B, Gemini)
     EMBED = "embed"      # Embeddings
 
 
@@ -26,10 +26,13 @@ class ModelSelectionType(Enum):
 # Single source of truth - import this instead of defining your own.
 SELECTION_TYPE_TO_GROUP: dict[ModelSelectionType, str] = {
     ModelSelectionType.FAST: "fast",
-    ModelSelectionType.QUALITY: "quality",
-    ModelSelectionType.INSTRUCT: "quality",  # Instruct maps to quality tier
-    ModelSelectionType.EMBED: "fast",        # Embeddings use fast tier
+    ModelSelectionType.CHAT: "chat",
+    ModelSelectionType.INSTRUCT: "instruct",
+    ModelSelectionType.EMBED: "fast",
 }
+
+# Valid model groups for the LiteLLM router
+MODEL_GROUPS: set[str] = {"fast", "chat", "instruct"}
 
 
 # Priority order for each selection type.
@@ -43,16 +46,14 @@ MODEL_PRIORITIES: dict[ModelSelectionType, list[str]] = {
         "cerebras/llama3.1-8b",                # Ultra-fast, 8k context
         "sambanova/Meta-Llama-3.1-8B-Instruct",  # Low RPD fallback
     ],
-    ModelSelectionType.QUALITY: [
-        "cerebras/qwen-3-235b-a22b-instruct-2507",  # Best quality, instruction-tuned
-        "groq/meta-llama/llama-4-scout-17b-16e-instruct",  # Fast, good tool use
-        "groq/moonshotai/kimi-k2-instruct",    # Fast, 128k context
-        "gemini/gemini-2.5-flash",             # Huge context, JSON issues (fallback)
+    ModelSelectionType.CHAT: [
+        "cerebras/llama-3.3-70b",              # Ultra-fast 70B
+        "groq/llama-3.3-70b-versatile",        # Fast 70B, 32k context
     ],
     ModelSelectionType.INSTRUCT: [
-        "cerebras/qwen-3-235b-a22b-instruct-2507",
-        "groq/meta-llama/llama-4-scout-17b-16e-instruct",
-        "groq/moonshotai/kimi-k2-instruct",
+        "cerebras/qwen-3-235b-a22b-instruct-2507",  # Best instruction-following
+        "groq/meta-llama/llama-4-scout-17b-16e-instruct",  # Fast, good tool use
+        "groq/moonshotai/kimi-k2-instruct",    # Fast, 128k context
         "gemini/gemini-2.5-flash",             # Fallback - good tool use, JSON needs sanitizing
     ],
     ModelSelectionType.EMBED: [
@@ -159,7 +160,7 @@ class ModelSelectionServiceProtocol(Protocol):
         Select specific model ID.
 
         Args:
-            selection_type: FAST, QUALITY, INSTRUCT, or EMBED
+            selection_type: FAST, CHAT, INSTRUCT, or EMBED
             min_context: Minimum context window required (0 = no requirement)
             session_preferred: Previously selected model for session stickiness
 

@@ -408,7 +408,7 @@ def think_node(
                 **llm_kwargs,
             )
         else:
-            # Normal mode: use Router-based tier selection
+            # Normal mode: use user-selected tier from state
             response, task_record = llm_service.completion_sync(
                 model=state.current_tier,
                 messages=messages,
@@ -753,6 +753,7 @@ async def think_node_streaming(
             content_parts: list[str] = []
             all_fragments: list[ToolCallFragment] = []
 
+            # Use user-selected tier from state
             async for chunk in llm_service.stream_completion(
                 model=state.current_tier,
                 messages=messages,

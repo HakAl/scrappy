@@ -59,7 +59,7 @@ class CLIDisplay:
             self.io.echo()
             self.io.secho("Provider Management:", bold=True)
             self.io.echo(f"  {self.io.style('/models', fg=self.io.theme.warning)} [filter] - List models")
-            self.io.echo(f"  {self.io.style('/model', fg=self.io.theme.warning)} [mode]    - Toggle quality/fast mode")
+            self.io.echo(f"  {self.io.style('/model', fg=self.io.theme.warning)} [mode]    - Set model tier (fast/chat/instruct)")
             self.io.echo(f"  {self.io.style('/status', fg=self.io.theme.warning)}          - Show status")
             self.io.echo(f"  {self.io.style('/usage', fg=self.io.theme.warning)}           - Show usage")
             self.io.echo()
@@ -149,13 +149,13 @@ class CLIDisplay:
                 self.io.echo(f"  Entries: {total_entries}")
 
     def list_models(self, provider_name: str = ""):
-        """List available models by group (fast/quality).
+        """List available models by group (fast/chat/instruct).
 
         With LiteLLM integration, models are organized into groups rather than
         by individual providers.
 
         Args:
-            provider_name: Optional filter - 'fast', 'quality', or provider name.
+            provider_name: Optional filter - 'fast', 'chat', 'instruct', or provider name.
 
         Side Effects:
             - Writes formatted model list to stdout via self.io
@@ -164,6 +164,7 @@ class CLIDisplay:
             None
         """
         from scrappy.orchestrator.litellm_config import get_configured_models
+        from scrappy.orchestrator.model_selection import MODEL_GROUPS
         from scrappy.infrastructure.config.api_keys import create_api_key_service
 
         api_key_service = create_api_key_service()
@@ -176,7 +177,7 @@ class CLIDisplay:
         # Filter by group or provider if specified
         filter_arg = provider_name.strip().lower() if provider_name else ""
 
-        if filter_arg in ("fast", "quality"):
+        if filter_arg in MODEL_GROUPS:
             filtered = [m for m in configured_models if m.group == filter_arg]
             self.io.secho(f"\n{filter_arg.upper()} Models:", bold=True)
             self.io.echo("-" * 50)
@@ -198,14 +199,20 @@ class CLIDisplay:
             self.io.echo("-" * 50)
 
             fast_models = [m for m in configured_models if m.group == "fast"]
-            quality_models = [m for m in configured_models if m.group == "quality"]
+            chat_models = [m for m in configured_models if m.group == "chat"]
+            instruct_models = [m for m in configured_models if m.group == "instruct"]
 
             if fast_models:
-                self.io.secho("\nFAST (speed priority):", fg=self.io.theme.primary)
+                self.io.secho("\nFAST (8B, speed priority):", fg=self.io.theme.primary)
                 for m in fast_models:
                     self.io.echo(f"  {m.model_id} ({m.context_length:,} ctx, {m.rpd:,} RPD)")
 
-            if quality_models:
-                self.io.secho("\nQUALITY (reasoning priority):", fg=self.io.theme.primary)
-                for m in quality_models:
+            if chat_models:
+                self.io.secho("\nCHAT (70B, conversation):", fg=self.io.theme.primary)
+                for m in chat_models:
+                    self.io.echo(f"  {m.model_id} ({m.context_length:,} ctx, {m.rpd:,} RPD)")
+
+            if instruct_models:
+                self.io.secho("\nINSTRUCT (agent/tools):", fg=self.io.theme.primary)
+                for m in instruct_models:
                     self.io.echo(f"  {m.model_id} ({m.context_length:,} ctx, {m.rpd:,} RPD)")

@@ -4,7 +4,7 @@ LiteLLM Router configuration and model metadata.
 This module provides:
 - Model metadata for status display
 - Router factory for creating LiteLLM Router with model groups
-- Model group definitions ("fast" and "quality")
+- Model group definitions
 
 Architecture:
 - MODEL_METADATA: Static metadata for status display (not used for routing)
@@ -12,8 +12,9 @@ Architecture:
 - Model groups are defined by model_name in router config
 
 Model Groups:
-- "fast": 8B models, speed priority, any context OK
-- "quality": 70B+ models, quality priority, >= 32k context required
+- "fast": 8B models, speed priority
+- "chat": 70B models, conversation
+- "instruct": Instruction-tuned models for agent/tools (Qwen 235B, Gemini)
 """
 
 from dataclasses import dataclass
@@ -77,72 +78,30 @@ MODEL_METADATA: dict[str, ModelMetadata] = {
         tpm=60000,
     ),
 
-    # --- Quality tier ---
+    # --- Chat tier (70B class, conversation) ---
 
     # Cerebras
     "cerebras/llama-3.3-70b": ModelMetadata(
         model_id="cerebras/llama-3.3-70b",
         provider="cerebras",
-        group="quality",
+        group="chat",
         context_length=8192,
         speed=SpeedRank.ULTRA_FAST,  # 2100 tok/s
         quality=QualityRank.EXCELLENT,
         rpd=14400,
         tpm=60000,
     ),
-    "cerebras/qwen-3-235b-a22b-instruct-2507": ModelMetadata(
-        model_id="cerebras/qwen-3-235b-a22b-instruct-2507",
-        provider="cerebras",
-        group="quality",
-        context_length=8192,
-        speed=SpeedRank.FAST,  # 1.3s latency (235B size)
-        quality=QualityRank.EXCELLENT,  # Instruction-tuned
-        rpd=14400,
-        tpm=60000,
-    ),
 
     # Groq
-    "groq/meta-llama/llama-4-scout-17b-16e-instruct": ModelMetadata(
-        model_id="groq/meta-llama/llama-4-scout-17b-16e-instruct",
-        provider="groq",
-        group="quality",
-        context_length=131072,  # 128k
-        speed=SpeedRank.ULTRA_FAST,  # 0.4s
-        quality=QualityRank.VERY_GOOD,
-        rpd=7000,
-        tpm=20000,
-    ),
-    "groq/moonshotai/kimi-k2-instruct": ModelMetadata(
-        model_id="groq/moonshotai/kimi-k2-instruct",
-        provider="groq",
-        group="quality",
-        context_length=131072,  # 128k
-        speed=SpeedRank.ULTRA_FAST,  # 0.4s
-        quality=QualityRank.VERY_GOOD,
-        rpd=7000,
-        tpm=20000,
-    ),
     "groq/llama-3.3-70b-versatile": ModelMetadata(
         model_id="groq/llama-3.3-70b-versatile",
         provider="groq",
-        group="quality",
+        group="chat",
         context_length=32768,
         speed=SpeedRank.FAST,  # 1.0s
         quality=QualityRank.EXCELLENT,
         rpd=1000,
         tpm=12000,
-    ),
-
-    # Gemini
-    "gemini/gemini-2.5-flash": ModelMetadata(
-        model_id="gemini/gemini-2.5-flash",
-        provider="gemini",
-        group="quality",
-        context_length=1000000,  # 1M context
-        speed=SpeedRank.MODERATE,
-        quality=QualityRank.VERY_GOOD,
-        rpd=250,
-        tpm=250000,
     ),
 
     # SambaNova
@@ -159,12 +118,60 @@ MODEL_METADATA: dict[str, ModelMetadata] = {
     "sambanova/Meta-Llama-3.3-70B-Instruct": ModelMetadata(
         model_id="sambanova/Meta-Llama-3.3-70B-Instruct",
         provider="sambanova",
-        group="quality",
+        group="chat",
         context_length=131072,  # 128k
         speed=SpeedRank.ULTRA_FAST,  # 0.26s latency
         quality=QualityRank.EXCELLENT,
         rpd=40,
         tpm=100000,
+    ),
+
+    # --- Instruct tier (instruction-tuned, agent/tools) ---
+
+    # Cerebras
+    "cerebras/qwen-3-235b-a22b-instruct-2507": ModelMetadata(
+        model_id="cerebras/qwen-3-235b-a22b-instruct-2507",
+        provider="cerebras",
+        group="instruct",
+        context_length=8192,
+        speed=SpeedRank.FAST,  # 1.3s latency (235B size)
+        quality=QualityRank.EXCELLENT,  # Instruction-tuned
+        rpd=14400,
+        tpm=60000,
+    ),
+
+    # Groq
+    "groq/meta-llama/llama-4-scout-17b-16e-instruct": ModelMetadata(
+        model_id="groq/meta-llama/llama-4-scout-17b-16e-instruct",
+        provider="groq",
+        group="instruct",
+        context_length=131072,  # 128k
+        speed=SpeedRank.ULTRA_FAST,  # 0.4s
+        quality=QualityRank.VERY_GOOD,
+        rpd=7000,
+        tpm=20000,
+    ),
+    "groq/moonshotai/kimi-k2-instruct": ModelMetadata(
+        model_id="groq/moonshotai/kimi-k2-instruct",
+        provider="groq",
+        group="instruct",
+        context_length=131072,  # 128k
+        speed=SpeedRank.ULTRA_FAST,  # 0.4s
+        quality=QualityRank.VERY_GOOD,
+        rpd=7000,
+        tpm=20000,
+    ),
+
+    # Gemini
+    "gemini/gemini-2.5-flash": ModelMetadata(
+        model_id="gemini/gemini-2.5-flash",
+        provider="gemini",
+        group="instruct",
+        context_length=1000000,  # 1M context
+        speed=SpeedRank.MODERATE,
+        quality=QualityRank.VERY_GOOD,
+        rpd=250,
+        tpm=250000,
     ),
 }
 
@@ -289,7 +296,33 @@ def build_model_list(api_key_service: ApiKeyConfigServiceProtocol) -> list[dict]
             "rpm": 1,  # ~40 RPD = very low RPM
         })
 
-    # --- Quality Models (tool-use + instruction-following priority) ---
+    # --- Chat Models (no tools, lighter models for conversation) ---
+    # Used when use_tools=False - simple chat doesn't need 235B models
+    # Priority: Cerebras Llama 70B (ultra fast) > Groq Llama 70B (fallback)
+
+    if cerebras_key:
+        model_list.append({
+            "model_name": "chat",
+            "litellm_params": {
+                "model": "cerebras/llama-3.3-70b",
+                "api_key": cerebras_key,
+            },
+            "tpm": 60000,
+            "rpm": 30,
+        })
+
+    if groq_key:
+        model_list.append({
+            "model_name": "chat",
+            "litellm_params": {
+                "model": "groq/llama-3.3-70b-versatile",
+                "api_key": groq_key,
+            },
+            "tpm": 12000,
+            "rpm": 30,
+        })
+
+    # --- Instruct Models (tool-use + instruction-following priority) ---
     # Priority:
     # 1. Cerebras Qwen 235B - instruction-tuned, massive model
     # 2. Groq Llama 4 - fast, good tool use
@@ -299,7 +332,7 @@ def build_model_list(api_key_service: ApiKeyConfigServiceProtocol) -> list[dict]
     # Cerebras Qwen 235B - instruction-tuned for tool use
     if cerebras_key:
         model_list.append({
-            "model_name": "quality",
+            "model_name": "instruct",
             "litellm_params": {
                 "model": "cerebras/qwen-3-235b-a22b-instruct-2507",
                 "api_key": cerebras_key,
@@ -312,7 +345,7 @@ def build_model_list(api_key_service: ApiKeyConfigServiceProtocol) -> list[dict]
     if groq_key:
         # Llama 4 - latest architecture, 0.4s latency
         model_list.append({
-            "model_name": "quality",
+            "model_name": "instruct",
             "litellm_params": {
                 "model": "groq/meta-llama/llama-4-scout-17b-16e-instruct",
                 "api_key": groq_key,
@@ -322,7 +355,7 @@ def build_model_list(api_key_service: ApiKeyConfigServiceProtocol) -> list[dict]
         })
         # Kimi K2 - fast, 128k context
         model_list.append({
-            "model_name": "quality",
+            "model_name": "instruct",
             "litellm_params": {
                 "model": "groq/moonshotai/kimi-k2-instruct",
                 "api_key": groq_key,
@@ -334,7 +367,7 @@ def build_model_list(api_key_service: ApiKeyConfigServiceProtocol) -> list[dict]
     # Gemini - deprioritized (JSON issues) but useful for huge context
     if gemini_key:
         model_list.append({
-            "model_name": "quality",
+            "model_name": "instruct",
             "litellm_params": {
                 "model": "gemini/gemini-2.5-flash",
                 "api_key": gemini_key,

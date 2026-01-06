@@ -8,7 +8,7 @@ Implements UserNotifierProtocol following SOLID:
 """
 from __future__ import annotations
 from datetime import datetime
-from typing import Dict, List, Optional, Protocol
+from typing import Dict, List, Protocol
 
 
 class OutputProtocol(Protocol):

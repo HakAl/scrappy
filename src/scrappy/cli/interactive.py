@@ -113,9 +113,13 @@ class InteractiveMode:
 
         try:
             # Run through LangGraph - bridge handles streaming output
+            # Chat mode uses "chat" tier (70B models)
+            # Agent mode (/agent command) uses "instruct" tier
+            logger.info("Chat mode: calling run_agent with tier=chat")
             result = self._langgraph_bridge.run_agent(
                 task=user_input,
                 working_dir=os.getcwd(),
+                tier="chat",
             )
 
             # Extract response from final state
@@ -198,8 +202,15 @@ class InteractiveMode:
 
         # Route through LangGraph if bridge available (unified chat)
         # Otherwise fall back to TaskRouter (legacy path)
+        import logging
+        _logger = logging.getLogger(__name__)
+        _logger.info("_process_input: _langgraph_bridge is %s", "SET" if self._langgraph_bridge else "NONE")
         if self._langgraph_bridge is not None:
             response_content = self._process_via_langgraph(user_input)
+            # Display the response (streaming already handled by bridge, this is for non-tool responses)
+            if response_content and not response_content.startswith("("):
+                io.echo()
+                io.echo(response_content)
         else:
             # Legacy: Use streaming auto-routing via TaskRouter
             result = self.task_router.handle_auto_route_streaming_sync(user_input)

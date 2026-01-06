@@ -86,7 +86,7 @@ class AgentState(BaseModel):
         done: Whether the agent has completed its task
         error_count: Number of consecutive errors (for retry logic)
         last_error: Last error message (for error node context)
-        current_tier: Model tier being used ("fast" or "quality")
+        current_tier: Model tier being used ("fast", "chat", or "instruct")
         files_changed: List of file paths modified in this session
         working_dir: Current working directory for file operations
         checkpoint: Optional checkpoint identifier for resumption
@@ -125,9 +125,9 @@ class AgentState(BaseModel):
     )
 
     # Model selection
-    current_tier: Literal["fast", "quality"] = Field(
-        default="quality",
-        description="Model tier: 'fast' for speed, 'quality' for complex tasks (default: quality for better tool following)"
+    current_tier: Literal["fast", "chat", "instruct"] = Field(
+        default="instruct",
+        description="Model tier: 'fast' for 8B speed, 'chat' for 70B conversation, 'instruct' for agent/tools"
     )
     current_model: Optional[str] = Field(
         default=None,

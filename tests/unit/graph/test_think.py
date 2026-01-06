@@ -464,12 +464,24 @@ class TestThinkNode:
         # Should be marked done (no tool calls)
         assert result.done is True
 
-    def test_uses_correct_model_tier(self):
-        """Think node should use the model tier from state."""
-        state = create_test_state(current_tier="quality")
+    def test_uses_chat_tier_without_tools(self):
+        """Think node should use 'chat' tier when no tool_adapter is provided."""
+        state = create_test_state(current_tier="instruct")
         llm_service = MockLLMService()
 
-        think_node(state, llm_service)
+        # No tool_adapter = chat mode = "chat" tier
+        think_node(state, llm_service, tool_adapter=None)
+
+        assert llm_service.calls[0]["model"] == "chat"
+
+    def test_uses_state_tier_with_tools(self):
+        """Think node should use state.current_tier when tool_adapter is provided."""
+        state = create_test_state(current_tier="instruct")
+        llm_service = MockLLMService()
+        tool_adapter = MockToolAdapter(tool_names=["test_tool"])
+
+        # With tool_adapter = agent mode = use state.current_tier
+        think_node(state, llm_service, tool_adapter=tool_adapter)
 
         assert llm_service.calls[0]["model"] == "quality"
 
@@ -728,14 +740,29 @@ class TestThinkNodeStreaming:
         assert result.error_count == 0
 
     @pytest.mark.asyncio
-    async def test_streaming_uses_model_tier(self):
-        """Streaming should use correct model tier."""
-        state = create_test_state(current_tier="quality")
+    async def test_streaming_uses_chat_tier_without_tools(self):
+        """Streaming should use 'chat' tier when no tool_adapter is provided."""
+        state = create_test_state(current_tier="instruct")
         llm_service = MockStreamingLLMService(chunks=[
             StreamChunk(content="Test", finish_reason="stop")
         ])
 
-        await think_node_streaming(state, llm_service)
+        # No tool_adapter = chat mode = "chat" tier
+        await think_node_streaming(state, llm_service, tool_adapter=None)
+
+        assert llm_service.calls[0]["model"] == "chat"
+
+    @pytest.mark.asyncio
+    async def test_streaming_uses_state_tier_with_tools(self):
+        """Streaming should use state.current_tier when tool_adapter is provided."""
+        state = create_test_state(current_tier="instruct")
+        llm_service = MockStreamingLLMService(chunks=[
+            StreamChunk(content="Test", finish_reason="stop")
+        ])
+        tool_adapter = MockToolAdapter(tool_names=["test_tool"])
+
+        # With tool_adapter = agent mode = use state.current_tier
+        await think_node_streaming(state, llm_service, tool_adapter=tool_adapter)
 
         assert llm_service.calls[0]["model"] == "quality"
 

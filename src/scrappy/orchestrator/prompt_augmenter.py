@@ -17,7 +17,6 @@ try:
     )
 except ImportError:
     from protocols.delegation import (
-        PromptAugmenterProtocol,
         ContextProviderProtocol,
         WorkingMemoryProtocol,
     )

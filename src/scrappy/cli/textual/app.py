@@ -340,6 +340,11 @@ class ScrappyApp(App):
         # Reinitialize handlers with bridge for TUI-aware user interaction
         self._cli.reinitialize_handlers_with_bridge(self.bridge, langgraph_bridge)
 
+        # Wire LangGraph for ALL chat (not just agent tasks)
+        # This enables unified chat where LLM decides tool usage
+        if langgraph_bridge is not None:
+            self.interactive_mode.set_langgraph_bridge(langgraph_bridge)
+
         # Update command router's references to the new handlers
         self.interactive_mode.command_router.agent_mgr = self._cli.agent_mgr
 

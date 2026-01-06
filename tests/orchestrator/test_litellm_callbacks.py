@@ -28,44 +28,44 @@ class TestEscalationMetrics:
         """Verify escalation events are recorded."""
         metrics = EscalationMetrics()
 
-        metrics.record_escalation("fast", "quality")
+        metrics.record_escalation("fast", "chat")
 
         assert metrics.total_escalations == 1
-        assert metrics.escalations_by_path["fast->quality"] == 1
+        assert metrics.escalations_by_path["fast->chat"] == 1
 
     def test_tracks_multiple_escalations(self):
         """Verify multiple escalations are counted correctly."""
         metrics = EscalationMetrics()
 
-        metrics.record_escalation("fast", "quality")
-        metrics.record_escalation("fast", "quality")
-        metrics.record_escalation("fast", "quality")
+        metrics.record_escalation("fast", "chat")
+        metrics.record_escalation("fast", "chat")
+        metrics.record_escalation("fast", "chat")
 
         assert metrics.total_escalations == 3
-        assert metrics.escalations_by_path["fast->quality"] == 3
+        assert metrics.escalations_by_path["fast->chat"] == 3
 
     def test_tracks_different_escalation_paths(self):
         """Verify different escalation paths are tracked separately."""
         metrics = EscalationMetrics()
 
-        metrics.record_escalation("fast", "quality")
-        metrics.record_escalation("fast", "quality")
+        metrics.record_escalation("fast", "chat")
+        metrics.record_escalation("fast", "chat")
         metrics.record_escalation("ultra_fast", "fast")  # Hypothetical path
 
         assert metrics.total_escalations == 3
-        assert metrics.escalations_by_path["fast->quality"] == 2
+        assert metrics.escalations_by_path["fast->chat"] == 2
         assert metrics.escalations_by_path["ultra_fast->fast"] == 1
 
     def test_get_summary_returns_correct_format(self):
         """Verify get_summary returns proper dictionary format."""
         metrics = EscalationMetrics()
-        metrics.record_escalation("fast", "quality")
-        metrics.record_escalation("fast", "quality")
+        metrics.record_escalation("fast", "chat")
+        metrics.record_escalation("fast", "chat")
 
         summary = metrics.get_summary()
 
         assert summary["total_escalations"] == 2
-        assert summary["by_path"]["fast->quality"] == 2
+        assert summary["by_path"]["fast->chat"] == 2
 
     def test_empty_metrics_summary(self):
         """Verify empty metrics return zero counts."""
@@ -182,7 +182,7 @@ class TestRateTrackingCallbackEscalation:
         """Verify record_escalation updates escalation metrics."""
         callback = RateTrackingCallback()
 
-        callback.record_escalation("fast", "quality")
+        callback.record_escalation("fast", "chat")
 
         assert callback.escalation_metrics.total_escalations == 1
 
@@ -190,12 +190,12 @@ class TestRateTrackingCallbackEscalation:
         """Verify escalation metrics are accessible."""
         callback = RateTrackingCallback()
 
-        callback.record_escalation("fast", "quality")
-        callback.record_escalation("fast", "quality")
+        callback.record_escalation("fast", "chat")
+        callback.record_escalation("fast", "chat")
 
         summary = callback.escalation_metrics.get_summary()
         assert summary["total_escalations"] == 2
-        assert summary["by_path"]["fast->quality"] == 2
+        assert summary["by_path"]["fast->chat"] == 2
 
     def test_custom_escalation_metrics_used(self):
         """Verify custom EscalationMetrics can be injected."""

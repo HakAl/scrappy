@@ -6,7 +6,7 @@ Handles presentation logic for displaying provider configuration and selection s
 
 from typing import Optional
 
-from scrappy.orchestrator.protocols import BaseOutputProtocol
+from scrappy.orchestrator.output import BaseOutputProtocol
 from scrappy.orchestrator.provider_definitions import get_all_provider_names, get_brain_priority
 
 
@@ -88,9 +88,9 @@ class ProviderStatusReporter:
             reason = self._selector._get_brain_selection_reason(self._brain_name)
             self._output.info(f"Selection Reason: {reason}")
 
-        mode = "QUALITY" if self._quality_mode else "FAST"
+        mode = "CHAT" if self._quality_mode else "FAST"
         self._output.info(f"\nModel Selection Mode: {mode}")
-        self._output.info(f"  Use /model fast or /model quality to change mode")
+        self._output.info("  Use /model fast or /model chat to change mode")
 
         self._output.info("\nSelection Priority: cerebras > groq > gemini")
         self._output.info("Use --brain <provider> to override auto-selection")

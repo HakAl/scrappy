@@ -93,18 +93,18 @@ class TestEscalationMetrics:
         """Verify EscalationMetrics correctly records escalation."""
         metrics = EscalationMetrics()
 
-        metrics.record_escalation("fast", "quality")
-        metrics.record_escalation("fast", "quality")
+        metrics.record_escalation("fast", "chat")
+        metrics.record_escalation("fast", "chat")
 
         summary = metrics.get_summary()
         assert summary["total_escalations"] == 2
-        assert summary["by_path"]["fast->quality"] == 2
+        assert summary["by_path"]["fast->chat"] == 2
 
     def test_callback_record_escalation_updates_metrics(self):
         """Verify callback properly updates escalation metrics."""
         callback = RateTrackingCallback()
 
-        callback.record_escalation("fast", "quality")
+        callback.record_escalation("fast", "chat")
 
         assert callback.escalation_metrics.total_escalations == 1
 
@@ -194,7 +194,7 @@ class TestEscalationWarningOutput:
         assert len(warnings) == 1
         assert "Context window exceeded" in warnings[0]
         assert "fast" in warnings[0]
-        assert "quality" in warnings[0]
+        assert "chat" in warnings[0]  # fast escalates to chat
 
 
 class TestAsyncEscalation:
@@ -245,7 +245,7 @@ class TestAsyncEscalation:
             messages=[{"role": "user", "content": "test"}],
         )
 
-        mock_callback.record_escalation.assert_called_once_with("fast", "quality")
+        mock_callback.record_escalation.assert_called_once_with("fast", "chat")
 
 
 class TestMultipleEscalationAttempts:

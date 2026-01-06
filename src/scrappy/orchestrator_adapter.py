@@ -18,15 +18,15 @@ from .orchestrator.protocols import ContextProvider, OrchestratorAdapter
 # Import LLMResponse from providers to get full feature set including tool_calls
 from .providers.base import LLMResponse, ToolCall
 
+# Import canonical MODEL_GROUPS from model_selection
+from .orchestrator.model_selection import MODEL_GROUPS
 
-# Model groups used by LiteLLM Router
-MODEL_GROUPS = {"fast", "quality"}
 
 # Map legacy provider names to model groups
 PROVIDER_TO_GROUP = {
-    "groq": "fast",       # Default to fast for Groq (has both fast and quality models)
+    "groq": "fast",       # Default to fast for Groq (has both fast and instruct models)
     "cerebras": "fast",   # Cerebras only has 8k context, always fast tier
-    "gemini": "quality",  # Gemini is quality tier (large context)
+    "gemini": "instruct", # Gemini is instruct tier (tool use, large context)
     "auto": "fast",       # Auto-select defaults to fast
 }
 

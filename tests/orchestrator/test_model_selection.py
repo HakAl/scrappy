@@ -106,34 +106,47 @@ class TestModelSelectionService:
         assert service.is_configured("groq/llama-3.1-8b-instant") is True
         assert service.is_configured("cerebras/llama3.1-8b") is False
 
-    def test_quality_models_selection(self):
-        """Quality selection type uses correct priority list."""
+    def test_chat_models_selection(self):
+        """CHAT selection type uses correct priority list."""
+        configured = {
+            "cerebras/llama-3.3-70b",
+            "groq/llama-3.3-70b-versatile",
+        }
+        service = ModelSelectionService(configured_models=configured)
+
+        result = service.select(ModelSelectionType.CHAT)
+
+        # Cerebras 70B is first in CHAT priorities
+        assert result == "cerebras/llama-3.3-70b"
+
+    def test_instruct_models_selection(self):
+        """Instruct selection type uses correct priority list."""
         configured = {
             "cerebras/qwen-3-235b-a22b-instruct-2507",
             "groq/meta-llama/llama-4-scout-17b-16e-instruct",
         }
         service = ModelSelectionService(configured_models=configured)
 
-        result = service.select(ModelSelectionType.QUALITY)
+        result = service.select(ModelSelectionType.INSTRUCT)
 
-        # Cerebras qwen is first in QUALITY priorities
+        # Cerebras qwen is first in INSTRUCT priorities
         assert result == "cerebras/qwen-3-235b-a22b-instruct-2507"
 
     def test_session_preference_ignored_for_wrong_type(self):
-        """Session preference for QUALITY doesn't affect FAST selection."""
+        """Session preference for INSTRUCT doesn't affect FAST selection."""
         configured = {
             "groq/llama-3.1-8b-instant",
             "cerebras/qwen-3-235b-a22b-instruct-2507",
         }
         service = ModelSelectionService(configured_models=configured)
 
-        # Session preferred a QUALITY model, but selecting FAST
+        # Session preferred an INSTRUCT model, but selecting FAST
         result = service.select(
             ModelSelectionType.FAST,
             session_preferred="cerebras/qwen-3-235b-a22b-instruct-2507"
         )
 
-        # QUALITY model isn't in FAST list, so falls back to priority
+        # INSTRUCT model isn't in FAST list, so falls back to priority
         assert result == "groq/llama-3.1-8b-instant"
 
 
@@ -168,10 +181,15 @@ class TestModelPrioritiesConfig:
         assert ModelSelectionType.FAST in MODEL_PRIORITIES
         assert len(MODEL_PRIORITIES[ModelSelectionType.FAST]) > 0
 
-    def test_quality_priorities_exist(self):
-        """QUALITY selection type has priority list defined."""
-        assert ModelSelectionType.QUALITY in MODEL_PRIORITIES
-        assert len(MODEL_PRIORITIES[ModelSelectionType.QUALITY]) > 0
+    def test_chat_priorities_exist(self):
+        """CHAT selection type has priority list defined."""
+        assert ModelSelectionType.CHAT in MODEL_PRIORITIES
+        assert len(MODEL_PRIORITIES[ModelSelectionType.CHAT]) > 0
+
+    def test_instruct_priorities_exist(self):
+        """INSTRUCT selection type has priority list defined."""
+        assert ModelSelectionType.INSTRUCT in MODEL_PRIORITIES
+        assert len(MODEL_PRIORITIES[ModelSelectionType.INSTRUCT]) > 0
 
     def test_all_models_have_provider_prefix(self):
         """All models in priorities have provider/model format."""

@@ -21,31 +21,28 @@ try:
         OutputInterfaceProtocol,
     )
     from ..orchestrator.protocols import LLMServiceProtocol
+    from ..orchestrator.model_selection import MODEL_GROUPS
     from ..config import (
         DEFAULT_MAX_CONCURRENT,
         DEFAULT_MAX_RETRIES,
     )
 except ImportError:
     from protocols.delegation import (
-        BatchSchedulerProtocol,
         LLMRequest,
         OutputInterfaceProtocol,
     )
     from orchestrator.protocols import LLMServiceProtocol
+    from orchestrator.model_selection import MODEL_GROUPS
     from config import (
         DEFAULT_MAX_CONCURRENT,
-        DEFAULT_MAX_RETRIES,
     )
 
-
-# Model groups for LiteLLM Router
-MODEL_GROUPS = {"fast", "quality"}
 
 # Map legacy provider names to model groups
 PROVIDER_TO_GROUP = {
     "groq": "fast",
     "cerebras": "fast",
-    "gemini": "quality",
+    "gemini": "instruct",
     "auto": "fast",
 }
 

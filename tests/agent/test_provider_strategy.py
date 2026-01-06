@@ -20,7 +20,7 @@ class TestDynamicProviderStrategy:
     """Tests for DynamicProviderStrategy."""
 
     def test_get_planner_delegates_to_orchestrator(self):
-        """get_planner should delegate to orchestrator.get_recommended_provider with QUALITY."""
+        """get_planner should delegate to orchestrator.get_recommended_provider with CHAT."""
         mock_orchestrator = Mock()
         mock_orchestrator.get_recommended_provider.return_value = "openai"
 
@@ -28,8 +28,8 @@ class TestDynamicProviderStrategy:
         result = strategy.get_planner()
 
         assert result == "openai"
-        # Planner uses QUALITY selection for best reasoning capability
-        mock_orchestrator.get_recommended_provider.assert_called_once_with(ModelSelectionType.QUALITY)
+        # Planner uses CHAT selection for best reasoning capability
+        mock_orchestrator.get_recommended_provider.assert_called_once_with(ModelSelectionType.CHAT)
 
     def test_get_executor_delegates_to_orchestrator(self):
         """get_executor should delegate to orchestrator.get_recommended_provider."""
@@ -54,7 +54,7 @@ class TestDynamicProviderStrategy:
         call_args = mock_orchestrator.get_recommended_provider.call_args
         arg = call_args[0][0]  # First positional argument
         assert isinstance(arg, ModelSelectionType), f"Expected ModelSelectionType enum, got {type(arg).__name__}: {arg!r}"
-        assert arg == ModelSelectionType.QUALITY, "Planner should use QUALITY selection"
+        assert arg == ModelSelectionType.CHAT, "Planner should use CHAT selection"
 
 
     def test_supports_dynamic_selection_returns_true(self):

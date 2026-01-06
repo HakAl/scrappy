@@ -183,7 +183,7 @@ class TestAgentOrchestratorAdapterSelectionType:
         # Call delegate WITH explicit selection_type
         adapter.delegate(
             prompt="test prompt",
-            selection_type=ModelSelectionType.QUALITY
+            selection_type=ModelSelectionType.CHAT
         )
 
         # Get the kwargs that were passed to orchestrator
@@ -191,4 +191,4 @@ class TestAgentOrchestratorAdapterSelectionType:
 
         # selection_type SHOULD be in kwargs when explicitly provided
         assert 'selection_type' in call_kwargs
-        assert call_kwargs['selection_type'] == ModelSelectionType.QUALITY
+        assert call_kwargs['selection_type'] == ModelSelectionType.CHAT

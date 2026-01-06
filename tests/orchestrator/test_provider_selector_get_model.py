@@ -1,13 +1,13 @@
 """
 Tests for ProviderSelector.get_model() after LiteLLM integration.
 
-After LiteLLM integration, get_model() returns model groups ("fast", "quality")
+After LiteLLM integration, get_model() returns model groups ("fast", "chat", "instruct")
 instead of provider names. The LiteLLM Router handles actual model selection.
 
 Tests:
 - FAST -> "fast" group
-- QUALITY -> "quality" group
-- INSTRUCT -> "quality" group
+- CHAT -> "chat" group
+- INSTRUCT -> "instruct" group
 - EMBED -> "fast" group
 - Model is always None (Router picks actual model)
 """
@@ -38,35 +38,35 @@ class TestGetModelFast:
         assert any("fast" in entry.lower() for entry in log)
 
 
-class TestGetModelQuality:
-    """Tests for ModelSelectionType.QUALITY selection."""
+class TestGetModelChat:
+    """Tests for ModelSelectionType.CHAT selection."""
 
-    def test_quality_returns_quality_group(self):
-        """QUALITY selection returns 'quality' model group."""
+    def test_chat_returns_chat_group(self):
+        """CHAT selection returns 'chat' model group."""
         selector = ProviderSelector()
-        group, model = selector.get_model(ModelSelectionType.QUALITY)
+        group, model = selector.get_model(ModelSelectionType.CHAT)
 
-        assert group == "quality"
+        assert group == "chat"
         assert model is None
 
-    def test_quality_logs_selection(self):
-        """QUALITY selection should log the decision."""
+    def test_chat_logs_selection(self):
+        """CHAT selection should log the decision."""
         selector = ProviderSelector(verbose=True)
-        selector.get_model(ModelSelectionType.QUALITY)
+        selector.get_model(ModelSelectionType.CHAT)
 
         log = selector.get_selection_log()
-        assert any("quality" in entry.lower() for entry in log)
+        assert any("chat" in entry.lower() for entry in log)
 
 
 class TestGetModelInstruct:
     """Tests for ModelSelectionType.INSTRUCT selection."""
 
-    def test_instruct_returns_quality_group(self):
-        """INSTRUCT selection maps to 'quality' group."""
+    def test_instruct_returns_instruct_group(self):
+        """INSTRUCT selection maps to 'instruct' group."""
         selector = ProviderSelector()
         group, model = selector.get_model(ModelSelectionType.INSTRUCT)
 
-        assert group == "quality"
+        assert group == "instruct"
         assert model is None
 
 
@@ -92,7 +92,7 @@ class TestGetModelErrors:
 
         for selection_type in ModelSelectionType:
             group, model = selector.get_model(selection_type)
-            assert group in ("fast", "quality")
+            assert group in ("fast", "chat", "instruct")
             assert model is None
 
 
@@ -101,8 +101,8 @@ class TestGetModelIntegration:
 
     @pytest.mark.parametrize("selection_type,expected_group", [
         (ModelSelectionType.FAST, "fast"),
-        (ModelSelectionType.QUALITY, "quality"),
-        (ModelSelectionType.INSTRUCT, "quality"),
+        (ModelSelectionType.CHAT, "chat"),
+        (ModelSelectionType.INSTRUCT, "instruct"),
         (ModelSelectionType.EMBED, "fast"),
     ])
     def test_all_selection_types_return_valid_groups(self, selection_type, expected_group):

@@ -2,8 +2,8 @@
 Tests for orchestrator provider configuration after LiteLLM integration.
 
 After LiteLLM integration:
-- ProviderSelector returns model groups ("fast", "quality") not provider names
-- setup_brain() returns "quality" for brain/reasoning tasks
+- ProviderSelector returns model groups ("fast", "chat", "instruct") not provider names
+- setup_brain() returns "instruct" for brain/reasoning tasks
 - get_model() maps ModelSelectionType to groups
 - Fallback is handled by LiteLLM Router, not ProviderSelector
 
@@ -21,22 +21,22 @@ from scrappy.orchestrator.model_selection import ModelSelectionType
 class TestProviderSelectorModelGroups:
     """Tests for ProviderSelector returning model groups."""
 
-    def test_setup_brain_returns_quality_group(self):
-        """setup_brain() returns 'quality' model group."""
+    def test_setup_brain_returns_instruct_group(self):
+        """setup_brain() returns 'instruct' model group."""
         selector = ProviderSelector()
 
         group, model = selector.setup_brain()
 
-        assert group == "quality"
+        assert group == "instruct"
         assert model is None
 
-    def test_setup_brain_maps_legacy_provider_to_quality(self):
-        """setup_brain() maps legacy provider names to 'quality' group."""
+    def test_setup_brain_maps_legacy_provider_to_instruct(self):
+        """setup_brain() maps legacy provider names to 'instruct' group."""
         selector = ProviderSelector()
 
         group, model = selector.setup_brain(preferred_provider="gemini")
 
-        assert group == "quality"
+        assert group == "instruct"
         assert model is None
 
     def test_setup_brain_accepts_fast_group(self):
@@ -48,13 +48,13 @@ class TestProviderSelectorModelGroups:
         assert group == "fast"
         assert model is None
 
-    def test_setup_brain_accepts_quality_group(self):
-        """setup_brain() accepts 'quality' as preferred group."""
+    def test_setup_brain_accepts_quality_maps_to_instruct(self):
+        """setup_brain() maps legacy 'quality' to 'instruct' group."""
         selector = ProviderSelector()
 
         group, model = selector.setup_brain(preferred_provider="quality")
 
-        assert group == "quality"
+        assert group == "instruct"  # quality maps to instruct for brain
         assert model is None
 
 
@@ -69,15 +69,15 @@ class TestFallbackModelGroups:
 
         assert result == "fast"
 
-    def test_fallback_with_quality_selection_type(self):
-        """get_provider_for_fallback() returns 'quality' for quality selection."""
+    def test_fallback_with_chat_selection_type(self):
+        """get_provider_for_fallback() returns 'chat' for chat selection."""
         selector = ProviderSelector()
 
         result = selector.get_provider_for_fallback(
-            selection_type=ModelSelectionType.QUALITY
+            selection_type=ModelSelectionType.CHAT
         )
 
-        assert result == "quality"
+        assert result == "chat"
 
     def test_fallback_ignores_exclude_list(self):
         """get_provider_for_fallback() ignores exclude - LiteLLM handles fallback."""
@@ -88,7 +88,7 @@ class TestFallbackModelGroups:
             exclude=["cerebras", "groq", "gemini"]
         )
 
-        assert result in ("fast", "quality")
+        assert result in ("fast", "chat", "instruct")
 
 
 class TestTaskPreferencesRegression:
@@ -206,13 +206,13 @@ class TestSelectForTaskModelGroups:
         assert group == "fast"
         assert model is None
 
-    def test_quality_task_returns_quality_group(self):
-        """QUALITY selection returns 'quality' model group."""
+    def test_chat_task_returns_chat_group(self):
+        """CHAT selection returns 'chat' model group."""
         selector = ProviderSelector()
 
-        group, model = selector.get_model(ModelSelectionType.QUALITY)
+        group, model = selector.get_model(ModelSelectionType.CHAT)
 
-        assert group == "quality"
+        assert group == "chat"
         assert model is None
 
     def test_embed_task_returns_fast_group(self):
@@ -224,11 +224,11 @@ class TestSelectForTaskModelGroups:
         assert group == "fast"
         assert model is None
 
-    def test_instruct_task_returns_quality_group(self):
-        """INSTRUCT selection returns 'quality' model group."""
+    def test_instruct_task_returns_instruct_group(self):
+        """INSTRUCT selection returns 'instruct' model group."""
         selector = ProviderSelector()
 
         group, model = selector.get_model(ModelSelectionType.INSTRUCT)
 
-        assert group == "quality"
+        assert group == "instruct"
         assert model is None

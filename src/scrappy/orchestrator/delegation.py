@@ -9,10 +9,10 @@ Refactored to follow SOLID principles:
 After LiteLLM integration (Phase 3):
 - Uses LLMServiceProtocol instead of RetryOrchestratorProtocol
 - LiteLLM handles retry/fallback internally via Router configuration
-- provider_name is now a model GROUP name ("fast" or "quality")
+- provider_name is now a model GROUP name ("fast", "chat", or "instruct")
 """
 
-from typing import Optional, Callable, AsyncIterator, Any, Type, TypeVar
+from typing import Optional, AsyncIterator, Any, Type, TypeVar
 from datetime import datetime
 import asyncio
 
@@ -33,6 +33,7 @@ try:
     )
     from ..orchestrator.protocols import LLMServiceProtocol, StreamingCompletionProtocol, StructuredOutputProtocol
     from ..orchestrator.types import StreamChunk
+    from ..orchestrator.model_selection import MODEL_GROUPS
     from ..orchestrator.rate_limiting.protocols import (
         EnforcementAction,
         EnforcementDecision,
@@ -58,9 +59,9 @@ except ImportError:
     )
     from orchestrator.protocols import LLMServiceProtocol, StreamingCompletionProtocol, StructuredOutputProtocol
     from orchestrator.types import StreamChunk
+    from orchestrator.model_selection import MODEL_GROUPS
     from orchestrator.rate_limiting.protocols import (
         EnforcementAction,
-        EnforcementDecision,
         EnforcementPolicyProtocol,
         UserNotifierProtocol,
     )
@@ -74,14 +75,11 @@ except ImportError:
     from infrastructure.exceptions.provider_errors import AllProvidersRateLimitedError
 
 
-# Model groups for LiteLLM Router
-MODEL_GROUPS = {"fast", "quality"}
-
 # Map legacy provider names to model groups
 PROVIDER_TO_GROUP = {
     "groq": "fast",
     "cerebras": "fast",
-    "gemini": "quality",
+    "gemini": "instruct",
     "auto": "fast",
 }
 
@@ -94,7 +92,7 @@ def _resolve_model_group(provider_name: str) -> str:
         provider_name: Provider name (could be legacy name like "groq" or group like "fast")
 
     Returns:
-        Model group name ("fast" or "quality")
+        Model group name ("fast", "chat", or "instruct")
     """
     # If it's already a valid model group, return as-is
     if provider_name in MODEL_GROUPS:

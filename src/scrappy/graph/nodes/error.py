@@ -57,24 +57,38 @@ try a fundamentally different strategy.
     return context
 
 
-def should_escalate_tier(error_count: int, current_tier: Literal["fast", "quality"]) -> bool:
-    """
-    Determine if we should escalate to quality tier.
+# Tier escalation path: fast -> chat -> instruct
+TIER_ESCALATION = {
+    "fast": "chat",
+    "chat": "instruct",
+}
 
-    Escalates to quality tier after repeated errors, as more capable
+
+def should_escalate_tier(error_count: int, current_tier: Literal["fast", "chat", "instruct"]) -> bool:
+    """
+    Determine if we should escalate to next tier.
+
+    Escalates to next tier after repeated errors, as more capable
     models may handle complex error recovery better.
+
+    Escalation path: fast -> chat -> instruct
 
     Args:
         error_count: Number of consecutive errors
         current_tier: Current model tier
 
     Returns:
-        True if should escalate to quality tier
+        True if should escalate to next tier
     """
     return (
-        current_tier == "fast"
+        current_tier in TIER_ESCALATION
         and error_count >= ERROR_ESCALATION_THRESHOLD
     )
+
+
+def get_next_tier(current_tier: Literal["fast", "chat", "instruct"]) -> Literal["fast", "chat", "instruct"]:
+    """Get the next tier in escalation path, or same tier if already at top."""
+    return TIER_ESCALATION.get(current_tier, current_tier)  # type: ignore[return-value]
 
 
 def error_node(state: AgentState) -> AgentState:
@@ -88,7 +102,7 @@ def error_node(state: AgentState) -> AgentState:
     Behavior:
     - Creates a system message explaining the error
     - Clears last_error after processing
-    - Optionally escalates to quality tier on repeated errors
+    - Optionally escalates tier on repeated errors (fast -> chat -> instruct)
 
     Args:
         state: Current agent state with last_error set
@@ -121,9 +135,11 @@ def error_node(state: AgentState) -> AgentState:
     # Determine if we should escalate tier
     new_tier = state.current_tier
     if should_escalate_tier(state.error_count, state.current_tier):
-        new_tier = "quality"
+        new_tier = get_next_tier(state.current_tier)
         logger.info(
-            "Escalating to quality tier after %d consecutive errors",
+            "Escalating from %s to %s tier after %d consecutive errors",
+            state.current_tier,
+            new_tier,
             state.error_count,
         )
 

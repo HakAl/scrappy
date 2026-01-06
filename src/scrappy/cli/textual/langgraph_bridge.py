@@ -439,6 +439,7 @@ class LangGraphBridge:
         task: str,
         working_dir: str,
         thread_id: Optional[str] = None,
+        tier: str = "instruct",
     ) -> AgentResult:
         """
         Run the agent synchronously (for use inside worker thread).
@@ -454,6 +455,7 @@ class LangGraphBridge:
             task: The user's task/query
             working_dir: Working directory for file operations
             thread_id: Optional thread ID for checkpointing (default: generate UUID)
+            tier: Model tier to use ("chat" for conversation, "instruct" for agent)
 
         Returns:
             AgentResult with success status and final state
@@ -486,13 +488,15 @@ class LangGraphBridge:
 
         try:
             # Create agent runner with HITL support
+            # Tools always available - LLM decides whether to use them
             graph, checkpointer = create_agent_runner(
                 llm_service=self._llm_service,
                 tool_adapter=self._tool_adapter,
             )
 
-            # Create initial state
+            # Create initial state with tier selection
             initial_state = AgentState.create_initial(task, working_dir)
+            initial_state = initial_state.model_copy(update={"current_tier": tier})
 
             # Configure graph execution
             # Note: recursion_limit counts TOTAL node invocations, not iterations.
@@ -718,6 +722,7 @@ class LangGraphBridge:
         task: str,
         working_dir: str,
         thread_id: Optional[str] = None,
+        tier: str = "instruct",
     ) -> AgentResult:
         """
         Run the agent in a Textual worker thread.
@@ -732,17 +737,19 @@ class LangGraphBridge:
             task: The user's task/query
             working_dir: Working directory for file operations
             thread_id: Optional thread ID for checkpointing
+            tier: Model tier to use ("chat" for conversation, "instruct" for agent)
 
         Returns:
             AgentResult with success status and final state
         """
-        return self.run_agent(task, working_dir, thread_id)
+        return self.run_agent(task, working_dir, thread_id, tier)
 
     async def run_agent_async(
         self,
         task: str,
         working_dir: str,
         thread_id: Optional[str] = None,
+        tier: str = "instruct",
     ) -> AgentResult:
         """
         Run the agent asynchronously.
@@ -757,6 +764,7 @@ class LangGraphBridge:
             task: The user's task/query
             working_dir: Working directory for file operations
             thread_id: Optional thread ID for checkpointing
+            tier: Model tier to use ("chat" for conversation, "instruct" for agent)
 
         Returns:
             AgentResult with success status and final state
@@ -765,10 +773,7 @@ class LangGraphBridge:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(
             None,
-            self.run_agent,
-            task,
-            working_dir,
-            thread_id,
+            lambda: self.run_agent(task, working_dir, thread_id, tier),
         )
 
     def cancel(self) -> None:

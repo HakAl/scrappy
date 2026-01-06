@@ -31,7 +31,7 @@ def create_test_state(
     messages: Optional[list[Message]] = None,
     error_count: int = 0,
     last_error: Optional[str] = None,
-    current_tier: Literal["fast", "quality"] = "fast",
+    current_tier: Literal["fast", "chat", "instruct"] = "fast",
 ) -> AgentState:
     """Create a test AgentState."""
     return AgentState(
@@ -106,13 +106,21 @@ class TestShouldEscalateTier:
         )
         assert result is False
 
-    def test_no_escalate_if_already_quality(self):
-        """Should not escalate if already on quality tier."""
+    def test_no_escalate_if_already_instruct(self):
+        """Should not escalate if already on instruct tier (top tier)."""
         result = should_escalate_tier(
             error_count=ERROR_ESCALATION_THRESHOLD + 5,
-            current_tier="quality",
+            current_tier="instruct",
         )
         assert result is False
+
+    def test_escalate_chat_to_instruct(self):
+        """Should escalate from chat to instruct after threshold."""
+        result = should_escalate_tier(
+            error_count=ERROR_ESCALATION_THRESHOLD,
+            current_tier="chat",
+        )
+        assert result is True
 
     def test_escalate_above_threshold(self):
         """Should escalate above threshold."""
@@ -169,7 +177,7 @@ class TestErrorNode:
         assert result.error_count == 3
 
     def test_escalates_tier_on_repeated_errors(self):
-        """Should escalate to quality tier after threshold."""
+        """Should escalate to chat tier after threshold (fast -> chat)."""
         state = create_test_state(
             last_error="error",
             error_count=ERROR_ESCALATION_THRESHOLD,
@@ -178,7 +186,7 @@ class TestErrorNode:
 
         result = error_node(state)
 
-        assert result.current_tier == "quality"
+        assert result.current_tier == "chat"
 
     def test_no_escalation_below_threshold(self):
         """Should not escalate below threshold."""
@@ -192,17 +200,17 @@ class TestErrorNode:
 
         assert result.current_tier == "fast"
 
-    def test_no_escalation_if_already_quality(self):
-        """Should not change tier if already on quality."""
+    def test_no_escalation_if_already_instruct(self):
+        """Should not change tier if already on instruct (top tier)."""
         state = create_test_state(
             last_error="error",
             error_count=ERROR_ESCALATION_THRESHOLD,
-            current_tier="quality",
+            current_tier="instruct",
         )
 
         result = error_node(state)
 
-        assert result.current_tier == "quality"
+        assert result.current_tier == "instruct"
 
     def test_handles_no_error_gracefully(self):
         """Should handle being called with no error set."""
