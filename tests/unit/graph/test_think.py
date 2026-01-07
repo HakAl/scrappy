@@ -22,6 +22,8 @@ from scrappy.graph.nodes.think import (
     estimate_message_tokens,
     accumulate_tool_calls,
     fragments_to_tool_calls,
+    mask_old_tool_results,
+    FULL_CONTEXT_WINDOW,
 )
 from scrappy.orchestrator.litellm_service import NotConfiguredError
 from scrappy.orchestrator.types import StreamChunk, ToolCallFragment
@@ -275,6 +277,120 @@ class TestContextSanitization:
 
         # Should have at least 1 message (can't drop everything)
         assert len(result) >= 1
+
+
+# =============================================================================
+# Observation Masking Tests
+# =============================================================================
+
+
+class TestObservationMasking:
+    """Tests for tool result masking to save context."""
+
+    def test_mask_empty_messages(self):
+        """Empty messages should return empty list."""
+        result = mask_old_tool_results([])
+        assert result == []
+
+    def test_mask_no_tool_messages(self):
+        """Messages without tool results should be unchanged."""
+        messages = [
+            {"role": "system", "content": "System prompt."},
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi there!"},
+        ]
+        result = mask_old_tool_results(messages)
+        assert result == messages
+
+    def test_mask_fewer_than_window(self):
+        """Fewer tool results than window should not be masked."""
+        messages = [
+            {"role": "user", "content": "Run a command"},
+            {"role": "assistant", "content": "", "tool_calls": [{"id": "1", "type": "function", "function": {"name": "run", "arguments": "{}"}}]},
+            {"role": "tool", "tool_call_id": "1", "content": "Command output here"},
+        ]
+        result = mask_old_tool_results(messages, keep_full=2)
+        # Only 1 tool result, window is 2, so no masking
+        assert result[2]["content"] == "Command output here"
+
+    def test_mask_old_tool_results_preserves_recent(self):
+        """Old tool results should be masked, recent ones preserved."""
+        messages = [
+            {"role": "user", "content": "Do tasks"},
+            # First tool call/result (will be masked)
+            {"role": "assistant", "content": "Calling tool 1"},
+            {"role": "tool", "tool_call_id": "1", "content": "Result from tool 1 with lots of data"},
+            # Second tool call/result (will be masked)
+            {"role": "assistant", "content": "Calling tool 2"},
+            {"role": "tool", "tool_call_id": "2", "content": "Result from tool 2"},
+            # Third tool call/result (recent - preserved)
+            {"role": "assistant", "content": "Calling tool 3"},
+            {"role": "tool", "tool_call_id": "3", "content": "Recent result 3"},
+            # Fourth tool call/result (recent - preserved)
+            {"role": "assistant", "content": "Calling tool 4"},
+            {"role": "tool", "tool_call_id": "4", "content": "Recent result 4"},
+        ]
+
+        result = mask_old_tool_results(messages, keep_full=2)
+
+        # First two tool results should be masked
+        assert "[" in result[2]["content"] and "chars returned]" in result[2]["content"]
+        assert "[" in result[4]["content"] and "chars returned]" in result[4]["content"]
+
+        # Last two tool results should be preserved
+        assert result[6]["content"] == "Recent result 3"
+        assert result[8]["content"] == "Recent result 4"
+
+    def test_mask_preserves_non_tool_messages(self):
+        """Non-tool messages (user, assistant, system) should never be masked."""
+        messages = [
+            {"role": "system", "content": "Important system instructions"},
+            {"role": "user", "content": "User input"},
+            {"role": "assistant", "content": "Assistant reasoning - should not be masked"},
+            {"role": "tool", "tool_call_id": "1", "content": "Old tool result"},
+            {"role": "assistant", "content": "More reasoning"},
+            {"role": "tool", "tool_call_id": "2", "content": "Newer tool result"},
+            {"role": "assistant", "content": "Final reasoning"},
+            {"role": "tool", "tool_call_id": "3", "content": "Newest tool result"},
+        ]
+
+        result = mask_old_tool_results(messages, keep_full=2)
+
+        # All non-tool messages should be unchanged
+        assert result[0]["content"] == "Important system instructions"
+        assert result[1]["content"] == "User input"
+        assert result[2]["content"] == "Assistant reasoning - should not be masked"
+        assert result[4]["content"] == "More reasoning"
+        assert result[6]["content"] == "Final reasoning"
+
+    def test_mask_placeholder_format(self):
+        """Masked content should show character count."""
+        messages = [
+            {"role": "tool", "tool_call_id": "1", "content": "x" * 100},  # 100 chars
+            {"role": "tool", "tool_call_id": "2", "content": "y" * 50},   # 50 chars
+            {"role": "tool", "tool_call_id": "3", "content": "z" * 25},   # preserved
+        ]
+
+        result = mask_old_tool_results(messages, keep_full=1)
+
+        # First two should be masked with char counts
+        assert result[0]["content"] == "[100 chars returned]"
+        assert result[1]["content"] == "[50 chars returned]"
+        # Last one preserved
+        assert result[2]["content"] == "z" * 25
+
+    def test_default_window_matches_constant(self):
+        """Default keep_full should match FULL_CONTEXT_WINDOW constant."""
+        # Create messages with more tool results than default window
+        messages = []
+        for i in range(5):
+            messages.append({"role": "tool", "tool_call_id": str(i), "content": f"Result {i}"})
+
+        result = mask_old_tool_results(messages)  # Use default
+
+        # Count how many are NOT masked
+        unmasked = sum(1 for m in result if "chars returned]" not in m["content"])
+        assert unmasked == FULL_CONTEXT_WINDOW
 
 
 # =============================================================================

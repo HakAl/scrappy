@@ -54,6 +54,11 @@ DEFAULT_MAX_TOKENS = 128000
 # Minimum messages to keep (system + last user message)
 MIN_MESSAGES_TO_KEEP = 2
 
+# Observation masking constants (migrated from task_router/strategies/research_loop.py)
+# Keep last N tool results in full, mask older ones to save context
+FULL_CONTEXT_WINDOW = 2  # Keep last N tool results with full content
+CONTEXT_THRESHOLD = 0.8  # Start aggressive compaction at 80% of context limit
+
 
 # Callback type for streaming progress
 StreamCallback = Callable[[str], None]
@@ -109,6 +114,61 @@ def estimate_message_tokens(message: dict) -> int:
     return tokens
 
 
+def mask_old_tool_results(
+    messages: list[dict],
+    keep_full: int = FULL_CONTEXT_WINDOW,
+) -> list[dict]:
+    """
+    Replace old tool result content with placeholder to save context.
+
+    Observation masking pattern from task_router/strategies/research_loop.py:
+    - Recent tool results (last `keep_full`) are preserved in full
+    - Older tool results are replaced with "[X chars returned]" placeholder
+    - Non-tool messages (user, assistant, system) are never masked
+
+    This is critical for long agent runs where tool results accumulate
+    and consume context window. The LLM can still see that a tool was
+    called and returned data, just not the full content.
+
+    Args:
+        messages: List of messages to process
+        keep_full: Number of recent tool results to keep in full
+
+    Returns:
+        New list with old tool results masked (original list unchanged)
+    """
+    if not messages:
+        return messages
+
+    # Find indices of all tool result messages
+    tool_indices: list[int] = []
+    for i, msg in enumerate(messages):
+        if msg.get("role") == "tool":
+            tool_indices.append(i)
+
+    # If we have fewer tool results than keep_full, no masking needed
+    if len(tool_indices) <= keep_full:
+        return messages
+
+    # Indices to mask (all except last keep_full)
+    indices_to_mask = set(tool_indices[:-keep_full])
+
+    # Create new list with masked content
+    result: list[dict] = []
+    for i, msg in enumerate(messages):
+        if i in indices_to_mask:
+            # Mask this tool result
+            content = msg.get("content", "")
+            content_len = len(content)
+            masked_msg = dict(msg)  # Shallow copy
+            masked_msg["content"] = f"[{content_len} chars returned]"
+            result.append(masked_msg)
+        else:
+            result.append(msg)
+
+    return result
+
+
 def sanitize_context(
     messages: list[dict],
     max_tokens: int = DEFAULT_MAX_TOKENS,
@@ -117,9 +177,10 @@ def sanitize_context(
     Trim message history if approaching token limit.
 
     Strategy:
-    1. Always keep first message (system prompt) if present
-    2. Always keep last few messages (current conversation)
-    3. Summarize or drop middle messages if needed
+    1. Apply observation masking - replace old tool results with placeholders
+    2. Always keep first message (system prompt) if present
+    3. Always keep last few messages (current conversation)
+    4. Summarize or drop middle messages if needed
 
     Args:
         messages: Full message history
@@ -131,7 +192,11 @@ def sanitize_context(
     if not messages:
         return messages
 
-    # Calculate current token usage
+    # Apply observation masking first - replace old tool results with placeholders
+    # This is critical for long agent runs to save context tokens
+    messages = mask_old_tool_results(messages, keep_full=FULL_CONTEXT_WINDOW)
+
+    # Calculate current token usage (after masking)
     total_tokens = sum(estimate_message_tokens(m) for m in messages)
 
     # Calculate effective limit with margin
