@@ -14,6 +14,7 @@ Features:
 
 import json
 import logging
+import sys
 from typing import Any, Callable, Optional
 
 from scrappy.graph.protocols import LLMServiceProtocol, StreamingLLMServiceProtocol
@@ -31,6 +32,14 @@ from scrappy.infrastructure.exceptions import (
     RateLimitError,
     RecoveryAction,
     TimeoutError as InfraTimeoutError,
+)
+from scrappy.prompts.protocols import Platform
+from scrappy.prompts.sections import (
+    platform_section,
+    security_awareness_section,
+    safety_section,
+    efficiency_section,
+    quality_section,
 )
 
 logger = logging.getLogger(__name__)
@@ -199,11 +208,19 @@ def sanitize_context(
     return [remaining[-1]] if remaining else []
 
 
+def _detect_platform() -> Platform:
+    """Detect the current operating system platform."""
+    if sys.platform == "win32":
+        return Platform.WINDOWS
+    return Platform.UNIX
+
+
 def build_system_prompt(state: AgentState, tool_names: list[str]) -> str:
     """
     Build the system prompt for the agent.
 
-    Includes task context, available tools, and guidelines.
+    Includes task context, available tools, guidelines, and reusable sections
+    for platform awareness, security, safety, efficiency, and quality.
     User-controlled data is wrapped in XML tags to prevent prompt injection.
 
     Args:
@@ -214,6 +231,7 @@ def build_system_prompt(state: AgentState, tool_names: list[str]) -> str:
         System prompt string
     """
     tools_list = ", ".join(tool_names) if tool_names else "none"
+    platform = _detect_platform()
 
     # Wrap user-controlled content in XML tags to clearly separate data from instructions
     # This is a defense-in-depth measure against prompt injection
@@ -251,6 +269,16 @@ def build_system_prompt(state: AgentState, tool_names: list[str]) -> str:
 
 ## Iteration
 {state.iteration}
+
+{platform_section(platform)}
+
+{efficiency_section()}
+
+{safety_section()}
+
+{quality_section()}
+
+{security_awareness_section()}
 """
 
     # Add error context if recovering from error
