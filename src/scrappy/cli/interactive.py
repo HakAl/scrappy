@@ -207,8 +207,9 @@ class InteractiveMode:
         _logger.info("_process_input: _langgraph_bridge is %s", "SET" if self._langgraph_bridge else "NONE")
         if self._langgraph_bridge is not None:
             response_content = self._process_via_langgraph(user_input)
-            # Display the response (streaming already handled by bridge, this is for non-tool responses)
-            if response_content and not response_content.startswith("("):
+            # Chat mode streams response via callback - don't echo again
+            # Only echo for errors/cancellations (which start with "(" or "Error:")
+            if response_content and response_content.startswith(("(", "Error:")):
                 io.echo()
                 io.echo(response_content)
         else:
@@ -290,7 +291,7 @@ class InteractiveMode:
                 save_session,
                 on_error=lambda e: None,
                 io=io,
-                degraded_message=f"Could not save session: will continue without saving"
+                degraded_message="Could not save session: will continue without saving"
             )
 
             if result:

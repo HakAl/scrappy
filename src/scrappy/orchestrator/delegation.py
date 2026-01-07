@@ -81,6 +81,7 @@ PROVIDER_TO_GROUP = {
     "cerebras": "fast",
     "gemini": "instruct",
     "auto": "fast",
+    "quality": "chat",  # Legacy name for 70B conversation tier
 }
 
 

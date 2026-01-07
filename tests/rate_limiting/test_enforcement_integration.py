@@ -354,14 +354,14 @@ class TestEnforcementIntegration:
         assert len(notifier.notifications) == 0
 
     @pytest.mark.unit
-    def test_skips_enforcement_for_quality_group(self):
-        """Should skip enforcement for 'quality' model group."""
+    def test_skips_enforcement_for_chat_group(self):
+        """Should skip enforcement for 'chat' model group."""
         manager, llm_service, notifier, _ = self._create_manager(
             provider_quotas={"some_provider": 0.0}
         )
 
         response, record = manager.delegate(
-            provider_name="quality",  # Model group
+            provider_name="chat",  # Model group (not a provider with rate limits)
             prompt="test prompt",
         )
 

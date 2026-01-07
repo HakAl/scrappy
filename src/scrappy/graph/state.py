@@ -123,6 +123,14 @@ class AgentState(BaseModel):
         default=None,
         description="Last error message for error node context"
     )
+    recovery_action: Optional[str] = Field(
+        default=None,
+        description="Recommended recovery action from exception (retry, fallback, abort, skip, ask_user)"
+    )
+    error_category: Optional[str] = Field(
+        default=None,
+        description="Error category for classification (network, rate_limit, api, auth, parse, system)"
+    )
 
     # Model selection
     current_tier: Literal["fast", "chat", "instruct"] = Field(

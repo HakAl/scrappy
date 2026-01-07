@@ -5,7 +5,7 @@ Centralizes protocol definitions to avoid duplication across modules.
 """
 
 from pathlib import Path
-from typing import Any, AsyncIterator, Callable, Protocol, runtime_checkable
+from typing import Any, AsyncIterator, Callable, Iterator, Protocol, runtime_checkable
 
 from scrappy.orchestrator.types import StreamChunk
 
@@ -81,6 +81,28 @@ class LLMServiceProtocol(Protocol):
 
         Returns:
             Tuple of (LLMResponse, task_record)
+        """
+        ...
+
+    def stream_completion_sync(
+        self,
+        model: str,
+        messages: list[dict],
+        **kwargs: Any,
+    ) -> Iterator[StreamChunk]:
+        """
+        Sync streaming completion call.
+
+        Yields chunks as they arrive from the LLM provider. Used by
+        think_node when stream_callback is provided for real-time output.
+
+        Args:
+            model: Model tier ("fast", "chat", or "instruct")
+            messages: Chat messages
+            **kwargs: Additional params (tools, tool_choice, max_tokens, etc.)
+
+        Yields:
+            StreamChunk objects as they arrive
         """
         ...
 

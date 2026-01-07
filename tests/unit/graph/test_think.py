@@ -464,12 +464,12 @@ class TestThinkNode:
         # Should be marked done (no tool calls)
         assert result.done is True
 
-    def test_uses_chat_tier_without_tools(self):
-        """Think node should use 'chat' tier when no tool_adapter is provided."""
-        state = create_test_state(current_tier="instruct")
+    def test_uses_state_tier_without_tools(self):
+        """Think node should use state.current_tier even without tools."""
+        state = create_test_state(current_tier="chat")
         llm_service = MockLLMService()
 
-        # No tool_adapter = chat mode = "chat" tier
+        # No tool_adapter, uses state.current_tier
         think_node(state, llm_service, tool_adapter=None)
 
         assert llm_service.calls[0]["model"] == "chat"
@@ -483,7 +483,7 @@ class TestThinkNode:
         # With tool_adapter = agent mode = use state.current_tier
         think_node(state, llm_service, tool_adapter=tool_adapter)
 
-        assert llm_service.calls[0]["model"] == "quality"
+        assert llm_service.calls[0]["model"] == "instruct"
 
     def test_includes_conversation_history(self):
         """Think node should include previous messages."""
@@ -614,22 +614,6 @@ class TestThinkNode:
         # last_error is cleared (no current error)
         assert result.last_error is None
 
-    def test_stream_callback_receives_content(self):
-        """Stream callback should receive response content."""
-        state = create_test_state()
-        llm_service = MockLLMService(
-            response=MockLLMResponse(content="Hello, world!")
-        )
-        received_content: list[str] = []
-
-        def callback(content: str):
-            received_content.append(content)
-
-        think_node(state, llm_service, stream_callback=callback)
-
-        assert len(received_content) == 1
-        assert "Hello, world!" in received_content[0]
-
 
 # =============================================================================
 # Streaming Think Node Tests
@@ -740,14 +724,14 @@ class TestThinkNodeStreaming:
         assert result.error_count == 0
 
     @pytest.mark.asyncio
-    async def test_streaming_uses_chat_tier_without_tools(self):
-        """Streaming should use 'chat' tier when no tool_adapter is provided."""
-        state = create_test_state(current_tier="instruct")
+    async def test_streaming_uses_state_tier_without_tools(self):
+        """Streaming should use state.current_tier even without tools."""
+        state = create_test_state(current_tier="chat")
         llm_service = MockStreamingLLMService(chunks=[
             StreamChunk(content="Test", finish_reason="stop")
         ])
 
-        # No tool_adapter = chat mode = "chat" tier
+        # No tool_adapter, uses state.current_tier
         await think_node_streaming(state, llm_service, tool_adapter=None)
 
         assert llm_service.calls[0]["model"] == "chat"
@@ -764,7 +748,7 @@ class TestThinkNodeStreaming:
         # With tool_adapter = agent mode = use state.current_tier
         await think_node_streaming(state, llm_service, tool_adapter=tool_adapter)
 
-        assert llm_service.calls[0]["model"] == "quality"
+        assert llm_service.calls[0]["model"] == "instruct"
 
 
 # =============================================================================

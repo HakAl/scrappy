@@ -361,12 +361,14 @@ class TestCancellationBug:
         mock_bridge = Mock()
         mock_output = Mock()
         mock_llm = Mock()
+        mock_tool_adapter = Mock()
 
         bridge = LangGraphBridge(
             app=mock_app,
             bridge=mock_bridge,
             output_adapter=mock_output,
             llm_service=mock_llm,
+            tool_adapter=mock_tool_adapter,
         )
 
         # _current_worker should be None initially (that's fine)
@@ -385,12 +387,14 @@ class TestCancellationBug:
         mock_bridge = Mock()
         mock_output = Mock()
         mock_llm = Mock()
+        mock_tool_adapter = Mock()
 
         bridge = LangGraphBridge(
             app=mock_app,
             bridge=mock_bridge,
             output_adapter=mock_output,
             llm_service=mock_llm,
+            tool_adapter=mock_tool_adapter,
         )
 
         # When called outside worker context, should return False (not crash)
@@ -405,12 +409,14 @@ class TestCancellationBug:
         mock_bridge = Mock()
         mock_output = Mock()
         mock_llm = Mock()
+        mock_tool_adapter = Mock()
 
         bridge = LangGraphBridge(
             app=mock_app,
             bridge=mock_bridge,
             output_adapter=mock_output,
             llm_service=mock_llm,
+            tool_adapter=mock_tool_adapter,
         )
 
         # Simulate what should happen: worker is assigned
@@ -500,12 +506,14 @@ class TestStreamingCancellation:
         mock_bridge = Mock()
         mock_output = Mock()
         mock_llm = Mock()
+        mock_tool_adapter = Mock()
 
         bridge = LangGraphBridge(
             app=mock_app,
             bridge=mock_bridge,
             output_adapter=mock_output,
             llm_service=mock_llm,
+            tool_adapter=mock_tool_adapter,
         )
 
         # Create mock graph that yields events
@@ -557,10 +565,12 @@ class TestStreamingCancellation:
         mock_bridge = Mock()
         mock_output = Mock()
         mock_llm = Mock()
+        mock_tool_adapter = Mock()
 
         bridge = LangGraphBridge(
             app=mock_app,
             bridge=mock_bridge,
+            tool_adapter=mock_tool_adapter,
             output_adapter=mock_output,
             llm_service=mock_llm,
         )

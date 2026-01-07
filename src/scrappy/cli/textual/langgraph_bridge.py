@@ -509,7 +509,10 @@ class LangGraphBridge:
             }
 
             logger.info("Starting agent run for task: %s", task[:100])
-            self._output_callback(f"Task: {task}\n")
+
+            # For agent mode, show task header. For chat, skip (just stream response)
+            if tier != "chat":
+                self._output_callback(f"Task: {task}\n")
 
             # Start timing, set working dir, and show initial activity
             self._start_time = time.time()
@@ -548,11 +551,21 @@ class LangGraphBridge:
             # last_error set means there were unrecoverable errors
             is_success = final_state.done and final_state.last_error is None
 
-            # Output completion summary
-            self._output_completion_summary(
-                success=is_success,
-                final_state=final_state,
-            )
+            # Output based on tier
+            if tier == "chat":
+                # Chat mode: output the response content
+                for msg in reversed(final_state.messages):
+                    if msg.get("role") == "assistant":
+                        content = msg.get("content", "")
+                        if content:
+                            self._output_callback(f"{content}\n")
+                            break
+            else:
+                # Agent mode: show completion summary
+                self._output_completion_summary(
+                    success=is_success,
+                    final_state=final_state,
+                )
 
             logger.debug("run_agent: returning success=%s", is_success)
             return AgentResult(

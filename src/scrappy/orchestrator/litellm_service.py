@@ -29,7 +29,7 @@ import logging
 import re
 import time
 import threading
-from typing import Optional, TYPE_CHECKING, AsyncIterator, Type, TypeVar
+from typing import Iterator, Optional, TYPE_CHECKING, AsyncIterator, Type, TypeVar
 
 from pydantic import BaseModel
 
@@ -820,6 +820,127 @@ class LiteLLMService:
                 message=str(e),
                 attempted_providers=[provider],
             )
+
+    def stream_completion_sync(
+        self,
+        model: str,
+        messages: list[dict],
+        _escalation_depth: int = 0,
+        _escalated_from: Optional[str] = None,
+        **kwargs
+    ) -> Iterator[StreamChunk]:
+        """
+        Sync streaming completion via LiteLLM Router.
+
+        Used by think_node when stream_callback is provided, allowing
+        token-by-token streaming to the UI from a sync context.
+
+        Args:
+            model: Model group name ("fast", "chat", or "instruct")
+            messages: Chat messages
+            _escalation_depth: Internal counter to prevent infinite recursion (do not set)
+            _escalated_from: Internal tracking of original tier (do not set)
+            **kwargs: Additional params (max_tokens, temperature, tools, tool_choice, etc.)
+
+        Yields:
+            StreamChunk objects as they arrive from the provider
+
+        Raises:
+            NotConfiguredError: When service not configured with API keys
+            AllProvidersRateLimitedError: When all providers exhausted
+            ContextWindowExceededError: When quality tier also exceeds context (fatal)
+            RuntimeError: When max escalation depth exceeded (safety guard)
+        """
+        import litellm  # Lazy import (fast after first __init__)
+
+        if not self._configured:
+            raise NotConfiguredError("LLM service not configured. Run setup wizard first.")
+
+        # Safety guard against infinite recursion
+        if _escalation_depth >= MAX_ESCALATION_DEPTH:
+            raise RuntimeError(
+                f"Max escalation depth ({MAX_ESCALATION_DEPTH}) exceeded. "
+                "Context window too small for all available model tiers."
+            )
+
+        # Track partial content for error recovery
+        partial_content = ""
+        seen_final = False  # For Groq double-final chunk dedup
+
+        # Throttle requests to avoid rate limits (especially for Groq)
+        _get_throttle().wait_sync(model)
+
+        try:
+            # Call LiteLLM Router's sync streaming method
+            stream = self._router.completion(
+                model=model,
+                messages=messages,
+                stream=True,
+                num_retries=0,  # Don't retry - let Orchestrator handle model fallback
+                **kwargs
+            )
+
+            # Stream chunks
+            for chunk in stream:
+                converted = self._convert_chunk(chunk)
+
+                # Groq double-final chunk dedup
+                # Some providers send finish_reason twice - skip duplicates
+                if converted.finish_reason:
+                    if seen_final:
+                        continue  # Skip duplicate final chunk
+                    seen_final = True
+
+                # Accumulate content for error recovery
+                if converted.content:
+                    partial_content += converted.content
+
+                yield converted
+
+        except litellm.ContextWindowExceededError:
+            # Smart recovery: escalate to next tier (has larger context models)
+            next_tier = ESCALATION_PATH.get(model)
+            if next_tier:
+                self._output.warn(
+                    f"Context window exceeded on {model} tier, retrying with {next_tier} tier..."
+                )
+                # Track escalation for monitoring
+                if self._callback:
+                    self._callback.record_escalation(model, next_tier)
+                # Recursively call with next tier
+                yield from self.stream_completion_sync(
+                    next_tier,
+                    messages,
+                    _escalation_depth=_escalation_depth + 1,
+                    _escalated_from=model,
+                    **kwargs
+                )
+                return
+            # No escalation path available - fatal, re-raise
+            raise
+
+        except litellm.RateLimitError as e:
+            provider = getattr(e, 'llm_provider', None)
+            raise AllProvidersRateLimitedError(
+                message=str(e),
+                attempted_providers=[provider] if provider else [],
+            )
+
+        except Exception as e:
+            # Map LiteLLM exceptions to user-friendly exceptions
+            # Extract provider from error if available
+            provider = getattr(e, 'llm_provider', '') or ''
+            mapped_error = _map_litellm_error(e, provider=provider, model=model)
+
+            # Mid-stream error handling: preserve partial content info
+            if partial_content:
+                # Add partial content context to the mapped error
+                mapped_error.context = {
+                    **(getattr(mapped_error, 'context', {}) or {}),
+                    'partial_content_chars': len(partial_content)
+                }
+
+            raise mapped_error from e
 
     async def stream_completion(
         self,

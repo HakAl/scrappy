@@ -22,7 +22,16 @@ from scrappy.graph.tools import ToolAdapterProtocol
 from scrappy.graph.fallbacks import get_next_fallback
 from scrappy.orchestrator.litellm_service import NotConfiguredError
 from scrappy.orchestrator.types import StreamChunk, ToolCallFragment
-from scrappy.infrastructure.exceptions.provider_errors import AllProvidersRateLimitedError
+from scrappy.infrastructure.exceptions import (
+    AllProvidersRateLimitedError,
+    AuthenticationError,
+    NetworkError,
+    ProviderError,
+    ProviderExecutionError,
+    RateLimitError,
+    RecoveryAction,
+    TimeoutError as InfraTimeoutError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -335,7 +344,6 @@ def think_node(
     llm_service: LLMServiceProtocol,
     tool_adapter: Optional[ToolAdapterProtocol] = None,
     max_tokens: int = DEFAULT_MAX_TOKENS,
-    stream_callback: Optional[StreamCallback] = None,
 ) -> AgentState:
     """
     Think node - LLM reasoning step.
@@ -351,7 +359,6 @@ def think_node(
         llm_service: LLM service for completions
         tool_adapter: Optional tool adapter for tool schemas
         max_tokens: Max context tokens (for sanitization)
-        stream_callback: Optional callback for streaming progress
 
     Returns:
         Updated AgentState with new assistant message
@@ -407,6 +414,7 @@ def think_node(
                 messages=messages,
                 **llm_kwargs,
             )
+            raw_content = response.content if hasattr(response, "content") else ""
         else:
             # Normal mode: use user-selected tier from state
             response, task_record = llm_service.completion_sync(
@@ -414,9 +422,7 @@ def think_node(
                 messages=messages,
                 **llm_kwargs,
             )
-
-        # Extract response content
-        raw_content = response.content if hasattr(response, "content") else ""
+            raw_content = response.content if hasattr(response, "content") else ""
 
         # Handle malformed responses where tool calls are in content instead of tool_calls
         # Some models put tool calls in content as:
@@ -478,10 +484,6 @@ def think_node(
                 content = raw_content
         else:
             content = str(raw_content) if raw_content else ""
-
-        # Notify via callback if provided
-        if stream_callback and content:
-            stream_callback(content)
 
         # Extract tool calls if present, converting to OpenAI format
         tool_calls: list[ToolCall] = []
@@ -581,10 +583,23 @@ def think_node(
                 "iteration": state.iteration + 1,
                 "done": True,  # Stop the graph, no point in retrying
                 "last_error": "LLM not configured. Run /setup",
+                "recovery_action": RecoveryAction.ABORT.value,
             }
         )
-    except AllProvidersRateLimitedError:
-        # Rate limit hit - try fallback model if available
+    except AuthenticationError as e:
+        # Auth error - non-retryable, user needs to fix API keys
+        logger.error("Authentication error: %s", e)
+        return state.model_copy(
+            update={
+                "iteration": state.iteration + 1,
+                "done": True,  # Fatal - can't retry without valid credentials
+                "last_error": str(e),
+                "recovery_action": e.recovery_action.value,
+                "error_category": e.category.value,
+            }
+        )
+    except AllProvidersRateLimitedError as e:
+        # All providers rate limited - try fallback model if available
         # Use context-aware fallback chain based on whether tools are being used
         current_model = state.current_model
         next_model = get_next_fallback(current_model, has_tools=has_tools)
@@ -602,6 +617,8 @@ def think_node(
                     "iteration": state.iteration + 1,
                     "current_model": next_model,
                     "last_error": f"Rate limited, trying fallback: {next_model}",
+                    "recovery_action": RecoveryAction.FALLBACK.value,
+                    "error_category": e.category.value,
                 }
             )
         else:
@@ -613,26 +630,99 @@ def think_node(
                     "done": True,
                     "error_count": state.error_count + 1,
                     "last_error": "All providers rate limited. Please try again later.",
+                    "recovery_action": RecoveryAction.ABORT.value,
+                    "error_category": e.category.value,
                 }
             )
+    except RateLimitError as e:
+        # Single provider rate limit - retryable
+        logger.warning(
+            "Rate limit on provider %s: %s",
+            e.provider_name or "unknown",
+            e,
+            extra=e.logging_extra(),
+        )
+        return state.model_copy(
+            update={
+                "iteration": state.iteration + 1,
+                "error_count": state.error_count + 1,
+                "last_error": str(e),
+                "recovery_action": e.recovery_action.value,
+                "error_category": e.category.value,
+            }
+        )
+    except (NetworkError, InfraTimeoutError) as e:
+        # Network/timeout errors - retryable
+        logger.warning(
+            "Network error in think node: %s",
+            e,
+            extra=e.logging_extra(),
+        )
+        return state.model_copy(
+            update={
+                "iteration": state.iteration + 1,
+                "error_count": state.error_count + 1,
+                "last_error": str(e),
+                "recovery_action": e.recovery_action.value,
+                "error_category": e.category.value,
+            }
+        )
     except (ConnectionError, TimeoutError, OSError) as e:
-        # Network/connection errors - expected in distributed systems
+        # Stdlib network errors (fallback for non-wrapped errors)
         logger.warning("Network error in think node: %s", e)
         return state.model_copy(
             update={
                 "iteration": state.iteration + 1,
                 "error_count": state.error_count + 1,
                 "last_error": f"Connection error: {e}",
+                "recovery_action": RecoveryAction.RETRY.value,
+                "error_category": "network",
+            }
+        )
+    except ProviderExecutionError as e:
+        # Provider execution error - may be retryable
+        logger.warning(
+            "Provider execution error: %s",
+            e,
+            extra=e.logging_extra(),
+        )
+        return state.model_copy(
+            update={
+                "iteration": state.iteration + 1,
+                "error_count": state.error_count + 1,
+                "last_error": str(e),
+                "recovery_action": e.recovery_action.value,
+                "error_category": e.category.value,
+            }
+        )
+    except ProviderError as e:
+        # Generic provider error - check if retryable
+        log_method = logger.warning if e.is_retryable else logger.error
+        log_method(
+            "Provider error: %s",
+            e,
+            extra=e.logging_extra(),
+        )
+        return state.model_copy(
+            update={
+                "iteration": state.iteration + 1,
+                "error_count": state.error_count + 1,
+                "last_error": str(e),
+                "recovery_action": e.recovery_action.value,
+                "error_category": e.category.value,
+                "done": not e.is_retryable,  # Stop if non-retryable
             }
         )
     except (json.JSONDecodeError, ValueError, TypeError, AttributeError) as e:
-        # Response parsing/handling errors - expected when API returns unexpected format
+        # Response parsing/handling errors - may be retryable (API returned bad format)
         logger.warning("Response parsing error in think node: %s", e)
         return state.model_copy(
             update={
                 "iteration": state.iteration + 1,
                 "error_count": state.error_count + 1,
                 "last_error": f"Response error: {e}",
+                "recovery_action": RecoveryAction.RETRY.value,
+                "error_category": "parse",
             }
         )
     except Exception as e:
@@ -643,6 +733,8 @@ def think_node(
                 "iteration": state.iteration + 1,
                 "error_count": state.error_count + 1,
                 "last_error": str(e),
+                "recovery_action": RecoveryAction.ABORT.value,
+                "error_category": "system",
             }
         )
 
@@ -829,10 +921,23 @@ async def think_node_streaming(
                 "iteration": state.iteration + 1,
                 "done": True,  # Stop the graph, no point in retrying
                 "last_error": "LLM not configured. Run /setup",
+                "recovery_action": RecoveryAction.ABORT.value,
             }
         )
-    except AllProvidersRateLimitedError:
-        # Rate limit hit - try fallback model if available
+    except AuthenticationError as e:
+        # Auth error - non-retryable, user needs to fix API keys
+        logger.error("Authentication error: %s", e)
+        return state.model_copy(
+            update={
+                "iteration": state.iteration + 1,
+                "done": True,  # Fatal - can't retry without valid credentials
+                "last_error": str(e),
+                "recovery_action": e.recovery_action.value,
+                "error_category": e.category.value,
+            }
+        )
+    except AllProvidersRateLimitedError as e:
+        # All providers rate limited - try fallback model if available
         # Use context-aware fallback chain based on whether tools are being used
         current_model = state.current_model
         next_model = get_next_fallback(current_model, has_tools=has_tools)
@@ -850,6 +955,8 @@ async def think_node_streaming(
                     "iteration": state.iteration + 1,
                     "current_model": next_model,
                     "last_error": f"Rate limited, trying fallback: {next_model}",
+                    "recovery_action": RecoveryAction.FALLBACK.value,
+                    "error_category": e.category.value,
                 }
             )
         else:
@@ -861,26 +968,99 @@ async def think_node_streaming(
                     "done": True,
                     "error_count": state.error_count + 1,
                     "last_error": "All providers rate limited. Please try again later.",
+                    "recovery_action": RecoveryAction.ABORT.value,
+                    "error_category": e.category.value,
                 }
             )
+    except RateLimitError as e:
+        # Single provider rate limit - retryable
+        logger.warning(
+            "Rate limit on provider %s: %s",
+            e.provider_name or "unknown",
+            e,
+            extra=e.logging_extra(),
+        )
+        return state.model_copy(
+            update={
+                "iteration": state.iteration + 1,
+                "error_count": state.error_count + 1,
+                "last_error": str(e),
+                "recovery_action": e.recovery_action.value,
+                "error_category": e.category.value,
+            }
+        )
+    except (NetworkError, InfraTimeoutError) as e:
+        # Network/timeout errors - retryable
+        logger.warning(
+            "Network error in streaming think node: %s",
+            e,
+            extra=e.logging_extra(),
+        )
+        return state.model_copy(
+            update={
+                "iteration": state.iteration + 1,
+                "error_count": state.error_count + 1,
+                "last_error": str(e),
+                "recovery_action": e.recovery_action.value,
+                "error_category": e.category.value,
+            }
+        )
     except (ConnectionError, TimeoutError, OSError) as e:
-        # Network/connection errors - expected in distributed systems
+        # Stdlib network errors (fallback for non-wrapped errors)
         logger.warning("Network error in streaming think node: %s", e)
         return state.model_copy(
             update={
                 "iteration": state.iteration + 1,
                 "error_count": state.error_count + 1,
                 "last_error": f"Connection error: {e}",
+                "recovery_action": RecoveryAction.RETRY.value,
+                "error_category": "network",
+            }
+        )
+    except ProviderExecutionError as e:
+        # Provider execution error - may be retryable
+        logger.warning(
+            "Provider execution error: %s",
+            e,
+            extra=e.logging_extra(),
+        )
+        return state.model_copy(
+            update={
+                "iteration": state.iteration + 1,
+                "error_count": state.error_count + 1,
+                "last_error": str(e),
+                "recovery_action": e.recovery_action.value,
+                "error_category": e.category.value,
+            }
+        )
+    except ProviderError as e:
+        # Generic provider error - check if retryable
+        log_method = logger.warning if e.is_retryable else logger.error
+        log_method(
+            "Provider error: %s",
+            e,
+            extra=e.logging_extra(),
+        )
+        return state.model_copy(
+            update={
+                "iteration": state.iteration + 1,
+                "error_count": state.error_count + 1,
+                "last_error": str(e),
+                "recovery_action": e.recovery_action.value,
+                "error_category": e.category.value,
+                "done": not e.is_retryable,  # Stop if non-retryable
             }
         )
     except (json.JSONDecodeError, ValueError, TypeError, AttributeError) as e:
-        # Response parsing/handling errors - expected when API returns unexpected format
+        # Response parsing/handling errors - may be retryable (API returned bad format)
         logger.warning("Response parsing error in streaming think node: %s", e)
         return state.model_copy(
             update={
                 "iteration": state.iteration + 1,
                 "error_count": state.error_count + 1,
                 "last_error": f"Response error: {e}",
+                "recovery_action": RecoveryAction.RETRY.value,
+                "error_category": "parse",
             }
         )
     except Exception as e:
@@ -891,5 +1071,7 @@ async def think_node_streaming(
                 "iteration": state.iteration + 1,
                 "error_count": state.error_count + 1,
                 "last_error": str(e),
+                "recovery_action": RecoveryAction.ABORT.value,
+                "error_category": "system",
             }
         )

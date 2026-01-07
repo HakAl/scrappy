@@ -19,7 +19,7 @@ from scrappy.orchestrator.rate_limiting import RateLimitTracker
 from scrappy.orchestrator.memory import WorkingMemory
 from scrappy.orchestrator.session import SessionManager
 from scrappy.orchestrator.provider_selector import ProviderSelector
-from scrappy.orchestrator.protocols import BaseOutputProtocol
+from scrappy.protocols.output import BaseOutputProtocol
 from scrappy.orchestrator.output import NullOutput
 from scrappy.orchestrator.manager_protocols import DelegationManagerProtocol
 
