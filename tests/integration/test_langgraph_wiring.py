@@ -492,6 +492,50 @@ class TestAgentManagerCancelWiring:
         mock_bridge.cancel.assert_not_called()
         mock_io.secho.assert_not_called()
 
+    def test_two_stage_cancel_shows_different_messages(self):
+        """First cancel shows graceful message, second cancel shows force message."""
+        from scrappy.cli.agent_manager import CLIAgentManager
+        from scrappy.agent.cancellation import CancellationToken
+
+        # Create mocks
+        mock_orchestrator = Mock()
+        mock_io = Mock()
+        mock_io.theme = Mock()
+        mock_io.theme.warning = "yellow"
+        mock_io.theme.error = "red"
+        mock_io.secho = Mock()
+
+        # Create mock LangGraphBridge with is_running=True
+        mock_bridge = Mock()
+        mock_bridge.is_running = True
+
+        # Create agent manager with bridge
+        agent_mgr = CLIAgentManager(
+            orchestrator=mock_orchestrator,
+            io=mock_io,
+            user_interaction=Mock(),
+            langgraph_bridge=mock_bridge,
+        )
+
+        # Simulate having a cancellation token (as would exist during a run)
+        agent_mgr._cancellation_token = CancellationToken()
+
+        # First cancel - should show graceful message
+        agent_mgr.cancel()
+        mock_io.secho.assert_called_with(
+            "Cancelling... waiting for current step to finish (press again to force)",
+            fg="yellow"
+        )
+
+        # Second cancel - should show force message
+        mock_io.secho.reset_mock()
+        agent_mgr.cancel()
+        mock_io.secho.assert_called_with("Force cancelling...", fg="red")
+
+        # Verify token state
+        assert agent_mgr._cancellation_token.is_cancelled()
+        assert agent_mgr._cancellation_token.is_force_cancelled()
+
 
 class TestStreamingCancellation:
     """Test that streaming allows mid-execution cancellation."""

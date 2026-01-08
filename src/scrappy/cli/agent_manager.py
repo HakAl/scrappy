@@ -57,23 +57,33 @@ class CLIAgentManager:
         Works for both CodeAgent (via _cancellation_token) and
         LangGraph (via _langgraph_bridge.cancel()).
         """
-        # Cancel LangGraph bridge if active AND running (TUI mode)
-        if self._langgraph_bridge is not None and self._langgraph_bridge.is_running:
-            self._langgraph_bridge.cancel()
-            self.io.secho(
-                "Cancelling... waiting for current LLM call to finish",
-                fg=self.io.theme.warning
-            )
+        # Check if anything is running
+        bridge_running = (
+            self._langgraph_bridge is not None and self._langgraph_bridge.is_running
+        )
+        if not self._cancellation_token and not bridge_running:
+            return  # No agent running
 
-        # Cancel CodeAgent if active (CLI mode)
+        # Track cancel count via token (for two-stage cancel UX)
+        was_force_cancelled = False
+        is_now_force = False
         if self._cancellation_token:
             was_force_cancelled = self._cancellation_token.is_force_cancelled()
             self._cancellation_token.cancel()
+            is_now_force = self._cancellation_token.is_force_cancelled()
 
-            if self._cancellation_token.is_force_cancelled() and not was_force_cancelled:
-                self.io.secho("Force cancelling...", fg=self.io.theme.error)
-            elif not self._cancellation_token.is_force_cancelled():
-                self.io.secho("Cancelling... waiting for current step to finish (press again to force)", fg=self.io.theme.warning)
+        # Cancel LangGraph bridge if active (TUI mode)
+        if bridge_running:
+            self._langgraph_bridge.cancel()
+
+        # Show appropriate message based on cancel stage
+        if is_now_force and not was_force_cancelled:
+            self.io.secho("Force cancelling...", fg=self.io.theme.error)
+        elif not is_now_force:
+            self.io.secho(
+                "Cancelling... waiting for current step to finish (press again to force)",
+                fg=self.io.theme.warning
+            )
 
     def is_force_cancelled(self) -> bool:
         """Check if force cancel was requested."""
