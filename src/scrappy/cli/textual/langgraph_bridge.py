@@ -21,6 +21,7 @@ from textual import work
 from textual.worker import Worker, WorkerCancelled, get_current_worker
 
 from scrappy.protocols.activity import ActivityState
+from scrappy.protocols.tasks import Task, TaskStatus
 
 if TYPE_CHECKING:
     from langgraph.graph.state import CompiledStateGraph
@@ -127,6 +128,10 @@ class LangGraphBridge:
         # Track working directory for diff display
         self._working_dir: str = ""
 
+        # Task progress tracking (rolling window)
+        self._recent_tasks: list[Task] = []
+        self._max_completed_tasks: int = 3  # Keep last N completed
+
     def _post_activity(
         self,
         state: ActivityState,
@@ -185,6 +190,42 @@ class LangGraphBridge:
             # Not running in a worker context
             return False
 
+    def _update_task_progress(self, tool_tasks: list[tuple[str, bool]]) -> None:
+        """
+        Update task progress widget with tool execution status.
+
+        Maintains a rolling window showing current in-progress tool plus
+        last N completed tools.
+
+        Args:
+            tool_tasks: List of (description, is_complete) tuples for tools
+        """
+        # Build new task list: completed tools first, then in-progress
+        completed = []
+        in_progress = []
+
+        for desc, is_complete in tool_tasks:
+            task = Task(
+                description=desc,
+                status=TaskStatus.DONE if is_complete else TaskStatus.IN_PROGRESS,
+            )
+            if is_complete:
+                completed.append(task)
+            else:
+                in_progress.append(task)
+
+        # Keep only last N completed + all in-progress
+        recent_completed = completed[-self._max_completed_tasks:]
+        self._recent_tasks = recent_completed + in_progress
+
+        # Post update to TUI
+        self._output_adapter.post_tasks_updated(self._recent_tasks)
+
+    def _clear_task_progress(self) -> None:
+        """Clear the task progress widget."""
+        self._recent_tasks = []
+        self._output_adapter.post_tasks_updated([])
+
     def _output_tool_executions(self, node_output: dict[str, Any]) -> None:
         """
         Output tool execution info from execute node output.
@@ -192,12 +233,16 @@ class LangGraphBridge:
         Displays tool calls in format: [tool] name: key_param
         Truncates long paths (>50 chars) with ellipsis.
         Shows git diff for file-modifying tools.
+        Updates task progress widget with completed tools.
 
         Args:
             node_output: The execute node's output dict containing state updates
         """
         tool_calls = node_output.get("pending_tool_calls", [])
         tool_results = node_output.get("tool_results", [])
+
+        # Track completed tools for task widget
+        completed_tools: list[str] = []
 
         if not tool_calls:
             return
@@ -225,6 +270,13 @@ class LangGraphBridge:
 
             # Extract key parameter based on tool type
             key_param = self._extract_key_param(name, args)
+
+            # Build task description for progress widget
+            if key_param:
+                task_desc = f"{name}: {key_param}"
+            else:
+                task_desc = name
+            completed_tools.append(task_desc)
 
             # Add blank line between tool calls for visual separation
             if i > 0:
@@ -275,6 +327,18 @@ class LangGraphBridge:
                 file_path = self._get_file_path_from_args(args)
                 if file_path:
                     self._output_file_diff(file_path)
+
+        # Update task progress widget with completed tools
+        if completed_tools:
+            # Add new completed tools to recent list
+            for desc in completed_tools:
+                self._recent_tasks.append(Task(
+                    description=desc,
+                    status=TaskStatus.DONE,
+                ))
+            # Keep only last N completed
+            self._recent_tasks = self._recent_tasks[-self._max_completed_tasks:]
+            self._output_adapter.post_tasks_updated(self._recent_tasks)
 
     def _truncate_result(self, result: str, max_lines: int = 3, max_chars: int = 200) -> str:
         """
@@ -606,6 +670,8 @@ class LangGraphBridge:
             self._post_activity(ActivityState.IDLE)
             self._start_time = 0.0
             self._working_dir = ""
+            # Clear task progress widget
+            self._clear_task_progress()
             # Clear running state to allow new runs
             self._is_running = False
             self._current_worker = None

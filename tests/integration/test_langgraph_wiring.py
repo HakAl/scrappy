@@ -646,5 +646,121 @@ class TestStreamingCancellation:
         assert result is None, "Expected None when cancelled"
 
 
+class TestTaskProgressWidget:
+    """Test that task progress widget is updated during tool execution."""
+
+    def test_output_tool_executions_updates_task_progress(self):
+        """_output_tool_executions should update task progress widget."""
+        from scrappy.cli.textual.langgraph_bridge import LangGraphBridge
+        from scrappy.protocols.tasks import TaskStatus
+
+        # Create bridge with mocks
+        mock_app = Mock()
+        mock_bridge = Mock()
+        mock_output = Mock()
+        mock_llm = Mock()
+        mock_tool_adapter = Mock()
+
+        bridge = LangGraphBridge(
+            app=mock_app,
+            bridge=mock_bridge,
+            tool_adapter=mock_tool_adapter,
+            output_adapter=mock_output,
+            llm_service=mock_llm,
+        )
+
+        # Simulate execute node output with tool calls
+        node_output = {
+            "pending_tool_calls": [
+                {
+                    "type": "function",
+                    "id": "call_1",
+                    "function": {"name": "read_file", "arguments": '{"path": "config.py"}'},
+                },
+                {
+                    "type": "function",
+                    "id": "call_2",
+                    "function": {"name": "write_file", "arguments": '{"path": "output.txt"}'},
+                },
+            ],
+            "tool_results": [
+                {"name": "read_file", "result": "file content"},
+                {"name": "write_file", "result": "success"},
+            ],
+        }
+
+        # Call the method
+        bridge._output_tool_executions(node_output)
+
+        # Verify post_tasks_updated was called with completed tasks
+        mock_output.post_tasks_updated.assert_called_once()
+        tasks = mock_output.post_tasks_updated.call_args[0][0]
+        assert len(tasks) == 2
+        assert all(t.status == TaskStatus.DONE for t in tasks)
+        assert "read_file" in tasks[0].description
+        assert "write_file" in tasks[1].description
+
+    def test_task_progress_rolling_window(self):
+        """Task progress should keep only last N completed tasks."""
+        from scrappy.cli.textual.langgraph_bridge import LangGraphBridge
+
+        # Create bridge
+        mock_app = Mock()
+        mock_output = Mock()
+
+        bridge = LangGraphBridge(
+            app=mock_app,
+            bridge=Mock(),
+            tool_adapter=Mock(),
+            output_adapter=mock_output,
+            llm_service=Mock(),
+        )
+        bridge._max_completed_tasks = 3  # Keep last 3
+
+        # Simulate 5 tool executions across multiple batches
+        for i in range(5):
+            node_output = {
+                "pending_tool_calls": [
+                    {"type": "function", "id": f"call_{i}", "function": {"name": f"tool_{i}", "arguments": "{}"}},
+                ],
+                "tool_results": [{"name": f"tool_{i}", "result": "ok"}],
+            }
+            bridge._output_tool_executions(node_output)
+
+        # Should only have last 3 tasks
+        assert len(bridge._recent_tasks) == 3
+        assert "tool_2" in bridge._recent_tasks[0].description
+        assert "tool_3" in bridge._recent_tasks[1].description
+        assert "tool_4" in bridge._recent_tasks[2].description
+
+    def test_clear_task_progress_on_run_end(self):
+        """Task progress should be cleared when agent run completes."""
+        from scrappy.cli.textual.langgraph_bridge import LangGraphBridge
+        from scrappy.protocols.tasks import Task, TaskStatus
+
+        mock_output = Mock()
+
+        bridge = LangGraphBridge(
+            app=Mock(),
+            bridge=Mock(),
+            tool_adapter=Mock(),
+            output_adapter=mock_output,
+            llm_service=Mock(),
+        )
+
+        # Add some tasks
+        bridge._recent_tasks = [
+            Task(description="task1", status=TaskStatus.DONE),
+            Task(description="task2", status=TaskStatus.DONE),
+        ]
+
+        # Clear
+        bridge._clear_task_progress()
+
+        # Verify cleared
+        assert bridge._recent_tasks == []
+        mock_output.post_tasks_updated.assert_called_with([])
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
