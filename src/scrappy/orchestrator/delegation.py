@@ -277,9 +277,19 @@ class DelegationManager:
         # FAIL or BLOCK with no alternative
         if self._notifier:
             self._notifier.notify_all_exhausted([provider_name])
+
+        # Build provider details with wait time if available
+        provider_details = {}
+        if decision.wait_seconds:
+            provider_details[provider_name] = {
+                "retry_after": decision.wait_seconds,
+                "error": decision.reason,
+            }
+
         raise AllProvidersRateLimitedError(
-            message=decision.reason,
+            message="",  # Will be auto-generated with provider details
             attempted_providers=[provider_name],
+            provider_details=provider_details,
         )
 
     def delegate(

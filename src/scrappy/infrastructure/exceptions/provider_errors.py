@@ -106,6 +106,7 @@ class AllProvidersRateLimitedError(NonRetryableError):
         self,
         message: str,
         attempted_providers: Optional[list[str]] = None,
+        provider_details: Optional[Dict[str, Dict[str, Any]]] = None,
         **kwargs: Any
     ):
         """Initialize all-providers-rate-limited error.
@@ -113,15 +114,27 @@ class AllProvidersRateLimitedError(NonRetryableError):
         Args:
             message: Error message
             attempted_providers: List of providers attempted
+            provider_details: Per-provider info with retry_after times.
+                Format: {"provider": {"retry_after": seconds, "error": msg}}
             **kwargs: Additional BaseError arguments
         """
-        context = kwargs.pop('context', {})
-        if attempted_providers:
-            context['attempted_providers'] = attempted_providers
+        self.provider_details = provider_details or {}
+        self.attempted_providers = attempted_providers or list(self.provider_details.keys())
 
+        context = kwargs.pop('context', {})
+        if self.attempted_providers:
+            context['attempted_providers'] = self.attempted_providers
+        if self.provider_details:
+            context['provider_details'] = self.provider_details
+
+        # Generate user-friendly suggestion based on retry times
         suggestion = kwargs.pop('suggestion', None)
         if not suggestion:
-            suggestion = "Wait for rate limits to reset or add more provider API keys."
+            suggestion = self._generate_suggestion()
+
+        # Generate user-friendly message if not provided
+        if not message or message == "Rate limit exceeded":
+            message = self._generate_message()
 
         super().__init__(
             message,
@@ -129,7 +142,58 @@ class AllProvidersRateLimitedError(NonRetryableError):
             suggestion=suggestion,
             **kwargs
         )
-        self.attempted_providers = attempted_providers or []
+
+    def _generate_message(self) -> str:
+        """Generate user-friendly error message listing providers."""
+        if not self.attempted_providers:
+            return "All providers are rate limited."
+
+        parts = ["Rate limited by all providers:"]
+        for provider in self.attempted_providers:
+            details = self.provider_details.get(provider, {})
+            retry_after = details.get("retry_after")
+            if retry_after:
+                parts.append(f"  - {provider}: retry after {self._format_time(retry_after)}")
+            else:
+                parts.append(f"  - {provider}")
+
+        return "\n".join(parts)
+
+    def _generate_suggestion(self) -> str:
+        """Generate actionable suggestion based on retry times."""
+        # Find minimum retry time
+        min_retry = None
+        for details in self.provider_details.values():
+            retry_after = details.get("retry_after")
+            if retry_after is not None:
+                if min_retry is None or retry_after < min_retry:
+                    min_retry = retry_after
+
+        if min_retry is not None:
+            return f"Wait {self._format_time(min_retry)} or add another provider API key."
+        return "Wait for rate limits to reset or add more provider API keys."
+
+    @staticmethod
+    def _format_time(seconds: float) -> str:
+        """Format seconds into human-readable time."""
+        if seconds < 60:
+            return f"{int(seconds)}s"
+        elif seconds < 3600:
+            minutes = int(seconds / 60)
+            return f"{minutes}m"
+        else:
+            hours = seconds / 3600
+            return f"{hours:.1f}h"
+
+    def user_friendly_message(self) -> str:
+        """Get complete user-friendly message with suggestion.
+
+        Returns formatted message suitable for display to users.
+        """
+        parts = [str(self)]
+        if self.suggestion:
+            parts.append(f"Suggestion: {self.suggestion}")
+        return "\n".join(parts)
 
 
 class ProviderNotFoundError(NonRetryableError):

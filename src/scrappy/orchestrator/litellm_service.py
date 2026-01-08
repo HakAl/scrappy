@@ -107,6 +107,122 @@ PROVIDER_THROTTLE_DELAYS = {
 }
 DEFAULT_THROTTLE_DELAY = 0.5  # Default for unknown providers
 
+
+def _extract_retry_after(error: Exception) -> Optional[float]:
+    """Extract retry-after time from litellm RateLimitError.
+
+    Checks multiple sources:
+    1. response headers (Retry-After, x-ratelimit-reset-requests)
+    2. error body for retry_after field
+    3. error message for time patterns
+
+    Args:
+        error: A litellm exception (usually RateLimitError)
+
+    Returns:
+        Retry-after time in seconds, or None if not available
+    """
+    # Try response headers first
+    response = getattr(error, 'response', None)
+    if response:
+        headers = getattr(response, 'headers', {})
+        if headers:
+            # Standard Retry-After header (seconds or HTTP date)
+            retry_after = headers.get('Retry-After') or headers.get('retry-after')
+            if retry_after:
+                try:
+                    return float(retry_after)
+                except ValueError:
+                    pass  # HTTP date format, skip
+
+            # OpenAI/Anthropic rate limit headers
+            reset_requests = headers.get('x-ratelimit-reset-requests')
+            reset_tokens = headers.get('x-ratelimit-reset-tokens')
+            if reset_requests:
+                # Parse time like "1s", "1m30s", "1h"
+                return _parse_time_string(reset_requests)
+            if reset_tokens:
+                return _parse_time_string(reset_tokens)
+
+    # Try error body
+    body = getattr(error, 'body', None)
+    if body and isinstance(body, dict):
+        retry = body.get('retry_after') or body.get('retryAfter')
+        if retry:
+            try:
+                return float(retry)
+            except (ValueError, TypeError):
+                pass
+
+    # Try parsing from error message (e.g., "retry after 45 seconds")
+    message = str(error).lower()
+    if 'retry' in message or 'wait' in message:
+        import re
+        # Match patterns like "45 seconds", "2 minutes", "1.5 hours"
+        time_match = re.search(r'(\d+(?:\.\d+)?)\s*(second|minute|hour|s|m|h)', message)
+        if time_match:
+            value = float(time_match.group(1))
+            unit = time_match.group(2)
+            if unit.startswith('m'):
+                value *= 60
+            elif unit.startswith('h'):
+                value *= 3600
+            return value
+
+    return None
+
+
+def _parse_time_string(time_str: str) -> Optional[float]:
+    """Parse time strings like '1s', '1m30s', '1h2m3s' into seconds."""
+    import re
+    total_seconds = 0.0
+    time_str = time_str.lower().strip()
+
+    # Match hours, minutes, seconds patterns
+    hours = re.search(r'(\d+(?:\.\d+)?)\s*h', time_str)
+    minutes = re.search(r'(\d+(?:\.\d+)?)\s*m(?!s)', time_str)  # m but not ms
+    seconds = re.search(r'(\d+(?:\.\d+)?)\s*s', time_str)
+
+    if hours:
+        total_seconds += float(hours.group(1)) * 3600
+    if minutes:
+        total_seconds += float(minutes.group(1)) * 60
+    if seconds:
+        total_seconds += float(seconds.group(1))
+
+    # If no time units found, try parsing as plain number
+    if total_seconds == 0.0 and time_str:
+        try:
+            total_seconds = float(time_str)
+        except ValueError:
+            return None
+
+    return total_seconds if total_seconds > 0 else None
+
+
+def _build_provider_details(
+    error: Exception,
+    provider: Optional[str]
+) -> dict[str, dict]:
+    """Build provider_details dict from a rate limit error.
+
+    Args:
+        error: The litellm error
+        provider: Provider name if known
+
+    Returns:
+        Dict like {"openai": {"retry_after": 45, "error": "..."}}
+    """
+    if not provider:
+        return {}
+
+    details: dict = {"error": str(error)[:200]}
+    retry_after = _extract_retry_after(error)
+    if retry_after is not None:
+        details["retry_after"] = retry_after
+
+    return {provider: details}
+
 # Instructor retry limit - keep low since LiteLLM Router already handles retries
 DEFAULT_INSTRUCTOR_RETRIES = 1
 
@@ -620,8 +736,9 @@ class LiteLLMService:
         except litellm.RateLimitError as e:
             provider = getattr(e, 'llm_provider', None)
             raise AllProvidersRateLimitedError(
-                message=str(e),
+                message="",  # Will be auto-generated
                 attempted_providers=[provider] if provider else [],
+                provider_details=_build_provider_details(e, provider),
             )
         # NOTE: AuthenticationError is NOT caught here.
         # LiteLLM Router handles auth failures internally by trying next provider in group.
@@ -730,8 +847,9 @@ class LiteLLMService:
         except litellm.RateLimitError as e:
             provider = getattr(e, 'llm_provider', None)
             raise AllProvidersRateLimitedError(
-                message=str(e),
+                message="",  # Will be auto-generated
                 attempted_providers=[provider] if provider else [],
+                provider_details=_build_provider_details(e, provider),
             )
         # NOTE: AuthenticationError is NOT caught here. See async version for rationale.
 
@@ -817,8 +935,9 @@ class LiteLLMService:
 
         except litellm.RateLimitError as e:
             raise AllProvidersRateLimitedError(
-                message=str(e),
+                message="",  # Will be auto-generated
                 attempted_providers=[provider],
+                provider_details=_build_provider_details(e, provider),
             )
 
     def stream_completion_sync(
@@ -922,8 +1041,9 @@ class LiteLLMService:
         except litellm.RateLimitError as e:
             provider = getattr(e, 'llm_provider', None)
             raise AllProvidersRateLimitedError(
-                message=str(e),
+                message="",  # Will be auto-generated
                 attempted_providers=[provider] if provider else [],
+                provider_details=_build_provider_details(e, provider),
             )
 
         except Exception as e:
@@ -1075,8 +1195,9 @@ class LiteLLMService:
         except litellm.RateLimitError as e:
             provider = getattr(e, 'llm_provider', None)
             raise AllProvidersRateLimitedError(
-                message=str(e),
+                message="",  # Will be auto-generated
                 attempted_providers=[provider] if provider else [],
+                provider_details=_build_provider_details(e, provider),
             )
 
         except (StreamStuckError, StreamCancelledError):

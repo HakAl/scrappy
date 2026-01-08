@@ -99,6 +99,81 @@ class TestAllProvidersRateLimitedError:
         suggestion = error.suggestion.lower()
         assert 'wait' in suggestion or 'api key' in suggestion
 
+    def test_provider_details_with_retry_after(self):
+        """Test error includes retry-after times per provider."""
+        provider_details = {
+            'openai': {'retry_after': 45, 'error': 'Rate limit exceeded'},
+            'anthropic': {'retry_after': 120, 'error': 'Too many requests'},
+        }
+        error = AllProvidersRateLimitedError(
+            "",  # Empty to trigger auto-generation
+            provider_details=provider_details
+        )
+
+        # Should auto-populate attempted_providers from provider_details
+        assert set(error.attempted_providers) == {'openai', 'anthropic'}
+        assert error.provider_details == provider_details
+        assert error.context['provider_details'] == provider_details
+
+    def test_auto_generates_message_with_retry_times(self):
+        """Test message lists providers with retry times."""
+        error = AllProvidersRateLimitedError(
+            "",
+            provider_details={
+                'openai': {'retry_after': 45},
+                'groq': {'retry_after': 60},
+            }
+        )
+
+        message = str(error)
+        assert 'openai' in message
+        assert 'groq' in message
+        assert '45s' in message
+        assert '1m' in message  # 60s formatted as 1m
+
+    def test_suggestion_uses_minimum_retry_time(self):
+        """Test suggestion shows minimum wait time."""
+        error = AllProvidersRateLimitedError(
+            "",
+            provider_details={
+                'openai': {'retry_after': 120},  # 2 minutes
+                'groq': {'retry_after': 30},     # 30 seconds (minimum)
+            }
+        )
+
+        assert '30s' in error.suggestion
+
+    def test_time_formatting(self):
+        """Test time formatting for different durations."""
+        # Seconds
+        error1 = AllProvidersRateLimitedError(
+            "", provider_details={'p': {'retry_after': 45}}
+        )
+        assert '45s' in str(error1)
+
+        # Minutes
+        error2 = AllProvidersRateLimitedError(
+            "", provider_details={'p': {'retry_after': 120}}
+        )
+        assert '2m' in str(error2)
+
+        # Hours
+        error3 = AllProvidersRateLimitedError(
+            "", provider_details={'p': {'retry_after': 3600}}
+        )
+        assert '1.0h' in str(error3)
+
+    def test_user_friendly_message_includes_suggestion(self):
+        """Test user_friendly_message combines message and suggestion."""
+        error = AllProvidersRateLimitedError(
+            "",
+            provider_details={'groq': {'retry_after': 60}}
+        )
+
+        friendly = error.user_friendly_message()
+        assert 'groq' in friendly
+        assert 'Suggestion' in friendly
+
 
 class TestProviderNotFoundError:
     """Test ProviderNotFoundError behavior."""
