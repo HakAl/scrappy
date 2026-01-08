@@ -26,10 +26,9 @@ Last updated: 2025-11-16
 | llama-3.3-70b-versatile | 30 | 1,000 | 12K | 100K |
 | llama-3.1-70b-versatile | 30 | 1,000 | 12K | 100K |
 | mixtral-8x7b-32768 | 30 | 14,400 | 5K | - |
-| meta-llama/llama-4-scout-17b-16e-instruct | 30 | 7,000 | 20K | 200K |
 | moonshotai/kimi-k2-instruct | 30 | 7,000 | 20K | 200K |
 
-**Note**: `gemma2-9b-it` was decommissioned by Groq (2025-11). New instruction-tuned models (Llama 4, Kimi K2) added as replacements with excellent JSON compliance for agent planning.
+**Note**: `gemma2-9b-it` was decommissioned by Groq (2025-11). Kimi K2 added as replacement with excellent JSON compliance for agent planning.
 
 **Best for**: Backup to Cerebras, model variety, **agent planning** (instruction-tuned models)
 

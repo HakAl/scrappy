@@ -139,18 +139,18 @@ MODEL_METADATA: dict[str, ModelMetadata] = {
         rpd=14400,
         tpm=60000,
     ),
+    "cerebras/gpt-oss-120b": ModelMetadata(
+        model_id="cerebras/gpt-oss-120b",
+        provider="cerebras",
+        group="instruct",
+        context_length=131072,  # 128k context
+        speed=SpeedRank.FAST,
+        quality=QualityRank.VERY_GOOD,
+        rpd=14400,
+        tpm=60000,
+    ),
 
     # Groq
-    "groq/meta-llama/llama-4-scout-17b-16e-instruct": ModelMetadata(
-        model_id="groq/meta-llama/llama-4-scout-17b-16e-instruct",
-        provider="groq",
-        group="instruct",
-        context_length=131072,  # 128k
-        speed=SpeedRank.ULTRA_FAST,  # 0.4s
-        quality=QualityRank.VERY_GOOD,
-        rpd=7000,
-        tpm=20000,
-    ),
     "groq/moonshotai/kimi-k2-instruct": ModelMetadata(
         model_id="groq/moonshotai/kimi-k2-instruct",
         provider="groq",
@@ -325,11 +325,11 @@ def build_model_list(api_key_service: ApiKeyConfigServiceProtocol) -> list[dict]
     # --- Instruct Models (tool-use + instruction-following priority) ---
     # Priority:
     # 1. Cerebras Qwen 235B - instruction-tuned, massive model
-    # 2. Groq Llama 4 - fast, good tool use
+    # 2. Cerebras GPT-OSS 120B - large model, same high RPD
     # 3. Groq Kimi K2 - fast, 128k context
     # 4. Gemini - fallback (JSON issues but huge context)
 
-    # Cerebras Qwen 235B - instruction-tuned for tool use
+    # Cerebras - high RPD (14,400/day), use as primary
     if cerebras_key:
         model_list.append({
             "model_name": "instruct",
@@ -340,19 +340,18 @@ def build_model_list(api_key_service: ApiKeyConfigServiceProtocol) -> list[dict]
             "tpm": 60000,
             "rpm": 30,
         })
-
-    # Groq - fast inference, good tool use
-    if groq_key:
-        # Llama 4 - latest architecture, 0.4s latency
         model_list.append({
             "model_name": "instruct",
             "litellm_params": {
-                "model": "groq/meta-llama/llama-4-scout-17b-16e-instruct",
-                "api_key": groq_key,
+                "model": "cerebras/gpt-oss-120b",
+                "api_key": cerebras_key,
             },
-            "tpm": 20000,
+            "tpm": 60000,
             "rpm": 30,
         })
+
+    # Groq - fast inference, good tool use
+    if groq_key:
         # Kimi K2 - fast, 128k context
         model_list.append({
             "model_name": "instruct",
@@ -435,11 +434,11 @@ def create_litellm_router(callbacks: Optional[list] = None):
     # Context window fallbacks: when a model hits context limit, try larger models
     # Order: small context -> medium -> large (Gemini has 1M context)
     context_fallbacks = [
-        {"cerebras/qwen-3-235b-a22b-instruct-2507": ["groq/moonshotai/kimi-k2-instruct", "gemini/gemini-2.5-flash"]},
+        {"cerebras/qwen-3-235b-a22b-instruct-2507": ["cerebras/gpt-oss-120b", "groq/moonshotai/kimi-k2-instruct", "gemini/gemini-2.5-flash"]},
+        {"cerebras/gpt-oss-120b": ["gemini/gemini-2.5-flash"]},
         {"cerebras/llama-3.3-70b": ["groq/moonshotai/kimi-k2-instruct", "gemini/gemini-2.5-flash"]},
         {"cerebras/llama3.1-8b": ["groq/llama-3.1-8b-instant", "gemini/gemini-2.5-flash"]},
         {"groq/moonshotai/kimi-k2-instruct": ["gemini/gemini-2.5-flash"]},
-        {"groq/meta-llama/llama-4-scout-17b-16e-instruct": ["gemini/gemini-2.5-flash"]},
         {"groq/llama-3.3-70b-versatile": ["gemini/gemini-2.5-flash"]},
     ]
 

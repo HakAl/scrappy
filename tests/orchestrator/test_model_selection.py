@@ -123,7 +123,7 @@ class TestModelSelectionService:
         """Instruct selection type uses correct priority list."""
         configured = {
             "cerebras/qwen-3-235b-a22b-instruct-2507",
-            "groq/meta-llama/llama-4-scout-17b-16e-instruct",
+            "groq/moonshotai/kimi-k2-instruct",
         }
         service = ModelSelectionService(configured_models=configured)
 

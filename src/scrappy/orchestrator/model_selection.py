@@ -51,10 +51,10 @@ MODEL_PRIORITIES: dict[ModelSelectionType, list[str]] = {
         "groq/llama-3.3-70b-versatile",        # Fast 70B, 32k context
     ],
     ModelSelectionType.INSTRUCT: [
-        "cerebras/qwen-3-235b-a22b-instruct-2507",  # Best instruction-following
-        "groq/meta-llama/llama-4-scout-17b-16e-instruct",  # Fast, good tool use
-        "groq/moonshotai/kimi-k2-instruct",    # Fast, 128k context
-        "gemini/gemini-2.5-flash",             # Fallback - good tool use, JSON needs sanitizing
+        "cerebras/qwen-3-235b-a22b-instruct-2507",  # Best instruction-following, 14k RPD
+        "cerebras/gpt-oss-120b",               # 120B model, same high RPD, 128k context
+        "groq/moonshotai/kimi-k2-instruct",    # Fast, 128k context, 7k RPD
+        "gemini/gemini-2.5-flash",             # Fallback - 1M context, low RPD
     ],
     ModelSelectionType.EMBED: [
         "groq/llama-3.1-8b-instant",

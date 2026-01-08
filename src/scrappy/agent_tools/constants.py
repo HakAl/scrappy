@@ -75,7 +75,7 @@ DEFAULT_TEMPERATURE = 0.3  # temperature - low for deterministic code generation
 # NOTE: GitHub Models excluded from planner due to aggressive rate limiting
 # (crashes after ~10 requests, unsuitable for multi-step agent tasks)
 # Cerebras llama-3.3-70b preferred for planning (best quality/speed balance)
-# Groq llama-4-scout-17b-16e-instruct as secondary option
+# Groq kimi-k2-instruct as secondary option
 DEFAULT_PLANNER_PREFERENCES: List[str] = ['cerebras', 'groq', 'gemini']
 DEFAULT_EXECUTOR_PREFERENCES: List[str] = ['cerebras', 'groq']
 

@@ -68,7 +68,7 @@ class TestBuildModelList:
         )
 
     def test_adds_instruct_models_when_groq_key_present(self):
-        """Verify groq key adds instruct tier models (llama-4 and kimi-k2)."""
+        """Verify groq key adds instruct tier models (kimi-k2)."""
         api_key_service = MockApiKeyService(keys={
             "GROQ_API_KEY": "test-groq-key",
         })
@@ -76,10 +76,10 @@ class TestBuildModelList:
         model_list = build_model_list(api_key_service)
 
         instruct_models = [m for m in model_list if m["model_name"] == "instruct"]
-        # Groq adds llama-4-scout and kimi-k2 to instruct tier
-        assert len(instruct_models) >= 2
+        # Groq adds kimi-k2 to instruct tier
+        assert len(instruct_models) >= 1
         assert any(
-            m["litellm_params"]["model"] == "groq/meta-llama/llama-4-scout-17b-16e-instruct"
+            m["litellm_params"]["model"] == "groq/moonshotai/kimi-k2-instruct"
             for m in instruct_models
         )
 
@@ -316,7 +316,6 @@ class TestModelMetadata:
         # Models actually used for agent instruct tier (from build_model_list)
         agent_instruct_models = [
             "cerebras/qwen-3-235b-a22b-instruct-2507",
-            "groq/meta-llama/llama-4-scout-17b-16e-instruct",
             "groq/moonshotai/kimi-k2-instruct",
             "gemini/gemini-2.5-flash",
         ]

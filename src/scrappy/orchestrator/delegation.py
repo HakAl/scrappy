@@ -128,9 +128,9 @@ def _select_model_for_context(min_context: int, prefer_group: str = "quality") -
     large_context_models = [
         ("gemini/gemini-2.5-flash", 1000000),
         ("groq/moonshotai/kimi-k2-instruct", 131072),
-        ("groq/meta-llama/llama-4-scout-17b-16e-instruct", 131072),
+        ("cerebras/gpt-oss-120b", 131072),
         ("groq/llama-3.1-8b-instant", 131072),
-        ("cerebras/qwen-3-235b-a22b-instruct-2507", 65536),
+        ("cerebras/qwen-3-235b-a22b-instruct-2507", 8192),
     ]
 
     for model_id, context_size in large_context_models:

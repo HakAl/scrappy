@@ -58,8 +58,6 @@ GROQ
   | llama-3.3-70b-versatile                       | 128k    | 32k        | Quality, have it                   |
   | moonshotai/kimi-k2-instruct                   | 128k    | 16k        | I was wrong - Groq DOES host Kimi! |
   | moonshotai/kimi-k2-instruct-0905              | 256k    | 16k        | Newer Kimi version                 |
-  | meta-llama/llama-4-scout-17b-16e-instruct     | 128k    | 8k         | Llama 4!                           |
-  | meta-llama/llama-4-maverick-17b-128e-instruct | 128k    | 8k         | Llama 4!                           |
   | qwen/qwen3-32b                                | 128k    | 40k        | Qwen 3!                            |
   | openai/gpt-oss-120b                           | 128k    | 64k        | Open GPT 120B!                     |
   | openai/gpt-oss-20b                            | 128k    | 64k        | Smaller GPT-OSS                    |
@@ -125,11 +123,10 @@ Good resource here: https://github.com/cheahjs/free-llm-api-resources
 
 | Model ID | Parameters | RPD | Context | Notes |
 |----------|-----------|-----|---------|-------|
-| `meta-llama/llama-4-maverick-17b-128e-instruct` | 17B | ? | 128K | **NEW** Llama 4, latest arch |
-| `meta-llama/llama-4-scout-17b-16e-instruct` | 17B | ? | 16K | **NEW** Llama 4, smaller context |
-| `moonshotai/kimi-k2-instruct` | ? | ? | ? | Instruction-tuned |
+| `moonshotai/kimi-k2-instruct` | ? | 7,000 | 128K | Instruction-tuned, fast |
 | `moonshotai/kimi-k2-instruct-0905` | ? | ? | ? | Specific version |
 | `qwen/qwen3-32b` | 32B | ? | ? | May be chat-tuned |
+| `openai/gpt-oss-120b` | 120B | ? | 128K | Large open model |
 
 ### Currently Configured Models
 
@@ -161,10 +158,10 @@ Good resource here: https://github.com/cheahjs/free-llm-api-resources
 
 ### Recommended for Agent
 
-**Primary:** `meta-llama/llama-4-maverick-17b-128e-instruct`
-- Latest Llama 4 architecture
-- Explicitly instruction-tuned
-- Large 128K context window
+**Primary:** `moonshotai/kimi-k2-instruct`
+- Fast inference, 128K context
+- Instruction-tuned
+- 7,000 RPD
 
 **Fallback:** `llama-3.3-70b-versatile`
 - Proven reliability
@@ -313,11 +310,11 @@ Tested models for structured JSON output (critical for agent tool-calling):
 
 | Provider | Model | Latency | RPD | Status |
 |----------|-------|---------|-----|--------|
-| Cerebras | `llama-3.3-70b` | 0.6s | 14,400 | **RECOMMENDED** |
-| Groq | `meta-llama/llama-4-scout-17b-16e-instruct` | 0.4s | 7,000 | **NEW - Fastest** |
-| Groq | `moonshotai/kimi-k2-instruct` | 0.4s | 7,000 | **NEW** |
+| Cerebras | `qwen-3-235b-a22b-instruct-2507` | 1.3s | 14,400 | **RECOMMENDED - Largest** |
+| Cerebras | `gpt-oss-120b` | ~1s | 14,400 | **NEW - 120B, 128k ctx** |
+| Groq | `moonshotai/kimi-k2-instruct` | 0.4s | 7,000 | Fast, 128k ctx |
 | Groq | `llama-3.3-70b-versatile` | 1.0s | 1,000 | Reliable |
-| Cerebras | `qwen-3-235b-a22b-instruct-2507` | 1.3s | 14,400 | **NEW - Largest** |
+| Cerebras | `llama-3.3-70b` | 0.6s | 14,400 | Chat tier |
 
 ### Problem Models (80/100 - JSON Issues)
 
@@ -353,13 +350,13 @@ Tested models for structured JSON output (critical for agent tool-calling):
 
 ### Tier 2: Secondary Planner (Fast + Perfect JSON)
 
-**Groq `meta-llama/llama-4-scout-17b-16e-instruct`** - NEW, FASTEST
-- RPD: 7,000
-- JSON Score: 110/100 (perfect)
-- Latency: 0.4s (ultra-fast)
-- Latest Llama 4 architecture
+**Cerebras `gpt-oss-120b`** - NEW
+- RPD: 14,400
+- 120B parameters, 128K context
+- Same high RPD as qwen-235b
+- Good fallback before Groq
 
-**Groq `moonshotai/kimi-k2-instruct`** - NEW
+**Groq `moonshotai/kimi-k2-instruct`**
 - RPD: 7,000
 - JSON Score: 110/100 (perfect)
 - Latency: 0.4s (ultra-fast)
@@ -385,11 +382,15 @@ Tested models for structured JSON output (critical for agent tool-calling):
 ```python
 # Primary planner (best overall)
 planner = "cerebras"
-planner_model = "llama-3.3-70b"  # 14,400 RPD, 110/100 JSON, 0.6s
+planner_model = "qwen-3-235b-a22b-instruct-2507"  # 14,400 RPD, 235B instruct
 
-# Fast alternative (when speed matters most)
+# Secondary (same high RPD, 128k context)
+planner = "cerebras"
+planner_model = "gpt-oss-120b"  # 14,400 RPD, 120B
+
+# Tertiary (fast, lower RPD)
 planner = "groq"
-planner_model = "meta-llama/llama-4-scout-17b-16e-instruct"  # 7,000 RPD, 0.4s
+planner_model = "moonshotai/kimi-k2-instruct"  # 7,000 RPD, 0.4s
 
 # Executor (fast, high volume)
 executor = "cerebras"
@@ -404,7 +405,7 @@ Combined capacity: 21,400+ RPD for agent workflows
 
 1. **Cerebras and Groq models excel at JSON compliance** - All tested models scored 110/100
 2. **Gemini models have JSON formatting issues** - They add markdown code fences
-3. **Groq `gemma2-9b-it` is deprecated** - Removed from config
-4. **New instruction-tuned models are available** - Llama 4, Kimi K2 added
-5. **Speed vs RPD trade-off** - Groq fastest (0.4s) but lower RPD; Cerebras has highest RPD (14,400)
+3. **Cerebras has highest RPD (14,400)** - Use as primary provider
+4. **gpt-oss-120b available on both Cerebras and Groq** - 120B model with 128k context
+5. **Kimi K2 is fast and reliable** - 0.4s latency, 128k context, 7k RPD
 
