@@ -33,6 +33,9 @@ class TestBackgroundTaskSubmission:
         assert isinstance(task_id, str)
         assert len(task_id) > 0
 
+        # Cleanup: wait for task to complete
+        await manager.wait_for_background_tasks(timeout=1.0)
+
     @pytest.mark.asyncio
     async def test_submit_multiple_tasks_returns_different_ids(self):
         """Each submitted task should get a unique ID."""
@@ -49,6 +52,9 @@ class TestBackgroundTaskSubmission:
         assert task_id_2 != task_id_3
         assert task_id_1 != task_id_3
 
+        # Cleanup: wait for tasks to complete
+        await manager.wait_for_background_tasks(timeout=1.0)
+
     @pytest.mark.asyncio
     async def test_tracks_active_tasks(self):
         """Manager should track submitted tasks as active."""
@@ -64,6 +70,9 @@ class TestBackgroundTaskSubmission:
         # Should be tracked
         status = manager.get_task_status()
         assert status['pending_tasks'] >= 2
+
+        # Cleanup: wait for tasks to complete
+        await manager.wait_for_background_tasks(timeout=1.0)
 
     @pytest.mark.asyncio
     async def test_task_actually_executes_in_background(self):
@@ -358,6 +367,9 @@ class TestEdgeCases:
         assert 'pending_tasks' in status
         assert status['pending_tasks'] == 3
 
+        # Cleanup: wait for tasks to complete
+        await manager.wait_for_background_tasks(timeout=1.0)
+
     @pytest.mark.asyncio
     async def test_error_tracking_preserves_error_info(self):
         """Error records should include useful debugging information."""
@@ -412,6 +424,9 @@ class TestBackgroundTaskManagerThreadSafety:
         status = manager.get_task_status()
         assert status['pending_tasks'] == 10
 
+        # Cleanup: wait for tasks to complete
+        await manager.wait_for_background_tasks(timeout=1.0)
+
     @pytest.mark.asyncio
     async def test_concurrent_status_access(self):
         """Concurrent status reads should not corrupt data."""
@@ -450,6 +465,9 @@ class TestBackgroundTaskManagerThreadSafety:
             assert 'pending_tasks' in status
             assert 'recent_errors' in status
             assert 'total_errors' in status
+
+        # Cleanup: wait for tasks to complete
+        await manager.wait_for_background_tasks(timeout=1.0)
 
     @pytest.mark.asyncio
     async def test_error_deque_thread_safety(self):

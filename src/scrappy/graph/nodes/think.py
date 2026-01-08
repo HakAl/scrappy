@@ -820,7 +820,7 @@ def think_node(
         )
     except Exception as e:
         # Unexpected error - log with full traceback for debugging
-        logger.exception("Unexpected error in think node: %s: %s", type(e).__name__, e)
+        logger.exception(f"Unexpected error in think node: {type(e).__name__}: {e}")
         return state.model_copy(
             update={
                 "iteration": state.iteration + 1,
@@ -1158,7 +1158,7 @@ async def think_node_streaming(
         )
     except Exception as e:
         # Unexpected error - log with full traceback for debugging
-        logger.exception("Unexpected error in streaming think node: %s: %s", type(e).__name__, e)
+        logger.exception(f"Unexpected error in streaming think node: {type(e).__name__}: {e}")
         return state.model_copy(
             update={
                 "iteration": state.iteration + 1,
