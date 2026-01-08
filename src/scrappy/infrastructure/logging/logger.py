@@ -245,20 +245,28 @@ class StructuredLogger:
 
         self._log(logging.DEBUG, "DEBUG", message, extra)
 
-    def info(self, message: str, extra: Optional[Dict[str, Any]] = None):
-        """Log info message."""
+    def info(self, message: str, *args, extra: Optional[Dict[str, Any]] = None):
+        """Log info message with optional formatting args."""
+        if args:
+            message = message % args
         self._log(logging.INFO, "INFO", message, extra)
 
-    def warning(self, message: str, extra: Optional[Dict[str, Any]] = None):
-        """Log warning message."""
+    def warning(self, message: str, *args, extra: Optional[Dict[str, Any]] = None):
+        """Log warning message with optional formatting args."""
+        if args:
+            message = message % args
         self._log(logging.WARNING, "WARNING", message, extra)
 
-    def error(self, message: str, extra: Optional[Dict[str, Any]] = None):
-        """Log error message."""
+    def error(self, message: str, *args, extra: Optional[Dict[str, Any]] = None):
+        """Log error message with optional formatting args."""
+        if args:
+            message = message % args
         self._log(logging.ERROR, "ERROR", message, extra)
 
-    def critical(self, message: str, extra: Optional[Dict[str, Any]] = None):
-        """Log critical message."""
+    def critical(self, message: str, *args, extra: Optional[Dict[str, Any]] = None):
+        """Log critical message with optional formatting args."""
+        if args:
+            message = message % args
         self._log(logging.CRITICAL, "CRITICAL", message, extra)
 
     def exception(self, message: str, extra: Optional[Dict[str, Any]] = None):

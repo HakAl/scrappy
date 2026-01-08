@@ -13,7 +13,6 @@ Features:
 """
 
 import json
-import logging
 import sys
 from typing import Any, Callable, Optional
 
@@ -21,8 +20,6 @@ from scrappy.graph.protocols import LLMServiceProtocol, StreamingLLMServiceProto
 from scrappy.graph.state import AgentState, Message, ToolCall
 from scrappy.graph.tools import ToolAdapterProtocol
 from scrappy.graph.fallbacks import get_next_fallback
-from scrappy.orchestrator.litellm_service import NotConfiguredError
-from scrappy.orchestrator.types import StreamChunk, ToolCallFragment
 from scrappy.infrastructure.exceptions import (
     AllProvidersRateLimitedError,
     AuthenticationError,
@@ -33,6 +30,9 @@ from scrappy.infrastructure.exceptions import (
     RecoveryAction,
     TimeoutError as InfraTimeoutError,
 )
+from scrappy.infrastructure.logging import get_logger
+from scrappy.orchestrator.litellm_service import NotConfiguredError
+from scrappy.orchestrator.types import StreamChunk, ToolCallFragment
 from scrappy.prompts.protocols import Platform
 from scrappy.prompts.sections import (
     platform_section,
@@ -42,7 +42,7 @@ from scrappy.prompts.sections import (
     quality_section,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Token estimation constants
 # Average tokens per character (conservative estimate for English text)

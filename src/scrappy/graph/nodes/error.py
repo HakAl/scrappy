@@ -13,7 +13,6 @@ Features:
 - Langfuse tracing integration
 """
 
-import logging
 from typing import Literal, Optional
 
 from scrappy.graph.edges import MAX_RETRIES
@@ -25,8 +24,9 @@ from scrappy.infrastructure.error_recovery import (
     AGGRESSIVE_RETRY_CONFIG,
     CONSERVATIVE_RETRY_CONFIG,
 )
+from scrappy.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Threshold for escalating to quality tier on repeated errors
 ERROR_ESCALATION_THRESHOLD = 2

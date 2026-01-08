@@ -10,15 +10,15 @@ without modifying agent_tools/ internals.
 """
 
 import json
-import logging
 from typing import Any, Protocol, runtime_checkable
 
 from scrappy.agent_tools.registry_factory import create_default_registry
 from scrappy.agent_tools.tools.base import ToolContext
 from scrappy.agent_tools.tools.registry import ToolRegistry
 from scrappy.graph.state import ToolCall, ToolResult
+from scrappy.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @runtime_checkable

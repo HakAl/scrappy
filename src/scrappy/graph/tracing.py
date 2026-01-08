@@ -16,7 +16,6 @@ Usage:
 """
 
 import functools
-import logging
 import os
 import threading
 from contextlib import contextmanager
@@ -24,12 +23,14 @@ from typing import Any, Callable, Generator, Optional, Protocol, TypeVar, runtim
 
 from typing_extensions import ParamSpec
 
+from scrappy.infrastructure.logging import get_logger
+
 # Lazy import to avoid loading langfuse at module import time
 # This prevents langfuse from corrupting terminal state in TUI apps
 if TYPE_CHECKING:
     from langfuse.callback import CallbackHandler as LangfuseCallbackHandler
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Thread-safe lock for global tracer access
 _tracer_lock = threading.Lock()

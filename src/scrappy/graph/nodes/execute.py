@@ -14,15 +14,15 @@ Features:
 - Langfuse tracing integration
 """
 
-import logging
 from pathlib import Path
 from typing import Optional
 
 from scrappy.graph.protocols import ToolContextFactory, ToolContextProtocol
 from scrappy.graph.state import AgentState, Message, ToolCall, ToolResult
 from scrappy.graph.tools import ToolAdapterProtocol
+from scrappy.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Output truncation threshold (20k chars)
 OUTPUT_TRUNCATION_LIMIT = 20000

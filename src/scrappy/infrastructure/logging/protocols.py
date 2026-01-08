@@ -6,7 +6,6 @@ across all layers of the application (CLI, orchestrator, agent).
 """
 
 from contextlib import contextmanager
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol
 
 
@@ -25,20 +24,20 @@ class LoggerProtocol(Protocol):
         """Log debug message with optional extra context."""
         ...
 
-    def info(self, message: str, extra: Optional[Dict[str, Any]] = None) -> None:
-        """Log info message with optional extra context."""
+    def info(self, message: str, *args, extra: Optional[Dict[str, Any]] = None) -> None:
+        """Log info message with optional formatting args and extra context."""
         ...
 
-    def warning(self, message: str, extra: Optional[Dict[str, Any]] = None) -> None:
-        """Log warning message with optional extra context."""
+    def warning(self, message: str, *args, extra: Optional[Dict[str, Any]] = None) -> None:
+        """Log warning message with optional formatting args and extra context."""
         ...
 
-    def error(self, message: str, extra: Optional[Dict[str, Any]] = None) -> None:
-        """Log error message with optional extra context."""
+    def error(self, message: str, *args, extra: Optional[Dict[str, Any]] = None) -> None:
+        """Log error message with optional formatting args and extra context."""
         ...
 
-    def critical(self, message: str, extra: Optional[Dict[str, Any]] = None) -> None:
-        """Log critical message with optional extra context."""
+    def critical(self, message: str, *args, extra: Optional[Dict[str, Any]] = None) -> None:
+        """Log critical message with optional formatting args and extra context."""
         ...
 
     def exception(self, message: str, extra: Optional[Dict[str, Any]] = None) -> None:

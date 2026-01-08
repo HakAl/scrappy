@@ -27,7 +27,6 @@ Features:
 
 from __future__ import annotations
 
-import logging
 import os
 import uuid
 from pathlib import Path
@@ -49,8 +48,9 @@ from scrappy.graph.protocols import LLMServiceProtocol
 from scrappy.graph.state import AgentState
 from scrappy.graph.tools import ToolAdapterProtocol
 from scrappy.graph.tracing import get_langfuse_callback
+from scrappy.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # System directories that should never be used as working_dir
 # These are dangerous because file operations would affect critical system files
@@ -460,24 +460,26 @@ def run_agent(
         config["callbacks"] = [langfuse_handler]
         logger.debug("Langfuse tracing enabled for agent run")
 
-    logger.info("Starting agent run for task: %s", task[:100])
+    # Use context binding for correlated logs across the entire agent run
+    with logger.context(thread_id=thread_id, task_summary=task[:50]):
+        logger.info("Starting agent run for task: %s", task[:100])
 
-    # Run the graph
-    # Note: This will pause at confirm nodes due to interrupt_before
-    # For full HITL support, caller should use build_graph() directly
-    result = graph.invoke(initial_state, config)  # type: ignore[arg-type]
+        # Run the graph
+        # Note: This will pause at confirm nodes due to interrupt_before
+        # For full HITL support, caller should use build_graph() directly
+        result = graph.invoke(initial_state, config)  # type: ignore[arg-type]
 
-    # Result is a dict, convert back to AgentState
-    if isinstance(result, dict):
-        final_state = AgentState(**result)
-    else:
-        final_state = result
+        # Result is a dict, convert back to AgentState
+        if isinstance(result, dict):
+            final_state = AgentState(**result)
+        else:
+            final_state = result
 
-    logger.info(
-        "Agent run completed: done=%s, iterations=%d",
-        final_state.done,
-        final_state.iteration,
-    )
+        logger.info(
+            "Agent run completed: done=%s, iterations=%d",
+            final_state.done,
+            final_state.iteration,
+        )
 
     return final_state
 

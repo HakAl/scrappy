@@ -18,13 +18,13 @@ Security:
 - subprocess.run uses shell=False explicitly (defense-in-depth)
 """
 
-import logging
 import subprocess
 from pathlib import Path
 
 from scrappy.graph.state import AgentState
+from scrappy.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def sanitize_file_paths(

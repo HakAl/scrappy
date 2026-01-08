@@ -23,12 +23,12 @@ Features:
 - Langfuse tracing integration
 """
 
-import logging
 from typing import Literal, Optional
 
 from scrappy.graph.state import AgentState, Message, PendingConfirmation
+from scrappy.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # Confirmation types that abort the entire operation when denied

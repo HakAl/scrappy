@@ -17,17 +17,17 @@ Usage:
     persist_new_messages(conversation_store, result, original_message_count)
 """
 
-import logging
 from typing import Optional
 
 from scrappy.graph.state import AgentState, Message
+from scrappy.infrastructure.logging import get_logger
 from scrappy.persistence import (
     ConversationStoreProtocol,
     check_session_staleness,
     get_stale_context_message,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def load_history_into_state(
