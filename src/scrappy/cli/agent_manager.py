@@ -94,12 +94,21 @@ class CLIAgentManager:
         if self._cancellation_token:
             self._cancellation_token.reset()
 
-    def run_agent(self, task: str, dry_run: bool = False, verbose: bool = False):
+    def run_agent(
+        self,
+        task: str,
+        dry_run: bool = False,
+        verbose: bool = False,
+    ):
         """
         Run the code agent on a task with human-in-the-loop approval.
 
         Creates and executes a CodeAgent for the given task, with interactive
         prompts for git checkpoints.
+
+        In TUI mode (LangGraph), tool confirmation is enabled by default.
+        Users are prompted with y/n/a before destructive operations.
+        Pressing 'a' allows all remaining operations for the run.
 
         Args:
             task: Description of the task for the agent to perform.
@@ -263,6 +272,10 @@ class CLIAgentManager:
         This method is called when a LangGraphBridge is available (TUI mode).
         It delegates execution to the bridge which runs the agent in a
         worker thread with proper HITL confirmation support.
+
+        Tool confirmation is enabled by default - user will be prompted
+        with y/n/a before destructive operations. Pressing 'a' allows
+        all remaining operations for the run.
 
         Args:
             task: The task to run

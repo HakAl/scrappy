@@ -140,6 +140,15 @@ class InputCaptureManager:
 
         if self._type == "confirm":
             result = user_input.lower() in ('y', 'yes', '1', 'true')
+        elif self._type == "confirm_yna":
+            # y/n/a confirmation: return the character
+            lower = user_input.lower()
+            if lower in ('a', 'all', 'allow'):
+                result = "a"
+            elif lower in ('y', 'yes', '1', 'true'):
+                result = "y"
+            else:
+                result = "n"
         else:
             result = user_input if user_input else self._default
 
@@ -153,6 +162,8 @@ class InputCaptureManager:
 
         if self._type == "confirm":
             result = False
+        elif self._type == "confirm_yna":
+            result = "n"  # Cancel = deny
         else:
             result = self._default
 

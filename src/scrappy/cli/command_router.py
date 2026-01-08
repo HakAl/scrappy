@@ -277,6 +277,11 @@ class CommandRouter:
             io.echo("  --dry-run  Simulate actions without making changes")
             io.echo("  --verbose  Show full output (thinking, params, results)")
             io.echo("  --clear    Clear previous task list before starting")
+            io.echo("")
+            io.echo("Tool confirmation is enabled by default. Respond with:")
+            io.echo("  y - allow this operation")
+            io.echo("  n - deny this operation")
+            io.echo("  a - allow all remaining operations")
             return True
 
         # Check dependencies before running agent

@@ -132,6 +132,9 @@ class LangGraphBridge:
         self._recent_tasks: list[Task] = []
         self._max_completed_tasks: int = 3  # Keep last N completed
 
+        # Tool confirmation state (reset per run)
+        self._allow_all: bool = False  # User pressed 'a' to allow all
+
     def _post_activity(
         self,
         state: ActivityState,
@@ -161,6 +164,38 @@ class LangGraphBridge:
             True if confirmed, False if denied or shutdown
         """
         return self._bridge.blocking_confirm(question)
+
+    def _tool_confirm_callback(self, tool_name: str, description: str) -> bool:
+        """
+        Confirmation callback for destructive tools.
+
+        Called by ToolAdapter before executing destructive tools like
+        write_file, run_command, etc. Routes through ThreadSafeAsyncBridge
+        to show y/n/a confirmation dialog in the UI.
+
+        Args:
+            tool_name: Name of the tool being executed
+            description: Human-readable description of the operation
+
+        Returns:
+            True if user confirmed (y or a), False if denied (n)
+        """
+        # Skip if user already pressed 'a' (allow all) this run
+        if self._allow_all:
+            return True
+
+        # Format question for UI display
+        question = f"{description}?"
+        response = self._bridge.blocking_confirm_yna(question)
+
+        if response == "a":
+            # Allow all remaining operations this run
+            self._allow_all = True
+            return True
+        elif response == "y":
+            return True
+        else:
+            return False
 
     def _output_callback(self, content: str) -> None:
         """
@@ -515,6 +550,10 @@ class LangGraphBridge:
         Uses graph.stream() instead of graph.invoke() to allow cancellation
         checks between node executions.
 
+        Tool confirmation is enabled by default - user will be prompted
+        before destructive operations (file writes, commands) with y/n/a
+        options. Pressing 'a' allows all remaining operations for this run.
+
         Args:
             task: The user's task/query
             working_dir: Working directory for file operations
@@ -539,6 +578,13 @@ class LangGraphBridge:
 
         # Mark as running
         self._is_running = True
+
+        # Reset allow_all state for new run (user must press 'a' again)
+        self._allow_all = False
+
+        # Always enable tool confirmation (default behavior)
+        if hasattr(self._tool_adapter, "confirm_callback"):
+            self._tool_adapter.confirm_callback = self._tool_confirm_callback  # type: ignore[union-attr]
 
         # Capture current worker for cancellation support
         try:

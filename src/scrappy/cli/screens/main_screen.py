@@ -429,6 +429,8 @@ class MainAppScreen(Screen):
 
         if request.input_type == "confirm":
             self._layout.input.placeholder = "Type y or n..."
+        elif request.input_type == "confirm_yna":
+            self._layout.input.placeholder = "Type y, n, or a (allow all)..."
         elif request.input_type == "checkpoint":
             self._layout.input.placeholder = "Type c, g, a, or s..."
         else:

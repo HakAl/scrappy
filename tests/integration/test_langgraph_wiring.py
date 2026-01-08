@@ -762,5 +762,243 @@ class TestTaskProgressWidget:
         mock_output.post_tasks_updated.assert_called_with([])
 
 
+class TestToolConfirmation:
+    """Test tool confirmation callback (y/n/a behavior)."""
+
+    def test_destructive_tool_calls_confirm_callback(self):
+        """Destructive tools should call confirm callback when set."""
+        from scrappy.graph.tools import ToolAdapter, DESTRUCTIVE_TOOLS
+
+        # Create mock registry with write_file tool
+        mock_registry = Mock()
+        mock_tool = Mock()
+        mock_tool.validate.return_value = (True, None)
+        mock_tool.execute.return_value = Mock(success=True, output="written", error=None, metadata=None)
+        mock_registry.get.return_value = mock_tool
+
+        adapter = ToolAdapter(mock_registry)
+
+        # Track callback invocations
+        callback_calls = []
+        def track_callback(tool_name, desc):
+            callback_calls.append((tool_name, desc))
+            return True  # Confirm
+
+        adapter.confirm_callback = track_callback
+
+        # Create tool call for write_file (destructive)
+        tool_call = {
+            "type": "function",
+            "id": "call_1",
+            "function": {"name": "write_file", "arguments": '{"path": "test.txt"}'},
+        }
+
+        # Execute
+        result = adapter._execute_single(tool_call, Mock())
+
+        # Verify callback was called
+        assert len(callback_calls) == 1
+        assert callback_calls[0][0] == "write_file"
+        assert "test.txt" in callback_calls[0][1]
+
+        # Verify tool was executed
+        mock_tool.execute.assert_called_once()
+
+    def test_destructive_tool_skipped_when_denied(self):
+        """Destructive tools should be skipped when user denies."""
+        from scrappy.graph.tools import ToolAdapter
+
+        # Create mock registry
+        mock_registry = Mock()
+        mock_tool = Mock()
+        mock_registry.get.return_value = mock_tool
+
+        adapter = ToolAdapter(mock_registry)
+
+        # Callback denies
+        def deny_callback(tool_name, desc):
+            return False
+
+        adapter.confirm_callback = deny_callback
+
+        # Create tool call for run_command (destructive)
+        tool_call = {
+            "type": "function",
+            "id": "call_1",
+            "function": {"name": "run_command", "arguments": '{"command": "rm -rf /"}'},
+        }
+
+        # Execute
+        result = adapter._execute_single(tool_call, Mock())
+
+        # Verify tool was NOT executed
+        mock_tool.validate.assert_not_called()
+        mock_tool.execute.assert_not_called()
+
+        # Verify error result returned
+        assert result.get("error") is not None
+        assert "denied" in result["error"].lower()
+
+    def test_non_destructive_tool_skips_callback(self):
+        """Non-destructive tools should skip confirmation callback."""
+        from scrappy.graph.tools import ToolAdapter
+
+        # Create mock registry with read_file tool
+        mock_registry = Mock()
+        mock_tool = Mock()
+        mock_tool.validate.return_value = (True, None)
+        mock_tool.execute.return_value = Mock(success=True, output="content", error=None, metadata=None)
+        mock_registry.get.return_value = mock_tool
+
+        adapter = ToolAdapter(mock_registry)
+
+        # Track callback invocations
+        callback_calls = []
+        def track_callback(tool_name, desc):
+            callback_calls.append((tool_name, desc))
+            return True
+
+        adapter.confirm_callback = track_callback
+
+        # Create tool call for read_file (NOT destructive)
+        tool_call = {
+            "type": "function",
+            "id": "call_1",
+            "function": {"name": "read_file", "arguments": '{"path": "test.txt"}'},
+        }
+
+        # Execute
+        result = adapter._execute_single(tool_call, Mock())
+
+        # Verify callback was NOT called
+        assert len(callback_calls) == 0
+
+        # Verify tool was still executed
+        mock_tool.execute.assert_called_once()
+
+    def test_bridge_always_enables_confirmation(self):
+        """LangGraphBridge should always set tool callback (confirmation is default)."""
+        from scrappy.cli.textual.langgraph_bridge import LangGraphBridge
+        from scrappy.graph.tools import ToolAdapter
+
+        # Create mock registry
+        mock_registry = Mock()
+        mock_registry.list_tools.return_value = []
+        mock_registry.to_openai_schema.return_value = []
+
+        # Create real ToolAdapter
+        tool_adapter = ToolAdapter(mock_registry)
+
+        # Create bridge
+        mock_app = Mock()
+        mock_async_bridge = Mock()
+        mock_output = Mock()
+        mock_llm = Mock()
+
+        bridge = LangGraphBridge(
+            app=mock_app,
+            bridge=mock_async_bridge,
+            output_adapter=mock_output,
+            llm_service=mock_llm,
+            tool_adapter=tool_adapter,
+        )
+
+        # Initially no callback
+        assert tool_adapter.confirm_callback is None
+
+        # Patch create_agent_runner (imported inside run_agent method)
+        with patch('scrappy.graph.agent.create_agent_runner') as mock_create:
+            mock_graph = Mock()
+            mock_graph.stream.return_value = iter([])
+            mock_graph.get_state.return_value = Mock(next=None, values={})
+            mock_create.return_value = (mock_graph, Mock())
+
+            # Also patch get_current_worker since we're not in worker context
+            with patch('scrappy.cli.textual.langgraph_bridge.get_current_worker', side_effect=Exception("Not in worker")):
+                # Run agent - confirmation should be enabled by default
+                bridge.run_agent(
+                    task="test task",
+                    working_dir="/tmp",
+                )
+
+        # After run, callback should be set (always enabled)
+        assert tool_adapter.confirm_callback is not None
+
+    def test_allow_all_skips_subsequent_confirmations(self):
+        """After user presses 'a', remaining operations should not prompt."""
+        from scrappy.cli.textual.langgraph_bridge import LangGraphBridge
+        from scrappy.graph.tools import ToolAdapter
+
+        # Create mock registry
+        mock_registry = Mock()
+        mock_registry.list_tools.return_value = []
+        mock_registry.to_openai_schema.return_value = []
+
+        tool_adapter = ToolAdapter(mock_registry)
+
+        # Create bridge with mock async bridge
+        mock_async_bridge = Mock()
+        # First call returns "a" (allow all), subsequent calls should not happen
+        mock_async_bridge.blocking_confirm_yna = Mock(return_value="a")
+
+        bridge = LangGraphBridge(
+            app=Mock(),
+            bridge=mock_async_bridge,
+            output_adapter=Mock(),
+            llm_service=Mock(),
+            tool_adapter=tool_adapter,
+        )
+
+        # Reset allow_all state
+        bridge._allow_all = False
+
+        # First confirmation - should call blocking_confirm_yna and get "a"
+        result1 = bridge._tool_confirm_callback("write_file", "Write to test.txt")
+        assert result1 is True
+        assert bridge._allow_all is True
+        mock_async_bridge.blocking_confirm_yna.assert_called_once()
+
+        # Second confirmation - should skip prompt due to allow_all
+        mock_async_bridge.blocking_confirm_yna.reset_mock()
+        result2 = bridge._tool_confirm_callback("run_command", "Run: ls -la")
+        assert result2 is True
+        mock_async_bridge.blocking_confirm_yna.assert_not_called()  # Skipped!
+
+    def test_allow_all_resets_per_run(self):
+        """allow_all state should reset at start of each run."""
+        from scrappy.cli.textual.langgraph_bridge import LangGraphBridge
+        from scrappy.graph.tools import ToolAdapter
+
+        mock_registry = Mock()
+        mock_registry.list_tools.return_value = []
+        mock_registry.to_openai_schema.return_value = []
+
+        tool_adapter = ToolAdapter(mock_registry)
+
+        bridge = LangGraphBridge(
+            app=Mock(),
+            bridge=Mock(),
+            output_adapter=Mock(),
+            llm_service=Mock(),
+            tool_adapter=tool_adapter,
+        )
+
+        # Simulate allow_all being set from previous run
+        bridge._allow_all = True
+
+        # Patch create_agent_runner
+        with patch('scrappy.graph.agent.create_agent_runner') as mock_create:
+            mock_graph = Mock()
+            mock_graph.stream.return_value = iter([])
+            mock_graph.get_state.return_value = Mock(next=None, values={})
+            mock_create.return_value = (mock_graph, Mock())
+
+            with patch('scrappy.cli.textual.langgraph_bridge.get_current_worker', side_effect=Exception("Not in worker")):
+                bridge.run_agent(task="new task", working_dir="/tmp")
+
+        # allow_all should be reset to False at start of run
+        assert bridge._allow_all is False
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

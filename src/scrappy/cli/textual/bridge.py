@@ -100,6 +100,45 @@ class ThreadSafeAsyncBridge:
 
         return result
 
+    def blocking_confirm_yna(self, question: str) -> str:
+        """Called from worker thread - blocks until user responds y/n/a.
+
+        Returns:
+            "y" - yes, allow this operation
+            "n" - no, deny this operation
+            "a" - allow all remaining operations this run
+        """
+        if threading.current_thread() is threading.main_thread():
+            raise RuntimeError(
+                "CRITICAL ERROR: blocking_confirm_yna() called from Main Thread! "
+                "This will cause a deadlock."
+            )
+
+        if self._shutting_down:
+            return "n"
+
+        prompt_id = str(uuid.uuid4())
+
+        with self._lock:
+            event = threading.Event()
+            self._pending_prompts[prompt_id] = event
+
+        self.app.post_message(RequestInlineInput(prompt_id, question, "confirm_yna"))
+
+        # Wait with timeout to allow for shutdown
+        while not event.wait(timeout=0.5):
+            if self._shutting_down:
+                return "n"
+
+        with self._lock:
+            result = self._prompt_results.pop(prompt_id, "n")
+            self._pending_prompts.pop(prompt_id, None)
+
+        # Normalize to y/n/a
+        if result in ("y", "n", "a"):
+            return result
+        return "n"
+
     def blocking_checkpoint(self, message: str, default: str = "c") -> str:
         """Called from worker thread for checkpoint prompts.
 
