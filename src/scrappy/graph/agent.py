@@ -44,7 +44,7 @@ from scrappy.graph.nodes import (
     think_node,
     verify_node,
 )
-from scrappy.graph.protocols import LLMServiceProtocol, WorkingMemoryProtocol
+from scrappy.graph.protocols import ContextFactoryProtocol, LLMServiceProtocol, WorkingMemoryProtocol
 from scrappy.graph.state import AgentState
 from scrappy.graph.tools import ToolAdapterProtocol
 from scrappy.graph.tracing import get_langfuse_callback
@@ -162,6 +162,7 @@ def _wrap_think_node(
     llm_service: LLMServiceProtocol,
     tool_adapter: Optional[ToolAdapterProtocol],
     working_memory: Optional[WorkingMemoryProtocol] = None,
+    context_factory: Optional[ContextFactoryProtocol] = None,
 ) -> Any:
     """
     Create a wrapped think node with injected dependencies.
@@ -173,12 +174,13 @@ def _wrap_think_node(
         llm_service: LLM service for completions
         tool_adapter: Tool adapter for schemas
         working_memory: Optional working memory for session context
+        context_factory: Optional factory for RAG context augmentation
 
     Returns:
         Node function compatible with LangGraph
     """
     def wrapped(state: AgentState) -> AgentState:
-        return think_node(state, llm_service, tool_adapter, working_memory=working_memory)
+        return think_node(state, llm_service, tool_adapter, working_memory=working_memory, context_factory=context_factory)
     return wrapped
 
 
@@ -278,6 +280,7 @@ def build_graph(
     enable_hitl: bool = True,
     context_factory: Optional[Any] = None,
     working_memory: Optional[WorkingMemoryProtocol] = None,
+    rag_context_factory: Optional[ContextFactoryProtocol] = None,
 ) -> CompiledStateGraph:
     """
     Build and compile the agent graph.
@@ -305,6 +308,7 @@ def build_graph(
                      node. Set False for autonomous execution (default: True)
         context_factory: Factory for creating ToolContext (default: uses agent_tools ToolContext)
         working_memory: Optional working memory for session context and tool tracking
+        rag_context_factory: Factory for RAG context augmentation in think node
 
     Returns:
         Compiled StateGraph ready for execution
@@ -317,7 +321,7 @@ def build_graph(
     builder: StateGraph[AgentState] = StateGraph(AgentState)
 
     # Add nodes with wrapped functions that have dependencies injected
-    builder.add_node("think", _wrap_think_node(llm_service, tool_adapter, working_memory))
+    builder.add_node("think", _wrap_think_node(llm_service, tool_adapter, working_memory, rag_context_factory))
     builder.add_node("execute", _wrap_execute_node(tool_adapter, context_factory, working_memory))
     builder.add_node("verify", _wrap_verify_node(run_mypy_check))
     builder.add_node("confirm", confirm_node)
@@ -499,6 +503,7 @@ def create_agent_runner(
     run_mypy_check: bool = True,
     enable_hitl: bool = True,
     working_memory: Optional[WorkingMemoryProtocol] = None,
+    rag_context_factory: Optional[ContextFactoryProtocol] = None,
 ) -> tuple[CompiledStateGraph, MemorySaver]:
     """
     Create an agent runner with shared checkpointer.
@@ -520,6 +525,7 @@ def create_agent_runner(
         run_mypy_check: Whether to run mypy in verify node
         enable_hitl: Whether to enable human-in-the-loop interrupts (default: True)
         working_memory: Optional working memory for session context and tool tracking
+        rag_context_factory: Factory for RAG context augmentation in think node
 
     Returns:
         Tuple of (compiled_graph, checkpointer)
@@ -549,6 +555,7 @@ def create_agent_runner(
         run_mypy_check=run_mypy_check,
         enable_hitl=enable_hitl,
         working_memory=working_memory,
+        rag_context_factory=rag_context_factory,
     )
 
     return graph, checkpointer

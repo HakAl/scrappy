@@ -193,3 +193,60 @@ class WorkingMemoryProtocol(Protocol):
             Context string summarizing recent interactions
         """
         ...
+
+
+@runtime_checkable
+class ContextFactoryProtocol(Protocol):
+    """
+    Protocol for building agent execution context.
+
+    Single Responsibility: Create context (RAG, search strategy) based on task.
+
+    Implementations:
+    - GraphContextFactory: Full RAG + search strategy for graph agent
+    - MockContextFactory: Fixed context for testing
+    - NullContextFactory: No-op for when RAG unavailable
+
+    Example:
+        def enhance_prompt(factory: ContextFactoryProtocol, task: str, prompt: str) -> str:
+            rag_context = factory.build_rag_context(task)
+            if rag_context:
+                return prompt + rag_context
+            return prompt
+    """
+
+    def build_rag_context(self, task: str) -> str | None:
+        """
+        Build passive RAG context using semantic search.
+
+        Computes token budget heuristically, searches codebase,
+        filters results by quality, formats into context block.
+
+        Args:
+            task: User task description
+
+        Returns:
+            Formatted RAG context string, or None if unavailable
+        """
+        ...
+
+    def build_search_strategy_section(self, tool_names: list[str]) -> str:
+        """
+        Build search strategy guidance based on available tools.
+
+        Args:
+            tool_names: List of available tool names
+
+        Returns:
+            Search strategy prompt section, empty if no search tools
+        """
+        ...
+
+    def is_ready(self) -> bool:
+        """
+        Check if context factory is ready (semantic search indexed).
+
+        Returns:
+            True if ready to provide RAG context, False otherwise
+        """
+        ...
