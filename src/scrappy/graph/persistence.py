@@ -77,7 +77,8 @@ def load_history_into_state(
                 for msg in loaded:
                     message: Message = {
                         "role": msg.get("role", "user"),
-                        "content": msg.get("content", ""),
+                        # Use `or ""` because .get() returns None if key exists with None value
+                        "content": msg.get("content") or "",
                     }
                     # Only add optional fields if present (NotRequired in TypedDict)
                     if msg.get("tool_calls"):

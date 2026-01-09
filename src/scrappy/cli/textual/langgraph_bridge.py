@@ -666,7 +666,8 @@ class LangGraphBridge:
                 # Chat mode: output the response content
                 for msg in reversed(final_state.messages):
                     if msg.get("role") == "assistant":
-                        content = msg.get("content", "")
+                        # Use `or ""` because .get() returns None if key exists with None value
+                        content = msg.get("content") or ""
                         if content:
                             self._output_callback(f"{content}\n")
                             break

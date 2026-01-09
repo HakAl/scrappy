@@ -433,7 +433,8 @@ class CommandRouter:
 
         for i, msg in enumerate(messages_to_show):
             role = msg.get("role", "unknown")
-            content = msg.get("content", "")
+            # Use `or ""` because .get() returns None if key exists with None value
+            content = msg.get("content") or ""
 
             # Truncate long messages for display
             max_len = 200

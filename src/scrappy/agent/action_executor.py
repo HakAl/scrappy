@@ -240,8 +240,9 @@ class ActionExecutor:
         Returns:
             List of diff lines (empty for new files)
         """
-        path = action.parameters.get('path', '')
-        new_content = action.parameters.get('content', '')
+        # Use `or ""` because .get() returns None if key exists with None value
+        path = action.parameters.get('path') or ''
+        new_content = action.parameters.get('content') or ''
 
         if not path:
             return []

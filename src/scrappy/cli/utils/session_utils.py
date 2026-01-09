@@ -163,9 +163,11 @@ def display_last_conversation_messages(
 
     for msg in messages_to_show:
         role = msg.get('role', 'unknown')
-        content = msg.get('content', '')[:truncate_at]
+        # Use `or ""` because .get() returns None if key exists with None value
+        full_content = msg.get('content') or ''
+        content = full_content[:truncate_at]
 
-        if len(msg.get('content', '')) > truncate_at:
+        if len(full_content) > truncate_at:
             content += "..."
 
         if role == 'user':

@@ -64,6 +64,64 @@ CONTEXT_THRESHOLD = 0.8  # Start aggressive compaction at 80% of context limit
 StreamCallback = Callable[[str], None]
 
 
+def convert_tool_calls(response_tool_calls: Optional[list]) -> list[ToolCall]:
+    """
+    Convert tool calls from LLMResponse format to OpenAI format.
+
+    LLMResponse uses providers/base.ToolCall dataclass:
+        {id: str, name: str, arguments: Dict}
+
+    Graph state uses OpenAI TypedDict format:
+        {type: "function", id: str, function: {name: str, arguments: str}}
+
+    Args:
+        response_tool_calls: List of tool calls from LLMResponse, or None
+
+    Returns:
+        List of OpenAI-format ToolCall dicts
+    """
+    if not response_tool_calls:
+        return []
+
+    tool_calls: list[ToolCall] = []
+    for tc in response_tool_calls:
+        # Handle both dataclass (has attributes) and dict formats
+        if hasattr(tc, 'name'):
+            # Dataclass format from providers/base.ToolCall
+            tc_id = getattr(tc, 'id', '') or ''
+            tc_name = tc.name
+            tc_args = tc.arguments
+        elif isinstance(tc, dict):
+            # Already a dict - could be OpenAI format or flat format
+            if 'function' in tc:
+                # Already OpenAI format, just append
+                tool_calls.append(tc)  # type: ignore[arg-type]
+                continue
+            tc_id = tc.get('id', '') or ''
+            tc_name = tc.get('name', '')
+            tc_args = tc.get('arguments', {})
+        else:
+            logger.warning("Unknown tool call format: %s", type(tc))
+            continue
+
+        # Convert arguments to JSON string if needed
+        if isinstance(tc_args, dict):
+            tc_args = json.dumps(tc_args)
+        elif not isinstance(tc_args, str):
+            tc_args = '{}'
+
+        tool_calls.append(ToolCall(
+            type='function',
+            id=tc_id,
+            function={
+                'name': tc_name,
+                'arguments': tc_args,
+            },
+        ))
+
+    return tool_calls
+
+
 def estimate_tokens(text: str) -> int:
     """
     Estimate token count for text.
@@ -98,7 +156,8 @@ def estimate_message_tokens(message: dict) -> int:
     tokens += 4
 
     # Content tokens
-    content = message.get("content", "")
+    # Use `or ""` because .get() returns None if key exists with None value
+    content = message.get("content") or ""
     if content:
         tokens += estimate_tokens(content)
 
@@ -158,7 +217,8 @@ def mask_old_tool_results(
     for i, msg in enumerate(messages):
         if i in indices_to_mask:
             # Mask this tool result
-            content = msg.get("content", "")
+            # Use `or ""` because .get() returns None if key exists with None value
+            content = msg.get("content") or ""
             content_len = len(content)
             masked_msg = dict(msg)  # Shallow copy
             masked_msg["content"] = f"[{content_len} chars returned]"
@@ -525,7 +585,6 @@ def think_node(
                 messages=messages,
                 **llm_kwargs,
             )
-            raw_content = response.content if hasattr(response, "content") else ""
         else:
             # Normal mode: use user-selected tier from state
             response, task_record = llm_service.completion_sync(
@@ -533,114 +592,14 @@ def think_node(
                 messages=messages,
                 **llm_kwargs,
             )
-            raw_content = response.content if hasattr(response, "content") else ""
 
-        # Handle malformed responses where tool calls are in content instead of tool_calls
-        # Some models put tool calls in content as:
-        # 1. A dict like {"name": "write_file", "arguments": {...}}
-        # 2. Newline-separated JSON strings like '{"name": "x", ...}\n{"name": "y", ...}'
-        content = ""
-        content_tool_calls: list[ToolCall] = []
+        # LLMResponse.content is already normalized to string by litellm_service
+        # (handles None, dict-in-content, etc.)
+        content = response.content
 
-        if isinstance(raw_content, dict):
-            # Case 1: Content is a single tool call dict
-            if "name" in raw_content:
-                args = raw_content.get("arguments", {})
-                if isinstance(args, dict):
-                    args = json.dumps(args)
-                content_tool_calls.append(ToolCall(
-                    type="function",
-                    id=f"content_{id(raw_content)}",
-                    function={
-                        "name": raw_content["name"],
-                        "arguments": args if isinstance(args, str) else "{}",
-                    },
-                ))
-        elif isinstance(raw_content, str) and raw_content.strip():
-            # Case 2: Check if content is newline-separated JSON tool calls
-            # Pattern: '{"name": "tool", "arguments": ...}\n{"name": "tool2", ...}'
-            lines = raw_content.strip().split("\n")
-            parsed_any = False
-            for i, line in enumerate(lines):
-                line = line.strip()
-                if not line or not line.startswith("{"):
-                    continue
-                try:
-                    parsed = json.loads(line)
-                    if isinstance(parsed, dict) and "name" in parsed:
-                        args = parsed.get("arguments", {})
-                        if isinstance(args, dict):
-                            args = json.dumps(args)
-                        elif isinstance(args, str):
-                            # Arguments might be double-escaped JSON string
-                            try:
-                                args = json.loads(args)
-                                args = json.dumps(args) if isinstance(args, dict) else args
-                            except json.JSONDecodeError:
-                                pass  # Keep as-is
-                        content_tool_calls.append(ToolCall(
-                            type="function",
-                            id=f"content_line_{i}",
-                            function={
-                                "name": parsed["name"],
-                                "arguments": args if isinstance(args, str) else "{}",
-                            },
-                        ))
-                        parsed_any = True
-                except json.JSONDecodeError:
-                    continue
-
-            # If we didn't parse any tool calls, treat content as regular text
-            if not parsed_any:
-                content = raw_content
-        else:
-            content = str(raw_content) if raw_content else ""
-
-        # Extract tool calls if present, converting to OpenAI format
-        tool_calls: list[ToolCall] = []
-
-        # First, add any tool calls extracted from content
-        if content_tool_calls:
-            tool_calls.extend(content_tool_calls)
-
-        if hasattr(response, "tool_calls") and response.tool_calls:
-            for tc in response.tool_calls:
-                # Handle both dict and object tool calls, normalize to OpenAI format
-                if isinstance(tc, dict):
-                    # Could be OpenAI format or flat format
-                    if "function" in tc:
-                        # Already OpenAI format
-                        tool_calls.append(tc)  # type: ignore[arg-type]
-                    else:
-                        # Flat format - convert to OpenAI
-                        args = tc.get("arguments", {})
-                        if isinstance(args, dict):
-                            args = json.dumps(args)
-                        tool_calls.append(
-                            ToolCall(
-                                type="function",
-                                id=tc.get("id", ""),
-                                function={
-                                    "name": tc.get("name", ""),
-                                    "arguments": args if args else "{}",
-                                },
-                            )
-                        )
-                else:
-                    # Object with id, name, arguments attributes
-                    args = tc.arguments
-                    if isinstance(args, dict):
-                        args = json.dumps(args)
-                    tool_calls.append(
-                        ToolCall(
-                            type="function",
-                            id=tc.id,
-                            function={
-                                "name": tc.name,
-                                "arguments": args if isinstance(args, str) else "{}",
-                            },
-                        )
-                    )
+        # Convert tool calls from LLMResponse format to OpenAI format
+        # litellm_service already extracted tool calls from malformed content (dict, XML)
+        tool_calls = convert_tool_calls(response.tool_calls)
 
         # Check for empty response (no content AND no tool calls)
         # This is an error condition - LLM should return either content or tool calls
@@ -926,32 +885,12 @@ async def think_node_streaming(
                 messages=messages,
                 **llm_kwargs,
             )
-            # Extract content from sync response
-            raw_content = response.content if hasattr(response, "content") else ""
-            accumulated_content = raw_content if isinstance(raw_content, str) else ""
+            # LLMResponse.content is already normalized to string by litellm_service
+            accumulated_content = response.content
             if stream_callback and accumulated_content:
                 stream_callback(accumulated_content)  # Send all at once
-            # Extract tool calls from sync response
-            tool_calls: list[ToolCall] = []
-            if hasattr(response, "tool_calls") and response.tool_calls:
-                for tc in response.tool_calls:
-                    if isinstance(tc, dict):
-                        tool_calls.append(tc)  # type: ignore[arg-type]
-                    else:
-                        import json as json_mod
-                        args = tc.arguments
-                        if isinstance(args, dict):
-                            args = json_mod.dumps(args)
-                        tool_calls.append(
-                            ToolCall(
-                                type="function",
-                                id=tc.id,
-                                function={
-                                    "name": tc.name,
-                                    "arguments": args if isinstance(args, str) else "{}",
-                                },
-                            )
-                        )
+            # Convert tool calls from LLMResponse format to OpenAI format
+            tool_calls = convert_tool_calls(response.tool_calls)
         else:
             # Normal streaming mode
             # Use list accumulator for O(n) total instead of O(n^2) string concat

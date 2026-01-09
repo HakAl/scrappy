@@ -140,7 +140,8 @@ Maximum {max_steps} steps. Be specific and actionable."""
         # Parse the response
         try:
             # Extract JSON from response (handle markdown code blocks and embedded JSON)
-            content = response.content.strip()
+            # Handle None content from some providers
+            content = (response.content or "").strip()
 
             # Try to extract JSON array from content
             json_content = None
@@ -261,7 +262,8 @@ Be thorough but concise. Do not repeat yourself. Provide unique insights in each
 
         # Parse JSON response
         try:
-            content = response.content.strip()
+            # Handle None content from some providers
+            content = (response.content or "").strip()
             # Handle markdown code blocks
             if content.startswith('```'):
                 lines = content.split('\n')

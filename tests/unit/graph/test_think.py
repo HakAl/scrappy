@@ -23,6 +23,7 @@ from scrappy.graph.nodes.think import (
     accumulate_tool_calls,
     fragments_to_tool_calls,
     mask_old_tool_results,
+    convert_tool_calls,
     FULL_CONTEXT_WINDOW,
 )
 from scrappy.orchestrator.litellm_service import NotConfiguredError
@@ -210,6 +211,24 @@ class TestTokenEstimation:
         simple_result = estimate_message_tokens(simple_msg)
         assert result > simple_result
 
+    def test_estimate_message_tokens_with_null_content(self):
+        """Message with None content should not crash (bug fix scrappy-snqa).
+
+        Some LLM providers return content: null when there are tool_calls.
+        """
+        msg = {
+            "role": "assistant",
+            "content": None,  # Explicitly null, not missing
+            "tool_calls": [
+                {"name": "read_file", "arguments": '{"path": "/test"}'}
+            ],
+        }
+        # Should not raise 'NoneType' object has no attribute error
+        result = estimate_message_tokens(msg)
+
+        # Should still return positive token count (role overhead + tool calls)
+        assert result > 0
+
 
 # =============================================================================
 # Context Sanitization Tests
@@ -392,6 +411,33 @@ class TestObservationMasking:
         unmasked = sum(1 for m in result if "chars returned]" not in m["content"])
         assert unmasked == FULL_CONTEXT_WINDOW
 
+    def test_mask_handles_null_content(self):
+        """Messages with None content should not crash (bug fix scrappy-snqa).
+
+        Some LLM providers return content: null when there are tool_calls.
+        The masking function should handle this gracefully.
+        """
+        messages = [
+            {"role": "user", "content": "Do tasks"},
+            # Assistant message with null content (common when tool_calls present)
+            {"role": "assistant", "content": None, "tool_calls": [{"id": "1", "type": "function", "function": {"name": "run", "arguments": "{}"}}]},
+            {"role": "tool", "tool_call_id": "1", "content": "Old result"},
+            # Another with null content
+            {"role": "assistant", "content": None, "tool_calls": [{"id": "2", "type": "function", "function": {"name": "run", "arguments": "{}"}}]},
+            {"role": "tool", "tool_call_id": "2", "content": "New result"},
+        ]
+
+        # Should not raise 'NoneType' object has no attribute 'strip' or similar
+        result = mask_old_tool_results(messages, keep_full=1)
+
+        # Old tool result should be masked
+        assert "[" in result[2]["content"] and "chars returned]" in result[2]["content"]
+        # New tool result should be preserved
+        assert result[4]["content"] == "New result"
+        # None content should remain None (or be handled gracefully)
+        assert result[1]["content"] is None
+        assert result[3]["content"] is None
+
 
 # =============================================================================
 # System Prompt Tests
@@ -442,6 +488,96 @@ class TestBuildSystemPrompt:
         state = create_test_state()
         prompt = build_system_prompt(state, [])
         assert "none" in prompt
+
+
+# =============================================================================
+# Tool Call Conversion Tests
+# =============================================================================
+
+
+class TestConvertToolCalls:
+    """Tests for converting tool calls from LLMResponse to OpenAI format."""
+
+    def test_convert_none_returns_empty_list(self):
+        """None input should return empty list."""
+        result = convert_tool_calls(None)
+        assert result == []
+
+    def test_convert_empty_list_returns_empty_list(self):
+        """Empty list should return empty list."""
+        result = convert_tool_calls([])
+        assert result == []
+
+    def test_convert_dataclass_format(self):
+        """Convert from dataclass format (providers/base.ToolCall)."""
+        # Create a mock dataclass-style object
+        class MockToolCall:
+            id = "call_123"
+            name = "read_file"
+            arguments = {"path": "/test.txt"}
+
+        result = convert_tool_calls([MockToolCall()])
+
+        assert len(result) == 1
+        assert result[0]["type"] == "function"
+        assert result[0]["id"] == "call_123"
+        assert result[0]["function"]["name"] == "read_file"
+        assert result[0]["function"]["arguments"] == '{"path": "/test.txt"}'
+
+    def test_convert_dict_flat_format(self):
+        """Convert from flat dict format."""
+        input_tc = {
+            "id": "call_456",
+            "name": "write_file",
+            "arguments": {"path": "/out.txt", "content": "hello"},
+        }
+
+        result = convert_tool_calls([input_tc])
+
+        assert len(result) == 1
+        assert result[0]["type"] == "function"
+        assert result[0]["id"] == "call_456"
+        assert result[0]["function"]["name"] == "write_file"
+        # Arguments should be JSON string
+        assert '"path"' in result[0]["function"]["arguments"]
+
+    def test_convert_dict_openai_format_passthrough(self):
+        """Already OpenAI format should pass through unchanged."""
+        input_tc = {
+            "type": "function",
+            "id": "call_789",
+            "function": {
+                "name": "run_command",
+                "arguments": '{"cmd": "ls"}',
+            },
+        }
+
+        result = convert_tool_calls([input_tc])
+
+        assert len(result) == 1
+        assert result[0] == input_tc  # Should be same object
+
+    def test_convert_string_arguments(self):
+        """String arguments should be kept as string."""
+        class MockToolCall:
+            id = "call_str"
+            name = "test_tool"
+            arguments = '{"already": "json"}'
+
+        result = convert_tool_calls([MockToolCall()])
+
+        assert result[0]["function"]["arguments"] == '{"already": "json"}'
+
+    def test_convert_handles_missing_id(self):
+        """Missing id should default to empty string."""
+        input_tc = {
+            "name": "some_tool",
+            "arguments": {},
+        }
+
+        result = convert_tool_calls([input_tc])
+
+        assert result[0]["id"] == ""
 
 
 # =============================================================================

@@ -130,7 +130,8 @@ class InteractiveMode:
                 messages = result.final_state.messages
                 for msg in reversed(messages):
                     if msg.get("role") == "assistant":
-                        content = msg.get("content", "")
+                        # Use `or ""` because .get() returns None if key exists with None value
+                        content = msg.get("content") or ""
                         if content:
                             return content
                 return "(no response)"
