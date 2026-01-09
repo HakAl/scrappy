@@ -741,46 +741,6 @@ class AgentOrchestrator:
         ):
             yield chunk
 
-    def delegate_with_intent(
-        self,
-        provider_name: str,
-        prompt: str,
-        model: Optional[str] = None,
-        system_prompt: Optional[str] = None,
-        max_tokens: int = 1000,
-        temperature: float = 0.7,
-        use_context: Optional[bool] = None,
-        use_cache: Optional[bool] = None,
-        **kwargs
-    ) -> LLMResponse:
-        """Delegate a task with automatic intent classification for semantic caching."""
-        from scrappy.task_router.intent import RegexIntentClassifier, RegexEntityExtractor
-
-        classifier = RegexIntentClassifier()
-        extractor = RegexEntityExtractor()
-
-        intent_result = classifier.classify(prompt)
-        entities = extractor.extract(prompt)
-
-        intent_classification = {
-            'intent': intent_result.intent.value,
-            'entities': entities,
-            'keywords': []  # Keywords can be extracted from metadata if needed
-        }
-
-        return self.delegate(
-            provider_name=provider_name,
-            prompt=prompt,
-            model=model,
-            system_prompt=system_prompt,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            use_context=use_context,
-            use_cache=use_cache,
-            intent_classification=intent_classification,
-            **kwargs
-        )
-
     def delegate_smart(
         self,
         prompt: str,

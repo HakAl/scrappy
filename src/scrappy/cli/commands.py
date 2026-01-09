@@ -22,7 +22,6 @@ from .exceptions import (
     FileOperationError,
 )
 from .logging import get_logger
-from ..agent import CodeAgent
 from scrappy.undo import create_undo_point, UndoError
 from .config_factory import get_config
 from scrappy.infrastructure.output_mode import OutputModeContext
@@ -491,110 +490,6 @@ def explore(ctx, path, save):
             f.write(f"Generated: {datetime.now().isoformat()}\n\n")
             f.write(summary)
         click.secho(f"\nSaved to: {summary_file}", fg="green")
-
-
-@cli.command()
-@click.argument("task")
-@click.option("--dry-run", "-d", is_flag=True, help="Run in dry-run mode (no actual changes)")
-@click.option("--no-checkpoint", is_flag=True, help="Skip git checkpoint creation")
-@click.option("--auto-confirm", is_flag=True, help="Auto-confirm all actions (use with caution)")
-@click.option("--max-iterations", "-m", default=50, type=int, help="Maximum agent iterations (checkpoint every 15)")
-@click.pass_context
-def agent(ctx, task, dry_run, no_checkpoint, auto_confirm, max_iterations):
-    """Run code agent to complete a task.
-
-    Note: Interactive approvals require interactive mode. Use --auto-confirm or
-    --dry-run for one-off commands. For full interactive mode, use 'scrappy'
-    and then '/agent <task>'.
-
-    Example:
-        scrappy agent "Add a health check endpoint" --auto-confirm
-    """
-    if not auto_confirm and not dry_run:
-        click.secho("Error: Agent command requires --auto-confirm or --dry-run in one-off mode", fg="red")
-        click.echo("For interactive approvals, use: scrappy (then /agent <task>)")
-        sys.exit(1)
-
-    # Check dependencies before running agent
-    deps_ok, errors = check_agent_dependencies()
-    if not deps_ok:
-        click.secho("Agent requires missing dependencies:", fg="red")
-        for err in errors:
-            click.echo(f"  - {err}")
-        sys.exit(1)
-
-    orchestrator = create_orchestrator_for_command(ctx)
-
-    click.secho(f"\nCode Agent - Task: {task}", bold=True)
-    click.echo("-" * 60)
-
-    undo_state = None
-    if not no_checkpoint:
-        click.echo("Creating undo point...")
-        try:
-            undo_state = create_undo_point()
-            click.secho(f"Undo point created: {undo_state.ref.split('/')[-1]}", fg="green")
-        except UndoError as e:
-            click.secho(f"Could not create undo point: {e}", fg="yellow")
-
-    code_agent = CodeAgent(orchestrator)
-    code_agent.dry_run = dry_run
-
-    click.echo("\nAgent Configuration:")
-    click.echo(f"  Planner (smart tasks): {code_agent.planner}")
-    click.echo(f"  Executor (fast tasks): {code_agent.executor}")
-    click.echo(f"  Project root: {code_agent.project_root}")
-    click.echo(f"  Max iterations: {max_iterations}")
-    if dry_run:
-        click.secho("  Mode: DRY RUN (no actual changes)", fg="yellow")
-    if auto_confirm:
-        click.secho("  WARNING: Auto-confirm enabled - no approval prompts", fg="red", bold=True)
-    click.echo()
-
-    logger = get_logger("cli.agent")
-    logger.info("Agent started", extra={
-        "task": task,
-        "dry_run": dry_run,
-        "max_iterations": max_iterations,
-    })
-
-    try:
-        result = code_agent.run(task, max_iterations=max_iterations, auto_confirm=auto_confirm)
-
-        click.echo("\n" + "=" * 60)
-        if result['success']:
-            click.secho("Task Completed Successfully!", fg="green", bold=True)
-            logger.info("Agent task completed", extra={"task": task, "iterations": result['iterations']})
-        else:
-            click.secho("Task Did Not Complete", fg="yellow", bold=True)
-            logger.warning("Agent task incomplete", extra={"task": task, "iterations": result['iterations']})
-
-        log_path = code_agent.save_audit_log()
-        click.secho(f"Audit log: {log_path}", fg="cyan")
-
-        if undo_state and not dry_run:
-            click.echo("\nTo undo changes: scrappy undo")
-
-    except KeyboardInterrupt:
-        click.echo("\n\nAgent interrupted by user.")
-        logger.info("Agent interrupted by user", extra={"task": task})
-        sys.exit(1)
-    except CLIError as e:
-        click.secho(f"\nAgent error: {e}", fg="red")
-        if e.suggestion:
-            click.echo(f"Suggestion: {e.suggestion}")
-        logger.error("Agent CLI error", extra=e.logging_extra())
-        sys.exit(1)
-    except Exception as e:
-        error = TaskExecutionError(
-            f"Agent error: {e}",
-            task_name=task,
-            original=e
-        )
-        click.secho(f"\n{error}", fg="red")
-        click.echo(f"Suggestion: {error.suggestion}")
-        logger.exception("Unexpected agent error")
-        sys.exit(1)
 
 
 # =============================================================================

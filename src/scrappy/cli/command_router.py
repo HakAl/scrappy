@@ -13,9 +13,7 @@ from .display import CLIDisplay
 from .session import CLISessionManager
 from .codebase import CLICodebaseAnalysis
 from .tasks import CLITaskExecution
-from .smart_query import CLISmartQuery
 from .agent_manager import CLIAgentManager
-from .task_router_handler import CLITaskRouterHandler
 from .validators import validate_command
 from .utils.dependency_check import check_agent_dependencies, check_optional_dependencies
 from .utils.session_utils import (
@@ -39,9 +37,7 @@ class CommandRouter:
         session_mgr: CLISessionManager,
         codebase: CLICodebaseAnalysis,
         tasks: CLITaskExecution,
-        smart: CLISmartQuery,
         agent_mgr: CLIAgentManager,
-        task_router: CLITaskRouterHandler,
         state_manager: Optional[PlanStateManager] = None
     ) -> None:
         """
@@ -55,9 +51,7 @@ class CommandRouter:
             session_mgr: Session manager for persistence.
             codebase: Codebase analysis handler.
             tasks: Task execution handler.
-            smart: Smart query handler.
             agent_mgr: Agent manager handler.
-            task_router: Task router handler.
             state_manager: Optional plan state manager.
         """
         self.io = io
@@ -67,9 +61,7 @@ class CommandRouter:
         self.session_mgr = session_mgr
         self.codebase = codebase
         self.tasks = tasks
-        self.smart = smart
         self.agent_mgr = agent_mgr
-        self.task_router = task_router
         self.state_manager = state_manager or PlanStateManager()
 
         # Optional callback for TUI mode to launch wizard screen
@@ -96,12 +88,8 @@ class CommandRouter:
             "/plan": self._handle_plan,
             "/reason": self._handle_reason,
             "/agent": self._handle_agent,
-            # Smart query commands
-            "/smart": self._handle_smart,
             # Codebase commands
             "/explore": self._handle_explore,
-            # Task router commands
-            "/classify": self._handle_classify,
             # State commands
             "/clear": self._handle_clear,
             "/history": self._handle_history,
@@ -364,36 +352,9 @@ class CommandRouter:
 
         return True  # Always continue (user chose continue or clear)
 
-    def _handle_smart(self, args: str) -> bool:
-        """Handle /smart command."""
-        io = self.io
-        if not args:
-            status = io.style("ON", fg=io.theme.success) if self.session_context.smart_mode else io.style("OFF", fg=io.theme.warning)
-            io.echo(f"Smart query mode: {status}")
-            io.echo("Usage: /smart <query> or /smart toggle")
-        elif args.lower() == "toggle":
-            self.session_context.smart_mode = not self.session_context.smart_mode
-            status = "enabled" if self.session_context.smart_mode else "disabled"
-            io.secho(f"Smart query mode {status}.", fg=io.theme.success if self.session_context.smart_mode else io.theme.warning)
-            if self.session_context.smart_mode:
-                io.echo("All queries will now use tools for research (higher quota usage).")
-        else:
-            self.smart.smart_query(args)
-        return True
-
     def _handle_explore(self, args: str) -> bool:
         """Handle /explore command."""
         self.codebase.explore_codebase(args)
-        return True
-
-    def _handle_classify(self, args: str) -> bool:
-        """Handle /classify command."""
-        io = self.io
-        if not args:
-            io.echo("Usage: /classify <task description>")
-            io.echo("  Preview how a task would be classified without executing.")
-        else:
-            self.task_router.handle_classify_only(args)
         return True
 
     def _handle_clear(self, args: str) -> bool:

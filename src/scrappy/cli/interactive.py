@@ -13,8 +13,6 @@ from .session_context import SessionContextProtocol
 from .input_handler import InputHandler
 from .command_router import CommandRouter
 from .display import CLIDisplay
-from .smart_query import CLISmartQuery
-from .task_router_handler import CLITaskRouterHandler
 from .tasks import CLITaskExecution
 from .exceptions import CLIError, ProviderError
 from .error_recovery import graceful_degrade
@@ -38,8 +36,6 @@ class InteractiveMode:
         input_handler: InputHandler,
         command_router: CommandRouter,
         display: CLIDisplay,
-        smart: CLISmartQuery,
-        task_router: CLITaskRouterHandler,
         tasks: CLITaskExecution,
         logger: CLILogger,
         theme: Optional[ThemeProtocol] = None,
@@ -55,8 +51,6 @@ class InteractiveMode:
             input_handler: Input handler for reading user input.
             command_router: Command router for slash commands.
             display: Display handler for showing information.
-            smart: Smart query handler for tool-assisted queries.
-            task_router: Task router handler for auto-routing.
             tasks: Task execution handler.
             logger: Logger for structured logging.
             theme: Optional theme for consistent styling.
@@ -70,8 +64,6 @@ class InteractiveMode:
         self.input_handler = input_handler
         self.command_router = command_router
         self.display = display
-        self.smart = smart
-        self.task_router = task_router
         self.tasks = tasks
         self.logger = logger
         self._theme = theme or DEFAULT_THEME
@@ -147,8 +139,8 @@ class InteractiveMode:
         Process user input.
 
         Handles both slash commands and regular chat input. For commands,
-        delegates to command_router. For chat, uses auto-routing, smart mode,
-        or direct LLM delegation based on current settings.
+        delegates to command_router. For chat, routes through LangGraph
+        where the LLM decides tool usage.
 
         Args:
             user_input: The user's input string.
@@ -158,12 +150,8 @@ class InteractiveMode:
 
         Side Effects:
             - Commands are routed to command_router.route()
-            - Chat input is:
-              - Routed through task_router if auto_route_mode is enabled
-              - Processed by smart_query if smart_mode is enabled
-              - Sent to orchestrator.delegate() otherwise
-            - Displays response to console with metadata
-            - May use tools for research if query requires it
+            - Chat input is processed through LangGraph bridge
+            - LLM decides whether to use tools based on query
             - Prompts for task progression if plan is active
 
         State Changes:
@@ -201,41 +189,17 @@ class InteractiveMode:
         # Echo user query
         io.secho(f"> {user_input}", fg=self._theme.text)
 
-        # Route through LangGraph if bridge available (unified chat)
-        # Otherwise fall back to TaskRouter (legacy path)
-        import logging
-        _logger = logging.getLogger(__name__)
-        _logger.info("_process_input: _langgraph_bridge is %s", "SET" if self._langgraph_bridge else "NONE")
-        if self._langgraph_bridge is not None:
+        # Route through LangGraph (required)
+        if self._langgraph_bridge is None:
+            io.secho("Error: LangGraph bridge not initialized", fg=io.theme.error)
+            response_content = "Error: Agent not initialized"
+        else:
             response_content = self._process_via_langgraph(user_input)
             # Chat mode streams response via callback - don't echo again
             # Only echo for errors/cancellations (which start with "(" or "Error:")
             if response_content and response_content.startswith(("(", "Error:")):
                 io.echo()
                 io.echo(response_content)
-        else:
-            # Legacy: Use streaming auto-routing via TaskRouter
-            result = self.task_router.handle_auto_route_streaming_sync(user_input)
-            response_content = result.output if result.success else f"Error: {result.error}"
-
-            # For streaming, output was already displayed during stream
-            if not result.metadata.get("streaming"):
-                io.echo()
-                io.echo(f"| {response_content}")
-
-            # Verbose mode: show metadata
-            if self.session_context.verbose_mode:
-                classification = result.metadata.get('classification', {})
-                provider = classification.get('resolved_provider') or result.provider_used or 'local'
-                model = classification.get('resolved_model', '')
-                tokens = result.tokens_used
-                time_ms = result.execution_time * 1000
-                if model:
-                    provider_str = provider + " (" + model + ")"
-                else:
-                    provider_str = provider
-                time_str = f"{time_ms:.1f}"
-                io.echo(f"  {provider_str} | {tokens} tokens | {time_str}ms")
 
         io.echo()
 

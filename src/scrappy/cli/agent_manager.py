@@ -5,9 +5,7 @@ Handles running and managing code execution agents with human approval.
 
 from typing import TYPE_CHECKING, Optional
 
-from ..agent import CodeAgent, CancellationToken
 from scrappy.undo import create_undo_point, UndoError
-from ..agent_config import AgentConfig
 from .io_interface import CLIIOProtocol
 from .display_manager import DisplayManager
 from .user_interaction import CLIUserInteraction
@@ -43,56 +41,14 @@ class CLIAgentManager:
         self.display = DisplayManager(io=io, dashboard_enabled=False)
         # Inject user interaction - defaults to CLI mode
         self._interaction = user_interaction or CLIUserInteraction(io)
-        # Cancellation token for current agent run (None when no agent running)
-        self._cancellation_token: Optional[CancellationToken] = None
-        # LangGraph bridge for TUI mode (None in CLI mode)
+        # LangGraph bridge for TUI mode
         self._langgraph_bridge = langgraph_bridge
 
     def cancel(self) -> None:
-        """Cancel the currently running agent if any.
-
-        First cancel: graceful (waits for current step)
-        Second cancel: force (marks for immediate termination)
-
-        Works for both CodeAgent (via _cancellation_token) and
-        LangGraph (via _langgraph_bridge.cancel()).
-        """
-        # Check if anything is running
-        bridge_running = (
-            self._langgraph_bridge is not None and self._langgraph_bridge.is_running
-        )
-        if not self._cancellation_token and not bridge_running:
-            return  # No agent running
-
-        # Track cancel count via token (for two-stage cancel UX)
-        was_force_cancelled = False
-        is_now_force = False
-        if self._cancellation_token:
-            was_force_cancelled = self._cancellation_token.is_force_cancelled()
-            self._cancellation_token.cancel()
-            is_now_force = self._cancellation_token.is_force_cancelled()
-
-        # Cancel LangGraph bridge if active (TUI mode)
-        if bridge_running:
+        """Cancel the currently running agent if any."""
+        if self._langgraph_bridge is not None and self._langgraph_bridge.is_running:
             self._langgraph_bridge.cancel()
-
-        # Show appropriate message based on cancel stage
-        if is_now_force and not was_force_cancelled:
-            self.io.secho("Force cancelling...", fg=self.io.theme.error)
-        elif not is_now_force:
-            self.io.secho(
-                "Cancelling... waiting for current step to finish (press again to force)",
-                fg=self.io.theme.warning
-            )
-
-    def is_force_cancelled(self) -> bool:
-        """Check if force cancel was requested."""
-        return self._cancellation_token and self._cancellation_token.is_force_cancelled()
-
-    def reset_cancel_state(self) -> None:
-        """Reset cancellation state for a new agent run."""
-        if self._cancellation_token:
-            self._cancellation_token.reset()
+            self.io.secho("Cancelling...", fg=self.io.theme.warning)
 
     def run_agent(
         self,
@@ -101,57 +57,19 @@ class CLIAgentManager:
         verbose: bool = False,
     ):
         """
-        Run the code agent on a task with human-in-the-loop approval.
-
-        Creates and executes a CodeAgent for the given task, with interactive
-        prompts for git checkpoints.
-
-        In TUI mode (LangGraph), tool confirmation is enabled by default.
-        Users are prompted with y/n/a before destructive operations.
-        Pressing 'a' allows all remaining operations for the run.
+        Run the LangGraph agent on a task with human-in-the-loop approval.
 
         Args:
             task: Description of the task for the agent to perform.
             dry_run: If True, agent simulates actions without making changes.
             verbose: If True, show full output (thinking, params, results).
-
-        Side Effects:
-            - Prompts user for checkpoint creation
-            - May create a git checkpoint before execution
-            - Displays agent configuration and progress to console via self.display
-            - Agent may modify project files if not in dry-run mode
-            - Displays audit log summary after execution
-            - May save audit log to file if user requests
-            - May rollback to checkpoint if user requests
-            - Adds discovery to orchestrator's working memory
-            - Updates dashboard if dashboard mode is enabled
-
-        State Changes:
-            - Creates temporary CodeAgent instance (not stored)
-            - Updates orchestrator.discoveries with task result
-            - May create new git commits (for checkpoint/rollback)
-            - May modify project files via agent execution
-
-        Raises:
-            KeyboardInterrupt: If user interrupts agent execution.
-            Exception: Any unhandled errors from agent execution are caught
-                and displayed, then recorded as discoveries.
-
-        Returns:
-            None
         """
-        io = self.io  # Use stored reference directly
+        io = self.io
         dashboard = self.display.get_dashboard()
 
-        # Header differs by mode - LangGraph shows task via bridge
         if self._langgraph_bridge is None:
-            # CodeAgent mode - show header here
-            io.secho(f"\nCode Agent - Task: {task}", bold=True)
-            io.echo("-" * 60)
-
-        # Create cancellation token FIRST so Escape works during any prompt
-        self.reset_cancel_state()
-        self._cancellation_token = CancellationToken()
+            io.secho("Error: Agent not initialized", fg=io.theme.error)
+            return
 
         # Update dashboard if enabled
         if dashboard:
@@ -163,12 +81,6 @@ class CLIAgentManager:
             "Create undo point before running?", default=True
         )
 
-        # Check if user cancelled during undo point prompt
-        if self._cancellation_token.is_cancelled():
-            io.secho("Agent cancelled.", fg=io.theme.warning)
-            self._cancellation_token = None
-            return
-
         undo_state = None
         if create_undo:
             io.echo("Creating undo point...")
@@ -178,86 +90,7 @@ class CLIAgentManager:
             except UndoError as e:
                 io.secho(f"Could not create undo point: {e}", fg=io.theme.warning)
 
-        # Use LangGraph agent if bridge is available (TUI mode)
-        if self._langgraph_bridge is not None:
-            self._run_langgraph_agent(task, undo_state, dry_run, dashboard)
-            return
-
-        # Fallback to CodeAgent (CLI mode or when bridge not available)
-        # Create config with verbose setting
-        config = AgentConfig()
-        config.verbose = verbose
-
-        # Create agent with bridged io instance and cancellation token
-        agent = CodeAgent(
-            self.orchestrator,
-            io=io,
-            config=config,
-            cancellation_token=self._cancellation_token
-        )
-        agent.dry_run = dry_run
-
-        # Show agent configuration
-        io.echo("\nAgent Configuration:")
-        io.echo(f"  Planner (smart tasks): {agent.planner}")
-        io.echo(f"  Executor (fast tasks): {agent.executor}")
-        io.echo(f"  Project root: {agent.project_root}")
-        if dry_run:
-            io.secho("  Mode: DRY RUN (no actual changes)", fg=io.theme.warning)
-        io.echo()
-
-        # Run agent
-        if dashboard:
-            dashboard.set_state("executing", "Running code agent...")
-            dashboard.update_thought_process(f"Executing task: {task}\n\nAgent analyzing requirements...")
-
-        try:
-            result = agent.run(task)
-
-            if dashboard:
-                dashboard.set_state("idle", "Task completed")
-
-            io.echo("\n" + "=" * 60)
-            if result['success']:
-                io.secho("Task Completed Successfully!", fg=io.theme.success, bold=True)
-            else:
-                io.secho("Task Did Not Complete", fg=io.theme.warning, bold=True)
-
-            # Audit log is auto-saved to .scrappy/audit.json
-            audit_path = agent.project_root / ".scrappy" / "audit.json"
-            if audit_path.exists():
-                io.secho(f"Audit log: {audit_path}", fg=io.theme.primary)
-
-            # Inform user about undo option
-            if undo_state and not dry_run:
-                io.echo("\nTo undo changes: scrappy undo")
-
-            # Save agent task result to working memory
-            self.orchestrator.working_memory.add_discovery(
-                f"Agent task '{task[:50]}...': {'completed' if result['success'] else 'incomplete'} in {result['iterations']} iterations",
-                "agent_task"
-            )
-
-        except KeyboardInterrupt:
-            io.echo("\n\nAgent interrupted by user.")
-            self.orchestrator.working_memory.add_discovery(
-                f"Agent task '{task[:50]}...' interrupted by user",
-                "agent_task"
-            )
-        except Exception as e:
-            io.echo()  # Newline before error
-            handle_error(e, io, context="agent execution")
-            self.orchestrator.working_memory.add_discovery(
-                f"Agent task '{task[:50]}...' failed: {str(e)[:50]}",
-                "agent_task"
-            )
-        finally:
-            # Clear cancellation token after run completes
-            self._cancellation_token = None
-            # Clear task progress widget
-            output_sink = getattr(io, "output_sink", None)
-            if output_sink is not None and hasattr(output_sink, "post_tasks_updated"):
-                output_sink.post_tasks_updated([])
+        self._run_langgraph_agent(task, undo_state, dry_run, dashboard)
 
     def _run_langgraph_agent(
         self,
@@ -354,8 +187,6 @@ class CLIAgentManager:
             )
         finally:
             lgr.debug("_run_langgraph_agent: finally block, cleaning up")
-            # Clear cancellation token
-            self._cancellation_token = None
             # Clear task progress widget
             output_sink = getattr(io, "output_sink", None)
             if output_sink is not None and hasattr(output_sink, "post_tasks_updated"):

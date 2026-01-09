@@ -22,8 +22,6 @@ if TYPE_CHECKING:
     from .input_handler import InputHandler
     from .command_router import CommandRouter
     from .display import CLIDisplay
-    from .smart_query import CLISmartQuery
-    from .task_router_handler import CLITaskRouterHandler
     from .tasks import CLITaskExecution
     from .logging import CLILogger
     from .core import CLI
@@ -51,8 +49,6 @@ class TextualInteractiveMode:
         input_handler: "InputHandler",
         command_router: "CommandRouter",
         display: "CLIDisplay",
-        smart: "CLISmartQuery",
-        task_router: "CLITaskRouterHandler",
         tasks: "CLITaskExecution",
         logger: "CLILogger",
         io: UnifiedIO,
@@ -68,8 +64,6 @@ class TextualInteractiveMode:
             input_handler: Input handler for parsing commands
             command_router: Command router for slash commands
             display: Display handler for showing information
-            smart: Smart query handler for tool-assisted queries
-            task_router: Task router handler for auto-routing
             tasks: Task execution handler
             logger: Logger for structured logging
             io: UnifiedIO instance (created before CLI.initialize() ran)
@@ -82,8 +76,6 @@ class TextualInteractiveMode:
         self.input_handler = input_handler
         self.command_router = command_router
         self.display = display
-        self.smart = smart
-        self.task_router = task_router
         self.tasks = tasks
         self.logger = logger
         self.io = io
@@ -111,9 +103,6 @@ class TextualInteractiveMode:
         orchestrator_output = OutputBridge(output_adapter)
         self.orchestrator.output = orchestrator_output
 
-        # Pass session_context to task_router for verbose_mode access
-        self.task_router.session_context = self.session_context
-
         # Create InteractiveMode with existing Textual IO
         interactive_mode = InteractiveMode(
             io=self.io,  # Use existing Textual IO, not creating new one
@@ -123,8 +112,6 @@ class TextualInteractiveMode:
             input_handler=self.input_handler,
             command_router=self.command_router,
             display=self.display,
-            smart=self.smart,
-            task_router=self.task_router,
             tasks=self.tasks,
             logger=self.logger
         )

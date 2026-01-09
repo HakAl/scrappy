@@ -299,14 +299,9 @@ class ScrappyApp(App):
             input_handler=self._cli.input_handler,
             command_router=self._cli._create_command_router(),
             display=self._cli.display,
-            smart=self._cli.smart,
-            task_router=self._cli.task_router,
             tasks=self._cli.tasks,
             logger=self._cli.logger
         )
-
-        # Pass session_context to task_router for verbose_mode access
-        self.interactive_mode.task_router.session_context = self.interactive_mode.session_context
 
         # Set up codebase context for semantic search
         if hasattr(self._cli.orchestrator, 'context_manager'):

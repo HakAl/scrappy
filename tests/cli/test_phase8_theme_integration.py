@@ -177,7 +177,6 @@ class TestCLICoreTheme:
             "multiprovider": MagicMock(),
             "smart": MagicMock(),
             "agent_mgr": MagicMock(),
-            "task_router": MagicMock(),
         }
 
     def test_cli_stores_theme(self):

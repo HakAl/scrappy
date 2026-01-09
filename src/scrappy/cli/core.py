@@ -113,9 +113,7 @@ class CLI:
         self.session_mgr = handlers['session_mgr']
         self.codebase = handlers['codebase']
         self.tasks = handlers['tasks']
-        self.smart = handlers['smart']
         self.agent_mgr = handlers['agent_mgr']
-        self.task_router = handlers['task_router']
 
         # Initialize command history for CLI mode (enables up/down arrow navigation)
         # TUI mode uses Textual's TextArea which has its own history
@@ -187,18 +185,12 @@ class CLI:
         return CommandRouter(
             io=self.io,
             orchestrator=self.orchestrator,
-            # todo wrong type
-            # todo wrong type
-            # todo wrong type
-            # todo wrong type
             session_context=self.session_context,
             display=self.display,
             session_mgr=self.session_mgr,
             codebase=self.codebase,
             tasks=self.tasks,
-            smart=self.smart,
             agent_mgr=self.agent_mgr,
-            task_router=self.task_router,
             state_manager=self.state_manager
         )
 
@@ -216,17 +208,11 @@ class CLI:
 
         return TextualInteractiveMode(
             orchestrator=self.orchestrator,
-            # todo wrong type
-            # todo wrong type
-            # todo wrong type
-            # todo wrong type
             session_context=self.session_context,
             state_manager=self.state_manager,
             input_handler=self.input_handler,
             command_router=command_router,
             display=self.display,
-            smart=self.smart,
-            task_router=self.task_router,
             tasks=self.tasks,
             logger=self.logger,
             io=self.io,  # Pass existing TextualIO created before initialize()

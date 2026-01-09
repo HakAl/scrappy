@@ -55,9 +55,7 @@ class FileConfigLoader:
     Example:
         loader = FileConfigLoader(Path(".scrappy.yaml"))
         config = loader.load()
-        clarification = ClarificationConfig.from_dict(
-            config.get('clarification', {})
-        )
+        providers = config.get('providers', {})
     """
 
     def __init__(

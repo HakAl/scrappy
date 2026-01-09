@@ -8,7 +8,6 @@ from .display import CLIDisplay
 from .session import CLISessionManager
 from .codebase import CLICodebaseAnalysis
 from .tasks import CLITaskExecution
-from .smart_query import CLISmartQuery
 from .agent_manager import CLIAgentManager
 from .commands import cli, main
 from .protocols import (
@@ -25,7 +24,6 @@ __all__ = [
     'CLISessionManager',
     'CLICodebaseAnalysis',
     'CLITaskExecution',
-    'CLISmartQuery',
     'CLIAgentManager',
     'cli',
     'main',
