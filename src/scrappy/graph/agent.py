@@ -44,7 +44,7 @@ from scrappy.graph.nodes import (
     think_node,
     verify_node,
 )
-from scrappy.graph.protocols import LLMServiceProtocol
+from scrappy.graph.protocols import LLMServiceProtocol, WorkingMemoryProtocol
 from scrappy.graph.state import AgentState
 from scrappy.graph.tools import ToolAdapterProtocol
 from scrappy.graph.tracing import get_langfuse_callback
@@ -161,6 +161,7 @@ def validate_working_dir(working_dir: str) -> Path:
 def _wrap_think_node(
     llm_service: LLMServiceProtocol,
     tool_adapter: Optional[ToolAdapterProtocol],
+    working_memory: Optional[WorkingMemoryProtocol] = None,
 ) -> Any:
     """
     Create a wrapped think node with injected dependencies.
@@ -171,18 +172,20 @@ def _wrap_think_node(
     Args:
         llm_service: LLM service for completions
         tool_adapter: Tool adapter for schemas
+        working_memory: Optional working memory for session context
 
     Returns:
         Node function compatible with LangGraph
     """
     def wrapped(state: AgentState) -> AgentState:
-        return think_node(state, llm_service, tool_adapter)
+        return think_node(state, llm_service, tool_adapter, working_memory=working_memory)
     return wrapped
 
 
 def _wrap_execute_node(
     tool_adapter: ToolAdapterProtocol,
     context_factory: Optional[Any] = None,
+    working_memory: Optional[WorkingMemoryProtocol] = None,
 ) -> Any:
     """
     Create a wrapped execute node with injected dependencies.
@@ -190,12 +193,13 @@ def _wrap_execute_node(
     Args:
         tool_adapter: Tool adapter for execution
         context_factory: Optional factory for creating ToolContext
+        working_memory: Optional working memory for tracking tool results
 
     Returns:
         Node function compatible with LangGraph
     """
     def wrapped(state: AgentState) -> AgentState:
-        return execute_node(state, tool_adapter, context_factory)
+        return execute_node(state, tool_adapter, context_factory, working_memory)
     return wrapped
 
 
@@ -273,6 +277,7 @@ def build_graph(
     run_mypy_check: bool = True,
     enable_hitl: bool = True,
     context_factory: Optional[Any] = None,
+    working_memory: Optional[WorkingMemoryProtocol] = None,
 ) -> CompiledStateGraph:
     """
     Build and compile the agent graph.
@@ -299,6 +304,7 @@ def build_graph(
         enable_hitl: Whether to enable human-in-the-loop interrupts at confirm
                      node. Set False for autonomous execution (default: True)
         context_factory: Factory for creating ToolContext (default: uses agent_tools ToolContext)
+        working_memory: Optional working memory for session context and tool tracking
 
     Returns:
         Compiled StateGraph ready for execution
@@ -311,8 +317,8 @@ def build_graph(
     builder: StateGraph[AgentState] = StateGraph(AgentState)
 
     # Add nodes with wrapped functions that have dependencies injected
-    builder.add_node("think", _wrap_think_node(llm_service, tool_adapter))
-    builder.add_node("execute", _wrap_execute_node(tool_adapter, context_factory))
+    builder.add_node("think", _wrap_think_node(llm_service, tool_adapter, working_memory))
+    builder.add_node("execute", _wrap_execute_node(tool_adapter, context_factory, working_memory))
     builder.add_node("verify", _wrap_verify_node(run_mypy_check))
     builder.add_node("confirm", confirm_node)
     builder.add_node("error", error_node)
@@ -399,6 +405,7 @@ def run_agent(
     tool_adapter: Optional[ToolAdapterProtocol] = None,
     checkpointer: Optional[MemorySaver] = None,
     thread_id: Optional[str] = None,
+    working_memory: Optional[WorkingMemoryProtocol] = None,
 ) -> AgentState:
     """
     Run the agent on a task.
@@ -417,6 +424,7 @@ def run_agent(
         tool_adapter: Tool adapter (default: create default)
         checkpointer: MemorySaver for checkpointing (default: create new)
         thread_id: Thread ID for checkpointing (default: generate UUID)
+        working_memory: Optional working memory for session context and tool tracking
 
     Returns:
         Final AgentState after execution completes
@@ -438,6 +446,7 @@ def run_agent(
         tool_adapter=tool_adapter,
         checkpointer=checkpointer,
         enable_hitl=False,
+        working_memory=working_memory,
     )
 
     # Generate thread ID if not provided
@@ -489,6 +498,7 @@ def create_agent_runner(
     tool_adapter: ToolAdapterProtocol,
     run_mypy_check: bool = True,
     enable_hitl: bool = True,
+    working_memory: Optional[WorkingMemoryProtocol] = None,
 ) -> tuple[CompiledStateGraph, MemorySaver]:
     """
     Create an agent runner with shared checkpointer.
@@ -509,6 +519,7 @@ def create_agent_runner(
         tool_adapter: Tool adapter (default: create default)
         run_mypy_check: Whether to run mypy in verify node
         enable_hitl: Whether to enable human-in-the-loop interrupts (default: True)
+        working_memory: Optional working memory for session context and tool tracking
 
     Returns:
         Tuple of (compiled_graph, checkpointer)
@@ -537,6 +548,7 @@ def create_agent_runner(
         checkpointer=checkpointer,
         run_mypy_check=run_mypy_check,
         enable_hitl=enable_hitl,
+        working_memory=working_memory,
     )
 
     return graph, checkpointer

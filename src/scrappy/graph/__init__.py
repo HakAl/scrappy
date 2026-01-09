@@ -31,6 +31,7 @@ from scrappy.graph.protocols import (
     StreamingLLMServiceProtocol,
     ToolContextFactory,
     ToolContextProtocol,
+    WorkingMemoryProtocol,
 )
 from scrappy.graph.tools import ToolAdapter, ToolAdapterProtocol
 
@@ -42,6 +43,7 @@ __all__ = [
     "ToolContextFactory",
     "ToolContextProtocol",
     "WorkingDirectoryError",
+    "WorkingMemoryProtocol",
     "build_graph",
     "create_agent_runner",
     "create_persistent_agent_state",

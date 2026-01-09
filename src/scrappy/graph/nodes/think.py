@@ -16,7 +16,7 @@ import json
 import sys
 from typing import Any, Callable, Optional
 
-from scrappy.graph.protocols import LLMServiceProtocol, StreamingLLMServiceProtocol
+from scrappy.graph.protocols import LLMServiceProtocol, StreamingLLMServiceProtocol, WorkingMemoryProtocol
 from scrappy.graph.state import AgentState, Message, ToolCall
 from scrappy.graph.tools import ToolAdapterProtocol
 from scrappy.graph.fallbacks import get_next_fallback
@@ -280,7 +280,11 @@ def _detect_platform() -> Platform:
     return Platform.UNIX
 
 
-def build_system_prompt(state: AgentState, tool_names: list[str]) -> str:
+def build_system_prompt(
+    state: AgentState,
+    tool_names: list[str],
+    working_memory: Optional[WorkingMemoryProtocol] = None,
+) -> str:
     """
     Build the system prompt for the agent.
 
@@ -291,6 +295,7 @@ def build_system_prompt(state: AgentState, tool_names: list[str]) -> str:
     Args:
         state: Current agent state
         tool_names: List of available tool names
+        working_memory: Optional working memory for session context
 
     Returns:
         System prompt string
@@ -366,6 +371,17 @@ Please address this error in your response.
 </files_changed>
 """
 
+    # Add working memory context if available
+    if working_memory:
+        memory_context = working_memory.get_context()
+        if memory_context:
+            prompt += f"""
+## Session Context
+<working_memory>
+{memory_context}
+</working_memory>
+"""
+
     return prompt
 
 
@@ -437,6 +453,7 @@ def think_node(
     llm_service: LLMServiceProtocol,
     tool_adapter: Optional[ToolAdapterProtocol] = None,
     max_tokens: int = DEFAULT_MAX_TOKENS,
+    working_memory: Optional[WorkingMemoryProtocol] = None,
 ) -> AgentState:
     """
     Think node - LLM reasoning step.
@@ -452,13 +469,14 @@ def think_node(
         llm_service: LLM service for completions
         tool_adapter: Optional tool adapter for tool schemas
         max_tokens: Max context tokens (for sanitization)
+        working_memory: Optional working memory for session context
 
     Returns:
         Updated AgentState with new assistant message
     """
     # Build system prompt
     tool_names = tool_adapter.get_tool_names() if tool_adapter else []
-    system_prompt = build_system_prompt(state, tool_names)
+    system_prompt = build_system_prompt(state, tool_names, working_memory)
 
     # Build messages list
     messages: list[dict] = [{"role": "system", "content": system_prompt}]
@@ -838,6 +856,7 @@ async def think_node_streaming(
     tool_adapter: Optional[ToolAdapterProtocol] = None,
     max_tokens: int = DEFAULT_MAX_TOKENS,
     stream_callback: Optional[StreamCallback] = None,
+    working_memory: Optional[WorkingMemoryProtocol] = None,
 ) -> AgentState:
     """
     Think node with streaming support.
@@ -851,13 +870,14 @@ async def think_node_streaming(
         tool_adapter: Optional tool adapter for tool schemas
         max_tokens: Max context tokens (for sanitization)
         stream_callback: Callback for streaming progress (content chunks)
+        working_memory: Optional working memory for session context
 
     Returns:
         Updated AgentState with new assistant message
     """
     # Build system prompt
     tool_names = tool_adapter.get_tool_names() if tool_adapter else []
-    system_prompt = build_system_prompt(state, tool_names)
+    system_prompt = build_system_prompt(state, tool_names, working_memory)
 
     # Build messages list
     messages: list[dict] = [{"role": "system", "content": system_prompt}]

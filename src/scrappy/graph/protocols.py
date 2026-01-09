@@ -133,3 +133,63 @@ class StreamingLLMServiceProtocol(Protocol):
             AsyncIterator of StreamChunk objects
         """
         ...
+
+
+@runtime_checkable
+class WorkingMemoryProtocol(Protocol):
+    """
+    Protocol for session-scoped working memory.
+
+    Tracks recent file reads, searches, git operations, and discoveries
+    to provide context for LLM augmentation.
+    """
+
+    def remember_file_read(self, path: str, content: str, lines: int = 0) -> None:
+        """
+        Store a file read in working memory.
+
+        Args:
+            path: File path
+            content: File content
+            lines: Number of lines in file
+        """
+        ...
+
+    def remember_search(self, query: str, results: list) -> None:
+        """
+        Store a search result in working memory.
+
+        Args:
+            query: Search query
+            results: Search results
+        """
+        ...
+
+    def remember_git_operation(self, operation: str, output: str) -> None:
+        """
+        Store a git operation result in working memory.
+
+        Args:
+            operation: Git command executed
+            output: Command output
+        """
+        ...
+
+    def add_discovery(self, finding: str, location: str = "") -> None:
+        """
+        Add a discovery/learning to working memory.
+
+        Args:
+            finding: What was discovered
+            location: Where it was found (optional)
+        """
+        ...
+
+    def get_context(self) -> str:
+        """
+        Get working memory context string for LLM augmentation.
+
+        Returns:
+            Context string summarizing recent interactions
+        """
+        ...
