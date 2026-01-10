@@ -9,8 +9,14 @@ Nodes:
 - verify.py: Linting/testing verification (ruff, mypy)
 - confirm.py: Human-in-the-loop confirmation (dangerous operations)
 - error.py: Error handling and recovery (format errors for LLM retry)
+
+Supporting classes:
+- token_estimator.py: Token counting for context management
+- context_manager.py: Context window management and trimming
+- tool_call_processor.py: Tool call format conversion
 """
 
+from .context_manager import ContextManager, ContextManagerProtocol
 from .think import (
     think_node,
     think_node_streaming,
@@ -19,6 +25,8 @@ from .think import (
     LLMServiceProtocol,
     StreamingLLMServiceProtocol,
 )
+from .token_estimator import TokenEstimator, TokenEstimatorProtocol
+from .tool_call_processor import ToolCallProcessor, ToolCallProcessorProtocol
 
 # Node imports will be added as they're implemented
 from .execute import execute_node
@@ -38,12 +46,21 @@ from .error import (
 )
 
 __all__ = [
+    # Think node
     "think_node",
     "think_node_streaming",
     "build_system_prompt",
     "sanitize_context",
     "LLMServiceProtocol",
     "StreamingLLMServiceProtocol",
+    # Supporting classes
+    "TokenEstimator",
+    "TokenEstimatorProtocol",
+    "ContextManager",
+    "ContextManagerProtocol",
+    "ToolCallProcessor",
+    "ToolCallProcessorProtocol",
+    # Other nodes
     "execute_node",
     "verify_node",
     "confirm_node",

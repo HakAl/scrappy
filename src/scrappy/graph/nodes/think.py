@@ -16,10 +16,13 @@ import json
 import sys
 from typing import Any, Callable, Optional
 
+from scrappy.graph.fallbacks import get_next_fallback
+from scrappy.graph.nodes.context_manager import ContextManager
+from scrappy.graph.nodes.token_estimator import TokenEstimator
+from scrappy.graph.nodes.tool_call_processor import ToolCallProcessor
 from scrappy.graph.protocols import ContextFactoryProtocol, LLMServiceProtocol, StreamingLLMServiceProtocol, WorkingMemoryProtocol
 from scrappy.graph.state import AgentState, Message, ToolCall
 from scrappy.graph.tools import ToolAdapterProtocol
-from scrappy.graph.fallbacks import get_next_fallback
 from scrappy.infrastructure.exceptions import (
     AllProvidersRateLimitedError,
     AuthenticationError,
@@ -38,293 +41,255 @@ from scrappy.prompts.protocols import AgentPromptConfig, Platform
 
 logger = get_logger(__name__)
 
-# Token estimation constants
-# Average tokens per character (conservative estimate for English text)
-TOKENS_PER_CHAR = 0.25
-# Safety margin - trim at 80% of limit to leave room for response
-TOKEN_LIMIT_MARGIN = 0.8
-# Default context window (128k tokens)
-DEFAULT_MAX_TOKENS = 128000
-# Minimum messages to keep (system + last user message)
-MIN_MESSAGES_TO_KEEP = 2
+# Module-level instances for backward compatibility and simple usage
+_token_estimator = TokenEstimator()
+_context_manager = ContextManager(_token_estimator)
+_tool_call_processor = ToolCallProcessor()
 
-# Observation masking constants (migrated from task_router/strategies/research_loop.py)
-# Keep last N tool results in full, mask older ones to save context
-FULL_CONTEXT_WINDOW = 2  # Keep last N tool results with full content
-CONTEXT_THRESHOLD = 0.8  # Start aggressive compaction at 80% of context limit
-
+# Re-export constants for backward compatibility
+DEFAULT_MAX_TOKENS = ContextManager.DEFAULT_MAX_TOKENS
+FULL_CONTEXT_WINDOW = ContextManager.DEFAULT_KEEP_FULL
 
 # Callback type for streaming progress
 StreamCallback = Callable[[str], None]
 
 
-def convert_tool_calls(response_tool_calls: Optional[list]) -> list[ToolCall]:
-    """
-    Convert tool calls from LLMResponse format to OpenAI format.
-
-    LLMResponse uses providers/base.ToolCall dataclass:
-        {id: str, name: str, arguments: Dict}
-
-    Graph state uses OpenAI TypedDict format:
-        {type: "function", id: str, function: {name: str, arguments: str}}
-
-    Args:
-        response_tool_calls: List of tool calls from LLMResponse, or None
-
-    Returns:
-        List of OpenAI-format ToolCall dicts
-    """
-    if not response_tool_calls:
-        return []
-
-    tool_calls: list[ToolCall] = []
-    for tc in response_tool_calls:
-        # Handle both dataclass (has attributes) and dict formats
-        if hasattr(tc, 'name'):
-            # Dataclass format from providers/base.ToolCall
-            tc_id = getattr(tc, 'id', '') or ''
-            tc_name = tc.name
-            tc_args = tc.arguments
-        elif isinstance(tc, dict):
-            # Already a dict - could be OpenAI format or flat format
-            if 'function' in tc:
-                # Already OpenAI format, just append
-                tool_calls.append(tc)  # type: ignore[arg-type]
-                continue
-            tc_id = tc.get('id', '') or ''
-            tc_name = tc.get('name', '')
-            tc_args = tc.get('arguments', {})
-        else:
-            logger.warning("Unknown tool call format: %s", type(tc))
-            continue
-
-        # Convert arguments to JSON string if needed
-        if isinstance(tc_args, dict):
-            tc_args = json.dumps(tc_args)
-        elif not isinstance(tc_args, str):
-            tc_args = '{}'
-
-        tool_calls.append(ToolCall(
-            type='function',
-            id=tc_id,
-            function={
-                'name': tc_name,
-                'arguments': tc_args,
-            },
-        ))
-
-    return tool_calls
-
+# === Backward-compatible function wrappers ===
+# These delegate to the class instances for existing callers
 
 def estimate_tokens(text: str) -> int:
-    """
-    Estimate token count for text.
-
-    Uses character-based estimation. Not perfectly accurate but
-    sufficient for context trimming decisions.
-
-    Args:
-        text: Text to estimate tokens for
-
-    Returns:
-        Estimated token count
-    """
-    return int(len(text) * TOKENS_PER_CHAR)
+    """Estimate token count for text. Delegates to TokenEstimator."""
+    return _token_estimator.estimate_text(text)
 
 
 def estimate_message_tokens(message: dict) -> int:
-    """
-    Estimate token count for a message.
-
-    Includes role, content, and tool calls if present.
-
-    Args:
-        message: Message dict with role, content, etc.
-
-    Returns:
-        Estimated token count
-    """
-    tokens = 0
-
-    # Role overhead (e.g., "user:", "assistant:")
-    tokens += 4
-
-    # Content tokens
-    # Use `or ""` because .get() returns None if key exists with None value
-    content = message.get("content") or ""
-    if content:
-        tokens += estimate_tokens(content)
-
-    # Tool calls overhead
-    tool_calls = message.get("tool_calls", [])
-    if tool_calls:
-        for tc in tool_calls:
-            # Name + arguments JSON
-            name = tc.get("name", "")
-            args = tc.get("arguments", "{}")
-            tokens += estimate_tokens(name) + estimate_tokens(args) + 10  # Overhead
-
-    return tokens
+    """Estimate token count for a message. Delegates to TokenEstimator."""
+    return _token_estimator.estimate_message(message)
 
 
 def mask_old_tool_results(
     messages: list[dict],
     keep_full: int = FULL_CONTEXT_WINDOW,
 ) -> list[dict]:
-    """
-    Replace old tool result content with placeholder to save context.
-
-    Observation masking pattern from task_router/strategies/research_loop.py:
-    - Recent tool results (last `keep_full`) are preserved in full
-    - Older tool results are replaced with "[X chars returned]" placeholder
-    - Non-tool messages (user, assistant, system) are never masked
-
-    This is critical for long agent runs where tool results accumulate
-    and consume context window. The LLM can still see that a tool was
-    called and returned data, just not the full content.
-
-    Args:
-        messages: List of messages to process
-        keep_full: Number of recent tool results to keep in full
-
-    Returns:
-        New list with old tool results masked (original list unchanged)
-    """
-    if not messages:
-        return messages
-
-    # Find indices of all tool result messages
-    tool_indices: list[int] = []
-    for i, msg in enumerate(messages):
-        if msg.get("role") == "tool":
-            tool_indices.append(i)
-
-    # If we have fewer tool results than keep_full, no masking needed
-    if len(tool_indices) <= keep_full:
-        return messages
-
-    # Indices to mask (all except last keep_full)
-    indices_to_mask = set(tool_indices[:-keep_full])
-
-    # Create new list with masked content
-    result: list[dict] = []
-    for i, msg in enumerate(messages):
-        if i in indices_to_mask:
-            # Mask this tool result
-            # Use `or ""` because .get() returns None if key exists with None value
-            content = msg.get("content") or ""
-            content_len = len(content)
-            masked_msg = dict(msg)  # Shallow copy
-            masked_msg["content"] = f"[{content_len} chars returned]"
-            result.append(masked_msg)
-        else:
-            result.append(msg)
-
-    return result
+    """Replace old tool results with placeholders. Delegates to ContextManager."""
+    return _context_manager.mask_old_tool_results(messages, keep_full)
 
 
 def sanitize_context(
     messages: list[dict],
     max_tokens: int = DEFAULT_MAX_TOKENS,
 ) -> list[dict]:
-    """
-    Trim message history if approaching token limit.
+    """Trim message history if approaching token limit. Delegates to ContextManager."""
+    return _context_manager.sanitize(messages, max_tokens)
 
-    Strategy:
-    1. Apply observation masking - replace old tool results with placeholders
-    2. Always keep first message (system prompt) if present
-    3. Always keep last few messages (current conversation)
-    4. Summarize or drop middle messages if needed
+
+def convert_tool_calls(response_tool_calls: Optional[list]) -> list[ToolCall]:
+    """Convert tool calls from LLM response format. Delegates to ToolCallProcessor."""
+    return _tool_call_processor.convert(response_tool_calls)
+
+
+def accumulate_tool_calls(fragments: list[ToolCallFragment]) -> dict[int, dict]:
+    """Accumulate streaming tool call fragments. Delegates to ToolCallProcessor."""
+    return _tool_call_processor.accumulate(fragments)
+
+
+def fragments_to_tool_calls(accumulated: dict[int, dict]) -> list[ToolCall]:
+    """Convert accumulated fragments to ToolCall list. Delegates to ToolCallProcessor."""
+    return _tool_call_processor.fragments_to_calls(accumulated)
+
+
+def _handle_llm_error(
+    error: Exception,
+    state: AgentState,
+    has_tools: bool,
+    log_context: str = "think node",
+) -> AgentState:
+    """
+    Handle LLM errors and return updated state.
+
+    Centralizes error handling logic shared between think_node (sync) and
+    think_node_streaming (async). Each error type has specific recovery behavior.
 
     Args:
-        messages: Full message history
-        max_tokens: Maximum allowed tokens
+        error: The exception that was raised
+        state: Current agent state
+        has_tools: Whether tools are being used (affects fallback chain selection)
+        log_context: Context string for log messages (e.g., "think node", "streaming think node")
 
     Returns:
-        Trimmed message list within token budget
+        Updated AgentState with error information set appropriately
     """
-    if not messages:
-        return messages
+    if isinstance(error, NotConfiguredError):
+        # LLM not configured - fatal error, stop the graph immediately
+        logger.error("LLM not configured. User needs to run setup.")
+        return state.model_copy(
+            update={
+                "iteration": state.iteration + 1,
+                "done": True,  # Stop the graph, no point in retrying
+                "last_error": "LLM not configured. Run /setup",
+                "recovery_action": RecoveryAction.ABORT.value,
+            }
+        )
 
-    # Apply observation masking first - replace old tool results with placeholders
-    # This is critical for long agent runs to save context tokens
-    messages = mask_old_tool_results(messages, keep_full=FULL_CONTEXT_WINDOW)
+    if isinstance(error, AuthenticationError):
+        # Auth error - non-retryable, user needs to fix API keys
+        logger.error("Authentication error: %s", error)
+        return state.model_copy(
+            update={
+                "iteration": state.iteration + 1,
+                "done": True,  # Fatal - can't retry without valid credentials
+                "last_error": str(error),
+                "recovery_action": error.recovery_action.value,
+                "error_category": error.category.value,
+            }
+        )
 
-    # Calculate current token usage (after masking)
-    total_tokens = sum(estimate_message_tokens(m) for m in messages)
+    if isinstance(error, AllProvidersRateLimitedError):
+        # All providers rate limited - try fallback model if available
+        # Use context-aware fallback chain based on whether tools are being used
+        current_model = state.current_model
+        next_model = get_next_fallback(current_model, has_tools=has_tools)
 
-    # Calculate effective limit with margin
-    effective_limit = int(max_tokens * TOKEN_LIMIT_MARGIN)
-
-    # If within limit, return as-is
-    if total_tokens <= effective_limit:
-        return messages
-
-    logger.warning(
-        "Context approaching limit: %d tokens (limit: %d). Trimming.",
-        total_tokens,
-        effective_limit,
-    )
-
-    # Strategy: Keep first message (system) and last N messages
-    # Drop middle messages one by one until within limit
-    if len(messages) <= MIN_MESSAGES_TO_KEEP:
-        # Can't trim further, just return what we have
-        return messages
-
-    # Separate system message if present
-    first_message = messages[0] if messages else None
-    has_system = first_message is not None and first_message.get("role") == "system"
-
-    if has_system:
-        # Keep system + trim middle + keep recent
-        system_msg: dict = messages[0]
-        remaining: list[dict] = messages[1:]
-        system_tokens = estimate_message_tokens(system_msg)
-    else:
-        remaining = messages[:]
-        system_tokens = 0
-
-    # Pre-compute token counts for each message (O(n) once)
-    token_counts = [estimate_message_tokens(m) for m in remaining]
-
-    # Build suffix sums: suffix_sum[i] = sum of tokens from index i to end
-    # This allows O(1) lookup of "tokens for last k messages"
-    n = len(remaining)
-    suffix_sums = [0] * (n + 1)  # suffix_sums[n] = 0 (no messages)
-    for i in range(n - 1, -1, -1):
-        suffix_sums[i] = suffix_sums[i + 1] + token_counts[i]
-
-    # Binary search for how many recent messages we can keep
-    # suffix_sums[n - k] = tokens for last k messages
-    for keep_count in range(n, 0, -1):
-        candidate_tokens = system_tokens + suffix_sums[n - keep_count]
-        if candidate_tokens <= effective_limit:
-            recent_msgs: list[dict] = remaining[-keep_count:]
-            if has_system:
-                candidate: list[dict] = [system_msg] + recent_msgs
-            else:
-                candidate = recent_msgs
-            if keep_count < len(remaining):
-                dropped = len(remaining) - keep_count
-                logger.info("Dropped %d messages to fit context window.", dropped)
-
-                # Add a summary message to indicate trimming occurred
-                summary_msg: dict = {
-                    "role": "system",
-                    "content": f"[Earlier conversation of {dropped} messages omitted for context limit]",
+        if next_model:
+            logger.warning(
+                "Rate limited on %s, falling back to %s (has_tools=%s)",
+                current_model or state.current_tier,
+                next_model,
+                has_tools,
+            )
+            # Return state with next fallback model - graph will loop back to think
+            return state.model_copy(
+                update={
+                    "iteration": state.iteration + 1,
+                    "current_model": next_model,
+                    "last_error": f"Rate limited, trying fallback: {next_model}",
+                    "recovery_action": RecoveryAction.FALLBACK.value,
+                    "error_category": error.category.value,
                 }
-                if has_system:
-                    return [system_msg, summary_msg] + recent_msgs
-                else:
-                    return [summary_msg] + recent_msgs
-            return candidate
+            )
+        else:
+            # Fallback chain exhausted - fatal error
+            logger.error("All fallback models exhausted. Cannot continue.")
+            return state.model_copy(
+                update={
+                    "iteration": state.iteration + 1,
+                    "done": True,
+                    "error_count": state.error_count + 1,
+                    "last_error": "All providers rate limited. Please try again later.",
+                    "recovery_action": RecoveryAction.ABORT.value,
+                    "error_category": error.category.value,
+                }
+            )
 
-    # Worst case: just keep the minimum
-    logger.warning("Had to drop all but minimum messages for context limit.")
-    if has_system:
-        return [system_msg, remaining[-1]] if remaining else [system_msg]
-    return [remaining[-1]] if remaining else []
+    if isinstance(error, RateLimitError):
+        # Single provider rate limit - retryable
+        logger.warning(
+            "Rate limit on provider %s: %s",
+            error.provider_name or "unknown",
+            error,
+            extra=error.logging_extra(),
+        )
+        return state.model_copy(
+            update={
+                "iteration": state.iteration + 1,
+                "error_count": state.error_count + 1,
+                "last_error": str(error),
+                "recovery_action": error.recovery_action.value,
+                "error_category": error.category.value,
+            }
+        )
+
+    if isinstance(error, (NetworkError, InfraTimeoutError)):
+        # Network/timeout errors - retryable
+        logger.warning(
+            "Network error in %s: %s",
+            log_context,
+            error,
+            extra=error.logging_extra(),
+        )
+        return state.model_copy(
+            update={
+                "iteration": state.iteration + 1,
+                "error_count": state.error_count + 1,
+                "last_error": str(error),
+                "recovery_action": error.recovery_action.value,
+                "error_category": error.category.value,
+            }
+        )
+
+    if isinstance(error, (ConnectionError, TimeoutError, OSError)):
+        # Stdlib network errors (fallback for non-wrapped errors)
+        logger.warning("Network error in %s: %s", log_context, error)
+        return state.model_copy(
+            update={
+                "iteration": state.iteration + 1,
+                "error_count": state.error_count + 1,
+                "last_error": f"Connection error: {error}",
+                "recovery_action": RecoveryAction.RETRY.value,
+                "error_category": "network",
+            }
+        )
+
+    if isinstance(error, ProviderExecutionError):
+        # Provider execution error - may be retryable
+        logger.warning(
+            "Provider execution error: %s",
+            error,
+            extra=error.logging_extra(),
+        )
+        return state.model_copy(
+            update={
+                "iteration": state.iteration + 1,
+                "error_count": state.error_count + 1,
+                "last_error": str(error),
+                "recovery_action": error.recovery_action.value,
+                "error_category": error.category.value,
+            }
+        )
+
+    if isinstance(error, ProviderError):
+        # Generic provider error - check if retryable
+        log_method = logger.warning if error.is_retryable else logger.error
+        log_method(
+            "Provider error: %s",
+            error,
+            extra=error.logging_extra(),
+        )
+        return state.model_copy(
+            update={
+                "iteration": state.iteration + 1,
+                "error_count": state.error_count + 1,
+                "last_error": str(error),
+                "recovery_action": error.recovery_action.value,
+                "error_category": error.category.value,
+                "done": not error.is_retryable,  # Stop if non-retryable
+            }
+        )
+
+    if isinstance(error, (json.JSONDecodeError, ValueError, TypeError, AttributeError)):
+        # Response parsing/handling errors - may be retryable (API returned bad format)
+        logger.warning("Response parsing error in %s: %s", log_context, error)
+        return state.model_copy(
+            update={
+                "iteration": state.iteration + 1,
+                "error_count": state.error_count + 1,
+                "last_error": f"Response error: {error}",
+                "recovery_action": RecoveryAction.RETRY.value,
+                "error_category": "parse",
+            }
+        )
+
+    # Unexpected error - log with full traceback for debugging
+    logger.exception(f"Unexpected error in {log_context}: {type(error).__name__}: {error}")
+    return state.model_copy(
+        update={
+            "iteration": state.iteration + 1,
+            "error_count": state.error_count + 1,
+            "last_error": str(error),
+            "recovery_action": RecoveryAction.ABORT.value,
+            "error_category": "system",
+        }
+    )
 
 
 def _detect_platform() -> Platform:
@@ -383,69 +348,6 @@ def build_system_prompt(
     # Delegate to factory
     factory = PromptFactory()
     return factory.create_agent_system_prompt(config)
-
-
-def accumulate_tool_calls(fragments: list[ToolCallFragment]) -> dict[int, dict]:
-    """
-    Accumulate tool call fragments into complete tool calls.
-
-    Streaming responses deliver tool calls in fragments across multiple chunks.
-    This function accumulates them by index.
-
-    Args:
-        fragments: List of tool call fragments from streaming
-
-    Returns:
-        Dict mapping index to accumulated tool call data
-    """
-    accumulated: dict[int, dict] = {}
-
-    for frag in fragments:
-        idx = frag.index
-        if idx not in accumulated:
-            accumulated[idx] = {
-                "id": "",
-                "name": "",
-                "arguments": "",
-            }
-
-        if frag.id:
-            accumulated[idx]["id"] = frag.id
-        if frag.name:
-            accumulated[idx]["name"] += frag.name
-        if frag.arguments:
-            accumulated[idx]["arguments"] += frag.arguments
-
-    return accumulated
-
-
-def fragments_to_tool_calls(accumulated: dict[int, dict]) -> list[ToolCall]:
-    """
-    Convert accumulated fragments to ToolCall dicts in OpenAI format.
-
-    Args:
-        accumulated: Dict from accumulate_tool_calls
-
-    Returns:
-        List of ToolCall TypedDicts in OpenAI format
-    """
-    tool_calls: list[ToolCall] = []
-
-    for idx in sorted(accumulated.keys()):
-        tc_data = accumulated[idx]
-        if tc_data["name"]:  # Only include if we have a name
-            tool_calls.append(
-                ToolCall(
-                    type="function",
-                    id=tc_data["id"],
-                    function={
-                        "name": tc_data["name"],
-                        "arguments": tc_data["arguments"],
-                    },
-                )
-            )
-
-    return tool_calls
 
 
 def think_node(
@@ -597,168 +499,8 @@ def think_node(
             }
         )
 
-    except NotConfiguredError:
-        # LLM not configured - fatal error, stop the graph immediately
-        logger.error("LLM not configured. User needs to run setup.")
-        return state.model_copy(
-            update={
-                "iteration": state.iteration + 1,
-                "done": True,  # Stop the graph, no point in retrying
-                "last_error": "LLM not configured. Run /setup",
-                "recovery_action": RecoveryAction.ABORT.value,
-            }
-        )
-    except AuthenticationError as e:
-        # Auth error - non-retryable, user needs to fix API keys
-        logger.error("Authentication error: %s", e)
-        return state.model_copy(
-            update={
-                "iteration": state.iteration + 1,
-                "done": True,  # Fatal - can't retry without valid credentials
-                "last_error": str(e),
-                "recovery_action": e.recovery_action.value,
-                "error_category": e.category.value,
-            }
-        )
-    except AllProvidersRateLimitedError as e:
-        # All providers rate limited - try fallback model if available
-        # Use context-aware fallback chain based on whether tools are being used
-        current_model = state.current_model
-        next_model = get_next_fallback(current_model, has_tools=has_tools)
-
-        if next_model:
-            logger.warning(
-                "Rate limited on %s, falling back to %s (has_tools=%s)",
-                current_model or state.current_tier,
-                next_model,
-                has_tools,
-            )
-            # Return state with next fallback model - graph will loop back to think
-            return state.model_copy(
-                update={
-                    "iteration": state.iteration + 1,
-                    "current_model": next_model,
-                    "last_error": f"Rate limited, trying fallback: {next_model}",
-                    "recovery_action": RecoveryAction.FALLBACK.value,
-                    "error_category": e.category.value,
-                }
-            )
-        else:
-            # Fallback chain exhausted - fatal error
-            logger.error("All fallback models exhausted. Cannot continue.")
-            return state.model_copy(
-                update={
-                    "iteration": state.iteration + 1,
-                    "done": True,
-                    "error_count": state.error_count + 1,
-                    "last_error": "All providers rate limited. Please try again later.",
-                    "recovery_action": RecoveryAction.ABORT.value,
-                    "error_category": e.category.value,
-                }
-            )
-    except RateLimitError as e:
-        # Single provider rate limit - retryable
-        logger.warning(
-            "Rate limit on provider %s: %s",
-            e.provider_name or "unknown",
-            e,
-            extra=e.logging_extra(),
-        )
-        return state.model_copy(
-            update={
-                "iteration": state.iteration + 1,
-                "error_count": state.error_count + 1,
-                "last_error": str(e),
-                "recovery_action": e.recovery_action.value,
-                "error_category": e.category.value,
-            }
-        )
-    except (NetworkError, InfraTimeoutError) as e:
-        # Network/timeout errors - retryable
-        logger.warning(
-            "Network error in think node: %s",
-            e,
-            extra=e.logging_extra(),
-        )
-        return state.model_copy(
-            update={
-                "iteration": state.iteration + 1,
-                "error_count": state.error_count + 1,
-                "last_error": str(e),
-                "recovery_action": e.recovery_action.value,
-                "error_category": e.category.value,
-            }
-        )
-    except (ConnectionError, TimeoutError, OSError) as e:
-        # Stdlib network errors (fallback for non-wrapped errors)
-        logger.warning("Network error in think node: %s", e)
-        return state.model_copy(
-            update={
-                "iteration": state.iteration + 1,
-                "error_count": state.error_count + 1,
-                "last_error": f"Connection error: {e}",
-                "recovery_action": RecoveryAction.RETRY.value,
-                "error_category": "network",
-            }
-        )
-    except ProviderExecutionError as e:
-        # Provider execution error - may be retryable
-        logger.warning(
-            "Provider execution error: %s",
-            e,
-            extra=e.logging_extra(),
-        )
-        return state.model_copy(
-            update={
-                "iteration": state.iteration + 1,
-                "error_count": state.error_count + 1,
-                "last_error": str(e),
-                "recovery_action": e.recovery_action.value,
-                "error_category": e.category.value,
-            }
-        )
-    except ProviderError as e:
-        # Generic provider error - check if retryable
-        log_method = logger.warning if e.is_retryable else logger.error
-        log_method(
-            "Provider error: %s",
-            e,
-            extra=e.logging_extra(),
-        )
-        return state.model_copy(
-            update={
-                "iteration": state.iteration + 1,
-                "error_count": state.error_count + 1,
-                "last_error": str(e),
-                "recovery_action": e.recovery_action.value,
-                "error_category": e.category.value,
-                "done": not e.is_retryable,  # Stop if non-retryable
-            }
-        )
-    except (json.JSONDecodeError, ValueError, TypeError, AttributeError) as e:
-        # Response parsing/handling errors - may be retryable (API returned bad format)
-        logger.warning("Response parsing error in think node: %s", e)
-        return state.model_copy(
-            update={
-                "iteration": state.iteration + 1,
-                "error_count": state.error_count + 1,
-                "last_error": f"Response error: {e}",
-                "recovery_action": RecoveryAction.RETRY.value,
-                "error_category": "parse",
-            }
-        )
     except Exception as e:
-        # Unexpected error - log with full traceback for debugging
-        logger.exception(f"Unexpected error in think node: {type(e).__name__}: {e}")
-        return state.model_copy(
-            update={
-                "iteration": state.iteration + 1,
-                "error_count": state.error_count + 1,
-                "last_error": str(e),
-                "recovery_action": RecoveryAction.ABORT.value,
-                "error_category": "system",
-            }
-        )
+        return _handle_llm_error(e, state, has_tools, log_context="think node")
 
 
 async def think_node_streaming(
@@ -940,165 +682,5 @@ async def think_node_streaming(
             }
         )
 
-    except NotConfiguredError:
-        # LLM not configured - fatal error, stop the graph immediately
-        logger.error("LLM not configured. User needs to run setup.")
-        return state.model_copy(
-            update={
-                "iteration": state.iteration + 1,
-                "done": True,  # Stop the graph, no point in retrying
-                "last_error": "LLM not configured. Run /setup",
-                "recovery_action": RecoveryAction.ABORT.value,
-            }
-        )
-    except AuthenticationError as e:
-        # Auth error - non-retryable, user needs to fix API keys
-        logger.error("Authentication error: %s", e)
-        return state.model_copy(
-            update={
-                "iteration": state.iteration + 1,
-                "done": True,  # Fatal - can't retry without valid credentials
-                "last_error": str(e),
-                "recovery_action": e.recovery_action.value,
-                "error_category": e.category.value,
-            }
-        )
-    except AllProvidersRateLimitedError as e:
-        # All providers rate limited - try fallback model if available
-        # Use context-aware fallback chain based on whether tools are being used
-        current_model = state.current_model
-        next_model = get_next_fallback(current_model, has_tools=has_tools)
-
-        if next_model:
-            logger.warning(
-                "Rate limited on %s, falling back to %s (has_tools=%s)",
-                current_model or state.current_tier,
-                next_model,
-                has_tools,
-            )
-            # Return state with next fallback model - graph will loop back to think
-            return state.model_copy(
-                update={
-                    "iteration": state.iteration + 1,
-                    "current_model": next_model,
-                    "last_error": f"Rate limited, trying fallback: {next_model}",
-                    "recovery_action": RecoveryAction.FALLBACK.value,
-                    "error_category": e.category.value,
-                }
-            )
-        else:
-            # Fallback chain exhausted - fatal error
-            logger.error("All fallback models exhausted. Cannot continue.")
-            return state.model_copy(
-                update={
-                    "iteration": state.iteration + 1,
-                    "done": True,
-                    "error_count": state.error_count + 1,
-                    "last_error": "All providers rate limited. Please try again later.",
-                    "recovery_action": RecoveryAction.ABORT.value,
-                    "error_category": e.category.value,
-                }
-            )
-    except RateLimitError as e:
-        # Single provider rate limit - retryable
-        logger.warning(
-            "Rate limit on provider %s: %s",
-            e.provider_name or "unknown",
-            e,
-            extra=e.logging_extra(),
-        )
-        return state.model_copy(
-            update={
-                "iteration": state.iteration + 1,
-                "error_count": state.error_count + 1,
-                "last_error": str(e),
-                "recovery_action": e.recovery_action.value,
-                "error_category": e.category.value,
-            }
-        )
-    except (NetworkError, InfraTimeoutError) as e:
-        # Network/timeout errors - retryable
-        logger.warning(
-            "Network error in streaming think node: %s",
-            e,
-            extra=e.logging_extra(),
-        )
-        return state.model_copy(
-            update={
-                "iteration": state.iteration + 1,
-                "error_count": state.error_count + 1,
-                "last_error": str(e),
-                "recovery_action": e.recovery_action.value,
-                "error_category": e.category.value,
-            }
-        )
-    except (ConnectionError, TimeoutError, OSError) as e:
-        # Stdlib network errors (fallback for non-wrapped errors)
-        logger.warning("Network error in streaming think node: %s", e)
-        return state.model_copy(
-            update={
-                "iteration": state.iteration + 1,
-                "error_count": state.error_count + 1,
-                "last_error": f"Connection error: {e}",
-                "recovery_action": RecoveryAction.RETRY.value,
-                "error_category": "network",
-            }
-        )
-    except ProviderExecutionError as e:
-        # Provider execution error - may be retryable
-        logger.warning(
-            "Provider execution error: %s",
-            e,
-            extra=e.logging_extra(),
-        )
-        return state.model_copy(
-            update={
-                "iteration": state.iteration + 1,
-                "error_count": state.error_count + 1,
-                "last_error": str(e),
-                "recovery_action": e.recovery_action.value,
-                "error_category": e.category.value,
-            }
-        )
-    except ProviderError as e:
-        # Generic provider error - check if retryable
-        log_method = logger.warning if e.is_retryable else logger.error
-        log_method(
-            "Provider error: %s",
-            e,
-            extra=e.logging_extra(),
-        )
-        return state.model_copy(
-            update={
-                "iteration": state.iteration + 1,
-                "error_count": state.error_count + 1,
-                "last_error": str(e),
-                "recovery_action": e.recovery_action.value,
-                "error_category": e.category.value,
-                "done": not e.is_retryable,  # Stop if non-retryable
-            }
-        )
-    except (json.JSONDecodeError, ValueError, TypeError, AttributeError) as e:
-        # Response parsing/handling errors - may be retryable (API returned bad format)
-        logger.warning("Response parsing error in streaming think node: %s", e)
-        return state.model_copy(
-            update={
-                "iteration": state.iteration + 1,
-                "error_count": state.error_count + 1,
-                "last_error": f"Response error: {e}",
-                "recovery_action": RecoveryAction.RETRY.value,
-                "error_category": "parse",
-            }
-        )
     except Exception as e:
-        # Unexpected error - log with full traceback for debugging
-        logger.exception(f"Unexpected error in streaming think node: {type(e).__name__}: {e}")
-        return state.model_copy(
-            update={
-                "iteration": state.iteration + 1,
-                "error_count": state.error_count + 1,
-                "last_error": str(e),
-                "recovery_action": RecoveryAction.ABORT.value,
-                "error_category": "system",
-            }
-        )
+        return _handle_llm_error(e, state, has_tools, log_context="streaming think node")

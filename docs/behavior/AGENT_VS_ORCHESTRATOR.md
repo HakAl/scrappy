@@ -1,26 +1,26 @@
-# Agent VS Orchestrator
+# Graph Agent VS Orchestrator
 
 ## Core Responsibilities
 
-| Aspect | Agent | Orchestrator |
-|--------|-------|--------------|
-| **Primary Role** | Decide what to do (reason, plan, execute tools) | Decide which provider to use |
-| **LLM Interaction** | Sends prompts via orchestrator | Routes to providers, handles retries |
-| **Context** | Builds per-iteration context with RAG | Augments prompts with codebase context |
-| **Semantic Search** | Explicit tool + passive RAG in system prompt | Implicit context augmentation |
+| Aspect | Graph Agent | Orchestrator |
+|--------|-------------|--------------|
+| **Primary Role** | Reason, decide actions, execute tools | Route to providers, handle retries |
+| **LLM Interaction** | Think node calls LLM service | LiteLLM Router selects providers |
+| **Context** | ContextFactory builds RAG context | Augments prompts with codebase context |
+| **Semantic Search** | Explicit tool + RAG in system prompt | Implicit context augmentation |
 
 ## Semantic Search Integration
 
-Both agent and orchestrator use semantic search, but differently:
+Both graph agent and orchestrator use semantic search, but differently:
 
 ```
-Orchestrator (implicit)                 Agent (explicit)
-=======================                 ================
-CodebaseContext                         AgentContextFactory
+Orchestrator (implicit)                 Graph Agent (explicit)
+=======================                 ======================
+CodebaseContext                         ContextFactory
     |                                       |
-    +-- augment_prompt()                    +-- Passive RAG (system prompt)
+    +-- augment_prompt()                    +-- build_rag_context()
     |       |                               |
-    |       +-- Semantic search             +-- Tool filtering
+    |       +-- Semantic search             +-- build_search_strategy_section()
     |           for context                 |
     |                                       +-- SemanticSearchTool
     +-- use_context=True in                     |
@@ -29,37 +29,34 @@ CodebaseContext                         AgentContextFactory
 
 **Orchestrator**: When `use_context=True`, automatically injects relevant code into prompts.
 
-**Agent**:
-1. `AgentContextFactory` pre-fetches relevant context into system prompt (passive RAG)
+**Graph Agent**:
+1. `ContextFactory` builds RAG context for system prompt
 2. `codebase_search` tool lets LLM explicitly search when needed
-3. Tool is hidden until index is ready (dynamic filtering)
+3. Think node includes context in system prompt
 
 ## Provider Selection
 
-Agent delegates provider selection to orchestrator:
+Graph agent uses LiteLLM Router for provider selection:
 
 ```python
-# Agent should NOT hardcode providers:
-response = self.orch.delegate('gemini', prompt, ...)  # Bad
-
-# Agent lets orchestrator decide:
-response = self.orch.delegate(
-    provider_name=None,  # Let orchestrator pick
-    prompt=prompt,
+# Graph agent uses tier-based selection:
+response = llm_service.completion_sync(
+    model="fast",  # or "quality" - tier, not specific provider
+    messages=messages,
     ...
 )
 ```
 
-Orchestrator decides based on:
-- Task type requirements (planning vs execution)
+LiteLLM Router decides based on:
+- Model tier (fast vs quality)
 - Current rate limit status
 - Provider availability
-- Provider health/error rates
+- Fallback chains
 
 ## Benefits
 
-- Rate limiting actually works
-- Provider rotation when limits approached
-- Agent code stays clean and focused
-- Easy to add new providers without touching agent
+- Automatic provider rotation via LiteLLM Router
+- Rate limiting handled transparently
+- Graph nodes stay focused on their responsibility
+- Easy to add new providers without touching graph code
 - Semantic search works at both levels

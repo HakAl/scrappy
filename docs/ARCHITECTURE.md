@@ -8,20 +8,20 @@ This system creates a **swappable orchestrator** for multi-provider LLM coordina
 User / CLI Interface
     │
     ▼
-AgentOrchestrator
+Orchestrator (LiteLLM Router)
     │
-    ├─── CodeAgent (Tool-based Code Writing)
-    │     ├─ Planner: Gemini (smart reasoning)
-    │     ├─ Executor: Cerebras (fast operations)
-    │     ├─ Tools: read_file, write_file, run_command, etc.
-    │     ├─ Human-in-the-loop approval
-    │     └─ Safety: sandboxing, audit logging, git checkpoints
+    ├─── Graph Agent (LangGraph-based)
+    │     ├─ Think Node: LLM reasoning
+    │     ├─ Execute Node: Tool execution
+    │     ├─ Verify Node: Linting/testing
+    │     ├─ Confirm Node: Human-in-the-loop
+    │     └─ Error Node: Recovery handling
     │
     ├─── CodebaseContext (Auto-Explore & Cache)
     │     └─ Project analysis, file index, summary generation
     │
-    ├─── Brain (Swappable: Cerebras/Groq/Gemini)
-    │     └─ Planning, reasoning, synthesis
+    ├─── LiteLLM Router (Provider Selection)
+    │     └─ Fast tier, Quality tier, fallback chains
     │
     ├─── Cerebras (Primary - 14,400 RPD)
     │     └─ llama3.1-8b, llama-3.3-70b, qwen-3-32b
@@ -38,24 +38,22 @@ AgentOrchestrator
 
 ## Key Innovations
 
-### 1. Code Agent with Human-in-the-Loop
+### 1. Graph-Based Agent with Human-in-the-Loop
 
-The system includes an AI code agent that can read, write, and modify code with explicit human approval for every action:
+The system uses a LangGraph-based agent that can read, write, and modify code with explicit human approval for dangerous operations:
 
 ```python
-from src.agent import CodeAgent
+from scrappy.graph import create_agent_graph
 
-# Create agent with hybrid model approach
-agent = CodeAgent(orch)
-# Uses Gemini for planning (smart), Cerebras for execution (fast)
+# Create graph-based agent
+graph = create_agent_graph(llm_service, tool_adapter)
 
-# Run task with human approval at each step
-result = agent.run("Add input validation to API endpoints")
+# Run task - dangerous operations require confirmation
+result = await graph.arun(task="Add input validation to API endpoints")
 
-# Every file operation requires explicit approval:
-# Agent wants to: read_file
-# Parameters: {"path": "src/api.py"}
-# Allow? [y/N]: y
+# Dangerous file operations trigger confirm node:
+# [CONFIRM] Write to src/api.py?
+# [y/N]: y
 ```
 
 **Key Safety Features:**
@@ -204,39 +202,35 @@ CodebaseContext.get_relevant_context(query)
 3. **Deduplication**: Prevents duplicate chunks in results
 4. **Fallback**: If hybrid search fails, falls back to vector-only search
 
-### 4. Code Agent (`src/agent/`)
+### 4. Graph Agent (`src/scrappy/graph/`)
 
-AI-powered code writing with safety, modularized into a package:
+LangGraph-based agent for autonomous code tasks:
 
-**Core Components:**
-- `core.py` - Main CodeAgent class
-- `agent_loop.py` - Agent reasoning/execution loop
-- `action_executor.py` - Action execution coordination
-- `tool_runner.py` - Tool execution
-- `response_parser.py` - LLM response parsing
-- `provider_strategy.py` - Provider selection strategy
+**Node Components:**
+- `nodes/think.py` - LLM reasoning step (decide what to do next)
+- `nodes/execute.py` - Tool execution (run tools from LLM response)
+- `nodes/verify.py` - Linting/testing verification (ruff, mypy)
+- `nodes/confirm.py` - Human-in-the-loop confirmation (dangerous operations)
+- `nodes/error.py` - Error handling and recovery
 
-**Safety Components:**
-- `safety_checker.py` - Safety validation
-- `checkpoint.py` - Git checkpoint operations
-- `audit.py` - Audit logging
-- `duplicate_detector.py` - Duplicate action detection
-- `denial_handler.py` - Denial handling
+**Supporting Classes:**
+- `nodes/token_estimator.py` - Token counting for context management
+- `nodes/context_manager.py` - Context window management and trimming
+- `nodes/tool_call_processor.py` - Tool call format conversion
+
+**Graph Structure:**
+- `agent.py` - Graph construction and configuration
+- `state.py` - AgentState (Pydantic) for graph state
+- `edges.py` - Conditional edge logic (routing between nodes)
+- `protocols.py` - Protocol definitions for dependency injection
 
 **Features:**
-- **Hybrid model approach**: Gemini for planning/reasoning, Cerebras for fast operations
-- **Tool-based execution**: read_file, write_file, list_files, run_command, search_code, git_log, git_diff, git_blame, git_show
-- **Git history awareness**: Agent can check commits, diffs, and blame to understand code evolution
-- **Human-in-the-loop**: Every action requires explicit approval
-- **Safety features**:
-  - Path sandboxing (restricted to project directory)
-  - Dangerous command blocking
-  - Git checkpoint creation/rollback
-  - Complete audit logging
-  - Dry-run mode for previewing
-- **Context-aware**: Uses project exploration for informed decisions
-
-Note: `src/agent.py` exists as a backward-compatibility wrapper.
+- **LangGraph architecture**: Nodes connected by conditional edges
+- **Streaming support**: Real-time token streaming via callbacks
+- **Tool calling**: Native LLM tool calling with schema validation
+- **Human-in-the-loop**: Dangerous operations require confirmation
+- **Error recovery**: Automatic retry with tier escalation
+- **Context management**: Token-aware context trimming and observation masking
 
 ### 5. Orchestrator (`src/orchestrator/`)
 
@@ -420,15 +414,12 @@ summary = orch.synthesize(
 )
 ```
 
-### Pattern 6: Code Agent with Human Approval
+### Pattern 6: Graph Agent with Human Approval
 
 ```python
-from src.agent import CodeAgent
+from scrappy.graph import create_agent_graph
+from scrappy.graph.state import AgentState
 from scrappy.undo import create_undo_point, undo, UndoError
-
-# Setup
-orch = AgentOrchestrator(auto_explore=True)
-agent = CodeAgent(orch)
 
 # Create safety undo point (automatically done by CLI)
 try:
@@ -437,18 +428,19 @@ try:
 except UndoError as e:
     print(f"Warning: Could not create undo point: {e}")
 
-# Run agent (human approves each action)
-result = agent.run(
-    task="Add error handling to all API endpoints",
-    max_iterations=10,
-    auto_confirm=False  # Human must approve each action
+# Create and run graph agent
+graph = create_agent_graph(llm_service, tool_adapter)
+initial_state = AgentState(
+    input="Add error handling to all API endpoints",
+    original_task="Add error handling to all API endpoints",
+    working_dir=str(Path.cwd()),
 )
 
-if result['success']:
-    print(f"Completed in {result['iterations']} iterations")
-    # Review audit log
-    for entry in result['audit_log']:
-        print(f"  {entry['action']} - {entry['approved']}")
+# Run agent (dangerous operations require confirmation via confirm node)
+final_state = await graph.arun(initial_state)
+
+if final_state.done and not final_state.last_error:
+    print(f"Completed in {final_state.iteration} iterations")
 else:
     # Rollback if needed using the undo system
     try:
@@ -572,98 +564,69 @@ python examples/basic_usage.py
 ## Project Structure
 
 ```
-src/
+src/scrappy/
 ├── __init__.py
-├── orchestrator.py           # Backward-compat wrapper -> orchestrator/
-├── agent.py                  # Backward-compat wrapper -> agent/
-├── agent_config.py           # Agent configuration (extends BaseConfig)
-├── orchestrator_adapter.py   # Orchestrator adapter for agents
-├── orchestrator/             # Modularized orchestrator package
-│   ├── core.py               # Main AgentOrchestrator class
+├── agent_config.py           # Agent configuration
+├── orchestrator_adapter.py   # Orchestrator adapter for graph agent
+├── graph/                    # LangGraph-based agent
+│   ├── agent.py              # Graph construction
+│   ├── state.py              # AgentState definition
+│   ├── edges.py              # Conditional edge logic
+│   ├── protocols.py          # Protocol definitions
+│   ├── tools.py              # Tool adapter
+│   ├── fallbacks.py          # Model fallback chains
+│   ├── nodes/                # Graph nodes
+│   │   ├── think.py          # LLM reasoning
+│   │   ├── execute.py        # Tool execution
+│   │   ├── verify.py         # Linting/testing
+│   │   ├── confirm.py        # Human confirmation
+│   │   ├── error.py          # Error recovery
+│   │   ├── token_estimator.py
+│   │   ├── context_manager.py
+│   │   └── tool_call_processor.py
+│   └── ...
+├── orchestrator/             # LiteLLM-based orchestration
+│   ├── core.py               # Main orchestrator class
 │   ├── factory.py            # Factory methods
+│   ├── litellm_service.py    # LiteLLM integration
+│   ├── litellm_config.py     # Router configuration
 │   ├── delegation.py         # Delegation logic
-│   ├── provider_selector.py  # Smart provider selection
-│   ├── rate_limiter.py       # Rate limiting facade
 │   ├── rate_limiting/        # Rate limit subsystem
 │   ├── cache.py              # Response caching
-│   ├── session.py            # Session persistence
-│   ├── memory.py             # Working memory
-│   └── ...                   # 25+ files total
-├── agent/                    # Modularized agent package
-│   ├── core.py               # Main CodeAgent class
-│   ├── agent_loop.py         # Agent reasoning loop
-│   ├── action_executor.py    # Action execution
-│   ├── safety_checker.py     # Safety validation
-│   ├── checkpoint.py         # Git checkpoints
-│   ├── audit.py              # Audit logging
-│   └── ...                   # 13+ files total
-├── agent_tools/              # Agent tool implementations
+│   └── ...
+├── agent_tools/              # Tool implementations
 │   ├── tools/                # Individual tools
 │   │   ├── file_tools.py     # read_file, write_file, list_files
-│   │   ├── git_tools.py      # git_log, git_diff, git_blame, git_show
+│   │   ├── git_tools.py      # git operations
 │   │   ├── command_tool.py   # run_command
 │   │   ├── search_tools.py   # search_code
 │   │   └── ...
 │   └── components/           # Tool components
 ├── context/                  # Context management
 │   ├── codebase_context.py   # Main context manager
-│   ├── protocols.py          # Context protocols
 │   ├── semantic_manager.py   # Semantic search coordination
 │   ├── semantic/             # Semantic search subsystem
-│   │   ├── provider.py       # LanceDB vector search
-│   │   ├── embeddings.py     # FastEmbed integration
-│   │   ├── ranker.py         # Result ranking
-│   │   └── chunkers/         # Code chunking strategies
-│   ├── file_scanner.py       # File system scanning
-│   ├── project_detector.py   # Project type detection
-│   ├── git_history.py        # Git operations
-│   └── cache.py              # Context caching
-├── providers/                # LLM providers
-│   ├── base.py               # Abstract base class & protocols
-│   ├── cerebras_provider.py  # Cerebras (primary)
-│   ├── groq_provider.py      # Groq (secondary)
-│   ├── gemini_provider.py    # Gemini (auto-fallback)
-│   ├── cohere_provider.py    # Cohere (embeddings)
-│   └── github_models_provider.py  # GitHub Models
-├── task_router/              # Task routing system
-│   ├── classifier.py         # Task classification
-│   ├── router.py             # Task routing
-│   ├── strategies/           # Execution strategies
-│   └── classification_strategies/
+│   └── ...
 ├── cli/                      # CLI implementation
-│   ├── commands.py           # Click commands
-│   ├── command_router.py     # Slash command routing
 │   ├── core.py               # Main CLI class
+│   ├── session_context.py    # Session management
 │   └── ...
 ├── infrastructure/           # Infrastructure layer
-│   ├── config/               # Configuration framework
+│   ├── exceptions.py         # Exception hierarchy
 │   ├── persistence/          # Persistence abstractions
 │   ├── logging/              # Logging system
-│   └── file_system.py        # File system abstraction
+│   └── ...
 ├── platform/                 # Platform abstraction
 │   ├── detection.py          # Platform detection
-│   ├── translation.py        # Command translation
-│   └── executors.py          # Platform-specific execution
+│   └── ...
 └── prompts/                  # Prompt system
     ├── factory.py            # Prompt factory
-    ├── builders/             # Prompt builders
-    └── templates/            # Prompt templates
+    └── ...
 
 docs/
-├── CLI.md                    # CLI reference guide
 ├── ARCHITECTURE.md           # This file
-└── RATE_LIMITS.md           # Detailed rate limits
-
-examples/
-├── basic_usage.py           # Basic orchestrator usage
-├── orchestrator_demo.py     # Full orchestrator features
-├── agent_demo.py            # Code agent safety features
-└── context_aware_demo.py    # Context-aware development
-
-scrappy.py                   # CLI entry point
-.scrappy/
-.scrappy/.context.json        # Cached codebase context (auto-generated)
-.scrappy/.audit.json             # Agent action audit log (auto-generated)
+├── CLI.md                    # CLI reference guide
+└── behavior/                 # Internal behavior specs
 ```
 
 ## Context Caching

@@ -11,8 +11,7 @@ For user-facing documentation, see the parent `docs/` directory.
 | Document | Description |
 |----------|-------------|
 | [ORCHESTRATOR.md](ORCHESTRATOR.md) | Multi-provider orchestration, delegation, and coordination |
-| [AGENT.md](AGENT.md) | Code agent loop, thinking, planning, and execution |
-| [AGENT_VS_ORCHESTRATOR.md](AGENT_VS_ORCHESTRATOR.md) | Separation of concerns between agent and orchestrator |
+| [AGENT_VS_ORCHESTRATOR.md](AGENT_VS_ORCHESTRATOR.md) | Separation of concerns between graph agent and orchestrator |
 | [PROVIDERS.md](PROVIDERS.md) | LLM provider adapters and integration |
 
 ### User Interface
@@ -27,7 +26,6 @@ For user-facing documentation, see the parent `docs/` directory.
 | Document | Description |
 |----------|-------------|
 | [TOOLS.md](TOOLS.md) | Available tools (file, git, web, search, command) |
-| [TASK_ROUTER.md](TASK_ROUTER.md) | Task classification and routing strategies |
 | [SEMANTIC_FILE_SEARCH.md](SEMANTIC_FILE_SEARCH.md) | Semantic code search architecture |
 
 ### System Features
@@ -50,31 +48,32 @@ For user-facing documentation, see the parent `docs/` directory.
 User Input
     |
     v
-+---CLI---+
-|  Command Router  |
++-------CLI--------+
+|  Session Manager |
 +------------------+
     |
     v
 +---Orchestrator---+
-|  Provider Selection  |
-|  Rate Limiting       |
-|  Caching             |
-+----------------------+
+|  LiteLLM Router  |
+|  Rate Limiting   |
+|  Caching         |
++------------------+
     |
     v
-+---Agent---+
-|  Think    |
-|  Plan     |
-|  Execute  |
-+-----------+
++----Graph Agent---+
+|  Think Node      |
+|  Execute Node    |
+|  Verify Node     |
+|  Confirm Node    |
++------------------+
     |
     v
-+---Tools---+
-|  File Ops |
-|  Git      |
-|  Commands |
-|  Web      |
-+-----------+
++------Tools-------+
+|  File Ops        |
+|  Git             |
+|  Commands        |
+|  Web             |
++------------------+
 ```
 
 ## Key Architectural Principles

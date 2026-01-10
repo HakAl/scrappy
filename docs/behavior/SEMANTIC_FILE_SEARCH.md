@@ -9,8 +9,8 @@ Semantic search is used at two levels:
 | Level | Component | Usage |
 |-------|-----------|-------|
 | **Orchestrator** | `CodebaseContext.augment_prompt()` | Implicit context injection when `use_context=True` |
-| **Agent** | `SemanticSearchTool` (`codebase_search`) | Explicit tool LLM can call |
-| **Agent** | `AgentContextFactory` | Passive RAG in system prompt |
+| **Graph Agent** | `SemanticSearchTool` (`codebase_search`) | Explicit tool LLM can call |
+| **Graph Agent** | `ContextFactory` | RAG context in system prompt |
 
 ## Architecture Diagram
 
@@ -54,9 +54,9 @@ Semantic search is used at two levels:
 | `SemanticSearchInitializer` | `context/semantic/initializer.py` | Background initialization |
 | `SemanticCodeChunker` | `context/code_chunker.py` | Splits code into chunks |
 | `SemanticSearchTool` | `agent_tools/tools/semantic_search_tool.py` | Agent tool wrapper |
-| `AgentContextFactory` | `agent/context_factory.py` | Passive RAG, tool filtering |
+| `ContextFactory` | `graph/context_factory.py` | RAG context augmentation |
 
-## Agent Integration
+## Graph Agent Integration
 
 ### SemanticSearchTool (`codebase_search`)
 
@@ -68,28 +68,18 @@ result = tool.execute(ctx, query="how does auth work", max_tokens=4000)
 
 When unavailable, returns `success=True` with guidance message (prevents LLM panic).
 
-### AgentContextFactory
+### ContextFactory
 
-Builds per-iteration context with:
-1. **Passive RAG** - Pre-fetches relevant code into system prompt
-2. **Tool filtering** - Hides `codebase_search` until index ready
+Builds RAG context for the think node:
+1. **Search strategy** - Builds search guidance based on available tools
+2. **RAG context** - Fetches relevant code for the current task
 
 ```python
-factory = AgentContextFactory(
-    semantic_manager=manager,
-    config=config,
-    tool_registry=registry,
-)
-context = factory.build_context(task, base_prompt)
-# context.system_prompt includes relevant code
-# context.active_tools excludes unavailable tools
+factory = ContextFactory(semantic_manager=manager)
+rag_context = factory.build_rag_context(task)
+search_strategy = factory.build_search_strategy_section(tool_names)
+# Used in build_system_prompt() for think node
 ```
-
-### Configuration
-
-In `AgentConfig`:
-- `passive_rag_enabled` - Enable passive RAG (default: True)
-- `passive_rag_max_tokens` - Token budget (default: 2000)
 
 ## Orchestrator Integration
 

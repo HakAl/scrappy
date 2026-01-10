@@ -384,7 +384,7 @@ python scrappy.py smart "Your query here"
 python scrappy.py smart "What files are in this project?"
 
 # Understand specific code
-python scrappy.py smart "How does the CodeAgent class work?"
+python scrappy.py smart "How does the graph agent work?"
 
 # Locate functionality
 python scrappy.py smart "Where is authentication implemented?"
@@ -394,7 +394,7 @@ python scrappy.py smart "Where is authentication implemented?"
 ```
 [Smart Query] Researching...
   - Checking directory structure...
-  - Searching for 'CodeAgent'...
+  - Searching for 'graph agent'...
 
 [Response based on actual code inspection]
 ```
