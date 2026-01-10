@@ -2,7 +2,7 @@ import pytest
 import json
 import httpx
 from unittest.mock import MagicMock, Mock, patch
-from scrappy.agent_tools.tools.web_tools import WebFetchTool, WebSearchTool
+from scrappy.agent_tools.tools.web_tools import WebFetchTool
 from scrappy.agent_tools.tools.base import ToolContext
 
 
@@ -174,86 +174,3 @@ class TestWebFetchExecution:
         assert len(result.output) < len(huge_text)
         assert "truncated" in result.output
         assert result.metadata["truncated"] is True
-
-
-# --- WebSearchTool Tests ---
-
-class TestWebSearchTool:
-
-    def test_unknown_registry(self, mock_context):
-        """Should reject unknown registries."""
-        tool = WebSearchTool()
-        result = tool.execute(mock_context, registry="fake", query="something")
-
-        assert not result.success
-        assert "Unknown registry" in result.error
-
-    def test_github_query_validation(self, mock_context):
-        """Should require owner/repo format for GitHub."""
-        tool = WebSearchTool()
-        result = tool.execute(mock_context, registry="github", query="just-repo")
-
-        assert not result.success
-        assert "owner/repo" in result.error
-
-# todo
-    # def test_pypi_search_format(self, mock_context, mock_client, mock_response):
-    #     """Should format PyPI JSON into readable text."""
-    #     tool = WebSearchTool()
-    #     pypi_data = {
-    #         "info": {
-    #             "name": "requests",
-    #             "version": "2.31.0",
-    #             "summary": "HTTP for Humans",
-    #             "author": "Kenneth Reitz",
-    #             "license": "Apache 2.0",
-    #             "requires_python": ">=3.7"
-    #         },
-    #         "requires_dist": ["urllib3", "certifi"]
-    #     }
-    #     mock_response.json.return_value = pypi_data
-    #
-    #     result = tool.execute(mock_context, registry="pypi", query="requests")
-    #
-    #     assert result.success
-    #     # Verify URL construction
-    #     url_called = mock_client.get.call_args[0][0]
-    #     assert "pypi.org/pypi/requests/json" in url_called
-    #
-    #     # Verify Output formatting
-    #     assert "Package: requests" in result.output
-    #     assert "Version: 2.31.0" in result.output
-    #     assert "Dependencies" in result.output
-    #     assert "- urllib3" in result.output
-
-    def test_npm_search_format(self, mock_context, mock_client, mock_response):
-        """Should format npm JSON into readable text."""
-        tool = WebSearchTool()
-        npm_data = {
-            "name": "react",
-            "dist-tags": {"latest": "18.2.0"},
-            "versions": {
-                "18.2.0": {
-                    "license": "MIT",
-                    "dependencies": {"loose-envify": "^1.1.0"}
-                }
-            }
-        }
-        mock_response.json.return_value = npm_data
-
-        result = tool.execute(mock_context, registry="npm", query="react")
-
-        assert result.success
-        assert "registry.npmjs.org/react" in mock_client.get.call_args[0][0]
-        assert "Version: 18.2.0" in result.output
-        assert "loose-envify" in result.output
-
-    def test_search_not_found(self, mock_context, mock_client, mock_response):
-        """Should handle 404 from registries gracefully."""
-        tool = WebSearchTool()
-        mock_response.status_code = 404
-
-        result = tool.execute(mock_context, registry="pypi", query="nonexistent-pkg")
-
-        assert not result.success
-        assert "not found" in result.error

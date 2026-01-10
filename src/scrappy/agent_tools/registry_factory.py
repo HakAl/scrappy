@@ -2,9 +2,9 @@
 Factory functions for creating tool registries with profile support.
 
 Profiles control which tools are presented to the agent:
-- full: All 16 tools (backward compatible)
-- optimized: 10 tools (40% token savings, production default)
-- minimal: 7 tools (maximum token savings)
+- full: All 18 tools (backward compatible)
+- optimized: 12 tools (40% token savings, production default)
+- minimal: 9 tools (maximum token savings)
 
 Tool code is preserved; profiles only change what's registered.
 """
@@ -29,7 +29,7 @@ from .tools.git_tools import (
 )
 from .tools.search_tools import FindExactTextTool
 from .tools.semantic_search_tool import SemanticSearchTool
-from .tools.web_tools import WebFetchTool, WebSearchTool
+from .tools.web_tools import WebFetchTool
 from .tools.command_tool import CommandTool
 from .tools.control_tools import CompleteTool
 from .tools.task_tools import TaskTool
@@ -44,11 +44,11 @@ if TYPE_CHECKING:
 # Tools not in profile are still in codebase but not registered
 TOOL_PROFILES: Dict[str, List[str]] = {
     "full": [
-        # All 19 tools - backward compatible
+        # All 18 tools - backward compatible
         "read_file", "read_files", "write_file", "write_files", "list_files",
         "git_log", "git_status", "git_diff", "git_blame", "git_show", "git_recent_changes",
         "find_exact_text", "codebase_search",
-        "web_fetch", "web_search",
+        "web_fetch",
         "run_command", "run_tests",
         "complete",
         "task",
@@ -56,7 +56,6 @@ TOOL_PROFILES: Dict[str, List[str]] = {
     "optimized": [
         # 12 tools - 40% token savings, production default
         # Agent uses run_command for git_log, git_blame, git_show, git_recent_changes
-        # Agent uses web_fetch for web_search functionality
         # Task management via system prompt or TODO.md
         "read_file", "read_files", "write_file", "write_files", "list_files",
         "git_status", "git_diff",
@@ -135,7 +134,6 @@ def create_registry_with_profile(
         "codebase_search": lambda: SemanticSearchTool(semantic_search=semantic_search),
         # Web tools
         "web_fetch": lambda: WebFetchTool(),
-        "web_search": lambda: WebSearchTool(),
         # Command tool
         "run_command": lambda: CommandTool(
             timeout=command_timeout,
@@ -167,7 +165,7 @@ def create_default_registry(
     include_web: bool = True,
     include_git: bool = True,
     semantic_search: Optional['SemanticSearchProtocol'] = None,
-    profile: str = "full",
+    profile: str = "optimized",
 ) -> ToolRegistry:
     """
     Create the default tool registry with all standard tools.
@@ -176,10 +174,10 @@ def create_default_registry(
         command_timeout: Command execution timeout in seconds
         max_command_output: Maximum command output size in bytes
         dangerous_commands: List of dangerous command patterns to block
-        include_web: Include web fetch/search tools (default True) - ignored if profile set
+        include_web: Include web fetch tools (default True) - ignored if profile set
         include_git: Include git tools (default True) - ignored if profile set
         semantic_search: Optional semantic search provider for codebase_search tool
-        profile: Tool profile ("full", "optimized", "minimal"). Default "full" for backward compat.
+        profile: Tool profile ("full", "optimized", "minimal"). Default "optimized".
 
     Returns:
         Configured ToolRegistry instance

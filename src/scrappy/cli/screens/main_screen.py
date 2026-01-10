@@ -276,6 +276,7 @@ class MainAppScreen(Screen):
     def _cancel_ui_cleanup(self) -> None:
         """Stop timer and hide activity indicator after cancellation."""
         self._stop_elapsed_timer()
+        self._history.reset_position()
         try:
             indicator = self.query_one(ActivityIndicator)
             indicator.hide()

@@ -340,7 +340,7 @@ class ToolAdapter:
         self._registry.cleanup()
 
     @classmethod
-    def create_default(cls, profile: str = "full") -> "ToolAdapter":
+    def create_default(cls, profile: str = "optimized") -> "ToolAdapter":
         """
         Create a ToolAdapter with the default tool registry.
 

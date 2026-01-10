@@ -36,7 +36,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
-from scrappy.graph.edges import MAX_RETRIES, Route, route_after_think, should_continue
+from scrappy.graph.edges import MAX_ITERATIONS, MAX_RETRIES, Route, route_after_think, should_continue
 from scrappy.graph.nodes import (
     confirm_node,
     error_node,
@@ -240,16 +240,18 @@ def _route_after_error(state: AgentState) -> Route:
     """
     Route after error node.
 
-    Checks if we've hit MAX_RETRIES before routing back to think.
+    Checks MAX_RETRIES and MAX_ITERATIONS before routing back to think.
     This prevents wasting an LLM call when we're about to terminate anyway.
 
     Args:
         state: Current agent state
 
     Returns:
-        Route.END if max retries reached, Route.THINK otherwise
+        Route.END if limits reached, Route.THINK otherwise
     """
     if state.error_count >= MAX_RETRIES:
+        return Route.END
+    if state.iteration >= MAX_ITERATIONS:
         return Route.END
     return Route.THINK
 
@@ -258,16 +260,36 @@ def _route_after_confirm(state: AgentState) -> Route:
     """
     Route after confirm node.
 
-    Checks if user denied confirmation (done=True) before routing back to think.
-    This prevents wasting an LLM call when the user meant to abort.
+    Checks done flag and MAX_ITERATIONS before routing back to think.
+    This prevents wasting an LLM call when we're about to terminate anyway.
 
     Args:
         state: Current agent state
 
     Returns:
-        Route.END if done (user aborted), Route.THINK otherwise
+        Route.END if done or iteration limit reached, Route.THINK otherwise
     """
     if state.done:
+        return Route.END
+    if state.iteration >= MAX_ITERATIONS:
+        return Route.END
+    return Route.THINK
+
+
+def _route_after_verify(state: AgentState) -> Route:
+    """
+    Route after verify node.
+
+    Checks MAX_ITERATIONS before routing back to think.
+    This prevents wasting an LLM call when we're about to terminate anyway.
+
+    Args:
+        state: Current agent state
+
+    Returns:
+        Route.END if iteration limit reached, Route.THINK otherwise
+    """
+    if state.iteration >= MAX_ITERATIONS:
         return Route.END
     return Route.THINK
 
@@ -356,14 +378,19 @@ def build_graph(
         },
     )
 
-    # Add edges from verify back to think
-    # Design: verify always routes to think, even on failure.
+    # Add conditional edges from verify
+    # Design: verify routes to think on success or failure, but checks iteration limit.
     # When verify fails, it sets error_count and last_error, but the LLM in think
     # sees the error in messages and can reason about how to fix it.
-    # If think succeeds, it resets error_count=0 and last_error=None, so the
-    # stale verify error doesn't affect subsequent routing.
-    # This is intentional: let the LLM see and fix verification errors.
-    builder.add_edge("verify", "think")
+    # Check MAX_ITERATIONS before routing to think to avoid exceeding limit.
+    builder.add_conditional_edges(
+        "verify",
+        _route_after_verify,
+        {
+            Route.THINK: "think",
+            Route.END: END,
+        },
+    )
 
     # Add conditional edges from confirm
     # Check done flag before routing to think to avoid wasting LLM call on abort
