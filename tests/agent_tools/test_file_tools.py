@@ -38,6 +38,9 @@ def mock_context(tmp_path):
     context.config.skip_directories = ['.git', '__pycache__']
     context.config.allowed_hidden_files = ['.gitignore']
 
+    # Run context is ephemeral and optional - set to None for unit tests
+    context.run_context = None
+
     return context
 
 

@@ -49,6 +49,21 @@ class ReadFileTool(ToolBase):
             return ToolResult(False, "", f"File '{path}' does not exist")
 
         try:
+            # Check run context cache first (avoid redundant reads within same run)
+            cached_content = None
+            if context.run_context is not None:
+                cached_content = context.run_context.get_cached_file(str(target))
+
+            if cached_content is not None:
+                content = cached_content
+                lines = content.count('\n') + 1
+                # Still record in working memory (needed for context)
+                context.remember_file_read(path, content, lines)
+                if context.working_set:
+                    context.working_set.record_read(path, context.turn)
+                return ToolResult(True, content, metadata={"lines": lines, "path": path, "cached": True})
+
+            # Read from disk
             content = target.read_text(encoding='utf-8')
             lines = content.count('\n') + 1
 
@@ -56,6 +71,10 @@ class ReadFileTool(ToolBase):
             max_size = context.config.max_file_read_size
             if len(content) > max_size:
                 content = content[:max_size] + "\n... [truncated]"
+
+            # Cache in run context (for this agent run only)
+            if context.run_context is not None:
+                context.run_context.cache_file(str(target), content)
 
             # Store in working memory
             context.remember_file_read(path, content, lines)
@@ -132,7 +151,19 @@ class ReadFilesTool(ToolBase):
                 continue
 
             try:
-                content = target.read_text(encoding='utf-8')
+                # Check run context cache first
+                cached_content = None
+                if context.run_context is not None:
+                    cached_content = context.run_context.get_cached_file(str(target))
+
+                if cached_content is not None:
+                    content = cached_content
+                else:
+                    content = target.read_text(encoding='utf-8')
+                    # Cache in run context
+                    if context.run_context is not None:
+                        context.run_context.cache_file(str(target), content)
+
                 lines = content.count('\n') + 1
 
                 # Check remaining budget
@@ -347,6 +378,10 @@ class WriteFilesTool(ToolBase):
                 # Record in HUD working set
                 if context.working_set:
                     context.working_set.record_write(path, context.turn)
+
+                # Invalidate file cache (content changed)
+                if context.run_context is not None:
+                    context.run_context.invalidate_file(str(target))
 
                 line_count = content.count('\n') + (1 if content and not content.endswith('\n') else 0)
                 results.append(f"[OK] {path} ({line_count} lines, {len(content)} chars)")
@@ -567,6 +602,10 @@ class WriteFileTool(ToolBase):
             # Record in HUD working set
             if context.working_set:
                 context.working_set.record_write(path, context.turn)
+
+            # Invalidate file cache (content changed)
+            if context.run_context is not None:
+                context.run_context.invalidate_file(str(target))
 
             line_count = content.count('\n') + (1 if content and not content.endswith('\n') else 0)
             return ToolResult(
