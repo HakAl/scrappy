@@ -21,6 +21,7 @@ from textual import work
 from textual.worker import Worker, WorkerCancelled, get_current_worker
 
 from scrappy.graph.run_context import AgentRunContext
+from scrappy.infrastructure.threading import CancellationToken
 from scrappy.protocols.activity import ActivityState
 from scrappy.protocols.tasks import Task, TaskStatus
 
@@ -139,6 +140,9 @@ class LangGraphBridge:
         # Run context for current agent run (ephemeral)
         self._run_context: Optional[AgentRunContext] = None
 
+        # Cancellation token for multi-press force cancel support (per-run)
+        self._cancellation_token: Optional[CancellationToken] = None
+
     def _post_activity(
         self,
         state: ActivityState,
@@ -245,16 +249,36 @@ class LangGraphBridge:
         Check if the current worker has been cancelled.
 
         Should be called periodically during long-running operations.
+        Checks both the Textual worker state and our cancellation token.
 
         Returns:
             True if cancelled, False otherwise
         """
+        # Check our cancellation token first (handles multi-press)
+        if self._cancellation_token is not None and self._cancellation_token.is_cancelled:
+            return True
+
+        # Also check worker state (Textual's built-in cancellation)
         try:
             worker = get_current_worker()
             return worker.is_cancelled
         except Exception:
             # Not running in a worker context
             return False
+
+    def _check_force_cancellation(self) -> bool:
+        """
+        Check if force cancellation has been requested (multiple escape presses).
+
+        Force cancellation indicates user wants immediate termination,
+        not graceful stop at next checkpoint.
+
+        Returns:
+            True if force cancelled, False otherwise
+        """
+        if self._cancellation_token is None:
+            return False
+        return self._cancellation_token.is_force_cancelled
 
     def _update_task_progress(self, tool_tasks: list[tuple[str, bool]]) -> None:
         """
@@ -632,6 +656,9 @@ class LangGraphBridge:
             self._run_context = AgentRunContext()
             self._run_context.set_status_callback(self._show_provider_status)
 
+            # Create fresh cancellation token for this run
+            self._cancellation_token = CancellationToken()
+
             # Create agent runner with HITL support
             # Tools always available - LLM decides whether to use them
             graph, checkpointer = create_agent_runner(
@@ -772,6 +799,9 @@ class LangGraphBridge:
                 except Exception:
                     pass  # Best effort cleanup
                 self._run_context = None
+
+            # Clear cancellation token
+            self._cancellation_token = None
 
             # Clear activity indicator and provider status
             self._post_activity(ActivityState.IDLE)
@@ -984,12 +1014,24 @@ class LangGraphBridge:
         """
         Cancel the current agent run if any.
 
+        First call: graceful cancellation at next checkpoint.
+        Second+ call: force cancellation for immediate stop.
+
         This signals the worker to stop at the next cancellation check point.
         The agent will stop gracefully and return a cancelled result.
         """
+        # Use our cancellation token for multi-press tracking
+        if self._cancellation_token is not None:
+            self._cancellation_token.cancel()
+            count = self._cancellation_token.cancel_count
+            if count >= 2:
+                logger.info(f"Force cancellation requested (press #{count})")
+            else:
+                logger.info("Agent run cancellation requested")
+
+        # Also cancel the worker (Textual's mechanism)
         if self._current_worker is not None:
             self._current_worker.cancel()
-            logger.info("Agent run cancellation requested")
 
     @property
     def is_running(self) -> bool:
@@ -1000,3 +1042,13 @@ class LangGraphBridge:
             True if agent is running, False otherwise
         """
         return self._is_running
+
+    @property
+    def is_force_cancelled(self) -> bool:
+        """
+        Check if force cancellation was requested (multiple escape presses).
+
+        Returns:
+            True if user pressed escape 2+ times, False otherwise
+        """
+        return self._check_force_cancellation()

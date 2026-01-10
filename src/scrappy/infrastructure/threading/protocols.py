@@ -241,3 +241,79 @@ class ManagedThreadProtocol(Protocol):
             timeout: Maximum seconds to wait (None = wait forever)
         """
         ...
+
+
+class CancellationTokenProtocol(Protocol):
+    """
+    Protocol for cooperative cancellation of long-running operations.
+
+    Provides thread-safe cancellation signaling with support for both
+    graceful cancellation and force cancellation (after multiple requests).
+
+    Implementations:
+    - CancellationToken: Production implementation with cancel counting
+
+    Example:
+        token = CancellationToken()
+
+        # In worker thread
+        while not token.is_cancelled:
+            do_work()
+            if token.is_force_cancelled:
+                # Immediate exit requested
+                break
+
+        # From UI thread
+        token.cancel()  # First press - graceful
+        token.cancel()  # Second press - force cancel
+    """
+
+    @property
+    def is_cancelled(self) -> bool:
+        """
+        Check if cancellation has been requested.
+
+        Returns:
+            True if cancel() has been called at least once
+        """
+        ...
+
+    @property
+    def is_force_cancelled(self) -> bool:
+        """
+        Check if force cancellation has been requested.
+
+        Force cancellation is triggered after multiple cancel() calls,
+        indicating the user wants immediate termination.
+
+        Returns:
+            True if cancel() has been called multiple times
+        """
+        ...
+
+    @property
+    def cancel_count(self) -> int:
+        """
+        Get the number of times cancel() has been called.
+
+        Returns:
+            Number of cancel requests received
+        """
+        ...
+
+    def cancel(self) -> None:
+        """
+        Request cancellation.
+
+        Can be called multiple times. After the second call,
+        is_force_cancelled will return True.
+        """
+        ...
+
+    def reset(self) -> None:
+        """
+        Reset the token to uncancelled state.
+
+        Use this to reuse the token for a new operation.
+        """
+        ...
