@@ -28,13 +28,36 @@ class ChatPromptConfig:
 
 @dataclass(frozen=True)
 class AgentPromptConfig:
-    """Configuration for agent mode with full tool access and behavioral guidelines."""
+    """Configuration for agent mode with full tool access and behavioral guidelines.
 
+    Required fields:
+        platform: Target OS platform
+        tool_names: List of available tool names
+        original_task: The user's original task/query
+        working_dir: Working directory for file operations
+
+    Optional fields for dynamic state:
+        iteration: Current iteration count
+        last_error: Error message if recovering from failure
+        files_changed: Files modified this session
+        working_memory_context: Session context from working memory
+        search_strategy: Search guidance based on available tools
+        rag_context: Retrieved context from semantic search
+    """
+
+    # Required
     platform: Platform
-    tool_descriptions: str
-    use_native_tools: bool = False
-    project_type: Optional[str] = None
-    codebase_structure: Optional[str] = None
+    tool_names: tuple[str, ...]
+    original_task: str
+    working_dir: str
+
+    # Optional dynamic state
+    iteration: int = 0
+    last_error: Optional[str] = None
+    files_changed: tuple[str, ...] = ()
+    working_memory_context: Optional[str] = None
+    search_strategy: Optional[str] = None
+    rag_context: Optional[str] = None
 
 
 @dataclass(frozen=True)

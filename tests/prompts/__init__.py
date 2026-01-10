@@ -1,1 +1,1 @@
-"""Tests for stateless prompt generation."""
+"""Tests for scrappy.prompts package."""
