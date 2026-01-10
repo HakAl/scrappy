@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Optional
 
 from scrappy.graph.protocols import ToolContextFactory, ToolContextProtocol, WorkingMemoryProtocol
+from scrappy.graph.run_context import AgentRunContextProtocol
 from scrappy.graph.state import AgentState, Message, ToolCall, ToolResult
 from scrappy.graph.tools import ToolAdapterProtocol
 from scrappy.infrastructure.logging import get_logger
@@ -314,6 +315,7 @@ def build_tool_message(tool_call: ToolCall, result: ToolResult) -> Message:
 def _default_context_factory(
     working_dir: str,
     working_memory: Optional[WorkingMemoryProtocol] = None,
+    run_context: Optional[AgentRunContextProtocol] = None,
 ) -> ToolContextProtocol:
     """
     Default factory for creating tool contexts.
@@ -324,6 +326,7 @@ def _default_context_factory(
     Args:
         working_dir: Working directory for file operations
         working_memory: Optional working memory for tracking tool results
+        run_context: Optional ephemeral run context for file caching/status
     """
     from scrappy.agent_config import AgentConfig
     from scrappy.agent_tools.tools.base import ToolContext
@@ -336,6 +339,7 @@ def _default_context_factory(
         dry_run=False,
         config=AgentConfig(),
         orchestrator=orchestrator,
+        run_context=run_context,
     )
 
 
@@ -344,6 +348,7 @@ def execute_node(
     tool_adapter: ToolAdapterProtocol,
     context_factory: Optional[ToolContextFactory] = None,
     working_memory: Optional[WorkingMemoryProtocol] = None,
+    run_context: Optional[AgentRunContextProtocol] = None,
 ) -> AgentState:
     """
     Execute node - tool execution step.
@@ -356,6 +361,7 @@ def execute_node(
         tool_adapter: Tool adapter for executing tools
         context_factory: Factory to create ToolContext (uses default if not provided)
         working_memory: Optional working memory for tracking tool results
+        run_context: Optional ephemeral run context for file caching/status
 
     Returns:
         Updated AgentState with tool results appended to messages
@@ -385,12 +391,12 @@ def execute_node(
     logger.info("Executing %d tool call(s)", len(tool_calls))
 
     # Create context using factory
-    # If custom factory provided, use it (won't have working_memory)
-    # Otherwise use default factory with working_memory support
+    # If custom factory provided, use it (won't have working_memory or run_context)
+    # Otherwise use default factory with full support
     if context_factory:
         context = context_factory(state.working_dir)
     else:
-        context = _default_context_factory(state.working_dir, working_memory)
+        context = _default_context_factory(state.working_dir, working_memory, run_context)
 
     # Execute tools sequentially (not parallel to avoid file conflicts)
     # Wrap in try/except to prevent graph crash on tool adapter failures

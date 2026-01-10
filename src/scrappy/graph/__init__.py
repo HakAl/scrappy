@@ -33,9 +33,17 @@ from scrappy.graph.protocols import (
     ToolContextProtocol,
     WorkingMemoryProtocol,
 )
+from scrappy.graph.run_context import (
+    AgentRunContext,
+    AgentRunContextProtocol,
+    HANDOFF_TRIGGERS,
+)
 from scrappy.graph.tools import ToolAdapter, ToolAdapterProtocol
 
 __all__ = [
+    "AgentRunContext",
+    "AgentRunContextProtocol",
+    "HANDOFF_TRIGGERS",
     "LLMServiceProtocol",
     "StreamingLLMServiceProtocol",
     "ToolAdapter",

@@ -5,9 +5,12 @@ Centralizes protocol definitions to avoid duplication across modules.
 """
 
 from pathlib import Path
-from typing import Any, AsyncIterator, Callable, Iterator, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, AsyncIterator, Callable, Iterator, Optional, Protocol, runtime_checkable
 
 from scrappy.orchestrator.types import StreamChunk
+
+if TYPE_CHECKING:
+    from scrappy.graph.run_context import AgentRunContextProtocol
 
 
 @runtime_checkable
@@ -27,6 +30,11 @@ class ToolContextProtocol(Protocol):
     @property
     def dry_run(self) -> bool:
         """Whether to simulate operations without side effects."""
+        ...
+
+    @property
+    def run_context(self) -> Optional["AgentRunContextProtocol"]:
+        """Ephemeral run context for file caching and status updates."""
         ...
 
 

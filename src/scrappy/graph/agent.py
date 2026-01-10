@@ -200,8 +200,17 @@ def _wrap_execute_node(
     Returns:
         Node function compatible with LangGraph
     """
-    def wrapped(state: AgentState) -> AgentState:
-        return execute_node(state, tool_adapter, context_factory, working_memory)
+    from langgraph.types import RunnableConfig
+
+    def wrapped(state: AgentState, config: RunnableConfig) -> AgentState:
+        # Extract run_context from config if present
+        run_context = None
+        if config and "configurable" in config:
+            run_context = config["configurable"].get("run_context")
+
+        return execute_node(
+            state, tool_adapter, context_factory, working_memory, run_context=run_context
+        )
     return wrapped
 
 

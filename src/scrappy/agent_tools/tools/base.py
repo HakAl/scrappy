@@ -22,6 +22,7 @@ from scrappy.infrastructure.theme import DEFAULT_THEME
 if TYPE_CHECKING:
     from ...agent_config import AgentConfig
     from ...context.protocols import SemanticSearchProtocol
+    from ...graph.run_context import AgentRunContextProtocol
     from ...protocols.tasks import TaskStorageProtocol
 
 
@@ -179,6 +180,9 @@ class ToolContext:
     task_storage: Optional["TaskStorageProtocol"] = None
     working_set: Optional[WorkingSet] = None
     turn: int = 0  # Incremented each iteration by AgentLoop
+
+    # Ephemeral run context (for file caching, status updates)
+    run_context: Optional["AgentRunContextProtocol"] = None
 
     def get_project_root(self) -> Path:
         """Get project root directory."""

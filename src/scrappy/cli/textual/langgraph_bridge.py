@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, Optional, Protocol, runtime_checkable
 from textual import work
 from textual.worker import Worker, WorkerCancelled, get_current_worker
 
+from scrappy.graph.run_context import AgentRunContext
 from scrappy.protocols.activity import ActivityState
 from scrappy.protocols.tasks import Task, TaskStatus
 
@@ -134,6 +135,9 @@ class LangGraphBridge:
 
         # Tool confirmation state (reset per run)
         self._allow_all: bool = False  # User pressed 'a' to allow all
+
+        # Run context for current agent run (ephemeral)
+        self._run_context: Optional[AgentRunContext] = None
 
     def _post_activity(
         self,
@@ -624,6 +628,10 @@ class LangGraphBridge:
             thread_id = str(uuid.uuid4())
 
         try:
+            # Create ephemeral run context for this agent run
+            self._run_context = AgentRunContext()
+            self._run_context.set_status_callback(self._show_provider_status)
+
             # Create agent runner with HITL support
             # Tools always available - LLM decides whether to use them
             graph, checkpointer = create_agent_runner(
@@ -641,7 +649,10 @@ class LangGraphBridge:
             # MAX_ITERATIONS=50 means up to 100+ nodes (including error/verify nodes).
             # Set to 150 to allow for error recovery loops without hitting the limit.
             config = {
-                "configurable": {"thread_id": thread_id},
+                "configurable": {
+                    "thread_id": thread_id,
+                    "run_context": self._run_context,
+                },
                 "recursion_limit": 150,
             }
 
@@ -663,7 +674,13 @@ class LangGraphBridge:
             )
 
             if final_state is None:
-                # Cancelled
+                # Cancelled during streaming
+                if self._run_context is not None:
+                    try:
+                        self._run_context.on_cancel()
+                    except Exception:
+                        pass
+                    self._run_context = None
                 self._output_completion_summary(
                     success=False,
                     final_state=None,
@@ -716,6 +733,13 @@ class LangGraphBridge:
 
         except WorkerCancelled:
             logger.info("Agent run cancelled via WorkerCancelled")
+            # Clean up run context on cancellation
+            if self._run_context is not None:
+                try:
+                    self._run_context.on_cancel()
+                except Exception:
+                    pass
+                self._run_context = None
             self._output_completion_summary(
                 success=False,
                 final_state=None,
@@ -741,6 +765,14 @@ class LangGraphBridge:
                 cancelled=False,
             )
         finally:
+            # Clean up run context (file cache, cancel callbacks)
+            if self._run_context is not None:
+                try:
+                    self._run_context.on_complete(success=True)
+                except Exception:
+                    pass  # Best effort cleanup
+                self._run_context = None
+
             # Clear activity indicator and provider status
             self._post_activity(ActivityState.IDLE)
             self._hide_provider_status()
