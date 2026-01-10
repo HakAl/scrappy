@@ -824,7 +824,13 @@ class LangGraphBridge:
                     elif node_name == "verify":
                         self._post_activity(ActivityState.THINKING, "verifying")
                     elif node_name == "error":
-                        self._post_activity(ActivityState.THINKING, "recovering")
+                        # Show error category if available for better UX
+                        error_msg = "recovering"
+                        if current_state is not None:
+                            category = getattr(current_state, "error_category", None)
+                            if category:
+                                error_msg = f"recovering ({category})"
+                        self._post_activity(ActivityState.THINKING, error_msg)
 
                     # Update provider status from state (shows actual model used)
                     if current_state is not None:
@@ -884,7 +890,7 @@ class LangGraphBridge:
         working_dir: str,
         thread_id: Optional[str] = None,
         tier: str = "instruct",
-    ) -> AgentResult:
+    ) -> Worker[AgentResult]:
         """
         Run the agent in a Textual worker thread.
 
@@ -894,6 +900,10 @@ class LangGraphBridge:
         - Streaming output via TextualOutputAdapter
         - Cancellation via Worker state checks
 
+        Note: The @work decorator wraps this method to return a Worker object
+        immediately. The actual AgentResult is accessed via worker.result
+        after the worker completes.
+
         Args:
             task: The user's task/query
             working_dir: Working directory for file operations
@@ -901,7 +911,8 @@ class LangGraphBridge:
             tier: Model tier to use ("chat" for conversation, "instruct" for agent)
 
         Returns:
-            AgentResult with success status and final state
+            Worker[AgentResult]: Worker object that provides the AgentResult via
+            worker.result after completion.
         """
         return self.run_agent(task, working_dir, thread_id, tier)
 

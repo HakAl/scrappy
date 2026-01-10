@@ -264,8 +264,8 @@ class MainAppScreen(Screen):
 
         previous = self._history.get_previous()
         if previous is not None:
-            self._layout.input.clear()
-            self._layout.input.insert(previous)
+            # Use text setter instead of clear()+insert() to properly reset cursor state
+            self._layout.input.text = previous
 
     def action_history_next(self) -> None:
         """Handle Down arrow to navigate to next history entry."""
@@ -274,13 +274,13 @@ class MainAppScreen(Screen):
 
         next_entry = self._history.get_next()
         if next_entry is not None:
-            self._layout.input.clear()
-            self._layout.input.insert(next_entry)
+            # Use text setter instead of clear()+insert() to properly reset cursor state
+            self._layout.input.text = next_entry
         else:
-            self._layout.input.clear()
-            if self._history_temp_input:
-                self._layout.input.insert(self._history_temp_input)
-                self._history_temp_input = ""
+            # Restore saved input when navigating past history end
+            restored = self._history_temp_input
+            self._history_temp_input = ""
+            self._layout.input.text = restored
 
     def _cancel_ui_cleanup(self) -> None:
         """Stop timer and hide activity indicator after cancellation."""

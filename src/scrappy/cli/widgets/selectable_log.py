@@ -61,7 +61,10 @@ class SelectableLog(ScrollView, can_focus=True):
             renderable: Any Rich renderable (Text, Panel, Table, str, etc.)
         """
         console = self.app.console
-        render_options = console.options
+        # Use widget's actual width for proper text wrapping on resize
+        # Fall back to console width if widget not yet sized
+        widget_width = self.scrollable_content_region.width or console.width
+        render_options = console.options.update_width(widget_width)
 
         # Render the content
         segments = list(console.render(renderable, render_options))

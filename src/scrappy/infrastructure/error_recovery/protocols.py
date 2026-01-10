@@ -8,7 +8,6 @@ Following SOLID principles from CLAUDE.md:
 """
 
 from typing import Protocol, Callable, TypeVar, Any, Optional, runtime_checkable
-import asyncio
 
 # Re-export enums from exceptions.enums for backward compatibility
 # (Enums moved to break circular dependency)

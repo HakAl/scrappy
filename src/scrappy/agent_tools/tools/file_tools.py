@@ -313,6 +313,17 @@ class WriteFilesTool(ToolBase):
             target = context.project_root / path
 
             try:
+                # Auto-format JSON files to prevent minification
+                if path.endswith('.json'):
+                    try:
+                        import json
+                        parsed = json.loads(content)
+                        content = json.dumps(parsed, indent=2, ensure_ascii=False)
+                        if not content.endswith('\n'):
+                            content += '\n'
+                    except json.JSONDecodeError:
+                        pass  # Not valid JSON, write as-is
+
                 # Create parent directories if needed
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_text(content, encoding='utf-8')
@@ -519,6 +530,18 @@ class WriteFileTool(ToolBase):
                 pass
 
         try:
+            # Auto-format JSON files to prevent minification
+            # LLMs often return minified JSON which is hard to read/edit
+            if path.endswith('.json'):
+                try:
+                    import json
+                    parsed = json.loads(content)
+                    content = json.dumps(parsed, indent=2, ensure_ascii=False)
+                    if not content.endswith('\n'):
+                        content += '\n'
+                except json.JSONDecodeError:
+                    pass  # Not valid JSON, write as-is
+
             # Create parent directories if needed
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(content, encoding='utf-8')
