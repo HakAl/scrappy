@@ -649,6 +649,15 @@ def think_node(
         # Note: We already handled empty content case above, so content is non-empty here
         is_done = len(tool_calls) == 0
 
+        # Format model display string (e.g., "cerebras: llama-3.3-70b")
+        model_display = None
+        if response.provider and response.model:
+            # Strip provider prefix from model if present (e.g., "cerebras/llama-3.3-70b" -> "llama-3.3-70b")
+            model_name = response.model
+            if "/" in model_name:
+                model_name = model_name.split("/", 1)[1]
+            model_display = f"{response.provider}: {model_name}"
+
         # Success - clear fallback mode (current_model) since we got a response
         return state.model_copy(
             update={
@@ -658,6 +667,7 @@ def think_node(
                 "error_count": 0,  # Reset on success - tracks consecutive errors
                 "last_error": None,
                 "current_model": None,  # Clear fallback mode on success
+                "last_model_display": model_display,
             }
         )
 
@@ -914,6 +924,8 @@ async def think_node_streaming(
             # Use list accumulator for O(n) total instead of O(n^2) string concat
             content_parts: list[str] = []
             all_fragments: list[ToolCallFragment] = []
+            stream_model: str = ""
+            stream_provider: str = ""
 
             # Use user-selected tier from state
             async for chunk in llm_service.stream_completion(
@@ -932,6 +944,12 @@ async def think_node_streaming(
                     # Accumulate tool call fragments
                     if chunk.tool_call_fragments:
                         all_fragments.extend(chunk.tool_call_fragments)
+
+                    # Capture model/provider from chunks (may be populated later)
+                    if chunk.model:
+                        stream_model = chunk.model
+                    if chunk.provider:
+                        stream_provider = chunk.provider
 
             # Join once at end (O(n) total)
             accumulated_content = "".join(content_parts)
@@ -971,6 +989,18 @@ async def think_node_streaming(
         # Check if we should mark as done (no tool calls = final response)
         is_done = len(tool_calls) == 0 and accumulated_content.strip() != ""
 
+        # Format model display string (e.g., "cerebras: llama-3.3-70b")
+        model_display = None
+        # Use response object if available (non-streaming fallback), else streaming vars
+        display_provider = response.provider if 'response' in dir() and response else stream_provider
+        display_model = response.model if 'response' in dir() and response else stream_model
+        if display_provider and display_model:
+            # Strip provider prefix from model if present
+            model_name = display_model
+            if "/" in model_name:
+                model_name = model_name.split("/", 1)[1]
+            model_display = f"{display_provider}: {model_name}"
+
         # Success - clear fallback mode (current_model) since we got a response
         return state.model_copy(
             update={
@@ -980,6 +1010,7 @@ async def think_node_streaming(
                 "error_count": 0,  # Reset on success - tracks consecutive errors
                 "last_error": None,
                 "current_model": None,  # Clear fallback mode on success
+                "last_model_display": model_display,
             }
         )
 

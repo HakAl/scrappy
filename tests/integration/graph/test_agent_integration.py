@@ -37,9 +37,13 @@ class MockLLMResponse:
         self,
         content: str = "",
         tool_calls: Optional[list[MockToolCall]] = None,
+        model: str = "mock-model",
+        provider: str = "mock",
     ) -> None:
         self.content = content
         self.tool_calls = tool_calls
+        self.model = model
+        self.provider = provider
 
 
 class MockLLMService:

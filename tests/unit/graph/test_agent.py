@@ -36,9 +36,13 @@ class MockLLMResponse:
         self,
         content: str = "Test response",
         tool_calls: Optional[list] = None,
+        model: str = "mock-model",
+        provider: str = "mock",
     ):
         self.content = content
         self.tool_calls = tool_calls
+        self.model = model
+        self.provider = provider
 
 
 class MockLLMService:
@@ -445,12 +449,16 @@ class TestGraphIntegration:
                                 "arguments": "{}",
                             })()
                         ]
+                        model = "mock-model"
+                        provider = "mock"
                     return ToolCallResponse(), {}
                 else:
                     # Subsequent calls - return final response
                     class FinalResponse:
                         content = "Task completed successfully."
                         tool_calls = None
+                        model = "mock-model"
+                        provider = "mock"
                     return FinalResponse(), {}
 
         llm_service = MultiStepLLMService()
@@ -483,6 +491,8 @@ class TestGraphIntegration:
                     class SuccessResponse:
                         content = "Recovered successfully."
                         tool_calls = None
+                        model = "mock-model"
+                        provider = "mock"
                     return SuccessResponse(), {}
 
         llm_service = ErrorRecoveryLLMService()
@@ -513,6 +523,8 @@ class TestGraphIntegration:
                             "arguments": "{}",
                         })()
                     ]
+                    model = "mock-model"
+                    provider = "mock"
                 return ToolCallResponse(), {}
 
         llm_service = InfiniteLoopLLMService()

@@ -117,6 +117,45 @@ class TokenCounter:
         self._visible = False
 
 
+class ProviderStatus:
+    """Shows current provider/model during agent runs in the status bar."""
+
+    def __init__(self) -> None:
+        self._display: str = ""
+        self._visible: bool = False
+        self._widget: Optional[Label] = None
+
+    @property
+    def component_id(self) -> str:
+        return "provider_status"
+
+    @property
+    def is_visible(self) -> bool:
+        return self._visible and bool(self._display)
+
+    @property
+    def widget(self) -> Label:
+        if self._widget is None:
+            self._widget = Label(self._display, id=self.component_id)
+        return self._widget
+
+    def update_widget(self) -> None:
+        if self._widget is not None:
+            self._widget.update(self._display)
+
+    def show(self, display: str) -> None:
+        """Show the provider status with given display string (e.g., 'cerebras: llama-3.3-70b')."""
+        self._display = display
+        self._visible = True
+        self.update_widget()
+
+    def hide(self) -> None:
+        """Hide the provider status."""
+        self._display = ""
+        self._visible = False
+        self.update_widget()
+
+
 class PromptDisplay:
     """Shows prompt/question near the input in the status bar."""
 

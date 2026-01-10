@@ -20,6 +20,7 @@ from .messages import (
 from .status_components import (
     ProgressIndicator,
     TokenCounter,
+    ProviderStatus,
     PromptDisplay,
     SemanticStatusComponent,
     ActivityIndicator,
@@ -45,6 +46,7 @@ __all__ = [
     # Status components
     "ProgressIndicator",
     "TokenCounter",
+    "ProviderStatus",
     "PromptDisplay",
     "SemanticStatusComponent",
     "ActivityIndicator",

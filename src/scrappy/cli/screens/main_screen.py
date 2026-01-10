@@ -16,6 +16,7 @@ from ..input_capture import InputCaptureManager, InputRequest
 from ..command_history import CommandHistory, get_default_history_path
 from ..textual import (
     ProgressIndicator,
+    ProviderStatus,
     TokenCounter,
     PromptDisplay,
     SemanticStatusComponent,
@@ -111,6 +112,13 @@ class MainAppScreen(Screen):
             self._semantic_status = SemanticStatusComponent()
         return self._semantic_status
 
+    @property
+    def provider_status(self) -> ProviderStatus:
+        """Lazy-load provider status component."""
+        if not hasattr(self, '_provider_status'):
+            self._provider_status = ProviderStatus()
+        return self._provider_status
+
     def compose(self) -> ComposeResult:
         """Create child widgets using ChatLayout."""
         yield ChatLayout(
@@ -131,6 +139,7 @@ class MainAppScreen(Screen):
         status_bar.register_component(self.token_counter)
         status_bar.register_component(self.prompt_display)
         status_bar.register_component(self.semantic_status)
+        status_bar.register_component(self.provider_status)
 
         # NOTE: Banner is now displayed immediately in app._show_main_screen()
         # using display_banner_header_tui(). Status lines are shown when CLI is ready.

@@ -22,9 +22,17 @@ class MockToolCall:
 
 class MockLLMResponse:
     """Mock LLM response."""
-    def __init__(self, content: str = "", tool_calls: list = None) -> None:
+    def __init__(
+        self,
+        content: str = "",
+        tool_calls: list = None,
+        model: str = "mock-model",
+        provider: str = "mock",
+    ) -> None:
         self.content = content
         self.tool_calls = tool_calls or []
+        self.model = model
+        self.provider = provider
 
 
 class TracingLLMService:

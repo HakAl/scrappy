@@ -141,6 +141,10 @@ class AgentState(BaseModel):
         default=None,
         description="Specific model being used (for fallback tracking). None = use tier default."
     )
+    last_model_display: Optional[str] = Field(
+        default=None,
+        description="Last model used for display (e.g., 'cerebras: llama-3.3-70b')"
+    )
 
     # File tracking
     files_changed: list[str] = Field(

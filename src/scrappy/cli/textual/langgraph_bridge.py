@@ -150,6 +150,33 @@ class LangGraphBridge:
         elapsed_ms = int((time.time() - self._start_time) * 1000) if self._start_time else 0
         self._output_adapter.post_activity(state, message, elapsed_ms)
 
+    def _show_provider_status(self, tier: str) -> None:
+        """Show the current tier in the status bar."""
+        try:
+            from ..screens import MainAppScreen
+            screen = self.app.screen
+            if isinstance(screen, MainAppScreen):
+                screen.provider_status.show(tier)
+                # Trigger status bar refresh
+                from . import StatusBar
+                status_bar = screen.query_one(StatusBar)
+                status_bar.refresh_display()
+        except Exception:
+            pass  # Screen might not be ready
+
+    def _hide_provider_status(self) -> None:
+        """Hide the provider status from the status bar."""
+        try:
+            from ..screens import MainAppScreen
+            screen = self.app.screen
+            if isinstance(screen, MainAppScreen):
+                screen.provider_status.hide()
+                from . import StatusBar
+                status_bar = screen.query_one(StatusBar)
+                status_bar.refresh_display()
+        except Exception:
+            pass  # Screen might not be ready
+
     def _confirm_callback(self, question: str) -> bool:
         """
         Confirmation callback that routes through ThreadSafeAsyncBridge.
@@ -628,6 +655,7 @@ class LangGraphBridge:
             self._start_time = time.time()
             self._working_dir = working_dir
             self._post_activity(ActivityState.THINKING)
+            # Provider status will be updated after first LLM call with actual model
 
             # Use stream() instead of invoke() to allow cancellation between nodes
             final_state = self._run_with_streaming(
@@ -713,8 +741,9 @@ class LangGraphBridge:
                 cancelled=False,
             )
         finally:
-            # Clear activity indicator
+            # Clear activity indicator and provider status
             self._post_activity(ActivityState.IDLE)
+            self._hide_provider_status()
             self._start_time = 0.0
             self._working_dir = ""
             # Clear task progress widget
@@ -796,6 +825,12 @@ class LangGraphBridge:
                         self._post_activity(ActivityState.THINKING, "verifying")
                     elif node_name == "error":
                         self._post_activity(ActivityState.THINKING, "recovering")
+
+                    # Update provider status from state (shows actual model used)
+                    if current_state is not None:
+                        model_display = getattr(current_state, "last_model_display", None)
+                        if model_display:
+                            self._show_provider_status(model_display)
 
                     logger.debug("Node %s completed", node_name)
 
