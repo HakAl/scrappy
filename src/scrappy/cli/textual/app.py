@@ -669,8 +669,9 @@ class ScrappyApp(App):
         if self.interactive_mode:
             agent_mgr = self.interactive_mode.command_router.agent_mgr
             if agent_mgr:
-                # Check if agent has active work
-                if agent_mgr._cancellation_token is not None:
+                # Check if agent has active work via the bridge
+                bridge = getattr(agent_mgr, '_langgraph_bridge', None)
+                if bridge is not None and bridge.is_running:
                     did_cancel = True
                 agent_mgr.cancel()
 
