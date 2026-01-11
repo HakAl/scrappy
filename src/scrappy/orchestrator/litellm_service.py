@@ -522,6 +522,9 @@ class LiteLLMService:
 
         Call on app shutdown. Closes httpx clients we created and any
         aiohttp sessions that LiteLLM may have created internally.
+
+        Uses run_coroutine_threadsafe to properly await async closes when
+        called from a sync context with a running event loop.
         """
         import litellm  # Lazy import (fast after first __init__)
 
@@ -534,22 +537,54 @@ class LiteLLMService:
             finally:
                 litellm.client_session = None
 
-        # AsyncClient needs async close - mark for GC
+        # Collect async close coroutines
+        async_closes: list = []
+
+        # httpx AsyncClient needs async close
         if hasattr(litellm, 'aclient_session') and litellm.aclient_session is not None:
+            async_closes.append(('aclient_session', litellm.aclient_session.aclose()))
             litellm.aclient_session = None
 
-        # Close any aiohttp sessions LiteLLM created internally
+        # aiohttp sessions LiteLLM created internally
         if hasattr(litellm, '_client_session') and litellm._client_session is not None:
+            async_closes.append(('_client_session', litellm._client_session.close()))
+            litellm._client_session = None
+
+        # Run async closes with proper waiting
+        if async_closes:
+            self._run_async_closes(async_closes)
+
+    def _run_async_closes(self, closes: list) -> None:
+        """Run async close operations, waiting for completion."""
+        try:
+            loop = asyncio.get_event_loop_policy().get_event_loop()
+        except RuntimeError:
+            # No event loop - coroutines will be garbage collected
+            logger.debug("No event loop available for async closes")
+            return
+
+        async def close_all():
+            for name, coro in closes:
+                try:
+                    await coro
+                except Exception as e:
+                    logger.debug("Error closing %s: %s", name, e)
+
+        if loop.is_running():
+            # Schedule on running loop and wait with timeout
+            future = asyncio.run_coroutine_threadsafe(close_all(), loop)
             try:
-                loop = asyncio.get_event_loop_policy().get_event_loop()
-                if loop.is_running():
-                    asyncio.ensure_future(litellm._client_session.close())
-                else:
-                    loop.run_until_complete(litellm._client_session.close())
+                future.result(timeout=2.0)  # 2s timeout for cleanup
+            except TimeoutError:
+                logger.debug("Timeout waiting for async session closes")
             except Exception as e:
-                logger.debug("Error closing aiohttp session: %s", e)
-            finally:
-                litellm._client_session = None
+                logger.debug("Error in async closes: %s", e)
+        else:
+            # No running loop - run directly
+            try:
+                loop.run_until_complete(close_all())
+            except Exception as e:
+                logger.debug("Error running async closes: %s", e)
 
     async def aclose(self) -> None:
         """Async version of close for async contexts."""

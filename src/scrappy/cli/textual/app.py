@@ -182,7 +182,11 @@ class ScrappyApp(App):
         config_service = create_api_key_service()
         disclaimer_acknowledged = config_service.is_disclaimer_acknowledged()
 
-        if not has_provider or not disclaimer_acknowledged:
+        # Mock mode bypasses wizard (for e2e testing)
+        from scrappy.orchestrator.mock_llm_service import is_mock_mode_enabled
+        mock_mode = is_mock_mode_enabled()
+
+        if not mock_mode and (not has_provider or not disclaimer_acknowledged):
             # Show wizard if no provider OR disclaimer not acknowledged
             # In deferred mode, wizard needs CLI - create it synchronously
             # (user needs to configure before using anyway, no benefit to defer)
@@ -390,8 +394,24 @@ class ScrappyApp(App):
             except Exception as e:
                 logger.debug("Error cleaning up tool adapter: %s", e)
 
-        # Close LLM service HTTP sessions
+        # Cancel background tasks and close LLM service
         if hasattr(self, 'interactive_mode') and self.interactive_mode:
+            # Cancel any pending background tasks first
+            try:
+                cancelled = self.interactive_mode.orchestrator.cancel_all_background_tasks()
+                if cancelled > 0:
+                    logger.debug("Cancelled %d background tasks on shutdown", cancelled)
+            except Exception as e:
+                logger.debug("Error cancelling background tasks: %s", e)
+
+            # Flush and shutdown tracing (langfuse) before closing HTTP sessions
+            try:
+                from scrappy.graph.tracing import shutdown_tracing
+                shutdown_tracing()
+            except Exception as e:
+                logger.debug("Error shutting down tracing: %s", e)
+
+            # Close LLM service HTTP sessions
             try:
                 self.interactive_mode.orchestrator.llm_service.close()
             except Exception as e:
@@ -514,8 +534,13 @@ class ScrappyApp(App):
 
     @work(exclusive=False, thread=True)
     def consume_output_queue(self) -> None:
-        """Worker thread that consumes output queue and posts to UI."""
-        while not self._should_stop_consumer and self.is_running:
+        """Worker thread that consumes output queue and posts to UI.
+
+        Uses only _should_stop_consumer flag (not is_running) to avoid race
+        conditions during shutdown. The flag is set in exit() before Textual
+        waits for workers, ensuring prompt termination.
+        """
+        while not self._should_stop_consumer:
             try:
                 message = self.output_adapter.get_message(block=True, timeout=0.1)
 

@@ -474,7 +474,17 @@ class OrchestratorFactory:
         Service is always created. If API keys exist, router is configured
         immediately. Otherwise, configure() must be called after wizard
         saves keys.
+
+        Mock Mode:
+        If SCRAPPY_MOCK_LLM env var is set, returns MockLLMService instead.
+        This enables deterministic testing without real API calls.
         """
+        # Check for mock mode (for e2e testing)
+        from .mock_llm_service import is_mock_mode_enabled, MockLLMService
+        if is_mock_mode_enabled():
+            logger.info("Mock LLM mode enabled via SCRAPPY_MOCK_LLM env var")
+            return MockLLMService()
+
         # Lazy import to avoid 2s litellm startup delay
         from .litellm_callbacks import create_rate_tracking_callback
 

@@ -10,13 +10,11 @@ Focuses on:
 
 import pytest
 from dataclasses import fields
-from unittest.mock import Mock, MagicMock, patch, PropertyMock
+from unittest.mock import Mock, patch
 
 from scrappy.cli.textual.langgraph_bridge import (
     AgentResult,
     LangGraphBridge,
-    ConfirmCallbackProtocol,
-    OutputCallbackProtocol,
 )
 from scrappy.infrastructure.threading import CancellationToken
 
