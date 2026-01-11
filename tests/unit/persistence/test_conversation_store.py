@@ -23,10 +23,6 @@ from scrappy.infrastructure.persistence import (
 )
 
 
-
-
-
-
 class TestGetOrCreateProjectId:
     """Tests for project ID generation and persistence."""
 
