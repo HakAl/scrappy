@@ -4,6 +4,7 @@ Test to debug the infinite loop issue in LangGraph agent.
 Run with: python -m pytest tests/integration/test_langgraph_loop.py -v -s
 """
 
+import json
 import pytest
 from unittest.mock import Mock, MagicMock
 from langgraph.checkpoint.memory import MemorySaver
@@ -11,6 +12,42 @@ from langgraph.checkpoint.memory import MemorySaver
 from scrappy.graph.agent import build_graph
 from scrappy.graph.state import AgentState
 from scrappy.graph.tools import ToolAdapter
+from scrappy.orchestrator.types import StreamChunk, ToolCallFragment
+
+
+def make_stream_from_response(response, model="mock"):
+    """Helper to convert a MockLLMResponse to StreamChunk yields."""
+    content = response.content or ""
+    tool_calls = response.tool_calls or []
+
+    # Yield content in chunks
+    if content:
+        for i in range(0, len(content), 10):
+            yield StreamChunk(content=content[i:i+10], model=model, provider="mock")
+
+    # Convert tool calls to fragments
+    tool_fragments = []
+    for idx, tc in enumerate(tool_calls):
+        func = tc.get("function", {})
+        args = func.get("arguments", "{}")
+        if isinstance(args, dict):
+            args = json.dumps(args)
+        tool_fragments.append(ToolCallFragment(
+            id=tc.get("id", f"call_{idx}"),
+            type="function",
+            name=func.get("name", ""),
+            arguments=args,
+            index=idx,
+            complete=True,
+        ))
+
+    yield StreamChunk(
+        content="",
+        tool_call_fragments=tool_fragments,
+        model=model,
+        provider="mock",
+        finish_reason="stop"
+    )
 
 
 class MockLLMResponse:
@@ -83,6 +120,76 @@ class TracingLLMService:
 
         # Return (response, task_record)
         return response, {}
+
+    def stream_completion_sync(self, model, messages, **kwargs):
+        """Streaming version - yields chunks then returns final response."""
+        # Get the response using the same logic as completion_sync
+        print(f"\n{'='*60}")
+        print(f"STREAMING LLM CALL #{self._call_index + 1}")
+        print(f"Model: {model}")
+        print(f"Messages count: {len(messages)}")
+
+        if messages:
+            last_msg = messages[-1]
+            print(f"Last message role: {last_msg.get('role')}")
+            content = str(last_msg.get('content', ''))[:200]
+            print(f"Last message content: {content}...")
+        print(f"Tools provided: {'tools' in kwargs}")
+        print(f"{'='*60}")
+
+        # Get next response
+        if self._call_index < len(self._responses):
+            content, tool_calls = self._responses[self._call_index]
+        else:
+            # Default: return done response
+            content = "Task completed."
+            tool_calls = []
+
+        self._call_index += 1
+
+        response = MockLLMResponse(content, tool_calls)
+
+        print(f"\nRESPONSE:")
+        print(f"Content: {response.content[:200] if response.content else '(empty)'}...")
+        print(f"Tool calls: {len(response.tool_calls)}")
+        for tc in response.tool_calls:
+            print(f"  - {tc.get('name') or tc.get('function', {}).get('name')}")
+        print(f"{'='*60}\n")
+
+        self.calls.append({
+            'messages': messages,
+            'response_content': response.content,
+            'tool_calls': response.tool_calls,
+        })
+
+        # Yield chunks (simulate streaming)
+        if content:
+            # Yield content in chunks
+            for i in range(0, len(content), 10):
+                chunk_text = content[i:i+10]
+                yield StreamChunk(content=chunk_text, model=model, provider="mock")
+
+        # Final chunk with tool calls if any
+        tool_fragments = []
+        if tool_calls:
+            for idx, tc in enumerate(tool_calls):
+                func = tc.get("function", {})
+                tool_fragments.append(ToolCallFragment(
+                    id=tc.get("id", f"call_{idx}"),
+                    type="function",
+                    name=func.get("name", ""),
+                    arguments=json.dumps(func.get("arguments", {})) if isinstance(func.get("arguments"), dict) else func.get("arguments", "{}"),
+                    index=idx,
+                    complete=True,
+                ))
+
+        yield StreamChunk(
+            content="",
+            tool_call_fragments=tool_fragments,
+            model=model,
+            provider="mock",
+            finish_reason="stop"
+        )
 
 
 class MockToolAdapter:
@@ -333,6 +440,10 @@ def test_verify_failure_loop():
             # Subsequent calls: return done
             return MockLLMResponse("Task completed.", []), {}
 
+        def stream_completion_sync(self, model, messages, **kwargs):
+            response, _ = self.completion_sync(model, messages, **kwargs)
+            yield from make_stream_from_response(response, model)
+
     llm_service = CountingLLMService()
     tool_adapter = MockToolAdapter()
 
@@ -400,6 +511,10 @@ def test_infinite_tool_calls_hits_iteration_limit():
                 ],
             ), {}
 
+        def stream_completion_sync(self, model, messages, **kwargs):
+            response, _ = self.completion_sync(model, messages, **kwargs)
+            yield from make_stream_from_response(response, model)
+
     llm_service = InfiniteToolCallsLLM()
     tool_adapter = MockToolAdapter()
 
@@ -455,6 +570,10 @@ def test_empty_response_terminates():
             print(f"\n[LLM CALL #{call_count[0]}] Returning EMPTY response...")
             # Empty content, no tool calls - treated as error now
             return MockLLMResponse("", []), {}
+
+        def stream_completion_sync(self, model, messages, **kwargs):
+            response, _ = self.completion_sync(model, messages, **kwargs)
+            yield from make_stream_from_response(response, model)
 
     llm_service = EmptyResponseLLM()
     tool_adapter = MockToolAdapter()
