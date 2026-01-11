@@ -191,6 +191,7 @@ class SubprocessRunner:
         Execute command as list (no shell interpolation).
 
         Safer than execute() - no shell injection risk.
+        Supports cancellation via CancellationToken.
 
         Args:
             command: Command as list of arguments
@@ -202,10 +203,14 @@ class SubprocessRunner:
 
         Raises:
             TimeoutError: If execution exceeds timeout
+            CancelledException: If cancelled via token
         """
         timeout = timeout or 120  # Default 2 minutes
 
         start_time = time.time()
+        process = None
+        stdout_lines: List[str] = []
+        stderr_lines: List[str] = []
 
         try:
             # Run subprocess without shell=True for security
@@ -220,18 +225,66 @@ class SubprocessRunner:
                 errors='replace',
             )
 
-            # Wait for process with timeout
-            try:
-                stdout, stderr = process.communicate(timeout=timeout)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                raise TimeoutError(f"Command timed out after {timeout}s")
+            # Read stdout/stderr in background threads
+            def read_stdout():
+                try:
+                    for line in iter(process.stdout.readline, ''):
+                        if line:
+                            stdout_lines.append(line.rstrip())
+                except Exception:
+                    pass
+
+            def read_stderr():
+                try:
+                    for line in iter(process.stderr.readline, ''):
+                        if line:
+                            stderr_lines.append(line.rstrip())
+                except Exception:
+                    pass
+
+            stdout_thread = threading.Thread(target=read_stdout)
+            stderr_thread = threading.Thread(target=read_stderr)
+            stdout_thread.daemon = True
+            stderr_thread.daemon = True
+            stdout_thread.start()
+            stderr_thread.start()
+
+            # Poll for completion with cancellation support
+            while process.poll() is None:
+                elapsed = time.time() - start_time
+
+                if elapsed > timeout:
+                    process.kill()
+                    raise TimeoutError(f"Command timed out after {timeout}s")
+
+                # Check cancellation using Event.wait() for efficiency
+                if self._cancellation_token is not None:
+                    was_cancelled = self._cancellation_token.wait(timeout=0.5)
+                    if was_cancelled:
+                        if self._cancellation_token.is_force_cancelled:
+                            process.kill()
+                            process.wait(timeout=2)
+                            raise CancelledException("Force cancelled by user", force=True)
+                        else:
+                            process.terminate()
+                            try:
+                                process.wait(timeout=5)
+                            except subprocess.TimeoutExpired:
+                                process.kill()
+                                process.wait(timeout=2)
+                            raise CancelledException("Cancelled by user", force=False)
+                else:
+                    time.sleep(0.5)
+
+            # Wait for reader threads to finish
+            stdout_thread.join(timeout=5)
+            stderr_thread.join(timeout=5)
 
             execution_time = time.time() - start_time
 
             return ExecutionResult(
-                stdout=stdout if stdout else "",
-                stderr=stderr if stderr else "",
+                stdout="\n".join(stdout_lines) if stdout_lines else "",
+                stderr="\n".join(stderr_lines) if stderr_lines else "",
                 exit_code=process.returncode,
                 execution_time=execution_time
             )
@@ -240,6 +293,8 @@ class SubprocessRunner:
             if process:
                 process.kill()
             raise TimeoutError("Command interrupted by user (Ctrl+C)")
+        except CancelledException:
+            raise
         except subprocess.SubprocessError as e:
             if process:
                 process.kill()
