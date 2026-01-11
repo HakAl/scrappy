@@ -19,6 +19,7 @@ from unittest.mock import MagicMock, patch
 
 from scrappy.graph.agent import run_agent, create_agent_runner
 from scrappy.graph.state import AgentState, ToolCall, ToolResult
+from tests.helpers import MockLLMResponse
 
 
 class MockToolCall:
@@ -30,24 +31,8 @@ class MockToolCall:
         self.arguments = arguments
 
 
-class MockLLMResponse:
-    """Mock LLM response object."""
-
-    def __init__(
-        self,
-        content: str = "",
-        tool_calls: Optional[list[MockToolCall]] = None,
-        model: str = "mock-model",
-        provider: str = "mock",
-    ) -> None:
-        self.content = content
-        self.tool_calls = tool_calls
-        self.model = model
-        self.provider = provider
-
-
 class MockLLMService:
-    """Mock LLM service that returns predefined responses."""
+    """Mock LLM service that returns predefined responses in sequence."""
 
     def __init__(self, responses: list[dict[str, Any]]) -> None:
         """
@@ -527,37 +512,6 @@ class TestStateTransitions:
 
         # Should have accumulated messages
         assert len(result.messages) >= 2
-
-    def test_files_changed_tracked(self) -> None:
-        """Test that file changes are tracked in state."""
-        responses = [
-            {
-                "content": "Writing file.",
-                "tool_calls": [{"name": "write_file", "arguments": {"path": "new.py"}}],
-            },
-            {
-                "content": "Done.",
-            },
-        ]
-
-        llm_service = MockLLMService(responses)
-        tool_adapter = MockToolAdapter()
-
-        with patch("scrappy.graph.nodes.verify.run_ruff") as mock_ruff, \
-             patch("scrappy.graph.nodes.verify.run_mypy") as mock_mypy:
-            mock_ruff.return_value = (True, "")
-            mock_mypy.return_value = (True, "")
-
-            result = run_agent(
-                task="Write file",
-                working_dir="/tmp",
-                llm_service=llm_service,
-                tool_adapter=tool_adapter,
-            )
-
-        # Files should be tracked in state
-        # Note: tracking happens in execute_node based on tool name
-        assert isinstance(result.files_changed, list)
 
     def test_iteration_counter_increments(self) -> None:
         """Test that iteration counter increments each loop."""

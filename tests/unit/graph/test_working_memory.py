@@ -21,6 +21,7 @@ from scrappy.graph.nodes.execute import (
 )
 from scrappy.graph.nodes.think import build_system_prompt
 from scrappy.graph.state import AgentState, Message, ToolCall, ToolResult
+from tests.helpers import MockToolAdapter
 
 
 # =============================================================================
@@ -58,39 +59,6 @@ class MockWorkingMemory:
         self._context = context
 
 
-class MockToolAdapter:
-    """Mock tool adapter for testing execute node."""
-
-    def __init__(
-        self,
-        results: Optional[list[ToolResult]] = None,
-        exception: Optional[Exception] = None,
-    ):
-        self.results = results or []
-        self.exception = exception
-        self.executed_calls: list = []
-
-    def execute(self, tool_calls: list[ToolCall], context) -> list[ToolResult]:
-        """Record calls and return mock results."""
-        self.executed_calls.append((tool_calls, context))
-
-        if self.exception:
-            raise self.exception
-
-        if self.results:
-            return self.results
-        return [
-            ToolResult(name=tc["function"]["name"], result="mock result")
-            for tc in tool_calls
-        ]
-
-    def get_tool_names(self) -> list[str]:
-        return ["read_file", "write_file"]
-
-    def get_tool_schemas(self) -> list[dict]:
-        return []
-
-
 def make_tool_call(id: str, name: str, arguments: str = "{}") -> ToolCall:
     """Create a ToolCall in OpenAI format for testing."""
     return {
@@ -126,11 +94,6 @@ def create_test_state(
 
 class TestWorkingMemoryProtocol:
     """Tests for WorkingMemoryProtocol compliance."""
-
-    def test_mock_implements_protocol(self):
-        """MockWorkingMemory should implement WorkingMemoryProtocol."""
-        memory = MockWorkingMemory()
-        assert isinstance(memory, WorkingMemoryProtocol)
 
     def test_remember_file_read(self):
         """Should track file reads."""

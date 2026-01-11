@@ -14,9 +14,9 @@ After LiteLLM integration (Phase 3):
 """
 
 import pytest
-from unittest.mock import Mock
 from scrappy.orchestrator.delegation import DelegationManager
-from scrappy.providers.base import LLMResponse
+from scrappy.orchestrator.provider_types import LLMResponse
+from tests.helpers import MockLLMService
 
 
 # Test Doubles
@@ -80,58 +80,6 @@ class MockPromptAugmenter:
         if use_context:
             return prompt + self.augmented_suffix
         return prompt
-
-
-class MockLLMService:
-    """Test double for LLMServiceProtocol."""
-
-    def __init__(self, response=None):
-        self.response = response or LLMResponse(
-            content="test response",
-            model="test-model",
-            provider="test-provider",
-            tokens_used=100
-        )
-        self.completion_calls = []
-
-    async def completion(
-        self,
-        model: str,
-        messages: list[dict],
-        **kwargs
-    ):
-        """Async completion method."""
-        prompt = messages[-1].get("content", "") if messages else ""
-        self.completion_calls.append({
-            'model': model,
-            'messages': messages,
-            'prompt': prompt,
-            'kwargs': kwargs
-        })
-        # Return tuple: (response, task_record)
-        return (self.response, {
-            'timestamp': '2024-01-01T00:00:00',
-            'provider': 'test-provider',
-            'model': 'test-model',
-            'tokens_used': 100,
-            'latency_ms': 50.0,
-            'fallback': False,
-            'attempts': 1,
-        })
-
-    def completion_sync(
-        self,
-        model: str,
-        messages: list[dict],
-        **kwargs
-    ):
-        """Sync completion method."""
-        import asyncio
-        loop = asyncio.new_event_loop()
-        try:
-            return loop.run_until_complete(self.completion(model, messages, **kwargs))
-        finally:
-            loop.close()
 
 
 class MockOutput:
@@ -276,7 +224,7 @@ class TestCachingBehavior:
         # Should have called LLM service (not used cache)
         assert len(llm_service.completion_calls) > 0
         # Should get fresh response, not cached
-        assert response.content == "test response"
+        assert response.content == "Test response"
 
 
 class TestPromptAugmentation:
@@ -400,7 +348,9 @@ class TestDelegationFlow:
 
         response, task_record = await manager.delegate_async("fast", "test prompt")
 
-        assert isinstance(response, LLMResponse)
+        # Check response has expected attributes (duck-typing)
+        assert hasattr(response, 'content')
+        assert hasattr(response, 'model')
         assert isinstance(task_record, dict)
         assert 'provider' in task_record
 

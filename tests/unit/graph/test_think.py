@@ -28,27 +28,12 @@ from scrappy.graph.nodes.think import (
 )
 from scrappy.orchestrator.litellm_service import NotConfiguredError
 from scrappy.orchestrator.types import StreamChunk, ToolCallFragment
+from tests.helpers import MockLLMService, MockLLMResponse, MockToolAdapter
 
 
 # =============================================================================
 # Test Doubles
 # =============================================================================
-
-
-class MockLLMResponse:
-    """Mock LLM response object."""
-
-    def __init__(
-        self,
-        content: str = "Test response",
-        tool_calls: Optional[list] = None,
-        model: str = "mock-model",
-        provider: str = "mock",
-    ):
-        self.content = content
-        self.tool_calls = tool_calls
-        self.model = model
-        self.provider = provider
 
 
 class MockToolCall:
@@ -58,38 +43,6 @@ class MockToolCall:
         self.id = id
         self.name = name
         self.arguments = arguments
-
-
-class MockLLMService:
-    """Mock LLM service for testing think node."""
-
-    def __init__(
-        self,
-        response: Optional[MockLLMResponse] = None,
-        exception: Optional[Exception] = None,
-    ):
-        self.response = response or MockLLMResponse()
-        self.exception = exception
-        self.calls: list[dict] = []
-
-    def completion_sync(
-        self,
-        model: str,
-        messages: list[dict],
-        **kwargs: Any,
-    ) -> tuple[MockLLMResponse, dict]:
-        """Record call and return mock response."""
-        self.calls.append({
-            "model": model,
-            "messages": messages,
-            **kwargs,
-        })
-
-        if self.exception:
-            raise self.exception
-
-        task_record = {"model": model, "tokens_used": 100}
-        return self.response, task_record
 
 
 class MockStreamingLLMService:
@@ -122,24 +75,6 @@ class MockStreamingLLMService:
 
         for chunk in self.chunks:
             yield chunk
-
-
-class MockToolAdapter:
-    """Mock tool adapter for testing."""
-
-    def __init__(
-        self,
-        tool_names: Optional[list[str]] = None,
-        tool_schemas: Optional[list[dict]] = None,
-    ):
-        self._tool_names = tool_names or []
-        self._tool_schemas = tool_schemas or []
-
-    def get_tool_names(self) -> list[str]:
-        return self._tool_names
-
-    def get_tool_schemas(self) -> list[dict]:
-        return self._tool_schemas
 
 
 def create_test_state(

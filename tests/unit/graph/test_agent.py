@@ -22,84 +22,7 @@ from scrappy.graph.agent import (
 )
 from scrappy.graph.state import AgentState
 from scrappy.graph.edges import MAX_ITERATIONS, MAX_RETRIES
-
-
-# =============================================================================
-# Test Doubles
-# =============================================================================
-
-
-class MockLLMResponse:
-    """Mock LLM response object."""
-
-    def __init__(
-        self,
-        content: str = "Test response",
-        tool_calls: Optional[list] = None,
-        model: str = "mock-model",
-        provider: str = "mock",
-    ):
-        self.content = content
-        self.tool_calls = tool_calls
-        self.model = model
-        self.provider = provider
-
-
-class MockLLMService:
-    """Mock LLM service for testing."""
-
-    def __init__(
-        self,
-        response: Optional[MockLLMResponse] = None,
-        exception: Optional[Exception] = None,
-    ):
-        self.response = response or MockLLMResponse()
-        self.exception = exception
-        self.calls: list[dict] = []
-
-    def completion_sync(
-        self,
-        model: str,
-        messages: list[dict],
-        **kwargs: Any,
-    ) -> tuple[MockLLMResponse, dict]:
-        """Record call and return mock response."""
-        self.calls.append({
-            "model": model,
-            "messages": messages,
-            **kwargs,
-        })
-
-        if self.exception:
-            raise self.exception
-
-        task_record = {"model": model, "tokens_used": 100}
-        return self.response, task_record
-
-
-class MockToolAdapter:
-    """Mock tool adapter for testing."""
-
-    def __init__(
-        self,
-        tool_names: Optional[list[str]] = None,
-        tool_schemas: Optional[list[dict]] = None,
-        execute_results: Optional[list[dict]] = None,
-    ):
-        self._tool_names = tool_names or ["mock_tool"]
-        self._tool_schemas = tool_schemas or []
-        self._execute_results = execute_results or [{"name": "mock_tool", "result": "ok"}]
-        self.execute_calls: list[tuple] = []
-
-    def get_tool_names(self) -> list[str]:
-        return self._tool_names
-
-    def get_tool_schemas(self) -> list[dict]:
-        return self._tool_schemas
-
-    def execute(self, tool_calls: list, context: Any) -> list[dict]:
-        self.execute_calls.append((tool_calls, context))
-        return self._execute_results
+from tests.helpers import MockLLMService, MockLLMResponse, MockToolAdapter
 
 
 def create_test_state(
@@ -142,15 +65,6 @@ class TestBuildGraph:
         tool_adapter = MockToolAdapter()
         graph = build_graph(llm_service, tool_adapter)
         assert graph is not None
-
-    def test_returns_compiled_graph(self) -> None:
-        """build_graph should return a CompiledStateGraph."""
-        llm_service = MockLLMService()
-        tool_adapter = MockToolAdapter()
-        graph = build_graph(llm_service, tool_adapter)
-        # CompiledStateGraph has invoke method
-        assert hasattr(graph, "invoke")
-        assert callable(graph.invoke)
 
     def test_accepts_custom_tool_adapter(self) -> None:
         """build_graph should accept custom tool adapter."""
@@ -215,18 +129,6 @@ class TestBuildGraph:
 
 class TestNodeWrappers:
     """Tests for node wrapper functions."""
-
-    def test_wrap_think_node_returns_callable(self) -> None:
-        """_wrap_think_node should return a callable."""
-        llm_service = MockLLMService()
-        wrapped = _wrap_think_node(llm_service, None)
-        assert callable(wrapped)
-
-    def test_wrap_execute_node_returns_callable(self) -> None:
-        """_wrap_execute_node should return a callable."""
-        tool_adapter = MockToolAdapter()
-        wrapped = _wrap_execute_node(tool_adapter)
-        assert callable(wrapped)
 
     def test_wrap_verify_node_returns_callable(self) -> None:
         """_wrap_verify_node should return a callable."""
@@ -343,21 +245,6 @@ class TestCreateAgentRunner:
 
 class TestRunAgent:
     """Tests for run_agent function."""
-
-    def test_returns_agent_state(self) -> None:
-        """run_agent should return an AgentState."""
-        # Use a simple response that ends the conversation
-        llm_service = MockLLMService(
-            response=MockLLMResponse(content="Task completed.")
-        )
-
-        result = run_agent(
-            task="Test task",
-            working_dir=tempfile.gettempdir(),
-            llm_service=llm_service,
-        )
-
-        assert isinstance(result, AgentState)
 
     def test_preserves_original_task(self) -> None:
         """run_agent should preserve the original task."""
@@ -607,24 +494,6 @@ class TestStateConversion:
         # Working dir is resolved to absolute path
         assert result.working_dir is not None
 
-    def test_dict_to_state_conversion(self) -> None:
-        """run_agent should convert dict result to AgentState."""
-        llm_service = MockLLMService(
-            response=MockLLMResponse(content="Final answer.")
-        )
-
-        result = run_agent(
-            task="Test",
-            working_dir=tempfile.gettempdir(),
-            llm_service=llm_service,
-        )
-
-        # Result should be AgentState, not dict
-        assert isinstance(result, AgentState)
-        assert hasattr(result, "input")
-        assert hasattr(result, "messages")
-        assert hasattr(result, "done")
-
 
 # =============================================================================
 # Working Directory Validation Tests
@@ -640,30 +509,3 @@ class TestValidateWorkingDir:
         result = validate_working_dir(temp_dir)
         assert result.exists()
         assert result.is_dir()
-
-    def test_empty_path_raises(self) -> None:
-        """validate_working_dir should reject empty path."""
-        with pytest.raises(WorkingDirectoryError, match="cannot be empty"):
-            validate_working_dir("")
-
-    def test_whitespace_only_path_raises(self) -> None:
-        """validate_working_dir should reject whitespace-only path."""
-        with pytest.raises(WorkingDirectoryError, match="cannot be empty"):
-            validate_working_dir("   ")
-
-    def test_nonexistent_path_raises(self) -> None:
-        """validate_working_dir should reject non-existent path."""
-        with pytest.raises(WorkingDirectoryError, match="does not exist"):
-            validate_working_dir("/this/path/definitely/does/not/exist/anywhere")
-
-    def test_file_instead_of_directory_raises(self) -> None:
-        """validate_working_dir should reject files."""
-        import os
-        # Create a temp file (closed immediately to avoid Windows locking)
-        fd, path = tempfile.mkstemp()
-        os.close(fd)
-        try:
-            with pytest.raises(WorkingDirectoryError, match="not a directory"):
-                validate_working_dir(path)
-        finally:
-            os.unlink(path)

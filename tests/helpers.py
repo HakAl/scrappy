@@ -9,10 +9,7 @@ from unittest.mock import Mock
 from pathlib import Path
 import tempfile
 
-from scrappy.providers.base import LLMResponse
-from scrappy.orchestrator_adapter import NullContext, ContextProvider
-from scrappy.infrastructure import InMemoryFileSystem, FileSystemProtocol
-from scrappy.infrastructure.protocols import PathProviderProtocol
+from scrappy.orchestrator.provider_types import LLMResponse
 from scrappy.cli.session_context import SessionContext
 
 
@@ -1305,11 +1302,6 @@ def create_test_rate_limit_tracker(
 
 from scrappy.agent_tools.protocols import (
     ExecutionResult,
-    CommandSecurityProtocol,
-    OutputParserProtocol,
-    CommandAdvisorProtocol,
-    PlatformSanitizerProtocol,
-    SubprocessRunnerProtocol,
 )
 
 
@@ -2684,6 +2676,451 @@ class MockProviderStatusTracker:
     def last_failure(self) -> Optional[Dict[str, Any]]:
         """Get last recorded failure."""
         return self.failures[-1] if self.failures else None
+
+
+# =============================================================================
+# LLM Service Test Doubles
+# =============================================================================
+
+class MockLLMResponse:
+    """
+    Simple mock response for LLM service tests.
+
+    Provides a response object with content and optional tool_calls.
+    Use this when you need a lightweight response mock.
+    """
+
+    def __init__(
+        self,
+        content: str = "Test response",
+        tool_calls: Optional[List[Any]] = None,
+        model: str = "mock-model",
+        provider: str = "mock",
+    ):
+        self.content = content
+        self.tool_calls = tool_calls
+        self.model = model
+        self.provider = provider
+
+
+class MockLLMService:
+    """
+    Consolidated test double for LLMServiceProtocol.
+
+    Supports both sync and async completion methods with:
+    - Single response or sequence of responses
+    - Exception injection
+    - Delay for concurrency testing
+    - Call tracking
+
+    Usage:
+        # Simple usage
+        service = MockLLMService(response_content="Hello!")
+        response, metadata = service.completion_sync("fast", messages)
+
+        # With sequence of responses
+        service = MockLLMService(responses=[
+            ("First response", {}),
+            ("Second response", {}),
+        ])
+
+        # With exception
+        service = MockLLMService(exception=ValueError("Test error"))
+
+        # With delay for concurrency testing
+        service = MockLLMService(delay_ms=100)
+
+        # Verify calls
+        assert service.call_count == 1
+        assert "fast" in service.calls[0]['model']
+    """
+
+    def __init__(
+        self,
+        response: Optional[Any] = None,
+        response_content: str = "Test response",
+        responses: Optional[List[tuple[Any, dict]]] = None,
+        exception: Optional[Exception] = None,
+        delay_ms: float = 0,
+    ):
+        """
+        Initialize MockLLMService.
+
+        Args:
+            response: Response object to return (overrides response_content)
+            response_content: Content string for default response
+            responses: List of (response, metadata) tuples for sequenced responses
+            exception: Exception to raise on completion calls
+            delay_ms: Delay in milliseconds before returning (for concurrency tests)
+        """
+        if response is not None:
+            self._default_response = response
+        else:
+            # Use MockLLMResponse to avoid circular imports
+            self._default_response = MockLLMResponse(
+                content=response_content,
+                model="test-model",
+                provider="test-provider",
+            )
+
+        self._responses = list(responses) if responses else []
+        self._response_index = 0
+        self._exception = exception
+        self._delay_ms = delay_ms
+
+        # Call tracking
+        self.calls: List[Dict[str, Any]] = []
+        self.call_count = 0
+        self.concurrent_calls = 0
+        self.max_concurrent_calls = 0
+        self.last_call_kwargs: Optional[Dict[str, Any]] = None
+
+    @property
+    def completion_calls(self) -> List[Dict[str, Any]]:
+        """Backwards compatibility alias for calls."""
+        return self.calls
+
+    def _get_next_response(self) -> tuple[Any, dict]:
+        """Get the next response in sequence or default."""
+        if self._responses and self._response_index < len(self._responses):
+            response = self._responses[self._response_index]
+            self._response_index += 1
+            return response
+
+        # Default response with metadata
+        return (self._default_response, {
+            "provider": "test-provider",
+            "model": "test-model",
+            "tokens_used": 100,
+            "latency_ms": 50,
+        })
+
+    def _record_call(self, model: str, messages: list, **kwargs) -> None:
+        """Record a call for verification."""
+        call_record = {
+            "model": model,
+            "messages": messages,
+            **kwargs,
+        }
+        self.calls.append(call_record)
+        self.last_call_kwargs = call_record
+        self.call_count += 1
+
+    def completion_sync(
+        self,
+        model: str,
+        messages: list,
+        **kwargs,
+    ) -> tuple[Any, dict]:
+        """
+        Synchronous completion (mock).
+
+        Args:
+            model: Model group name
+            messages: Chat messages
+            **kwargs: Additional parameters
+
+        Returns:
+            Tuple of (response, task_record)
+
+        Raises:
+            Configured exception if set
+        """
+        self._record_call(model, messages, **kwargs)
+
+        if self._exception:
+            raise self._exception
+
+        return self._get_next_response()
+
+    async def completion(
+        self,
+        model: str,
+        messages: list,
+        **kwargs,
+    ) -> tuple[Any, dict]:
+        """
+        Asynchronous completion (mock).
+
+        Supports delay for testing concurrency behavior.
+
+        Args:
+            model: Model group name
+            messages: Chat messages
+            **kwargs: Additional parameters
+
+        Returns:
+            Tuple of (response, task_record)
+
+        Raises:
+            Configured exception if set
+        """
+        import asyncio
+
+        self.concurrent_calls += 1
+        self.max_concurrent_calls = max(self.max_concurrent_calls, self.concurrent_calls)
+
+        try:
+            self._record_call(model, messages, **kwargs)
+
+            if self._delay_ms > 0:
+                await asyncio.sleep(self._delay_ms / 1000.0)
+
+            if self._exception:
+                raise self._exception
+
+            return self._get_next_response()
+        finally:
+            self.concurrent_calls -= 1
+
+    def set_response(self, response: LLMResponse) -> None:
+        """Set a new default response."""
+        self._default_response = response
+
+    def set_exception(self, exception: Exception) -> None:
+        """Set an exception to raise on next call."""
+        self._exception = exception
+
+    def clear_exception(self) -> None:
+        """Clear any configured exception."""
+        self._exception = None
+
+    def reset(self) -> None:
+        """Reset all state for reuse."""
+        self.calls = []
+        self.call_count = 0
+        self.concurrent_calls = 0
+        self.max_concurrent_calls = 0
+        self.last_call_kwargs = None
+        self._response_index = 0
+        self._exception = None
+
+
+def make_mock_llm_service(
+    response_content: str = "Test response",
+    responses: Optional[List[tuple[str, dict]]] = None,
+    exception: Optional[Exception] = None,
+    delay_ms: float = 0,
+) -> MockLLMService:
+    """
+    Factory function to create MockLLMService with defaults.
+
+    Args:
+        response_content: Default response content
+        responses: List of (content, metadata) tuples for sequenced responses
+        exception: Exception to raise on calls
+        delay_ms: Delay for concurrency testing
+
+    Returns:
+        Configured MockLLMService
+    """
+    # Convert content strings to response tuples if needed
+    if responses:
+        response_tuples = []
+        for item in responses:
+            if isinstance(item, tuple):
+                content, metadata = item
+                if isinstance(content, str):
+                    response = MockLLMResponse(
+                        content=content,
+                        model="test-model",
+                        provider="test-provider",
+                    )
+                    response_tuples.append((response, metadata))
+                else:
+                    response_tuples.append(item)
+            else:
+                # Assume it's just a content string
+                response = MockLLMResponse(
+                    content=str(item),
+                    model="test-model",
+                    provider="test-provider",
+                )
+                response_tuples.append((response, {}))
+        responses = response_tuples
+
+    return MockLLMService(
+        response_content=response_content,
+        responses=responses,
+        exception=exception,
+        delay_ms=delay_ms,
+    )
+
+
+# =============================================================================
+# Tool Adapter Test Doubles
+# =============================================================================
+
+
+class MockToolAdapter:
+    """
+    Consolidated test double for ToolAdapterProtocol.
+
+    Supports:
+    - Configurable tool names and schemas
+    - Configurable execution results (list or dict mapping)
+    - Exception injection
+    - Call tracking
+
+    Usage:
+        # Simple usage
+        adapter = MockToolAdapter()
+        names = adapter.get_tool_names()
+
+        # With custom tools
+        adapter = MockToolAdapter(
+            tool_names=["read_file", "write_file"],
+            tool_schemas=[{"type": "function", "function": {"name": "read_file"}}],
+        )
+
+        # With predefined results
+        adapter = MockToolAdapter(
+            results=[ToolResult(name="read_file", result="file contents")]
+        )
+
+        # With exception
+        adapter = MockToolAdapter(exception=ValueError("Tool error"))
+
+        # Check calls
+        adapter.execute(tool_calls, context)
+        assert len(adapter.executed_calls) == 1
+    """
+
+    DEFAULT_TOOL_NAMES = ["read_file", "write_file", "execute_shell"]
+    DEFAULT_WRITE_TOOLS = {"write_file", "edit_file", "create_file"}
+
+    def __init__(
+        self,
+        tool_names: Optional[List[str]] = None,
+        tool_schemas: Optional[List[dict]] = None,
+        results: Optional[List[Any]] = None,
+        results_map: Optional[Dict[str, Any]] = None,
+        exception: Optional[Exception] = None,
+        write_tools: Optional[set] = None,
+    ):
+        """
+        Initialize MockToolAdapter.
+
+        Args:
+            tool_names: List of tool names to return from get_tool_names()
+            tool_schemas: List of tool schemas to return from get_tool_schemas()
+            results: List of results to return from execute()
+            results_map: Dict mapping tool name to result (alternative to results)
+            exception: Exception to raise on execute()
+            write_tools: Set of tool names that modify files
+        """
+        self._tool_names = tool_names if tool_names is not None else self.DEFAULT_TOOL_NAMES
+        self._tool_schemas = tool_schemas or []
+        self._results = results
+        self._results_map = results_map or {}
+        self._exception = exception
+        self._write_tools = write_tools if write_tools is not None else self.DEFAULT_WRITE_TOOLS
+
+        # Call tracking
+        self.executed_calls: List[tuple] = []
+        self.call_history: List[Dict[str, Any]] = []
+
+    def get_tool_names(self) -> List[str]:
+        """Return configured tool names."""
+        return self._tool_names
+
+    def get_tool_schemas(self) -> List[dict]:
+        """Return configured tool schemas."""
+        return self._tool_schemas
+
+    def execute(self, tool_calls: list, context: Any) -> list:
+        """
+        Execute tool calls and return mock results.
+
+        Args:
+            tool_calls: List of tool calls to execute
+            context: Tool execution context
+
+        Returns:
+            List of results (ToolResult objects or dicts)
+
+        Raises:
+            Configured exception if set
+        """
+        # Import here to avoid circular imports
+        from scrappy.graph.state import ToolResult
+
+        # Track the call
+        self.executed_calls.append((tool_calls, context))
+        self.call_history.append({
+            "tool_calls": tool_calls,
+            "context": context,
+        })
+
+        if self._exception:
+            raise self._exception
+
+        # Return configured results if provided
+        if self._results is not None:
+            return self._results
+
+        # Build results from tool calls
+        results = []
+        for tc in tool_calls:
+            # Handle both dict format and object format
+            if isinstance(tc, dict):
+                func = tc.get("function", {})
+                name = func.get("name", tc.get("name", "unknown"))
+            else:
+                name = getattr(tc, "name", "unknown")
+
+            # Check results_map first
+            if name in self._results_map:
+                results.append(self._results_map[name])
+            else:
+                # Default mock result
+                results.append(ToolResult(name=name, result="mock result"))
+
+        return results
+
+    def is_write_tool(self, tool_name: str) -> bool:
+        """Check if a tool modifies files."""
+        return tool_name in self._write_tools
+
+    def set_results(self, results: List[Any]) -> None:
+        """Set results to return from execute()."""
+        self._results = results
+
+    def set_exception(self, exception: Exception) -> None:
+        """Set exception to raise on execute()."""
+        self._exception = exception
+
+    def clear_exception(self) -> None:
+        """Clear configured exception."""
+        self._exception = None
+
+    def reset(self) -> None:
+        """Reset call tracking."""
+        self.executed_calls = []
+        self.call_history = []
+
+
+def make_mock_tool_adapter(
+    tool_names: Optional[List[str]] = None,
+    results: Optional[List[Any]] = None,
+    exception: Optional[Exception] = None,
+) -> MockToolAdapter:
+    """
+    Factory function to create MockToolAdapter with defaults.
+
+    Args:
+        tool_names: Tool names to return
+        results: Results to return from execute()
+        exception: Exception to raise on execute()
+
+    Returns:
+        Configured MockToolAdapter
+    """
+    return MockToolAdapter(
+        tool_names=tool_names,
+        results=results,
+        exception=exception,
+    )
 
 
 # =============================================================================

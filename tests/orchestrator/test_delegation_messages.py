@@ -10,31 +10,8 @@ from unittest.mock import Mock, MagicMock
 from datetime import datetime
 
 from scrappy.orchestrator.delegation import DelegationManager
-from scrappy.providers.base import LLMResponse
-
-
-class MockLLMService:
-    """Mock LLM service for testing."""
-
-    def __init__(self, response_content="Test response"):
-        self.response_content = response_content
-        self.last_call_kwargs = None
-
-    def completion_sync(self, **kwargs):
-        self.last_call_kwargs = kwargs
-        response = LLMResponse(
-            content=self.response_content,
-            model=kwargs.get("model", "test-model"),
-            provider="test-provider",
-            tokens_used=10,
-        )
-        task_record = {
-            "provider": "test-provider",
-            "model": "test-model",
-            "tokens_used": 10,
-            "latency_ms": 100,
-        }
-        return response, task_record
+from scrappy.orchestrator.provider_types import LLMResponse
+from tests.helpers import MockLLMService
 
 
 class MockCache:

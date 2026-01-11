@@ -28,6 +28,7 @@ from scrappy.graph.nodes.execute import (
     build_tool_message,
     OUTPUT_TRUNCATION_LIMIT,
 )
+from tests.helpers import MockToolAdapter
 
 
 def make_tool_call(id: str, name: str, arguments: str = "{}") -> ToolCall:
@@ -40,49 +41,6 @@ def make_tool_call(id: str, name: str, arguments: str = "{}") -> ToolCall:
             "arguments": arguments,
         },
     }
-
-
-# =============================================================================
-# Test Doubles
-# =============================================================================
-
-
-class MockToolAdapter:
-    """Mock tool adapter for testing execute node."""
-
-    def __init__(
-        self,
-        results: Optional[list[ToolResult]] = None,
-        exception: Optional[Exception] = None,
-    ):
-        self.results = results or []
-        self.exception = exception
-        self.executed_calls: list[tuple[list[ToolCall], ToolContext]] = []
-
-    def execute(
-        self,
-        tool_calls: list[ToolCall],
-        context: ToolContext,
-    ) -> list[ToolResult]:
-        """Record calls and return mock results."""
-        self.executed_calls.append((tool_calls, context))
-
-        if self.exception:
-            raise self.exception
-
-        # Return results for each tool call
-        if self.results:
-            return self.results
-        return [
-            ToolResult(name=tc["function"]["name"], result="mock result")
-            for tc in tool_calls
-        ]
-
-    def get_tool_names(self) -> list[str]:
-        return ["read_file", "write_file", "execute_shell"]
-
-    def get_tool_schemas(self) -> list[dict]:
-        return []
 
 
 def create_test_state(
