@@ -177,7 +177,8 @@ class TestCreateLiteLLMRouter:
             create_litellm_router()
 
             call_kwargs = mock_router_class.call_args[1]
-            assert call_kwargs["num_retries"] == 3
+            # num_retries=1: reduced to let graph fallback chain handle retries deterministically
+            assert call_kwargs["num_retries"] == 1
             assert call_kwargs["timeout"] == 60
             assert call_kwargs["retry_after"] == 5
             assert call_kwargs["routing_strategy"] == "simple-shuffle"

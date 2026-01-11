@@ -313,12 +313,13 @@ class TestRunTestsToolErrorHandling:
 class TestRunTestsToolCancellation:
     """Tests for cancellation support."""
 
-    def setup_method(self):
-        """Set up test fixtures."""
+    @pytest.fixture(autouse=True)
+    def setup_with_tmp_path(self, tmp_path):
+        """Set up test fixtures with real tmp_path for subprocess cwd."""
         from scrappy.infrastructure.threading.cancellation import CancellationToken
 
         self.config = AgentConfig()
-        self.project_root = Path("/test/project")
+        self.project_root = tmp_path  # Use real path for subprocess cwd
         self.token = CancellationToken()
 
         # Create mock run_context with cancellation_token

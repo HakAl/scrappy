@@ -4,6 +4,7 @@ import platform
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 
 from scrappy.sandbox.docker_executor import (
     CommandResult,
@@ -53,6 +54,7 @@ class TestCommandResult:
 class TestWindowsPathTranslation:
     """Tests for Windows path translation."""
 
+    @pytest.mark.skipif(platform.system() != "Windows", reason="Windows-specific path handling")
     @patch("scrappy.sandbox.docker_executor.platform.system")
     def test_translates_c_drive(self, mock_system):
         """Translates C:\\ to /c/ (Docker Desktop format)."""
@@ -63,6 +65,7 @@ class TestWindowsPathTranslation:
         assert "Users" in result
         assert "\\" not in result
 
+    @pytest.mark.skipif(platform.system() != "Windows", reason="Windows-specific path handling")
     @patch("scrappy.sandbox.docker_executor.platform.system")
     def test_translates_other_drives(self, mock_system):
         """Translates D:\\ to /d/ (Docker Desktop format)."""
