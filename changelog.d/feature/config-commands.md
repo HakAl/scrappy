@@ -1,1 +1,0 @@
-Added `scrappy config` command group for managing API keys: `config list` shows configured providers with masked keys, `config set <provider>` adds or updates a key, and `config remove <provider>` removes a key.

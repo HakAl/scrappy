@@ -1,1 +1,0 @@
-Fixed agent cancellation not working when Escape pressed during confirmation prompts. Now properly cancels the agent loop instead of just dismissing the prompt.

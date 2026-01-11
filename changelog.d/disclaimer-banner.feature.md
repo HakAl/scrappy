@@ -1,1 +1,0 @@
-First-run disclaimer banner requiring user acknowledgment before use

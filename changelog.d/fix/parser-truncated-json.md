@@ -1,1 +1,0 @@
-Fixed response parser failing on truncated JSON responses. Now salvages thought, action, and partial parameters when LLM response is cut off mid-string.

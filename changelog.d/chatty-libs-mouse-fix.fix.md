@@ -1,1 +1,0 @@
-Fixed mouse selection and scrolling breaking after app initialization. LiteLLM and Langfuse write debug output during import, corrupting terminal escape sequences used by Textual for mouse tracking. Solution: suppress their output BEFORE importing. Added `suppress_output()` utility in `scrappy.infrastructure` for future chatty libraries.

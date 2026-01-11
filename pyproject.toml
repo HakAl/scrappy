@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scrappy-ai"
-version = "1.0.3"
+version = "1.1.0"
 description = "A context-aware coding assistant for everyone. Students, learners, anyone who doesn't want to pay for subscriptions."
 readme = "README.md"
 license = {text = "MIT"}
@@ -32,19 +32,13 @@ dependencies = [
     "openai>=1.0.0",
     "click>=8.0.0",
     "rich>=14.2.0",
-    "rich-rst==1.3.2",
     "lancedb>=0.5.0",
     "fastembed>=0.2.0",
     "fasteners>=0.19",
     "tantivy>=0.21.0; sys_platform != 'win32'",
-    "tqdm>=4.65.0",
-    "pandas>=2.0.0",
-    "prompt_toolkit>=3.0.0",
     "pyperclip>=1.11.0",
     "textual>=0.47.0",
-    # LangGraph migration (Phase 0)
     "langgraph>=0.2.0",
-    "langchain>=0.3.0",  # Needed for langfuse.langchain CallbackHandler
     "langfuse>=2.0.0,<3.0.0",  # Pin to v2 to match docker server
     "docker>=7.0.0",
 ]
@@ -173,5 +167,7 @@ showcontent = true
 [tool.ruff]
 line-length = 120
 target-version = "py310"
+
+[tool.ruff.lint]
 select = ["E", "F", "W"]
 ignore = ["E501"]

@@ -1,1 +1,0 @@
-Agent mode now checks for git availability before running
