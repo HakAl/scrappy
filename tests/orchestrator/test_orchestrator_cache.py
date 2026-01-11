@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 from scrappy.orchestrator.cache import ResponseCache
-from scrappy.providers.base import LLMResponse
+from scrappy.orchestrator.provider_types import LLMResponse
 
 
 class TestResponseCacheBasics:

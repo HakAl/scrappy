@@ -8,7 +8,7 @@ the status bar widget through the StatusBarUpdaterProtocol.
 from typing import Optional
 
 from scrappy.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
-from scrappy.protocols.progress import StatusBarUpdaterProtocol
+from scrappy.cli.protocols import StatusBarUpdaterProtocol
 
 
 class TextualProgressReporter:

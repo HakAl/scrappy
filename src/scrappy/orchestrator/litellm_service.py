@@ -37,7 +37,7 @@ from pydantic import BaseModel
 # to avoid 4s startup delay. They are accessed via local imports in methods.
 
 from ..infrastructure.logging import StructuredLogger
-from ..providers.base import LLMResponse, ToolCall
+from .provider_types import LLMResponse, ToolCall
 from ..infrastructure.exceptions.provider_errors import (
     AllProvidersRateLimitedError,
     RateLimitError,
@@ -46,7 +46,7 @@ from ..infrastructure.exceptions.provider_errors import (
     TimeoutError as ProviderTimeoutError,
     ProviderExecutionError,
 )
-from ..protocols.output import BaseOutputProtocol
+from ..cli.protocols import BaseOutputProtocol
 from ..infrastructure.config.api_keys import ApiKeyConfigServiceProtocol
 from .types import StreamChunk, ToolCallFragment
 from .litellm_config import build_model_list

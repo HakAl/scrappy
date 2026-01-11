@@ -141,52 +141,6 @@ class TestBridgeDataFlow:
 class TestRealLLMService:
     """Test with real LiteLLMService to find the actual failure."""
 
-    def test_litellm_service_through_graph(self):
-        """Test if real LiteLLMService works through the graph."""
-        from scrappy.orchestrator.litellm_service import LiteLLMService
-        from scrappy.orchestrator.litellm_config import create_litellm_router
-        from scrappy.infrastructure.config.api_keys import create_api_key_service
-        from scrappy.graph.agent import run_agent
-
-        # Create minimal dependencies
-        router = create_litellm_router()
-        api_key_service = create_api_key_service()
-        mock_output = Mock()
-        mock_output.status = Mock()
-        mock_output.echo = Mock()
-
-        # Create real LLM service
-        llm_service = LiteLLMService(
-            router=router,
-            api_key_service=api_key_service,
-            output=mock_output,
-        )
-
-        # Try to configure
-        llm_service.configure()
-
-        # Check if configured
-        is_configured = llm_service.is_configured()
-        print(f"LiteLLMService.is_configured() = {is_configured}")
-
-        if not is_configured:
-            pytest.skip("LiteLLMService not configured (no API keys)")
-
-        # Run agent
-        try:
-            result = run_agent(
-                task="Say hello in exactly 3 words",
-                working_dir=".",
-                llm_service=llm_service,
-            )
-            print(f"Result: done={result.done}, iterations={result.iteration}")
-            print(f"Messages: {len(result.messages)}")
-            if result.messages:
-                print(f"Last message: {result.messages[-1]}")
-        except Exception as e:
-            print(f"Exception: {type(e).__name__}: {e}")
-            raise
-
 
 @pytest.mark.integration
 class TestOrchestratorLLMService:

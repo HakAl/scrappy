@@ -9,8 +9,8 @@ import logging
 import sys
 from typing import Any, List, Optional, Tuple
 
-# Import protocol from centralized location and re-export for backwards compatibility
-from ..protocols.output import BaseOutputProtocol
+# Import protocol from CLI protocols (canonical location)
+from ..cli.protocols import BaseOutputProtocol
 
 __all__ = ['BaseOutputProtocol', 'ConsoleOutput', 'NullOutput', 'CapturingOutput']
 

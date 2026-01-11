@@ -11,7 +11,7 @@ from typing import Optional
 
 from scrappy.orchestrator.rate_limiting import RateLimitTracker
 from scrappy.orchestrator.rate_limiting import RateLimitCalculator, RateLimitPolicy, RateLimitRecommender
-from scrappy.providers.base import ProviderLimits
+from scrappy.orchestrator.provider_types import ProviderLimits
 from tests.helpers import create_test_rate_limit_tracker, FakeStorage
 
 

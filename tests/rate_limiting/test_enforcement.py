@@ -440,13 +440,3 @@ class TestRateLimitNotifier:
 
 class TestNullNotifier:
     """Tests for NullNotifier."""
-
-    @pytest.mark.unit
-    def test_no_op_methods(self):
-        """All methods should be no-ops."""
-        notifier = NullNotifier()
-
-        # Should not raise
-        notifier.notify_approaching_limit("test", 0.1, 10)
-        notifier.notify_fallback("a", "b", "reason")
-        notifier.notify_all_exhausted(["a", "b"])

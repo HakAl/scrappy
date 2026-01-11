@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from textual.message import Message
 
-from scrappy.protocols.activity import ActivityState
+from ..protocols import ActivityState
 
 if TYPE_CHECKING:
     from ..core import CLI

@@ -6,6 +6,7 @@ Tests cover:
 - Status updates (callbacks)
 - Lifecycle (cancel callbacks, cleanup)
 - Handoff triggers (rate limit, timeout thresholds)
+- Cancellation token integration
 """
 
 import pytest
@@ -15,6 +16,7 @@ from scrappy.graph.run_context import (
     AgentRunContextProtocol,
     HANDOFF_TRIGGERS,
 )
+from scrappy.infrastructure.threading.cancellation import CancellationToken
 
 
 class TestAgentRunContextProtocol:
@@ -181,12 +183,7 @@ class TestFileCaching:
 
         ctx.invalidate_file("test.py")
 
-        assert ctx.get_cached_file("test.py") is None
-
-    def test_invalidate_nonexistent_file_safe(self):
-        """Invalidating nonexistent file should not raise."""
-        ctx = AgentRunContext()
-        ctx.invalidate_file("nonexistent.py")  # Should not raise
+        assert ctx.get_cached_file("test.py") is None  # Should not raise
 
     def test_cache_eviction_when_over_limit(self):
         """Oldest files should be evicted when cache exceeds limit."""
@@ -232,20 +229,7 @@ class TestStatusUpdates:
         ctx.update_status("thinking")
         ctx.update_status("executing tools")
 
-        assert messages == ["thinking", "executing tools"]
-
-    def test_update_status_without_callback_safe(self):
-        """Updating status without callback should not raise."""
-        ctx = AgentRunContext()
-        ctx.update_status("thinking")  # Should not raise
-
-    def test_callback_error_logged_not_raised(self):
-        """Callback errors should be logged but not raised."""
-        ctx = AgentRunContext()
-        ctx.set_status_callback(lambda msg: 1 / 0)  # Will raise
-
-        # Should not raise
-        ctx.update_status("thinking")
+        assert messages == ["thinking", "executing tools"]  # Should not raise
 
 
 class TestLifecycle:
@@ -346,3 +330,75 @@ class TestHandoffTriggersConfiguration:
         never = ["network", "parse"]
         for trigger in never:
             assert HANDOFF_TRIGGERS[trigger] is False, f"{trigger} should be False"
+
+
+class TestCancellationToken:
+    """Tests for cancellation token integration."""
+
+    def test_initial_state_not_cancelled(self):
+        """Fresh context without token should not be cancelled."""
+        ctx = AgentRunContext()
+        assert ctx.is_cancelled() is False
+        assert ctx.is_force_cancelled() is False
+
+    def test_cancellation_token_property_getter_setter(self):
+        """Should be able to set and get cancellation token."""
+        ctx = AgentRunContext()
+        token = CancellationToken()
+
+        ctx.cancellation_token = token
+
+        assert ctx.cancellation_token is token
+
+    def test_is_cancelled_false_when_token_not_cancelled(self):
+        """is_cancelled should return False when token is not cancelled."""
+        ctx = AgentRunContext()
+        token = CancellationToken()
+        ctx.cancellation_token = token
+
+        assert ctx.is_cancelled() is False
+
+    def test_is_cancelled_true_when_token_cancelled(self):
+        """is_cancelled should return True when token.cancel() called."""
+        ctx = AgentRunContext()
+        token = CancellationToken()
+        ctx.cancellation_token = token
+
+        token.cancel()
+
+        assert ctx.is_cancelled() is True
+
+    def test_is_force_cancelled_false_after_single_cancel(self):
+        """is_force_cancelled should be False after single cancel."""
+        ctx = AgentRunContext()
+        token = CancellationToken()
+        ctx.cancellation_token = token
+
+        token.cancel()
+
+        assert ctx.is_cancelled() is True
+        assert ctx.is_force_cancelled() is False
+
+    def test_is_force_cancelled_true_after_double_cancel(self):
+        """is_force_cancelled should be True after two cancels."""
+        ctx = AgentRunContext()
+        token = CancellationToken()
+        ctx.cancellation_token = token
+
+        token.cancel()
+        token.cancel()
+
+        assert ctx.is_cancelled() is True
+        assert ctx.is_force_cancelled() is True
+
+    def test_is_cancelled_false_when_no_token(self):
+        """is_cancelled should return False when no token is set."""
+        ctx = AgentRunContext()
+        # No token set
+        assert ctx.is_cancelled() is False
+        assert ctx.is_force_cancelled() is False
+
+    def test_cancellation_token_initially_none(self):
+        """Cancellation token should be None initially."""
+        ctx = AgentRunContext()
+        assert ctx.cancellation_token is None

@@ -817,3 +817,122 @@ class TestExecuteNodeIntegration:
         result = execute_node(state, adapter, context_factory)
 
         assert result.done is True
+
+
+# =============================================================================
+# Cancellation Tests
+# =============================================================================
+
+
+class MockRunContext:
+    """Mock run context for testing cancellation."""
+
+    def __init__(self, cancelled: bool = False, force_cancelled: bool = False):
+        self._cancelled = cancelled
+        self._force_cancelled = force_cancelled
+
+    def is_cancelled(self) -> bool:
+        return self._cancelled
+
+    def is_force_cancelled(self) -> bool:
+        return self._force_cancelled
+
+
+class TestExecuteNodeCancellation:
+    """Tests for execute node cancellation behavior."""
+
+    def test_returns_cancelled_state_when_cancelled_before_start(self):
+        """Execute node should return cancelled state if already cancelled."""
+        tool_call = make_tool_call("call_1", "read_file")
+        state = create_test_state(
+            messages=[{
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [tool_call],
+            }]
+        )
+        adapter = MockToolAdapter(
+            results=[ToolResult(name="read_file", result="should not execute")]
+        )
+        context_factory = create_test_context_factory()
+        run_context = MockRunContext(cancelled=True)
+
+        result = execute_node(
+            state, adapter, context_factory, run_context=run_context
+        )
+
+        # Should return cancelled state
+        assert result.done is True
+        assert result.last_error == "Cancelled by user"
+        # Tool adapter should not have been called
+        assert len(adapter.executed_calls) == 0
+
+    def test_no_cancellation_when_run_context_none(self):
+        """Execute node should run normally when run_context is None."""
+        tool_call = make_tool_call("call_1", "read_file")
+        state = create_test_state(
+            messages=[{
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [tool_call],
+            }]
+        )
+        adapter = MockToolAdapter(
+            results=[ToolResult(name="read_file", result="file content")]
+        )
+        context_factory = create_test_context_factory()
+
+        result = execute_node(state, adapter, context_factory, run_context=None)
+
+        # Should run normally
+        assert len(adapter.executed_calls) == 1
+
+    def test_no_cancellation_when_not_cancelled(self):
+        """Execute node should run normally when run_context.is_cancelled() is False."""
+        tool_call = make_tool_call("call_1", "read_file")
+        state = create_test_state(
+            messages=[{
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [tool_call],
+            }]
+        )
+        adapter = MockToolAdapter(
+            results=[ToolResult(name="read_file", result="file content")]
+        )
+        context_factory = create_test_context_factory()
+        run_context = MockRunContext(cancelled=False)
+
+        result = execute_node(
+            state, adapter, context_factory, run_context=run_context
+        )
+
+        # Should run normally
+        assert len(adapter.executed_calls) == 1
+
+    def test_catches_cancellation_exception_from_adapter(self):
+        """Execute node should catch CancelledException from tool adapter."""
+        from scrappy.infrastructure.exceptions import CancelledException
+
+        tool_call = make_tool_call("call_1", "slow_tool")
+        state = create_test_state(
+            messages=[{
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [tool_call],
+            }]
+        )
+
+        # Create adapter that raises CancelledException
+        class CancellingAdapter(MockToolAdapter):
+            def execute(self, tool_calls, context):
+                raise CancelledException("Cancelled by user")
+
+        adapter = CancellingAdapter()
+        context_factory = create_test_context_factory()
+
+        result = execute_node(state, adapter, context_factory)
+
+        # Should return cancelled state (not crash)
+        assert result.done is True
+        assert result.last_error == "Cancelled by user"

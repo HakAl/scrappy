@@ -20,7 +20,13 @@ from scrappy.graph.fallbacks import get_next_fallback
 from scrappy.graph.nodes.context_manager import ContextManager
 from scrappy.graph.nodes.token_estimator import TokenEstimator
 from scrappy.graph.nodes.tool_call_processor import ToolCallProcessor
-from scrappy.graph.protocols import ContextFactoryProtocol, LLMServiceProtocol, StreamingLLMServiceProtocol, WorkingMemoryProtocol
+from scrappy.graph.protocols import (
+    ContextFactoryProtocol,
+    LLMServiceProtocol,
+    StreamingLLMServiceProtocol,
+    WorkingMemoryProtocol,
+)
+from scrappy.graph.run_context import AgentRunContextProtocol
 from scrappy.graph.state import AgentState, Message, ToolCall
 from scrappy.graph.tools import ToolAdapterProtocol
 from scrappy.infrastructure.exceptions import (
@@ -357,6 +363,7 @@ def think_node(
     max_tokens: int = DEFAULT_MAX_TOKENS,
     working_memory: Optional[WorkingMemoryProtocol] = None,
     context_factory: Optional[ContextFactoryProtocol] = None,
+    run_context: Optional[AgentRunContextProtocol] = None,
 ) -> AgentState:
     """
     Think node - LLM reasoning step.
@@ -374,10 +381,21 @@ def think_node(
         max_tokens: Max context tokens (for sanitization)
         working_memory: Optional working memory for session context
         context_factory: Optional factory for RAG context augmentation
+        run_context: Optional run context for cancellation support
 
     Returns:
         Updated AgentState with new assistant message
     """
+    # Check cancellation before starting
+    if run_context is not None and run_context.is_cancelled():
+        logger.info("Think node cancelled before start")
+        return state.model_copy(
+            update={
+                "iteration": state.iteration + 1,
+                "done": True,
+                "last_error": "Cancelled by user",
+            }
+        )
     # Build system prompt
     tool_names = tool_adapter.get_tool_names() if tool_adapter else []
     system_prompt = build_system_prompt(state, tool_names, working_memory, context_factory)
@@ -511,12 +529,16 @@ async def think_node_streaming(
     stream_callback: Optional[StreamCallback] = None,
     working_memory: Optional[WorkingMemoryProtocol] = None,
     context_factory: Optional[ContextFactoryProtocol] = None,
+    run_context: Optional[AgentRunContextProtocol] = None,
 ) -> AgentState:
     """
     Think node with streaming support.
 
     Async version that uses streaming completion for real-time output.
     Yields chunks via stream_callback as they arrive.
+
+    Supports cancellation via run_context - checks between streaming chunks
+    and discards partial response on cancellation.
 
     Args:
         state: Current agent state
@@ -526,10 +548,22 @@ async def think_node_streaming(
         stream_callback: Callback for streaming progress (content chunks)
         working_memory: Optional working memory for session context
         context_factory: Optional factory for RAG context augmentation
+        run_context: Optional run context for cancellation support
 
     Returns:
         Updated AgentState with new assistant message
     """
+    # Check cancellation before starting
+    if run_context is not None and run_context.is_cancelled():
+        logger.info("Streaming think node cancelled before start")
+        return state.model_copy(
+            update={
+                "iteration": state.iteration + 1,
+                "done": True,
+                "last_error": "Cancelled by user",
+            }
+        )
+
     # Build system prompt
     tool_names = tool_adapter.get_tool_names() if tool_adapter else []
     system_prompt = build_system_prompt(state, tool_names, working_memory, context_factory)
@@ -596,11 +630,18 @@ async def think_node_streaming(
             stream_provider: str = ""
 
             # Use user-selected tier from state
+            cancelled = False
             async for chunk in llm_service.stream_completion(
                 model=state.current_tier,
                 messages=messages,
                 **llm_kwargs,
             ):
+                # Check cancellation between chunks - discard partial response
+                if run_context is not None and run_context.is_cancelled():
+                    logger.info("LLM streaming cancelled - discarding partial response")
+                    cancelled = True
+                    break
+
                 # Type check - should be StreamChunk
                 if isinstance(chunk, StreamChunk):
                     # Accumulate content (O(1) append)
@@ -618,6 +659,16 @@ async def think_node_streaming(
                         stream_model = chunk.model
                     if chunk.provider:
                         stream_provider = chunk.provider
+
+            # Handle cancellation - return early without adding partial content
+            if cancelled:
+                return state.model_copy(
+                    update={
+                        "iteration": state.iteration + 1,
+                        "done": True,
+                        "last_error": "Cancelled by user",
+                    }
+                )
 
             # Join once at end (O(n) total)
             accumulated_content = "".join(content_parts)

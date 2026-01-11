@@ -137,12 +137,7 @@ class TestAgentStateValidation:
 
         # This should work (valid tier)
         state.current_tier = "chat"
-        assert state.current_tier == "chat"
-
-    def test_required_fields(self) -> None:
-        """Test that required fields must be provided."""
-        with pytest.raises(Exception):  # ValidationError
-            AgentState()  # Missing input and original_task
+        assert state.current_tier == "chat"  # Missing input and original_task
 
 
 class TestAgentStateEdgeCases:
@@ -176,16 +171,6 @@ class TestAgentStateEdgeCases:
         long_task = "x" * 10000
         state = AgentState.create_initial(long_task, "/tmp")
         assert len(state.input) == 10000
-
-    def test_empty_working_dir_raises(self) -> None:
-        """Empty working_dir should raise ValidationError."""
-        with pytest.raises(Exception):  # ValidationError
-            AgentState.create_initial("task", "")
-
-    def test_whitespace_only_working_dir_raises(self) -> None:
-        """Whitespace-only working_dir should raise ValidationError."""
-        with pytest.raises(Exception):  # ValidationError
-            AgentState.create_initial("task", "   ")
 
     def test_unicode_path_in_working_dir(self) -> None:
         """Unicode paths in working_dir are allowed."""

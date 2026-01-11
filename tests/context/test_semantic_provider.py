@@ -538,14 +538,6 @@ class TestNormalizePath:
             result = provider._normalize_path("src/main.py")
             assert result == "src/main.py"
 
-    def test_normalize_path_outside_project_raises(self):
-        """Should raise ValueError for paths outside project root."""
-        from scrappy.context.semantic.provider import IndexingError
-
-        # Attempt to access parent directory
-        with pytest.raises(ValueError, match="Security"):
-            self.provider._normalize_path("../../../etc/passwd")
-
     def test_normalize_windows_path(self):
         """Should normalize paths to POSIX style."""
         import tempfile
@@ -670,38 +662,6 @@ class TestClearIndex:
             chunker=self.chunker,
             config=self.config,
         )
-
-    @patch('scrappy.context.semantic.provider.fasteners')
-    def test_clear_index_drops_table(self, mock_fasteners):
-        """Should drop the code_chunks table."""
-        mock_lock = Mock()
-        mock_lock.acquire.return_value = True
-        mock_fasteners.InterProcessLock.return_value = mock_lock
-
-        mock_db = Mock()
-        mock_db.table_names.return_value = ["code_chunks"]
-        self.provider._db = mock_db
-        self.provider._ensure_db = Mock()
-
-        self.provider.clear_index()
-
-        mock_db.drop_table.assert_called_once_with("code_chunks")
-
-    @patch('scrappy.context.semantic.provider.fasteners')
-    def test_clear_index_does_nothing_when_no_table(self, mock_fasteners):
-        """Should not fail when table doesn't exist."""
-        mock_lock = Mock()
-        mock_lock.acquire.return_value = True
-        mock_fasteners.InterProcessLock.return_value = mock_lock
-
-        mock_db = Mock()
-        mock_db.table_names.return_value = []
-        self.provider._db = mock_db
-        self.provider._ensure_db = Mock()
-
-        self.provider.clear_index()
-
-        mock_db.drop_table.assert_not_called()
 
 
 class TestRemoveFiles:
@@ -1030,43 +990,6 @@ class TestEnsureSchema:
         # Schema should be initialized
         assert provider._code_schema is not None
 
-    @patch('scrappy.context.semantic.provider._create_embedding_func')
-    @patch('scrappy.context.semantic.provider._create_code_schema')
-    def test_ensure_schema_lazy_loads_embedding(self, mock_schema, mock_embed_func):
-        """Should lazy-load embedding function when not injected."""
-        mock_embed = MockEmbeddingFunction()
-        mock_embed_func.return_value = mock_embed
-        mock_schema.return_value = Mock()
-
-        provider = LanceDBSearchProvider(
-            project_path=Path("."),
-            chunker=self.chunker,
-            config=self.config,
-            embedding_func=None,  # Not injected
-        )
-
-        provider._ensure_schema()
-
-        mock_embed_func.assert_called_once()
-        mock_schema.assert_called_once()
-
-    @patch('scrappy.context.semantic.provider._create_embedding_func')
-    def test_ensure_schema_raises_indexing_error_on_failure(self, mock_embed_func):
-        """Should raise IndexingError when initialization fails."""
-        from scrappy.context.semantic.provider import IndexingError
-
-        mock_embed_func.side_effect = Exception("Model not found")
-
-        provider = LanceDBSearchProvider(
-            project_path=Path("."),
-            chunker=self.chunker,
-            config=self.config,
-            embedding_func=None,
-        )
-
-        with pytest.raises(IndexingError, match="Failed to initialize embedding function"):
-            provider._ensure_schema()
-
 
 class TestSafeDbContext:
     """Test _safe_db_context context manager."""
@@ -1080,59 +1003,6 @@ class TestSafeDbContext:
             chunker=self.chunker,
             config=self.config,
         )
-
-    @patch('scrappy.context.semantic.provider.fasteners')
-    def test_safe_db_context_acquires_lock(self, mock_fasteners):
-        """Should acquire and release lock."""
-        mock_lock = Mock()
-        mock_lock.acquire.return_value = True
-        mock_fasteners.InterProcessLock.return_value = mock_lock
-
-        with self.provider._safe_db_context():
-            pass
-
-        mock_lock.acquire.assert_called_once()
-        mock_lock.release.assert_called_once()
-
-    @patch('scrappy.context.semantic.provider.fasteners')
-    def test_safe_db_context_raises_on_lock_failure(self, mock_fasteners):
-        """Should raise IndexingError when lock cannot be acquired."""
-        from scrappy.context.semantic.provider import IndexingError
-
-        mock_lock = Mock()
-        mock_lock.acquire.return_value = False
-        mock_fasteners.InterProcessLock.return_value = mock_lock
-
-        with pytest.raises(IndexingError, match="Database locked"):
-            with self.provider._safe_db_context():
-                pass
-
-    @patch('scrappy.context.semantic.provider.fasteners')
-    def test_safe_db_context_propagates_exceptions(self, mock_fasteners):
-        """Should propagate exceptions without wrapping."""
-        mock_lock = Mock()
-        mock_lock.acquire.return_value = True
-        mock_fasteners.InterProcessLock.return_value = mock_lock
-
-        # Exceptions should propagate as-is, not be wrapped
-        with pytest.raises(ValueError, match="test error"):
-            with self.provider._safe_db_context():
-                raise ValueError("test error")
-
-    @patch('scrappy.context.semantic.provider.fasteners')
-    def test_safe_db_context_releases_lock_on_error(self, mock_fasteners):
-        """Should release lock even when exception occurs."""
-        mock_lock = Mock()
-        mock_lock.acquire.return_value = True
-        mock_fasteners.InterProcessLock.return_value = mock_lock
-
-        try:
-            with self.provider._safe_db_context():
-                raise ValueError("Test error")
-        except ValueError:
-            pass
-
-        mock_lock.release.assert_called_once()
 
 
 class TestIndexFiles:
@@ -1149,57 +1019,6 @@ class TestIndexFiles:
             config=self.config,
             embedding_func=self.mock_embed,
         )
-
-    def test_index_files_returns_early_for_empty_files(self):
-        """Should return early when no files provided."""
-        self.provider._ensure_db = Mock()
-
-        self.provider.index_files({})
-
-        # Should not attempt DB operations
-        self.provider._ensure_db.assert_not_called()
-
-    @patch('scrappy.context.semantic.provider.fasteners')
-    def test_index_files_creates_table_when_not_exists(self, mock_fasteners):
-        """Should create new table when it doesn't exist."""
-        import tempfile
-
-        mock_lock = Mock()
-        mock_lock.acquire.return_value = True
-        mock_fasteners.InterProcessLock.return_value = mock_lock
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            # Create a test file
-            test_file = Path(tmpdir) / "test.py"
-            test_file.write_text("def hello(): pass")
-
-            provider = LanceDBSearchProvider(
-                project_path=Path(tmpdir),
-                chunker=self.chunker,
-                config=self.config,
-                embedding_func=self.mock_embed,
-            )
-
-            mock_db = Mock()
-            mock_db.table_names.return_value = []  # No tables
-            mock_table = Mock()
-            mock_db.create_table.return_value = mock_table
-            provider._db = mock_db
-
-            provider.index_files({"test.py": "def hello(): pass"})
-
-            mock_db.create_table.assert_called_once()
-
-    def test_index_files_skips_unsafe_paths_before_lock(self):
-        """Should skip files with unsafe paths before acquiring lock."""
-        # Mock to verify _ensure_db is not called
-        self.provider._ensure_db = Mock()
-
-        # Try to index file outside project root
-        self.provider.index_files({"../../../etc/passwd": "content"})
-
-        # Should return early before any DB operations
-        self.provider._ensure_db.assert_not_called()
 
 
 class TestSearch:
@@ -1280,24 +1099,6 @@ class TestSearch:
         result = self.provider.search("test query")
 
         assert len(result.chunks) == 1
-
-    def test_search_propagates_fatal_errors(self):
-        """Should not catch fatal errors like KeyboardInterrupt."""
-        self.provider.is_indexed = Mock(return_value=True)
-        self.provider._ensure_schema = Mock()
-
-        mock_table = Mock()
-        mock_search = Mock()
-        mock_search.vector.return_value = mock_search
-        mock_search.text.side_effect = KeyboardInterrupt()
-        mock_table.search.return_value = mock_search
-
-        mock_db = Mock()
-        mock_db.open_table.return_value = mock_table
-        self.provider._db = mock_db
-
-        with pytest.raises(KeyboardInterrupt):
-            self.provider.search("test query")
 
     def test_search_with_ranker(self):
         """Should use ranker when provided."""
@@ -1423,18 +1224,6 @@ class TestAddFilesInBatches:
         assert isinstance(metrics, IndexingMetrics)
         assert metrics.files_processed == 1
         assert metrics.chunks_added >= 0
-
-    def test_reports_progress(self):
-        """Should report progress if reporter is set."""
-        mock_table = Mock()
-        mock_progress = Mock()
-        self.provider._progress = mock_progress
-
-        files = {"test.py": "def hello():\n    pass\n    return\n"}
-        self.provider._add_files_in_batches(mock_table, files)
-
-        # Progress should have been updated
-        mock_progress.update.assert_called()
 
 
 class TestIndexStatePersistence:

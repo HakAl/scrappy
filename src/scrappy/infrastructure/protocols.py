@@ -11,7 +11,7 @@ from io import StringIO
 
 if TYPE_CHECKING:
     from rich.console import Console
-    from scrappy.protocols.output import RichRenderableProtocol as OutputSink
+    from scrappy.cli.protocols import RichRenderableProtocol as OutputSink
 
 
 class FileSystemProtocol(Protocol):

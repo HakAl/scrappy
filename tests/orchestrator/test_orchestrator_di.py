@@ -19,7 +19,7 @@ from scrappy.orchestrator.rate_limiting import RateLimitTracker
 from scrappy.orchestrator.memory import WorkingMemory
 from scrappy.orchestrator.session import SessionManager
 from scrappy.orchestrator.provider_selector import ProviderSelector
-from scrappy.protocols.output import BaseOutputProtocol
+from scrappy.cli.protocols import BaseOutputProtocol
 from scrappy.orchestrator.output import NullOutput
 from scrappy.orchestrator.manager_protocols import DelegationManagerProtocol
 
@@ -28,7 +28,7 @@ class MockDelegationManager:
     """Mock delegation manager for tests that don't need API keys."""
 
     async def delegate_async(self, provider, prompt, **kwargs):
-        from scrappy.providers.base import LLMResponse
+        from scrappy.orchestrator.provider_types import LLMResponse
         response = LLMResponse(
             content="mock response",
             model="mock-model",

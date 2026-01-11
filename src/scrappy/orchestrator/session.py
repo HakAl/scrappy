@@ -8,17 +8,9 @@ from datetime import datetime
 from pathlib import Path
 import json
 
-try:
-    from ..utils.imports import safe_import
-    aiofiles, AIOFILES_AVAILABLE = safe_import('aiofiles')
-except ImportError:
-    # Fallback for direct execution
-    try:
-        import aiofiles
-        AIOFILES_AVAILABLE = True
-    except ImportError:
-        AIOFILES_AVAILABLE = False
-        aiofiles = None
+from ..infrastructure.utils import safe_import
+
+aiofiles, AIOFILES_AVAILABLE = safe_import('aiofiles')
 
 from .memory import WorkingMemory
 from .protocols import WorkingMemoryProtocol  # For type hints (Dependency Inversion)

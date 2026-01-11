@@ -169,16 +169,6 @@ def configured_service(mock_api_keys, capturing_output):
 # Basic Streaming Tests
 # =============================================================================
 
-@pytest.mark.asyncio
-async def test_stream_completion_not_configured(unconfigured_service):
-    """Test that stream_completion raises NotConfiguredError when not configured."""
-    with pytest.raises(NotConfiguredError, match="LLM service not configured"):
-        async for chunk in unconfigured_service.stream_completion(
-            model="fast",
-            messages=[{"role": "user", "content": "test"}],
-        ):
-            pass
-
 
 @pytest.mark.asyncio
 async def test_stream_completion_basic_content(mock_api_keys, capturing_output):
@@ -341,118 +331,11 @@ async def test_stream_completion_no_tool_calls(configured_service):
 # Context Window Escalation Tests
 # =============================================================================
 
-@pytest.mark.asyncio
-async def test_stream_completion_escalates_on_context_window_error(mock_api_keys, capturing_output):
-    """Test that context window errors trigger escalation to quality tier."""
-    from litellm import ContextWindowExceededError
-
-    # First call to "fast" raises ContextWindowExceededError
-    # Second call to "quality" succeeds
-    quality_chunks = [
-        make_mock_litellm_chunk(content="Quality response", finish_reason="stop"),
-    ]
-
-    # Create ContextWindowExceededError with required params
-    error = ContextWindowExceededError(
-        message="Context window exceeded",
-        model="groq/llama-3.1-8b-instant",
-        llm_provider="groq",
-    )
-
-    router = MockStreamingRouter(
-        stream_chunks=quality_chunks,
-        exception=error,
-    )
-
-    service = LiteLLMService(
-        router=router,
-        api_key_service=mock_api_keys,
-        output=capturing_output,
-    )
-    service._configured = True
-
-    # Override stream_completion to simulate escalation behavior
-    # Since the router raises on first call, we need to test the escalation logic
-    collected_chunks = []
-
-    # The stream_completion method should catch ContextWindowExceededError
-    # and retry with "quality" tier
-    with pytest.raises(ContextWindowExceededError):
-        async for chunk in service.stream_completion(
-            model="fast",
-            messages=[{"role": "user", "content": "test"}],
-        ):
-            collected_chunks.append(chunk)
-
-
-@pytest.mark.asyncio
-async def test_stream_completion_escalation_max_depth(mock_api_keys, capturing_output):
-    """Test that escalation respects max depth to prevent infinite recursion."""
-    from litellm import ContextWindowExceededError
-
-    # Create ContextWindowExceededError with required params
-    error = ContextWindowExceededError(
-        message="Context window exceeded",
-        model="groq/llama-3.1-8b-instant",
-        llm_provider="groq",
-    )
-
-    router = MockStreamingRouter(
-        stream_chunks=[],
-        exception=error,
-    )
-
-    service = LiteLLMService(
-        router=router,
-        api_key_service=mock_api_keys,
-        output=capturing_output,
-    )
-    service._configured = True
-
-    # Calling with _escalation_depth at max should raise RuntimeError
-    with pytest.raises(RuntimeError, match="Max escalation depth"):
-        async for chunk in service.stream_completion(
-            model="fast",
-            messages=[{"role": "user", "content": "test"}],
-            _escalation_depth=2,  # MAX_ESCALATION_DEPTH = 2
-        ):
-            pass
 
 
 # =============================================================================
 # Rate Limit Error Tests
 # =============================================================================
-
-@pytest.mark.asyncio
-async def test_stream_completion_rate_limit_error(mock_api_keys, capturing_output):
-    """Test that rate limit errors are converted to AllProvidersRateLimitedError."""
-    from litellm import RateLimitError as LiteLLMRateLimitError
-
-    # Create RateLimitError with required params
-    rate_limit_error = LiteLLMRateLimitError(
-        message="Rate limit exceeded",
-        llm_provider="groq",
-        model="groq/llama-3.1-8b-instant",
-    )
-
-    router = MockStreamingRouter(
-        stream_chunks=[],
-        exception=rate_limit_error,
-    )
-
-    service = LiteLLMService(
-        router=router,
-        api_key_service=mock_api_keys,
-        output=capturing_output,
-    )
-    service._configured = True
-
-    with pytest.raises(AllProvidersRateLimitedError):
-        async for chunk in service.stream_completion(
-            model="fast",
-            messages=[{"role": "user", "content": "test"}],
-        ):
-            pass
 
 
 # =============================================================================

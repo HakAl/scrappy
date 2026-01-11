@@ -37,3 +37,4 @@ class ErrorCategory(Enum):
     NETWORK = "network"
     RATE_LIMIT = "rate_limit"
     AUTHENTICATION = "authentication"
+    CANCELLATION = "cancellation"

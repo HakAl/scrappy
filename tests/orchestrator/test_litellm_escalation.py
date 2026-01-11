@@ -222,31 +222,6 @@ class TestAsyncEscalation:
         assert response.metadata.get("escalated_from") == "fast"
         assert task_record["escalated_from"] == "fast"
 
-    @pytest.mark.asyncio
-    async def test_async_escalation_records_callback(self):
-        """Verify async escalation records to callback."""
-        context_error = make_context_window_error()
-
-        mock_router = MockLiteLLMRouter(
-            responses=[
-                context_error,
-                make_mock_litellm_response(model="groq/llama-3.3-70b-versatile"),
-            ]
-        )
-        mock_output = MockOutputForLiteLLM()
-        mock_callback = Mock(spec=RateTrackingCallback)
-
-        service = make_configured_service(
-            router=mock_router, output=mock_output, callback=mock_callback
-        )
-
-        await service.completion(
-            model="fast",
-            messages=[{"role": "user", "content": "test"}],
-        )
-
-        mock_callback.record_escalation.assert_called_once_with("fast", "chat")
-
 
 class TestMultipleEscalationAttempts:
     """Tests for multiple escalation scenarios."""

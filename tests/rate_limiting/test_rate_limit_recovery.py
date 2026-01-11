@@ -9,9 +9,8 @@ After LiteLLM integration (Phase 3):
 
 import pytest
 
-from scrappy.utils.errors import is_rate_limit_error, RateLimitError
-from scrappy.utils.errors import AllProvidersRateLimitedError as LegacyAllProvidersRateLimitedError
-from scrappy.infrastructure.exceptions import AllProvidersRateLimitedError
+from scrappy.infrastructure.utils import is_rate_limit_error
+from scrappy.infrastructure.exceptions import RateLimitError, AllProvidersRateLimitedError
 
 
 class TestRateLimitErrorDetection:
@@ -54,7 +53,7 @@ class TestRateLimitErrorDetection:
         assert is_rate_limit_error(error) is False
 
     def test_detects_custom_rate_limit_error(self):
-        error = RateLimitError("groq", "Rate limit hit", "requests")
+        error = RateLimitError("Rate limit hit for groq", provider_name="groq")
         assert is_rate_limit_error(error) is True
 
 
@@ -64,22 +63,28 @@ class TestRateLimitErrorDetection:
 
 
 class TestRateLimitExceptions:
-    """Test the custom rate limit exception classes."""
+    """Test the infrastructure rate limit exception classes."""
 
     def test_rate_limit_error_message(self):
-        error = RateLimitError("groq", limit_type="tokens")
+        error = RateLimitError(
+            "Rate limit exceeded for groq (tokens)",
+            provider_name="groq",
+            wait_seconds=30.0
+        )
         assert "groq" in str(error)
-        assert "tokens" in str(error)
-        assert error.provider == "groq"
-        assert error.limit_type == "tokens"
+        assert error.provider_name == "groq"
+        assert error.wait_seconds == 30.0
 
     def test_rate_limit_error_custom_message(self):
-        error = RateLimitError("cerebras", "Custom rate limit message")
+        error = RateLimitError("Custom rate limit message")
         assert str(error) == "Custom rate limit message"
 
     def test_all_providers_error_lists_attempted(self):
-        error = LegacyAllProvidersRateLimitedError(['groq', 'cerebras', 'gemini'])
-        assert 'groq' in str(error)
-        assert 'cerebras' in str(error)
-        assert 'gemini' in str(error)
+        error = AllProvidersRateLimitedError(
+            "All providers rate limited",
+            attempted_providers=['groq', 'cerebras', 'gemini']
+        )
+        assert 'groq' in error.attempted_providers
+        assert 'cerebras' in error.attempted_providers
+        assert 'gemini' in error.attempted_providers
         assert error.attempted_providers == ['groq', 'cerebras', 'gemini']

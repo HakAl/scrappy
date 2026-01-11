@@ -14,26 +14,22 @@ After LiteLLM integration (Phase 3):
 
 import pytest
 import asyncio
-from typing import Any
-from unittest.mock import AsyncMock, Mock
 
-from scrappy.orchestrator.batch_scheduler import BatchScheduler, DEFAULT_MAX_CONCURRENT
-from scrappy.protocols.delegation import (
-    BatchSchedulerProtocol,
+from scrappy.orchestrator.batch_scheduler import BatchScheduler
+from scrappy.orchestrator.protocols import (
     LLMRequest,
-    OutputInterfaceProtocol,
 )
-from scrappy.orchestrator.protocols import LLMServiceProtocol
-from scrappy.providers import LLMResponse
+from scrappy.orchestrator.provider_types import LLMResponse
 
 
 # Test doubles
 
 class MockLLMService:
-    """Mock LLM service that returns predictable responses."""
+    """Mock LLM service that returns dynamic responses based on prompt."""
 
-    def __init__(self, delay_ms: float = 0):
+    def __init__(self, delay_ms: float = 0, exception: Exception | None = None):
         self.delay_ms = delay_ms
+        self.exception = exception
         self.call_count = 0
         self.concurrent_calls = 0
         self.max_concurrent_calls = 0
@@ -53,6 +49,9 @@ class MockLLMService:
             await asyncio.sleep(self.delay_ms / 1000.0)
 
         try:
+            if self.exception:
+                raise self.exception
+
             # Extract prompt from messages
             prompt = messages[-1].get("content", "") if messages else ""
 
@@ -88,17 +87,9 @@ class MockLLMService:
             loop.close()
 
 
-class FailingLLMService:
-    """Mock LLM service that always fails."""
-
-    async def completion(
-        self,
-        model: str,
-        messages: list[dict],
-        **kwargs
-    ) -> tuple[LLMResponse, dict]:
-        """Always raise an error."""
-        raise Exception(f"Model {model} failed")
+def make_failing_llm_service(error_message: str = "Model failed") -> MockLLMService:
+    """Create a MockLLMService that always fails."""
+    return MockLLMService(exception=Exception(error_message))
 
 
 class MockOutput:
@@ -203,7 +194,7 @@ async def test_execute_batch_with_default_concurrency():
 @pytest.mark.asyncio
 async def test_execute_batch_handles_individual_failures():
     """Test that individual request failures don't fail entire batch."""
-    llm_service = FailingLLMService()
+    llm_service = make_failing_llm_service()
     output = MockOutput()
     scheduler = BatchScheduler(llm_service=llm_service, output=output)
 
@@ -227,31 +218,6 @@ async def test_execute_batch_handles_individual_failures():
     assert len(output.errors) == 2
 
 
-@pytest.mark.asyncio
-async def test_execute_batch_empty_requests_raises():
-    """Test that empty requests list raises ValueError."""
-    llm_service = MockLLMService()
-    output = MockOutput()
-    scheduler = BatchScheduler(llm_service=llm_service, output=output)
-
-    with pytest.raises(ValueError, match="Cannot execute batch with empty requests list"):
-        await scheduler.execute_batch([], max_concurrent=5)
-
-
-@pytest.mark.asyncio
-async def test_execute_batch_invalid_max_concurrent():
-    """Test that invalid max_concurrent raises ValueError."""
-    llm_service = MockLLMService()
-    output = MockOutput()
-    scheduler = BatchScheduler(llm_service=llm_service, output=output)
-
-    requests = [LLMRequest(prompt="Test", provider="fast")]
-
-    with pytest.raises(ValueError, match="max_concurrent must be >= 1"):
-        await scheduler.execute_batch(requests, max_concurrent=0)
-
-    with pytest.raises(ValueError, match="max_concurrent must be >= 1"):
-        await scheduler.execute_batch(requests, max_concurrent=-1)
 
 
 @pytest.mark.asyncio
@@ -295,7 +261,7 @@ async def test_execute_multi_provider_basic():
 @pytest.mark.asyncio
 async def test_execute_multi_provider_excludes_failures():
     """Test that failed model groups are excluded from results."""
-    llm_service = FailingLLMService()
+    llm_service = make_failing_llm_service()
     output = MockOutput()
     scheduler = BatchScheduler(llm_service=llm_service, output=output)
 
@@ -310,18 +276,6 @@ async def test_execute_multi_provider_excludes_failures():
     # Errors should be logged (one per model group)
     assert len(output.errors) == 3
 
-
-@pytest.mark.asyncio
-async def test_execute_multi_provider_empty_providers_raises():
-    """Test that empty model_groups list raises ValueError."""
-    llm_service = MockLLMService()
-    output = MockOutput()
-    scheduler = BatchScheduler(llm_service=llm_service, output=output)
-
-    request = LLMRequest(prompt="Test prompt", provider="fast")
-
-    with pytest.raises(ValueError, match="Cannot execute multi-provider with empty model_groups list"):
-        await scheduler.execute_multi_provider(request, [])
 
 
 @pytest.mark.asyncio

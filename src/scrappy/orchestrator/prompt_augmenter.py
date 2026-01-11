@@ -9,17 +9,11 @@ Follows SOLID principles:
 
 from typing import Optional
 
-try:
-    from ..protocols.delegation import (
-        PromptAugmenterProtocol,
-        ContextProviderProtocol,
-        WorkingMemoryProtocol,
-    )
-except ImportError:
-    from protocols.delegation import (
-        ContextProviderProtocol,
-        WorkingMemoryProtocol,
-    )
+from .protocols import (
+    PromptAugmenterProtocol,
+    ContextProvider as ContextProviderProtocol,
+    WorkingMemoryProtocol,
+)
 
 
 class PromptAugmenter:

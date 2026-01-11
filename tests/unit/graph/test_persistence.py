@@ -10,7 +10,7 @@ from scrappy.graph.persistence import (
     persist_new_messages,
 )
 from scrappy.graph.state import AgentState, Message
-from scrappy.persistence import ConversationStoreProtocol
+from scrappy.infrastructure.persistence import ConversationStoreProtocol
 
 
 class FakeConversationStore:

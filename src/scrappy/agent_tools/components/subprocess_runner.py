@@ -3,17 +3,23 @@ Subprocess execution component.
 
 Implements SubprocessRunnerProtocol to handle low-level process
 execution, streaming, timeout handling, and signal management.
+
+Supports cancellation via CancellationToken for responsive user interrupts.
 """
 
 import os
 import subprocess
 import threading
 import time
-from typing import Optional, List
+from typing import TYPE_CHECKING, Optional, List
 
 from ..protocols import ExecutionResult
 from .output_collector import ThreadSafeOutputCollector
-from scrappy.protocols.io import CLIIOProtocol
+from scrappy.cli.protocols import CLIIOProtocol
+from scrappy.infrastructure.exceptions import CancelledException
+
+if TYPE_CHECKING:
+    from scrappy.infrastructure.threading.protocols import CancellationTokenProtocol
 
 
 class SubprocessRunner:
@@ -25,16 +31,26 @@ class SubprocessRunner:
 
     Following dependency injection principles, accepts optional IO interface
     for progress output. If not provided, progress messages are suppressed.
+
+    Supports cancellation via CancellationToken - uses Event.wait() for
+    efficient cancellation instead of polling sleep loops.
     """
 
-    def __init__(self, io: Optional[CLIIOProtocol] = None):
+    def __init__(
+        self,
+        io: Optional[CLIIOProtocol] = None,
+        cancellation_token: Optional["CancellationTokenProtocol"] = None,
+    ):
         """Initialize subprocess runner.
 
         Args:
             io: Optional IO interface for progress output. If None,
                 progress messages are suppressed.
+            cancellation_token: Optional token for user cancellation support.
+                If provided, allows responsive interrupt during execution.
         """
         self._io = io
+        self._cancellation_token = cancellation_token
 
     def execute(
         self,
@@ -109,11 +125,33 @@ class SubprocessRunner:
                     process.kill()
                     raise TimeoutError(f"Command timed out after {timeout}s")
 
+                # Check cancellation using Event.wait() instead of sleep+poll
+                # This wakes immediately on cancellation instead of waiting the interval
+                if self._cancellation_token is not None:
+                    was_cancelled = self._cancellation_token.wait(timeout=0.5)
+                    if was_cancelled:
+                        if self._cancellation_token.is_force_cancelled:
+                            # Force cancel - SIGKILL immediately
+                            process.kill()
+                            process.wait(timeout=2)
+                            raise CancelledException("Force cancelled by user", force=True)
+                        else:
+                            # Graceful cancel - SIGTERM, allow cleanup
+                            process.terminate()
+                            try:
+                                process.wait(timeout=5)
+                            except subprocess.TimeoutExpired:
+                                # Force kill if won't die gracefully
+                                process.kill()
+                                process.wait(timeout=2)
+                            raise CancelledException("Cancelled by user", force=False)
+                else:
+                    # No token - use regular sleep
+                    time.sleep(0.5)
+
                 if stall_time > 30 and not stall_warning_shown and stream_output and self._io:
                     self._io.echo("   No output for 30s - command may be waiting for input")
                     stall_warning_shown = True
-
-                time.sleep(0.5)
 
             reader_thread.join(timeout=5)
 

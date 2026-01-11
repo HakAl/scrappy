@@ -5,7 +5,7 @@ from textual.widgets import Static
 from rich.console import RenderableType
 from rich.text import Text
 
-from scrappy.protocols.tasks import Task, TaskStatus
+from ..protocols import Task, TaskStatus
 
 
 class TaskProgressWidget(Static):

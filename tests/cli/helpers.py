@@ -56,11 +56,12 @@ class MockApiKeyConfigService:
         self._disclaimer_acknowledged = True
 
 
-class MockLLMService:
+class MockKeyValidationService:
     """
-    Mock implementation of LLMServiceProtocol for testing.
+    Mock for API key validation in wizard testing.
 
-    Provides configurable validate_key behavior for wizard testing.
+    Provides configurable validate_key behavior. For LLM completion mocks,
+    use MockLLMService from tests.helpers instead.
     """
 
     def __init__(self, validate_key_result: tuple[bool, Optional[str]] = (True, None)):
@@ -76,3 +77,7 @@ class MockLLMService:
     def set_validate_key_result(self, success: bool, error: Optional[str] = None) -> None:
         """Configure what validate_key should return."""
         self._validate_key_result = (success, error)
+
+
+# Backwards compatibility alias
+MockLLMService = MockKeyValidationService

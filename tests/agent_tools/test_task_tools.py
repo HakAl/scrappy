@@ -12,7 +12,7 @@ from scrappy.agent_tools.tools.task_tools import (
     TASK_PATTERN,
 )
 from scrappy.agent_config import AgentConfig
-from scrappy.protocols.tasks import (
+from scrappy.cli.protocols import (
     Task,
     TaskStatus,
     TaskPriority,

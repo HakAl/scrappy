@@ -11,7 +11,7 @@ import uuid
 from queue import Queue, Empty
 
 if TYPE_CHECKING:
-    from scrappy.protocols.activity import ActivityState
+    from ..protocols import ActivityState
 
 
 class TextualOutputAdapter:

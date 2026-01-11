@@ -20,7 +20,7 @@ Model Groups:
 from dataclasses import dataclass
 from typing import Optional
 
-from ..providers.base import SpeedRank, QualityRank
+from .provider_types import SpeedRank, QualityRank
 from ..infrastructure.config.api_keys import ApiKeyConfigServiceProtocol
 
 

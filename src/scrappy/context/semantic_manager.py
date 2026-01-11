@@ -8,7 +8,10 @@ testability and single responsibility.
 
 import logging
 from pathlib import Path
-from typing import Optional, Callable, Set
+from typing import Optional, Callable, Set, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..cli.protocols import CLIIOProtocol
 
 from ..infrastructure.protocols import (
     BackgroundInitializerProtocol,
@@ -31,7 +34,6 @@ from .protocols import (
 from .semantic.config import SemanticIndexConfig
 from .semantic.state import LanceDBIndexStateManager
 from .semantic.decision import ThresholdDecisionMaker
-from ..protocols.io import CLIIOProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +65,7 @@ class SemanticSearchManager:
         project_path: Path,
         initializer: Optional[BackgroundInitializerProtocol] = None,
         event_queue: Optional[EventQueueProtocol] = None,
-        io: Optional[CLIIOProtocol] = None,
+        io: Optional["CLIIOProtocol"] = None,
         config: Optional[SemanticIndexConfig] = None,
         state_manager: Optional[IndexStateProtocol] = None,
         decision_maker: Optional[IndexingDecisionProtocol] = None,

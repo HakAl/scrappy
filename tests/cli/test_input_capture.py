@@ -58,8 +58,49 @@ class TestInputCaptureManager:
 
     # --- Cancel Tests ---
 
+    def test_cancel_resets_capturing_state(self, manager, mock_bridge):
+        """Bug scrappy-z719: cancel() must reset is_capturing to False.
 
+        Without this, arrow keys don't work after canceling a prompt
+        because action_history_previous checks is_capturing.
+        """
+        manager.enter_capture_mode("id1", "Question?", "confirm")
+        assert manager.is_capturing is True
 
+        manager.cancel()
+
+        # This is the bug - cancel() didn't reset _mode
+        assert manager.is_capturing is False
+
+    def test_cancel_provides_result_to_bridge(self, manager, mock_bridge):
+        """Cancel provides a denial result to the bridge."""
+        manager.enter_capture_mode("id1", "Question?", "confirm")
+        manager.cancel()
+
+        mock_bridge.provide_result.assert_called_once_with("id1", False)
+
+    def test_cancel_confirm_yna_returns_n(self, manager, mock_bridge):
+        """Cancel on confirm_yna returns 'n' (deny)."""
+        manager.enter_capture_mode("id1", "Allow?", "confirm_yna")
+        manager.cancel()
+
+        mock_bridge.provide_result.assert_called_once_with("id1", "n")
+
+    def test_cancel_prompt_returns_default(self, manager, mock_bridge):
+        """Cancel on prompt returns the default value."""
+        manager.enter_capture_mode("id1", "Name?", "prompt", default="Anonymous")
+        manager.cancel()
+
+        mock_bridge.provide_result.assert_called_once_with("id1", "Anonymous")
+
+    def test_cancel_clears_current_type(self, manager, mock_bridge):
+        """Cancel resets current_type to None."""
+        manager.enter_capture_mode("id1", "Question?", "confirm")
+        assert manager.current_type == "confirm"
+
+        manager.cancel()
+
+        assert manager.current_type is None
 
     # --- Defensive Null Check Tests (Bug 3 Fix) ---
 

@@ -24,6 +24,12 @@ class TestQualityVisitor(ast.NodeVisitor):
     # Entry point:  per-test function
     # -------------------------------------------------
     def visit_FunctionDef(self, node):
+        self._visit_function(node)
+
+    def visit_AsyncFunctionDef(self, node):
+        self._visit_function(node)
+
+    def _visit_function(self, node):
         if not node.name.startswith("test_"):
             return self.generic_visit(node)
 
@@ -77,12 +83,7 @@ class TestQualityVisitor(ast.NodeVisitor):
             1 for n in ast.walk(ast.Module(body=body, type_ignores=[]))
             if isinstance(n, ast.Assert) and self._is_tautology(n.test)
         )
-        self.stats[node.name]['over_mocked'] = int(
-            self._count_mocks(body) >= 4 and
-            (self.stats[node.name]['asserts'] + self.stats[node.name]['weak_asserts']) and
-            self.stats[node.name]['weak_asserts'] /
-            (self.stats[node.name]['asserts'] + self.stats[node.name]['weak_asserts']) >= 0.75
-        )
+        # NOTE: over_mocked is calculated after generic_visit() below
         self.stats[node.name]['sleep_freeze'] = int(self._has_sleep_or_freeze(body))
         self.stats[node.name]['swallow'] = int(self._swallows_all_exceptions(body))
         self.stats[node.name]['dead_assert'] = int(self._unreachable_assert(body))
@@ -109,6 +110,17 @@ class TestQualityVisitor(ast.NodeVisitor):
                 self.stats[node.name]['mocks'] += 1
 
         self.generic_visit(node)
+
+        # Calculate over_mocked AFTER generic_visit so asserts/weak_asserts are populated
+        stats = self.stats[node.name]
+        total_asserts = stats['asserts'] + stats['weak_asserts']
+        mock_count = self._count_mocks(body)
+        if total_asserts > 0 and mock_count >= 4:
+            weak_ratio = stats['weak_asserts'] / total_asserts
+            stats['over_mocked'] = int(weak_ratio >= 0.75)
+        else:
+            stats['over_mocked'] = 0
+
         self.current_test = None
 
     # -------------------------------------------------
@@ -221,7 +233,10 @@ class TestQualityVisitor(ast.NodeVisitor):
             return True
         if len(stmts) == 1 and isinstance(stmts[0], ast.Expr):
             val = stmts[0].value
-            return isinstance(val, ast.Constant) and isinstance(val.value, str) or isinstance(val, ast.Ellipsis)
+            # Docstring-only or ellipsis-only body
+            is_docstring = isinstance(val, ast.Constant) and isinstance(val.value, str)
+            is_ellipsis = isinstance(val, ast.Ellipsis)
+            return is_docstring or is_ellipsis
         return False
 
     def _is_only_instantiation(self, stmts):
@@ -307,6 +322,7 @@ def calculate_badness_score(data: dict) -> int:
 # file scanner
 # ---------------------------------------------------------------------------
 def scan_file(filepath):
+    """Scan a single file and return raw results (duplicates marked later)."""
     try:
         with open(filepath, encoding="utf-8", errors="replace") as f:
             source = f.read()
@@ -317,24 +333,33 @@ def scan_file(filepath):
     visitor = TestQualityVisitor()
     visitor.visit(tree)
 
-    # mark duplicates inside this file
-    from collections import Counter
-    hashes = [d['dup_hash'] for d in visitor.stats.values()]
-    dupes = {h for h, c in Counter(hashes).items() if c > 1}
-    for d in visitor.stats.values():
-        d['duplicate'] = 1 if d['dup_hash'] in dupes else 0
-
     results = []
     for name, data in visitor.stats.items():
-        score = calculate_badness_score(data)
-        if score > 0:
-            results.append({
-                'file': filepath,
-                'test': name,
-                'score': score,
-                'details': data,
-            })
+        results.append({
+            'file': filepath,
+            'test': name,
+            'details': data,
+        })
     return results
+
+
+def mark_duplicates(all_results):
+    """Mark duplicates both within files and across files."""
+    from collections import Counter
+
+    # Collect all hashes
+    all_hashes = [r['details']['dup_hash'] for r in all_results]
+    hash_counts = Counter(all_hashes)
+
+    # Mark duplicates (hash appears more than once across all files)
+    cross_file_dupes = {h for h, c in hash_counts.items() if c > 1}
+
+    for result in all_results:
+        dup_hash = result['details']['dup_hash']
+        result['details']['duplicate'] = 1 if dup_hash in cross_file_dupes else 0
+
+        # Calculate score after duplicate marking
+        result['score'] = calculate_badness_score(result['details'])
 
 
 # ---------------------------------------------------------------------------
@@ -347,7 +372,7 @@ def main():
     parser.add_argument("--min-score", type=int, default=4, help="Minimum badness score to report (default: 4)")
     args = parser.parse_args()
 
-    all_issues = []
+    all_results = []
     files_scanned = 0
 
     for root, _, files in os.walk(args.target):
@@ -355,9 +380,13 @@ def main():
             if f.startswith("test_") and f.endswith(".py"):
                 files_scanned += 1
                 path = os.path.join(root, f)
-                all_issues.extend(scan_file(path))
+                all_results.extend(scan_file(path))
 
-    filtered = [i for i in all_issues if i['score'] >= args.min_score]
+    # Mark duplicates across all files and calculate scores
+    mark_duplicates(all_results)
+
+    # Filter by score
+    filtered = [i for i in all_results if i['score'] >= args.min_score]
     filtered.sort(key=lambda x: x['score'], reverse=True)
 
     if args.json:
@@ -373,7 +402,7 @@ def main():
             print(f"       Stats: Mocks={d['mocks']}  Strong={d['asserts']}  Weak={d['weak_asserts']}")
         print("=" * 70)
         print(f"Files scanned : {files_scanned}")
-        print(f"Issues found  : {len(filtered)}  (score ≥ {args.min_score})")
+        print(f"Issues found  : {len(filtered)}  (score >= {args.min_score})")
 
 
 if __name__ == "__main__":

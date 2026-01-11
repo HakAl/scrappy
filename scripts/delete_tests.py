@@ -18,7 +18,7 @@ def fix_empty_classes(original_source, broken_source, deleted_test_names):
     # Parse original to find classes and their methods
     try:
         original_tree = ast.parse(original_source)
-    except:
+    except SyntaxError:
         return broken_source
 
     class_info = {}  # {class_name: [(method_name, indent_level)]}
@@ -27,7 +27,7 @@ def fix_empty_classes(original_source, broken_source, deleted_test_names):
         if isinstance(node, ast.ClassDef):
             methods = []
             for item in node.body:
-                if isinstance(item, ast.FunctionDef):
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     methods.append(item.name)
             class_info[node.name] = methods
 
@@ -69,25 +69,41 @@ def kill_tests_in_file(path, test_names, dry):
     # Track classes to check if we empty them out
     classes_touched = {}  # {class_node: [deleted_method_names]}
 
+    # First pass: find all functions to delete
     for node in ast.walk(atok.tree):
-        if isinstance(node, ast.FunctionDef) and node.name in test_names:
-
-            # Identify if this method belongs to a class
-            parent = getattr(node, 'parent', None)  # asttokens doesn't always attach parent easily
-            # Note: standard AST walking doesn't give parents.
-            # We rely on the deletion logic below, but handling 'pass' is tricky
-            # without parent links. We will stick to the SyntaxError catch for safety.
-
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in test_names:
             # Get range including decorators
             start, end = atok.get_text_range(node)
 
             # WHITESPACE CLEANUP:
-            # Attempt to consume the preceding newline to avoid "Swiss Cheese" files
-            # This checks if the character before start is a newline
-            if start > 0 and source[start - 1] == '\n':
+            # Consume preceding blank lines to avoid "Swiss Cheese" files
+            while start > 0 and source[start - 1] in '\n\r':
                 start -= 1
+                # Also consume any whitespace-only lines
+                line_start = source.rfind('\n', 0, start)
+                if line_start >= 0:
+                    line_content = source[line_start + 1:start + 1]
+                    if line_content.strip() == '':
+                        start = line_start
+                    else:
+                        start += 1  # Undo the last decrement
+                        break
+                else:
+                    break
 
             kill_ranges.append((start, end))
+
+    # Second pass: find orphan type annotations for deleted functions
+    # e.g., `my_func: Callable[..., str]` before `def my_func(): ...`
+    for node in ast.walk(atok.tree):
+        if isinstance(node, ast.AnnAssign):
+            # Check if this is an annotation for a function we're deleting
+            if isinstance(node.target, ast.Name) and node.target.id in test_names:
+                start, end = atok.get_text_range(node)
+                # Consume preceding newline
+                while start > 0 and source[start - 1] in '\n\r':
+                    start -= 1
+                kill_ranges.append((start, end))
 
     if not kill_ranges:
         return False

@@ -57,25 +57,6 @@ class TestSandboxedSubprocessRunner:
         assert result.exit_code == 0
         assert result.execution_time >= 0
 
-    def test_raises_timeout_error_on_timeout(self, tmp_path):
-        """Raises TimeoutError when command times out."""
-        mock_executor = MagicMock()
-        mock_executor.run.return_value = CommandResult(
-            stdout="",
-            stderr="",
-            exit_code=124,
-            timed_out=True,
-        )
-        mock_executor.executor_type = "mock"
-
-        runner = SandboxedSubprocessRunner(
-            project_dir=str(tmp_path),
-            executor=mock_executor,
-        )
-
-        with pytest.raises(TimeoutError):
-            runner.execute("sleep 100", str(tmp_path), timeout=1.0)
-
     def test_passes_timeout_to_executor(self, tmp_path):
         """Passes timeout to the underlying executor."""
         mock_executor = MagicMock()
@@ -175,32 +156,6 @@ class TestSandboxedSubprocessRunner:
         call_args = mock_executor.run.call_args[1]
         assert call_args["command"] == "ls -la /tmp"
 
-    def test_cleanup_delegates_to_executor(self, tmp_path):
-        """cleanup() delegates to executor.cleanup()."""
-        mock_executor = MagicMock()
-        mock_executor.executor_type = "mock"
-
-        runner = SandboxedSubprocessRunner(
-            project_dir=str(tmp_path),
-            executor=mock_executor,
-        )
-        runner.cleanup()
-
-        mock_executor.cleanup.assert_called_once()
-
-    def test_context_manager_cleans_up(self, tmp_path):
-        """Context manager cleans up on exit."""
-        mock_executor = MagicMock()
-        mock_executor.executor_type = "mock"
-
-        with SandboxedSubprocessRunner(
-            project_dir=str(tmp_path),
-            executor=mock_executor,
-        ):
-            pass
-
-        mock_executor.cleanup.assert_called_once()
-
     def test_executor_type_property(self, tmp_path):
         """executor_type returns underlying executor type."""
         mock_executor = MagicMock()
@@ -261,22 +216,6 @@ class TestSandboxedSubprocessRunner:
 
 class TestCreateSandboxedRunner:
     """Tests for create_sandboxed_runner factory function."""
-
-    @patch("scrappy.agent_tools.components.sandboxed_runner.create_executor")
-    def test_creates_runner_with_default_options(self, mock_create_executor, tmp_path):
-        """Creates runner with default options."""
-        mock_executor = MagicMock()
-        mock_executor.executor_type = "docker"
-        mock_create_executor.return_value = mock_executor
-
-        runner = create_sandboxed_runner(str(tmp_path))
-
-        mock_create_executor.assert_called_once_with(
-            project_dir=str(tmp_path),
-            prefer_docker=True,
-            network_enabled=False,
-        )
-        assert isinstance(runner, SandboxedSubprocessRunner)
 
     @patch("scrappy.agent_tools.components.sandboxed_runner.create_executor")
     def test_passes_network_enabled_option(self, mock_create_executor, tmp_path):

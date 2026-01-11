@@ -47,15 +47,7 @@ class TestSuppressOutput:
             pass
 
         # stdout should still work after context
-        assert sys.stdout.fileno() == original_stdout
-
-    def test_suppresses_only_stderr_when_configured(self):
-        """Verify selective suppression works."""
-        from scrappy.infrastructure import suppress_output
-
-        with suppress_output(suppress_stdout=False, suppress_stderr=True):
-            # stdout should still work, stderr suppressed
-            pass  # No exception = success
+        assert sys.stdout.fileno() == original_stdout  # No exception = success
 
 
 class TestLiteLLMNoOutput:

@@ -1,15 +1,12 @@
 """Tests for pure prompt section functions."""
 
-import pytest
 
 from scrappy.prompts.protocols import Platform
 from scrappy.prompts.sections import (
     codebase_hint_section,
-    codebase_structure_section,
     completion_section,
     efficiency_section,
     platform_section,
-    project_section,
     safety_section,
     self_review_section,
     strategy_section,

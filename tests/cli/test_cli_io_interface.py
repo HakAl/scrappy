@@ -255,7 +255,7 @@ class TestIOProtocolUsage:
     @pytest.mark.unit
     def test_function_accepts_protocol(self):
         """Test that functions can accept CLIIOProtocol for dependency injection."""
-        from scrappy.protocols.io import CLIIOProtocol
+        from scrappy.cli.protocols import CLIIOProtocol
         from scrappy.cli.io_interface import TestIO
 
         # Example function that uses IO protocol
@@ -274,7 +274,7 @@ class TestIOProtocolUsage:
     @pytest.mark.unit
     def test_function_with_user_input(self):
         """Test function that requires user input can be tested."""
-        from scrappy.protocols.io import CLIIOProtocol
+        from scrappy.cli.protocols import CLIIOProtocol
         from scrappy.cli.io_interface import TestIO
 
         # Example function that gets user confirmation
@@ -292,7 +292,7 @@ class TestIOProtocolUsage:
     @pytest.mark.unit
     def test_function_with_prompt(self):
         """Test function that prompts for input can be tested."""
-        from scrappy.protocols.io import CLIIOProtocol
+        from scrappy.cli.protocols import CLIIOProtocol
         from scrappy.cli.io_interface import TestIO
 
         # Example function that gets user input
@@ -308,7 +308,7 @@ class TestIOProtocolUsage:
     @pytest.mark.unit
     def test_multiple_io_operations(self):
         """Test complex workflow with multiple I/O operations."""
-        from scrappy.protocols.io import CLIIOProtocol
+        from scrappy.cli.protocols import CLIIOProtocol
         from scrappy.cli.io_interface import TestIO
 
         # Example workflow function

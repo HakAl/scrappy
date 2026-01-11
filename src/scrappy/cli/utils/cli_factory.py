@@ -20,7 +20,7 @@ from ..cache_manager import CacheManager
 from ..rate_limiter import RateLimiter
 from ..persistence import SessionPersistence
 from ..user_interaction import get_user_interaction
-from scrappy.persistence import ConversationStore
+from scrappy.infrastructure.persistence import ConversationStore
 from scrappy.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
 
 if TYPE_CHECKING:

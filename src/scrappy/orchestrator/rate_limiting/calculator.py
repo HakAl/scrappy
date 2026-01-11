@@ -2,7 +2,7 @@
 from __future__ import annotations
 from typing import Any, Dict, Optional
 
-from scrappy.providers.base import ProviderLimits
+from scrappy.orchestrator.provider_types import ProviderLimits
 
 
 class RateLimitCalculator:

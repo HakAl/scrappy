@@ -69,6 +69,7 @@ from .cli_errors import (
     TaskExecutionError,
     ParseError,
     UserInputError,
+    CancelledException,
 )
 
 __all__ = [
@@ -109,4 +110,5 @@ __all__ = [
     'TaskExecutionError',
     'ParseError',
     'UserInputError',
+    'CancelledException',
 ]

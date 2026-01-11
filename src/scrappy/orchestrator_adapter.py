@@ -15,8 +15,8 @@ from typing import List, Optional
 # Import protocols from centralized location
 from .orchestrator.protocols import ContextProvider, OrchestratorAdapter
 
-# Import LLMResponse from providers to get full feature set including tool_calls
-from .providers.base import LLMResponse, ToolCall
+# Import LLMResponse from orchestrator provider types
+from .orchestrator.provider_types import LLMResponse, ToolCall
 
 # Import canonical MODEL_GROUPS from model_selection
 from .orchestrator.model_selection import MODEL_GROUPS

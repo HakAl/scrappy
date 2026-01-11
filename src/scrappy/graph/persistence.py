@@ -21,7 +21,7 @@ from typing import Optional
 
 from scrappy.graph.state import AgentState, Message
 from scrappy.infrastructure.logging import get_logger
-from scrappy.persistence import (
+from scrappy.infrastructure.persistence import (
     ConversationStoreProtocol,
     check_session_staleness,
     get_stale_context_message,

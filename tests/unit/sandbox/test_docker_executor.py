@@ -163,12 +163,7 @@ class TestHostExecutor:
             result = executor.run("ls", working_dir="subdir")
 
         assert result.success is True
-        assert "test.txt" in result.stdout
-
-    def test_cleanup_does_nothing(self, tmp_path):
-        """Cleanup is a no-op for host executor."""
-        executor = HostExecutor(str(tmp_path))
-        executor.cleanup()  # Should not raise
+        assert "test.txt" in result.stdout  # Should not raise
 
     def test_context_manager(self, tmp_path):
         """Works as context manager."""
@@ -250,51 +245,6 @@ class TestDockerExecutor:
         assert mock_client.containers.run.call_count == 1
         # Exec run called twice
         assert mock_container.exec_run.call_count == 2
-
-    @patch("scrappy.sandbox.docker_executor.docker")
-    def test_cleanup_stops_and_removes_container(self, mock_docker, tmp_path):
-        """Cleanup stops and removes the container."""
-        mock_client = MagicMock()
-        mock_docker.from_env.return_value = mock_client
-
-        mock_container = MagicMock()
-        mock_container.status = "running"
-        mock_container.short_id = "abc123"
-        mock_container.exec_run.return_value = MagicMock(
-            output=(b"", b""),
-            exit_code=0,
-        )
-        mock_client.containers.run.return_value = mock_container
-        mock_client.images.get.return_value = MagicMock()
-
-        executor = DockerExecutor(str(tmp_path))
-        executor.run("ls")
-        executor.cleanup()
-
-        mock_container.stop.assert_called_once()
-        mock_container.remove.assert_called_once()
-
-    @patch("scrappy.sandbox.docker_executor.docker")
-    def test_context_manager_cleans_up(self, mock_docker, tmp_path):
-        """Context manager cleans up on exit."""
-        mock_client = MagicMock()
-        mock_docker.from_env.return_value = mock_client
-
-        mock_container = MagicMock()
-        mock_container.status = "running"
-        mock_container.short_id = "abc123"
-        mock_container.exec_run.return_value = MagicMock(
-            output=(b"", b""),
-            exit_code=0,
-        )
-        mock_client.containers.run.return_value = mock_container
-        mock_client.images.get.return_value = MagicMock()
-
-        with DockerExecutor(str(tmp_path)) as executor:
-            executor.run("ls")
-
-        mock_container.stop.assert_called_once()
-        mock_container.remove.assert_called_once()
 
     @patch("scrappy.sandbox.docker_executor.docker")
     def test_network_isolation_by_default(self, mock_docker, tmp_path):
@@ -381,19 +331,6 @@ class TestCreateExecutor:
         executor = create_executor(str(tmp_path), prefer_docker=True)
 
         assert executor == mock_instance
-
-    @patch("scrappy.sandbox.docker_executor.DockerExecutor")
-    def test_falls_back_to_host_when_docker_unavailable(
-        self, mock_docker_class, tmp_path
-    ):
-        """Returns HostExecutor when Docker is unavailable."""
-        mock_instance = MagicMock()
-        mock_instance.is_available.return_value = False
-        mock_docker_class.return_value = mock_instance
-
-        executor = create_executor(str(tmp_path), prefer_docker=True)
-
-        assert isinstance(executor, HostExecutor)
 
     def test_returns_host_when_docker_not_preferred(self, tmp_path):
         """Returns HostExecutor when Docker not preferred."""

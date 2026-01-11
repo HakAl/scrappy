@@ -7,15 +7,12 @@ Central coordinator for multi-provider LLM agent team using composition.
 from typing import Optional, AsyncIterator
 from datetime import datetime
 
-try:
-    from ..providers import ProviderRegistry, LLMResponse
-    from ..context import CodebaseContext
-    from ..exceptions.delegation import ProviderNotFoundError
-    from ..infrastructure.exceptions import RateLimitError, AllProvidersRateLimitedError
-except ImportError:
-    from providers import ProviderRegistry, LLMResponse
-    from exceptions.delegation import ProviderNotFoundError
-    from infrastructure.exceptions import RateLimitError, AllProvidersRateLimitedError
+from .provider_types import ProviderRegistry, LLMResponse
+from ..infrastructure.exceptions import (
+    ProviderNotFoundError,
+    RateLimitError,
+    AllProvidersRateLimitedError,
+)
 
 from .output import BaseOutputProtocol
 from .types import StreamChunk
@@ -539,6 +536,7 @@ class AgentOrchestrator:
                 if provider_name is None:
                     available = list(self.providers.list_available())
                     raise ProviderNotFoundError(
+                        "No provider available for auto-select",
                         provider_name="<auto-select>",
                         available_providers=available
                     )
@@ -720,6 +718,7 @@ class AgentOrchestrator:
                 if provider_name is None:
                     available = list(self.providers.list_available())
                     raise ProviderNotFoundError(
+                        "No provider available for auto-select",
                         provider_name="<auto-select>",
                         available_providers=available
                     )

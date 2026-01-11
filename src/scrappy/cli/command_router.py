@@ -310,7 +310,7 @@ class CommandRouter:
             True to continue with agent, False if user cancelled.
         """
         from ..agent_tools.tools.task_tools import MarkdownTaskStorage
-        from ..protocols.tasks import TaskStatus
+        from .protocols import TaskStatus
         from ..infrastructure.paths import ScrappyPathProvider
 
         # Use ScrappyPathProvider for consistent path handling

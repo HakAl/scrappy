@@ -16,8 +16,8 @@ Usage:
 from typing import Optional, List, Dict, Any
 import click
 
-# Import protocol from shared location to avoid circular dependencies
-from ..protocols.io import CLIIOProtocol
+# Import protocol from cli protocols (canonical location)
+from .protocols import CLIIOProtocol
 
 
 class TestIO:

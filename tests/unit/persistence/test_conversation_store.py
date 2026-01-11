@@ -14,7 +14,7 @@ import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from scrappy.persistence import (
+from scrappy.infrastructure.persistence import (
     ConversationStore,
     get_or_create_project_id,
     check_session_staleness,
@@ -1332,7 +1332,7 @@ class TestPhase15StaleSessionMessage:
 
     def test_get_stale_context_message(self):
         """Should return system message dict."""
-        from scrappy.persistence import get_stale_context_message
+        from scrappy.infrastructure.persistence import get_stale_context_message
 
         message = get_stale_context_message()
 
@@ -1342,7 +1342,7 @@ class TestPhase15StaleSessionMessage:
 
     def test_stale_message_mentions_new_workflow(self):
         """System message should hint that user may be starting new workflow."""
-        from scrappy.persistence import get_stale_context_message
+        from scrappy.infrastructure.persistence import get_stale_context_message
 
         message = get_stale_context_message()
 

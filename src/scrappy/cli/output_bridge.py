@@ -17,7 +17,7 @@ Following SOLID principles:
 
 from typing import Optional, TYPE_CHECKING
 
-from ..protocols.output import BaseOutputProtocol, RichRenderableProtocol
+from .protocols import BaseOutputProtocol, RichRenderableProtocol
 from scrappy.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
 
 if TYPE_CHECKING:

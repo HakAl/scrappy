@@ -13,7 +13,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock, mock_open
 import pytest
 
-from scrappy.utils.imports import (
+from scrappy.infrastructure.utils import (
     safe_import,
     require_import,
     setup_src_path,
@@ -89,7 +89,7 @@ class TestPathSetupFunctions:
     #     # Mock the file structure
     #     mock_file_path = Path("/project/src/utils/imports.py")
     #
-    #     with patch('scrappy.utils.imports.Path') as mock_path_class:
+    #     with patch('scrappy.infrastructure.utils.imports.Path') as mock_path_class:
     #         mock_path_instance = Mock()
     #         mock_path_instance.parent.parent = Path("/project/src")
     #         mock_path_class.return_value = mock_file_path
@@ -109,7 +109,7 @@ class TestPathSetupFunctions:
     #     """Test setup_src_path doesn't duplicate existing path."""
     #     test_path = "/existing/path"
     #
-    #     with patch('scrappy.utils.imports.Path') as mock_path_class:
+    #     with patch('scrappy.infrastructure.utils.imports.Path') as mock_path_class:
     #         mock_file_path = Mock()
     #         mock_file_path.parent.parent.__str__.return_value = test_path
     #         mock_path_class.return_value = mock_file_path
@@ -125,7 +125,7 @@ class TestPathSetupFunctions:
     #     """Test setup_root_path adds correct directory to sys.path."""
     #     mock_file_path = Path("/project/src/utils/imports.py")
     #
-    #     with patch('scrappy.utils.imports.Path') as mock_path_class:
+    #     with patch('scrappy.infrastructure.utils.imports.Path') as mock_path_class:
     #         mock_path_instance = Mock()
     #         mock_path_instance.parent.parent.parent = Path("/project")
     #         mock_path_class.return_value = mock_file_path
@@ -146,7 +146,7 @@ class TestPathSetupFunctions:
     #     """Test setup_root_path doesn't duplicate existing path."""
     #     test_path = "/existing/path"
     #
-    #     with patch('scrappy.utils.imports.Path') as mock_path_class:
+    #     with patch('scrappy.infrastructure.utils.imports.Path') as mock_path_class:
     #         mock_file_path = Mock()
     #         mock_file_path.parent.parent.parent.__str__.return_value = test_path
     #         mock_path_class.return_value = mock_file_path
@@ -199,7 +199,7 @@ class TestImportWithFallback:
         mock_fallback = Mock()
 
         # Patch setup_src_path FIRST, before mocking __import__
-        with patch('scrappy.utils.imports.setup_src_path'):
+        with patch('scrappy.infrastructure.utils.imports.setup_src_path'):
             with patch('builtins.__import__') as mock_import:
                 # First call fails, second succeeds
                 mock_import.side_effect = [ImportError, mock_fallback]
@@ -267,7 +267,7 @@ class TestPreconfiguredDependencyCheckers:
 
     def test_get_aiofiles_available(self):
         """Test get_aiofiles when aiofiles is available."""
-        with patch('scrappy.utils.imports.safe_import') as mock_safe_import:
+        with patch('scrappy.infrastructure.utils.imports.safe_import') as mock_safe_import:
             mock_module = Mock()
             mock_safe_import.return_value = (mock_module, True)
 
@@ -279,7 +279,7 @@ class TestPreconfiguredDependencyCheckers:
 
     def test_get_aiofiles_not_available(self):
         """Test get_aiofiles when aiofiles is not available."""
-        with patch('scrappy.utils.imports.safe_import') as mock_safe_import:
+        with patch('scrappy.infrastructure.utils.imports.safe_import') as mock_safe_import:
             mock_safe_import.return_value = (None, False)
 
             module, available = get_aiofiles()
@@ -289,7 +289,7 @@ class TestPreconfiguredDependencyCheckers:
 
     def test_get_httpx_available(self):
         """Test get_httpx when httpx is available."""
-        with patch('scrappy.utils.imports.safe_import') as mock_safe_import:
+        with patch('scrappy.infrastructure.utils.imports.safe_import') as mock_safe_import:
             mock_module = Mock()
             mock_safe_import.return_value = (mock_module, True)
 
@@ -301,7 +301,7 @@ class TestPreconfiguredDependencyCheckers:
 
     def test_get_httpx_not_available(self):
         """Test get_httpx when httpx is not available."""
-        with patch('scrappy.utils.imports.safe_import') as mock_safe_import:
+        with patch('scrappy.infrastructure.utils.imports.safe_import') as mock_safe_import:
             mock_safe_import.return_value = (None, False)
 
             module, available = get_httpx()
@@ -311,7 +311,7 @@ class TestPreconfiguredDependencyCheckers:
 
     def test_get_click_available(self):
         """Test get_click when click is available."""
-        with patch('scrappy.utils.imports.safe_import') as mock_safe_import:
+        with patch('scrappy.infrastructure.utils.imports.safe_import') as mock_safe_import:
             mock_module = Mock()
             mock_safe_import.return_value = (mock_module, True)
 
@@ -323,7 +323,7 @@ class TestPreconfiguredDependencyCheckers:
 
     def test_get_click_not_available(self):
         """Test get_click when click is not available."""
-        with patch('scrappy.utils.imports.safe_import') as mock_safe_import:
+        with patch('scrappy.infrastructure.utils.imports.safe_import') as mock_safe_import:
             mock_safe_import.return_value = (None, False)
 
             module, available = get_click()
@@ -375,7 +375,7 @@ class TestImportEdgeCases:
     #
     # def test_import_with_fallback_empty_strings(self):
     #     """Test import_with_fallback with empty strings."""
-    #     with patch('scrappy.utils.imports.setup_src_path'):
+    #     with patch('scrappy.infrastructure.utils.imports.setup_src_path'):
     #         with pytest.raises(ImportError):
     #             import_with_fallback('', '')
     #
@@ -390,7 +390,7 @@ class TestImportEdgeCases:
     #     """Test path setup with complex directory structure."""
     #     mock_file_path = Path("/very/deep/nested/structure/src/utils/imports.py")
     #
-    #     with patch('scrappy.utils.imports.Path') as mock_path_class:
+    #     with patch('scrappy.infrastructure.utils.imports.Path') as mock_path_class:
     #         mock_path_class.return_value = mock_file_path
     #
     #         # Mock the parent chain

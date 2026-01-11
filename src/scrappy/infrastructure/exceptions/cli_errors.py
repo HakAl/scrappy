@@ -255,3 +255,41 @@ class UserInputError(NonRetryableError):
         )
         self.input_value = input_value
         self.expected_format = expected_format
+
+
+class CancelledException(NonRetryableError):
+    """User-initiated cancellation of an operation.
+
+    Raised when the user cancels an operation via escape key or interrupt.
+    Not retryable by design - cancellation is intentional.
+
+    Attributes:
+        force: True if user requested immediate termination (2nd+ escape)
+    """
+
+    default_category = ErrorCategory.CANCELLATION
+    default_severity = ErrorSeverity.INFO
+    default_recovery_action = RecoveryAction.ABORT
+
+    def __init__(
+        self,
+        message: str = "Operation cancelled by user",
+        force: bool = False,
+        **kwargs
+    ):
+        """Initialize cancellation exception.
+
+        Args:
+            message: Cancellation message
+            force: True if force cancellation (2nd+ escape press)
+            **kwargs: Additional BaseError arguments
+        """
+        context = kwargs.pop('context', {})
+        context['force'] = force
+
+        super().__init__(
+            message,
+            context=context,
+            **kwargs
+        )
+        self.force = force

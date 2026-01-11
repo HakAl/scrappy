@@ -154,6 +154,22 @@ Please address this error in your response.
 
         return prompt
 
+    def create_agent_user_prompt(self, task: str, config: AgentPromptConfig) -> str:
+        """Generate agent user prompt with task context.
+
+        Args:
+            task: The specific task to complete
+            config: Agent configuration (used for context)
+
+        Returns:
+            User prompt with task wrapped in XML for injection protection
+        """
+        return f"""<task>
+{task}
+</task>
+
+Please complete this task using the available tools."""
+
     def create_research_system_prompt(self, config: ResearchPromptConfig) -> str:
         """Generate research system prompt - tools depend on subtype.
 

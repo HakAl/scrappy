@@ -48,6 +48,9 @@ htmlcov/
 *.sqlite
 *.sqlite3
 .lancedb/
+.beads/
+.claude/
+.mypy_cache/
 
 # Git
 .git/
@@ -68,4 +71,7 @@ docs/_build/
 .env.local
 *.bak
 *.tmp
-node_modules/
+
+# Node.js
+**/node_modules/
+e2e/.tui-test/

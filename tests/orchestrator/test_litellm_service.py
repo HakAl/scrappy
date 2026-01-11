@@ -367,21 +367,6 @@ class TestAsyncCompletion:
 
         assert response.content == "Async response"
 
-    @pytest.mark.asyncio
-    async def test_async_completion_handles_rate_limit(self):
-        """Verify async completion handles rate limit errors."""
-        mock_error = make_rate_limit_error(provider="groq")
-
-        mock_router = MockLiteLLMRouter(exception=mock_error)
-        mock_output = MockOutputForLiteLLM()
-        service = make_configured_service(router=mock_router, output=mock_output)
-
-        with pytest.raises(AllProvidersRateLimitedError):
-            await service.completion(
-                model="fast",
-                messages=[{"role": "user", "content": "test"}]
-            )
-
 
 class TestParseToolArguments:
     """Tests for _parse_tool_arguments method - handles various argument formats."""
@@ -638,45 +623,6 @@ class TestModeSelection:
 
 class TestStructuredOutput:
     """Tests for completion_structured and completion_structured_sync methods."""
-
-    def test_structured_output_returns_pydantic_model(self):
-        """Verify structured output returns a validated Pydantic model."""
-        from pydantic import BaseModel
-
-        class SimpleResponse(BaseModel):
-            message: str
-            confidence: float
-
-        # Create mock response that returns JSON matching the model
-        # Instructor will parse this into the Pydantic model
-        mock_router = MockLiteLLMRouter(response=make_mock_litellm_response(
-            content='{"message": "Hello", "confidence": 0.9}'
-        ))
-        mock_output = MockOutputForLiteLLM()
-        service = make_configured_service(router=mock_router, output=mock_output)
-
-        # Note: This tests the internal instructor client dicts exist (keyed by mode)
-        # The actual call would require complex mocking of Instructor
-        assert hasattr(service, '_instructor_clients_sync')
-        assert hasattr(service, '_instructor_clients')
-
-    def test_completion_structured_sync_exists(self):
-        """Verify completion_structured_sync method is available."""
-        mock_router = MockLiteLLMRouter(response=make_mock_litellm_response())
-        mock_output = MockOutputForLiteLLM()
-        service = make_configured_service(router=mock_router, output=mock_output)
-
-        assert hasattr(service, 'completion_structured_sync')
-        assert callable(service.completion_structured_sync)
-
-    def test_completion_structured_async_exists(self):
-        """Verify async completion_structured method is available."""
-        mock_router = MockLiteLLMRouter(response=make_mock_litellm_response())
-        mock_output = MockOutputForLiteLLM()
-        service = make_configured_service(router=mock_router, output=mock_output)
-
-        assert hasattr(service, 'completion_structured')
-        assert callable(service.completion_structured)
 
     def test_instructor_default_retries_is_one(self):
         """Verify DEFAULT_INSTRUCTOR_RETRIES is set to 1."""

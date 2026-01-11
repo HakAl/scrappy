@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 # Import will fail until implementation exists
 try:
-    from scrappy.providers.base import ModelType, ModelInfo, LLMProviderBase
+    from scrappy.orchestrator.provider_types import ModelType, ModelInfo, LLMProviderBase
     IMPORTS_AVAILABLE = True
 except ImportError:
     IMPORTS_AVAILABLE = False
@@ -56,7 +56,7 @@ class TestModelInfo:
 
     def test_model_info_creation_full(self):
         """ModelInfo should accept all optional fields."""
-        from scrappy.providers.base import QualityRank, SpeedRank
+        from scrappy.orchestrator.provider_types import QualityRank, SpeedRank
         info = ModelInfo(
             id="gemma2-9b-it",
             model_type=ModelType.INSTRUCT,
@@ -74,7 +74,7 @@ class TestModelInfo:
 
     def test_model_info_defaults(self):
         """ModelInfo should have sensible defaults."""
-        from scrappy.providers.base import QualityRank, SpeedRank
+        from scrappy.orchestrator.provider_types import QualityRank, SpeedRank
         info = ModelInfo(
             id="test",
             model_type=ModelType.CHAT,
@@ -129,7 +129,7 @@ class TestModelTypeDetection:
 
     def test_instruct_takes_precedence_over_code(self):
         """'instruct' should take precedence over 'code' in model name."""
-        from scrappy.providers.base import detect_model_type
+        from scrappy.orchestrator.provider_types import detect_model_type
 
         # codellama with instruct should be CODE (code-specific instruct)
         result = detect_model_type('codellama-7b-instruct')
@@ -142,7 +142,7 @@ class TestModelInfoFromDict:
 
     def test_model_info_from_dict(self):
         """Should be able to create ModelInfo from provider config dict."""
-        from scrappy.providers.base import QualityRank, SpeedRank
+        from scrappy.orchestrator.provider_types import QualityRank, SpeedRank
         config = {
             'type': ModelType.INSTRUCT,
             'rpm': 30,
@@ -166,7 +166,7 @@ class TestModelInfoFromDict:
 
     def test_model_info_from_dict_without_type(self):
         """Should auto-detect type if not provided in config."""
-        from scrappy.providers.base import QualityRank, SpeedRank
+        from scrappy.orchestrator.provider_types import QualityRank, SpeedRank
         config = {
             'rpm': 30,
             'rpd': 14400,
@@ -182,7 +182,7 @@ class TestModelInfoFromDict:
 
     def test_model_info_from_dict_legacy_format(self):
         """Should handle legacy config format without 'type' field."""
-        from scrappy.providers.base import QualityRank, SpeedRank
+        from scrappy.orchestrator.provider_types import QualityRank, SpeedRank
         # Current provider configs don't have 'type'
         config = {
             'rpm': 30, 'rpd': 7000, 'tpm': 20000, 'tpd': 200000,

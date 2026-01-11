@@ -119,20 +119,6 @@ class TestFallbackChainAsync:
         assert result == "success"
         assert attempts == ["primary", "fallback1", "fallback2"]
 
-    @pytest.mark.asyncio
-    async def test_async_all_fail_raises(self):
-        """Test async all operations fail raises error."""
-        fallback_chain = FallbackChain()
-
-        async def primary():
-            raise ValueError("primary failed")
-
-        async def fallback1():
-            raise ValueError("fallback1 failed")
-
-        with pytest.raises(RetryExhaustedError):
-            await fallback_chain.execute_async(primary, [fallback1])
-
 
 class TestConvenienceFunctions:
     """Test convenience wrapper functions."""

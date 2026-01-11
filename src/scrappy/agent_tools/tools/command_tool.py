@@ -18,7 +18,8 @@ if TYPE_CHECKING:
         SubprocessRunnerProtocol,
         OutputParserProtocol,
     )
-    from scrappy.protocols.io import CLIIOProtocol
+    from scrappy.cli.protocols import CLIIOProtocol
+    from scrappy.infrastructure.threading.protocols import CancellationTokenProtocol
 else:
     # Runtime import for type annotation
     from ..protocols import SubprocessRunnerProtocol
@@ -54,6 +55,7 @@ def create_shell_executor(
     max_command_output: int = DEFAULT_MAX_COMMAND_OUTPUT,
     dangerous_commands: Optional[list[str]] = None,
     runner: Optional["SubprocessRunnerProtocol"] = None,
+    cancellation_token: Optional["CancellationTokenProtocol"] = None,
 ) -> "ShellCommandExecutor":
     """
     Factory function for creating ShellCommandExecutor with default dependencies.
@@ -66,6 +68,7 @@ def create_shell_executor(
         max_command_output: Maximum output size to capture in bytes
         dangerous_commands: List of dangerous command patterns to block
         runner: Optional subprocess runner (default: SubprocessRunner)
+        cancellation_token: Optional token for user cancellation support
 
     Returns:
         Fully configured ShellCommandExecutor instance
@@ -77,7 +80,7 @@ def create_shell_executor(
     # Create other components
     advisor = CommandAdvisor()
     if runner is None:
-        runner = SubprocessRunner()
+        runner = SubprocessRunner(cancellation_token=cancellation_token)
     parser = OutputParser()
 
     # Wire everything together
@@ -565,11 +568,16 @@ class CommandTool(ToolBase):
         self._executor = executor  # May be None, created lazily per project
         self._sandboxed_runners: dict[str, SandboxedSubprocessRunner] = {}  # Cache per project
 
-    def _get_executor_for_project(self, project_dir: str) -> tuple[ShellCommandExecutor, str]:
+    def _get_executor_for_project(
+        self,
+        project_dir: str,
+        cancellation_token: Optional["CancellationTokenProtocol"] = None,
+    ) -> tuple[ShellCommandExecutor, str]:
         """Get or create executor for a project directory.
 
         Args:
             project_dir: Project directory path
+            cancellation_token: Optional token for user cancellation support
 
         Returns:
             Tuple of (executor, executor_type) where executor_type is 'docker' or 'host'
@@ -584,9 +592,12 @@ class CommandTool(ToolBase):
                 command_timeout=self._timeout,
                 max_command_output=self._max_output,
                 dangerous_commands=self._dangerous_patterns,
+                cancellation_token=cancellation_token,
             ), "host"
 
         # Get or create sandboxed runner for this project
+        # Note: Sandboxed runners don't support cancellation token yet
+        # (they use Docker containers with their own lifecycle)
         if project_dir not in self._sandboxed_runners:
             self._sandboxed_runners[project_dir] = SandboxedSubprocessRunner(
                 project_dir=project_dir,
@@ -600,6 +611,7 @@ class CommandTool(ToolBase):
             max_command_output=self._max_output,
             dangerous_commands=self._dangerous_patterns,
             runner=runner,
+            # Note: cancellation_token not passed to sandboxed runner
         )
         return executor, runner.executor_type
 
@@ -653,7 +665,11 @@ class CommandTool(ToolBase):
 
         try:
             # Get executor for this project (may use Docker sandbox)
-            executor, executor_type = self._get_executor_for_project(str(context.project_root))
+            # Pass cancellation token for responsive user interrupts
+            executor, executor_type = self._get_executor_for_project(
+                str(context.project_root),
+                cancellation_token=context.cancellation_token,
+            )
 
             # Execute command - all security checks, platform fixes, and
             # validation are handled by the executor and its components

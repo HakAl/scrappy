@@ -21,6 +21,7 @@ from scrappy.graph.protocols import ToolContextFactory, ToolContextProtocol, Wor
 from scrappy.graph.run_context import AgentRunContextProtocol
 from scrappy.graph.state import AgentState, Message, ToolCall, ToolResult
 from scrappy.graph.tools import ToolAdapterProtocol
+from scrappy.infrastructure.exceptions import CancelledException
 from scrappy.infrastructure.logging import get_logger
 
 
@@ -366,6 +367,16 @@ def execute_node(
     Returns:
         Updated AgentState with tool results appended to messages
     """
+    # Check cancellation before starting any execution
+    if run_context is not None and run_context.is_cancelled():
+        logger.info("Execute node cancelled before start")
+        return state.model_copy(
+            update={
+                "done": True,
+                "last_error": "Cancelled by user",
+            }
+        )
+
     # Extract tool calls from last message
     tool_calls = extract_tool_calls(state)
 
@@ -402,6 +413,15 @@ def execute_node(
     # Wrap in try/except to prevent graph crash on tool adapter failures
     try:
         raw_results = tool_adapter.execute(tool_calls, context)
+    except CancelledException:
+        # User cancelled during tool execution
+        logger.info("Tool execution cancelled by user")
+        return state.model_copy(
+            update={
+                "done": True,
+                "last_error": "Cancelled by user",
+            }
+        )
     except Exception as e:
         # Tool adapter crashed - increment error count and set last_error
         # so routing goes to error node for recovery
@@ -421,6 +441,18 @@ def execute_node(
     tool_errors: list[str] = []
 
     for tool_call, raw_result in zip(tool_calls, raw_results):
+        # Check cancellation between result processing
+        if run_context is not None and run_context.is_cancelled():
+            logger.info("Tool result processing cancelled - returning partial results")
+            return state.model_copy(
+                update={
+                    "messages": new_messages,
+                    "files_changed": files_changed,
+                    "done": True,
+                    "last_error": "Cancelled by user",
+                }
+            )
+
         # Process result (truncation, binary guard)
         processed_result = process_tool_result(raw_result)
 

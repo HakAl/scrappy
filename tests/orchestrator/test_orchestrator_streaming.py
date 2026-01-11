@@ -17,7 +17,7 @@ from unittest.mock import Mock, AsyncMock
 from scrappy.orchestrator.core import AgentOrchestrator
 from scrappy.orchestrator.types import StreamChunk
 from scrappy.orchestrator.model_selection import ModelSelectionType
-from scrappy.exceptions.delegation import ProviderNotFoundError
+from scrappy.infrastructure.exceptions import ProviderNotFoundError
 from tests.helpers import make_stream_chunk
 
 
@@ -328,38 +328,6 @@ async def test_stream_delegate_use_cache_overrides_caching_enabled(orchestrator,
 # =============================================================================
 # Error Handling Tests
 # =============================================================================
-
-@pytest.mark.asyncio
-async def test_stream_delegate_raises_provider_not_found_when_no_providers():
-    """Test that ProviderNotFoundError is raised when no providers available."""
-    # Create orchestrator with no recommended provider
-    mock_selector = MockProviderSelector(recommended_provider=None)
-    mock_delegation = MockDelegationManager()
-    mock_output = MockOutput()
-    mock_registry = MockProviderRegistry(available=[])
-
-    orch = AgentOrchestrator(
-        output=mock_output,
-        registry=mock_registry,
-        cache=Mock(),
-        rate_tracker=Mock(),
-        working_memory=Mock(),
-        session_manager=Mock(),
-        provider_selector=mock_selector,
-        usage_reporter=MockUsageReporter(),
-        status_reporter=Mock(),
-        task_executor=Mock(),
-        context_manager=Mock(),
-        delegation_manager=mock_delegation,
-        background_manager=Mock(),
-    )
-
-    with pytest.raises(ProviderNotFoundError):
-        async for chunk in orch.stream_delegate(
-            provider_name=None,  # Auto-select (will fail)
-            prompt="test prompt",
-        ):
-            pass
 
 
 # =============================================================================

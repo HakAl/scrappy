@@ -7,10 +7,7 @@ Provides planning, reasoning, and synthesis capabilities using LLM providers.
 from typing import Optional, Callable, TYPE_CHECKING
 import json
 
-try:
-    from ..providers import LLMResponse
-except ImportError:
-    from providers import LLMResponse
+from .provider_types import LLMResponse
 
 if TYPE_CHECKING:
     from .protocols import LLMServiceProtocol

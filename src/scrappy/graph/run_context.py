@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Protocol, runtime_checkable
 
 from scrappy.infrastructure.logging import get_logger
+from scrappy.infrastructure.threading.protocols import CancellationTokenProtocol
 
 logger = get_logger(__name__)
 
@@ -104,6 +105,21 @@ class AgentRunContextProtocol(Protocol):
         """Set callback for status updates."""
         ...
 
+    # === Cancellation ===
+
+    @property
+    def cancellation_token(self) -> Optional[CancellationTokenProtocol]:
+        """Get cancellation token for this run."""
+        ...
+
+    def is_cancelled(self) -> bool:
+        """Check if cancellation has been requested."""
+        ...
+
+    def is_force_cancelled(self) -> bool:
+        """Check if force cancellation requested (2nd+ escape)."""
+        ...
+
     # === Lifecycle ===
 
     def register_cancel_callback(self, callback: Callable[[], None]) -> None:
@@ -142,6 +158,9 @@ class AgentRunContext:
 
     # === Status Updates ===
     _status_callback: Optional[Callable[[str], None]] = None
+
+    # === Cancellation ===
+    _cancellation_token: Optional[CancellationTokenProtocol] = None
 
     # === Lifecycle ===
     _cancel_callbacks: List[Callable[[], None]] = field(default_factory=list)
@@ -247,6 +266,40 @@ class AgentRunContext:
                 self._status_callback(message)
             except Exception as e:
                 logger.warning(f"Status callback failed: {e}")
+
+    # === Cancellation Methods ===
+
+    @property
+    def cancellation_token(self) -> Optional[CancellationTokenProtocol]:
+        """Get cancellation token for this run."""
+        return self._cancellation_token
+
+    @cancellation_token.setter
+    def cancellation_token(self, token: Optional[CancellationTokenProtocol]) -> None:
+        """Set cancellation token for this run."""
+        self._cancellation_token = token
+
+    def is_cancelled(self) -> bool:
+        """Check if cancellation has been requested.
+
+        Returns:
+            True if cancel() has been called on the token
+        """
+        return (
+            self._cancellation_token is not None
+            and self._cancellation_token.is_cancelled
+        )
+
+    def is_force_cancelled(self) -> bool:
+        """Check if force cancellation requested (2nd+ escape).
+
+        Returns:
+            True if cancel() has been called multiple times on the token
+        """
+        return (
+            self._cancellation_token is not None
+            and self._cancellation_token.is_force_cancelled
+        )
 
     # === Lifecycle Methods ===
 

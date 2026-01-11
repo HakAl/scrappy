@@ -12,67 +12,44 @@ After LiteLLM integration (Phase 3):
 - provider_name is now a model GROUP name ("fast", "chat", or "instruct")
 """
 
-from typing import Optional, AsyncIterator, Any, Type, TypeVar
-from datetime import datetime
+from __future__ import annotations
+
 import asyncio
+from datetime import datetime
+from typing import Any, AsyncIterator, Optional, Type, TypeVar, TYPE_CHECKING
 
 from pydantic import BaseModel
 
+from ..infrastructure.exceptions.provider_errors import AllProvidersRateLimitedError
+from .protocols import (
+    INTERNAL_KWARGS,
+    BatchSchedulerProtocol,
+    CacheProtocol,
+    LLMRequest,
+    PromptAugmenterProtocol,
+)
+from .constants import (
+    DEFAULT_MAX_CONCURRENT,
+    DEFAULT_MAX_RETRIES,
+    DEFAULT_MAX_TOKENS,
+    DEFAULT_PROVIDER,
+    DEFAULT_TEMPERATURE,
+)
+from .model_selection import MODEL_GROUPS
+from .protocols import LLMServiceProtocol, StreamingCompletionProtocol, StructuredOutputProtocol
+from .provider_types import LLMResponse
+from .rate_limiting.protocols import (
+    EnforcementAction,
+    EnforcementPolicyProtocol,
+    UserNotifierProtocol,
+)
+from .types import StreamChunk
+
+if TYPE_CHECKING:
+    from ..cli.protocols import BaseOutputProtocol as OutputInterfaceProtocol
+
 # Type variable for generic structured output responses
 T = TypeVar("T", bound=BaseModel)
-
-try:
-    from ..providers import LLMResponse
-    from ..protocols.delegation import (
-        LLMRequest,
-        CacheProtocol,
-        OutputInterfaceProtocol,
-        PromptAugmenterProtocol,
-        BatchSchedulerProtocol,
-        INTERNAL_KWARGS,
-    )
-    from ..orchestrator.protocols import LLMServiceProtocol, StreamingCompletionProtocol, StructuredOutputProtocol
-    from ..orchestrator.types import StreamChunk
-    from ..orchestrator.model_selection import MODEL_GROUPS
-    from ..orchestrator.rate_limiting.protocols import (
-        EnforcementAction,
-        EnforcementDecision,
-        EnforcementPolicyProtocol,
-        UserNotifierProtocol,
-    )
-    from ..config import (
-        DEFAULT_MAX_TOKENS,
-        DEFAULT_TEMPERATURE,
-        DEFAULT_MAX_RETRIES,
-        DEFAULT_PROVIDER,
-        DEFAULT_MAX_CONCURRENT,
-    )
-    from ..infrastructure.exceptions.provider_errors import AllProvidersRateLimitedError
-except ImportError:
-    from providers import LLMResponse
-    from protocols.delegation import (
-        LLMRequest,
-        CacheProtocol,
-        OutputInterfaceProtocol,
-        PromptAugmenterProtocol,
-        BatchSchedulerProtocol,
-    )
-    from orchestrator.protocols import LLMServiceProtocol, StreamingCompletionProtocol, StructuredOutputProtocol
-    from orchestrator.types import StreamChunk
-    from orchestrator.model_selection import MODEL_GROUPS
-    from orchestrator.rate_limiting.protocols import (
-        EnforcementAction,
-        EnforcementPolicyProtocol,
-        UserNotifierProtocol,
-    )
-    from config import (
-        DEFAULT_MAX_TOKENS,
-        DEFAULT_TEMPERATURE,
-        DEFAULT_MAX_RETRIES,
-        DEFAULT_PROVIDER,
-        DEFAULT_MAX_CONCURRENT,
-    )
-    from infrastructure.exceptions.provider_errors import AllProvidersRateLimitedError
 
 
 # Map legacy provider names to model groups
@@ -951,7 +928,7 @@ class DelegationManager:
             AllProvidersRateLimitedError: When all providers exhausted
 
         Example:
-            from scrappy.llm.models import TaskClassification
+            from scrappy.orchestrator.models import TaskClassification
 
             result = await delegation_manager.delegate_structured(
                 provider_name="fast",

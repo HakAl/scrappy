@@ -155,7 +155,12 @@ class InputCaptureManager:
         self._bridge.provide_result(self._id, result)
 
     def cancel(self) -> None:
-        """Cancel current capture (escape/ctrl+c)."""
+        """Cancel current capture (escape/ctrl+c).
+
+        Provides denial result to bridge and resets capture state.
+        Bug fix scrappy-z719: Must reset _mode so is_capturing returns False,
+        otherwise arrow key history navigation is blocked after cancel.
+        """
         if self._id is None:
             logger.warning("cancel called with no active capture")
             return
@@ -168,3 +173,9 @@ class InputCaptureManager:
             result = self._default
 
         self._bridge.provide_result(self._id, result)
+
+        # Reset state so is_capturing returns False (fixes scrappy-z719)
+        self._mode = False
+        self._id = None
+        self._type = None
+        self._default = ""

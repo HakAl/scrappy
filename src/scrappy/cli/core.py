@@ -91,7 +91,7 @@ class CLI:
 
             # Check staleness for LLM context injection (helps LLM know context may be outdated)
             if loaded_history:
-                from scrappy.persistence import check_session_staleness, get_stale_context_message
+                from scrappy.infrastructure.persistence import check_session_staleness, get_stale_context_message
                 last_time = conversation_store.get_last_message_time()
                 if check_session_staleness(last_time):
                     self._session_is_stale = True

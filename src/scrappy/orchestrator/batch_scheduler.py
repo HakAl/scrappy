@@ -14,28 +14,17 @@ After LiteLLM integration (Phase 3):
 import asyncio
 from typing import Any
 
-try:
-    from ..protocols.delegation import (
-        BatchSchedulerProtocol,
-        LLMRequest,
-        OutputInterfaceProtocol,
-    )
-    from ..orchestrator.protocols import LLMServiceProtocol
-    from ..orchestrator.model_selection import MODEL_GROUPS
-    from ..config import (
-        DEFAULT_MAX_CONCURRENT,
-        DEFAULT_MAX_RETRIES,
-    )
-except ImportError:
-    from protocols.delegation import (
-        LLMRequest,
-        OutputInterfaceProtocol,
-    )
-    from orchestrator.protocols import LLMServiceProtocol
-    from orchestrator.model_selection import MODEL_GROUPS
-    from config import (
-        DEFAULT_MAX_CONCURRENT,
-    )
+from .protocols import (
+    BatchSchedulerProtocol,
+    LLMRequest,
+    LLMServiceProtocol,
+)
+from ..cli.protocols import BaseOutputProtocol as OutputInterfaceProtocol
+from .model_selection import MODEL_GROUPS
+from .constants import (
+    DEFAULT_MAX_CONCURRENT,
+    DEFAULT_MAX_RETRIES,
+)
 
 
 # Map legacy provider names to model groups

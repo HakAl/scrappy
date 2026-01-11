@@ -7,12 +7,8 @@ specific concerns like delegation, task execution, background tasks, and reporti
 
 from typing import Protocol, Dict, Any, List, Optional, Coroutine, runtime_checkable
 
-from ..providers.base import LLMResponse
-
-try:
-    from ..context import CodebaseContextProtocol
-except ImportError:
-    from context import CodebaseContextProtocol
+from .provider_types import LLMResponse
+from ..context import CodebaseContextProtocol
 
 
 @runtime_checkable

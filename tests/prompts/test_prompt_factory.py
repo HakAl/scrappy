@@ -1,6 +1,5 @@
 """Tests for PromptFactory - stateless prompt generation."""
 
-import pytest
 
 from scrappy.prompts.factory import PromptFactory
 from scrappy.prompts.protocols import (
@@ -53,18 +52,22 @@ class TestAgentMode:
         factory = PromptFactory()
         config = AgentPromptConfig(
             platform=Platform.UNIX,
-            tool_descriptions="read_file: Read a file",
+            tool_names=("read_file",),
+            original_task="Read a file",
+            working_dir="/test",
         )
         prompt = factory.create_agent_system_prompt(config)
 
         assert "read_file" in prompt
-        assert "json" in prompt.lower()
+        assert "Tool Usage Rules" in prompt
 
     def test_agent_system_prompt_includes_platform_windows(self):
         factory = PromptFactory()
         config = AgentPromptConfig(
             platform=Platform.WINDOWS,
-            tool_descriptions="tools here",
+            tool_names=("read_file",),
+            original_task="Test task",
+            working_dir="C:\\test",
         )
         prompt = factory.create_agent_system_prompt(config)
 
@@ -75,127 +78,135 @@ class TestAgentMode:
         factory = PromptFactory()
         config = AgentPromptConfig(
             platform=Platform.UNIX,
-            tool_descriptions="tools here",
+            tool_names=("read_file",),
+            original_task="Test task",
+            working_dir="/test",
         )
         prompt = factory.create_agent_system_prompt(config)
 
         assert "Unix" in prompt or "Linux" in prompt
 
-    def test_agent_system_prompt_includes_project_type(self):
+    def test_agent_system_prompt_includes_original_task(self):
         factory = PromptFactory()
         config = AgentPromptConfig(
             platform=Platform.UNIX,
-            tool_descriptions="tools here",
-            project_type="python",
+            tool_names=("read_file",),
+            original_task="Implement authentication",
+            working_dir="/test",
         )
         prompt = factory.create_agent_system_prompt(config)
 
-        assert "Python" in prompt
-        assert "pip" in prompt
+        assert "Implement authentication" in prompt
 
-    def test_agent_system_prompt_includes_codebase_structure(self):
-        factory = PromptFactory()
-        structure = "src/\n  main.py\n  utils/"
-        config = AgentPromptConfig(
-            platform=Platform.UNIX,
-            tool_descriptions="tools here",
-            codebase_structure=structure,
-        )
-        prompt = factory.create_agent_system_prompt(config)
-
-        assert "Codebase Structure" in prompt
-        assert "main.py" in prompt
-
-    def test_agent_system_prompt_includes_strategy_section(self):
+    def test_agent_system_prompt_includes_working_dir(self):
         factory = PromptFactory()
         config = AgentPromptConfig(
             platform=Platform.UNIX,
-            tool_descriptions="tools here",
+            tool_names=("read_file",),
+            original_task="Test task",
+            working_dir="/my/project/path",
         )
         prompt = factory.create_agent_system_prompt(config)
 
-        assert "Strategy" in prompt
-        assert "write_file" in prompt.lower()
+        assert "/my/project/path" in prompt
+
+    def test_agent_system_prompt_includes_tool_usage_rules(self):
+        factory = PromptFactory()
+        config = AgentPromptConfig(
+            platform=Platform.UNIX,
+            tool_names=("read_file",),
+            original_task="Test task",
+            working_dir="/test",
+        )
+        prompt = factory.create_agent_system_prompt(config)
+
+        assert "Tool Usage Rules" in prompt
 
     def test_agent_system_prompt_includes_efficiency_section(self):
         factory = PromptFactory()
         config = AgentPromptConfig(
             platform=Platform.UNIX,
-            tool_descriptions="tools here",
+            tool_names=("read_file",),
+            original_task="Test task",
+            working_dir="/test",
         )
         prompt = factory.create_agent_system_prompt(config)
 
         assert "Efficiency" in prompt
         assert "redundant" in prompt.lower()
 
-    def test_agent_system_prompt_includes_completion_section(self):
+    def test_agent_system_prompt_includes_quality_section(self):
         factory = PromptFactory()
         config = AgentPromptConfig(
             platform=Platform.UNIX,
-            tool_descriptions="tools here",
+            tool_names=("read_file",),
+            original_task="Test task",
+            working_dir="/test",
         )
         prompt = factory.create_agent_system_prompt(config)
 
-        assert "Completion" in prompt
-
-    def test_agent_system_prompt_includes_self_review_section(self):
-        factory = PromptFactory()
-        config = AgentPromptConfig(
-            platform=Platform.UNIX,
-            tool_descriptions="tools here",
-        )
-        prompt = factory.create_agent_system_prompt(config)
-
-        assert "Self-Review" in prompt
-        assert "zen_lint" in prompt
-
-    def test_self_review_comes_before_completion(self):
-        """Self-review section appears before completion section in prompt."""
-        factory = PromptFactory()
-        config = AgentPromptConfig(
-            platform=Platform.UNIX,
-            tool_descriptions="tools here",
-        )
-        prompt = factory.create_agent_system_prompt(config)
-
-        self_review_pos = prompt.find("## Self-Review")
-        completion_pos = prompt.find("## Completion")
-
-        assert self_review_pos != -1, "Self-Review section not found"
-        assert completion_pos != -1, "Completion section not found"
-        assert self_review_pos < completion_pos, "Self-Review must come before Completion"
+        assert "Quality" in prompt
 
     def test_agent_system_prompt_includes_safety_section(self):
         factory = PromptFactory()
         config = AgentPromptConfig(
             platform=Platform.UNIX,
-            tool_descriptions="tools here",
+            tool_names=("read_file",),
+            original_task="Test task",
+            working_dir="/test",
         )
         prompt = factory.create_agent_system_prompt(config)
 
         assert "Safety" in prompt
 
-    def test_agent_native_tools_skips_json_format(self):
+    def test_agent_system_prompt_includes_security_section(self):
         factory = PromptFactory()
         config = AgentPromptConfig(
             platform=Platform.UNIX,
-            tool_descriptions="read_file: Read a file",
-            use_native_tools=True,
+            tool_names=("read_file",),
+            original_task="Test task",
+            working_dir="/test",
         )
         prompt = factory.create_agent_system_prompt(config)
 
-        # Should still have the tools
-        assert "read_file" in prompt
-        # But should not have JSON format instructions
-        assert '{"tool":' not in prompt
-        # The word "json" might still appear in Safety section warning, so we check for the specific format section
-        assert "## Tool Format" not in prompt
+        assert "Security" in prompt
+
+    def test_agent_system_prompt_includes_error_context(self):
+        factory = PromptFactory()
+        config = AgentPromptConfig(
+            platform=Platform.UNIX,
+            tool_names=("read_file",),
+            original_task="Test task",
+            working_dir="/test",
+            last_error="File not found: missing.py",
+        )
+        prompt = factory.create_agent_system_prompt(config)
+
+        assert "File not found: missing.py" in prompt
+        assert "Previous Error" in prompt
+
+    def test_agent_system_prompt_includes_files_changed(self):
+        factory = PromptFactory()
+        config = AgentPromptConfig(
+            platform=Platform.UNIX,
+            tool_names=("read_file",),
+            original_task="Test task",
+            working_dir="/test",
+            files_changed=("src/main.py", "tests/test_main.py"),
+        )
+        prompt = factory.create_agent_system_prompt(config)
+
+        assert "src/main.py" in prompt
+        assert "tests/test_main.py" in prompt
+        assert "Files Modified" in prompt
 
     def test_agent_user_prompt_includes_task(self):
         factory = PromptFactory()
         config = AgentPromptConfig(
             platform=Platform.UNIX,
-            tool_descriptions="tools here",
+            tool_names=("read_file",),
+            original_task="Original request",
+            working_dir="/test",
         )
         task = "Implement user authentication"
         prompt = factory.create_agent_user_prompt(task, config)
@@ -330,7 +341,9 @@ class TestFactoryIsStateless:
 
         config = AgentPromptConfig(
             platform=Platform.UNIX,
-            tool_descriptions="read_file: Read a file",
+            tool_names=("read_file",),
+            original_task="Read a file",
+            working_dir="/test",
         )
 
         prompt1 = factory.create_agent_system_prompt(config)
@@ -346,7 +359,9 @@ class TestFactoryIsStateless:
         agent_prompt = factory.create_agent_system_prompt(
             AgentPromptConfig(
                 platform=Platform.UNIX,
-                tool_descriptions="tools",
+                tool_names=("read_file",),
+                original_task="Test task",
+                working_dir="/test",
             )
         )
         research_prompt = factory.create_research_system_prompt(
@@ -358,7 +373,7 @@ class TestFactoryIsStateless:
         assert chat_prompt != research_prompt
         assert agent_prompt != research_prompt
 
-        # Agent should be most complex (has strategy, efficiency, etc.)
+        # Agent should be most complex (has efficiency, safety, etc.)
         assert len(agent_prompt) > len(chat_prompt)
         assert len(agent_prompt) > len(research_prompt)
 
@@ -404,29 +419,33 @@ class TestDegradedMode:
 class TestEdgeCases:
     """Tests for edge cases and error conditions."""
 
-    def test_empty_tool_descriptions_still_works(self):
+    def test_empty_tool_names_still_works(self):
         factory = PromptFactory()
         config = AgentPromptConfig(
             platform=Platform.UNIX,
-            tool_descriptions="",
+            tool_names=(),
+            original_task="Test task",
+            working_dir="/test",
         )
         prompt = factory.create_agent_system_prompt(config)
 
-        # Should still have structure even with empty tools
-        assert "Strategy" in prompt
+        # Should still have structure even with no tools
         assert "Safety" in prompt
+        assert "Efficiency" in prompt
 
-    def test_none_project_type_handled_gracefully(self):
+    def test_working_memory_context_included(self):
         factory = PromptFactory()
         config = AgentPromptConfig(
             platform=Platform.UNIX,
-            tool_descriptions="tools",
-            project_type=None,
+            tool_names=("read_file",),
+            original_task="Test task",
+            working_dir="/test",
+            working_memory_context="Previous context from session",
         )
         prompt = factory.create_agent_system_prompt(config)
 
-        # Should work without crashing
-        assert "Strategy" in prompt
+        # Should work without crashing and include context
+        assert "Previous context from session" in prompt
 
     def test_empty_extracted_files_handled_gracefully(self):
         factory = PromptFactory()

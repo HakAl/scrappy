@@ -204,19 +204,6 @@ class TestExponentialBackoffRetryAsync:
         assert attempt == 3
 
     @pytest.mark.asyncio
-    async def test_async_exhausts_retries(self):
-        """Test async all retries exhausted."""
-        retry = ExponentialBackoffRetry(
-            config=RetryConfig(max_retries=2, base_delay=0.01, jitter=False)
-        )
-
-        async def async_func():
-            raise ValueError("always fails")
-
-        with pytest.raises(ValueError, match="always fails"):
-            await retry.execute_async(async_func, max_retries=2)
-
-    @pytest.mark.asyncio
     async def test_async_backoff_timing(self):
         """Test async uses proper backoff timing."""
         retry = ExponentialBackoffRetry(

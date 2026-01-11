@@ -9,7 +9,7 @@ from .protocols import (
     CalculatorProtocol,
     RecommenderProtocol,
 )
-from scrappy.providers.base import ProviderLimits
+from scrappy.orchestrator.provider_types import ProviderLimits
 from ..config import OrchestratorConfig
 
 

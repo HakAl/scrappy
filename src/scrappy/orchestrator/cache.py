@@ -15,16 +15,8 @@ from .output import BaseOutputProtocol
 if TYPE_CHECKING:
     from ..infrastructure.persistence import JSONPersistence
 
-try:
-    from ..providers import LLMResponse
-    from ..infrastructure.persistence import JSONPersistence
-except ImportError:
-    # Fallback for direct execution
-    import sys
-    from pathlib import Path
-    sys.path.insert(0, str(Path(__file__).parent.parent))
-    from providers import LLMResponse
-    from infrastructure.persistence import JSONPersistence
+from .provider_types import LLMResponse
+from ..infrastructure.persistence import JSONPersistence
 
 
 class ResponseCache:

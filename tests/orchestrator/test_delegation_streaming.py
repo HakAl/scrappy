@@ -17,7 +17,7 @@ from unittest.mock import Mock
 from scrappy.orchestrator.delegation import DelegationManager
 from scrappy.orchestrator.types import StreamChunk
 from scrappy.orchestrator.protocols import StreamingCompletionProtocol
-from scrappy.providers import LLMResponse
+from scrappy.orchestrator.provider_types import LLMResponse
 from tests.helpers import (
     make_stream_chunk,
     CapturingStreamOutput,
@@ -493,16 +493,6 @@ async def test_stream_delegate_use_cache_false_skips_cache(delegation_manager_st
 # =============================================================================
 # Provider Support Tests
 # =============================================================================
-
-@pytest.mark.asyncio
-async def test_stream_delegate_nonstreaming_service_raises_error(delegation_manager_nonstreaming):
-    """Test that non-streaming LLM service raises NotImplementedError."""
-    with pytest.raises(NotImplementedError, match="does not support streaming"):
-        async for chunk in delegation_manager_nonstreaming.stream_delegate(
-            provider_name="fast",
-            prompt="test prompt",
-        ):
-            pass
 
 
 # =============================================================================

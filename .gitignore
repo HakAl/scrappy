@@ -53,6 +53,8 @@ Thumbs.db
 .pytest_tmp/
 .coverage
 htmlcov/
+coverage.json
+.audit/
 
 # Scrappy data directory
 .scrappy/
@@ -69,3 +71,5 @@ nul
 
 /.zen
 .team
+
+.docs

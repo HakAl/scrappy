@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 from scrappy.orchestrator.litellm_service import LiteLLMService
 from scrappy.orchestrator.litellm_config import create_litellm_router
 from scrappy.orchestrator.types import StreamChunk, ToolCallFragment
-from scrappy.providers.base import LLMResponse, ToolCall
+from scrappy.orchestrator.provider_types import LLMResponse, ToolCall
 from tests.helpers import MockOutputForLiteLLM, MockApiKeyService
 
 # Load keys for recording cassettes

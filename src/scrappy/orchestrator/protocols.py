@@ -3,17 +3,127 @@ Protocols for orchestrator module.
 
 Defines abstract interfaces (Protocols) for orchestrator implementations,
 enabling loose coupling and better testability throughout the codebase.
+
+This is the canonical location for all orchestrator-related protocols including:
+- LLM request/response types (LLMRequest)
+- Delegation protocols (PromptAugmenterProtocol, BatchSchedulerProtocol)
+- Provider management (ProviderRegistryProtocol, ProviderSelectorProtocol)
+- Caching and rate limiting (CacheProtocol, RateLimitTrackerProtocol)
 """
 
+from dataclasses import dataclass
 from typing import Protocol, Optional, Dict, Any, List, runtime_checkable, AsyncIterator, Type, TypeVar
 
 from pydantic import BaseModel
 
-from ..providers.base import LLMResponse, LLMProviderBase, ProviderLimits
+from .provider_types import LLMResponse, LLMProviderBase, ProviderLimits
 from .types import StreamChunk
 
 # Type variable for generic structured output responses
 T = TypeVar("T", bound=BaseModel)
+
+
+# =============================================================================
+# Request Types (from protocols/delegation.py)
+# =============================================================================
+
+# Internal kwargs that should NOT be passed to provider APIs
+# These are orchestration metadata, not provider parameters
+INTERNAL_KWARGS = frozenset({
+    'task_type',  # Internal hint for orchestration (e.g., 'planning', 'execution')
+    'selection_type',  # ModelSelectionType used for provider selection (for fallback)
+    'min_context',  # Minimum context length required (for fallback filtering)
+})
+
+
+@dataclass(frozen=True)
+class LLMRequest:
+    """
+    Value object representing a request to an LLM provider.
+
+    Immutable to ensure request integrity throughout the delegation pipeline.
+    """
+    prompt: str
+    provider: Optional[str] = None
+    model: Optional[str] = None
+    system_prompt: Optional[str] = None
+    max_tokens: int = 1000
+    temperature: float = 0.7
+    use_context: Optional[bool] = None
+    use_cache: Optional[bool] = None
+    intent_classification: Optional[dict] = None
+    auto_fallback: bool = True
+    selection_type: Optional[str] = None
+    min_context: int = 0
+    kwargs: dict = None
+
+    def __post_init__(self):
+        """Validate request parameters and filter internal kwargs."""
+        if self.kwargs is None:
+            object.__setattr__(self, 'kwargs', {})
+        else:
+            filtered_kwargs = {
+                k: v for k, v in self.kwargs.items()
+                if k not in INTERNAL_KWARGS
+            }
+            object.__setattr__(self, 'kwargs', filtered_kwargs)
+
+        if not self.prompt or not self.prompt.strip():
+            raise ValueError("prompt cannot be empty")
+        if not 0.0 <= self.temperature <= 2.0:
+            raise ValueError(f"temperature must be 0.0-2.0, got {self.temperature}")
+        if self.max_tokens <= 0:
+            raise ValueError(f"max_tokens must be positive, got {self.max_tokens}")
+
+
+# =============================================================================
+# Delegation Protocols (from protocols/delegation.py)
+# =============================================================================
+
+class PromptAugmenterProtocol(Protocol):
+    """
+    Augments prompts with contextual information.
+
+    Responsibilities:
+    - Add codebase context to prompts
+    - Add working memory/recent interactions
+    - Manage context window constraints
+    """
+
+    def augment(
+        self,
+        prompt: str,
+        use_context: bool = True,
+    ) -> str:
+        """Augment a prompt with contextual information."""
+        ...
+
+
+class BatchSchedulerProtocol(Protocol):
+    """
+    Schedules and executes parallel batch requests.
+
+    Responsibilities:
+    - Execute multiple requests in parallel
+    - Manage concurrency limits
+    - Coordinate multi-provider queries
+    """
+
+    async def execute_batch(
+        self,
+        requests: list[LLMRequest],
+        max_concurrent: int = 5,
+    ) -> list[tuple[Any, dict]]:
+        """Execute multiple requests in parallel."""
+        ...
+
+    async def execute_multi_provider(
+        self,
+        request: LLMRequest,
+        providers: list[str],
+    ) -> dict[str, tuple[Any, dict]]:
+        """Execute same request across multiple providers in parallel."""
+        ...
 
 
 @runtime_checkable

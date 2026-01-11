@@ -9,7 +9,7 @@ Tests the foundation for the Heads-Up Display (HUD) system:
 import pytest
 from pathlib import Path
 
-from scrappy.protocols.tasks import (
+from scrappy.cli.protocols import (
     Task,
     TaskStatus,
     TaskPriority,
@@ -172,13 +172,7 @@ class TestWorkingSet:
 
         recent = ws.get_recent()
         assert len(recent) == 1
-        assert recent[0].path == "other.py"
-
-    @pytest.mark.unit
-    def test_remove_deleted_nonexistent_is_safe(self):
-        """remove_deleted on nonexistent file should not error."""
-        ws = WorkingSet()
-        ws.remove_deleted("nonexistent.py")  # Should not raise
+        assert recent[0].path == "other.py"  # Should not raise
 
 
 class TestFileAccess:

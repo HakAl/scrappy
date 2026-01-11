@@ -179,8 +179,25 @@ def _wrap_think_node(
     Returns:
         Node function compatible with LangGraph
     """
-    def wrapped(state: AgentState) -> AgentState:
-        return think_node(state, llm_service, tool_adapter, working_memory=working_memory, context_factory=context_factory)
+    from langgraph.types import RunnableConfig
+    from typing import Optional as Opt
+
+    def wrapped(state: AgentState, config: Opt[RunnableConfig] = None) -> AgentState:
+        # Extract run_context from config if present (for cancellation support)
+        run_context = None
+        if config is not None:
+            configurable = config.get("configurable")
+            if configurable is not None:
+                run_context = configurable.get("run_context")
+
+        return think_node(
+            state,
+            llm_service,
+            tool_adapter,
+            working_memory=working_memory,
+            context_factory=context_factory,
+            run_context=run_context,
+        )
     return wrapped
 
 

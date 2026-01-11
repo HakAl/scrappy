@@ -11,7 +11,7 @@ from typing import Optional, Callable
 
 from scrappy.infrastructure.output_mode import OutputModeContext
 from scrappy.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
-from scrappy.protocols.io import CLIIOProtocol
+from scrappy.cli.protocols import CLIIOProtocol
 
 logger = logging.getLogger(__name__)
 

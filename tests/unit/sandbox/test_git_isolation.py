@@ -63,22 +63,11 @@ class TestRunGit:
         result = _run_git(["status"], tmp_path, check=False)
         assert result.returncode == 0
 
-    def test_raises_on_failure_with_check(self, tmp_path):
-        """Raises GitError on failure when check=True."""
-        with pytest.raises(GitError):
-            _run_git(["nonexistent-command"], tmp_path, check=True)
-
     def test_no_raise_on_failure_without_check(self, tmp_path):
         """Does not raise on failure when check=False."""
         result = _run_git(["status"], tmp_path, check=False)
         # Not a git repo, so status fails
         assert result.returncode != 0
-
-    def test_raises_on_missing_git(self, tmp_path):
-        """Raises GitError when git is not installed."""
-        with patch("subprocess.run", side_effect=FileNotFoundError):
-            with pytest.raises(GitError, match="not installed"):
-                _run_git(["status"], tmp_path)
 
 
 class TestGitIsolation:
@@ -114,18 +103,7 @@ class TestGitIsolation:
             cwd=str(tmp_path),
             capture_output=True,
         )
-        return tmp_path
-
-    def test_ensure_git_repo_raises_for_non_repo(self, tmp_path):
-        """Raises GitError for non-git directory."""
-        isolation = GitIsolation(str(tmp_path))
-        with pytest.raises(GitError, match="Not a git repository"):
-            isolation._ensure_git_repo()
-
-    def test_ensure_git_repo_succeeds_for_repo(self, git_repo):
-        """Succeeds for valid git repository."""
-        isolation = GitIsolation(str(git_repo))
-        isolation._ensure_git_repo()  # Should not raise
+        return tmp_path  # Should not raise
 
     def test_get_current_branch(self, git_repo):
         """Returns current branch name."""

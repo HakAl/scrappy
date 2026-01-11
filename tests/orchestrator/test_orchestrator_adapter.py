@@ -78,7 +78,7 @@ class TestLLMResponse:
     @pytest.mark.unit
     def test_tool_calls_can_be_set(self):
         """Test that tool_calls can be populated with ToolCall objects."""
-        from scrappy.providers.base import ToolCall
+        from scrappy.orchestrator.provider_types import ToolCall
 
         tool_calls = [
             ToolCall(id="call_1", name="read_file", arguments={"path": "/test.py"}),

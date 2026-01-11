@@ -16,14 +16,9 @@ from ..infrastructure.logging import StructuredLogger
 
 logger = logging.getLogger(__name__)
 
-try:
-    from ..providers import ProviderRegistry
-    from ..context import CodebaseContext
-    from ..infrastructure.config.api_keys import create_api_key_service
-except ImportError:
-    from providers import ProviderRegistry
-    from context import CodebaseContext
-    from infrastructure.config.api_keys import create_api_key_service
+from .provider_types import ProviderRegistry
+from ..context import CodebaseContext
+from ..infrastructure.config.api_keys import create_api_key_service
 
 from .cache import ResponseCache
 from .rate_limiting import (

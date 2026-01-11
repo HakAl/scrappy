@@ -47,17 +47,6 @@ class TestAgentPromptConfig:
         assert config.last_error == "File not found"
         assert len(config.files_changed) == 2
 
-    def test_frozen_dataclass(self):
-        """Config should be immutable (frozen)."""
-        config = AgentPromptConfig(
-            platform=Platform.UNIX,
-            tool_names=("read_file",),
-            original_task="Task",
-            working_dir="/tmp",
-        )
-        with pytest.raises(Exception):  # FrozenInstanceError
-            config.iteration = 10
-
 
 class TestPromptFactoryAgent:
     """Test PromptFactory.create_agent_system_prompt."""

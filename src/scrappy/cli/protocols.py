@@ -3,14 +3,20 @@ Protocol definitions for CLI handlers.
 
 This module defines the common interface that all CLI handlers must implement,
 enabling consistent behavior, testability, and type checking across the CLI layer.
+
+This is the canonical location for all CLI-related protocols including:
+- Activity indicators (ActivityState, ActivityIndicatorProtocol)
+- CLI I/O operations (CLIIOProtocol)
+- Output formatting (BaseOutputProtocol, FormattedOutputProtocol, RichRenderableProtocol)
+- Task management (Task, TaskStatus, TaskPriority, TaskStorageProtocol)
+- Status bar (StatusBarUpdaterProtocol)
 """
 
+from dataclasses import dataclass
+from enum import Enum
 from typing import TYPE_CHECKING, Protocol, Dict, Any, List, Optional, Callable, runtime_checkable, Generator
 from contextlib import contextmanager
-from .io_interface import CLIIOProtocol
 from ..orchestrator.protocols import Orchestrator
-from ..protocols.output import RichRenderableProtocol
-from ..protocols.activity import ActivityState, ActivityIndicatorProtocol
 
 if TYPE_CHECKING:
     from rich.console import Console, RenderableType
@@ -18,10 +24,333 @@ if TYPE_CHECKING:
     from textual.widget import Widget
 
 
+# =============================================================================
+# Activity Protocols (from protocols/activity.py)
+# =============================================================================
+
+class ActivityState(Enum):
+    """Activity states for UI indicators."""
+    IDLE = "idle"
+    THINKING = "thinking"
+    SYNCING = "syncing"
+    TOOL_EXECUTION = "tool_execution"
+
+
+@runtime_checkable
+class ActivityIndicatorProtocol(Protocol):
+    """Protocol for activity indicator widgets.
+
+    Defines the contract for UI components that display current activity state
+    with elapsed time tracking. Used to show user feedback during long-running
+    operations like Q/A processing and codebase re-indexing.
+    """
+
+    def show(self, state: ActivityState, message: str = "") -> None:
+        """Show the activity indicator with state and message."""
+        ...
+
+    def update_elapsed(self, elapsed_ms: int) -> None:
+        """Update elapsed time display."""
+        ...
+
+    def hide(self) -> None:
+        """Hide the activity indicator."""
+        ...
+
+    @property
+    def is_visible(self) -> bool:
+        """Whether indicator is currently visible."""
+        ...
+
+
+# =============================================================================
+# CLI I/O Protocol (from protocols/io.py)
+# =============================================================================
+
+class CLIIOProtocol(Protocol):
+    """Protocol defining CLI I/O operations.
+
+    This protocol abstracts all CLI input/output operations to enable
+    testability and potential future alternative implementations.
+
+    Implementations:
+    - UnifiedIO: Real CLI implementation with Rich formatting
+    - TestIO: Test implementation for unit tests
+    - MockIO: Mock implementation in tests/helpers.py
+    """
+
+    def echo(self, message: str = "", nl: bool = True) -> None:
+        """Output a message to the console."""
+        ...
+
+    def secho(
+        self,
+        message: str,
+        fg: Optional[str] = None,
+        bold: bool = False,
+        nl: bool = True
+    ) -> None:
+        """Output a styled message with color and formatting."""
+        ...
+
+    def style(
+        self,
+        text: str,
+        fg: Optional[str] = None,
+        bold: bool = False
+    ) -> str:
+        """Return styled text for inline use."""
+        ...
+
+    def prompt(
+        self,
+        text: str,
+        default: str = "",
+        show_default: bool = True
+    ) -> str:
+        """Get user input with a prompt."""
+        ...
+
+    def confirm(
+        self,
+        text: str,
+        default: bool = False
+    ) -> bool:
+        """Get yes/no confirmation from user."""
+        ...
+
+    def input_line(self) -> str:
+        """Read a raw line of input."""
+        ...
+
+    def table(
+        self,
+        headers: List[str],
+        rows: List[List[str]],
+        title: Optional[str] = None
+    ) -> None:
+        """Display a table with headers and rows."""
+        ...
+
+    def panel(
+        self,
+        content: str,
+        title: Optional[str] = None,
+        border_style: str = "blue"
+    ) -> None:
+        """Display content in a panel with optional title."""
+        ...
+
+
+# =============================================================================
+# Output Protocols (from protocols/output.py)
+# =============================================================================
+
+@runtime_checkable
+class BaseOutputProtocol(Protocol):
+    """Core output protocol for message-level logging.
+
+    This is the minimal contract for any output implementation.
+    """
+
+    def info(self, message: str) -> None:
+        """Output an informational message."""
+        ...
+
+    def warn(self, message: str) -> None:
+        """Output a warning message."""
+        ...
+
+    def error(self, message: str) -> None:
+        """Output an error message."""
+        ...
+
+    def success(self, message: str) -> None:
+        """Output a success message."""
+        ...
+
+
+@runtime_checkable
+class FormattedOutputProtocol(BaseOutputProtocol, Protocol):
+    """Extended protocol for formatted output with styling and user interaction."""
+
+    def print(
+        self,
+        text: str = "",
+        color: Optional[str] = None,
+        bold: bool = False,
+        newline: bool = True
+    ) -> None:
+        """Print text with optional styling."""
+        ...
+
+    def style(
+        self,
+        text: str,
+        color: Optional[str] = None,
+        bold: bool = False
+    ) -> str:
+        """Return styled text for inline use."""
+        ...
+
+    def prompt(
+        self,
+        text: str,
+        default: str = ""
+    ) -> str:
+        """Get user input with prompt."""
+        ...
+
+    def confirm(
+        self,
+        text: str,
+        default: bool = False
+    ) -> bool:
+        """Get yes/no confirmation."""
+        ...
+
+
+@runtime_checkable
+class RichRenderableProtocol(Protocol):
+    """Protocol for Rich-specific renderable output.
+
+    This protocol enables posting Rich renderables (Panel, Table, Text, etc.)
+    to output implementations that support them, such as Textual TUI.
+    """
+
+    def post_output(self, content: str) -> None:
+        """Post plain text output."""
+        ...
+
+    def post_renderable(self, obj: "RenderableType") -> None:
+        """Post Rich renderable (Panel, Table, Text, etc.)."""
+        ...
+
+
 # Backward compatibility alias
-# OutputSink is now an alias to RichRenderableProtocol from the centralized protocols module
-# New code should import RichRenderableProtocol directly from scrappy.protocols.output
 OutputSink = RichRenderableProtocol
+
+
+@runtime_checkable
+class StreamingOutputProtocol(Protocol):
+    """Protocol for async streaming output with token-by-token rendering."""
+
+    async def stream_start(self, metadata: Optional[dict[str, Any]] = None) -> None:
+        """Signal the start of a streaming response."""
+        ...
+
+    async def stream_token(self, token: str) -> None:
+        """Output a single token from the stream."""
+        ...
+
+    async def stream_end(self, metadata: Optional[dict[str, Any]] = None) -> None:
+        """Signal the end of a streaming response."""
+        ...
+
+
+# =============================================================================
+# Task Protocols (from protocols/tasks.py)
+# =============================================================================
+
+class TaskStatus(Enum):
+    """Status of a task in the task list."""
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    DONE = "done"
+
+
+class TaskPriority(Enum):
+    """Priority level for tasks."""
+    HIGH = "HIGH"
+    MEDIUM = "MED"
+    LOW = "LOW"
+
+
+@dataclass
+class Task:
+    """A single task in the agent's task list."""
+    description: str
+    status: TaskStatus
+    priority: TaskPriority | None = None
+
+    def __post_init__(self) -> None:
+        """Validate task on creation."""
+        if not self.description or not self.description.strip():
+            raise ValueError("Task description cannot be empty")
+
+
+class TaskStorageProtocol(Protocol):
+    """Contract for task persistence."""
+
+    def read_tasks(self) -> list[Task]:
+        """Load all tasks from storage."""
+        ...
+
+    def write_tasks(self, tasks: list[Task]) -> None:
+        """Persist all tasks to storage."""
+        ...
+
+    def exists(self) -> bool:
+        """Check if task storage exists."""
+        ...
+
+    def clear(self) -> None:
+        """Remove all tasks and delete storage."""
+        ...
+
+
+class InMemoryTaskStorage:
+    """In-memory task storage for session-scoped HUD."""
+
+    def __init__(
+        self,
+        initial: list[Task] | None = None,
+        initial_task: str | None = None,
+    ) -> None:
+        self._tasks: list[Task] = list(initial) if initial else []
+        if initial_task and initial_task.strip():
+            self._tasks.insert(0, Task(
+                description=initial_task.strip(),
+                status=TaskStatus.IN_PROGRESS,
+            ))
+        self._exists = len(self._tasks) > 0
+
+    def read_tasks(self) -> list[Task]:
+        """Return copy of tasks."""
+        return list(self._tasks)
+
+    def write_tasks(self, tasks: list[Task]) -> None:
+        """Store copy of tasks."""
+        self._tasks = list(tasks)
+        self._exists = True
+
+    def exists(self) -> bool:
+        """Check if storage has been written to."""
+        return self._exists
+
+    def clear(self) -> None:
+        """Clear all tasks."""
+        self._tasks = []
+        self._exists = False
+
+
+# =============================================================================
+# Progress Protocol (from protocols/progress.py)
+# =============================================================================
+
+@runtime_checkable
+class StatusBarUpdaterProtocol(Protocol):
+    """Protocol for updating status bar displays.
+
+    This protocol defines the minimal interface needed to update a status bar
+    widget. It abstracts the concrete implementation (e.g., Textual widgets)
+    to enable infrastructure components to update status without depending
+    on the CLI layer.
+    """
+
+    def update_status(self, content: str) -> None:
+        """Update the status bar content."""
+        ...
 
 
 @runtime_checkable

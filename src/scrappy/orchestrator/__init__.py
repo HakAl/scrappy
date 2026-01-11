@@ -56,6 +56,18 @@ __all__ = [
     'UsageReporterProtocol',
     'StatusReporterProtocol',
     'ContextManagerProtocol',
+    # Provider types (moved from providers/)
+    'LLMResponse',
+    'LLMProviderProtocol',
+    'LLMProviderBase',
+    'ProviderRegistry',
+    'ProviderLimits',
+    'ToolCall',
+    'ModelType',
+    'ModelInfo',
+    'SpeedRank',
+    'QualityRank',
+    'detect_model_type',
 ]
 
 # Mapping of names to their source modules
@@ -88,6 +100,18 @@ _LAZY_IMPORTS = {
     'UsageReporterProtocol': '.manager_protocols',
     'StatusReporterProtocol': '.manager_protocols',
     'ContextManagerProtocol': '.manager_protocols',
+    # Provider types
+    'LLMResponse': '.provider_types',
+    'LLMProviderProtocol': '.provider_types',
+    'LLMProviderBase': '.provider_types',
+    'ProviderRegistry': '.provider_types',
+    'ProviderLimits': '.provider_types',
+    'ToolCall': '.provider_types',
+    'ModelType': '.provider_types',
+    'ModelInfo': '.provider_types',
+    'SpeedRank': '.provider_types',
+    'QualityRank': '.provider_types',
+    'detect_model_type': '.provider_types',
 }
 
 

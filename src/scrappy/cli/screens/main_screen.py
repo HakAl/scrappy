@@ -26,7 +26,7 @@ from ..textual import (
 )
 
 from scrappy.infrastructure.theme import ThemeProtocol
-from scrappy.protocols.activity import ActivityState
+from ..protocols import ActivityState
 
 if TYPE_CHECKING:
     from ..interactive import InteractiveMode

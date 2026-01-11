@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Optional, Protocol
 from contextvars import ContextVar
 
 if TYPE_CHECKING:
-    from scrappy.protocols.output import RichRenderableProtocol as OutputSink
+    from scrappy.cli.protocols import RichRenderableProtocol as OutputSink
 
 
 class OutputModeProtocol(Protocol):

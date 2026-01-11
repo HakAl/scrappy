@@ -477,35 +477,6 @@ class TestUndoEdgeCases:
                 assert "worktree" in str(exc_info.value).lower()
                 assert "--force" in str(exc_info.value)
 
-    @pytest.mark.unit
-    def test_undo_wrong_worktree_force(self, temp_git_dir, sample_undo_state, mock_git_run):
-        """Undo with --force should bypass worktree check."""
-        state_file = temp_git_dir / ".git" / "scrappy" / "undo-states.json"
-        lock_path = temp_git_dir / ".git" / "scrappy.lock"
-        state_file.parent.mkdir(parents=True, exist_ok=True)
-
-        state_dict = asdict(sample_undo_state)
-        state_dict["created_at"] = sample_undo_state.created_at.isoformat()
-        data = {"states": [state_dict]}
-        state_file.write_text(json.dumps(data))
-
-        wrong_path = "/moved/project/path"
-
-        command_results = {
-            "checkout -f": (0, ""),
-            "reset --hard": (0, ""),
-            "rev-parse --verify HEAD~1": (0, "parent123\n"),
-            "reset --mixed HEAD~1": (0, ""),
-            "update-ref -d": (0, ""),
-        }
-
-        with patch("scrappy.undo.UNDO_STATE_PATH", state_file):
-            with patch("scrappy.undo.LOCK_PATH", lock_path):
-                with patch("os.getcwd", return_value=wrong_path):
-                    with patch("scrappy.undo.subprocess.run", side_effect=mock_git_run(command_results)):
-                        # Should not raise with force=True
-                        undo(force=True)
-
 
 # =============================================================================
 # Create Undo Point Tests (Behavior)

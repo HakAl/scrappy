@@ -8,7 +8,7 @@ between CLI, CommandRouter, and InteractiveMode components.
 from typing import Any, Dict, List, Optional, Protocol, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from scrappy.persistence import ConversationStoreProtocol
+    from scrappy.infrastructure.persistence import ConversationStoreProtocol
 
 
 class SessionContextProtocol(Protocol):
@@ -170,7 +170,7 @@ class SessionContext:
         if self._conversation_store is None:
             return False
 
-        from scrappy.cli.conversation_store import check_session_staleness
+        from scrappy.infrastructure.persistence import check_session_staleness
 
         last_time = self._conversation_store.get_last_message_time()
         return check_session_staleness(last_time)

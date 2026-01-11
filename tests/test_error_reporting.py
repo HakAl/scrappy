@@ -14,7 +14,7 @@ from datetime import datetime
 from scrappy.orchestrator.cache import ResponseCache
 from scrappy.orchestrator.rate_limiting import RateLimitTracker
 from scrappy.orchestrator.output import CapturingOutput, NullOutput
-from scrappy.providers.base import LLMResponse, ProviderLimits
+from scrappy.orchestrator.provider_types import LLMResponse, ProviderLimits
 
 
 class TestCacheErrorReporting:

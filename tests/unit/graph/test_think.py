@@ -1054,3 +1054,151 @@ class TestThinkNodeIntegration:
         call_messages = llm_service.calls[0]["messages"]
         system_prompt = next(m["content"] for m in call_messages if m["role"] == "system")
         assert "FileNotFoundError" in system_prompt
+
+
+# =============================================================================
+# Cancellation Tests
+# =============================================================================
+
+
+class MockRunContext:
+    """Mock run context for testing cancellation."""
+
+    def __init__(self, cancelled: bool = False, force_cancelled: bool = False):
+        self._cancelled = cancelled
+        self._force_cancelled = force_cancelled
+
+    def is_cancelled(self) -> bool:
+        return self._cancelled
+
+    def is_force_cancelled(self) -> bool:
+        return self._force_cancelled
+
+
+class TestThinkNodeCancellation:
+    """Tests for think node cancellation behavior."""
+
+    def test_returns_cancelled_state_when_cancelled_before_start(self):
+        """Think node should return cancelled state immediately if already cancelled."""
+        state = create_test_state()
+        llm_service = MockLLMService(
+            response=MockLLMResponse(content="This should not be called")
+        )
+        run_context = MockRunContext(cancelled=True)
+
+        result = think_node(state, llm_service, run_context=run_context)
+
+        # Should return cancelled state
+        assert result.done is True
+        assert result.last_error == "Cancelled by user"
+        # LLM should not have been called
+        assert len(llm_service.calls) == 0
+
+    def test_increments_iteration_on_cancellation(self):
+        """Think node should increment iteration even when cancelled."""
+        state = create_test_state(iteration=5)
+        llm_service = MockLLMService(
+            response=MockLLMResponse(content="")
+        )
+        run_context = MockRunContext(cancelled=True)
+
+        result = think_node(state, llm_service, run_context=run_context)
+
+        assert result.iteration == 6
+
+    def test_no_cancellation_when_run_context_none(self):
+        """Think node should run normally when run_context is None."""
+        state = create_test_state()
+        llm_service = MockLLMService(
+            response=MockLLMResponse(content="Normal response")
+        )
+
+        result = think_node(state, llm_service, run_context=None)
+
+        # Should run normally
+        assert result.done is True
+        assert len(llm_service.calls) == 1
+
+    def test_no_cancellation_when_not_cancelled(self):
+        """Think node should run normally when run_context.is_cancelled() is False."""
+        state = create_test_state()
+        llm_service = MockLLMService(
+            response=MockLLMResponse(content="Normal response")
+        )
+        run_context = MockRunContext(cancelled=False)
+
+        result = think_node(state, llm_service, run_context=run_context)
+
+        # Should run normally
+        assert result.done is True
+        assert len(llm_service.calls) == 1
+
+
+class TestThinkNodeStreamingCancellation:
+    """Tests for streaming think node cancellation behavior."""
+
+    @pytest.mark.asyncio
+    async def test_returns_cancelled_state_when_cancelled_before_start(self):
+        """Streaming think node should return cancelled state if already cancelled."""
+        state = create_test_state()
+        llm_service = MockStreamingLLMService(chunks=[
+            StreamChunk(content="This should not be streamed"),
+        ])
+        run_context = MockRunContext(cancelled=True)
+
+        result = await think_node_streaming(state, llm_service, run_context=run_context)
+
+        # Should return cancelled state
+        assert result.done is True
+        assert result.last_error == "Cancelled by user"
+        # LLM should not have been called
+        assert len(llm_service.calls) == 0
+
+    @pytest.mark.asyncio
+    async def test_discards_partial_response_on_mid_stream_cancellation(self):
+        """Streaming should discard partial response when cancelled mid-stream."""
+        state = create_test_state()
+
+        # Create a mock that cancels after first chunk
+        class CancellingRunContext:
+            def __init__(self):
+                self.check_count = 0
+
+            def is_cancelled(self) -> bool:
+                self.check_count += 1
+                # Cancel after first check (during first chunk)
+                return self.check_count > 1
+
+            def is_force_cancelled(self) -> bool:
+                return False
+
+        run_context = CancellingRunContext()
+
+        llm_service = MockStreamingLLMService(chunks=[
+            StreamChunk(content="First chunk "),
+            StreamChunk(content="Second chunk "),
+            StreamChunk(content="Third chunk"),
+        ])
+
+        result = await think_node_streaming(state, llm_service, run_context=run_context)
+
+        # Should be cancelled
+        assert result.done is True
+        assert result.last_error == "Cancelled by user"
+        # Should NOT have added partial content to messages
+        # (messages should be same as input state)
+        assert len(result.messages) == len(state.messages)
+
+    @pytest.mark.asyncio
+    async def test_no_cancellation_when_run_context_none(self):
+        """Streaming think node should run normally when run_context is None."""
+        state = create_test_state()
+        llm_service = MockStreamingLLMService(chunks=[
+            StreamChunk(content="Hello world"),
+        ])
+
+        result = await think_node_streaming(state, llm_service, run_context=None)
+
+        # Should run normally
+        assert result.done is True
+        assert len(llm_service.calls) == 1

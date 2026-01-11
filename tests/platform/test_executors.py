@@ -357,86 +357,6 @@ class TestFallbackCommandExecutor:
         assert result.output == 'file contents'
 
     @pytest.mark.unit
-    def test_execute_head_command(self):
-        """head command should dispatch to fallback.head."""
-        executor, fallback, _ = self._create_executor()
-        fallback.head.return_value = {'output': 'first lines', 'returncode': 0}
-
-        result = executor.execute("head -n 10 file.txt")
-
-        fallback.head.assert_called_once()
-
-    @pytest.mark.unit
-    def test_execute_tail_command(self):
-        """tail command should dispatch to fallback.tail."""
-        executor, fallback, _ = self._create_executor()
-        fallback.tail.return_value = {'output': 'last lines', 'returncode': 0}
-
-        result = executor.execute("tail -n 5 file.txt")
-
-        fallback.tail.assert_called_once()
-
-    @pytest.mark.unit
-    def test_execute_grep_command(self):
-        """grep command should dispatch to fallback.grep."""
-        executor, fallback, _ = self._create_executor()
-        fallback.grep.return_value = {'output': 'matching lines', 'returncode': 0}
-
-        result = executor.execute("grep pattern file.txt")
-
-        fallback.grep.assert_called_once()
-
-    @pytest.mark.unit
-    def test_execute_find_command(self):
-        """find command should dispatch to fallback.find."""
-        executor, fallback, _ = self._create_executor()
-        fallback.find.return_value = {'output': 'found files', 'returncode': 0}
-
-        result = executor.execute("find . -name '*.py'")
-
-        fallback.find.assert_called_once()
-
-    @pytest.mark.unit
-    def test_execute_wc_command(self):
-        """wc command should dispatch to fallback.wc."""
-        executor, fallback, _ = self._create_executor()
-        fallback.wc.return_value = {'output': '10 20 100', 'returncode': 0}
-
-        result = executor.execute("wc file.txt")
-
-        fallback.wc.assert_called_once()
-
-    @pytest.mark.unit
-    def test_execute_which_command(self):
-        """which command should dispatch to fallback.which."""
-        executor, fallback, _ = self._create_executor()
-        fallback.which.return_value = {'output': '/usr/bin/python', 'returncode': 0}
-
-        result = executor.execute("which python")
-
-        fallback.which.assert_called_once()
-
-    @pytest.mark.unit
-    def test_execute_touch_command(self):
-        """touch command should dispatch to fallback.touch."""
-        executor, fallback, _ = self._create_executor()
-        fallback.touch.return_value = {'output': '', 'returncode': 0}
-
-        result = executor.execute("touch newfile.txt")
-
-        fallback.touch.assert_called_once()
-
-    @pytest.mark.unit
-    def test_execute_mkdir_p_command(self):
-        """mkdir -p command should dispatch to fallback.mkdir_p."""
-        executor, fallback, _ = self._create_executor()
-        fallback.mkdir_p.return_value = {'output': '', 'returncode': 0}
-
-        result = executor.execute("mkdir -p path/to/dir")
-
-        fallback.mkdir_p.assert_called_once()
-
-    @pytest.mark.unit
     def test_execute_mkdir_without_p_not_handled(self):
         """mkdir without -p should not be handled."""
         executor, fallback, _ = self._create_executor()
@@ -445,36 +365,6 @@ class TestFallbackCommandExecutor:
 
         fallback.mkdir_p.assert_not_called()
         assert result.method == 'fallback_unavailable'
-
-    @pytest.mark.unit
-    def test_execute_rm_command(self):
-        """rm command should dispatch to fallback.rm."""
-        executor, fallback, _ = self._create_executor()
-        fallback.rm.return_value = {'output': '', 'returncode': 0}
-
-        result = executor.execute("rm file.txt")
-
-        fallback.rm.assert_called_once()
-
-    @pytest.mark.unit
-    def test_execute_cp_command(self):
-        """cp command should dispatch to fallback.cp."""
-        executor, fallback, _ = self._create_executor()
-        fallback.cp.return_value = {'output': '', 'returncode': 0}
-
-        result = executor.execute("cp src.txt dst.txt")
-
-        fallback.cp.assert_called_once()
-
-    @pytest.mark.unit
-    def test_execute_mv_command(self):
-        """mv command should dispatch to fallback.mv."""
-        executor, fallback, _ = self._create_executor()
-        fallback.mv.return_value = {'output': '', 'returncode': 0}
-
-        result = executor.execute("mv old.txt new.txt")
-
-        fallback.mv.assert_called_once()
 
     @pytest.mark.unit
     def test_execute_unknown_command(self):

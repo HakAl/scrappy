@@ -10,8 +10,6 @@ from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 
 from .file_scanner import FileScanner
-
-logger = logging.getLogger(__name__)
 from .cache import ContextCache
 from .git_history import GitHistoryReader
 from ..platform.detection import SystemPlatformDetector
@@ -32,11 +30,13 @@ from .protocols import (
     FileCollectorProtocol,
     StalenessCheckerProtocol,
 )
-from ..protocols.io import CLIIOProtocol
 
 if TYPE_CHECKING:
+    from ..cli.protocols import CLIIOProtocol
     from .semantic.config import SemanticIndexConfig
     from .protocols import IndexStateProtocol, IndexingDecisionProtocol
+
+logger = logging.getLogger(__name__)
 
 
 class CodebaseContext:
@@ -61,7 +61,7 @@ class CodebaseContext:
         project_detector: Optional[ProjectDetector] = None,
         path_provider: Optional[PathProviderProtocol] = None,
         file_collector: Optional[FileCollectorProtocol] = None,
-        io: Optional[CLIIOProtocol] = None,
+        io: Optional["CLIIOProtocol"] = None,
         event_queue: Optional[EventQueueProtocol] = None,
         semantic_manager: Optional[SemanticSearchManagerProtocol] = None,
         context_augmenter: Optional[ContextAugmenterProtocol] = None,

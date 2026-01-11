@@ -102,7 +102,7 @@ class TestTaskPreferencesRegression:
 
     def _create_mock_registry(self, available_providers: list[str]):
         """Create a mock registry with specified providers."""
-        from scrappy.providers.base import ProviderRegistry
+        from scrappy.orchestrator.provider_types import ProviderRegistry
 
         registry = ProviderRegistry()
 

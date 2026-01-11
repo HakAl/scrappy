@@ -7,7 +7,7 @@ to maintain state across complex multi-step operations.
 import re
 from pathlib import Path
 
-from scrappy.protocols.tasks import (
+from scrappy.cli.protocols import (
     Task,
     TaskStatus,
     TaskPriority,

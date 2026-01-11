@@ -14,8 +14,8 @@ from .protocols import (
     CLIHandlerProtocol,
     DisplayFormatterProtocol,
     InputValidatorProtocol,
+    CLIIOProtocol,
 )
-from .io_interface import CLIIOProtocol
 
 __all__ = [
     # Implementations

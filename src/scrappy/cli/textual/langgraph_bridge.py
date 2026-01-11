@@ -22,8 +22,7 @@ from textual.worker import Worker, WorkerCancelled, get_current_worker
 
 from scrappy.graph.run_context import AgentRunContext
 from scrappy.infrastructure.threading import CancellationToken
-from scrappy.protocols.activity import ActivityState
-from scrappy.protocols.tasks import Task, TaskStatus
+from ..protocols import ActivityState, Task, TaskStatus
 
 if TYPE_CHECKING:
     from langgraph.graph.state import CompiledStateGraph
@@ -656,8 +655,9 @@ class LangGraphBridge:
             self._run_context = AgentRunContext()
             self._run_context.set_status_callback(self._show_provider_status)
 
-            # Create fresh cancellation token for this run
+            # Create fresh cancellation token for this run and wire to context
             self._cancellation_token = CancellationToken()
+            self._run_context.cancellation_token = self._cancellation_token
 
             # Create agent runner with HITL support
             # Tools always available - LLM decides whether to use them

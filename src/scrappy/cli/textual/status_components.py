@@ -14,7 +14,7 @@ from textual.reactive import reactive
 from textual.widgets import Label
 from textual.app import ComposeResult
 
-from scrappy.protocols.activity import ActivityState
+from ..protocols import ActivityState
 
 if TYPE_CHECKING:
     from ..protocols import StatusComponentProtocol

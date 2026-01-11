@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from ...agent_config import AgentConfig
     from ...context.protocols import SemanticSearchProtocol
     from ...graph.run_context import AgentRunContextProtocol
+    from ...infrastructure.threading.protocols import CancellationTokenProtocol
     from ...protocols.tasks import TaskStorageProtocol
 
 
@@ -229,6 +230,17 @@ class ToolContext:
         """Store git operation result in working memory."""
         if self.orchestrator:
             self.orchestrator.working_memory.remember_git_operation(operation, result)
+
+    @property
+    def cancellation_token(self) -> Optional["CancellationTokenProtocol"]:
+        """Get cancellation token from run context if available.
+
+        Allows tools to check for user cancellation during long-running operations.
+        Returns None if no run_context or no token is set.
+        """
+        if self.run_context is not None:
+            return getattr(self.run_context, "cancellation_token", None)
+        return None
 
 
 @dataclass

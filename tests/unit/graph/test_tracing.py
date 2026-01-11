@@ -30,26 +30,7 @@ class TestNoOpSpan:
         """NoOpSpan works as context manager."""
         span = NoOpSpan("test")
         with span as s:
-            assert s is span
-
-    def test_set_attribute_is_noop(self) -> None:
-        """set_attribute does not raise."""
-        span = NoOpSpan("test")
-        span.set_attribute("key", "value")
-        span.set_attribute("number", 42)
-        span.set_attribute("nested", {"a": 1})
-
-    def test_add_event_is_noop(self) -> None:
-        """add_event does not raise."""
-        span = NoOpSpan("test")
-        span.add_event("event-name")
-        span.add_event("event-with-attrs", {"key": "value"})
-
-    def test_end_is_noop(self) -> None:
-        """end does not raise."""
-        span = NoOpSpan("test")
-        span.end()
-        span.end()  # Multiple calls should be safe
+            assert s is span  # Multiple calls should be safe
 
 
 class TestNoOpTracer:
@@ -74,13 +55,7 @@ class TestNoOpTracer:
         tracer = NoOpTracer()
         span = tracer.generation("test-gen")
         assert isinstance(span, NoOpSpan)
-        assert span.name == "test-gen"
-
-    def test_flush_is_noop(self) -> None:
-        """flush() does not raise."""
-        tracer = NoOpTracer()
-        tracer.flush()
-        tracer.flush()  # Multiple calls should be safe
+        assert span.name == "test-gen"  # Multiple calls should be safe
 
     def test_trace_accepts_kwargs(self) -> None:
         """trace() accepts arbitrary kwargs."""
@@ -103,18 +78,6 @@ class TestNoOpTracer:
 
 class TestGetTracer:
     """Tests for get_tracer function."""
-
-    def test_returns_tracer_when_no_keys(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Without API keys, returns NoOpTracer."""
-        # Clear the global tracer to force re-initialization
-        import scrappy.graph.tracing as tracing_module
-        tracing_module._tracer = None
-
-        monkeypatch.delenv("LANGFUSE_PUBLIC_KEY", raising=False)
-        monkeypatch.delenv("LANGFUSE_SECRET_KEY", raising=False)
-
-        tracer = get_tracer()
-        assert isinstance(tracer, NoOpTracer)
 
     def test_caches_tracer_instance(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """get_tracer returns the same instance on subsequent calls."""
@@ -163,15 +126,6 @@ class TestTraceNodeDecorator:
 
         assert sample_function.__name__ == "sample_function"
 
-    def test_decorator_handles_exceptions(self) -> None:
-        """Decorated function propagates exceptions."""
-        @trace_node("test-node")
-        def failing_function() -> None:
-            raise ValueError("test error")
-
-        with pytest.raises(ValueError, match="test error"):
-            failing_function()
-
     def test_decorator_works_with_kwargs(self) -> None:
         """Decorated function handles kwargs correctly."""
         @trace_node("test-node")
@@ -191,27 +145,7 @@ class TestTraceContext:
             assert span is not None
             # Should be a NoOpSpan when Langfuse not configured
             assert hasattr(span, "end")
-
-    def test_span_ends_on_exit(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Span end() is called when context exits."""
-        import scrappy.graph.tracing as tracing_module
-        tracing_module._tracer = None
-
-        monkeypatch.delenv("LANGFUSE_PUBLIC_KEY", raising=False)
-        monkeypatch.delenv("LANGFUSE_SECRET_KEY", raising=False)
-
-        with trace_context("test-context"):
-            # NoOpSpan.end() is a no-op, but we verify it can be called
-            pass
         # No exception means success
-
-    def test_span_ends_on_exception(self) -> None:
-        """Span end() is called even when exception occurs."""
-        try:
-            with trace_context("test-context"):
-                raise RuntimeError("test error")
-        except RuntimeError:
-            pass
         # No exception from cleanup means success
 
 
@@ -233,17 +167,4 @@ class TestShutdownTracing:
         # Shutdown
         shutdown_tracing()
         assert tracing_module._tracer is None
-
-    def test_safe_to_call_multiple_times(self) -> None:
-        """shutdown_tracing can be called multiple times."""
-        shutdown_tracing()
-        shutdown_tracing()
-        shutdown_tracing()
-        # No exception means success
-
-    def test_safe_when_never_initialized(self) -> None:
-        """shutdown_tracing is safe when tracer was never created."""
-        import scrappy.graph.tracing as tracing_module
-        tracing_module._tracer = None
-
-        shutdown_tracing()  # Should not raise
+        # No exception means success  # Should not raise

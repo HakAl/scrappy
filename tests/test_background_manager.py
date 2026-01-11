@@ -289,22 +289,6 @@ class TestBackgroundTaskCancellation:
         result = manager.cancel_task("nonexistent-id")
 
         assert result is False
-
-    @pytest.mark.asyncio
-    async def test_handles_cancellation_gracefully(self):
-        """Cancelled tasks should not appear in error log."""
-        manager = BackgroundTaskManager()
-
-        async def cancellable_task():
-            await asyncio.sleep(10)
-
-        task_id = manager.submit_background_task(cancellable_task())
-        manager.cancel_task(task_id)
-
-        await asyncio.sleep(0.05)
-
-        # Cancelled tasks should NOT be in error log
-        status = manager.get_task_status()
         # Depending on implementation, may have 0 errors or cancelled error isn't counted
         # The key is it shouldn't crash
 
