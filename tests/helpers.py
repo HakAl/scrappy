@@ -2873,6 +2873,79 @@ class MockLLMService:
         finally:
             self.concurrent_calls -= 1
 
+    def stream_completion_sync(
+        self,
+        model: str,
+        messages: list,
+        cancellation_token=None,
+        **kwargs,
+    ):
+        """
+        Synchronous streaming completion (mock).
+
+        Yields StreamChunk objects containing the response content.
+
+        Args:
+            model: Model group name
+            messages: Chat messages
+            cancellation_token: Optional cancellation token (ignored in mock)
+            **kwargs: Additional parameters
+
+        Yields:
+            StreamChunk objects
+
+        Raises:
+            Configured exception if set
+        """
+        from scrappy.orchestrator.types import StreamChunk
+
+        self._record_call(model, messages, **kwargs)
+
+        if self._exception:
+            raise self._exception
+
+        response, metadata = self._get_next_response()
+
+        # Stream the content as a single chunk
+        content = getattr(response, 'content', str(response)) if response else ""
+        tool_calls = getattr(response, 'tool_calls', None)
+
+        # First yield content chunk
+        if content:
+            yield StreamChunk(
+                content=content,
+                model=getattr(response, 'model', 'test-model'),
+                provider=getattr(response, 'provider', 'test-provider'),
+            )
+
+        # Yield tool call fragments if any
+        if tool_calls:
+            import json as _json
+            from scrappy.orchestrator.types import ToolCallFragment
+            for i, tc in enumerate(tool_calls):
+                args = getattr(tc, 'arguments', '')
+                # Convert dict to JSON string if needed
+                if isinstance(args, dict):
+                    args = _json.dumps(args)
+                yield StreamChunk(
+                    tool_call_fragments=[ToolCallFragment(
+                        index=i,
+                        id=getattr(tc, 'id', f'call_{i}'),
+                        type="function",
+                        name=getattr(tc, 'name', None),
+                        arguments=args,
+                    )],
+                    model=getattr(response, 'model', 'test-model'),
+                    provider=getattr(response, 'provider', 'test-provider'),
+                )
+
+        # Final chunk with finish_reason
+        yield StreamChunk(
+            finish_reason="stop",
+            model=getattr(response, 'model', 'test-model'),
+            provider=getattr(response, 'provider', 'test-provider'),
+        )
+
     def set_response(self, response: LLMResponse) -> None:
         """Set a new default response."""
         self._default_response = response

@@ -1061,18 +1061,34 @@ class TestThinkNodeIntegration:
 # =============================================================================
 
 
+class MockCancellationToken:
+    """Mock cancellation token for testing."""
+
+    def __init__(self, cancelled: bool = False):
+        self._cancelled = cancelled
+
+    @property
+    def is_cancelled(self) -> bool:
+        return self._cancelled
+
+
 class MockRunContext:
     """Mock run context for testing cancellation."""
 
     def __init__(self, cancelled: bool = False, force_cancelled: bool = False):
         self._cancelled = cancelled
         self._force_cancelled = force_cancelled
+        self._cancellation_token = MockCancellationToken(cancelled)
 
     def is_cancelled(self) -> bool:
         return self._cancelled
 
     def is_force_cancelled(self) -> bool:
         return self._force_cancelled
+
+    @property
+    def cancellation_token(self):
+        return self._cancellation_token
 
 
 class TestThinkNodeCancellation:
@@ -1131,6 +1147,34 @@ class TestThinkNodeCancellation:
 
         # Should run normally
         assert result.done is True
+        assert len(llm_service.calls) == 1
+
+    def test_mid_stream_cancellation_returns_cancelled_state(self):
+        """Think node should handle StreamCancelledError during streaming."""
+        from scrappy.orchestrator.litellm_service import StreamCancelledError
+        from scrappy.orchestrator.types import StreamChunk
+
+        state = create_test_state()
+
+        # Create an LLM service that raises StreamCancelledError mid-stream
+        class CancellingLLMService:
+            calls = []
+
+            def stream_completion_sync(self, model, messages, cancellation_token=None, **kwargs):
+                self.calls.append({"model": model, "messages": messages})
+                yield StreamChunk(content="Partial ", model="test", provider="test")
+                # Simulate cancellation after first chunk
+                raise StreamCancelledError("Cancelled by user", partial_content="Partial ")
+
+        llm_service = CancellingLLMService()
+        run_context = MockRunContext(cancelled=False)
+
+        result = think_node(state, llm_service, run_context=run_context)
+
+        # Should return cancelled state
+        assert result.done is True
+        assert result.last_error == "Cancelled by user"
+        # Should have called LLM
         assert len(llm_service.calls) == 1
 
 

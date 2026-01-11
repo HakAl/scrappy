@@ -40,7 +40,7 @@ from scrappy.infrastructure.exceptions import (
     TimeoutError as InfraTimeoutError,
 )
 from scrappy.infrastructure.logging import get_logger
-from scrappy.orchestrator.litellm_service import NotConfiguredError
+from scrappy.orchestrator.litellm_service import NotConfiguredError, StreamCancelledError
 from scrappy.orchestrator.types import StreamChunk, ToolCallFragment
 from scrappy.prompts.factory import PromptFactory
 from scrappy.prompts.protocols import AgentPromptConfig, Platform
@@ -436,32 +436,65 @@ def think_node(
 
     # Call LLM
     # If current_model is set (fallback mode), use direct call to specific model
-    # Otherwise use Router-based tier selection
+    # Otherwise use Router-based tier selection with streaming for responsive cancellation
     has_tools = tool_adapter is not None
+
+    # Extract cancellation token for streaming support
+    cancellation_token = run_context.cancellation_token if run_context else None
+
     try:
         if state.current_model:
             # Fallback mode: call specific model directly (bypass Router)
+            # Uses blocking call since completion_direct doesn't support streaming
             logger.info("Using fallback model: %s", state.current_model)
             response, task_record = llm_service.completion_direct(
                 model=state.current_model,
                 messages=messages,
                 **llm_kwargs,
             )
+            content = response.content
+            tool_calls = convert_tool_calls(response.tool_calls)
         else:
-            # Normal mode: use user-selected tier from state
-            response, task_record = llm_service.completion_sync(
+            # Normal mode: use streaming for responsive cancellation
+            # Stream chunks and accumulate content/tool fragments
+            content_parts: list[str] = []
+            all_fragments: list[ToolCallFragment] = []
+            response_model = ""
+            response_provider = ""
+
+            for chunk in llm_service.stream_completion_sync(
                 model=state.current_tier,
                 messages=messages,
+                cancellation_token=cancellation_token,
                 **llm_kwargs,
-            )
+            ):
+                if isinstance(chunk, StreamChunk):
+                    if chunk.content:
+                        content_parts.append(chunk.content)
+                    if chunk.tool_call_fragments:
+                        all_fragments.extend(chunk.tool_call_fragments)
+                    # Capture model/provider from chunks (usually in final chunk)
+                    if chunk.model:
+                        response_model = chunk.model
+                    if chunk.provider:
+                        response_provider = chunk.provider
 
-        # LLMResponse.content is already normalized to string by litellm_service
-        # (handles None, dict-in-content, etc.)
-        content = response.content
+            # Assemble final content and tool calls
+            content = "".join(content_parts)
 
-        # Convert tool calls from LLMResponse format to OpenAI format
-        # litellm_service already extracted tool calls from malformed content (dict, XML)
-        tool_calls = convert_tool_calls(response.tool_calls)
+            # Convert accumulated fragments to tool calls
+            if all_fragments:
+                accumulated = accumulate_tool_calls(all_fragments)
+                tool_calls = fragments_to_tool_calls(accumulated)
+            else:
+                tool_calls = []
+
+            # Create pseudo-response for model display
+            class _StreamResponse:
+                def __init__(self, model: str, provider: str):
+                    self.model = model
+                    self.provider = provider
+            response = _StreamResponse(response_model, response_provider)
 
         # Check for empty response (no content AND no tool calls)
         # This is an error condition - LLM should return either content or tool calls
@@ -514,6 +547,17 @@ def think_node(
                 "last_error": None,
                 "current_model": None,  # Clear fallback mode on success
                 "last_model_display": model_display,
+            }
+        )
+
+    except StreamCancelledError:
+        # User cancelled during LLM streaming - return cancelled state
+        logger.info("LLM streaming cancelled by user")
+        return state.model_copy(
+            update={
+                "iteration": state.iteration + 1,
+                "done": True,
+                "last_error": "Cancelled by user",
             }
         )
 

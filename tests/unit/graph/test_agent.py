@@ -5,18 +5,13 @@ Tests graph construction, wiring, and entry points.
 """
 
 import tempfile
-from typing import Any, Optional
-
-import pytest
+from typing import Optional
 
 from scrappy.graph.agent import (
-    WorkingDirectoryError,
     build_graph,
     create_agent_runner,
     run_agent,
     validate_working_dir,
-    _wrap_think_node,
-    _wrap_execute_node,
     _wrap_verify_node,
     _route_after_execute,
 )
@@ -61,27 +56,32 @@ class TestBuildGraph:
 
     def test_builds_without_error(self) -> None:
         """build_graph should complete without errors."""
+        from langgraph.graph.state import CompiledStateGraph
+
         llm_service = MockLLMService()
         tool_adapter = MockToolAdapter()
         graph = build_graph(llm_service, tool_adapter)
-        assert graph is not None
+        assert isinstance(graph, CompiledStateGraph)
 
     def test_accepts_custom_tool_adapter(self) -> None:
         """build_graph should accept custom tool adapter."""
+        from langgraph.graph.state import CompiledStateGraph
+
         llm_service = MockLLMService()
         tool_adapter = MockToolAdapter(tool_names=["custom_tool"])
         graph = build_graph(llm_service, tool_adapter)
-        assert graph is not None
+        assert isinstance(graph, CompiledStateGraph)
 
     def test_accepts_custom_checkpointer(self) -> None:
         """build_graph should accept custom checkpointer."""
+        from langgraph.graph.state import CompiledStateGraph
         from langgraph.checkpoint.memory import MemorySaver
 
         llm_service = MockLLMService()
         tool_adapter = MockToolAdapter()
         checkpointer = MemorySaver()
         graph = build_graph(llm_service, tool_adapter, checkpointer=checkpointer)
-        assert graph is not None
+        assert isinstance(graph, CompiledStateGraph)
 
     def test_has_think_as_entry_point(self) -> None:
         """Graph entry point should be 'think' node."""
@@ -89,11 +89,8 @@ class TestBuildGraph:
         tool_adapter = MockToolAdapter()
         graph = build_graph(llm_service, tool_adapter)
 
-        # The graph should have think node
-        # We can verify by checking the graph structure
-        assert graph is not None
-        # LangGraph CompiledStateGraph has nodes attribute
-        assert hasattr(graph, "nodes")
+        # Verify think node exists in the graph
+        assert "think" in graph.nodes
 
     def test_has_required_nodes(self) -> None:
         """Graph should have all required nodes."""
@@ -114,12 +111,9 @@ class TestBuildGraph:
         tool_adapter = MockToolAdapter()
         graph = build_graph(llm_service, tool_adapter)
 
-        # LangGraph stores interrupt configuration
-        # The graph should pause before confirm node
-        # We verify this by checking the compiled graph's interrupt configuration
-        assert graph is not None
-        # The interrupt_before is set during compilation
-        # We can verify behavior in integration tests
+        # LangGraph stores interrupt configuration in the compiled graph
+        # The interrupt_before list should include "confirm"
+        assert "confirm" in graph.interrupt_before_nodes
 
 
 # =============================================================================
@@ -200,6 +194,9 @@ class TestCreateAgentRunner:
 
     def test_returns_graph_and_checkpointer(self) -> None:
         """create_agent_runner should return tuple of graph and checkpointer."""
+        from langgraph.graph.state import CompiledStateGraph
+        from langgraph.checkpoint.memory import MemorySaver
+
         llm_service = MockLLMService()
         tool_adapter = MockToolAdapter()
         result = create_agent_runner(llm_service, tool_adapter)
@@ -208,34 +205,37 @@ class TestCreateAgentRunner:
         assert len(result) == 2
 
         graph, checkpointer = result
-        assert hasattr(graph, "invoke")
-        assert hasattr(checkpointer, "get")  # MemorySaver has get method
+        assert isinstance(graph, CompiledStateGraph)
+        assert isinstance(checkpointer, MemorySaver)
 
     def test_accepts_custom_tool_adapter(self) -> None:
         """create_agent_runner should accept custom tool adapter."""
+        from langgraph.graph.state import CompiledStateGraph
+
         llm_service = MockLLMService()
-        tool_adapter = MockToolAdapter()
+        tool_adapter = MockToolAdapter(tool_names=["custom_tool"])
 
         graph, checkpointer = create_agent_runner(
             llm_service,
             tool_adapter,
         )
 
-        assert graph is not None
-        assert checkpointer is not None
+        assert isinstance(graph, CompiledStateGraph)
 
     def test_accepts_mypy_config(self) -> None:
         """create_agent_runner should accept run_mypy_check config."""
+        from langgraph.graph.state import CompiledStateGraph
+
         llm_service = MockLLMService()
         tool_adapter = MockToolAdapter()
 
-        graph, checkpointer = create_agent_runner(
+        graph, _ = create_agent_runner(
             llm_service,
             tool_adapter,
             run_mypy_check=False,
         )
 
-        assert graph is not None
+        assert isinstance(graph, CompiledStateGraph)
 
 
 # =============================================================================
@@ -262,6 +262,8 @@ class TestRunAgent:
 
     def test_preserves_working_dir(self) -> None:
         """run_agent should preserve the working directory."""
+        from pathlib import Path
+
         llm_service = MockLLMService(
             response=MockLLMResponse(content="Done.")
         )
@@ -273,8 +275,8 @@ class TestRunAgent:
             llm_service=llm_service,
         )
 
-        # Working dir should be resolved to absolute path
-        assert result.working_dir is not None
+        # Working dir should be resolved to absolute path matching temp_dir
+        assert Path(result.working_dir).resolve() == Path(temp_dir).resolve()
 
     def test_increments_iteration(self) -> None:
         """run_agent should increment iteration count."""
@@ -292,7 +294,7 @@ class TestRunAgent:
         assert result.iteration >= 1
 
     def test_accepts_custom_thread_id(self) -> None:
-        """run_agent should accept custom thread_id."""
+        """run_agent should accept custom thread_id without raising."""
         llm_service = MockLLMService(
             response=MockLLMResponse(content="Done.")
         )
@@ -305,7 +307,8 @@ class TestRunAgent:
             thread_id="custom-session-123",
         )
 
-        assert result is not None
+        # Verify result was returned (test is about accepting the parameter)
+        assert result.original_task == "Test"
 
 
 # =============================================================================
@@ -348,6 +351,21 @@ class TestGraphIntegration:
                         provider = "mock"
                     return FinalResponse(), {}
 
+            def stream_completion_sync(self, model, messages, cancellation_token=None, **kwargs):
+                from scrappy.orchestrator.types import StreamChunk, ToolCallFragment
+                response, _ = self.completion_sync(model, messages, **kwargs)
+                if response.content:
+                    yield StreamChunk(content=response.content, model="mock-model", provider="mock")
+                if response.tool_calls:
+                    for i, tc in enumerate(response.tool_calls):
+                        yield StreamChunk(
+                            tool_call_fragments=[ToolCallFragment(
+                                index=i, id=tc.id, type="function", name=tc.name, arguments=tc.arguments
+                            )],
+                            model="mock-model", provider="mock"
+                        )
+                yield StreamChunk(finish_reason="stop", model="mock-model", provider="mock")
+
         llm_service = MultiStepLLMService()
         tool_adapter = MockToolAdapter()
 
@@ -382,6 +400,13 @@ class TestGraphIntegration:
                         provider = "mock"
                     return SuccessResponse(), {}
 
+            def stream_completion_sync(self, model, messages, cancellation_token=None, **kwargs):
+                from scrappy.orchestrator.types import StreamChunk
+                response, _ = self.completion_sync(model, messages, **kwargs)
+                if response.content:
+                    yield StreamChunk(content=response.content, model="mock-model", provider="mock")
+                yield StreamChunk(finish_reason="stop", model="mock-model", provider="mock")
+
         llm_service = ErrorRecoveryLLMService()
 
         result = run_agent(
@@ -414,6 +439,19 @@ class TestGraphIntegration:
                     provider = "mock"
                 return ToolCallResponse(), {}
 
+            def stream_completion_sync(self, model, messages, cancellation_token=None, **kwargs):
+                from scrappy.orchestrator.types import StreamChunk, ToolCallFragment
+                response, _ = self.completion_sync(model, messages, **kwargs)
+                if response.tool_calls:
+                    for i, tc in enumerate(response.tool_calls):
+                        yield StreamChunk(
+                            tool_call_fragments=[ToolCallFragment(
+                                index=i, id=tc.id, type="function", name=tc.name, arguments=tc.arguments
+                            )],
+                            model="mock-model", provider="mock"
+                        )
+                yield StreamChunk(finish_reason="stop", model="mock-model", provider="mock")
+
         llm_service = InfiniteLoopLLMService()
         tool_adapter = MockToolAdapter()
 
@@ -443,29 +481,36 @@ class TestGraphConfiguration:
 
     def test_tool_adapter_is_required(self) -> None:
         """Graph requires tool_adapter parameter."""
+        from langgraph.graph.state import CompiledStateGraph
+
         llm_service = MockLLMService()
         tool_adapter = MockToolAdapter()
 
         # tool_adapter is required - graph should build successfully
         graph = build_graph(llm_service, tool_adapter)
-        assert graph is not None
+        assert isinstance(graph, CompiledStateGraph)
 
     def test_default_checkpointer_creation(self) -> None:
         """Graph should create default checkpointer if not provided."""
+        from langgraph.graph.state import CompiledStateGraph
+
         llm_service = MockLLMService()
         tool_adapter = MockToolAdapter()
 
-        # Should not raise even without checkpointer
+        # Should build with all required nodes even without explicit checkpointer
         graph = build_graph(llm_service, tool_adapter)
-        assert graph is not None
+        assert isinstance(graph, CompiledStateGraph)
+        assert "think" in graph.nodes
 
     def test_mypy_check_disabled(self) -> None:
         """Graph should accept run_mypy_check=False."""
+        from langgraph.graph.state import CompiledStateGraph
+
         llm_service = MockLLMService()
         tool_adapter = MockToolAdapter()
 
         graph = build_graph(llm_service, tool_adapter, run_mypy_check=False)
-        assert graph is not None
+        assert isinstance(graph, CompiledStateGraph)
 
 
 # =============================================================================
@@ -478,13 +523,16 @@ class TestStateConversion:
 
     def test_initial_state_creation(self) -> None:
         """run_agent should create proper initial state."""
+        from pathlib import Path
+
         llm_service = MockLLMService(
             response=MockLLMResponse(content="Done.")
         )
 
+        temp_dir = tempfile.gettempdir()
         result = run_agent(
             task="Create initial state test",
-            working_dir=tempfile.gettempdir(),
+            working_dir=temp_dir,
             llm_service=llm_service,
         )
 
@@ -492,7 +540,7 @@ class TestStateConversion:
         assert result.input == "Create initial state test"
         assert result.original_task == "Create initial state test"
         # Working dir is resolved to absolute path
-        assert result.working_dir is not None
+        assert Path(result.working_dir).resolve() == Path(temp_dir).resolve()
 
 
 # =============================================================================
