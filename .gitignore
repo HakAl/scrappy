@@ -73,4 +73,5 @@ nul
 .team
 
 .docs
-.plan
+.docs/.plan
+.audit

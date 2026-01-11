@@ -291,6 +291,42 @@ class TestBackgroundTaskCancellation:
         # Depending on implementation, may have 0 errors or cancelled error isn't counted
         # The key is it shouldn't crash
 
+    @pytest.mark.asyncio
+    async def test_cancel_all_tasks_cancels_all_pending(self):
+        """cancel_all_tasks should cancel all pending tasks and return count."""
+        manager = BackgroundTaskManager()
+
+        async def long_running_task():
+            await asyncio.sleep(10)
+
+        # Submit multiple tasks
+        manager.submit_background_task(long_running_task())
+        manager.submit_background_task(long_running_task())
+        manager.submit_background_task(long_running_task())
+
+        # Should have 3 pending
+        assert manager.get_task_status()['pending_tasks'] == 3
+
+        # Cancel all
+        cancelled = manager.cancel_all_tasks()
+
+        assert cancelled == 3
+
+        # Give tasks a moment to process cancellation
+        await asyncio.sleep(0.05)
+
+        # Should no longer be pending
+        assert manager.get_task_status()['pending_tasks'] == 0
+
+    @pytest.mark.asyncio
+    async def test_cancel_all_returns_zero_when_no_tasks(self):
+        """cancel_all_tasks should return 0 when no tasks are pending."""
+        manager = BackgroundTaskManager()
+
+        cancelled = manager.cancel_all_tasks()
+
+        assert cancelled == 0
+
 
 class TestEdgeCases:
     """Test boundary conditions and edge cases."""

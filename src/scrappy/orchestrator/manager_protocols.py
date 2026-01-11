@@ -245,6 +245,17 @@ class BackgroundTaskManagerProtocol(Protocol):
         """
         ...
 
+    def cancel_all_tasks(self) -> int:
+        """
+        Cancel all pending background tasks.
+
+        Called during shutdown to prevent tasks from blocking exit.
+
+        Returns:
+            Number of tasks that were cancelled
+        """
+        ...
+
     def clear_background_errors(self) -> None:
         """
         Clear the background error log.

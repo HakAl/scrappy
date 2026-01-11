@@ -963,6 +963,17 @@ class AgentOrchestrator:
         """
         return self.background_manager.cancel_task(task_id)
 
+    def cancel_all_background_tasks(self) -> int:
+        """
+        Cancel all pending background tasks.
+
+        Called during shutdown to prevent tasks from blocking exit.
+
+        Returns:
+            Number of tasks that were cancelled
+        """
+        return self.background_manager.cancel_all_tasks()
+
     # Rate Limit Management
 
     def get_rate_limit_status(self) -> dict:

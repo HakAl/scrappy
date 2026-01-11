@@ -70,6 +70,10 @@ class TracerProtocol(Protocol):
         """Flush pending traces."""
         ...
 
+    def shutdown(self) -> None:
+        """Flush pending traces and shutdown background threads."""
+        ...
+
 
 class NoOpSpan:
     """No-op span for when Langfuse is not available."""
@@ -113,6 +117,10 @@ class NoOpTracer:
 
     def flush(self) -> None:
         """No-op flush."""
+        pass
+
+    def shutdown(self) -> None:
+        """No-op shutdown."""
         pass
 
 
@@ -197,13 +205,37 @@ class LangfuseTracer:
             except Exception as e:
                 logger.warning(f"Failed to flush Langfuse traces: {e}")
 
+    def shutdown(self) -> None:
+        """
+        Flush pending traces and shutdown Langfuse background threads.
+
+        This is the proper shutdown method per Langfuse docs:
+        - Flushes all buffered data
+        - Waits for background threads to terminate (blocking)
+        - Must be called before exit to prevent hanging
+        """
+        if self._available and self._client is not None:
+            try:
+                self._client.shutdown()
+                logger.debug("Langfuse shutdown complete")
+            except Exception as e:
+                logger.warning(f"Failed to shutdown Langfuse: {e}")
+            finally:
+                self._available = False
+                self._client = None
+
     def get_callback_handler(self) -> Optional["LangfuseCallbackHandler"]:
-        """Get CallbackHandler for LangGraph integration."""
-        if not self._available:
+        """Get CallbackHandler for LangGraph integration.
+
+        Shares the same Langfuse client as the tracer so that shutdown_tracing()
+        properly cleans up all langfuse resources.
+        """
+        if not self._available or self._client is None:
             return None
         # Lazy import to avoid loading at module import time
         from langfuse.callback import CallbackHandler
-        return CallbackHandler()
+        # Pass our existing client to avoid creating a separate one
+        return CallbackHandler(langfuse_client=self._client)
 
 
 # Global tracer instance (lazy singleton)
@@ -336,15 +368,19 @@ def trace_node(name: str) -> Callable[[Callable[P, R]], Callable[P, R]]:
 
 def shutdown_tracing() -> None:
     """
-    Flush and shutdown tracing.
+    Properly shutdown tracing, flushing data and terminating background threads.
 
-    Call this when the agent completes to ensure all traces are sent.
+    Per Langfuse docs, shutdown() (not just flush()) must be called to:
+    - Flush all buffered trace data
+    - Wait for background threads to terminate
+    - Prevent hanging on app exit
+
     Thread-safe: Uses lock to prevent race conditions.
     """
     global _tracer
     with _tracer_lock:
         if _tracer is not None:
-            _tracer.flush()
+            _tracer.shutdown()
             _tracer = None
 
 

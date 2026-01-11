@@ -163,6 +163,29 @@ class BackgroundTaskManager:
         task.cancel()
         return True
 
+    def cancel_all_tasks(self) -> int:
+        """
+        Cancel all pending background tasks.
+
+        Called during shutdown to prevent tasks from blocking exit.
+
+        Returns:
+            Number of tasks that were cancelled
+        """
+        with self._lock:
+            tasks_to_cancel = [
+                (task_id, task)
+                for task_id, task in self._tasks.items()
+                if not task.done()
+            ]
+
+        cancelled = 0
+        for task_id, task in tasks_to_cancel:
+            task.cancel()
+            cancelled += 1
+
+        return cancelled
+
     def clear_background_errors(self):
         """Clear the background error log."""
         self._errors.clear()
