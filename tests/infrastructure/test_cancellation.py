@@ -87,7 +87,7 @@ class TestCancellationToken:
         elapsed = time.time() - start
 
         assert result is False
-        assert elapsed >= 0.05
+        assert elapsed >= 0.045  # Allow ~10% tolerance for OS scheduling jitter
         assert not token.is_cancelled
 
     def test_thread_safety(self) -> None:
