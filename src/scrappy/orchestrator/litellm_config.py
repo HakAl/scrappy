@@ -421,10 +421,15 @@ def create_litellm_router(callbacks: Optional[list] = None):
     if callbacks:
         litellm.callbacks = callbacks
 
-    # NOTE: Langfuse tracing is handled via LangGraph's CallbackHandler (see tracing.py)
-    # We previously added "langfuse" to litellm callbacks here, but this created
-    # a separate Langfuse client that wasn't properly shutdown, causing errors on exit.
-    # The LangGraph callback handler already captures all LLM calls, so this is redundant.
+    # Enable Langfuse for LLM call tracing if configured
+    from scrappy.graph.tracing import is_tracing_enabled
+    if is_tracing_enabled():
+        litellm.success_callback = litellm.success_callback or []
+        if "langfuse" not in litellm.success_callback:
+            litellm.success_callback.append("langfuse")
+        litellm.failure_callback = litellm.failure_callback or []
+        if "langfuse" not in litellm.failure_callback:
+            litellm.failure_callback.append("langfuse")
 
     # Context window fallbacks: when a model hits context limit, try larger models
     # Order: small context -> medium -> large (Gemini has 1M context)

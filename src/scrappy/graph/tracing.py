@@ -375,6 +375,10 @@ def shutdown_tracing() -> None:
     - Wait for background threads to terminate
     - Prevent hanging on app exit
 
+    This shuts down both:
+    1. Our LangfuseTracer client (used by LangGraph callbacks)
+    2. The global langfuse client used by litellm's integration
+
     Thread-safe: Uses lock to prevent race conditions.
     """
     global _tracer
@@ -382,6 +386,20 @@ def shutdown_tracing() -> None:
         if _tracer is not None:
             _tracer.shutdown()
             _tracer = None
+
+    # Also shutdown litellm's langfuse client (separate from our tracer)
+    # litellm uses langfuse.get_client() internally when "langfuse" callback is enabled
+    # Only attempt if langfuse is installed (optional dev dependency)
+    try:
+        from langfuse import get_client
+        client = get_client()
+        if client is not None:
+            client.shutdown()
+            logger.debug("Litellm's langfuse client shutdown complete")
+    except ImportError:
+        pass  # langfuse not installed, nothing to shutdown
+    except Exception as e:
+        logger.debug(f"Error shutting down litellm's langfuse client: {e}")
 
 
 def get_langfuse_callback() -> Optional["LangfuseCallbackHandler"]:
