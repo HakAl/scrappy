@@ -173,6 +173,9 @@ class SubprocessRunner:
             if process:
                 process.kill()
             raise TimeoutError("Command interrupted by user (Ctrl+C)")
+        except CancelledException:
+            # Re-raise cancellation exceptions directly - don't wrap them
+            raise
         except Exception as e:
             if process:
                 process.kill()
