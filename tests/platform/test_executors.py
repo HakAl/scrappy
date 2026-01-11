@@ -5,7 +5,7 @@ Tests the different execution strategies: native, translated, and fallback.
 """
 import subprocess
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -104,11 +104,12 @@ class TestNativeCommandExecutor:
         mock_run.return_value = Mock(stdout="", stderr="", returncode=0)
         executor = self._create_executor()
 
-        executor.execute("long_command", timeout=60)
+        result = executor.execute("long_command", timeout=60)
 
         mock_run.assert_called_once()
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs['timeout'] == 60
+        assert result.success is True
 
     @pytest.mark.unit
     @patch('scrappy.platform.executors.subprocess.run')
@@ -198,6 +199,8 @@ class TestTranslatedCommandExecutor:
         translator.translate_command.assert_called_once_with("ls -1")
         mock_run.assert_called_once()
         assert mock_run.call_args[0][0] == "dir /b"
+        assert result.method == 'translated'
+        assert result.success is True
 
     @pytest.mark.unit
     @patch('scrappy.platform.executors.subprocess.run')
@@ -463,12 +466,12 @@ class TestExecutorIntegration:
         detector = Mock()
         executor = NativeCommandExecutor(detector)
 
-        executor.execute("ls")
+        result = executor.execute("ls")
 
         call_kwargs = mock_run.call_args[1]
-        # Should be a valid path string
-        assert isinstance(call_kwargs['cwd'], str)
-        assert len(call_kwargs['cwd']) > 0
+        # Should use current working directory
+        assert call_kwargs['cwd'] == str(Path.cwd())
+        assert result.success is True
 
     @pytest.mark.unit
     @patch('scrappy.platform.executors.subprocess.run')
@@ -480,11 +483,12 @@ class TestExecutorIntegration:
         translator.translate_command.return_value = ("dir", True)
         executor = TranslatedCommandExecutor(detector, translator)
 
-        executor.execute("ls")
+        result = executor.execute("ls")
 
         call_kwargs = mock_run.call_args[1]
-        assert isinstance(call_kwargs['cwd'], str)
-        assert len(call_kwargs['cwd']) > 0
+        # Should use current working directory
+        assert call_kwargs['cwd'] == str(Path.cwd())
+        assert result.success is True
 
     @pytest.mark.unit
     def test_fallback_executor_handles_command_with_only_spaces(self):

@@ -3,8 +3,6 @@
 import threading
 import time
 
-import pytest
-
 from scrappy.infrastructure.threading import CancellationToken
 
 
@@ -65,7 +63,6 @@ class TestCancellationToken:
     def test_wait_blocks_until_cancelled(self) -> None:
         """Wait blocks until cancel() is called from another thread."""
         token = CancellationToken()
-        cancelled_at: list[float] = []
 
         def canceller() -> None:
             time.sleep(0.05)

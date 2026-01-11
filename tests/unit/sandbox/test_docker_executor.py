@@ -263,10 +263,14 @@ class TestDockerExecutor:
         mock_client.images.get.return_value = MagicMock()
 
         executor = DockerExecutor(str(tmp_path), network_enabled=False)
-        executor.run("ls")
+        result = executor.run("ls")
 
+        # Verify container created with network isolation
         call_kwargs = mock_client.containers.run.call_args[1]
         assert call_kwargs["network_mode"] == "none"
+        # Verify command was executed
+        mock_container.exec_run.assert_called_once()
+        assert result.success is True
 
     @patch("scrappy.sandbox.docker_executor.docker")
     def test_network_enabled_when_requested(self, mock_docker, tmp_path):
@@ -285,10 +289,14 @@ class TestDockerExecutor:
         mock_client.images.get.return_value = MagicMock()
 
         executor = DockerExecutor(str(tmp_path), network_enabled=True)
-        executor.run("ls")
+        result = executor.run("ls")
 
+        # Verify container created with network enabled
         call_kwargs = mock_client.containers.run.call_args[1]
         assert call_kwargs["network_mode"] == "bridge"
+        # Verify command was executed
+        mock_container.exec_run.assert_called_once()
+        assert result.success is True
 
     @patch("scrappy.sandbox.docker_executor.docker")
     def test_falls_back_to_basic_image(self, mock_docker, tmp_path):
@@ -312,10 +320,13 @@ class TestDockerExecutor:
         mock_client.containers.run.return_value = mock_container
 
         executor = DockerExecutor(str(tmp_path))
-        executor.run("ls")
+        result = executor.run("ls")
 
         # Should have tried custom image first, then fallback
         assert mock_client.images.get.call_count == 2
+        # Command should still execute successfully
+        mock_container.exec_run.assert_called_once()
+        assert result.success is True
 
 
 class TestCreateExecutor:
@@ -342,21 +353,25 @@ class TestCommandExecutorProtocol:
     """Tests that executors implement the protocol."""
 
     def test_host_executor_implements_protocol(self, tmp_path):
-        """HostExecutor implements CommandExecutorProtocol."""
-
+        """HostExecutor implements CommandExecutorProtocol methods."""
         executor = HostExecutor(str(tmp_path))
-        # Duck typing check - all methods exist
-        assert hasattr(executor, "run")
-        assert hasattr(executor, "cleanup")
-        assert hasattr(executor, "is_available")
-        assert hasattr(executor, "executor_type")
+
+        # Verify methods are callable and return expected types
+        assert executor.executor_type == "host"
+        assert executor.is_available() is True
+        result = executor.run("echo test")
+        assert result.exit_code == 0
+        # cleanup should not raise
+        executor.cleanup()
 
     def test_docker_executor_implements_protocol(self, tmp_path):
-        """DockerExecutor implements CommandExecutorProtocol."""
-
+        """DockerExecutor implements CommandExecutorProtocol methods."""
         executor = DockerExecutor(str(tmp_path))
-        # Duck typing check - all methods exist
-        assert hasattr(executor, "run")
-        assert hasattr(executor, "cleanup")
-        assert hasattr(executor, "is_available")
-        assert hasattr(executor, "executor_type")
+
+        # Verify methods are callable and return expected types
+        assert executor.executor_type == "docker"
+        # is_available may return False if Docker not running - that's fine
+        available = executor.is_available()
+        assert isinstance(available, bool)
+        # cleanup should not raise even without container
+        executor.cleanup()
