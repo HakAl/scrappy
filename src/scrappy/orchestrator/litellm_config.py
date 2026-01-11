@@ -296,29 +296,30 @@ def build_model_list(api_key_service: ApiKeyConfigServiceProtocol) -> list[dict]
             "rpm": 1,  # ~40 RPD = very low RPM
         })
 
-    # --- Chat Models (no tools, lighter models for conversation) ---
-    # Used when use_tools=False - simple chat doesn't need 235B models
-    # Priority: Cerebras Llama 70B (ultra fast) > Groq Llama 70B (fallback)
+    # --- Chat Models (tool-capable, LLM decides when to use tools) ---
+    # Must use models with native tool calling - Llama hallucinates fake XML syntax.
+    # Lower volume than agent loops, so we can use quality models without rate limit risk.
+    # Priority: Gemini (tool support + 1M context) > Kimi K2 (fast, tool support)
 
-    if cerebras_key:
+    if gemini_key:
         model_list.append({
             "model_name": "chat",
             "litellm_params": {
-                "model": "cerebras/llama-3.3-70b",
-                "api_key": cerebras_key,
+                "model": "gemini/gemini-2.5-flash",
+                "api_key": gemini_key,
             },
-            "tpm": 60000,
-            "rpm": 30,
+            "tpm": 250000,
+            "rpm": 10,
         })
 
     if groq_key:
         model_list.append({
             "model_name": "chat",
             "litellm_params": {
-                "model": "groq/llama-3.3-70b-versatile",
+                "model": "groq/moonshotai/kimi-k2-instruct",
                 "api_key": groq_key,
             },
-            "tpm": 12000,
+            "tpm": 20000,
             "rpm": 30,
         })
 
@@ -453,7 +454,7 @@ def create_litellm_router(callbacks: Optional[list] = None):
     return litellm.Router(
         model_list=[],  # Empty - configured via set_model_list() later
         routing_strategy="simple-shuffle",
-        num_retries=3,
+        num_retries=1,  # Reduced: let graph fallback chain handle retries deterministically
         timeout=60,
         retry_after=5,
         context_window_fallbacks=context_fallbacks,

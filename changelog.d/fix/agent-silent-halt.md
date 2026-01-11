@@ -1,0 +1,1 @@
+Fixed agent rate limit handling: fallback chain now activates on any rate limit error (not just when all providers exhaust). This ensures deterministic model fallback order instead of random Router selection. Also fixed silent success display when rate limiting caused empty responses.
