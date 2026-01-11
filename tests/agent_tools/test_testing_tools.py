@@ -6,9 +6,9 @@ Tests the test execution tool with smart output truncation.
 
 import pytest
 from pathlib import Path
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock
 
-from scrappy.agent_tools.tools.base import ToolContext, ToolResult
+from scrappy.agent_tools.tools.base import ToolContext
 from scrappy.agent_tools.tools.testing_tools import (
     RunTestsTool,
     truncate_test_output,
@@ -308,3 +308,75 @@ class TestRunTestsToolErrorHandling:
 
         assert result.success is False
         assert "error" in result.error.lower()
+
+
+class TestRunTestsToolCancellation:
+    """Tests for cancellation support."""
+
+    def setup_method(self):
+        """Set up test fixtures."""
+        from scrappy.infrastructure.threading.cancellation import CancellationToken
+
+        self.config = AgentConfig()
+        self.project_root = Path("/test/project")
+        self.token = CancellationToken()
+
+        # Create mock run_context with cancellation_token
+        self.mock_run_context = Mock()
+        self.mock_run_context.cancellation_token = self.token
+
+        self.context = ToolContext(
+            project_root=self.project_root,
+            dry_run=False,
+            config=self.config,
+            run_context=self.mock_run_context
+        )
+
+    def test_cancellation_exception_propagates(self):
+        """CancelledException from runner is re-raised, not swallowed."""
+        from scrappy.infrastructure.exceptions import CancelledException
+
+        mock_runner = Mock()
+        mock_runner.execute.side_effect = CancelledException("Cancelled")
+
+        tool = RunTestsTool(runner=mock_runner)
+
+        with pytest.raises(CancelledException):
+            tool.execute(self.context, command="pytest")
+
+    def test_uses_cancellation_token_from_context(self):
+        """When no runner injected, creates runner with context's cancellation token."""
+        # Don't inject a runner - let it create one
+        tool = RunTestsTool()
+
+        # Cancel the token
+        self.token.cancel()
+
+        # Execute should raise CancelledException because the runner
+        # will be created with the cancelled token
+        from scrappy.infrastructure.exceptions import CancelledException
+
+        with pytest.raises(CancelledException):
+            # Use a slow command that would take time without cancellation
+            import sys
+            if sys.platform == "win32":
+                tool.execute(self.context, command="ping -n 5 127.0.0.1")
+            else:
+                tool.execute(self.context, command="sleep 5")
+
+    def test_injected_runner_used_when_provided(self):
+        """When runner is injected, uses that instead of creating new one."""
+        mock_runner = Mock()
+        mock_runner.execute.return_value = ExecutionResult(
+            stdout="PASSED",
+            stderr="",
+            exit_code=0,
+            execution_time=0.1
+        )
+
+        tool = RunTestsTool(runner=mock_runner)
+        result = tool.execute(self.context, command="pytest")
+
+        # Should use the injected runner
+        mock_runner.execute.assert_called_once()
+        assert result.success is True

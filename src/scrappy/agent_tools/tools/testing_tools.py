@@ -11,6 +11,7 @@ from typing import Optional
 from .base import ToolBase, ToolParameter, ToolResult, ToolContext
 from ..components import CommandSecurity, SubprocessRunner
 from ..constants import DEFAULT_COMMAND_TIMEOUT
+from scrappy.infrastructure.exceptions import CancelledException
 
 
 # Output truncation settings
@@ -78,11 +79,11 @@ class RunTestsTool(ToolBase):
         Args:
             timeout: Command execution timeout in seconds
             security: Command security validator (default: creates CommandSecurity)
-            runner: Subprocess runner (default: creates SubprocessRunner)
+            runner: Subprocess runner (for testing injection only)
         """
         self._timeout = timeout
         self._security = security or CommandSecurity()
-        self._runner = runner or SubprocessRunner()
+        self._injected_runner = runner  # Only used for test injection
 
     @property
     def name(self) -> str:
@@ -150,9 +151,14 @@ class RunTestsTool(ToolBase):
                 metadata={"dry_run": True, "command": command}
             )
 
+        # Get runner - use injected for tests, otherwise create with cancellation token
+        runner = self._injected_runner
+        if runner is None:
+            runner = SubprocessRunner(cancellation_token=context.cancellation_token)
+
         # Execute command
         try:
-            result = self._runner.execute(
+            result = runner.execute(
                 command=command,
                 cwd=str(context.project_root),
                 timeout=timeout,
@@ -181,6 +187,9 @@ class RunTestsTool(ToolBase):
                 }
             )
 
+        except CancelledException:
+            # Re-raise cancellation to propagate up the call stack
+            raise
         except TimeoutError:
             return ToolResult(
                 success=False,
