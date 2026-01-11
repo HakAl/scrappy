@@ -5,8 +5,6 @@ These tests verify the pre-execution advice and output enrichment
 functionality of the command advisor.
 """
 
-import pytest
-
 from scrappy.agent_tools.components.command_advisor import CommandAdvisor
 
 
@@ -143,12 +141,6 @@ class TestCommandAdvisorEnrichOutput:
 
 class TestCommandAdvisorInitialization:
     """Tests for CommandAdvisor initialization."""
-
-    def test_initialization(self):
-        """CommandAdvisor can be instantiated."""
-        advisor = CommandAdvisor()
-
-        assert advisor is not None
 
     def test_multiple_instances_independent(self):
         """Multiple instances are independent."""

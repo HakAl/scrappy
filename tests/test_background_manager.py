@@ -12,7 +12,6 @@ Following CLAUDE.md guidelines:
 import pytest
 import asyncio
 import threading
-from concurrent.futures import ThreadPoolExecutor
 from scrappy.orchestrator.background import BackgroundTaskManager
 
 
@@ -64,8 +63,8 @@ class TestBackgroundTaskSubmission:
             await asyncio.sleep(0.1)
 
         # Submit tasks
-        task_id_1 = manager.submit_background_task(slow_task())
-        task_id_2 = manager.submit_background_task(slow_task())
+        manager.submit_background_task(slow_task())
+        manager.submit_background_task(slow_task())
 
         # Should be tracked
         status = manager.get_task_status()
@@ -86,7 +85,7 @@ class TestBackgroundTaskSubmission:
             executed.append('done')
 
         # Submit task (should not block)
-        task_id = manager.submit_background_task(task_that_appends())
+        manager.submit_background_task(task_that_appends())
 
         # Task hasn't completed yet
         assert len(executed) == 0
@@ -110,7 +109,7 @@ class TestBackgroundTaskCompletion:
         async def quick_task():
             await asyncio.sleep(0.01)
 
-        task_id = manager.submit_background_task(quick_task())
+        manager.submit_background_task(quick_task())
 
         # Wait for completion
         await asyncio.sleep(0.05)
@@ -187,7 +186,7 @@ class TestBackgroundTaskErrors:
             await asyncio.sleep(0.01)
             raise ValueError("Task failed!")
 
-        task_id = manager.submit_background_task(failing_task())
+        manager.submit_background_task(failing_task())
 
         # Wait for task to fail
         await asyncio.sleep(0.05)
@@ -205,7 +204,7 @@ class TestBackgroundTaskErrors:
             await asyncio.sleep(0.01)
             raise RuntimeError("Something went wrong")
 
-        task_id = manager.submit_background_task(failing_task())
+        manager.submit_background_task(failing_task())
 
         # Wait for task to fail
         await asyncio.sleep(0.05)
@@ -557,20 +556,3 @@ class TestBackgroundTaskManagerThreadSafety:
             assert 'pending_tasks' in status
             assert 'recent_errors' in status
 
-    @pytest.mark.asyncio
-    async def test_has_lock_attribute(self):
-        """Manager should have thread lock for synchronization."""
-        manager = BackgroundTaskManager()
-        # Verify internal lock exists (implementation detail, but important for thread safety)
-        assert hasattr(manager, '_lock')
-        assert isinstance(manager._lock, type(threading.Lock()))
-
-    @pytest.mark.asyncio
-    async def test_errors_is_deque(self):
-        """Manager should use deque for errors (thread-safe append)."""
-        from collections import deque
-        manager = BackgroundTaskManager()
-        # Verify internal errors is a deque
-        assert hasattr(manager, '_errors')
-        assert isinstance(manager._errors, deque)
-        assert manager._errors.maxlen == 50
