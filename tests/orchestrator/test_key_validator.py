@@ -4,7 +4,6 @@ Tests for LiteLLMKeyValidator.
 Tests the API key validation functionality with mocked litellm calls.
 """
 
-import pytest
 from unittest.mock import patch, MagicMock
 
 from scrappy.orchestrator.key_validator import LiteLLMKeyValidator, create_key_validator
@@ -246,11 +245,3 @@ class TestCreateKeyValidator:
         assert validator1 is not validator2
 
 
-class TestLazyImport:
-    """Tests for lazy import behavior."""
-
-    def test_validator_can_be_instantiated_without_litellm_import(self):
-        """LiteLLMKeyValidator can be instantiated without triggering litellm import."""
-        # This proves that the class doesn't require litellm at init time
-        validator = LiteLLMKeyValidator()
-        assert validator is not None

@@ -16,11 +16,11 @@ tests/orchestrator/golden/{provider}_{scenario}.json
 import pytest
 import json
 from pathlib import Path
-from typing import List, Dict, Any, AsyncIterator, Optional
+from typing import List, Dict, Any, AsyncIterator
 from unittest.mock import Mock, AsyncMock
 
 from scrappy.orchestrator.litellm_service import LiteLLMService
-from scrappy.orchestrator.types import StreamChunk, ToolCallFragment
+from scrappy.orchestrator.types import ToolCallFragment
 from scrappy.orchestrator.streaming_util import ToolCallAccumulator
 from tests.helpers import MockApiKeyService, CapturingStreamOutput, MockStreamingRouter
 
@@ -420,7 +420,7 @@ async def test_cerebras_fragmentation_quirks():
                     accumulator.add_fragment(fragment)
 
     # Mark last fragments as complete
-    forced = accumulator.force_complete_pending()
+    accumulator.force_complete_pending()
 
     # Verify tool calls extracted despite fragmentation
     all_completed = accumulator.get_completed()
@@ -439,20 +439,25 @@ async def test_gemini_chunk_format():
     except FileNotFoundError:
         pytest.skip("Gemini golden file not found")
 
-    # Verify we can parse all chunks without errors
+    # Verify we can parse all chunks and extract content
     chunk_count = 0
+    content_found = False
     for chunk_record in recording["chunks"]:
         raw_chunk = chunk_record["raw_chunk"]
         mock_chunk = MockLiteLLMStreamChunk(raw_chunk)
 
-        # Verify structure
-        assert hasattr(mock_chunk, "choices")
+        # Verify structure by accessing content directly
         assert len(mock_chunk.choices) > 0
-        assert hasattr(mock_chunk.choices[0], "delta")
+        delta = mock_chunk.choices[0].delta
+        # Delta content may be None for some chunks, but attribute access should work
+        if delta.content:
+            content_found = True
 
         chunk_count += 1
 
     assert chunk_count == recording["total_chunks"]
+    # At least some chunks should have content
+    assert content_found, "Expected at least one chunk with content"
 
 
 @pytest.mark.asyncio
@@ -496,6 +501,8 @@ async def test_empty_response_handling():
     for chunk_record in recording["chunks"]:
         raw_chunk = chunk_record["raw_chunk"]
         mock_chunk = MockLiteLLMStreamChunk(raw_chunk)
+        # Verify chunk was parsed successfully
+        assert mock_chunk.choices is not None
         chunk_count += 1
 
     assert chunk_count > 0  # Should have at least one chunk
