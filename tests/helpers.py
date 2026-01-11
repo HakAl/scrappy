@@ -5,7 +5,7 @@ Provides mock adapters and utilities for testing the orchestrator and agent.
 """
 
 from typing import List, Optional, Dict, Any
-from unittest.mock import Mock
+from unittest.mock import Mock, MagicMock
 from pathlib import Path
 import tempfile
 
@@ -3350,3 +3350,110 @@ class CapturingStreamOutput:
         self.ended = False
         self.start_message = None
         self.end_message = None
+
+
+# =============================================================================
+# Tool Context Factory
+# =============================================================================
+
+
+def make_mock_tool_context(
+    project_root: Optional[Path] = None,
+    dry_run: bool = False,
+    is_safe_path: bool = True,
+    config: Optional[Dict[str, Any]] = None,
+    **kwargs: Any,
+) -> MagicMock:
+    """
+    Factory function to create a mock ToolContext for testing.
+
+    Creates a MagicMock with spec=ToolContext and sets up common attributes
+    with sensible defaults. All attributes can be overridden via kwargs.
+
+    Args:
+        project_root: Project root directory (default: temp directory)
+        dry_run: Whether in dry run mode (default: False)
+        is_safe_path: Default return value for is_safe_path() (default: True)
+        config: Dict of config values to set (merged with defaults)
+        **kwargs: Additional attributes to set on the context
+
+    Returns:
+        MagicMock configured as ToolContext
+
+    Usage:
+        # Simple usage
+        context = make_mock_tool_context()
+
+        # With project root
+        context = make_mock_tool_context(project_root=tmp_path)
+
+        # With custom config
+        context = make_mock_tool_context(config={
+            'git_timeout': 30,
+            'max_file_read_size': 5000,
+        })
+
+        # With custom is_safe_path behavior
+        context = make_mock_tool_context(is_safe_path=False)
+
+        # With orchestrator
+        context = make_mock_tool_context(orchestrator=mock_orchestrator)
+    """
+    from scrappy.agent_tools.tools.base import ToolContext
+
+    context = MagicMock(spec=ToolContext)
+
+    # Set project root
+    if project_root is None:
+        project_root = Path(tempfile.gettempdir())
+    context.project_root = project_root
+
+    # Set dry run
+    context.dry_run = dry_run
+
+    # Set is_safe_path mock
+    context.is_safe_path = Mock(return_value=is_safe_path)
+
+    # Set memory methods
+    context.remember_file_read = Mock()
+    context.remember_git_operation = Mock()
+    context.remember_search = Mock()
+
+    # Set default config
+    default_config = {
+        'git_timeout': 10,
+        'max_git_diff_size': 100,
+        'max_git_blame_size': 100,
+        'max_git_show_size': 100,
+        'max_recent_commits': 5,
+        'max_recent_changes_size': 200,
+        'git_diff_timeout': 20,
+        'max_file_read_size': 1000,
+        'max_file_listing': 10,
+        'max_directory_tree_lines': 50,
+        'skip_directories': ['.git', '__pycache__'],
+        'allowed_hidden_files': ['.gitignore'],
+    }
+    if config:
+        default_config.update(config)
+
+    context.config = Mock()
+    for key, value in default_config.items():
+        setattr(context.config, key, value)
+
+    # Set optional attributes to None by default
+    context.orchestrator = kwargs.pop('orchestrator', None)
+    context.semantic_search = kwargs.pop('semantic_search', None)
+    context.task_storage = kwargs.pop('task_storage', None)
+    context.working_set = kwargs.pop('working_set', None)
+    context.run_context = kwargs.pop('run_context', None)
+    context.turn = kwargs.pop('turn', 0)
+
+    # Set cancellation_token property
+    context.cancellation_token = kwargs.pop('cancellation_token', None)
+
+    # Apply any remaining kwargs
+    for key, value in kwargs.items():
+        setattr(context, key, value)
+
+    return context
