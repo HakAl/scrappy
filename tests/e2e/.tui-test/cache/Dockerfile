@@ -23,11 +23,11 @@ COPY . .
 RUN pip install --break-system-packages -e .
 
 # Install Node.js dependencies for E2E tests
-WORKDIR /app/e2e
+WORKDIR /app/tests/e2e
 RUN npm install
 
 # Back to app root
 WORKDIR /app
 
 # Run E2E tests
-CMD ["npm", "--prefix", "e2e", "test"]
+CMD ["npm", "--prefix", "tests/e2e", "test"]

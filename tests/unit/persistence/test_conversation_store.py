@@ -23,12 +23,6 @@ from scrappy.infrastructure.persistence import (
 )
 
 
-class TestStripAnsi:
-    """Tests for ANSI escape code stripping."""
-
-
-
-
 
 
 
@@ -137,11 +131,11 @@ class TestCheckSessionStaleness:
 
     def test_handles_naive_datetime(self):
         """Should handle naive datetime by assuming UTC."""
-        # Naive datetime (no timezone)
+        # Naive datetime (no timezone) - 5 hours ago is beyond 4-hour threshold
         last_time = datetime.now() - timedelta(hours=5)
         result = check_session_staleness(last_time)
-        # Should still work (treats as UTC)
-        assert isinstance(result, bool)
+        # Should treat as UTC and return True (stale)
+        assert result is True
 
 
 class TestFormatStaleSeparator:

@@ -9,7 +9,7 @@ import { test, expect } from "@microsoft/tui-test";
  */
 
 // Run tests sequentially to avoid resource contention
-test.describe.configure({ mode: "serial" });
+// Serial mode - tests run one at a time
 
 // Configure scrappy with no tracing
 test.use({

@@ -1,4 +1,4 @@
-//# hash=28cbd6dbf16613ccee626a383bcec590
+//# hash=1a7cf9f3c44723ea56298c0d1fa7ab70
 //# sourceMappingURL=smoke.spec.js.map
 
 function asyncGeneratorStep(gen, resolve, reject, _next, _throw, key, arg) {
@@ -130,8 +130,11 @@ function _ts_generator(thisArg, body) {
     }
 }
 import { test } from "@microsoft/tui-test";
-// Skip API key check and tracing for smoke tests
+// Run scrappy with no tracing
 test.use({
+    program: {
+        file: "scrappy"
+    },
     env: {
         LANGFUSE_PUBLIC_KEY: "",
         LANGFUSE_SECRET_KEY: ""
