@@ -399,29 +399,36 @@ class TestAgentCommand:
     def test_agent_parses_dry_run_flag(
         self, mock_optional, mock_deps, router, mock_agent_mgr
     ):
-        """_handle_agent parses --dry-run flag."""
+        """_handle_agent parses --dry-run flag and extracts task."""
         mock_deps.return_value = (True, [])
         mock_optional.return_value = []
 
         router._handle_agent("--dry-run do something")
 
         mock_agent_mgr.run_agent.assert_called_once()
-        call_kwargs = mock_agent_mgr.run_agent.call_args[1]
-        assert call_kwargs["dry_run"] is True
+        call_args = mock_agent_mgr.run_agent.call_args
+        # First positional arg is the task with flag stripped
+        assert call_args[0][0] == "do something"
+        # dry_run flag is True
+        assert call_args[1]["dry_run"] is True
 
     @patch("scrappy.cli.command_router.check_agent_dependencies")
     @patch("scrappy.cli.command_router.check_optional_dependencies")
     def test_agent_parses_verbose_flag(
         self, mock_optional, mock_deps, router, mock_agent_mgr
     ):
-        """_handle_agent parses --verbose flag."""
+        """_handle_agent parses --verbose flag and extracts task."""
         mock_deps.return_value = (True, [])
         mock_optional.return_value = []
 
         router._handle_agent("--verbose do something")
 
-        call_kwargs = mock_agent_mgr.run_agent.call_args[1]
-        assert call_kwargs["verbose"] is True
+        mock_agent_mgr.run_agent.assert_called_once()
+        call_args = mock_agent_mgr.run_agent.call_args
+        # First positional arg is the task with flag stripped
+        assert call_args[0][0] == "do something"
+        # verbose flag is True
+        assert call_args[1]["verbose"] is True
 
 
 class TestExploreCommand:
@@ -688,5 +695,12 @@ class TestHandleExistingTasks:
 
         result = router._handle_existing_tasks(mock_io, clear_tasks=True)
 
-        assert result is True
+        # Verified existing tasks before clearing
+        mock_storage.exists.assert_called_once()
+        mock_storage.read_tasks.assert_called_once()
+        # Cleared without prompting
         mock_storage.clear.assert_called_once()
+        assert result is True
+        # Confirmation message shown
+        output = mock_io.get_output()
+        assert "cleared" in output.lower()
