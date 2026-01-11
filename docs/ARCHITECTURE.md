@@ -31,9 +31,7 @@ Orchestrator (LiteLLM Router)
     │
     ├─── Gemini (Overflow - 1,650 RPD, auto-fallback)
     │     └─ gemini-2.5-flash-lite, gemini-2.0-flash, etc.
-    │
-    └─── Cohere (Embeddings - 1,000/month)
-          └─ command-r-08-2024, embed-english-v3.0
+    
 ```
 
 ## Key Innovations

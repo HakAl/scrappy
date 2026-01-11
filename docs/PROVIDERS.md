@@ -103,8 +103,6 @@ LiteLLM Router handles failover automatically:
 
 ## Rate Limits
 
-See [RATE_LIMITS.md](RATE_LIMITS.md) for detailed rate limit information per provider.
-
 | Provider | Daily Quota | Best For |
 |----------|------------|----------|
 | Cerebras | 14,400 RPD | Fast tier, highest quota |
