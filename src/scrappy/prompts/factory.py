@@ -5,7 +5,6 @@ from .sections import (
     DEGRADED_MODE_SECTION,
     codebase_hint_section,
     efficiency_section,
-    platform_section,
     quality_section,
     safety_section,
     security_awareness_section,
@@ -103,8 +102,6 @@ Guidelines:
 
 ## Iteration
 {config.iteration}
-
-{platform_section(config.platform)}
 
 {efficiency_section()}
 

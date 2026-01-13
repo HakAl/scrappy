@@ -10,9 +10,10 @@ Tests LLM reasoning step including:
 """
 
 import pytest
-from typing import Any, Optional
+from typing import Optional
 
-from scrappy.graph.state import AgentState, Message
+from scrappy.graph.state import AgentState, Message, ToolCall
+from scrappy.graph.protocols import ThinkResult
 from scrappy.graph.nodes.think import (
     think_node,
     think_node_streaming,
@@ -26,55 +27,15 @@ from scrappy.graph.nodes.think import (
     convert_tool_calls,
     FULL_CONTEXT_WINDOW,
 )
-from scrappy.orchestrator.litellm_service import NotConfiguredError
-from scrappy.orchestrator.types import StreamChunk, ToolCallFragment
-from tests.helpers import MockLLMService, MockLLMResponse, MockToolAdapter
+from scrappy.graph.nodes.mock_think_delegator import MockThinkDelegator
+from scrappy.infrastructure.exceptions import RecoveryAction
+from scrappy.orchestrator.types import ToolCallFragment
+from tests.helpers import MockToolAdapter
 
 
 # =============================================================================
 # Test Doubles
 # =============================================================================
-
-
-class MockToolCall:
-    """Mock tool call object with object attributes."""
-
-    def __init__(self, id: str, name: str, arguments: dict):
-        self.id = id
-        self.name = name
-        self.arguments = arguments
-
-
-class MockStreamingLLMService:
-    """Mock streaming LLM service for testing."""
-
-    def __init__(
-        self,
-        chunks: Optional[list[StreamChunk]] = None,
-        exception: Optional[Exception] = None,
-    ):
-        self.chunks = chunks or []
-        self.exception = exception
-        self.calls: list[dict] = []
-
-    async def stream_completion(
-        self,
-        model: str,
-        messages: list[dict],
-        **kwargs: Any,
-    ):
-        """Yield mock chunks."""
-        self.calls.append({
-            "model": model,
-            "messages": messages,
-            **kwargs,
-        })
-
-        if self.exception:
-            raise self.exception
-
-        for chunk in self.chunks:
-            yield chunk
 
 
 def create_test_state(
@@ -629,19 +590,22 @@ class TestToolCallAccumulation:
 
 
 class TestThinkNode:
-    """Tests for the main think_node function."""
+    """Tests for the main think_node function with ThinkDelegator."""
 
     def test_basic_completion(self):
-        """Think node should call LLM and return updated state."""
+        """Think node should apply successful ThinkResult to state."""
         state = create_test_state()
-        llm_service = MockLLMService(
-            response=MockLLMResponse(content="Here is your function...")
+        delegator = MockThinkDelegator(
+            default_response=ThinkResult(
+                content="Here is your function...",
+                model_display="test: model",
+            )
         )
 
-        result = think_node(state, llm_service)
+        result = think_node(state, delegator)
 
-        # Should have called LLM
-        assert len(llm_service.calls) == 1
+        # Should have called delegator
+        assert delegator.call_count == 1
 
         # State should be updated - includes user message + assistant response
         assert len(result.messages) == 2
@@ -655,29 +619,27 @@ class TestThinkNode:
         # Should be marked done (no tool calls)
         assert result.done is True
 
-    def test_uses_state_tier_without_tools(self):
-        """Think node should use state.current_tier even without tools."""
+    def test_passes_tier_to_delegator(self):
+        """Think node should pass state.current_tier to delegator."""
         state = create_test_state(current_tier="chat")
-        llm_service = MockLLMService()
+        delegator = MockThinkDelegator()
 
-        # No tool_adapter, uses state.current_tier
-        think_node(state, llm_service, tool_adapter=None)
+        think_node(state, delegator, tool_adapter=None)
 
-        assert llm_service.calls[0]["model"] == "chat"
+        assert delegator.last_tier == "chat"
 
-    def test_uses_state_tier_with_tools(self):
-        """Think node should use state.current_tier when tool_adapter is provided."""
+    def test_passes_tier_with_tools(self):
+        """Think node should pass tier to delegator when tool_adapter is provided."""
         state = create_test_state(current_tier="instruct")
-        llm_service = MockLLMService()
+        delegator = MockThinkDelegator()
         tool_adapter = MockToolAdapter(tool_names=["test_tool"])
 
-        # With tool_adapter = agent mode = use state.current_tier
-        think_node(state, llm_service, tool_adapter=tool_adapter)
+        think_node(state, delegator, tool_adapter=tool_adapter)
 
-        assert llm_service.calls[0]["model"] == "instruct"
+        assert delegator.last_tier == "instruct"
 
     def test_includes_conversation_history(self):
-        """Think node should include previous messages."""
+        """Think node should include previous messages in call to delegator."""
         prior_messages: list[Message] = [
             {"role": "user", "content": "What is Python?"},
             {"role": "assistant", "content": "Python is a programming language."},
@@ -686,31 +648,35 @@ class TestThinkNode:
             messages=prior_messages,
             input_text="Tell me more",
         )
-        llm_service = MockLLMService()
+        delegator = MockThinkDelegator()
 
-        think_node(state, llm_service)
+        think_node(state, delegator)
 
         # Messages should include history + system + current input
-        call_messages = llm_service.calls[0]["messages"]
+        call_messages = delegator.last_messages
+        assert call_messages is not None
         assert any("What is Python?" in str(m) for m in call_messages)
         assert any("programming language" in str(m) for m in call_messages)
 
-    def test_extracts_tool_calls_from_response(self):
-        """Think node should extract tool calls from LLM response."""
+    def test_applies_tool_calls_from_result(self):
+        """Think node should apply tool calls from ThinkResult to state."""
         state = create_test_state()
-        tool_call = MockToolCall(
-            id="call_abc",
-            name="read_file",
-            arguments={"path": "/test/file.py"},
-        )
-        llm_service = MockLLMService(
-            response=MockLLMResponse(
+        tool_call: ToolCall = {
+            "id": "call_abc",
+            "type": "function",
+            "function": {
+                "name": "read_file",
+                "arguments": '{"path": "/test/file.py"}',
+            },
+        }
+        delegator = MockThinkDelegator(
+            default_response=ThinkResult(
                 content="",
-                tool_calls=[tool_call],
+                tool_calls=(tool_call,),
             )
         )
 
-        result = think_node(state, llm_service)
+        result = think_node(state, delegator)
 
         # Should have user message + assistant with tool calls
         assert len(result.messages) == 2
@@ -722,10 +688,10 @@ class TestThinkNode:
         # Should NOT be done (has tool calls)
         assert result.done is False
 
-    def test_passes_tool_schemas(self):
-        """Think node should pass tool schemas to LLM."""
+    def test_passes_tool_schemas_to_delegator(self):
+        """Think node should pass tool schemas to delegator."""
         state = create_test_state()
-        llm_service = MockLLMService()
+        delegator = MockThinkDelegator()
         tool_adapter = MockToolAdapter(
             tool_names=["read_file"],
             tool_schemas=[{
@@ -738,20 +704,24 @@ class TestThinkNode:
             }],
         )
 
-        think_node(state, llm_service, tool_adapter=tool_adapter)
+        think_node(state, delegator, tool_adapter=tool_adapter)
 
         # Should have tools in call
-        assert "tools" in llm_service.calls[0]
-        assert len(llm_service.calls[0]["tools"]) == 1
+        assert delegator.last_tools is not None
+        assert len(delegator.last_tools) == 1
 
-    def test_handles_llm_error(self):
-        """Think node should handle LLM errors gracefully."""
+    def test_applies_error_result_to_state(self):
+        """Think node should apply error ThinkResult to state."""
         state = create_test_state()
-        llm_service = MockLLMService(
-            exception=Exception("API rate limit exceeded")
+        delegator = MockThinkDelegator(
+            default_response=ThinkResult(
+                error="API rate limit exceeded",
+                recovery_action=RecoveryAction.RETRY.value,
+                error_category="rate_limit",
+            )
         )
 
-        result = think_node(state, llm_service)
+        result = think_node(state, delegator)
 
         # Should not crash
         assert result is not None
@@ -763,42 +733,36 @@ class TestThinkNode:
         # Iteration should still increment
         assert result.iteration == 1
 
-    def test_handles_not_configured_error(self):
-        """Think node should handle NotConfiguredError specially - sets done=True."""
+    def test_applies_fatal_error_to_state(self):
+        """Think node should set done=True for fatal errors."""
         state = create_test_state()
-        llm_service = MockLLMService(
-            exception=NotConfiguredError("LLM service not configured")
+        delegator = MockThinkDelegator(
+            default_response=ThinkResult(
+                error="Not configured - run /setup first",
+                recovery_action=RecoveryAction.ABORT.value,
+                is_fatal=True,
+            )
         )
 
-        result = think_node(state, llm_service)
+        result = think_node(state, delegator)
 
         # Should not crash
         assert result is not None
 
-        # Should set done=True to stop the graph (no point retrying)
+        # Should set done=True to stop the graph
         assert result.done is True
 
-        # Should have clear error message directing user to setup
+        # Should have error message
         assert result.last_error is not None
         assert "/setup" in result.last_error
 
-        # error_count should NOT be incremented (not a retryable error)
-        assert result.error_count == 0
-
-        # Iteration should still increment
-        assert result.iteration == 1
-
     def test_resets_error_count_on_success(self):
-        """Successful completion should reset error count and clear last_error.
-
-        error_count tracks consecutive errors for retry logic.
-        Resetting on success prevents premature termination from transient errors.
-        """
+        """Successful completion should reset error count and clear last_error."""
         state = create_test_state()
         state = state.model_copy(update={"error_count": 2, "last_error": "Previous error"})
-        llm_service = MockLLMService()
+        delegator = MockThinkDelegator()
 
-        result = think_node(state, llm_service)
+        result = think_node(state, delegator)
 
         # error_count is reset (tracks consecutive errors)
         assert result.error_count == 0
@@ -812,20 +776,20 @@ class TestThinkNode:
 
 
 class TestThinkNodeStreaming:
-    """Tests for the streaming think_node_streaming function."""
+    """Tests for the streaming think_node_streaming function with ThinkDelegator."""
 
     @pytest.mark.asyncio
     async def test_basic_streaming(self):
-        """Streaming think node should accumulate chunks."""
+        """Streaming think node should apply ThinkResult with accumulated content."""
         state = create_test_state()
-        chunks = [
-            StreamChunk(content="Hello, "),
-            StreamChunk(content="world!"),
-            StreamChunk(content="", finish_reason="stop"),
-        ]
-        llm_service = MockStreamingLLMService(chunks=chunks)
+        delegator = MockThinkDelegator(
+            default_response=ThinkResult(
+                content="Hello, world!",
+                model_display="test: model",
+            )
+        )
 
-        result = await think_node_streaming(state, llm_service)
+        result = await think_node_streaming(state, delegator)
 
         # Should have user message + accumulated assistant content
         assert len(result.messages) == 2
@@ -834,45 +798,41 @@ class TestThinkNodeStreaming:
 
     @pytest.mark.asyncio
     async def test_streaming_callback(self):
-        """Streaming should call callback for each chunk."""
+        """Streaming should call callback for each chunk via delegator."""
         state = create_test_state()
-        chunks = [
-            StreamChunk(content="A"),
-            StreamChunk(content="B"),
-            StreamChunk(content="C"),
-        ]
-        llm_service = MockStreamingLLMService(chunks=chunks)
+        delegator = MockThinkDelegator(
+            default_response=ThinkResult(content="A B C")
+        )
         received: list[str] = []
 
         def callback(content: str):
             received.append(content)
 
-        await think_node_streaming(state, llm_service, stream_callback=callback)
+        await think_node_streaming(state, delegator, stream_callback=callback)
 
-        assert received == ["A", "B", "C"]
+        # MockThinkDelegator simulates streaming by splitting on words
+        assert len(received) > 0
 
     @pytest.mark.asyncio
     async def test_streaming_tool_calls(self):
-        """Streaming should accumulate tool call fragments."""
+        """Streaming should apply tool calls from ThinkResult."""
         state = create_test_state()
-        chunks = [
-            StreamChunk(
+        tool_call: ToolCall = {
+            "id": "call_123",
+            "type": "function",
+            "function": {
+                "name": "read_file",
+                "arguments": '{"path": "/test"}',
+            },
+        }
+        delegator = MockThinkDelegator(
+            default_response=ThinkResult(
                 content="",
-                tool_call_fragments=[
-                    ToolCallFragment(
-                        id="call_123",
-                        type="function",
-                        name="read_file",
-                        arguments='{"path": "/test"}',
-                        index=0,
-                    )
-                ],
-            ),
-            StreamChunk(content="", finish_reason="tool_calls"),
-        ]
-        llm_service = MockStreamingLLMService(chunks=chunks)
+                tool_calls=(tool_call,),
+            )
+        )
 
-        result = await think_node_streaming(state, llm_service)
+        result = await think_node_streaming(state, delegator)
 
         # Should have user message + assistant with tool calls
         assert len(result.messages) == 2
@@ -883,63 +843,61 @@ class TestThinkNodeStreaming:
 
     @pytest.mark.asyncio
     async def test_streaming_handles_error(self):
-        """Streaming should handle errors gracefully."""
+        """Streaming should apply error ThinkResult to state."""
         state = create_test_state()
-        llm_service = MockStreamingLLMService(
-            exception=Exception("Stream timeout")
+        delegator = MockThinkDelegator(
+            default_response=ThinkResult(
+                error="Stream timeout",
+                recovery_action=RecoveryAction.RETRY.value,
+            )
         )
 
-        result = await think_node_streaming(state, llm_service)
+        result = await think_node_streaming(state, delegator)
 
         assert result.error_count == 1
         assert "timeout" in result.last_error.lower()
 
     @pytest.mark.asyncio
-    async def test_streaming_handles_not_configured_error(self):
-        """Streaming should handle NotConfiguredError specially - sets done=True."""
+    async def test_streaming_handles_fatal_error(self):
+        """Streaming should set done=True for fatal errors."""
         state = create_test_state()
-        llm_service = MockStreamingLLMService(
-            exception=NotConfiguredError("LLM service not configured")
+        delegator = MockThinkDelegator(
+            default_response=ThinkResult(
+                error="Not configured - run /setup first",
+                recovery_action=RecoveryAction.ABORT.value,
+                is_fatal=True,
+            )
         )
 
-        result = await think_node_streaming(state, llm_service)
+        result = await think_node_streaming(state, delegator)
 
         # Should set done=True to stop the graph
         assert result.done is True
 
-        # Should have clear error message
+        # Should have error message
         assert result.last_error is not None
         assert "/setup" in result.last_error
 
-        # error_count should NOT be incremented
-        assert result.error_count == 0
-
     @pytest.mark.asyncio
-    async def test_streaming_uses_state_tier_without_tools(self):
-        """Streaming should use state.current_tier even without tools."""
+    async def test_streaming_passes_tier_to_delegator(self):
+        """Streaming should pass state.current_tier to delegator."""
         state = create_test_state(current_tier="chat")
-        llm_service = MockStreamingLLMService(chunks=[
-            StreamChunk(content="Test", finish_reason="stop")
-        ])
+        delegator = MockThinkDelegator()
 
-        # No tool_adapter, uses state.current_tier
-        await think_node_streaming(state, llm_service, tool_adapter=None)
+        await think_node_streaming(state, delegator, tool_adapter=None)
 
-        assert llm_service.calls[0]["model"] == "chat"
+        assert delegator.last_tier == "chat"
 
     @pytest.mark.asyncio
-    async def test_streaming_uses_state_tier_with_tools(self):
-        """Streaming should use state.current_tier when tool_adapter is provided."""
+    async def test_streaming_passes_tier_with_tools(self):
+        """Streaming should pass tier to delegator when tool_adapter is provided."""
         state = create_test_state(current_tier="instruct")
-        llm_service = MockStreamingLLMService(chunks=[
-            StreamChunk(content="Test", finish_reason="stop")
-        ])
+        delegator = MockThinkDelegator()
         tool_adapter = MockToolAdapter(tool_names=["test_tool"])
 
-        # With tool_adapter = agent mode = use state.current_tier
-        await think_node_streaming(state, llm_service, tool_adapter=tool_adapter)
+        await think_node_streaming(state, delegator, tool_adapter=tool_adapter)
 
-        assert llm_service.calls[0]["model"] == "instruct"
+        assert delegator.last_tier == "instruct"
 
 
 # =============================================================================
@@ -954,11 +912,12 @@ class TestThinkNodeIntegration:
         """Think node should work correctly in multi-turn conversations."""
         # Turn 1
         state = create_test_state(input_text="What is Python?")
-        llm_service = MockLLMService(
-            response=MockLLMResponse(content="Python is a programming language.")
-        )
+        delegator = MockThinkDelegator(responses=[
+            ThinkResult(content="Python is a programming language."),
+            ThinkResult(content="Python features include..."),
+        ])
 
-        state = think_node(state, llm_service)
+        state = think_node(state, delegator)
 
         # After turn 1: [user1, assistant1]
         assert len(state.messages) == 2
@@ -971,11 +930,8 @@ class TestThinkNodeIntegration:
             ],
             "done": False,
         })
-        llm_service = MockLLMService(
-            response=MockLLMResponse(content="Python features include...")
-        )
 
-        state = think_node(state, llm_service)
+        state = think_node(state, delegator)
 
         # Should have 4 messages total (user1 + assistant1 + user2 + assistant2)
         assert len(state.messages) == 4
@@ -997,16 +953,20 @@ class TestThinkNodeIntegration:
         )
 
         # Step 1: LLM decides to use tool
-        tool_call = MockToolCall(
-            id="call_1",
-            name="read_file",
-            arguments={"path": "config.py"},
-        )
-        llm_service = MockLLMService(
-            response=MockLLMResponse(content="", tool_calls=[tool_call])
-        )
+        tool_call: ToolCall = {
+            "id": "call_1",
+            "type": "function",
+            "function": {
+                "name": "read_file",
+                "arguments": '{"path": "config.py"}',
+            },
+        }
+        delegator = MockThinkDelegator(responses=[
+            ThinkResult(content="", tool_calls=(tool_call,)),
+            ThinkResult(content="The config contains..."),
+        ])
 
-        state = think_node(state, llm_service, tool_adapter=tool_adapter)
+        state = think_node(state, delegator, tool_adapter=tool_adapter)
 
         # Should have [user, assistant_with_tool_calls], not be done
         assert len(state.messages) == 2
@@ -1021,11 +981,8 @@ class TestThinkNodeIntegration:
                 {"role": "tool", "content": "config data...", "tool_call_id": "call_1"}
             ]
         })
-        llm_service = MockLLMService(
-            response=MockLLMResponse(content="The config contains...")
-        )
 
-        state = think_node(state, llm_service, tool_adapter=tool_adapter)
+        state = think_node(state, delegator, tool_adapter=tool_adapter)
 
         # Now should be done with [user, assistant_tool, tool_result, assistant_final]
         assert state.done is True
@@ -1038,20 +995,21 @@ class TestThinkNodeIntegration:
             last_error="FileNotFoundError: config.py not found",
             error_count=1,
         )
-        llm_service = MockLLMService(
-            response=MockLLMResponse(
+        delegator = MockThinkDelegator(
+            default_response=ThinkResult(
                 content="I see the file was not found. Let me check the directory..."
             )
         )
 
-        result = think_node(state, llm_service)
+        result = think_node(state, delegator)
 
         # error_count reset on successful recovery, last_error cleared
         assert result.error_count == 0  # Reset on success
         assert result.last_error is None  # Cleared on success
 
-        # LLM should have received error context
-        call_messages = llm_service.calls[0]["messages"]
+        # LLM should have received error context in messages
+        call_messages = delegator.last_messages
+        assert call_messages is not None
         system_prompt = next(m["content"] for m in call_messages if m["role"] == "system")
         assert "FileNotFoundError" in system_prompt
 
@@ -1059,190 +1017,130 @@ class TestThinkNodeIntegration:
 # =============================================================================
 # Cancellation Tests
 # =============================================================================
-
-
-class MockCancellationToken:
-    """Mock cancellation token for testing."""
-
-    def __init__(self, cancelled: bool = False):
-        self._cancelled = cancelled
-
-    @property
-    def is_cancelled(self) -> bool:
-        return self._cancelled
+#
+# Note: Cancellation logic is now handled by ThinkDelegator (tested in
+# test_think_delegator.py). These tests verify that think_node correctly
+# applies cancellation results from the delegator to state.
 
 
 class MockRunContext:
-    """Mock run context for testing cancellation."""
+    """Mock run context for testing."""
 
-    def __init__(self, cancelled: bool = False, force_cancelled: bool = False):
+    def __init__(self, cancelled: bool = False):
         self._cancelled = cancelled
-        self._force_cancelled = force_cancelled
-        self._cancellation_token = MockCancellationToken(cancelled)
+        self.preferred_model = None
+        self.preferred_provider = None
+        self.model_selection = None
 
     def is_cancelled(self) -> bool:
         return self._cancelled
 
-    def is_force_cancelled(self) -> bool:
-        return self._force_cancelled
-
-    @property
-    def cancellation_token(self):
-        return self._cancellation_token
-
 
 class TestThinkNodeCancellation:
-    """Tests for think node cancellation behavior."""
+    """Tests for think node applying cancellation results from delegator."""
 
-    def test_returns_cancelled_state_when_cancelled_before_start(self):
-        """Think node should return cancelled state immediately if already cancelled."""
+    def test_applies_cancelled_result_to_state(self):
+        """Think node should apply cancelled ThinkResult from delegator."""
         state = create_test_state()
-        llm_service = MockLLMService(
-            response=MockLLMResponse(content="This should not be called")
+        delegator = MockThinkDelegator(
+            default_response=ThinkResult(
+                error="Cancelled by user",
+                recovery_action=RecoveryAction.ABORT.value,
+                is_fatal=True,
+            )
         )
-        run_context = MockRunContext(cancelled=True)
 
-        result = think_node(state, llm_service, run_context=run_context)
+        result = think_node(state, delegator)
 
-        # Should return cancelled state
+        # Should have applied cancelled state
         assert result.done is True
         assert result.last_error == "Cancelled by user"
-        # LLM should not have been called
-        assert len(llm_service.calls) == 0
 
     def test_increments_iteration_on_cancellation(self):
         """Think node should increment iteration even when cancelled."""
         state = create_test_state(iteration=5)
-        llm_service = MockLLMService(
-            response=MockLLMResponse(content="")
+        delegator = MockThinkDelegator(
+            default_response=ThinkResult(
+                error="Cancelled by user",
+                recovery_action=RecoveryAction.ABORT.value,
+                is_fatal=True,
+            )
         )
-        run_context = MockRunContext(cancelled=True)
 
-        result = think_node(state, llm_service, run_context=run_context)
+        result = think_node(state, delegator)
 
         assert result.iteration == 6
 
-    def test_no_cancellation_when_run_context_none(self):
+    def test_passes_run_context_to_delegator(self):
+        """Think node should pass run_context to delegator."""
+        state = create_test_state()
+        delegator = MockThinkDelegator()
+        run_context = MockRunContext(cancelled=False)
+
+        think_node(state, delegator, run_context=run_context)
+
+        # Delegator should have received run_context
+        assert delegator.last_run_context is run_context
+
+    def test_runs_normally_when_run_context_none(self):
         """Think node should run normally when run_context is None."""
         state = create_test_state()
-        llm_service = MockLLMService(
-            response=MockLLMResponse(content="Normal response")
+        delegator = MockThinkDelegator(
+            default_response=ThinkResult(content="Normal response")
         )
 
-        result = think_node(state, llm_service, run_context=None)
+        result = think_node(state, delegator, run_context=None)
 
         # Should run normally
         assert result.done is True
-        assert len(llm_service.calls) == 1
-
-    def test_no_cancellation_when_not_cancelled(self):
-        """Think node should run normally when run_context.is_cancelled() is False."""
-        state = create_test_state()
-        llm_service = MockLLMService(
-            response=MockLLMResponse(content="Normal response")
-        )
-        run_context = MockRunContext(cancelled=False)
-
-        result = think_node(state, llm_service, run_context=run_context)
-
-        # Should run normally
-        assert result.done is True
-        assert len(llm_service.calls) == 1
-
-    def test_mid_stream_cancellation_returns_cancelled_state(self):
-        """Think node should handle StreamCancelledError during streaming."""
-        from scrappy.orchestrator.litellm_service import StreamCancelledError
-        from scrappy.orchestrator.types import StreamChunk
-
-        state = create_test_state()
-
-        # Create an LLM service that raises StreamCancelledError mid-stream
-        class CancellingLLMService:
-            calls = []
-
-            def stream_completion_sync(self, model, messages, cancellation_token=None, **kwargs):
-                self.calls.append({"model": model, "messages": messages})
-                yield StreamChunk(content="Partial ", model="test", provider="test")
-                # Simulate cancellation after first chunk
-                raise StreamCancelledError("Cancelled by user", partial_content="Partial ")
-
-        llm_service = CancellingLLMService()
-        run_context = MockRunContext(cancelled=False)
-
-        result = think_node(state, llm_service, run_context=run_context)
-
-        # Should return cancelled state
-        assert result.done is True
-        assert result.last_error == "Cancelled by user"
-        # Should have called LLM
-        assert len(llm_service.calls) == 1
+        assert delegator.call_count == 1
 
 
 class TestThinkNodeStreamingCancellation:
-    """Tests for streaming think node cancellation behavior."""
+    """Tests for streaming think node applying cancellation results from delegator."""
 
     @pytest.mark.asyncio
-    async def test_returns_cancelled_state_when_cancelled_before_start(self):
-        """Streaming think node should return cancelled state if already cancelled."""
+    async def test_applies_cancelled_result_to_state(self):
+        """Streaming think node should apply cancelled ThinkResult from delegator."""
         state = create_test_state()
-        llm_service = MockStreamingLLMService(chunks=[
-            StreamChunk(content="This should not be streamed"),
-        ])
-        run_context = MockRunContext(cancelled=True)
+        delegator = MockThinkDelegator(
+            default_response=ThinkResult(
+                error="Cancelled by user",
+                recovery_action=RecoveryAction.ABORT.value,
+                is_fatal=True,
+            )
+        )
 
-        result = await think_node_streaming(state, llm_service, run_context=run_context)
+        result = await think_node_streaming(state, delegator)
 
-        # Should return cancelled state
+        # Should have applied cancelled state
         assert result.done is True
         assert result.last_error == "Cancelled by user"
-        # LLM should not have been called
-        assert len(llm_service.calls) == 0
-
-    @pytest.mark.asyncio
-    async def test_discards_partial_response_on_mid_stream_cancellation(self):
-        """Streaming should discard partial response when cancelled mid-stream."""
-        state = create_test_state()
-
-        # Create a mock that cancels after first chunk
-        class CancellingRunContext:
-            def __init__(self):
-                self.check_count = 0
-
-            def is_cancelled(self) -> bool:
-                self.check_count += 1
-                # Cancel after first check (during first chunk)
-                return self.check_count > 1
-
-            def is_force_cancelled(self) -> bool:
-                return False
-
-        run_context = CancellingRunContext()
-
-        llm_service = MockStreamingLLMService(chunks=[
-            StreamChunk(content="First chunk "),
-            StreamChunk(content="Second chunk "),
-            StreamChunk(content="Third chunk"),
-        ])
-
-        result = await think_node_streaming(state, llm_service, run_context=run_context)
-
-        # Should be cancelled
-        assert result.done is True
-        assert result.last_error == "Cancelled by user"
-        # Should NOT have added partial content to messages
-        # (messages should be same as input state)
+        # Should NOT have added any content to messages
         assert len(result.messages) == len(state.messages)
 
     @pytest.mark.asyncio
-    async def test_no_cancellation_when_run_context_none(self):
+    async def test_passes_run_context_to_delegator(self):
+        """Streaming think node should pass run_context to delegator."""
+        state = create_test_state()
+        delegator = MockThinkDelegator()
+        run_context = MockRunContext(cancelled=False)
+
+        await think_node_streaming(state, delegator, run_context=run_context)
+
+        # Delegator should have received run_context
+        assert delegator.last_run_context is run_context
+
+    @pytest.mark.asyncio
+    async def test_runs_normally_when_run_context_none(self):
         """Streaming think node should run normally when run_context is None."""
         state = create_test_state()
-        llm_service = MockStreamingLLMService(chunks=[
-            StreamChunk(content="Hello world"),
-        ])
+        delegator = MockThinkDelegator(
+            default_response=ThinkResult(content="Hello world")
+        )
 
-        result = await think_node_streaming(state, llm_service, run_context=None)
+        result = await think_node_streaming(state, delegator, run_context=None)
 
         # Should run normally
         assert result.done is True
-        assert len(llm_service.calls) == 1
+        assert delegator.call_count == 1

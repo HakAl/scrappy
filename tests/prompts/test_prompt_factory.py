@@ -4,7 +4,6 @@
 from scrappy.prompts.factory import PromptFactory
 from scrappy.prompts.protocols import (
     AgentPromptConfig,
-    Platform,
     ResearchPromptConfig,
     ResearchSubtype,
 )
@@ -51,7 +50,6 @@ class TestAgentMode:
     def test_agent_system_prompt_has_tool_instructions(self):
         factory = PromptFactory()
         config = AgentPromptConfig(
-            platform=Platform.UNIX,
             tool_names=("read_file",),
             original_task="Read a file",
             working_dir="/test",
@@ -61,35 +59,9 @@ class TestAgentMode:
         assert "read_file" in prompt
         assert "Tool Usage Rules" in prompt
 
-    def test_agent_system_prompt_includes_platform_windows(self):
-        factory = PromptFactory()
-        config = AgentPromptConfig(
-            platform=Platform.WINDOWS,
-            tool_names=("read_file",),
-            original_task="Test task",
-            working_dir="C:\\test",
-        )
-        prompt = factory.create_agent_system_prompt(config)
-
-        assert "Windows" in prompt
-        assert "cmd.exe" in prompt
-
-    def test_agent_system_prompt_includes_platform_unix(self):
-        factory = PromptFactory()
-        config = AgentPromptConfig(
-            platform=Platform.UNIX,
-            tool_names=("read_file",),
-            original_task="Test task",
-            working_dir="/test",
-        )
-        prompt = factory.create_agent_system_prompt(config)
-
-        assert "Unix" in prompt or "Linux" in prompt
-
     def test_agent_system_prompt_includes_original_task(self):
         factory = PromptFactory()
         config = AgentPromptConfig(
-            platform=Platform.UNIX,
             tool_names=("read_file",),
             original_task="Implement authentication",
             working_dir="/test",
@@ -101,7 +73,6 @@ class TestAgentMode:
     def test_agent_system_prompt_includes_working_dir(self):
         factory = PromptFactory()
         config = AgentPromptConfig(
-            platform=Platform.UNIX,
             tool_names=("read_file",),
             original_task="Test task",
             working_dir="/my/project/path",
@@ -113,7 +84,6 @@ class TestAgentMode:
     def test_agent_system_prompt_includes_tool_usage_rules(self):
         factory = PromptFactory()
         config = AgentPromptConfig(
-            platform=Platform.UNIX,
             tool_names=("read_file",),
             original_task="Test task",
             working_dir="/test",
@@ -125,7 +95,6 @@ class TestAgentMode:
     def test_agent_system_prompt_includes_efficiency_section(self):
         factory = PromptFactory()
         config = AgentPromptConfig(
-            platform=Platform.UNIX,
             tool_names=("read_file",),
             original_task="Test task",
             working_dir="/test",
@@ -138,7 +107,6 @@ class TestAgentMode:
     def test_agent_system_prompt_includes_quality_section(self):
         factory = PromptFactory()
         config = AgentPromptConfig(
-            platform=Platform.UNIX,
             tool_names=("read_file",),
             original_task="Test task",
             working_dir="/test",
@@ -150,7 +118,6 @@ class TestAgentMode:
     def test_agent_system_prompt_includes_safety_section(self):
         factory = PromptFactory()
         config = AgentPromptConfig(
-            platform=Platform.UNIX,
             tool_names=("read_file",),
             original_task="Test task",
             working_dir="/test",
@@ -162,7 +129,6 @@ class TestAgentMode:
     def test_agent_system_prompt_includes_security_section(self):
         factory = PromptFactory()
         config = AgentPromptConfig(
-            platform=Platform.UNIX,
             tool_names=("read_file",),
             original_task="Test task",
             working_dir="/test",
@@ -174,7 +140,6 @@ class TestAgentMode:
     def test_agent_system_prompt_includes_error_context(self):
         factory = PromptFactory()
         config = AgentPromptConfig(
-            platform=Platform.UNIX,
             tool_names=("read_file",),
             original_task="Test task",
             working_dir="/test",
@@ -188,7 +153,6 @@ class TestAgentMode:
     def test_agent_system_prompt_includes_files_changed(self):
         factory = PromptFactory()
         config = AgentPromptConfig(
-            platform=Platform.UNIX,
             tool_names=("read_file",),
             original_task="Test task",
             working_dir="/test",
@@ -203,7 +167,6 @@ class TestAgentMode:
     def test_agent_user_prompt_includes_task(self):
         factory = PromptFactory()
         config = AgentPromptConfig(
-            platform=Platform.UNIX,
             tool_names=("read_file",),
             original_task="Original request",
             working_dir="/test",
@@ -340,7 +303,6 @@ class TestFactoryIsStateless:
         factory = PromptFactory()
 
         config = AgentPromptConfig(
-            platform=Platform.UNIX,
             tool_names=("read_file",),
             original_task="Read a file",
             working_dir="/test",
@@ -358,7 +320,6 @@ class TestFactoryIsStateless:
         chat_prompt = factory.create_chat_system_prompt()
         agent_prompt = factory.create_agent_system_prompt(
             AgentPromptConfig(
-                platform=Platform.UNIX,
                 tool_names=("read_file",),
                 original_task="Test task",
                 working_dir="/test",
@@ -422,7 +383,6 @@ class TestEdgeCases:
     def test_empty_tool_names_still_works(self):
         factory = PromptFactory()
         config = AgentPromptConfig(
-            platform=Platform.UNIX,
             tool_names=(),
             original_task="Test task",
             working_dir="/test",
@@ -436,7 +396,6 @@ class TestEdgeCases:
     def test_working_memory_context_included(self):
         factory = PromptFactory()
         config = AgentPromptConfig(
-            platform=Platform.UNIX,
             tool_names=("read_file",),
             original_task="Test task",
             working_dir="/test",

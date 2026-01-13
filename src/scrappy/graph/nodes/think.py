@@ -12,38 +12,24 @@ Features:
 - Langfuse tracing integration
 """
 
-import json
-import sys
-from typing import Any, Callable, Optional
+from typing import Callable, Optional
 
-from scrappy.graph.fallbacks import get_next_fallback
 from scrappy.graph.nodes.context_manager import ContextManager
 from scrappy.graph.nodes.token_estimator import TokenEstimator
 from scrappy.graph.nodes.tool_call_processor import ToolCallProcessor
 from scrappy.graph.protocols import (
     ContextFactoryProtocol,
-    LLMServiceProtocol,
-    StreamingLLMServiceProtocol,
+    ThinkDelegatorProtocol,
+    ThinkResult,
     WorkingMemoryProtocol,
 )
 from scrappy.graph.run_context import AgentRunContextProtocol
 from scrappy.graph.state import AgentState, Message, ToolCall
 from scrappy.graph.tools import ToolAdapterProtocol
-from scrappy.infrastructure.exceptions import (
-    AllProvidersRateLimitedError,
-    AuthenticationError,
-    NetworkError,
-    ProviderError,
-    ProviderExecutionError,
-    RateLimitError,
-    RecoveryAction,
-    TimeoutError as InfraTimeoutError,
-)
 from scrappy.infrastructure.logging import get_logger
-from scrappy.orchestrator.litellm_service import NotConfiguredError, StreamCancelledError
-from scrappy.orchestrator.types import StreamChunk, ToolCallFragment
+from scrappy.orchestrator.types import ToolCallFragment
 from scrappy.prompts.factory import PromptFactory
-from scrappy.prompts.protocols import AgentPromptConfig, Platform
+from scrappy.prompts.protocols import AgentPromptConfig
 
 logger = get_logger(__name__)
 
@@ -104,207 +90,6 @@ def fragments_to_tool_calls(accumulated: dict[int, dict]) -> list[ToolCall]:
     return _tool_call_processor.fragments_to_calls(accumulated)
 
 
-def _handle_llm_error(
-    error: Exception,
-    state: AgentState,
-    has_tools: bool,
-    log_context: str = "think node",
-) -> AgentState:
-    """
-    Handle LLM errors and return updated state.
-
-    Centralizes error handling logic shared between think_node (sync) and
-    think_node_streaming (async). Each error type has specific recovery behavior.
-
-    Args:
-        error: The exception that was raised
-        state: Current agent state
-        has_tools: Whether tools are being used (affects fallback chain selection)
-        log_context: Context string for log messages (e.g., "think node", "streaming think node")
-
-    Returns:
-        Updated AgentState with error information set appropriately
-    """
-    if isinstance(error, NotConfiguredError):
-        # LLM not configured - fatal error, stop the graph immediately
-        logger.error("LLM not configured. User needs to run setup.")
-        return state.model_copy(
-            update={
-                "iteration": state.iteration + 1,
-                "done": True,  # Stop the graph, no point in retrying
-                "last_error": "LLM not configured. Run /setup",
-                "recovery_action": RecoveryAction.ABORT.value,
-            }
-        )
-
-    if isinstance(error, AuthenticationError):
-        # Auth error - non-retryable, user needs to fix API keys
-        logger.error("Authentication error: %s", error)
-        return state.model_copy(
-            update={
-                "iteration": state.iteration + 1,
-                "done": True,  # Fatal - can't retry without valid credentials
-                "last_error": str(error),
-                "recovery_action": error.recovery_action.value,
-                "error_category": error.category.value,
-            }
-        )
-
-    if isinstance(error, AllProvidersRateLimitedError):
-        # All providers rate limited - try fallback model if available
-        # Use context-aware fallback chain based on whether tools are being used
-        current_model = state.current_model
-        next_model = get_next_fallback(current_model, has_tools=has_tools)
-
-        if next_model:
-            logger.warning(
-                "Rate limited on %s, falling back to %s (has_tools=%s)",
-                current_model or state.current_tier,
-                next_model,
-                has_tools,
-            )
-            # Return state with next fallback model - graph will loop back to think
-            return state.model_copy(
-                update={
-                    "iteration": state.iteration + 1,
-                    "current_model": next_model,
-                    "last_error": f"Rate limited, trying fallback: {next_model}",
-                    "recovery_action": RecoveryAction.FALLBACK.value,
-                    "error_category": error.category.value,
-                }
-            )
-        else:
-            # Fallback chain exhausted - fatal error
-            logger.error("All fallback models exhausted. Cannot continue.")
-            return state.model_copy(
-                update={
-                    "iteration": state.iteration + 1,
-                    "done": True,
-                    "error_count": state.error_count + 1,
-                    "last_error": "All providers rate limited. Please try again later.",
-                    "recovery_action": RecoveryAction.ABORT.value,
-                    "error_category": error.category.value,
-                }
-            )
-
-    if isinstance(error, RateLimitError):
-        # Single provider rate limit - retryable
-        logger.warning(
-            "Rate limit on provider %s: %s",
-            error.provider_name or "unknown",
-            error,
-            extra=error.logging_extra(),
-        )
-        return state.model_copy(
-            update={
-                "iteration": state.iteration + 1,
-                "error_count": state.error_count + 1,
-                "last_error": str(error),
-                "recovery_action": error.recovery_action.value,
-                "error_category": error.category.value,
-            }
-        )
-
-    if isinstance(error, (NetworkError, InfraTimeoutError)):
-        # Network/timeout errors - retryable
-        logger.warning(
-            "Network error in %s: %s",
-            log_context,
-            error,
-            extra=error.logging_extra(),
-        )
-        return state.model_copy(
-            update={
-                "iteration": state.iteration + 1,
-                "error_count": state.error_count + 1,
-                "last_error": str(error),
-                "recovery_action": error.recovery_action.value,
-                "error_category": error.category.value,
-            }
-        )
-
-    if isinstance(error, (ConnectionError, TimeoutError, OSError)):
-        # Stdlib network errors (fallback for non-wrapped errors)
-        logger.warning("Network error in %s: %s", log_context, error)
-        return state.model_copy(
-            update={
-                "iteration": state.iteration + 1,
-                "error_count": state.error_count + 1,
-                "last_error": f"Connection error: {error}",
-                "recovery_action": RecoveryAction.RETRY.value,
-                "error_category": "network",
-            }
-        )
-
-    if isinstance(error, ProviderExecutionError):
-        # Provider execution error - may be retryable
-        logger.warning(
-            "Provider execution error: %s",
-            error,
-            extra=error.logging_extra(),
-        )
-        return state.model_copy(
-            update={
-                "iteration": state.iteration + 1,
-                "error_count": state.error_count + 1,
-                "last_error": str(error),
-                "recovery_action": error.recovery_action.value,
-                "error_category": error.category.value,
-            }
-        )
-
-    if isinstance(error, ProviderError):
-        # Generic provider error - check if retryable
-        log_method = logger.warning if error.is_retryable else logger.error
-        log_method(
-            "Provider error: %s",
-            error,
-            extra=error.logging_extra(),
-        )
-        return state.model_copy(
-            update={
-                "iteration": state.iteration + 1,
-                "error_count": state.error_count + 1,
-                "last_error": str(error),
-                "recovery_action": error.recovery_action.value,
-                "error_category": error.category.value,
-                "done": not error.is_retryable,  # Stop if non-retryable
-            }
-        )
-
-    if isinstance(error, (json.JSONDecodeError, ValueError, TypeError, AttributeError)):
-        # Response parsing/handling errors - may be retryable (API returned bad format)
-        logger.warning("Response parsing error in %s: %s", log_context, error)
-        return state.model_copy(
-            update={
-                "iteration": state.iteration + 1,
-                "error_count": state.error_count + 1,
-                "last_error": f"Response error: {error}",
-                "recovery_action": RecoveryAction.RETRY.value,
-                "error_category": "parse",
-            }
-        )
-
-    # Unexpected error - log with full traceback for debugging
-    logger.exception(f"Unexpected error in {log_context}: {type(error).__name__}: {error}")
-    return state.model_copy(
-        update={
-            "iteration": state.iteration + 1,
-            "error_count": state.error_count + 1,
-            "last_error": str(error),
-            "recovery_action": RecoveryAction.ABORT.value,
-            "error_category": "system",
-        }
-    )
-
-
-def _detect_platform() -> Platform:
-    """Detect the current operating system platform."""
-    if sys.platform == "win32":
-        return Platform.WINDOWS
-    return Platform.UNIX
-
-
 def build_system_prompt(
     state: AgentState,
     tool_names: list[str],
@@ -339,7 +124,6 @@ def build_system_prompt(
 
     # Build config with all state
     config = AgentPromptConfig(
-        platform=_detect_platform(),
         tool_names=tuple(tool_names),
         original_task=state.original_task,
         working_dir=state.working_dir,
@@ -356,9 +140,109 @@ def build_system_prompt(
     return factory.create_agent_system_prompt(config)
 
 
+def _apply_think_result(
+    state: AgentState,
+    result: ThinkResult,
+    user_message_exists: bool,
+) -> AgentState:
+    """
+    Apply ThinkResult to state, returning updated AgentState.
+
+    Centralizes the logic for mapping delegator results to state updates.
+    Used by both think_node and think_node_streaming when using delegator.
+
+    Args:
+        state: Current agent state
+        result: ThinkResult from delegator
+        user_message_exists: Whether user message is already in state.messages
+
+    Returns:
+        Updated AgentState
+    """
+    # Handle error result
+    if not result.is_success:
+        return state.model_copy(
+            update={
+                "iteration": state.iteration + 1,
+                "error_count": state.error_count + 1,
+                "last_error": result.error,
+                "recovery_action": result.recovery_action,
+                "error_category": result.error_category,
+                "done": result.is_fatal,
+            }
+        )
+
+    # Build new assistant message
+    new_message: Message = {
+        "role": "assistant",
+        "content": result.content,
+    }
+    if result.tool_calls:
+        # Convert tuple to list for Message TypedDict
+        new_message["tool_calls"] = list(result.tool_calls)
+
+    # Update messages - include user message if not already present
+    if user_message_exists:
+        new_messages = list(state.messages) + [new_message]
+    else:
+        user_msg: Message = {"role": "user", "content": state.input}
+        new_messages = [user_msg] + list(state.messages) + [new_message]
+
+    # Success - clear fallback mode and error state
+    return state.model_copy(
+        update={
+            "messages": new_messages,
+            "iteration": state.iteration + 1,
+            "done": result.is_done,
+            "error_count": 0,
+            "last_error": None,
+            "current_model": None,  # Clear fallback mode
+            "last_model_display": result.model_display,
+        }
+    )
+
+
+def _build_messages_for_llm(
+    state: AgentState,
+    system_prompt: str,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
+) -> tuple[list[dict], bool]:
+    """
+    Build messages list for LLM call.
+
+    Args:
+        state: Current agent state
+        system_prompt: System prompt to use
+        max_tokens: Max context tokens for sanitization
+
+    Returns:
+        Tuple of (messages list, user_message_exists flag)
+    """
+    messages: list[dict] = [{"role": "system", "content": system_prompt}]
+
+    # Add conversation history
+    for msg in state.messages:
+        messages.append(dict(msg))
+
+    # Check if user message already exists
+    user_message_exists = any(
+        m.get("role") == "user" and m.get("content") == state.input
+        for m in state.messages
+    )
+
+    # Add current input if not already in conversation
+    if not user_message_exists:
+        messages.append({"role": "user", "content": state.input})
+
+    # Sanitize context if too long
+    messages = sanitize_context(messages, max_tokens)
+
+    return messages, user_message_exists
+
+
 def think_node(
     state: AgentState,
-    llm_service: LLMServiceProtocol,
+    delegator: ThinkDelegatorProtocol,
     tool_adapter: Optional[ToolAdapterProtocol] = None,
     max_tokens: int = DEFAULT_MAX_TOKENS,
     working_memory: Optional[WorkingMemoryProtocol] = None,
@@ -368,15 +252,18 @@ def think_node(
     """
     Think node - LLM reasoning step.
 
-    Takes the current state, calls the LLM with context and tools,
-    and returns updated state with new assistant message.
+    Takes the current state, calls the LLM via delegator, and returns
+    updated state with new assistant message.
 
-    This is the synchronous version for simple execution contexts.
-    Use think_node_streaming for async streaming support.
+    The delegator handles all complexity:
+    - Model selection (affinity, priority-based, tier fallback)
+    - Streaming with cancellation support
+    - Error handling with automatic retry/fallback
+    - Provider affinity tracking
 
     Args:
         state: Current agent state
-        llm_service: LLM service for completions
+        delegator: Think delegator for LLM calls
         tool_adapter: Optional tool adapter for tool schemas
         max_tokens: Max context tokens (for sanitization)
         working_memory: Optional working memory for session context
@@ -386,188 +273,33 @@ def think_node(
     Returns:
         Updated AgentState with new assistant message
     """
-    # Check cancellation before starting
-    if run_context is not None and run_context.is_cancelled():
-        logger.info("Think node cancelled before start")
-        return state.model_copy(
-            update={
-                "iteration": state.iteration + 1,
-                "done": True,
-                "last_error": "Cancelled by user",
-            }
-        )
-    # Build system prompt
-    tool_names = tool_adapter.get_tool_names() if tool_adapter else []
-    system_prompt = build_system_prompt(state, tool_names, working_memory, context_factory)
-
-    # Build messages list
-    messages: list[dict] = [{"role": "system", "content": system_prompt}]
-
-    # Add conversation history
-    for msg in state.messages:
-        messages.append(dict(msg))
-
-    # Check if user message already exists in state.messages
-    # (Bug fix: previously checked only last message role, causing re-adds after tool results)
-    user_message_exists = any(
-        m.get("role") == "user" and m.get("content") == state.input
-        for m in state.messages
-    )
-
-    # Add current input if not already in conversation history
-    if not user_message_exists:
-        messages.append({"role": "user", "content": state.input})
-
-    # Sanitize context if too long
-    messages = sanitize_context(messages, max_tokens)
-
-    # Prepare LLM call kwargs
-    llm_kwargs: dict[str, Any] = {
-        "max_tokens": 4096,  # Response max tokens
-        "temperature": 0.3,  # Lower temperature for more focused responses
-    }
-
-    # Add tool schemas if available
+    # Get tool names and schemas
+    tool_names: list[str] = []
+    tools = None
     if tool_adapter:
+        tool_names = tool_adapter.get_tool_names()
         tool_schemas = tool_adapter.get_tool_schemas()
         if tool_schemas:
-            llm_kwargs["tools"] = tool_schemas
-            llm_kwargs["tool_choice"] = "auto"
+            tools = tool_schemas
 
-    # Call LLM
-    # If current_model is set (fallback mode), use direct call to specific model
-    # Otherwise use Router-based tier selection with streaming for responsive cancellation
-    has_tools = tool_adapter is not None
+    # Build system prompt and messages
+    system_prompt = build_system_prompt(state, tool_names, working_memory, context_factory)
+    messages, user_message_exists = _build_messages_for_llm(state, system_prompt, max_tokens)
 
-    # Extract cancellation token for streaming support
-    cancellation_token = run_context.cancellation_token if run_context else None
+    # Call delegator - handles model selection, streaming, errors, fallback
+    result = delegator.complete(
+        messages=messages,
+        tools=tools,
+        run_context=run_context,
+        current_tier=state.current_tier,
+    )
 
-    try:
-        if state.current_model:
-            # Fallback mode: call specific model directly (bypass Router)
-            # Uses blocking call since completion_direct doesn't support streaming
-            logger.info("Using fallback model: %s", state.current_model)
-            response, task_record = llm_service.completion_direct(
-                model=state.current_model,
-                messages=messages,
-                **llm_kwargs,
-            )
-            content = response.content
-            tool_calls = convert_tool_calls(response.tool_calls)
-        else:
-            # Normal mode: use streaming for responsive cancellation
-            # Stream chunks and accumulate content/tool fragments
-            content_parts: list[str] = []
-            all_fragments: list[ToolCallFragment] = []
-            response_model = ""
-            response_provider = ""
-
-            for chunk in llm_service.stream_completion_sync(
-                model=state.current_tier,
-                messages=messages,
-                cancellation_token=cancellation_token,
-                **llm_kwargs,
-            ):
-                if isinstance(chunk, StreamChunk):
-                    if chunk.content:
-                        content_parts.append(chunk.content)
-                    if chunk.tool_call_fragments:
-                        all_fragments.extend(chunk.tool_call_fragments)
-                    # Capture model/provider from chunks (usually in final chunk)
-                    if chunk.model:
-                        response_model = chunk.model
-                    if chunk.provider:
-                        response_provider = chunk.provider
-
-            # Assemble final content and tool calls
-            content = "".join(content_parts)
-
-            # Convert accumulated fragments to tool calls
-            if all_fragments:
-                accumulated = accumulate_tool_calls(all_fragments)
-                tool_calls = fragments_to_tool_calls(accumulated)
-            else:
-                tool_calls = []
-
-            # Create pseudo-response for model display
-            class _StreamResponse:
-                def __init__(self, model: str, provider: str):
-                    self.model = model
-                    self.provider = provider
-            response = _StreamResponse(response_model, response_provider)
-
-        # Check for empty response (no content AND no tool calls)
-        # This is an error condition - LLM should return either content or tool calls
-        if not tool_calls and not content.strip():
-            logger.warning("LLM returned empty response (no content, no tool calls)")
-            return state.model_copy(
-                update={
-                    "iteration": state.iteration + 1,
-                    "error_count": state.error_count + 1,
-                    "last_error": "LLM returned empty response. This may indicate an API issue or rate limiting.",
-                }
-            )
-
-        # Build new assistant message
-        new_message: Message = {
-            "role": "assistant",
-            "content": content,
-        }
-        if tool_calls:
-            new_message["tool_calls"] = tool_calls
-
-        # Update state - include user message if this is first iteration
-        # (Bug fix: user message must persist in state.messages for conversation history)
-        if user_message_exists:
-            new_messages = list(state.messages) + [new_message]
-        else:
-            user_msg: Message = {"role": "user", "content": state.input}
-            new_messages = [user_msg] + list(state.messages) + [new_message]
-
-        # Check if we should mark as done (no tool calls = final response)
-        # Note: We already handled empty content case above, so content is non-empty here
-        is_done = len(tool_calls) == 0
-
-        # Format model display string (e.g., "cerebras: llama-3.3-70b")
-        model_display = None
-        if response.provider and response.model:
-            # Strip provider prefix from model if present (e.g., "cerebras/llama-3.3-70b" -> "llama-3.3-70b")
-            model_name = response.model
-            if "/" in model_name:
-                model_name = model_name.split("/", 1)[1]
-            model_display = f"{response.provider}: {model_name}"
-
-        # Success - clear fallback mode (current_model) since we got a response
-        return state.model_copy(
-            update={
-                "messages": new_messages,
-                "iteration": state.iteration + 1,
-                "done": is_done,
-                "error_count": 0,  # Reset on success - tracks consecutive errors
-                "last_error": None,
-                "current_model": None,  # Clear fallback mode on success
-                "last_model_display": model_display,
-            }
-        )
-
-    except StreamCancelledError:
-        # User cancelled during LLM streaming - return cancelled state
-        logger.info("LLM streaming cancelled by user")
-        return state.model_copy(
-            update={
-                "iteration": state.iteration + 1,
-                "done": True,
-                "last_error": "Cancelled by user",
-            }
-        )
-
-    except Exception as e:
-        return _handle_llm_error(e, state, has_tools, log_context="think node")
+    return _apply_think_result(state, result, user_message_exists)
 
 
 async def think_node_streaming(
     state: AgentState,
-    llm_service: StreamingLLMServiceProtocol,
+    delegator: ThinkDelegatorProtocol,
     tool_adapter: Optional[ToolAdapterProtocol] = None,
     max_tokens: int = DEFAULT_MAX_TOKENS,
     stream_callback: Optional[StreamCallback] = None,
@@ -578,15 +310,12 @@ async def think_node_streaming(
     """
     Think node with streaming support.
 
-    Async version that uses streaming completion for real-time output.
-    Yields chunks via stream_callback as they arrive.
-
-    Supports cancellation via run_context - checks between streaming chunks
-    and discards partial response on cancellation.
+    Async version that streams content chunks via callback as they arrive.
+    The delegator handles all complexity including cancellation.
 
     Args:
         state: Current agent state
-        llm_service: LLM service with streaming support
+        delegator: Think delegator for LLM calls
         tool_adapter: Optional tool adapter for tool schemas
         max_tokens: Max context tokens (for sanitization)
         stream_callback: Callback for streaming progress (content chunks)
@@ -597,185 +326,26 @@ async def think_node_streaming(
     Returns:
         Updated AgentState with new assistant message
     """
-    # Check cancellation before starting
-    if run_context is not None and run_context.is_cancelled():
-        logger.info("Streaming think node cancelled before start")
-        return state.model_copy(
-            update={
-                "iteration": state.iteration + 1,
-                "done": True,
-                "last_error": "Cancelled by user",
-            }
-        )
-
-    # Build system prompt
-    tool_names = tool_adapter.get_tool_names() if tool_adapter else []
-    system_prompt = build_system_prompt(state, tool_names, working_memory, context_factory)
-
-    # Build messages list
-    messages: list[dict] = [{"role": "system", "content": system_prompt}]
-
-    # Add conversation history
-    for msg in state.messages:
-        messages.append(dict(msg))
-
-    # Check if user message already exists in state.messages
-    # (Bug fix: previously checked only last message role, causing re-adds after tool results)
-    user_message_exists = any(
-        m.get("role") == "user" and m.get("content") == state.input
-        for m in state.messages
-    )
-
-    # Add current input if not already in conversation history
-    if not user_message_exists:
-        messages.append({"role": "user", "content": state.input})
-
-    # Sanitize context if too long
-    messages = sanitize_context(messages, max_tokens)
-
-    # Prepare LLM call kwargs
-    llm_kwargs: dict[str, Any] = {
-        "max_tokens": 4096,
-        "temperature": 0.3,
-    }
-
-    # Add tool schemas if available
+    # Get tool names and schemas
+    tool_names: list[str] = []
+    tools = None
     if tool_adapter:
+        tool_names = tool_adapter.get_tool_names()
         tool_schemas = tool_adapter.get_tool_schemas()
         if tool_schemas:
-            llm_kwargs["tools"] = tool_schemas
-            llm_kwargs["tool_choice"] = "auto"
+            tools = tool_schemas
 
-    # Stream LLM response
-    # If current_model is set (fallback mode), use direct completion (loses streaming)
-    # Otherwise use Router-based streaming
-    has_tools = tool_adapter is not None
-    try:
-        # Fallback mode: use sync completion_direct (loses streaming but provides fallback)
-        if state.current_model:
-            logger.info("Using fallback model (non-streaming): %s", state.current_model)
-            response, task_record = llm_service.completion_direct(
-                model=state.current_model,
-                messages=messages,
-                **llm_kwargs,
-            )
-            # LLMResponse.content is already normalized to string by litellm_service
-            accumulated_content = response.content
-            if stream_callback and accumulated_content:
-                stream_callback(accumulated_content)  # Send all at once
-            # Convert tool calls from LLMResponse format to OpenAI format
-            tool_calls = convert_tool_calls(response.tool_calls)
-        else:
-            # Normal streaming mode
-            # Use list accumulator for O(n) total instead of O(n^2) string concat
-            content_parts: list[str] = []
-            all_fragments: list[ToolCallFragment] = []
-            stream_model: str = ""
-            stream_provider: str = ""
+    # Build system prompt and messages
+    system_prompt = build_system_prompt(state, tool_names, working_memory, context_factory)
+    messages, user_message_exists = _build_messages_for_llm(state, system_prompt, max_tokens)
 
-            # Use user-selected tier from state
-            cancelled = False
-            async for chunk in llm_service.stream_completion(
-                model=state.current_tier,
-                messages=messages,
-                **llm_kwargs,
-            ):
-                # Check cancellation between chunks - discard partial response
-                if run_context is not None and run_context.is_cancelled():
-                    logger.info("LLM streaming cancelled - discarding partial response")
-                    cancelled = True
-                    break
+    # Call delegator with streaming - handles model selection, errors, fallback
+    result = await delegator.complete_streaming(
+        messages=messages,
+        tools=tools,
+        run_context=run_context,
+        current_tier=state.current_tier,
+        on_chunk=stream_callback,
+    )
 
-                # Type check - should be StreamChunk
-                if isinstance(chunk, StreamChunk):
-                    # Accumulate content (O(1) append)
-                    if chunk.content:
-                        content_parts.append(chunk.content)
-                        if stream_callback:
-                            stream_callback(chunk.content)
-
-                    # Accumulate tool call fragments
-                    if chunk.tool_call_fragments:
-                        all_fragments.extend(chunk.tool_call_fragments)
-
-                    # Capture model/provider from chunks (may be populated later)
-                    if chunk.model:
-                        stream_model = chunk.model
-                    if chunk.provider:
-                        stream_provider = chunk.provider
-
-            # Handle cancellation - return early without adding partial content
-            if cancelled:
-                return state.model_copy(
-                    update={
-                        "iteration": state.iteration + 1,
-                        "done": True,
-                        "last_error": "Cancelled by user",
-                    }
-                )
-
-            # Join once at end (O(n) total)
-            accumulated_content = "".join(content_parts)
-
-            # Convert accumulated fragments to tool calls
-            accumulated_tc = accumulate_tool_calls(all_fragments)
-            tool_calls = fragments_to_tool_calls(accumulated_tc)
-
-        # Check for empty response (no content AND no tool calls)
-        # This is an error condition - LLM should return either content or tool calls
-        if not tool_calls and not accumulated_content.strip():
-            logger.warning("LLM returned empty response (no content, no tool calls)")
-            return state.model_copy(
-                update={
-                    "iteration": state.iteration + 1,
-                    "error_count": state.error_count + 1,
-                    "last_error": "LLM returned empty response. This may indicate an API issue or rate limiting.",
-                }
-            )
-
-        # Build new assistant message
-        new_message: Message = {
-            "role": "assistant",
-            "content": accumulated_content,
-        }
-        if tool_calls:
-            new_message["tool_calls"] = tool_calls
-
-        # Update state - include user message if this is first iteration
-        # (Bug fix: user message must persist in state.messages for conversation history)
-        if user_message_exists:
-            new_messages = list(state.messages) + [new_message]
-        else:
-            user_msg: Message = {"role": "user", "content": state.input}
-            new_messages = [user_msg] + list(state.messages) + [new_message]
-
-        # Check if we should mark as done (no tool calls = final response)
-        is_done = len(tool_calls) == 0 and accumulated_content.strip() != ""
-
-        # Format model display string (e.g., "cerebras: llama-3.3-70b")
-        model_display = None
-        # Use response object if available (non-streaming fallback), else streaming vars
-        display_provider = response.provider if 'response' in dir() and response else stream_provider
-        display_model = response.model if 'response' in dir() and response else stream_model
-        if display_provider and display_model:
-            # Strip provider prefix from model if present
-            model_name = display_model
-            if "/" in model_name:
-                model_name = model_name.split("/", 1)[1]
-            model_display = f"{display_provider}: {model_name}"
-
-        # Success - clear fallback mode (current_model) since we got a response
-        return state.model_copy(
-            update={
-                "messages": new_messages,
-                "iteration": state.iteration + 1,
-                "done": is_done,
-                "error_count": 0,  # Reset on success - tracks consecutive errors
-                "last_error": None,
-                "current_model": None,  # Clear fallback mode on success
-                "last_model_display": model_display,
-            }
-        )
-
-    except Exception as e:
-        return _handle_llm_error(e, state, has_tools, log_context="streaming think node")
+    return _apply_think_result(state, result, user_message_exists)

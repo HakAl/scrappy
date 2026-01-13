@@ -269,6 +269,29 @@ class MockLLMService:
             tool_call_fragments=None,
         )
 
+    def stream_completion_direct(
+        self,
+        model: str,
+        messages: list[dict],
+        **kwargs: Any
+    ) -> Iterator[StreamChunk]:
+        """
+        Stream completion with specific model (mock implementation).
+
+        In mock mode, this behaves identically to stream_completion_sync.
+        Accepts specific model names like "cerebras/qwen-3-235b-a22b-instruct-2507".
+
+        Args:
+            model: Specific model name (treated same as group in mock)
+            messages: Chat messages
+            **kwargs: Additional params (ignored in mock)
+
+        Yields:
+            Single StreamChunk with full mock response
+        """
+        # In mock mode, direct streaming behaves same as tier-based
+        yield from self.stream_completion_sync(model, messages, **kwargs)
+
     # Test helper methods
 
     @property

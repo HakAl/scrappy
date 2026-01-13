@@ -29,6 +29,8 @@ from scrappy.graph.persistence import (
 from scrappy.graph.protocols import (
     LLMServiceProtocol,
     StreamingLLMServiceProtocol,
+    ThinkDelegatorProtocol,
+    ThinkResult,
     ToolContextFactory,
     ToolContextProtocol,
     WorkingMemoryProtocol,
@@ -46,6 +48,8 @@ __all__ = [
     "HANDOFF_TRIGGERS",
     "LLMServiceProtocol",
     "StreamingLLMServiceProtocol",
+    "ThinkDelegatorProtocol",
+    "ThinkResult",
     "ToolAdapter",
     "ToolAdapterProtocol",
     "ToolContextFactory",

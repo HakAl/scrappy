@@ -975,6 +975,118 @@ class LiteLLMService:
                 provider_details=_build_provider_details(e, provider),
             )
 
+    def stream_completion_direct(
+        self,
+        model: str,
+        messages: list[dict],
+        **kwargs
+    ) -> Iterator[StreamChunk]:
+        """
+        Stream completion directly with a specific model (bypasses Router).
+
+        Use this for deterministic model selection when you need to stream
+        from a specific model rather than letting the Router shuffle.
+        This calls litellm.completion directly with stream=True.
+
+        Args:
+            model: Specific model name (e.g., "cerebras/qwen-3-235b-a22b-instruct-2507")
+            messages: Chat messages
+            **kwargs: Additional params (max_tokens, temperature, tools, tool_choice, etc.)
+
+        Yields:
+            StreamChunk objects as they arrive from the provider
+
+        Raises:
+            NotConfiguredError: When service not configured with API keys
+            AllProvidersRateLimitedError: When model is rate limited
+            ValueError: When provider is unknown
+        """
+        import litellm  # Lazy import (fast after first __init__)
+
+        if not self._configured:
+            raise NotConfiguredError("LLM service not configured. Run setup wizard first.")
+
+        # Extract provider from model string to get API key
+        provider = model.split("/")[0] if "/" in model else model
+
+        # Map provider to API key name
+        provider_key_map = {
+            "cerebras": "CEREBRAS_API_KEY",
+            "groq": "GROQ_API_KEY",
+            "gemini": "GEMINI_API_KEY",
+            "sambanova": "SAMBANOVA_API_KEY",
+        }
+
+        key_name = provider_key_map.get(provider)
+        if not key_name:
+            raise ValueError(f"Unknown provider: {provider}")
+
+        api_key = self._api_key_service.get_key(key_name)
+        if not api_key:
+            raise NotConfiguredError(f"API key not configured for {provider}")
+
+        # Log request
+        if self._logger:
+            tools = kwargs.get("tools") if kwargs else None
+            self._logger.debug(
+                f"Direct streaming request: model={model}, messages={len(messages)}, "
+                f"tools={len(tools) if tools else 0}"
+            )
+
+        # Track partial content for error recovery
+        partial_content = ""
+        seen_final = False  # For Groq double-final chunk dedup
+
+        # Throttle requests to avoid rate limits
+        _get_throttle().wait_sync(model)
+
+        try:
+            # Call LiteLLM directly (not via Router)
+            stream = litellm.completion(
+                model=model,
+                messages=messages,
+                api_key=api_key,
+                stream=True,
+                **kwargs
+            )
+
+            # Stream chunks
+            for chunk in stream:
+                converted = self._convert_chunk(chunk)
+
+                # Groq double-final chunk dedup
+                # Some providers send finish_reason twice - skip duplicates
+                if converted.finish_reason:
+                    if seen_final:
+                        continue  # Skip duplicate final chunk
+                    seen_final = True
+
+                # Accumulate content for error recovery
+                if converted.content:
+                    partial_content += converted.content
+
+                yield converted
+
+        except litellm.RateLimitError as e:
+            raise AllProvidersRateLimitedError(
+                message="",  # Will be auto-generated
+                attempted_providers=[provider],
+                provider_details=_build_provider_details(e, provider),
+            )
+
+        except Exception as e:
+            # Map LiteLLM exceptions to user-friendly exceptions
+            mapped_error = _map_litellm_error(e, provider=provider, model=model)
+
+            # Mid-stream error handling: preserve partial content info
+            if partial_content:
+                mapped_error.context = {
+                    **(getattr(mapped_error, 'context', {}) or {}),
+                    'partial_content_chars': len(partial_content)
+                }
+
+            raise mapped_error
+
     def stream_completion_sync(
         self,
         model: str,

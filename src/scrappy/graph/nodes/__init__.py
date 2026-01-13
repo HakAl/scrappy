@@ -22,8 +22,19 @@ from .think import (
     think_node_streaming,
     build_system_prompt,
     sanitize_context,
-    LLMServiceProtocol,
-    StreamingLLMServiceProtocol,
+)
+from .think_delegator import (
+    LiteLLMThinkDelegator,
+    create_think_delegator,
+)
+from .think_error_handler import (
+    DefaultThinkErrorHandler,
+    ThinkErrorHandlerProtocol,
+)
+from .mock_think_delegator import (
+    MockThinkDelegator,
+    FailingThinkDelegator,
+    SequenceThinkDelegator,
 )
 from .token_estimator import TokenEstimator, TokenEstimatorProtocol
 from .tool_call_processor import ToolCallProcessor, ToolCallProcessorProtocol
@@ -51,8 +62,15 @@ __all__ = [
     "think_node_streaming",
     "build_system_prompt",
     "sanitize_context",
-    "LLMServiceProtocol",
-    "StreamingLLMServiceProtocol",
+    # Think delegator
+    "LiteLLMThinkDelegator",
+    "create_think_delegator",
+    "DefaultThinkErrorHandler",
+    "ThinkErrorHandlerProtocol",
+    # Mock delegators for testing
+    "MockThinkDelegator",
+    "FailingThinkDelegator",
+    "SequenceThinkDelegator",
     # Supporting classes
     "TokenEstimator",
     "TokenEstimatorProtocol",

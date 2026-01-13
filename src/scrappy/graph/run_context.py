@@ -18,7 +18,7 @@ Related beads: scrappy-vpa2, scrappy-b6gg, scrappy-iq9k
 """
 
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional, Protocol, runtime_checkable
+from typing import Any, Callable, Dict, List, Optional, Protocol, runtime_checkable
 
 from scrappy.infrastructure.logging import get_logger
 from scrappy.infrastructure.threading.protocols import CancellationTokenProtocol
@@ -59,6 +59,16 @@ class AgentRunContextProtocol(Protocol):
     @property
     def preferred_provider(self) -> Optional[str]:
         """Provider that succeeded first - stick with it unless handoff triggered."""
+        ...
+
+    @property
+    def preferred_model(self) -> Optional[str]:
+        """Model that succeeded first - stick with it unless handoff triggered."""
+        ...
+
+    @property
+    def model_selection(self) -> Optional[Any]:
+        """Model selection service for deterministic priority-based selection."""
         ...
 
     def record_provider_success(self, provider: str, model: str) -> None:
@@ -164,6 +174,10 @@ class AgentRunContext:
 
     # === Lifecycle ===
     _cancel_callbacks: List[Callable[[], None]] = field(default_factory=list)
+
+    # === Model Selection Service ===
+    # Injected by langgraph_bridge for deterministic model selection
+    model_selection: Optional[Any] = None  # Type: ModelSelectionServiceProtocol
 
     # === Model Affinity Methods ===
 

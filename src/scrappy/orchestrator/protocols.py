@@ -12,7 +12,7 @@ This is the canonical location for all orchestrator-related protocols including:
 """
 
 from dataclasses import dataclass
-from typing import Protocol, Optional, Dict, Any, List, runtime_checkable, AsyncIterator, Type, TypeVar
+from typing import Protocol, Optional, Dict, Any, List, runtime_checkable, AsyncIterator, Iterator, Type, TypeVar
 
 from pydantic import BaseModel
 
@@ -952,6 +952,33 @@ class LLMServiceProtocol(Protocol):
         Raises:
             AllProvidersRateLimitedError: When all providers exhausted
             ContextWindowExceededError: When quality tier also exceeds context (fatal)
+        """
+        ...
+
+    def stream_completion_direct(
+        self,
+        model: str,
+        messages: list[dict],
+        **kwargs
+    ) -> Iterator[StreamChunk]:
+        """
+        Stream completion directly with a specific model (bypasses Router).
+
+        Use this for deterministic model selection when you need to stream
+        from a specific model rather than letting the Router shuffle.
+
+        Args:
+            model: Specific model name (e.g., "cerebras/qwen-3-235b-a22b-instruct-2507")
+            messages: Chat messages
+            **kwargs: Additional params (max_tokens, temperature, tools, tool_choice, etc.)
+
+        Yields:
+            StreamChunk objects as they arrive from the provider
+
+        Raises:
+            NotConfiguredError: When service not configured with API keys
+            AllProvidersRateLimitedError: When model is rate limited
+            ValueError: When provider is unknown
         """
         ...
 

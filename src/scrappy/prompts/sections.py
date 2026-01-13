@@ -3,8 +3,6 @@
 import os
 from typing import Optional
 
-from .protocols import Platform
-
 
 DEGRADED_MODE_SECTION = """## IMPORTANT: Degraded Mode - Semantic Search Unavailable
 
@@ -28,30 +26,6 @@ RECOMMENDED APPROACH:
 4. Build mental map of codebase through exploration
 
 Ask the user to run indexing if you need semantic search capabilities."""
-
-
-def platform_section(platform: Platform) -> str:
-    """Generate platform-specific shell instructions.
-
-    Args:
-        platform: Target operating system platform
-
-    Returns:
-        Platform-specific command instructions
-    """
-    if platform == Platform.WINDOWS:
-        return """## Platform: Windows (cmd.exe)
-
-- Use cmd.exe commands: mkdir, copy, del, dir, type
-- Do NOT use PowerShell cmdlets
-- Paths use backslashes (e.g., C:\\Users\\...)
-- Line continuation: use ^ at end of line"""
-
-    return """## Platform: Unix/Linux
-
-- Use standard Unix commands: mkdir -p, cp, rm, ls, cat
-- Paths use forward slashes (e.g., /home/...)
-- Line continuation: use \\ at end of line"""
 
 
 def project_section(project_type: Optional[str]) -> str:

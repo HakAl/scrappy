@@ -4,13 +4,166 @@ Protocols for the graph package.
 Centralizes protocol definitions to avoid duplication across modules.
 """
 
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, AsyncIterator, Callable, Iterator, Optional, Protocol, runtime_checkable
 
 from scrappy.orchestrator.types import StreamChunk
+from scrappy.graph.state import ToolCall
 
 if TYPE_CHECKING:
     from scrappy.graph.run_context import AgentRunContextProtocol
+
+
+# =============================================================================
+# Think Node Types
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class ThinkResult:
+    """
+    Result of a think delegation - either success or error.
+
+    Immutable value object that encapsulates everything the think node
+    needs to update agent state after an LLM call.
+
+    Success case: content and/or tool_calls populated, error is None
+    Error case: error populated, recovery_action guides next step
+
+    Examples:
+        # Successful text response (agent is done)
+        ThinkResult(content="The answer is 42.", model_display="cerebras: llama-3.3-70b")
+
+        # Successful tool call response (agent continues)
+        ThinkResult(
+            content="I'll search for that.",
+            tool_calls=[ToolCall(...)],
+            model_display="groq: llama-3.1-70b",
+        )
+
+        # Retriable error
+        ThinkResult(
+            error="Rate limit exceeded",
+            recovery_action="fallback",
+            error_category="rate_limit",
+        )
+
+        # Fatal error
+        ThinkResult(
+            error="API key invalid",
+            recovery_action="abort",
+            error_category="auth",
+            is_fatal=True,
+        )
+    """
+
+    # Success fields
+    content: str = ""
+    tool_calls: tuple[ToolCall, ...] = field(default_factory=tuple)
+    model_display: Optional[str] = None  # e.g., "cerebras: llama-3.3-70b"
+
+    # Error fields (mutually exclusive with success)
+    error: Optional[str] = None
+    recovery_action: Optional[str] = None  # "retry", "fallback", "abort"
+    error_category: Optional[str] = None  # "rate_limit", "auth", "network", etc.
+    is_fatal: bool = False  # Should graph stop immediately?
+
+    @property
+    def is_success(self) -> bool:
+        """True if this is a successful result (no error)."""
+        return self.error is None
+
+    @property
+    def is_done(self) -> bool:
+        """True if this is a final response (success with no tool calls)."""
+        return self.is_success and len(self.tool_calls) == 0 and self.content.strip() != ""
+
+    @property
+    def has_tool_calls(self) -> bool:
+        """True if response includes tool calls."""
+        return len(self.tool_calls) > 0
+
+
+@runtime_checkable
+class ThinkDelegatorProtocol(Protocol):
+    """
+    Handles LLM completion for think node with model selection and error recovery.
+
+    This protocol abstracts the LLM call logic out of think.py, encapsulating:
+    - Model selection (tier-based or affinity-based via run_context)
+    - Streaming with cancellation support
+    - Error handling with automatic fallback
+    - Provider affinity tracking
+
+    Implementations:
+    - LiteLLMThinkDelegator: Production implementation using LiteLLM
+    - MockThinkDelegator: Test double with scripted responses
+
+    Example:
+        def think_node(state, delegator: ThinkDelegatorProtocol, ...):
+            result = delegator.complete(messages, tools, run_context, state.current_tier)
+            if result.is_success:
+                # Update state with content/tool_calls
+            else:
+                # Handle error based on recovery_action
+    """
+
+    def complete(
+        self,
+        messages: list[dict],
+        tools: Optional[list[dict]] = None,
+        run_context: Optional["AgentRunContextProtocol"] = None,
+        current_tier: str = "instruct",
+    ) -> ThinkResult:
+        """
+        Synchronous completion with automatic model selection and fallback.
+
+        Selects model based on:
+        1. run_context.preferred_model (affinity from previous success)
+        2. run_context.model_selection.select() (priority-based)
+        3. current_tier fallback (Router-based)
+
+        On error, may retry with fallback models based on error type.
+
+        Args:
+            messages: Chat messages in OpenAI format
+            tools: Optional tool schemas for function calling
+            run_context: Optional context for affinity, cancellation, model selection
+            current_tier: Model tier ("fast", "chat", "instruct")
+
+        Returns:
+            ThinkResult with content/tool_calls on success, error info on failure
+        """
+        ...
+
+    async def complete_streaming(
+        self,
+        messages: list[dict],
+        tools: Optional[list[dict]] = None,
+        run_context: Optional["AgentRunContextProtocol"] = None,
+        current_tier: str = "instruct",
+        on_chunk: Optional[Callable[[str], None]] = None,
+    ) -> ThinkResult:
+        """
+        Async streaming completion with chunk callback.
+
+        Same model selection and fallback logic as complete(), but:
+        - Yields content chunks via on_chunk callback as they arrive
+        - Supports cancellation check between chunks
+        - Returns final ThinkResult when stream completes
+
+        Args:
+            messages: Chat messages in OpenAI format
+            tools: Optional tool schemas for function calling
+            run_context: Optional context for affinity, cancellation, model selection
+            current_tier: Model tier ("fast", "chat", "instruct")
+            on_chunk: Optional callback invoked with each content chunk
+
+        Returns:
+            ThinkResult with accumulated content/tool_calls on success
+        """
+        ...
 
 
 @runtime_checkable

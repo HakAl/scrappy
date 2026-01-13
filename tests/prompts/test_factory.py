@@ -4,13 +4,12 @@ Tests cover:
 - AgentPromptConfig creation and validation
 - create_agent_system_prompt output structure
 - Dynamic state inclusion (errors, files, memory, RAG)
-- Platform-specific sections
 """
 
 import pytest
 
 from scrappy.prompts.factory import PromptFactory
-from scrappy.prompts.protocols import AgentPromptConfig, Platform
+from scrappy.prompts.protocols import AgentPromptConfig
 
 
 class TestAgentPromptConfig:
@@ -19,12 +18,10 @@ class TestAgentPromptConfig:
     def test_required_fields_only(self):
         """Config with only required fields should work."""
         config = AgentPromptConfig(
-            platform=Platform.UNIX,
             tool_names=("read_file", "write_file"),
             original_task="Fix the bug",
             working_dir="/home/user/project",
         )
-        assert config.platform == Platform.UNIX
         assert config.tool_names == ("read_file", "write_file")
         assert config.iteration == 0  # default
         assert config.last_error is None
@@ -32,7 +29,6 @@ class TestAgentPromptConfig:
     def test_all_fields(self):
         """Config with all fields should work."""
         config = AgentPromptConfig(
-            platform=Platform.WINDOWS,
             tool_names=("read_file",),
             original_task="Add feature",
             working_dir="C:\\Users\\dev\\project",
@@ -58,7 +54,6 @@ class TestPromptFactoryAgent:
     @pytest.fixture
     def basic_config(self):
         return AgentPromptConfig(
-            platform=Platform.UNIX,
             tool_names=("read_file", "write_file", "complete"),
             original_task="Help me fix the login bug",
             working_dir="/home/user/myproject",
@@ -90,26 +85,9 @@ class TestPromptFactoryAgent:
         assert "## Iteration" in prompt
         assert "0" in prompt
 
-    def test_unix_platform_section(self, factory, basic_config):
-        """Unix config should include Unix-specific instructions."""
-        prompt = factory.create_agent_system_prompt(basic_config)
-        assert "Unix" in prompt or "unix" in prompt.lower()
-
-    def test_windows_platform_section(self, factory):
-        """Windows config should include Windows-specific instructions."""
-        config = AgentPromptConfig(
-            platform=Platform.WINDOWS,
-            tool_names=("read_file",),
-            original_task="Task",
-            working_dir="C:\\Project",
-        )
-        prompt = factory.create_agent_system_prompt(config)
-        assert "Windows" in prompt
-
     def test_includes_error_context(self, factory):
         """Prompt should include error context when present."""
         config = AgentPromptConfig(
-            platform=Platform.UNIX,
             tool_names=("read_file",),
             original_task="Task",
             working_dir="/tmp",
@@ -128,7 +106,6 @@ class TestPromptFactoryAgent:
     def test_includes_files_changed(self, factory):
         """Prompt should include files changed list."""
         config = AgentPromptConfig(
-            platform=Platform.UNIX,
             tool_names=("read_file",),
             original_task="Task",
             working_dir="/tmp",
@@ -147,7 +124,6 @@ class TestPromptFactoryAgent:
     def test_includes_working_memory(self, factory):
         """Prompt should include working memory context."""
         config = AgentPromptConfig(
-            platform=Platform.UNIX,
             tool_names=("read_file",),
             original_task="Task",
             working_dir="/tmp",
@@ -160,7 +136,6 @@ class TestPromptFactoryAgent:
     def test_includes_search_strategy(self, factory):
         """Prompt should include search strategy when provided."""
         config = AgentPromptConfig(
-            platform=Platform.UNIX,
             tool_names=("read_file",),
             original_task="Task",
             working_dir="/tmp",
@@ -172,7 +147,6 @@ class TestPromptFactoryAgent:
     def test_includes_rag_context(self, factory):
         """Prompt should include RAG context when provided."""
         config = AgentPromptConfig(
-            platform=Platform.UNIX,
             tool_names=("read_file",),
             original_task="Task",
             working_dir="/tmp",

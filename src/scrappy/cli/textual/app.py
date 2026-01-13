@@ -320,6 +320,7 @@ class ScrappyApp(App):
         # This bridges LangGraph async execution to Textual worker pattern
         langgraph_bridge = None
         llm_service = getattr(self._cli.orchestrator, 'llm_service', None)
+        model_selector = getattr(self._cli.orchestrator, 'model_selector', None)
         if llm_service is not None:
             from .langgraph_bridge import LangGraphBridge
             from scrappy.graph.tools import ToolAdapter
@@ -334,6 +335,7 @@ class ScrappyApp(App):
                 output_adapter=self.output_adapter,
                 llm_service=llm_service,
                 tool_adapter=self._tool_adapter,
+                model_selector=model_selector,
             )
 
         # Reinitialize handlers with bridge for TUI-aware user interaction

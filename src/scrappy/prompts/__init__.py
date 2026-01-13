@@ -4,7 +4,6 @@ from .factory import PromptFactory
 from .protocols import (
     AgentPromptConfig,
     ChatPromptConfig,
-    Platform,
     PromptFactoryProtocol,
     ResearchPromptConfig,
     ResearchSubtype,
@@ -16,6 +15,5 @@ __all__ = [
     "AgentPromptConfig",
     "ChatPromptConfig",
     "ResearchPromptConfig",
-    "Platform",
     "ResearchSubtype",
 ]

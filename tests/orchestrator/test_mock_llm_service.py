@@ -204,16 +204,65 @@ class TestMockLLMService:
         service.completion_direct(model="gpt-4", messages=[])
         assert service.call_count == 1
 
+    def test_stream_completion_direct_yields_chunks(self):
+        """stream_completion_direct yields StreamChunk objects for specific model."""
+        service = MockLLMService(default_response="Direct stream response")
+
+        chunks = list(service.stream_completion_direct(
+            model="cerebras/qwen-3-235b-a22b-instruct-2507",
+            messages=[{"role": "user", "content": "hello"}],
+        ))
+
+        assert len(chunks) == 1
+        assert chunks[0].content == "Direct stream response"
+        assert chunks[0].provider == "mock"
+        assert chunks[0].finish_reason == "stop"
+
+    def test_stream_completion_direct_tracks_calls(self):
+        """stream_completion_direct tracks call count."""
+        service = MockLLMService()
+        assert service.call_count == 0
+
+        list(service.stream_completion_direct(
+            model="cerebras/qwen-3-235b-a22b-instruct-2507",
+            messages=[],
+        ))
+        assert service.call_count == 1
+
 
 class TestMockLLMServiceIntegration:
     """Integration tests verifying MockLLMService works with graph nodes."""
 
-    def test_works_with_think_node(self):
-        """MockLLMService integrates correctly with think_node."""
-        from scrappy.graph.nodes.think import think_node
-        from scrappy.graph.state import AgentState
+    def test_works_with_think_delegator(self):
+        """MockLLMService integrates correctly with LiteLLMThinkDelegator."""
+        from scrappy.graph.nodes.think_delegator import LiteLLMThinkDelegator
 
         service = MockLLMService(default_response="Mock think response")
+        delegator = LiteLLMThinkDelegator(service)
+
+        messages = [
+            {"role": "system", "content": "You are a test assistant"},
+            {"role": "user", "content": "Test input"},
+        ]
+
+        result = delegator.complete(messages=messages, tools=None, current_tier="fast")
+
+        assert result is not None
+        assert service.call_count == 1
+        # Response content should be from the mock
+        assert result.is_success
+        assert "Mock think response" in result.content
+
+    def test_works_with_think_node(self):
+        """MockThinkDelegator integrates correctly with think_node."""
+        from scrappy.graph.nodes.think import think_node
+        from scrappy.graph.nodes.mock_think_delegator import MockThinkDelegator
+        from scrappy.graph.protocols import ThinkResult
+        from scrappy.graph.state import AgentState
+
+        delegator = MockThinkDelegator(
+            default_response=ThinkResult(content="Mock think response")
+        )
 
         state = AgentState(
             input="Test input",
@@ -223,10 +272,10 @@ class TestMockLLMServiceIntegration:
             current_tier="fast",
         )
 
-        result = think_node(state, llm_service=service)
+        result = think_node(state, delegator)
 
         assert result is not None
-        assert service.call_count == 1
+        assert delegator.call_count == 1
         # Response should be in the messages
         assert len(result.messages) > 0
         # The mock response should be in the assistant message

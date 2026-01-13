@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from scrappy.graph.agent import LLMServiceProtocol
     from scrappy.graph.state import AgentState
     from scrappy.graph.tools import ToolAdapterProtocol
+    from scrappy.orchestrator.model_selection import ModelSelectionServiceProtocol
 
     from .bridge import ThreadSafeAsyncBridge
     from .output_adapter import TextualOutputAdapter
@@ -100,6 +101,7 @@ class LangGraphBridge:
         output_adapter: "TextualOutputAdapter",
         llm_service: "LLMServiceProtocol",
         tool_adapter: "ToolAdapterProtocol",
+        model_selector: Optional["ModelSelectionServiceProtocol"] = None,
     ) -> None:
         """
         Initialize the LangGraph bridge.
@@ -110,12 +112,14 @@ class LangGraphBridge:
             output_adapter: TextualOutputAdapter for thread-safe output
             llm_service: LLM service for agent completions
             tool_adapter: Tool adapter for agent tool execution (required)
+            model_selector: Model selection service for deterministic selection
         """
         self.app = app
         self._bridge = bridge
         self._output_adapter = output_adapter
         self._llm_service = llm_service
         self._tool_adapter = tool_adapter
+        self._model_selector = model_selector
 
         # Track current worker for cancellation
         self._current_worker: Optional[Worker[AgentResult]] = None
@@ -654,6 +658,9 @@ class LangGraphBridge:
             # Create ephemeral run context for this agent run
             self._run_context = AgentRunContext()
             self._run_context.set_status_callback(self._show_provider_status)
+
+            # Inject model selection service for deterministic model selection
+            self._run_context.model_selection = self._model_selector
 
             # Create fresh cancellation token for this run and wire to context
             self._cancellation_token = CancellationToken()

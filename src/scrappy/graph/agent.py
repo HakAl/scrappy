@@ -44,6 +44,7 @@ from scrappy.graph.nodes import (
     think_node,
     verify_node,
 )
+from scrappy.graph.nodes.think_delegator import LiteLLMThinkDelegator
 from scrappy.graph.protocols import ContextFactoryProtocol, LLMServiceProtocol, WorkingMemoryProtocol
 from scrappy.graph.state import AgentState
 from scrappy.graph.tools import ToolAdapterProtocol
@@ -168,10 +169,10 @@ def _wrap_think_node(
     Create a wrapped think node with injected dependencies.
 
     LangGraph nodes receive only state. We use a closure to inject
-    the LLM service and tool adapter.
+    the delegator and tool adapter.
 
     Args:
-        llm_service: LLM service for completions
+        llm_service: LLM service for completions (wrapped in delegator)
         tool_adapter: Tool adapter for schemas
         working_memory: Optional working memory for session context
         context_factory: Optional factory for RAG context augmentation
@@ -181,6 +182,9 @@ def _wrap_think_node(
     """
     from langgraph.types import RunnableConfig
     from typing import Optional as Opt
+
+    # Create delegator that wraps the LLM service
+    delegator = LiteLLMThinkDelegator(llm_service)
 
     def wrapped(state: AgentState, config: Opt[RunnableConfig] = None) -> AgentState:
         # Extract run_context from config if present (for cancellation support)
@@ -192,7 +196,7 @@ def _wrap_think_node(
 
         return think_node(
             state,
-            llm_service,
+            delegator,
             tool_adapter,
             working_memory=working_memory,
             context_factory=context_factory,

@@ -5,13 +5,6 @@ from enum import Enum
 from typing import Optional, Protocol
 
 
-class Platform(Enum):
-    """Operating system platform for environment-specific instructions."""
-
-    WINDOWS = "windows"
-    UNIX = "unix"
-
-
 class ResearchSubtype(Enum):
     """Type of research query to determine tool availability."""
 
@@ -31,7 +24,6 @@ class AgentPromptConfig:
     """Configuration for agent mode with full tool access and behavioral guidelines.
 
     Required fields:
-        platform: Target OS platform
         tool_names: List of available tool names
         original_task: The user's original task/query
         working_dir: Working directory for file operations
@@ -46,7 +38,6 @@ class AgentPromptConfig:
     """
 
     # Required
-    platform: Platform
     tool_names: tuple[str, ...]
     original_task: str
     working_dir: str

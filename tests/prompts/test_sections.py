@@ -1,49 +1,15 @@
 """Tests for pure prompt section functions."""
 
 
-from scrappy.prompts.protocols import Platform
 from scrappy.prompts.sections import (
     codebase_hint_section,
     completion_section,
     efficiency_section,
-    platform_section,
     safety_section,
     self_review_section,
     strategy_section,
     tool_format_section,
 )
-
-
-class TestPlatformSection:
-    """Tests for platform_section function."""
-
-    def test_windows_platform_includes_cmd_exe(self):
-        result = platform_section(Platform.WINDOWS)
-
-        assert "cmd.exe" in result
-        assert "Windows" in result
-
-    def test_windows_platform_warns_against_powershell(self):
-        result = platform_section(Platform.WINDOWS)
-
-        assert "PowerShell" in result
-        assert "NOT" in result
-
-    def test_windows_platform_includes_backslash_info(self):
-        result = platform_section(Platform.WINDOWS)
-
-        assert "backslash" in result
-
-    def test_unix_platform_includes_unix_commands(self):
-        result = platform_section(Platform.UNIX)
-
-        assert "Unix" in result or "Linux" in result
-        assert "mkdir -p" in result or "cp" in result
-
-    def test_unix_platform_includes_forward_slash_info(self):
-        result = platform_section(Platform.UNIX)
-
-        assert "forward slash" in result or "/" in result
 
 
 class TestProjectSection:

@@ -134,6 +134,7 @@ class TextualInteractiveMode:
         # This bridges LangGraph async execution to Textual worker pattern
         langgraph_bridge = None
         llm_service = getattr(self.orchestrator, 'llm_service', None)
+        model_selector = getattr(self.orchestrator, 'model_selector', None)
         if self._cli is not None and llm_service is not None:
             from .textual.langgraph_bridge import LangGraphBridge
             from scrappy.graph.tools import ToolAdapter
@@ -148,6 +149,7 @@ class TextualInteractiveMode:
                 output_adapter=output_adapter,
                 llm_service=llm_service,
                 tool_adapter=app._tool_adapter,
+                model_selector=model_selector,
             )
         # Temporary assertion to catch wiring issues
         assert langgraph_bridge is not None, (
