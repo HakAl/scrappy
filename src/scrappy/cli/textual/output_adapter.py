@@ -17,10 +17,14 @@ if TYPE_CHECKING:
 class TextualOutputAdapter:
     """Adapter that bridges OutputSink protocol to thread-safe queue."""
 
+    # Sentinel value for shutdown - wakes blocked consumer immediately
+    SHUTDOWN_SENTINEL = ('_shutdown', None)
+
     def __init__(self) -> None:
         self._queue: Queue[tuple[str, Any]] = Queue()
         self._flush_events: Dict[str, threading.Event] = {}
         self._flush_lock = threading.Lock()
+        self._shutdown_requested = False
 
     def post_output(self, content: str) -> None:
         self._queue.put(('output', content))
@@ -81,8 +85,27 @@ class TextualOutputAdapter:
             if event:
                 event.set()
 
+    def request_shutdown(self) -> None:
+        """Signal the consumer to exit immediately.
+
+        Puts a sentinel on the queue to wake blocked get_message() calls.
+        Should be called before Textual's exit() to ensure the consumer
+        worker exits promptly.
+        """
+        self._shutdown_requested = True
+        # Put sentinel to wake any blocked consumer
+        self._queue.put(self.SHUTDOWN_SENTINEL)
+
+    def is_shutdown_requested(self) -> bool:
+        """Check if shutdown has been requested."""
+        return self._shutdown_requested
+
     def get_message(self, block: bool = True, timeout: Optional[float] = None) -> Optional[tuple[str, Any]]:
         try:
-            return self._queue.get(block=block, timeout=timeout)
+            msg = self._queue.get(block=block, timeout=timeout)
+            # Check for shutdown sentinel
+            if msg == self.SHUTDOWN_SENTINEL:
+                return None
+            return msg
         except Empty:
             return None

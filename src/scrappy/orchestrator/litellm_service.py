@@ -537,7 +537,18 @@ class LiteLLMService:
             finally:
                 litellm.client_session = None
 
-        # Collect async close coroutines
+        # Check if we have a usable event loop BEFORE creating coroutines
+        # Creating coroutines without awaiting them triggers RuntimeWarning
+        loop = self._get_usable_loop()
+        if loop is None:
+            # No usable loop - just clear references, let GC handle cleanup
+            if hasattr(litellm, 'aclient_session'):
+                litellm.aclient_session = None
+            if hasattr(litellm, '_client_session'):
+                litellm._client_session = None
+            return
+
+        # Collect async close coroutines (only if we have a usable loop)
         async_closes: list = []
 
         # httpx AsyncClient needs async close
@@ -552,15 +563,25 @@ class LiteLLMService:
 
         # Run async closes with proper waiting
         if async_closes:
-            self._run_async_closes(async_closes)
+            self._run_async_closes_with_loop(async_closes, loop)
 
     def _run_async_closes(self, closes: list) -> None:
-        """Run async close operations, waiting for completion."""
+        """Run async close operations, waiting for completion.
+
+        Uses defensive approach: if we can't reliably get a working event loop,
+        we skip async cleanup. The coroutines will be garbage collected anyway.
+        Better to exit cleanly than hang indefinitely.
+        """
         try:
             loop = asyncio.get_event_loop_policy().get_event_loop()
         except RuntimeError:
             # No event loop - coroutines will be garbage collected
             logger.debug("No event loop available for async closes")
+            return
+
+        # Check if loop is usable
+        if loop.is_closed():
+            logger.debug("Event loop is closed - skipping async closes")
             return
 
         async def close_all():
@@ -572,17 +593,23 @@ class LiteLLMService:
 
         if loop.is_running():
             # Schedule on running loop and wait with timeout
-            future = asyncio.run_coroutine_threadsafe(close_all(), loop)
             try:
+                future = asyncio.run_coroutine_threadsafe(close_all(), loop)
                 future.result(timeout=2.0)  # 2s timeout for cleanup
             except TimeoutError:
                 logger.debug("Timeout waiting for async session closes")
+            except RuntimeError as e:
+                # Loop might have stopped between is_running() check and scheduling
+                logger.debug("Event loop unavailable during async closes: %s", e)
             except Exception as e:
                 logger.debug("Error in async closes: %s", e)
         else:
-            # No running loop - run directly
+            # No running loop - try to run directly but with caution
             try:
                 loop.run_until_complete(close_all())
+            except RuntimeError as e:
+                # Loop might be closing or in bad state
+                logger.debug("Cannot run async closes on loop: %s", e)
             except Exception as e:
                 logger.debug("Error running async closes: %s", e)
 

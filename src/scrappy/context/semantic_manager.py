@@ -628,14 +628,18 @@ class SemanticSearchManager:
             logger.debug("StalenessChecker not available")
             return None
 
-    def shutdown(self) -> None:
-        """Signal background tasks to stop and clean up resources."""
+    def shutdown(self, timeout: float = 5.0) -> None:
+        """Signal background tasks to stop and clean up resources.
+
+        Args:
+            timeout: Max seconds to wait for background threads to stop.
+        """
         # Break reference cycle to allow GC
         self._progress_callback = None
         self._file_collector_callback = None
 
         if self._initializer is not None:
-            stopped = self._initializer.shutdown()
+            stopped = self._initializer.shutdown(timeout=timeout)
             if not stopped:
                 logger.info("Indexing interrupted - will resume on next launch")
 
@@ -705,6 +709,6 @@ class NullSemanticSearchManager:
         """No-op."""
         pass
 
-    def shutdown(self) -> None:
+    def shutdown(self, timeout: float = 5.0) -> None:
         """No-op shutdown."""
         pass

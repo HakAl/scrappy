@@ -70,8 +70,12 @@ class TracerProtocol(Protocol):
         """Flush pending traces."""
         ...
 
-    def shutdown(self) -> None:
-        """Flush pending traces and shutdown background threads."""
+    def shutdown(self, timeout: float = 2.0) -> None:
+        """Flush pending traces and shutdown background threads.
+
+        Args:
+            timeout: Maximum seconds to wait for shutdown
+        """
         ...
 
 
@@ -119,7 +123,7 @@ class NoOpTracer:
         """No-op flush."""
         pass
 
-    def shutdown(self) -> None:
+    def shutdown(self, timeout: float = 2.0) -> None:
         """No-op shutdown."""
         pass
 
@@ -146,6 +150,17 @@ class LangfuseTracer:
         self._available: bool = False
 
         try:
+            # Check if Langfuse server is reachable before enabling
+            import socket
+            from urllib.parse import urlparse
+            parsed = urlparse(host)
+            hostname = parsed.hostname or "localhost"
+            port = parsed.port or (443 if parsed.scheme == "https" else 3000)
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(1.0)
+            sock.connect((hostname, port))
+            sock.close()
+
             from langfuse import Langfuse
 
             self._client = Langfuse(
@@ -155,10 +170,10 @@ class LangfuseTracer:
             )
             self._available = True
             logger.info("Langfuse tracing initialized successfully")
-        except (ImportError, ConnectionError, OSError) as e:
+        except (ImportError, ConnectionError, OSError, socket.error, socket.timeout) as e:
             # Catch specific exceptions: import failures, connection issues, network errors
             # Avoid catching KeyboardInterrupt, SystemExit, etc.
-            logger.warning(f"Failed to initialize Langfuse: {e}. Tracing disabled.")
+            logger.debug(f"Langfuse unavailable: {e}")
             self._client = None
             self._available = False
 
@@ -205,24 +220,49 @@ class LangfuseTracer:
             except Exception as e:
                 logger.warning(f"Failed to flush Langfuse traces: {e}")
 
-    def shutdown(self) -> None:
+    def shutdown(self, timeout: float = 2.0) -> None:
         """
         Flush pending traces and shutdown Langfuse background threads.
 
         This is the proper shutdown method per Langfuse docs:
         - Flushes all buffered data
         - Waits for background threads to terminate (blocking)
-        - Must be called before exit to prevent hanging
+
+        Uses a timeout to prevent hanging if Langfuse has issues.
+
+        Args:
+            timeout: Maximum seconds to wait for shutdown (default: 2.0)
         """
-        if self._available and self._client is not None:
+        if not self._available or self._client is None:
+            return
+
+        import threading
+
+        shutdown_complete = threading.Event()
+        shutdown_error = [None]  # Use list to allow mutation in nested function
+
+        def do_shutdown():
             try:
                 self._client.shutdown()
-                logger.debug("Langfuse shutdown complete")
             except Exception as e:
-                logger.warning(f"Failed to shutdown Langfuse: {e}")
+                shutdown_error[0] = e
             finally:
-                self._available = False
-                self._client = None
+                shutdown_complete.set()
+
+        thread = threading.Thread(target=do_shutdown, name="LangfuseShutdown")
+        thread.start()
+
+        if shutdown_complete.wait(timeout=timeout):
+            if shutdown_error[0]:
+                logger.warning(f"Failed to shutdown Langfuse: {shutdown_error[0]}")
+            else:
+                logger.debug("Langfuse shutdown complete")
+        else:
+            logger.warning(f"Langfuse shutdown timed out after {timeout}s - continuing")
+
+        # Always mark as unavailable to prevent further use
+        self._available = False
+        self._client = None
 
     def get_callback_handler(self) -> Optional["LangfuseCallbackHandler"]:
         """Get CallbackHandler for LangGraph integration.
@@ -366,7 +406,7 @@ def trace_node(name: str) -> Callable[[Callable[P, R]], Callable[P, R]]:
     return decorator
 
 
-def shutdown_tracing() -> None:
+def shutdown_tracing(timeout: float = 2.0) -> None:
     """
     Properly shutdown tracing, flushing data and terminating background threads.
 
@@ -380,11 +420,15 @@ def shutdown_tracing() -> None:
     2. The global langfuse client used by litellm's integration
 
     Thread-safe: Uses lock to prevent race conditions.
+    All shutdown operations have timeouts to prevent hanging.
+
+    Args:
+        timeout: Maximum seconds to wait for each shutdown operation
     """
     global _tracer
     with _tracer_lock:
         if _tracer is not None:
-            _tracer.shutdown()
+            _tracer.shutdown(timeout=timeout)
             _tracer = None
 
     # Also shutdown litellm's langfuse client (separate from our tracer)
@@ -394,12 +438,37 @@ def shutdown_tracing() -> None:
         from langfuse import get_client
         client = get_client()
         if client is not None:
-            client.shutdown()
-            logger.debug("Litellm's langfuse client shutdown complete")
+            _shutdown_langfuse_client(client, timeout=timeout)
     except ImportError:
         pass  # langfuse not installed, nothing to shutdown
-    except Exception as e:
-        logger.debug(f"Error shutting down litellm's langfuse client: {e}")
+
+
+def _shutdown_langfuse_client(client, timeout: float = 2.0) -> None:
+    """Shutdown a langfuse client with timeout.
+
+    Args:
+        client: Langfuse client instance
+        timeout: Maximum seconds to wait for shutdown
+    """
+    import threading
+
+    shutdown_complete = threading.Event()
+
+    def do_shutdown():
+        try:
+            client.shutdown()
+        except Exception as e:
+            logger.debug(f"Error during langfuse client shutdown: {e}")
+        finally:
+            shutdown_complete.set()
+
+    thread = threading.Thread(target=do_shutdown, name="LangfuseClientShutdown")
+    thread.start()
+
+    if shutdown_complete.wait(timeout=timeout):
+        logger.debug("Litellm's langfuse client shutdown complete")
+    else:
+        logger.warning(f"Litellm's langfuse client shutdown timed out after {timeout}s")
 
 
 def get_langfuse_callback() -> Optional["LangfuseCallbackHandler"]:

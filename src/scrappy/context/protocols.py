@@ -974,8 +974,12 @@ class SemanticSearchManagerProtocol(Protocol):
         """
         ...
 
-    def shutdown(self) -> None:
-        """Signal background tasks to stop and clean up resources."""
+    def shutdown(self, timeout: float = 5.0) -> None:
+        """Signal background tasks to stop and clean up resources.
+
+        Args:
+            timeout: Max seconds to wait for background threads to stop.
+        """
         ...
 
 

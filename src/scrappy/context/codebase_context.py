@@ -1008,6 +1008,12 @@ Be concise and technical. No fluff."""
         self._project_detector.set_file_index(self.file_index)
         return self._project_detector.get_sub_projects()
 
-    def shutdown(self) -> None:
-        """Shutdown background tasks and clean up resources."""
-        self._semantic_manager.shutdown()
+    def shutdown(self, timeout: float = 5.0) -> None:
+        """Shutdown background tasks and clean up resources.
+
+        Args:
+            timeout: Max seconds to wait for background threads to stop.
+                     Use a short timeout (e.g., 0.5) for app exit since
+                     daemon threads will be killed anyway when process exits.
+        """
+        self._semantic_manager.shutdown(timeout=timeout)

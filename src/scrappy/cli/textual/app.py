@@ -6,8 +6,10 @@ wrapping the existing InteractiveMode with a modern UI.
 """
 
 from typing import TYPE_CHECKING, Optional, Callable
+import asyncio
 import logging
 import os
+import threading
 import time
 from pathlib import Path
 
@@ -117,6 +119,9 @@ class ScrappyApp(App):
         # Codebase context for semantic search indexing
         self._codebase_context: Optional["CodebaseContext"] = None
 
+        # Consumer thread (daemon so it won't block exit)
+        self._consumer_thread: Optional[threading.Thread] = None
+
     def set_codebase_context(self, context: "CodebaseContext") -> None:
         """Set codebase context for semantic search indexing.
 
@@ -171,8 +176,14 @@ class ScrappyApp(App):
         self._register_user_theme()
         OutputModeContext.set_tui_mode(True, self.output_adapter)
 
-        # Start worker thread to consume output queue
-        self.consume_output_queue()
+        # Start daemon thread to consume output queue.
+        # This avoids keeping a long-running Textual worker alive during exit.
+        self._consumer_thread = threading.Thread(
+            target=self._consume_output_queue_loop,
+            daemon=True,
+            name="output-queue-consumer",
+        )
+        self._consumer_thread.start()
 
         # Navigate to appropriate screen
         has_provider, env_key_count = self._check_and_migrate_providers()
@@ -360,34 +371,68 @@ class ScrappyApp(App):
         return_code: int = 0,
         message: object = None,
     ) -> None:
-        """Override exit to ensure bridge shutdown before worker wait.
+        """Override exit to ensure clean shutdown of all resources.
 
-        Textual waits for workers to complete before on_unmount is called.
-        If a worker is blocked on bridge.blocking_confirm(), this creates
-        a deadlock. Signal shutdown early to unblock workers.
+        Signal consumer worker to exit via sentinel before Textual waits for workers.
         """
-        self._should_stop_consumer = True
-        self.bridge.shutdown()
+        self._file_log("exit(): starting")
 
-        # Cancel any running agent to unblock its worker thread
+        # Signal consumer to exit - puts sentinel on queue to wake it immediately
+        self._should_stop_consumer = True
+        self.output_adapter.request_shutdown()
+        self._file_log("exit(): consumer signaled")
+
+        # Unblock any bridge operations (prompts/confirms)
+        self.bridge.shutdown()
+        self._file_log("exit(): bridge shutdown")
+
+        # Cancel any running agent
         if hasattr(self, 'interactive_mode') and self.interactive_mode:
             agent_mgr = self.interactive_mode.command_router.agent_mgr
             if agent_mgr:
                 agent_mgr.cancel()
+                self._file_log("exit(): agent cancelled")
 
-        # Cast message to satisfy type checker (parent expects RenderableType | None)
+        # Cancel all Textual workers before calling exit
+        # This prevents Textual's shutdown from waiting indefinitely for workers
+        try:
+            self._file_log(f"exit(): workers._workers={list(self.workers._workers)}")
+            for w in list(self.workers._workers):
+                self._file_log(f"exit(): worker name={w.name}, state={w.state}, is_finished={w.is_finished}")
+            self.workers.cancel_all()
+            self._file_log("exit(): cancel_all called, waiting briefly for workers...")
+            # Give workers a moment to actually cancel
+            import asyncio
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # Can't use run_until_complete, just sleep
+                    time.sleep(0.1)
+            except Exception:
+                pass
+            for w in list(self.workers._workers):
+                self._file_log(f"exit(): after cancel - worker name={w.name}, state={w.state}, is_finished={w.is_finished}")
+        except Exception as e:
+            import traceback
+            self._file_log(f"exit(): error cancelling workers: {e}")
+            self._file_log(f"exit(): traceback: {traceback.format_exc()}")
+
+        self._file_log("exit(): calling super().exit()")
         super().exit(result, return_code, str(message) if message else None)
+        self._file_log("exit(): super().exit() returned")
 
     def on_unmount(self) -> None:
         """Called when app is about to close."""
         self._should_stop_consumer = True
+        self.output_adapter.request_shutdown()  # Wake consumer immediately
         OutputModeContext.set_tui_mode(False)
 
         # Signal bridge to release any blocked worker threads (redundant but safe)
         self.bridge.shutdown()
 
         if self._codebase_context is not None:
-            self._codebase_context.shutdown()
+            # Short timeout since daemon threads will be killed on process exit anyway
+            self._codebase_context.shutdown(timeout=0.5)
 
         # Clean up tool adapter (stops Docker containers)
         if hasattr(self, '_tool_adapter') and self._tool_adapter is not None:
@@ -418,6 +463,72 @@ class ScrappyApp(App):
                 self.interactive_mode.orchestrator.llm_service.close()
             except Exception as e:
                 logger.debug("Error closing LLM service: %s", e)
+
+    async def _shutdown(self) -> None:  # type: ignore[override]
+        """Run Textual shutdown.
+
+        After Textual cleanup, we must shut down the default executor ourselves
+        to prevent asyncio.run() from hanging. The issue: Textual's _win_sleep.py
+        creates non-daemon threads via run_in_executor(None, func). These threads
+        block asyncio.run() from returning unless we explicitly shut down the
+        executor without waiting.
+
+        Additionally, Textual's _shutdown() can hang indefinitely after running
+        agent commands. We cancel pending asyncio tasks first to help it complete.
+        """
+        self._file_log("_shutdown: starting")
+
+        # Cancel all pending asyncio tasks except the current one.
+        # This helps Textual's shutdown complete when there are lingering tasks.
+        loop = asyncio.get_running_loop()
+        current_task = asyncio.current_task()
+        pending_tasks = [t for t in asyncio.all_tasks(loop) if t is not current_task and not t.done()]
+        self._file_log(f"_shutdown: cancelling {len(pending_tasks)} pending tasks")
+        for task in pending_tasks:
+            task.cancel()
+
+        # Give cancelled tasks a moment to process their cancellation
+        if pending_tasks:
+            try:
+                await asyncio.wait(pending_tasks, timeout=0.5)
+            except Exception:
+                pass
+            self._file_log("_shutdown: pending tasks cancelled")
+
+        try:
+            await super()._shutdown()
+            self._file_log("_shutdown: super()._shutdown() completed")
+        except Exception as e:
+            self._file_log(f"_shutdown: super()._shutdown() error: {e}")
+
+        # Shut down the default executor to prevent asyncio.run() from hanging.
+        # asyncio.run() calls loop.shutdown_default_executor() after our code
+        # completes, but that hangs waiting for Textual's non-daemon threads.
+        # By shutting it down here with wait=False and clearing the reference,
+        # we prevent the hang.
+        try:
+            loop = asyncio.get_running_loop()
+            executor = getattr(loop, '_default_executor', None)
+            if executor is not None:
+                self._file_log("_shutdown: shutting down default executor (wait=False)")
+                executor.shutdown(wait=False, cancel_futures=True)
+                # Clear the reference so asyncio.run() doesn't try to shut it down again
+                loop._default_executor = None  # type: ignore[attr-defined]
+                self._file_log("_shutdown: default executor cleared")
+        except Exception as e:
+            self._file_log(f"_shutdown: executor shutdown error: {e}")
+
+        self._file_log("_shutdown: complete")
+
+    def _file_log(self, msg: str) -> None:
+        """Debug log to file (bypasses Textual's stderr capture)."""
+        import tempfile
+        logpath = os.path.join(tempfile.gettempdir(), "scrappy_shutdown_debug.log")
+        try:
+            with open(logpath, "a") as f:
+                f.write(f"{time.time():.2f}: {msg}\n")
+        except Exception:
+            pass
 
     def update_status(self, content: str) -> None:
         """Update the status bar widget.
@@ -534,39 +645,44 @@ class ScrappyApp(App):
         """
         self.call_later(lambda: self._show_wizard_screen(allow_cancel=True))
 
-    @work(exclusive=False, thread=True)
-    def consume_output_queue(self) -> None:
-        """Worker thread that consumes output queue and posts to UI.
-
-        Uses only _should_stop_consumer flag (not is_running) to avoid race
-        conditions during shutdown. The flag is set in exit() before Textual
-        waits for workers, ensuring prompt termination.
-        """
+    def _consume_output_queue_loop(self) -> None:
+        """Consume output queue on a daemon thread and post to UI."""
         while not self._should_stop_consumer:
+            # Check shutdown before blocking on queue
+            if self.output_adapter.is_shutdown_requested():
+                break
+
             try:
-                message = self.output_adapter.get_message(block=True, timeout=0.1)
+                message = self.output_adapter.get_message(block=True, timeout=0.2)
+            except Exception as e:
+                logger.exception("Error consuming output queue: %s", e)
+                continue
 
-                if message is None:
-                    continue
+            if message is None:
+                # Timeout or shutdown sentinel received
+                continue
 
-                msg_type, content = message
+            # Check shutdown again before processing (avoid posting during shutdown)
+            if self._should_stop_consumer or self.output_adapter.is_shutdown_requested():
+                break
 
-                if msg_type == 'output':
+            msg_type, content = message
+
+            try:
+                if msg_type == "output":
                     self.post_message(WriteOutput(content))
-                elif msg_type == 'renderable':
+                elif msg_type == "renderable":
                     self.post_message(WriteRenderable(content))
-                elif msg_type == 'tasks':
+                elif msg_type == "tasks":
                     self.post_message(TasksUpdated(content))
-                elif msg_type == 'activity':
-                    # Unpack activity tuple: (state, message, elapsed_ms)
+                elif msg_type == "activity":
                     state, msg, elapsed_ms = content
                     self.post_message(ActivityStateChange(state, msg, elapsed_ms))
-                elif msg_type == 'flush':
-                    # Acknowledge flush - all prior items processed
+                elif msg_type == "flush":
                     self.output_adapter.acknowledge_flush(content)
-
-            except Exception as e:
-                logger.exception(f"Error consuming output queue: {e}")
+            except Exception:
+                # App shutting down, message pump closed
+                break
 
     # =========================================================================
     # Message Handlers - Route to Active Screen
