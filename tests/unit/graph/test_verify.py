@@ -103,7 +103,8 @@ class TestSanitizeFilePaths:
 
             assert len(valid) == 1
             assert len(skipped) == 0
-            assert str(test_file) in valid[0]
+            # Use resolve() to handle Windows 8.3 short names vs long names
+            assert Path(valid[0]).resolve() == test_file.resolve()
 
     def test_nonexistent_files_skipped(self) -> None:
         """Non-existent files should be skipped."""

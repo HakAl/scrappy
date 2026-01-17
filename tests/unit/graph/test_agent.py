@@ -339,7 +339,7 @@ class TestGraphIntegration:
 
         result = run_agent(
             task="Test multi-step",
-            working_dir="/tmp",
+            working_dir=tempfile.gettempdir(),
             orchestrator=orchestrator,
             tool_adapter=tool_adapter,
         )
@@ -369,7 +369,7 @@ class TestGraphIntegration:
 
         result = run_agent(
             task="Test error recovery",
-            working_dir="/tmp",
+            working_dir=tempfile.gettempdir(),
             orchestrator=orchestrator,
         )
 
@@ -401,7 +401,7 @@ class TestGraphIntegration:
         try:
             result = run_agent(
                 task="Test max iterations",
-                working_dir="/tmp",
+                working_dir=tempfile.gettempdir(),
                 orchestrator=orchestrator,
                 tool_adapter=tool_adapter,
             )
