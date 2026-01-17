@@ -6,6 +6,7 @@ Handles running and managing code execution agents with human approval.
 from typing import TYPE_CHECKING, Optional
 
 from scrappy.undo import create_undo_point, UndoError
+from scrappy.sandbox.git_isolation import GitIsolation, GitError, BranchInfo
 from .io_interface import CLIIOProtocol
 from .display_manager import DisplayManager
 from .user_interaction import CLIUserInteraction
@@ -64,6 +65,8 @@ class CLIAgentManager:
             dry_run: If True, agent simulates actions without making changes.
             verbose: If True, show full output (thinking, params, results).
         """
+        import os
+
         io = self.io
         dashboard = self.display.get_dashboard()
 
@@ -75,6 +78,17 @@ class CLIAgentManager:
         if dashboard:
             dashboard.set_state("idle", "Awaiting user input")
             dashboard.update_thought_process(f"Task: {task}")
+
+        # Git isolation - create working branch to keep main clean
+        branch_info: Optional[BranchInfo] = None
+        git_isolation: Optional[GitIsolation] = None
+        try:
+            git_isolation = GitIsolation(os.getcwd())
+            branch_info = git_isolation.create_working_branch(task)
+            io.secho(f"Working branch: {branch_info.name}", fg=io.theme.success)
+        except GitError as e:
+            io.secho(f"Could not create working branch: {e}", fg=io.theme.warning)
+            io.echo("Continuing on current branch...")
 
         # Safety options - use injected interaction handler for mode-aware prompts
         create_undo = self._interaction.confirm(
@@ -90,12 +104,13 @@ class CLIAgentManager:
             except UndoError as e:
                 io.secho(f"Could not create undo point: {e}", fg=io.theme.warning)
 
-        self._run_langgraph_agent(task, undo_state, dry_run, dashboard)
+        self._run_langgraph_agent(task, undo_state, branch_info, dry_run, dashboard)
 
     def _run_langgraph_agent(
         self,
         task: str,
         undo_state,
+        branch_info: Optional[BranchInfo],
         dry_run: bool,
         dashboard,
     ) -> None:
@@ -113,6 +128,7 @@ class CLIAgentManager:
         Args:
             task: The task to run
             undo_state: Undo state if checkpoint was created
+            branch_info: Branch info if working branch was created
             dry_run: Whether this is a dry run (currently ignored for LangGraph)
             dashboard: Dashboard instance if enabled
         """
@@ -166,9 +182,15 @@ class CLIAgentManager:
                     "agent_task"
                 )
 
-            # Inform user about undo option (if files were changed)
-            if undo_state and not dry_run and result.final_state and result.final_state.files_changed:
-                io.echo("To undo changes: scrappy undo")
+            # Inform user about rollback options (if files were changed)
+            if not dry_run and result.final_state and result.final_state.files_changed:
+                rollback_options = []
+                if undo_state:
+                    rollback_options.append("scrappy undo")
+                if branch_info:
+                    rollback_options.append(f"git checkout {branch_info.base_branch}")
+                if rollback_options:
+                    io.echo(f"To rollback: {' | '.join(rollback_options)}")
 
         except KeyboardInterrupt:
             lgr.debug("_run_langgraph_agent: KeyboardInterrupt")
