@@ -1,1 +1,0 @@
-Migrated agent to LangGraph-based architecture with distinct Think, Execute, Verify, Confirm, and Error nodes. This provides cleaner control flow, better error recovery, and more predictable behavior. The agent now follows a structured graph pattern instead of a hand-rolled state machine.

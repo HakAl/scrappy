@@ -9,13 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.1.0] - 2026-01-17
 
-No significant changes.
-
-
-## [1.1.0] - 2026-01-11
-
 ### Features
 
+- Migrated agent to LangGraph-based architecture with distinct Think, Execute, Verify, Confirm, and Error nodes. This provides cleaner control flow, better error recovery, and more predictable behavior.
+- Added Docker sandbox support for isolated command execution. Commands run in a container with project directory mounted, providing network isolation and timeout enforcement. Falls back to host execution if Docker is unavailable.
+- Added Langfuse integration for agent observability. All graph invocations are traced with node execution flow visible for debugging.
 - Agent can now be cancelled with Escape key during execution
 - Agent mode now checks for git availability before running
 - Agent dry-run mode is now opt-in via --dry-run flag instead of prompting every time
@@ -33,6 +31,7 @@ No significant changes.
 
 ### Bug Fixes
 
+- Fixed agent rate limit handling: fallback chain now activates on any rate limit error. This ensures deterministic model fallback order instead of random Router selection.
 - Fixed mouse selection and scrolling breaking after app initialization
 - Fixed app hanging on exit by properly cancelling background tasks and shutting down Langfuse tracer
 - Fixed escape key crash due to stale cancellation token check
@@ -44,5 +43,6 @@ No significant changes.
 
 ### Miscellaneous
 
+- Removed ~48,000 lines of legacy code through LangGraph migration (deleted task_router/, agent/, and associated tests). Codebase is significantly simpler while retaining all features.
 - Removed unused dependencies: rich-rst, tqdm, pandas, prompt_toolkit, langchain
 - Added pytest integration test markers for better test organization

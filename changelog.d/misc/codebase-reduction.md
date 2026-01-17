@@ -1,1 +1,0 @@
-Removed ~48,000 lines of legacy code through LangGraph migration. Deleted task_router/ (~8,259 lines), agent/ (~9,412 lines), and associated tests (~37,000 lines). The codebase is now significantly simpler and more maintainable while retaining all essential features.
