@@ -1,8 +1,11 @@
 """SelectableLog widget - RichLog replacement with mouse text selection."""
 
+import logging
 from typing import Optional
 
 from textual.scroll_view import ScrollView
+
+logger = logging.getLogger(__name__)
 from textual.strip import Strip
 from textual.geometry import Size
 from textual.events import MouseDown, MouseMove, MouseUp

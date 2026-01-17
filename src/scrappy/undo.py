@@ -86,6 +86,7 @@ def _run(cmd: str, check: bool = True) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         text=True,
         check=check,
+        stdin=subprocess.DEVNULL,  # Prevent terminal interaction in TUI worker threads
     )
     return result
 
@@ -212,7 +213,8 @@ def create_undo_point() -> UndoState:
         UndoState that can be used to restore this exact state.
 
     Raises:
-        UndoError: If in an unsafe git state (merge/rebase in progress).
+        UndoError: If in an unsafe git state (merge/rebase in progress),
+            or if git operations fail (e.g., not a git repository).
 
     Note:
         Restoring a dirty state will result in all changes being unstaged,
@@ -229,47 +231,53 @@ def create_undo_point() -> UndoState:
             UserWarning,
         )
 
-    with undo_lock():
-        # 2. Capture current state
-        branch = get_current_branch()
-        original_head = None if branch else get_head_sha()
+    try:
+        with undo_lock():
+            # 2. Capture current state
+            branch = get_current_branch()
+            original_head = None if branch else get_head_sha()
 
-        # 3. Snapshot dirty state as WIP commit
-        is_wip = False
-        if is_dirty() or has_untracked():
-            _run("git add -A")
+            # 3. Snapshot dirty state as WIP commit
+            is_wip = False
+            if is_dirty() or has_untracked():
+                _run("git add -A")
 
-            # Only commit if there is actually something staged
-            # (git add -A on all-ignored files results in nothing staged)
-            if has_staged_changes():
-                # --no-verify: bypass pre-commit hooks for internal commit
-                _run("git commit --no-verify -m 'scrappy:wip'")
-                is_wip = True
-            else:
-                # Nothing to commit - unstage and continue
-                _run("git reset HEAD")
+                # Only commit if there is actually something staged
+                # (git add -A on all-ignored files results in nothing staged)
+                if has_staged_changes():
+                    # --no-verify: bypass pre-commit hooks for internal commit
+                    _run("git commit --no-verify -m 'scrappy:wip'")
+                    is_wip = True
+                else:
+                    # Nothing to commit - unstage and continue
+                    _run("git reset HEAD")
 
-        # 4. Create unique ref (no worktree ID - lock handles concurrency)
-        ts = datetime.now().strftime("%Y%m%d-%H%M%S-%f")[:20]
-        ref = f"refs/scrappy/undo/{ts}"
-        _run(f"git update-ref {ref} HEAD")
+            # 4. Create unique ref (no worktree ID - lock handles concurrency)
+            ts = datetime.now().strftime("%Y%m%d-%H%M%S-%f")[:20]
+            ref = f"refs/scrappy/undo/{ts}"
+            _run(f"git update-ref {ref} HEAD")
 
-        # 5. Build state object
-        state = UndoState(
-            ref=ref,
-            branch=branch,
-            original_head=original_head,
-            is_wip=is_wip,
-            worktree_path=os.getcwd(),
-            created_at=datetime.now(),
-            scrappy_version=__version__,
-        )
+            # 5. Build state object
+            state = UndoState(
+                ref=ref,
+                branch=branch,
+                original_head=original_head,
+                is_wip=is_wip,
+                worktree_path=os.getcwd(),
+                created_at=datetime.now(),
+                scrappy_version=__version__,
+            )
 
-        # 6. Persist and prune
-        persist_undo_state(state)
-        prune_old_undo_states(keep=10)
+            # 6. Persist and prune
+            persist_undo_state(state)
+            prune_old_undo_states(keep=10)
 
-        return state
+            return state
+    except subprocess.CalledProcessError as e:
+        # Wrap git errors in UndoError for consistent error handling
+        raise UndoError(
+            f"Git operation failed: {e.cmd} returned exit status {e.returncode}"
+        ) from e
 
 
 # =============================================================================

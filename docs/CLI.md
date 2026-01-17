@@ -258,69 +258,28 @@ Models are organized into two tiers with automatic fallback:
 
 ### Code Agent Workflow
 
-Let the AI write code with your approval:
+The agent uses a graph-based architecture with distinct phases:
 
+- **Think**: LLM decides what action to take next
+- **Execute**: Runs the chosen tool (read/write files, run commands)
+- **Verify**: Checks changes with linting (ruff, mypy)
+- **Confirm**: Prompts before destructive operations
+- **Error**: Handles failures with automatic retry
+
+**Safety features:**
+- Undo points before each run (rollback with `/undo`)
+- Human approval for file writes and commands
+- Docker sandbox for command execution (when available)
+- Automatic linting verification after changes
+
+**Models:** Requires tool-capable models (Gemini, Qwen, Kimi K2). Llama models cannot call tools.
+
+**Usage:**
 ```
-You: /agent Add input validation to the user registration endpoint
-
-Code Agent - Task: Add input validation...
-------------------------------------------------------------
-Run in dry-run mode? [y/N]: n
-Create git checkpoint before running? [Y/n]: y
-Checkpoint created: f8e7d6c5
-
-Agent Configuration:
-  Planner (smart tasks): gemini
-  Executor (fast tasks): cerebras
-  Project root: /path/to/project
-
-Start agent? [Y/n]: y
-
---- Iteration 1/10 ---
-[gemini] Thinking...
-
-Thought: First, I need to examine the current registration endpoint
-
-Agent wants to: read_file
-Parameters: {"path": "src/routes/auth.py"}
-Allow? [y/N]: y
-Executing: read_file
-Result: [current file contents...]
-
---- Iteration 2/10 ---
-Thought: I'll add Pydantic validation for the user registration
-
-Agent wants to: write_file
-Parameters: {"path": "src/routes/auth.py", "content": "..."}
-
-Content preview:
-from pydantic import BaseModel, EmailStr, validator
-
-class UserRegistration(BaseModel):
-    email: EmailStr
-    password: str
-
-    @validator('password')
-    def password_strength(cls, v):
-        if len(v) < 8:
-            raise ValueError('Password must be at least 8 characters')
-        return v
-...
-
-Allow? [y/N]: y
-Executing: write_file
-Result: Successfully wrote 2847 characters to src/routes/auth.py
-
-============================================================
-Task Completed Successfully!
-Result: Added Pydantic validation with email and password checks
-Iterations: 2
-
-Save audit log to file? [y/N]: y
-Saved to: .scrappy/.audit.json  
-
-Rollback to checkpoint? [y/N]: n
+You: /agent Add input validation to the signup form
 ```
+
+The agent will show its thinking, request approval before making changes, and verify the results.
 
 
 ## Error Handling

@@ -24,10 +24,10 @@ Orchestrator (LiteLLM Router)
     │     └─ Fast tier, Quality tier, fallback chains
     │
     ├─── Cerebras (Primary - 14,400 RPD)
-    │     └─ llama3.1-8b, llama-3.3-70b, qwen-3-32b
+    │     └─ llama3.1-8b, llama-3.3-70b, qwen-3-235b-instruct, gpt-oss-120b
     │
     ├─── Groq (Secondary - 7,000 RPD)
-    │     └─ llama-3.1-8b-instant, llama-3.3-70b-versatile, mixtral, gemma
+    │     └─ kimi-k2-instruct, llama-3.1-8b-instant, llama-3.3-70b-versatile
     │
     ├─── Gemini (Overflow - 1,650 RPD, auto-fallback)
     │     └─ gemini-2.5-flash-lite, gemini-2.0-flash, etc.
@@ -41,26 +41,27 @@ Orchestrator (LiteLLM Router)
 The system uses a LangGraph-based agent that can read, write, and modify code with explicit human approval for dangerous operations:
 
 ```python
-from scrappy.graph import create_agent_graph
+from scrappy.graph import build_graph, run_agent, AgentRunContext
 
-# Create graph-based agent
-graph = create_agent_graph(llm_service, tool_adapter)
+# Build the graph
+graph = build_graph()
 
-# Run task - dangerous operations require confirmation
-result = await graph.arun(task="Add input validation to API endpoints")
+# Run agent on a task
+result = await run_agent(
+    graph=graph,
+    task="Add input validation to API endpoints",
+    run_context=AgentRunContext(...),
+)
 
-# Dangerous file operations trigger confirm node:
-# [CONFIRM] Write to src/api.py?
-# [y/N]: y
+# Dangerous file operations trigger confirm node with user approval
 ```
 
 **Key Safety Features:**
-- Human-in-the-loop approval for every action
-- Git checkpoint before changes (easy rollback)
+- Human-in-the-loop approval for file writes and commands
+- Undo points before changes (rollback with `/undo`)
 - Path sandboxing (can't escape project directory)
 - Dangerous command blocking (rm -rf, del /f, etc.)
-- Complete audit trail with timestamps
-- Dry-run mode for previewing
+- Docker sandbox for command execution (when available)
 
 ### 2. Swappable Orchestrator Brain
 
@@ -112,38 +113,36 @@ User Prompt → CodebaseContext.augment_prompt() → Enhanced Prompt → LLM
 
 ## Core Components
 
-### 1. Provider Abstraction (`src/providers/base.py`)
+### 1. Provider Management (LiteLLM Router)
 
-All providers implement a common interface:
-- `chat()` - Send messages, get responses
-- `get_limits()` - Check rate limits
-- `is_available()` - Verify configuration
-- `get_model_for_task()` - Recommend model based on task type
+Providers are managed through LiteLLM Router, configured in `src/scrappy/orchestrator/litellm_config.py`. There are no individual provider classes - LiteLLM handles all provider interactions.
 
-### 2. Provider Implementations
+**Configuration:** API keys are set via environment variables:
+- `CEREBRAS_API_KEY`
+- `GROQ_API_KEY`
+- `GEMINI_API_KEY`
+- `SAMBANOVA_API_KEY`
 
-**CerebrasProvider** (`src/providers/cerebras_provider.py`)
-- Best for: Primary workhorse, ultra-fast inference
-- Models: llama3.1-8b, llama-3.3-70b, qwen-3-32b
-- Limits: 14,400 RPD, 60,000 TPM
-- Default orchestrator brain
+**Model Groups:** The router organizes models into groups for different use cases:
 
-**GroqProvider** (`src/providers/groq_provider.py`)
-- Best for: Secondary provider, model variety
-- Models: llama-3.1-8b-instant, llama-3.3-70b-versatile, mixtral-8x7b, gemma2-9b
-- Limits: 30 RPM, 7,000 RPD, 20K TPM
+| Group | Purpose | Models |
+|-------|---------|--------|
+| `fast` | Speed priority, simple tasks | llama-3.1-8b (Groq, Cerebras, SambaNova) |
+| `chat` | Conversation, tool-capable | gemini-2.5-flash, kimi-k2-instruct |
+| `instruct` | Agent tasks, tool use | qwen-3-235b-instruct, gpt-oss-120b, kimi-k2, gemini |
 
-**GeminiProvider** (`src/providers/gemini_provider.py`)
-- Best for: Overflow capacity, auto-fallback
-- Models: gemini-2.5-flash-lite (1000 RPD), gemini-2.0-flash (200 RPD), etc.
-- Special feature: Auto-fallback between models on rate limits
+**Provider Details:**
 
-**CohereProvider** (`src/providers/cohere_provider.py`)
-- Best for: Embeddings only (trial is severely limited)
-- Models: command-r-08-2024, embed-english-v3.0
-- Limits: **1,000 calls/month total** (CRITICAL - use sparingly)
+| Provider | Daily Quota | Best For | Notes |
+|----------|-------------|----------|-------|
+| Cerebras | 14,400 RPD | Fast tier, high volume | Ultra-fast inference (2000+ tok/s) |
+| Groq | 7,000 RPD | Tool-capable models | Hosts Kimi K2 for agent tasks |
+| Gemini | 1,650 RPD | Large context, fallback | 1M token context window |
+| SambaNova | ~40 RPD | Backup only | Very limited free tier |
 
-### 3. Codebase Context (`src/context/`)
+**Fallback Behavior:** LiteLLM Router automatically fails over to the next provider when rate limits are hit.
+
+### 2. Codebase Context (`src/context/`)
 
 Automatic project understanding with **built-in semantic search**:
 - Scans project files and structure
@@ -200,7 +199,7 @@ CodebaseContext.get_relevant_context(query)
 3. **Deduplication**: Prevents duplicate chunks in results
 4. **Fallback**: If hybrid search fails, falls back to vector-only search
 
-### 4. Graph Agent (`src/scrappy/graph/`)
+### 3. Graph Agent (`src/scrappy/graph/`)
 
 LangGraph-based agent for autonomous code tasks:
 
@@ -230,7 +229,7 @@ LangGraph-based agent for autonomous code tasks:
 - **Error recovery**: Automatic retry with tier escalation
 - **Context management**: Token-aware context trimming and observation masking
 
-### 5. Orchestrator (`src/orchestrator/`)
+### 4. Orchestrator (`src/scrappy/orchestrator/`)
 
 Central coordinator, modularized into a package:
 
@@ -265,7 +264,7 @@ Central coordinator, modularized into a package:
 
 Note: `src/orchestrator.py` exists as a backward-compatibility wrapper.
 
-### 6. CLI Interface (`src/cli/`)
+### 5. CLI Interface (`src/scrappy/cli/`)
 
 Full-featured command-line interface:
 - Interactive chat mode with slash commands
@@ -276,7 +275,7 @@ Full-featured command-line interface:
 - Usage monitoring and status display
 - Built with Click for excellent UX
 
-### 7. Platform Abstraction (`src/platform/`)
+### 6. Platform Abstraction (`src/scrappy/platform/`)
 
 Cross-platform support layer:
 - `detection.py` - Detects OS, shell type, capabilities
@@ -287,7 +286,7 @@ Cross-platform support layer:
 
 **Why it exists:** Scrappy runs on Windows, macOS, and Linux. Commands like `ls`, `cat`, and path separators differ. This layer abstracts those differences so the agent and CLI work consistently across platforms.
 
-### 8. Infrastructure Layer (`src/infrastructure/`)
+### 7. Infrastructure Layer (`src/scrappy/infrastructure/`)
 
 Cross-cutting concerns and abstractions:
 
@@ -313,7 +312,7 @@ Cross-cutting concerns and abstractions:
 - Enables testing without touching real filesystem
 - Path normalization and security checks
 
-### 9. Prompt System (`src/prompts/`)
+### 8. Prompt System (`src/scrappy/prompts/`)
 
 Structured prompt generation:
 - `factory.py` - Creates prompts for different contexts
@@ -364,7 +363,7 @@ for step in steps:
         result = orch.delegate_smart(step['description'], task_type='quality')
 ```
 
-### Pattern 2: Simple Delegation
+### Pattern 3: Simple Delegation
 
 ```python
 # Direct provider call
@@ -372,7 +371,7 @@ result = orch.delegate('cerebras', 'Summarize this text: ...')
 print(result.content)
 ```
 
-### Pattern 3: Smart Delegation
+### Pattern 4: Smart Delegation
 
 ```python
 # Auto-selects best provider for task type
@@ -382,7 +381,7 @@ result = orch.delegate_smart(
 )
 ```
 
-### Pattern 4: Complex Reasoning
+### Pattern 5: Complex Reasoning
 
 ```python
 # Brain analyzes with evidence
@@ -397,7 +396,7 @@ answer = orch.reason(
 )
 ```
 
-### Pattern 5: Multi-Agent Synthesis
+### Pattern 6: Multi-Agent Synthesis
 
 ```python
 # Get perspectives from multiple models
@@ -412,109 +411,89 @@ summary = orch.synthesize(
 )
 ```
 
-### Pattern 6: Graph Agent with Human Approval
+### Pattern 7: Graph Agent with Human Approval
+
+The CLI handles agent execution. Programmatic usage:
 
 ```python
-from scrappy.graph import create_agent_graph
-from scrappy.graph.state import AgentState
+from scrappy.graph import build_graph, run_agent, AgentRunContext
 from scrappy.undo import create_undo_point, undo, UndoError
 
-# Create safety undo point (automatically done by CLI)
+# Create safety undo point
 try:
     undo_state = create_undo_point()
-    print(f"Undo point created: {undo_state.ref}")
 except UndoError as e:
     print(f"Warning: Could not create undo point: {e}")
 
-# Create and run graph agent
-graph = create_agent_graph(llm_service, tool_adapter)
-initial_state = AgentState(
-    input="Add error handling to all API endpoints",
-    original_task="Add error handling to all API endpoints",
-    working_dir=str(Path.cwd()),
+# Build and run agent
+graph = build_graph()
+result = await run_agent(
+    graph=graph,
+    task="Add error handling to all API endpoints",
+    run_context=AgentRunContext(...),
 )
 
-# Run agent (dangerous operations require confirmation via confirm node)
-final_state = await graph.arun(initial_state)
-
-if final_state.done and not final_state.last_error:
-    print(f"Completed in {final_state.iteration} iterations")
-else:
-    # Rollback if needed using the undo system
-    try:
-        undo(n=1)  # Undo most recent agent run
-        print("Rolled back to pre-agent state")
-    except UndoError as e:
-        print(f"Rollback failed: {e}")
+# Rollback if needed
+if not result.success:
+    undo(n=1)
 ```
 
 **CLI Usage:**
 ```bash
-# One-shot
-python scrappy.py agent "Add feature X"
-
-# Interactive
+# Interactive mode
+scrappy
 You: /agent Add input validation
+
+# The CLI will:
+# 1. Create an undo point
+# 2. Run the agent with human approval for each action
+# 3. Allow rollback via /undo if needed
 ```
 
 ## Adding New Providers
 
-### Step 1: Create Provider Class
+Providers are added by configuring them in the LiteLLM Router. No custom provider classes needed.
+
+### Step 1: Add API Key Environment Variable
 
 ```python
-# src/providers/newprovider_provider.py
-from .base import LLMProvider, LLMResponse, ProviderLimits
-
-class NewProvider(LLMProvider):
-    @property
-    def name(self) -> str:
-        return 'newprovider'
-
-    @property
-    def available_models(self) -> list[str]:
-        return ['model-a', 'model-b']
-
-    @property
-    def default_model(self) -> str:
-        return 'model-a'
-
-    def chat(self, messages, model=None, max_tokens=1000, **kwargs):
-        # Implementation
-        pass
-
-    def get_limits(self):
-        return ProviderLimits(requests_per_day=1000)
-
-    def get_model_for_task(self, task_type):
-        if task_type == 'quality':
-            return 'model-b'
-        return 'model-a'
+# In src/scrappy/orchestrator/litellm_config.py, add to build_model_list():
+newprovider_key = api_key_service.get_key("NEWPROVIDER_API_KEY")
 ```
 
-### Step 2: Register in `__init__.py`
+### Step 2: Add Models to Appropriate Groups
 
 ```python
-from .newprovider_provider import NewProvider
-__all__ = [..., 'NewProvider']
+# Add to the appropriate model group (fast, chat, or instruct)
+if newprovider_key:
+    model_list.append({
+        "model_name": "fast",  # or "chat" or "instruct"
+        "litellm_params": {
+            "model": "newprovider/model-name",  # LiteLLM format
+            "api_key": newprovider_key,
+        },
+        "tpm": 60000,  # tokens per minute
+        "rpm": 30,     # requests per minute
+    })
 ```
 
-### Step 3: Auto-register in Orchestrator
+### Step 3: Add Metadata for Status Display (Optional)
 
 ```python
-# In orchestrator.py _auto_register_providers()
-try:
-    self.registry.register(NewProvider())
-    print("[OK] NewProvider registered")
-except Exception as e:
-    print(f"[X] NewProvider unavailable: {e}")
+# In MODEL_METADATA dict for /status and /limits commands
+"newprovider/model-name": ModelMetadata(
+    model_id="newprovider/model-name",
+    provider="newprovider",
+    group="fast",
+    context_length=8192,
+    speed=SpeedRank.FAST,
+    quality=QualityRank.GOOD,
+    rpd=1000,
+    tpm=60000,
+),
 ```
 
-### Step 4: Add to Brain Priority (optional)
-
-```python
-# In _setup_brain()
-priority = ['cerebras', 'groq', 'gemini', 'newprovider']
-```
+LiteLLM supports 100+ providers out of the box. Check [LiteLLM docs](https://docs.litellm.ai/docs/providers) for the model format.
 
 ## Rate Limit Strategy
 
@@ -552,11 +531,13 @@ The system handles:
 ## Testing
 
 ```bash
-# Test provider connectivity
-python test_orchestrator.py
+# Run all tests
+pytest tests/
 
-# Test basic usage patterns
-python examples/basic_usage.py
+# Run specific test modules
+pytest tests/graph/           # Agent graph tests
+pytest tests/orchestrator/    # Orchestrator tests
+pytest tests/cli/             # CLI tests
 ```
 
 ## Project Structure
@@ -572,16 +553,15 @@ src/scrappy/
 │   ├── edges.py              # Conditional edge logic
 │   ├── protocols.py          # Protocol definitions
 │   ├── tools.py              # Tool adapter
-│   ├── fallbacks.py          # Model fallback chains
+│   ├── tracing.py            # Langfuse observability
+│   ├── run_context.py        # Agent run context
 │   ├── nodes/                # Graph nodes
 │   │   ├── think.py          # LLM reasoning
 │   │   ├── execute.py        # Tool execution
 │   │   ├── verify.py         # Linting/testing
 │   │   ├── confirm.py        # Human confirmation
 │   │   ├── error.py          # Error recovery
-│   │   ├── token_estimator.py
-│   │   ├── context_manager.py
-│   │   └── tool_call_processor.py
+│   │   └── ...
 │   └── ...
 ├── orchestrator/             # LiteLLM-based orchestration
 │   ├── core.py               # Main orchestrator class

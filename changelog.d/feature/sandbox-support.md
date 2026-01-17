@@ -1,0 +1,1 @@
+Added Docker sandbox support for isolated command execution. Commands can now run in a container with project directory mounted, providing network isolation and timeout enforcement. Falls back to host execution with warning if Docker is unavailable.

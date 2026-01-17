@@ -140,27 +140,3 @@ mock_service = create_mock_litellm_service(
 )
 orchestrator = AgentOrchestrator(litellm_service=mock_service)
 ```
-
-## CLI Commands
-
-```bash
-# List configured models
-/models
-
-# Filter by tier
-/models fast
-/models quality
-
-# Filter by provider
-/models cerebras
-
-# Show current mode
-/model
-
-# Switch mode
-/model fast
-/model quality
-
-# Show status including providers
-/status
-```

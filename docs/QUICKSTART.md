@@ -74,24 +74,6 @@ That's it. You're in.
 
 ---
 
-## One-Liners (No Interactive Mode)
-
-```bash
-# Quick question
-scrappy query "What is Docker?"
-
-# Question about your code
-scrappy query "How should I fix the auth bug?" --with-context
-
-# Plan something
-scrappy plan "Build REST API"
-
-# AI writes code
-scrappy agent "Add input validation"
-```
-
----
-
 ## What Just Happened?
 
 - `--auto-explore` scanned your project and learned about it
@@ -104,7 +86,6 @@ scrappy agent "Add input validation"
 ## Next Steps
 
 - Type `/help` to see all commands
-- Type `/limits` to check your API quota usage
 - Read [CLI.md](CLI.md) for full documentation
 - Check [ARCHITECTURE.md](ARCHITECTURE.md) to understand the system
 
