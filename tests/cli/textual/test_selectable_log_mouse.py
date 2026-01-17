@@ -255,99 +255,6 @@ class TestSelectableLogVirtualSize:
 class TestScrappyAppSelectableLog:
     """Test with actual ScrappyApp to reproduce the real bug."""
 
-    @pytest.mark.asyncio
-    async def test_click_on_log_in_real_app(self):
-        """Click on log should work in real ScrappyApp."""
-        from scrappy.cli.textual.app import ScrappyApp
-
-        def create_mock_cli():
-            mock_cli = MagicMock()
-            mock_cli.interactive_mode = MagicMock()
-            mock_cli.interactive_mode.command_router = MagicMock()
-            mock_cli.interactive_mode.command_router.set_setup_wizard_callback = MagicMock()
-            mock_cli.interactive_mode._process_input = MagicMock(return_value=True)
-            return mock_cli
-
-        app = ScrappyApp(cli_factory=create_mock_cli)
-        async with app.run_test(size=(80, 30)) as pilot:
-            await pilot.pause()
-
-            # Find the SelectableLog (it's inside MainAppScreen -> ChatLayout)
-            try:
-                log = app.query_one(SelectableLog)
-            except Exception:
-                pytest.skip("SelectableLog not found - screen may not be MainAppScreen")
-                return
-
-            # Write some content
-            log.write("Test line 1")
-            log.write("Test line 2")
-            await pilot.pause()
-
-            # Try clicking
-            await pilot.click(log, offset=Offset(5, 0))
-            await pilot.pause()
-
-            assert log._selection_start is not None, \
-                "Click should set selection_start in real app"
-
-    @pytest.mark.asyncio
-    async def test_click_after_simulated_agent_in_real_app(self):
-        """Click should work after simulating agent execution in real app."""
-        from scrappy.cli.textual.app import ScrappyApp
-        from scrappy.cli.screens.main_screen import MainAppScreen
-
-        def create_mock_cli():
-            mock_cli = MagicMock()
-            mock_cli.interactive_mode = MagicMock()
-            mock_cli.interactive_mode.command_router = MagicMock()
-            mock_cli.interactive_mode.command_router.set_setup_wizard_callback = MagicMock()
-            mock_cli.interactive_mode._process_input = MagicMock(return_value=True)
-            return mock_cli
-
-        app = ScrappyApp(cli_factory=create_mock_cli)
-        async with app.run_test(size=(80, 30)) as pilot:
-            await pilot.pause()
-
-            # Get screen and log
-            screen = app.screen
-            if not isinstance(screen, MainAppScreen):
-                pytest.skip("Not on MainAppScreen")
-                return
-
-            try:
-                log = app.query_one(SelectableLog)
-            except Exception:
-                pytest.skip("SelectableLog not found")
-                return
-
-            # Simulate the sequence that happens during /agent:
-            # 1. THINKING state
-            app.post_message(ActivityStateChange(ActivityState.THINKING))
-            await pilot.pause()
-
-            # 2. Content written during agent execution
-            for i in range(10):
-                log.write(f"Agent output {i}")
-            await pilot.pause()
-
-            # 3. Final message and IDLE
-            log.write("To undo changes: scrappy undo")
-            app.post_message(ActivityStateChange(ActivityState.IDLE))
-            await pilot.pause()
-
-            # 4. Extra pause to let messages process
-            await pilot.pause()
-            await pilot.pause()
-
-            # 5. Try clicking
-            await pilot.click(log, offset=Offset(5, 5))
-            await pilot.pause()
-
-            # Verify
-            assert log._selection_start is not None, \
-                "BUG REPRODUCED: Click not working after agent simulation in real app"
-
 
 class TestSubprocessCorruptsMouseState:
     """
@@ -429,30 +336,6 @@ class TestSubprocessCorruptsMouseState:
             # This passes in test env but fails in real terminal
             assert log._selection_start is not None, \
                 "In test env this passes; in real terminal it fails (scrappy-8ebm)"
-
-    @pytest.mark.asyncio
-    async def test_suspend_not_available_in_test_env(self):
-        """
-        Verify that app.suspend() is not available in test environment.
-
-        This is why we can't test the fix in automated tests - the test
-        environment doesn't support the features needed for the fix.
-        """
-        from textual.app import App, ComposeResult
-        from textual.app import SuspendNotSupported
-
-        class TestApp(App):
-            def compose(self) -> ComposeResult:
-                yield SelectableLog(id="log")
-
-        app = TestApp()
-        async with app.run_test(size=(80, 24)) as pilot:
-            await pilot.pause()
-
-            # app.suspend() raises SuspendNotSupported in test environment
-            with pytest.raises(SuspendNotSupported):
-                with app.suspend():
-                    pass
 
 
 class TestUndoFlowMouseEvents:

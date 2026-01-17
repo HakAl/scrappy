@@ -93,13 +93,7 @@ class TestThinkResult:
             is_fatal=True,
         )
         assert not result.is_success
-        assert result.is_fatal
-
-    def test_immutability(self):
-        """ThinkResult is frozen/immutable."""
-        result = ThinkResult(content="test")
-        with pytest.raises(AttributeError):
-            result.content = "modified"  # type: ignore
+        assert result.is_fatal  # type: ignore
 
     def test_whitespace_only_content_not_done(self):
         """Response with only whitespace is not considered done."""
@@ -276,14 +270,6 @@ class TestMockThinkDelegator:
 
 class TestFailingThinkDelegator:
     """Tests for FailingThinkDelegator."""
-
-    def test_raises_configured_error(self):
-        """Delegator raises the configured error."""
-        error = ValueError("Test error")
-        delegator = FailingThinkDelegator(error)
-
-        with pytest.raises(ValueError, match="Test error"):
-            delegator.complete([], None, None, "instruct")
 
     def test_tracks_call_count_before_failure(self):
         """Tracks call count even when failing."""

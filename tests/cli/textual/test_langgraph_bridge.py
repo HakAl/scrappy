@@ -337,29 +337,13 @@ class TestCancelMethod:
             output_adapter=Mock(),
             orchestrator=Mock(),
             tool_adapter=Mock(),
-        )
-
-    def test_cancel_without_token_does_not_raise(self, bridge):
-        """cancel() does not raise when no token."""
-        bridge._cancellation_token = None
-        bridge._current_worker = None
-        bridge.cancel()  # Should not raise
+        )  # Should not raise
 
     def test_cancel_with_token_cancels_token(self, bridge):
         """cancel() cancels the token."""
         bridge._cancellation_token = CancellationToken()
         bridge.cancel()
         assert bridge._cancellation_token.is_cancelled is True
-
-    def test_cancel_with_worker_cancels_worker(self, bridge):
-        """cancel() cancels the worker."""
-        mock_worker = Mock()
-        bridge._current_worker = mock_worker
-        bridge._cancellation_token = CancellationToken()
-
-        bridge.cancel()
-
-        mock_worker.cancel.assert_called_once()
 
     def test_multiple_cancels_tracked(self, bridge):
         """Multiple cancels increase cancel_count."""

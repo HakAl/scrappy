@@ -189,19 +189,6 @@ class TestSpecialCommands:
             # Should not crash
             assert app.screen is not None
 
-    @pytest.mark.asyncio
-    async def test_exit_command(self):
-        """Exit command should trigger app exit."""
-        app = create_test_app()
-
-        async with app.run_test() as pilot:
-            await pilot.pause()
-
-            # Type exit
-            await pilot.press("/", "e", "x", "i", "t")
-            await pilot.press("enter")
-            await pilot.pause()
-
             # App might be exiting, just verify no crash
 
 

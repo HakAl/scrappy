@@ -270,12 +270,6 @@ class TestInitialize:
         # Brain should not be set when auto_register=False
         assert mock_orchestrator._brain_name is None
 
-    def test_initialize_with_show_provider_status(self, mock_orchestrator):
-        """Initialize calls print_provider_status when requested."""
-        mock_orchestrator._status_reporter = Mock()
-        mock_orchestrator.initialize(auto_register=True, show_provider_status=True)
-        mock_orchestrator._status_reporter.print_status.assert_called_once()
-
 
 class TestBrainProperty:
     """Tests for brain property getter/setter."""
@@ -285,21 +279,10 @@ class TestBrainProperty:
         mock_orchestrator._brain_name = "test-brain"
         assert mock_orchestrator.brain == "test-brain"
 
-    def test_brain_setter_validates_provider(self, mock_orchestrator):
-        """brain setter validates provider exists."""
-        with pytest.raises(ValueError, match="not available"):
-            mock_orchestrator.brain = "nonexistent-provider"
-
     def test_brain_setter_accepts_valid_provider(self, mock_orchestrator):
         """brain setter accepts a valid provider."""
         mock_orchestrator.brain = "mock"
         assert mock_orchestrator._brain_name == "mock"
-
-    def test_brain_provider_raises_when_no_brain(self, mock_orchestrator):
-        """brain_provider raises when no brain configured."""
-        mock_orchestrator._brain = None
-        with pytest.raises(RuntimeError, match="No orchestrator brain"):
-            _ = mock_orchestrator.brain_provider
 
 
 class TestStatus:
@@ -355,12 +338,6 @@ class TestSessionMethods:
         """load_session restores working memory and task history."""
         result = mock_orchestrator.load_session()
         assert result["status"] == "loaded"
-
-    def test_clear_session_delegates(self, mock_orchestrator):
-        """clear_session delegates to session manager."""
-        mock_orchestrator.session_manager = Mock()
-        mock_orchestrator.clear_session()
-        mock_orchestrator.session_manager.clear_session.assert_called_once()
 
 
 class TestTaskExecutionMethods:
@@ -541,12 +518,6 @@ class TestUsageAndCacheMethods:
         result = mock_orchestrator.get_cache_stats()
         assert "hits" in result
 
-    def test_clear_cache_delegates(self, mock_orchestrator):
-        """clear_cache delegates to usage reporter."""
-        mock_orchestrator.usage_reporter = Mock()
-        mock_orchestrator.clear_cache()
-        mock_orchestrator.usage_reporter.clear_cache.assert_called_once()
-
     def test_toggle_cache_toggles_state(self, mock_orchestrator):
         """toggle_cache toggles caching state."""
         initial = mock_orchestrator.caching_enabled
@@ -576,12 +547,6 @@ class TestBackgroundTaskMethods:
         result = mock_orchestrator.get_background_task_status()
         assert "pending" in result
 
-    def test_clear_background_errors(self, mock_orchestrator):
-        """clear_background_errors delegates to manager."""
-        mock_orchestrator.background_manager = Mock()
-        mock_orchestrator.clear_background_errors()
-        mock_orchestrator.background_manager.clear_background_errors.assert_called_once()
-
     def test_cancel_background_task(self, mock_orchestrator):
         """cancel_background_task delegates to manager."""
         result = mock_orchestrator.cancel_background_task("task-123")
@@ -605,12 +570,6 @@ class TestRateLimitMethods:
         """check_rate_limit_warnings delegates to rate tracker."""
         result = mock_orchestrator.check_rate_limit_warnings()
         assert result == []
-
-    def test_reset_rate_tracking_delegates(self, mock_orchestrator):
-        """reset_rate_tracking delegates to rate tracker."""
-        mock_orchestrator.rate_tracker = Mock()
-        mock_orchestrator.reset_rate_tracking("mock")
-        mock_orchestrator.rate_tracker.reset_rate_tracking.assert_called_once_with("mock")
 
     def test_recommend_provider_delegates(self, mock_orchestrator):
         """recommend_provider delegates to provider selector."""

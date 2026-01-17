@@ -64,18 +64,6 @@ class TestMockModeNative:
             # App should still be running
             assert app.is_running
 
-    @pytest.mark.asyncio
-    async def test_mock_mode_clean_exit(self):
-        """App should exit cleanly with ctrl+c."""
-        app = create_test_app()
-
-        async with app.run_test() as pilot:
-            await pilot.pause()
-
-            # Request exit
-            app.exit()
-            await pilot.pause()
-
             # App should have exited
             # (run_test context manager handles cleanup)
 

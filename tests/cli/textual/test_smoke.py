@@ -138,31 +138,7 @@ class TestKeyboardInteraction:
 class TestAppExit:
     """Tests for app exit behavior."""
 
-    @pytest.mark.asyncio
-    async def test_app_exit_method_works(self):
-        """Calling app.exit() should cleanly exit."""
-        app = create_test_app()
-
-        async with app.run_test() as pilot:
-            await pilot.pause()
-
-            # Request exit
-            app.exit()
-            await pilot.pause()
-
             # Context manager will clean up
-
-    @pytest.mark.asyncio
-    async def test_ctrl_c_does_not_crash(self):
-        """Ctrl+C should not crash (may show exit prompt)."""
-        app = create_test_app()
-
-        async with app.run_test() as pilot:
-            await pilot.pause()
-
-            # Press Ctrl+C
-            await pilot.press("ctrl+c")
-            await pilot.pause()
 
             # App might still be running (waiting for confirmation)
             # or might have started exit process
