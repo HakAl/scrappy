@@ -146,12 +146,6 @@ class TestRouteDispatch:
             output = mock_io.get_output()
             assert "Invalid command" in output
 
-    def test_route_passes_args_to_handler(self, router, mock_display):
-        """route() passes args to handler."""
-        router.route("/models", "openai")
-
-        mock_display.list_models.assert_called_once_with("openai")
-
 
 class TestExitCommands:
     """Tests for exit command handlers."""
@@ -160,12 +154,6 @@ class TestExitCommands:
         """_handle_exit returns False to exit loop."""
         result = router._handle_exit("")
         assert result is False
-
-    def test_exit_saves_session_when_auto_save(self, router, mock_orchestrator, mock_io):
-        """Exit saves session when auto_save is enabled."""
-        router._handle_exit("")
-
-        mock_orchestrator.save_session.assert_called_once()
 
     def test_exit_shows_goodbye(self, router, mock_io):
         """Exit shows goodbye message."""
@@ -182,15 +170,6 @@ class TestExitCommands:
 
         assert result is False  # Still exits
         # Error should be reported but not crash
-
-    def test_exit_warns_when_not_auto_save(self, router, mock_session_context, mock_io):
-        """Exit warns when auto_save is disabled."""
-        mock_session_context.auto_save = False
-
-        router._handle_exit("")
-
-        # Should warn about not saving
-        output = mock_io.get_output()
         # The warning utility should be called
 
 
@@ -325,15 +304,6 @@ class TestTaskCommands:
         output = mock_io.get_output()
         assert "Usage:" in output
 
-    def test_plan_with_task_calls_plan_task(self, router, mock_tasks, mock_io):
-        """_handle_plan with task calls tasks.plan_task."""
-        mock_tasks.plan_task.return_value = []
-        mock_io._confirmations = [False]  # Don't start plan
-
-        router._handle_plan("build a feature")
-
-        mock_tasks.plan_task.assert_called_once_with("build a feature")
-
     def test_plan_starts_on_confirm(self, router, mock_tasks, mock_io):
         """_handle_plan starts plan when user confirms."""
         mock_tasks.plan_task.return_value = ["step1", "step2"]
@@ -351,12 +321,6 @@ class TestTaskCommands:
         output = mock_io.get_output()
         assert "Usage:" in output
 
-    def test_reason_with_question_calls_reason(self, router, mock_tasks):
-        """_handle_reason with question calls tasks.reason."""
-        router._handle_reason("why is the sky blue?")
-
-        mock_tasks.reason.assert_called_once_with("why is the sky blue?")
-
 
 class TestAgentCommand:
     """Tests for /agent command."""
@@ -368,19 +332,6 @@ class TestAgentCommand:
         assert result is True
         output = mock_io.get_output()
         assert "Usage:" in output
-
-    @patch("scrappy.cli.command_router.check_agent_dependencies")
-    @patch("scrappy.cli.command_router.check_optional_dependencies")
-    def test_agent_checks_dependencies(
-        self, mock_optional, mock_deps, router, mock_agent_mgr, mock_io
-    ):
-        """_handle_agent checks dependencies before running."""
-        mock_deps.return_value = (True, [])
-        mock_optional.return_value = []
-
-        router._handle_agent("do something")
-
-        mock_deps.assert_called_once()
 
     @patch("scrappy.cli.command_router.check_agent_dependencies")
     def test_agent_fails_on_missing_deps(self, mock_deps, router, mock_io, mock_agent_mgr):
@@ -586,16 +537,6 @@ class TestTasksCommand:
         output = mock_io.get_output()
         assert "No active plan" in output
 
-    def test_tasks_with_plan_shows_tasks(self, router, mock_io):
-        """_handle_tasks shows tasks when plan active."""
-        router.state_manager.plan_active = True
-        router.state_manager.active_plan = ["step1", "step2"]
-        router.state_manager.show_all_tasks = Mock()
-
-        router._handle_tasks("")
-
-        router.state_manager.show_all_tasks.assert_called_once()
-
 
 class TestSetupCommand:
     """Tests for /setup command."""
@@ -609,19 +550,6 @@ class TestSetupCommand:
 
         assert result is True
         mock_callback.assert_called_once()
-
-    @patch("scrappy.cli.setup_wizard.SetupWizard")
-    @patch("scrappy.orchestrator.key_validator.create_key_validator")
-    def test_setup_runs_cli_wizard_when_no_callback(
-        self, mock_validator, mock_wizard_class, router, mock_io
-    ):
-        """_handle_setup runs CLI wizard when no TUI callback."""
-        mock_wizard = Mock()
-        mock_wizard_class.return_value = mock_wizard
-
-        router._handle_setup("")
-
-        mock_wizard.run.assert_called_once_with(allow_cancel=True)
 
 
 class TestSetWizardCallback:

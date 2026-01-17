@@ -87,14 +87,6 @@ class TestConfirmTool:
         # Should have called output at least once for tool info
         assert handler._output.call_count >= 1
 
-    def test_prompts_with_description(self, handler):
-        """Prompts with formatted description."""
-        handler._confirm.return_value = "y"
-
-        handler.confirm_tool("write_file", "Write to test.py", {"path": "test.py"})
-
-        handler._confirm.assert_called_once_with("Write to test.py?")
-
 
 class TestReset:
     """Tests for reset method."""

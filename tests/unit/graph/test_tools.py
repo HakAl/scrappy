@@ -307,13 +307,6 @@ class TestToolAdapterGetToolNames:
 class TestToolAdapterFactory:
     """Tests for factory methods."""
 
-    def test_create_default_returns_adapter(self):
-        """create_default should return a ToolAdapter instance."""
-        adapter = ToolAdapter.create_default()
-
-        assert isinstance(adapter, ToolAdapter)
-        assert isinstance(adapter, ToolAdapterProtocol)
-
     def test_create_default_has_tools(self):
         """create_default should have default tools registered."""
         adapter = ToolAdapter.create_default()

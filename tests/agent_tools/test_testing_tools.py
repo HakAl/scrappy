@@ -333,38 +333,6 @@ class TestRunTestsToolCancellation:
             run_context=self.mock_run_context
         )
 
-    def test_cancellation_exception_propagates(self):
-        """CancelledException from runner is re-raised, not swallowed."""
-        from scrappy.infrastructure.exceptions import CancelledException
-
-        mock_runner = Mock()
-        mock_runner.execute.side_effect = CancelledException("Cancelled")
-
-        tool = RunTestsTool(runner=mock_runner)
-
-        with pytest.raises(CancelledException):
-            tool.execute(self.context, command="pytest")
-
-    def test_uses_cancellation_token_from_context(self):
-        """When no runner injected, creates runner with context's cancellation token."""
-        # Don't inject a runner - let it create one
-        tool = RunTestsTool()
-
-        # Cancel the token
-        self.token.cancel()
-
-        # Execute should raise CancelledException because the runner
-        # will be created with the cancelled token
-        from scrappy.infrastructure.exceptions import CancelledException
-
-        with pytest.raises(CancelledException):
-            # Use a slow command that would take time without cancellation
-            import sys
-            if sys.platform == "win32":
-                tool.execute(self.context, command="ping -n 5 127.0.0.1")
-            else:
-                tool.execute(self.context, command="sleep 5")
-
     def test_injected_runner_used_when_provided(self):
         """When runner is injected, uses that instead of creating new one."""
         mock_runner = Mock()

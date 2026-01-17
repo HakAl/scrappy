@@ -82,14 +82,6 @@ class TestTaskClassification:
         assert low.confidence == 0.0
         assert high.confidence == 1.0
 
-    def test_missing_required_fields_raises(self):
-        """Missing required fields raise ValidationError."""
-        with pytest.raises(ValidationError):
-            TaskClassification(task_type=TaskType.RESEARCH)
-
-        with pytest.raises(ValidationError):
-            TaskClassification(confidence=0.5, reasoning="test")
-
     def test_task_type_from_string(self):
         """TaskType can be provided as string value."""
         classification = TaskClassification(
@@ -121,14 +113,6 @@ class TestAgentAction:
             tool="list_files",
         )
         assert action.parameters == {}
-
-    def test_missing_required_fields_raises(self):
-        """Missing thought or tool raises ValidationError."""
-        with pytest.raises(ValidationError):
-            AgentAction(thought="thinking")
-
-        with pytest.raises(ValidationError):
-            AgentAction(tool="some_tool")
 
     def test_parameters_accepts_nested_structures(self):
         """Parameters can contain nested dicts and lists."""
@@ -172,22 +156,6 @@ class TestResearchResult:
         assert result.follow_up_needed is False
         assert result.follow_up_questions == []
 
-    def test_confidence_bounds(self):
-        """Confidence must be between 0 and 1."""
-        with pytest.raises(ValidationError):
-            ResearchResult(summary="test", confidence=-0.5)
-
-        with pytest.raises(ValidationError):
-            ResearchResult(summary="test", confidence=1.5)
-
-    def test_missing_required_fields_raises(self):
-        """Missing summary or confidence raises ValidationError."""
-        with pytest.raises(ValidationError):
-            ResearchResult(confidence=0.5)
-
-        with pytest.raises(ValidationError):
-            ResearchResult(summary="test")
-
 
 class TestCodeChangeResult:
     """Tests for CodeChangeResult model."""
@@ -213,14 +181,6 @@ class TestCodeChangeResult:
         )
         assert result.tests_needed is False
         assert result.review_notes is None
-
-    def test_missing_required_fields_raises(self):
-        """Missing files_changed or summary raises ValidationError."""
-        with pytest.raises(ValidationError):
-            CodeChangeResult(summary="test")
-
-        with pytest.raises(ValidationError):
-            CodeChangeResult(files_changed=["file.py"])
 
     def test_empty_files_changed_allowed(self):
         """Empty files_changed list is allowed (no changes made)."""

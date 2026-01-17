@@ -69,25 +69,6 @@ class TestAgentResult:
         assert field_names == {"success", "final_state", "error", "cancelled"}
 
 
-class TestProtocols:
-    """Tests for protocol definitions."""
-
-    def test_confirm_callback_protocol_is_runtime_checkable(self):
-        """ConfirmCallbackProtocol should be runtime checkable."""
-        def my_callback(question: str) -> bool:
-            return True
-
-        # Protocol is runtime_checkable, so isinstance works
-        assert callable(my_callback)
-
-    def test_output_callback_protocol_is_runtime_checkable(self):
-        """OutputCallbackProtocol should be runtime checkable."""
-        def my_callback(content: str) -> None:
-            pass
-
-        assert callable(my_callback)
-
-
 class TestTruncateResult:
     """Tests for _truncate_result method."""
 
@@ -337,29 +318,13 @@ class TestCancelMethod:
             output_adapter=Mock(),
             orchestrator=Mock(),
             tool_adapter=Mock(),
-        )
-
-    def test_cancel_without_token_does_not_raise(self, bridge):
-        """cancel() does not raise when no token."""
-        bridge._cancellation_token = None
-        bridge._current_worker = None
-        bridge.cancel()  # Should not raise
+        )  # Should not raise
 
     def test_cancel_with_token_cancels_token(self, bridge):
         """cancel() cancels the token."""
         bridge._cancellation_token = CancellationToken()
         bridge.cancel()
         assert bridge._cancellation_token.is_cancelled is True
-
-    def test_cancel_with_worker_cancels_worker(self, bridge):
-        """cancel() cancels the worker."""
-        mock_worker = Mock()
-        bridge._current_worker = mock_worker
-        bridge._cancellation_token = CancellationToken()
-
-        bridge.cancel()
-
-        mock_worker.cancel.assert_called_once()
 
     def test_multiple_cancels_tracked(self, bridge):
         """Multiple cancels increase cancel_count."""

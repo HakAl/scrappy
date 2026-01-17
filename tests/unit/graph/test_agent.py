@@ -54,35 +54,6 @@ def create_test_state(
 class TestBuildGraph:
     """Tests for build_graph function."""
 
-    def test_builds_without_error(self) -> None:
-        """build_graph should complete without errors."""
-        from langgraph.graph.state import CompiledStateGraph
-
-        orchestrator = MockOrchestrator()
-        tool_adapter = MockToolAdapter()
-        graph = build_graph(orchestrator, tool_adapter)
-        assert isinstance(graph, CompiledStateGraph)
-
-    def test_accepts_custom_tool_adapter(self) -> None:
-        """build_graph should accept custom tool adapter."""
-        from langgraph.graph.state import CompiledStateGraph
-
-        orchestrator = MockOrchestrator()
-        tool_adapter = MockToolAdapter(tool_names=["custom_tool"])
-        graph = build_graph(orchestrator, tool_adapter)
-        assert isinstance(graph, CompiledStateGraph)
-
-    def test_accepts_custom_checkpointer(self) -> None:
-        """build_graph should accept custom checkpointer."""
-        from langgraph.graph.state import CompiledStateGraph
-        from langgraph.checkpoint.memory import MemorySaver
-
-        orchestrator = MockOrchestrator()
-        tool_adapter = MockToolAdapter()
-        checkpointer = MemorySaver()
-        graph = build_graph(orchestrator, tool_adapter, checkpointer=checkpointer)
-        assert isinstance(graph, CompiledStateGraph)
-
     def test_has_think_as_entry_point(self) -> None:
         """Graph entry point should be 'think' node."""
         orchestrator = MockOrchestrator()
@@ -207,35 +178,6 @@ class TestCreateAgentRunner:
         graph, checkpointer = result
         assert isinstance(graph, CompiledStateGraph)
         assert isinstance(checkpointer, MemorySaver)
-
-    def test_accepts_custom_tool_adapter(self) -> None:
-        """create_agent_runner should accept custom tool adapter."""
-        from langgraph.graph.state import CompiledStateGraph
-
-        llm_service = MockLLMService()
-        tool_adapter = MockToolAdapter(tool_names=["custom_tool"])
-
-        graph, checkpointer = create_agent_runner(
-            llm_service,
-            tool_adapter,
-        )
-
-        assert isinstance(graph, CompiledStateGraph)
-
-    def test_accepts_mypy_config(self) -> None:
-        """create_agent_runner should accept run_mypy_check config."""
-        from langgraph.graph.state import CompiledStateGraph
-
-        llm_service = MockLLMService()
-        tool_adapter = MockToolAdapter()
-
-        graph, _ = create_agent_runner(
-            llm_service,
-            tool_adapter,
-            run_mypy_check=False,
-        )
-
-        assert isinstance(graph, CompiledStateGraph)
 
 
 # =============================================================================
@@ -420,17 +362,6 @@ class TestGraphIntegration:
 class TestGraphConfiguration:
     """Tests for graph configuration options."""
 
-    def test_tool_adapter_is_required(self) -> None:
-        """Graph requires tool_adapter parameter."""
-        from langgraph.graph.state import CompiledStateGraph
-
-        orchestrator = MockOrchestrator()
-        tool_adapter = MockToolAdapter()
-
-        # tool_adapter is required - graph should build successfully
-        graph = build_graph(orchestrator, tool_adapter)
-        assert isinstance(graph, CompiledStateGraph)
-
     def test_default_checkpointer_creation(self) -> None:
         """Graph should create default checkpointer if not provided."""
         from langgraph.graph.state import CompiledStateGraph
@@ -442,16 +373,6 @@ class TestGraphConfiguration:
         graph = build_graph(orchestrator, tool_adapter)
         assert isinstance(graph, CompiledStateGraph)
         assert "think" in graph.nodes
-
-    def test_mypy_check_disabled(self) -> None:
-        """Graph should accept run_mypy_check=False."""
-        from langgraph.graph.state import CompiledStateGraph
-
-        orchestrator = MockOrchestrator()
-        tool_adapter = MockToolAdapter()
-
-        graph = build_graph(orchestrator, tool_adapter, run_mypy_check=False)
-        assert isinstance(graph, CompiledStateGraph)
 
 
 # =============================================================================

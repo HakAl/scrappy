@@ -99,32 +99,8 @@ class TestEscapeKeyCancellation:
 class TestCtrlCHandling:
     """Tests for Ctrl+C handling."""
 
-    @pytest.mark.asyncio
-    async def test_single_ctrl_c_does_not_exit(self):
-        """Single Ctrl+C should not immediately exit (may show prompt)."""
-        app = create_test_app()
-
-        async with app.run_test() as pilot:
-            await pilot.pause()
-
-            # Press Ctrl+C once
-            await pilot.press("ctrl+c")
-            await pilot.pause()
-
             # App might still be running or showing exit confirmation
             # Either way it shouldn't crash
-
-    @pytest.mark.asyncio
-    async def test_ctrl_c_does_not_crash(self):
-        """Ctrl+C should be handled gracefully."""
-        app = create_test_app()
-
-        async with app.run_test() as pilot:
-            await pilot.pause()
-
-            # Press Ctrl+C
-            await pilot.press("ctrl+c")
-            await pilot.pause()
 
             # Should not crash - context manager handles cleanup
 

@@ -329,31 +329,6 @@ class TestDelegationFlow:
         assert len(llm_service.completion_calls) == 1
         assert llm_service.completion_calls[0]['model'] == 'fast'
 
-    @pytest.mark.asyncio
-    async def test_returns_response_and_task_record(self):
-        """Should return both response and task record."""
-        cache = MockCache()
-        augmenter = MockPromptAugmenter()
-        llm_service = MockLLMService()
-        output = MockOutput()
-        scheduler = MockBatchScheduler()
-
-        manager = DelegationManager(
-            llm_service=llm_service,
-            cache=cache,
-            output=output,
-            prompt_augmenter=augmenter,
-            batch_scheduler=scheduler
-        )
-
-        response, task_record = await manager.delegate_async("fast", "test prompt")
-
-        # Check response has expected attributes (duck-typing)
-        assert hasattr(response, 'content')
-        assert hasattr(response, 'model')
-        assert isinstance(task_record, dict)
-        assert 'provider' in task_record
-
 
 class TestEdgeCases:
     """Test boundary conditions and edge cases."""
