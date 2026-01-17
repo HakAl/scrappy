@@ -95,6 +95,8 @@ class TestQualityVisitor(ast.NodeVisitor):
         # other smells
         if self._is_no_op_body(body):
             self.stats[node.name]['no_op'] = 1
+        # only_new is set tentatively here; will be cleared after generic_visit
+        # if strong assertions are found
         if self._is_only_instantiation(body):
             self.stats[node.name]['only_new'] = 1
         if self._is_bare_try_pass(body):
@@ -120,6 +122,11 @@ class TestQualityVisitor(ast.NodeVisitor):
             stats['over_mocked'] = int(weak_ratio >= 0.75)
         else:
             stats['over_mocked'] = 0
+
+        # Clear only_new if there are strong assertions - that means the test
+        # actually validates behavior, not just instantiation
+        if stats['only_new'] and stats['asserts'] > 0:
+            stats['only_new'] = 0
 
         self.current_test = None
 
