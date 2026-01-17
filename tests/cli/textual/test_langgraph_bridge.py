@@ -69,25 +69,6 @@ class TestAgentResult:
         assert field_names == {"success", "final_state", "error", "cancelled"}
 
 
-class TestProtocols:
-    """Tests for protocol definitions."""
-
-    def test_confirm_callback_protocol_is_runtime_checkable(self):
-        """ConfirmCallbackProtocol should be runtime checkable."""
-        def my_callback(question: str) -> bool:
-            return True
-
-        # Protocol is runtime_checkable, so isinstance works
-        assert callable(my_callback)
-
-    def test_output_callback_protocol_is_runtime_checkable(self):
-        """OutputCallbackProtocol should be runtime checkable."""
-        def my_callback(content: str) -> None:
-            pass
-
-        assert callable(my_callback)
-
-
 class TestTruncateResult:
     """Tests for _truncate_result method."""
 
