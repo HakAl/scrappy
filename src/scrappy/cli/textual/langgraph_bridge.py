@@ -23,6 +23,7 @@ from textual.worker import Worker, WorkerCancelled, get_current_worker
 from scrappy.graph.run_context import AgentRunContext
 from scrappy.infrastructure.threading import CancellationToken
 from ..protocols import ActivityState, Task, TaskStatus
+from .tool_confirmation import ToolConfirmationHandler
 
 if TYPE_CHECKING:
     from langgraph.graph.state import CompiledStateGraph
@@ -133,8 +134,8 @@ class LangGraphBridge:
         self._recent_tasks: list[Task] = []
         self._max_completed_tasks: int = 3  # Keep last N completed
 
-        # Tool confirmation state (reset per run)
-        self._allow_all: bool = False  # User pressed 'a' to allow all
+        # Tool confirmation handler (created per run with working_dir)
+        self._confirmation_handler: Optional[ToolConfirmationHandler] = None
 
         # Run context for current agent run (ephemeral)
         self._run_context: Optional[AgentRunContext] = None
@@ -199,37 +200,30 @@ class LangGraphBridge:
         """
         return self._bridge.blocking_confirm(question)
 
-    def _tool_confirm_callback(self, tool_name: str, description: str) -> bool:
+    def _tool_confirm_callback(
+        self, tool_name: str, description: str, args: dict[str, Any]
+    ) -> bool:
         """
         Confirmation callback for destructive tools.
 
         Called by ToolAdapter before executing destructive tools like
-        write_file, run_command, etc. Routes through ThreadSafeAsyncBridge
-        to show y/n/a confirmation dialog in the UI.
+        write_file, run_command, etc. Delegates to ToolConfirmationHandler
+        which displays tool info and diff preview before prompting.
 
         Args:
             tool_name: Name of the tool being executed
             description: Human-readable description of the operation
+            args: Tool arguments (for displaying details and diff preview)
 
         Returns:
             True if user confirmed (y or a), False if denied (n)
         """
-        # Skip if user already pressed 'a' (allow all) this run
-        if self._allow_all:
-            return True
+        if self._confirmation_handler is None:
+            # Fallback if handler not initialized (shouldn't happen)
+            response = self._bridge.blocking_confirm_yna(f"{description}?")
+            return response in ("y", "a")
 
-        # Format question for UI display
-        question = f"{description}?"
-        response = self._bridge.blocking_confirm_yna(question)
-
-        if response == "a":
-            # Allow all remaining operations this run
-            self._allow_all = True
-            return True
-        elif response == "y":
-            return True
-        else:
-            return False
+        return self._confirmation_handler.confirm_tool(tool_name, description, args)
 
     def _output_callback(self, content: str) -> None:
         """
@@ -633,8 +627,12 @@ class LangGraphBridge:
         # Mark as running
         self._is_running = True
 
-        # Reset allow_all state for new run (user must press 'a' again)
-        self._allow_all = False
+        # Create confirmation handler for this run (needs working_dir)
+        self._confirmation_handler = ToolConfirmationHandler(
+            output_callback=self._output_callback,
+            confirm_callback=self._bridge.blocking_confirm_yna,
+            working_dir=working_dir,
+        )
 
         # Always enable tool confirmation (default behavior)
         if hasattr(self._tool_adapter, "confirm_callback"):
@@ -807,6 +805,9 @@ class LangGraphBridge:
 
             # Clear cancellation token
             self._cancellation_token = None
+
+            # Clear confirmation handler
+            self._confirmation_handler = None
 
             # Clear activity indicator and provider status
             self._post_activity(ActivityState.IDLE)

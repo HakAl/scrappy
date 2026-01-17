@@ -427,53 +427,55 @@ class TestToolConfirmCallback:
         )
         return bridge
 
-    def test_returns_true_when_allow_all(self, bridge):
-        """Returns True without prompting when allow_all is set."""
-        bridge._allow_all = True
-
-        result = bridge._tool_confirm_callback("write_file", "Write to test.py")
-
-        assert result is True
-        # Should not have called blocking_confirm_yna
-        bridge._bridge.blocking_confirm_yna.assert_not_called()
-
-    def test_returns_true_on_yes(self, bridge):
-        """Returns True when user responds 'y'."""
-        bridge._allow_all = False
+    def test_fallback_when_no_handler(self, bridge):
+        """Falls back to direct confirm when handler not set."""
+        bridge._confirmation_handler = None
         bridge._bridge.blocking_confirm_yna.return_value = "y"
 
-        result = bridge._tool_confirm_callback("write_file", "Write to test.py")
+        result = bridge._tool_confirm_callback(
+            "write_file", "Write to test.py", {"path": "test.py"}
+        )
 
         assert result is True
-        assert bridge._allow_all is False  # Not changed
+        bridge._bridge.blocking_confirm_yna.assert_called_once_with("Write to test.py?")
 
-    def test_sets_allow_all_on_a(self, bridge):
-        """Sets allow_all and returns True when user responds 'a'."""
-        bridge._allow_all = False
-        bridge._bridge.blocking_confirm_yna.return_value = "a"
-
-        result = bridge._tool_confirm_callback("write_file", "Write to test.py")
-
-        assert result is True
-        assert bridge._allow_all is True  # Now set
-
-    def test_returns_false_on_no(self, bridge):
-        """Returns False when user responds 'n'."""
-        bridge._allow_all = False
+    def test_fallback_returns_false_on_no(self, bridge):
+        """Fallback returns False when user responds 'n'."""
+        bridge._confirmation_handler = None
         bridge._bridge.blocking_confirm_yna.return_value = "n"
 
-        result = bridge._tool_confirm_callback("write_file", "Write to test.py")
+        result = bridge._tool_confirm_callback(
+            "write_file", "Write to test.py", {"path": "test.py"}
+        )
 
         assert result is False
 
-    def test_formats_question_correctly(self, bridge):
-        """Formats the question with description."""
-        bridge._allow_all = False
-        bridge._bridge.blocking_confirm_yna.return_value = "y"
+    def test_delegates_to_handler(self, bridge):
+        """Delegates to confirmation handler when set."""
+        mock_handler = Mock()
+        mock_handler.confirm_tool.return_value = True
+        bridge._confirmation_handler = mock_handler
 
-        bridge._tool_confirm_callback("write_file", "Write to test.py")
+        result = bridge._tool_confirm_callback(
+            "write_file", "Write to test.py", {"path": "test.py", "content": "data"}
+        )
 
-        bridge._bridge.blocking_confirm_yna.assert_called_once_with("Write to test.py?")
+        assert result is True
+        mock_handler.confirm_tool.assert_called_once_with(
+            "write_file", "Write to test.py", {"path": "test.py", "content": "data"}
+        )
+
+    def test_handler_returns_false(self, bridge):
+        """Returns False when handler denies."""
+        mock_handler = Mock()
+        mock_handler.confirm_tool.return_value = False
+        bridge._confirmation_handler = mock_handler
+
+        result = bridge._tool_confirm_callback(
+            "write_file", "Write to test.py", {"path": "test.py"}
+        )
+
+        assert result is False
 
 
 class TestRunAgentConcurrencyGuard:

@@ -20,8 +20,8 @@ from scrappy.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
-# Callback type for confirmation: (tool_name, description) -> confirmed
-ConfirmCallback = Callable[[str, str], bool]
+# Callback type for confirmation: (tool_name, description, args) -> confirmed
+ConfirmCallback = Callable[[str, str, dict[str, Any]], bool]
 
 # Tools that require confirmation when confirm_mode is enabled
 DESTRUCTIVE_TOOLS = frozenset({
@@ -197,41 +197,38 @@ class ToolAdapter:
         function_data = tool_call.get("function", {})
         tool_name = function_data.get("name", "")
 
-        # Check for confirmation if callback is set and tool is destructive
-        if self._confirm_callback is not None and tool_name in DESTRUCTIVE_TOOLS:
-            # Build description for confirmation prompt
-            raw_args = function_data.get("arguments", "{}")
-            desc = self._format_confirmation_prompt(tool_name, raw_args)
-
-            # Ask for confirmation (blocks until user responds)
-            confirmed = self._confirm_callback(tool_name, desc)
-            if not confirmed:
-                logger.info("User denied tool execution: %s", tool_name)
-                return ToolResult(
-                    name=tool_name,
-                    error=f"User denied {tool_name} execution",
-                )
-
-        # Parse arguments (may be JSON string or already parsed)
-        arguments = function_data.get("arguments", "{}")
-        if isinstance(arguments, str):
+        # Parse arguments early (needed for confirmation display and execution)
+        raw_args = function_data.get("arguments", "{}")
+        if isinstance(raw_args, str):
             try:
-                kwargs = json.loads(arguments) if arguments else {}
+                kwargs = json.loads(raw_args) if raw_args else {}
             except json.JSONDecodeError as e:
                 return ToolResult(
                     name=tool_name,
                     error=f"Invalid arguments JSON: {e}",
                 )
         else:
-            # Already a dict (shouldn't happen per TypedDict, but handle it)
-            kwargs = arguments if arguments else {}
+            kwargs = raw_args if raw_args else {}
 
-        # Ensure kwargs is a dict (JSON array would parse to list)
+        # Ensure kwargs is a dict
         if not isinstance(kwargs, dict):
             return ToolResult(
                 name=tool_name,
                 error=f"Invalid arguments: expected object, got {type(kwargs).__name__}",
             )
+
+        # Check for confirmation if callback is set and tool is destructive
+        if self._confirm_callback is not None and tool_name in DESTRUCTIVE_TOOLS:
+            desc = self._format_confirmation_prompt(tool_name, kwargs)
+
+            # Ask for confirmation with args (for diff preview display)
+            confirmed = self._confirm_callback(tool_name, desc, kwargs)
+            if not confirmed:
+                logger.info("User denied tool execution: %s", tool_name)
+                return ToolResult(
+                    name=tool_name,
+                    error=f"User denied {tool_name} execution",
+                )
 
         # Get the tool directly (not via execute() which returns string)
         tool = self._registry.get(tool_name)

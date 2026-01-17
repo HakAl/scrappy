@@ -14,6 +14,9 @@ import tempfile
 
 import pytest
 
+# Mark all tests in this module as slow (skipped by default)
+pytestmark = pytest.mark.slow
+
 
 class TestRealExitHang:
     """Test real exit hang after agent execution."""
