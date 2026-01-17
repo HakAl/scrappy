@@ -15,6 +15,8 @@ def mock_context(tmp_path):
     context.project_root = tmp_path
     context.remember_search = Mock()
     context.config = Mock()
+    # Explicitly set to None so constructor-injected provider is used as fallback
+    context.semantic_search = None
     return context
 
 

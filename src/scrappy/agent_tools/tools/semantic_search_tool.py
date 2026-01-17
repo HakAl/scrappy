@@ -66,8 +66,11 @@ class SemanticSearchTool(ToolBase):
         query = kwargs["query"]
         max_tokens = kwargs.get("max_tokens", 4000)
 
+        # Get semantic search from context (preferred) or constructor (legacy)
+        semantic_search = context.semantic_search or self._semantic_search
+
         # Check if semantic search is available
-        if not self._semantic_search:
+        if not semantic_search:
             return ToolResult(
                 success=True,
                 output=(
@@ -79,7 +82,7 @@ class SemanticSearchTool(ToolBase):
             )
 
         # Check if index is ready
-        if not self._semantic_search.is_indexed():
+        if not semantic_search.is_indexed():
             return ToolResult(
                 success=True,
                 output=(
@@ -92,7 +95,7 @@ class SemanticSearchTool(ToolBase):
 
         # Perform semantic search
         try:
-            result = self._semantic_search.search(
+            result = semantic_search.search(
                 query=query,
                 max_tokens=max_tokens
             )

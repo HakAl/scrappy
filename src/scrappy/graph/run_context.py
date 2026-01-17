@@ -18,10 +18,13 @@ Related beads: scrappy-vpa2, scrappy-b6gg, scrappy-iq9k
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Protocol, runtime_checkable
 
 from scrappy.infrastructure.logging import get_logger
 from scrappy.infrastructure.threading.protocols import CancellationTokenProtocol
+
+if TYPE_CHECKING:
+    from scrappy.context.protocols import SemanticSearchProtocol
 
 logger = get_logger(__name__)
 
@@ -178,6 +181,10 @@ class AgentRunContext:
     # === Model Selection Service ===
     # Injected by langgraph_bridge for deterministic model selection
     model_selection: Optional[Any] = None  # Type: ModelSelectionServiceProtocol
+
+    # === Semantic Search ===
+    # Injected by langgraph_bridge from codebase context
+    semantic_search: Optional["SemanticSearchProtocol"] = None
 
     # === Model Affinity Methods ===
 

@@ -397,6 +397,12 @@ class LangGraphBridge:
             else:
                 self._output_callback(f"[dim]>[/dim] [bold]{name}[/bold]\n")
 
+            # Show diff for file-modifying tools (before result)
+            if name in file_write_tools and self._working_dir:
+                file_path = self._get_file_path_from_args(args)
+                if file_path:
+                    self._output_file_diff(file_path)
+
             # Show result or error (from corresponding result)
             if i < len(tool_results):
                 result = tool_results[i]
@@ -410,12 +416,6 @@ class LangGraphBridge:
                         preview = self._truncate_result(str(result["result"]))
                         if preview:
                             self._output_callback(f"  [dim]{preview}[/dim]\n")
-
-            # Show diff for file-modifying tools
-            if name in file_write_tools and self._working_dir:
-                file_path = self._get_file_path_from_args(args)
-                if file_path:
-                    self._output_file_diff(file_path)
 
         # Update task progress widget with completed tools
         if completed_tools:
@@ -654,6 +654,10 @@ class LangGraphBridge:
             # Create ephemeral run context for this agent run
             self._run_context = AgentRunContext()
             self._run_context.set_status_callback(self._show_provider_status)
+
+            # Inject semantic search from codebase context if available
+            if hasattr(self.app, '_codebase_context') and self.app._codebase_context:
+                self._run_context.semantic_search = self.app._codebase_context.get_search_provider()
 
             # Create fresh cancellation token for this run and wire to context
             self._cancellation_token = CancellationToken()

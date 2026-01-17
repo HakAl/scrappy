@@ -335,12 +335,18 @@ def _default_context_factory(
     # Wrap working_memory in adapter if provided
     orchestrator = WorkingMemoryAdapter(working_memory) if working_memory else None
 
+    # Get semantic search from run context if available
+    semantic_search = None
+    if run_context and hasattr(run_context, 'semantic_search'):
+        semantic_search = run_context.semantic_search
+
     return ToolContext(
         project_root=Path(working_dir),
         dry_run=False,
         config=AgentConfig(),
         orchestrator=orchestrator,
         run_context=run_context,
+        semantic_search=semantic_search,
     )
 
 
