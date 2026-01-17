@@ -17,7 +17,7 @@ from scrappy.graph.nodes.think_error_handler import (
     ThinkErrorHandlerProtocol,
 )
 from scrappy.graph.nodes.tool_call_processor import ToolCallProcessor
-from scrappy.graph.protocols import LLMServiceProtocol, StreamingLLMServiceProtocol, ThinkResult
+from scrappy.graph.protocols import StreamingOrchestratorProtocol, ThinkResult
 from scrappy.graph.run_context import AgentRunContextProtocol
 from scrappy.graph.state import ToolCall
 from scrappy.infrastructure.exceptions import RecoveryAction
@@ -35,28 +35,28 @@ DEFAULT_TEMPERATURE = 0.3
 
 class LiteLLMThinkDelegator:
     """
-    Production implementation of ThinkDelegatorProtocol using LiteLLM.
+    Production implementation of ThinkDelegatorProtocol using orchestrator.
 
     Composes:
-    - LLMService for actual completions
-    - ModelSelectionService (via run_context) for model selection
+    - Orchestrator for streaming completions with fallback (owns model selection)
     - ThinkErrorHandler for error recovery decisions
     - ToolCallProcessor for streaming fragment accumulation
 
-    Model Selection Priority:
-    1. run_context.preferred_model (affinity from previous success)
-    2. run_context.model_selection.select() (priority-based)
-    3. current_tier via Router (fallback)
+    Model Selection & Fallback:
+    Delegated entirely to orchestrator.stream_completion_with_fallback(), which handles:
+    - Model selection via model_selector
+    - Rate limit detection and marking models as unavailable
+    - Automatic fallback to alternative models
+    - Session-sticky model preferences
 
     Error Recovery:
-    - On rate limit: try fallback model via model_selection
-    - On network error: retry same model
-    - On auth error: abort (fatal)
+    - Orchestrator handles rate limits with automatic fallback
+    - This class handles other errors (network, auth) via error_handler
     """
 
     def __init__(
         self,
-        llm_service: LLMServiceProtocol,
+        orchestrator: StreamingOrchestratorProtocol,
         error_handler: Optional[ThinkErrorHandlerProtocol] = None,
         tool_call_processor: Optional[ToolCallProcessor] = None,
     ):
@@ -64,11 +64,11 @@ class LiteLLMThinkDelegator:
         Initialize delegator with dependencies.
 
         Args:
-            llm_service: LLM service for completions
+            orchestrator: Orchestrator for streaming completions with fallback
             error_handler: Handler for error recovery (uses default if not provided)
             tool_call_processor: Processor for tool call format conversion
         """
-        self._llm = llm_service
+        self._orchestrator = orchestrator
         self._error_handler = error_handler or DefaultThinkErrorHandler()
         self._tool_processor = tool_call_processor or ToolCallProcessor()
 
@@ -82,6 +82,7 @@ class LiteLLMThinkDelegator:
         """
         Synchronous completion with automatic model selection and fallback.
 
+        Model selection and rate limit fallback are delegated to the orchestrator.
         Uses streaming internally for cancellation support, accumulates result.
         """
         # Check cancellation before starting
@@ -93,87 +94,47 @@ class LiteLLMThinkDelegator:
                 is_fatal=True,
             )
 
-        # Select model
-        model = self._select_model(run_context, current_tier)
-
         # Build LLM kwargs
         llm_kwargs = self._build_llm_kwargs(tools)
 
         # Get cancellation token
         cancellation_token = run_context.cancellation_token if run_context else None
 
-        # Try completion with fallback on error
-        max_attempts = 3
-        for attempt in range(max_attempts):
-            try:
-                result = self._do_streaming_completion(
-                    model=model,
-                    messages=messages,
-                    llm_kwargs=llm_kwargs,
-                    run_context=run_context,
-                    cancellation_token=cancellation_token,
-                    is_direct=(model is not None),
-                    tier=current_tier,
-                )
+        # Map tier to selection type for orchestrator
+        selection_type = self._tier_to_selection_type(current_tier)
 
-                # Check for empty response
-                if result.is_success and not result.content.strip() and not result.has_tool_calls:
-                    logger.warning("LLM returned empty response")
-                    return ThinkResult(
-                        error="LLM returned empty response. This may indicate an API issue.",
-                        recovery_action=RecoveryAction.RETRY.value,
-                        error_category="empty_response",
-                    )
+        try:
+            result = self._do_streaming_completion(
+                messages=messages,
+                llm_kwargs=llm_kwargs,
+                run_context=run_context,
+                cancellation_token=cancellation_token,
+                selection_type=selection_type,
+            )
 
-                return result
-
-            except StreamCancelledError:
+            # Check for empty response
+            if result.is_success and not result.content.strip() and not result.has_tool_calls:
+                logger.warning("LLM returned empty response")
                 return ThinkResult(
-                    error="Cancelled by user",
-                    recovery_action=RecoveryAction.ABORT.value,
-                    is_fatal=True,
+                    error="LLM returned empty response. This may indicate an API issue.",
+                    recovery_action=RecoveryAction.RETRY.value,
+                    error_category="empty_response",
                 )
 
-            except Exception as e:
-                error_result = self._error_handler.handle(e, run_context)
+            return result
 
-                if error_result.is_fatal:
-                    return error_result
+        except StreamCancelledError:
+            return ThinkResult(
+                error="Cancelled by user",
+                recovery_action=RecoveryAction.ABORT.value,
+                is_fatal=True,
+            )
 
-                if error_result.recovery_action == RecoveryAction.FALLBACK.value:
-                    # Try to get fallback model
-                    fallback_model = self._get_fallback_model(run_context, current_tier)
-                    if fallback_model:
-                        logger.warning(
-                            "Rate limited on %s, falling back to %s",
-                            model or current_tier,
-                            fallback_model,
-                        )
-                        model = fallback_model
-                        continue
-                    else:
-                        # No fallback available
-                        return ThinkResult(
-                            error="All models exhausted. Please try again later.",
-                            recovery_action=RecoveryAction.ABORT.value,
-                            error_category="rate_limit",
-                            is_fatal=True,
-                        )
-
-                # For retry, continue with same model
-                if error_result.recovery_action == RecoveryAction.RETRY.value:
-                    continue
-
-                # Other recovery actions: return the error result
-                return error_result
-
-        # Max attempts exhausted
-        return ThinkResult(
-            error="Max retry attempts exceeded",
-            recovery_action=RecoveryAction.ABORT.value,
-            error_category="exhausted",
-            is_fatal=True,
-        )
+        except Exception as e:
+            # Let error handler decide recovery action
+            # Note: Rate limit errors are handled by orchestrator with fallback,
+            # so if we get here with a rate limit error, all models are exhausted
+            return self._error_handler.handle(e, run_context)
 
     async def complete_streaming(
         self,
@@ -186,143 +147,13 @@ class LiteLLMThinkDelegator:
         """
         Async streaming completion with chunk callback.
 
-        Similar to complete() but:
-        - Uses async streaming for real-time output
-        - Invokes on_chunk callback with each content piece
-        - Checks cancellation between chunks
+        Note: Currently delegates to sync complete() since orchestrator only
+        provides sync streaming. The on_chunk callback is not invoked.
+        TODO: Add async streaming support to orchestrator.
         """
-        # Check cancellation before starting
-        if run_context is not None and run_context.is_cancelled():
-            logger.info("Streaming think delegator cancelled before start")
-            return ThinkResult(
-                error="Cancelled by user",
-                recovery_action=RecoveryAction.ABORT.value,
-                is_fatal=True,
-            )
-
-        # Select model
-        model = self._select_model(run_context, current_tier)
-
-        # Build LLM kwargs
-        llm_kwargs = self._build_llm_kwargs(tools)
-
-        # Try completion with fallback on error
-        max_attempts = 3
-        for attempt in range(max_attempts):
-            try:
-                result = await self._do_async_streaming_completion(
-                    model=model,
-                    messages=messages,
-                    llm_kwargs=llm_kwargs,
-                    run_context=run_context,
-                    on_chunk=on_chunk,
-                    tier=current_tier,
-                )
-
-                # Check for empty response
-                if result.is_success and not result.content.strip() and not result.has_tool_calls:
-                    logger.warning("LLM returned empty response")
-                    return ThinkResult(
-                        error="LLM returned empty response. This may indicate an API issue.",
-                        recovery_action=RecoveryAction.RETRY.value,
-                        error_category="empty_response",
-                    )
-
-                return result
-
-            except Exception as e:
-                error_result = self._error_handler.handle(e, run_context)
-
-                if error_result.is_fatal:
-                    return error_result
-
-                if error_result.recovery_action == RecoveryAction.FALLBACK.value:
-                    fallback_model = self._get_fallback_model(run_context, current_tier)
-                    if fallback_model:
-                        logger.warning(
-                            "Rate limited on %s, falling back to %s",
-                            model or current_tier,
-                            fallback_model,
-                        )
-                        model = fallback_model
-                        continue
-                    else:
-                        return ThinkResult(
-                            error="All models exhausted. Please try again later.",
-                            recovery_action=RecoveryAction.ABORT.value,
-                            error_category="rate_limit",
-                            is_fatal=True,
-                        )
-
-                if error_result.recovery_action == RecoveryAction.RETRY.value:
-                    continue
-
-                return error_result
-
-        return ThinkResult(
-            error="Max retry attempts exceeded",
-            recovery_action=RecoveryAction.ABORT.value,
-            error_category="exhausted",
-            is_fatal=True,
-        )
-
-    def _select_model(
-        self,
-        run_context: Optional[AgentRunContextProtocol],
-        current_tier: str,
-    ) -> Optional[str]:
-        """
-        Select model using affinity and priority.
-
-        Returns specific model ID or None to use tier-based selection.
-
-        Priority:
-        1. Affinity (preferred_model) if no handoff triggered
-        2. model_selection.select() if service available
-        3. None (use tier via Router)
-        """
-        if run_context is None:
-            return None
-
-        # If preferred model set and no handoff triggered, use affinity
-        if run_context.preferred_model and not run_context.should_handoff():
-            return run_context.preferred_model
-
-        # Try model selection service
-        if run_context.model_selection is not None:
-            try:
-                # Agent mode uses INSTRUCT, chat mode uses tier mapping
-                selection_type = self._tier_to_selection_type(current_tier)
-                return run_context.model_selection.select(
-                    selection_type=selection_type,
-                    session_preferred=run_context.preferred_model,
-                )
-            except Exception as e:
-                logger.warning("Model selection failed: %s", e)
-
-        return None
-
-    def _get_fallback_model(
-        self,
-        run_context: Optional[AgentRunContextProtocol],
-        current_tier: str,
-    ) -> Optional[str]:
-        """Get fallback model after rate limit."""
-        if run_context is None or run_context.model_selection is None:
-            return None
-
-        # Clear handoff to allow fresh selection
-        run_context.clear_handoff()
-
-        try:
-            selection_type = self._tier_to_selection_type(current_tier)
-            return run_context.model_selection.select(
-                selection_type=selection_type,
-                session_preferred=None,  # Don't prefer current model - it failed
-            )
-        except Exception as e:
-            logger.warning("Fallback model selection failed: %s", e)
-            return None
+        # For now, fall back to sync completion
+        # Async streaming would require orchestrator async support
+        return self.complete(messages, tools, run_context, current_tier)
 
     def _tier_to_selection_type(self, tier: str) -> ModelSelectionType:
         """Map tier string to ModelSelectionType."""
@@ -348,42 +179,32 @@ class LiteLLMThinkDelegator:
 
     def _do_streaming_completion(
         self,
-        model: Optional[str],
         messages: list[dict],
         llm_kwargs: dict[str, Any],
         run_context: Optional[AgentRunContextProtocol],
         cancellation_token: Any,
-        is_direct: bool,
-        tier: str,
+        selection_type: ModelSelectionType,
     ) -> ThinkResult:
         """
-        Perform synchronous streaming completion.
+        Perform synchronous streaming completion via orchestrator.
 
-        Uses stream_completion_direct for specific models,
-        stream_completion_sync for tier-based.
+        Orchestrator handles model selection and fallback on rate limit.
         """
         content_parts: list[str] = []
         all_fragments: list[ToolCallFragment] = []
         response_model = ""
         response_provider = ""
 
-        if is_direct and model:
-            # Direct call to specific model (affinity or explicit)
-            logger.info("Using direct model: %s", model)
-            stream = self._llm.stream_completion_direct(
-                model=model,
-                messages=messages,
-                cancellation_token=cancellation_token,
-                **llm_kwargs,
-            )
-        else:
-            # Tier-based via Router
-            stream = self._llm.stream_completion_sync(
-                model=tier,
-                messages=messages,
-                cancellation_token=cancellation_token,
-                **llm_kwargs,
-            )
+        # Pass cancellation token to orchestrator via kwargs
+        if cancellation_token is not None:
+            llm_kwargs["cancellation_token"] = cancellation_token
+
+        # Stream from orchestrator - it handles model selection and fallback
+        stream = self._orchestrator.stream_completion_with_fallback(
+            messages=messages,
+            selection_type=selection_type,
+            **llm_kwargs,
+        )
 
         for chunk in stream:
             if isinstance(chunk, StreamChunk):
@@ -402,69 +223,6 @@ class LiteLLMThinkDelegator:
         model_display = self._format_model_display(response_provider, response_model)
 
         # Record success for affinity
-        if run_context and response_provider:
-            run_context.record_provider_success(response_provider, response_model)
-
-        return ThinkResult(
-            content=content,
-            tool_calls=tuple(tool_calls),
-            model_display=model_display,
-        )
-
-    async def _do_async_streaming_completion(
-        self,
-        model: Optional[str],
-        messages: list[dict],
-        llm_kwargs: dict[str, Any],
-        run_context: Optional[AgentRunContextProtocol],
-        on_chunk: Optional[Callable[[str], None]],
-        tier: str,
-    ) -> ThinkResult:
-        """
-        Perform async streaming completion with chunk callback.
-
-        Requires llm_service to implement StreamingLLMServiceProtocol.
-        """
-        # Type check for streaming support
-        if not isinstance(self._llm, StreamingLLMServiceProtocol):
-            # Fall back to sync
-            return self.complete(messages, llm_kwargs.get("tools"), run_context, tier)
-
-        content_parts: list[str] = []
-        all_fragments: list[ToolCallFragment] = []
-        response_model = ""
-        response_provider = ""
-
-        async for chunk in self._llm.stream_completion(
-            model=tier,
-            messages=messages,
-            **llm_kwargs,
-        ):
-            # Check cancellation between chunks
-            if run_context is not None and run_context.is_cancelled():
-                logger.info("Async streaming cancelled")
-                return ThinkResult(
-                    error="Cancelled by user",
-                    recovery_action=RecoveryAction.ABORT.value,
-                    is_fatal=True,
-                )
-
-            if isinstance(chunk, StreamChunk):
-                if chunk.content:
-                    content_parts.append(chunk.content)
-                    if on_chunk:
-                        on_chunk(chunk.content)
-                if chunk.tool_call_fragments:
-                    all_fragments.extend(chunk.tool_call_fragments)
-                if chunk.model:
-                    response_model = chunk.model
-                if chunk.provider:
-                    response_provider = chunk.provider
-
-        content = "".join(content_parts)
-        tool_calls = self._process_tool_calls(all_fragments)
-        model_display = self._format_model_display(response_provider, response_model)
-
         if run_context and response_provider:
             run_context.record_provider_success(response_provider, response_model)
 
@@ -496,20 +254,20 @@ class LiteLLMThinkDelegator:
 
 
 def create_think_delegator(
-    llm_service: LLMServiceProtocol,
+    orchestrator: StreamingOrchestratorProtocol,
     error_handler: Optional[ThinkErrorHandlerProtocol] = None,
 ) -> LiteLLMThinkDelegator:
     """
     Factory function to create a think delegator.
 
     Args:
-        llm_service: LLM service for completions
+        orchestrator: Orchestrator for streaming completions with fallback
         error_handler: Optional custom error handler
 
     Returns:
         Configured LiteLLMThinkDelegator
     """
     return LiteLLMThinkDelegator(
-        llm_service=llm_service,
+        orchestrator=orchestrator,
         error_handler=error_handler,
     )

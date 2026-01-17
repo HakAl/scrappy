@@ -2969,6 +2969,113 @@ class MockLLMService:
         self._exception = None
 
 
+class MockOrchestrator:
+    """
+    Mock orchestrator for testing graph/agent code.
+
+    Provides stream_completion_with_fallback() that delegates to MockLLMService.
+    This allows tests to use the new orchestrator-based API without real LLM calls.
+
+    Usage:
+        # Create with MockLLMService
+        llm_service = MockLLMService(response=MockLLMResponse(content="Hello!"))
+        orchestrator = MockOrchestrator(llm_service)
+
+        # Or create directly with response
+        orchestrator = MockOrchestrator.with_response(content="Hello!")
+
+        # Use in tests
+        result = run_agent(task="Test", working_dir="/tmp", orchestrator=orchestrator)
+    """
+
+    def __init__(self, llm_service: Optional[MockLLMService] = None):
+        """
+        Initialize MockOrchestrator.
+
+        Args:
+            llm_service: MockLLMService to delegate to (creates default if None)
+        """
+        self._llm_service = llm_service or MockLLMService()
+
+    @classmethod
+    def with_response(
+        cls,
+        content: str = "Test response",
+        model: str = "test-model",
+        provider: str = "test-provider",
+        tool_calls: Optional[list] = None,
+    ) -> "MockOrchestrator":
+        """
+        Factory to create MockOrchestrator with a simple response.
+
+        Args:
+            content: Response content
+            model: Model name
+            provider: Provider name
+            tool_calls: Optional list of tool calls
+
+        Returns:
+            Configured MockOrchestrator
+        """
+        response = MockLLMResponse(
+            content=content,
+            model=model,
+            provider=provider,
+            tool_calls=tool_calls,
+        )
+        llm_service = MockLLMService(response=response)
+        return cls(llm_service)
+
+    def stream_completion_with_fallback(
+        self,
+        messages: list,
+        model: Optional[str] = None,
+        selection_type: Optional[Any] = None,
+        **kwargs,
+    ):
+        """
+        Stream completion with fallback (delegates to MockLLMService).
+
+        Args:
+            messages: Chat messages
+            model: Model name (ignored, uses mock)
+            selection_type: Model selection type (ignored, uses mock)
+            **kwargs: Additional parameters
+
+        Yields:
+            StreamChunk objects
+        """
+        # Delegate to MockLLMService's stream_completion_direct
+        tier = model or "instruct"
+        yield from self._llm_service.stream_completion_direct(
+            model=tier,
+            messages=messages,
+            **kwargs,
+        )
+
+    @property
+    def call_count(self) -> int:
+        """Number of calls made."""
+        return self._llm_service.call_count
+
+    @property
+    def calls(self) -> List[Dict[str, Any]]:
+        """List of all calls made."""
+        return self._llm_service.calls
+
+    def set_response(self, response: Any) -> None:
+        """Set a new default response."""
+        self._llm_service.set_response(response)
+
+    def set_exception(self, exception: Exception) -> None:
+        """Set an exception to raise on next call."""
+        self._llm_service.set_exception(exception)
+
+    def reset(self) -> None:
+        """Reset all state for reuse."""
+        self._llm_service.reset()
+
+
 def make_mock_llm_service(
     response_content: str = "Test response",
     responses: Optional[List[tuple[str, dict]]] = None,

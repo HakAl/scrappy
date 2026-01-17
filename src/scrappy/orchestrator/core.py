@@ -4,7 +4,7 @@ Core AgentOrchestrator implementation.
 Central coordinator for multi-provider LLM agent team using composition.
 """
 
-from typing import Optional, AsyncIterator
+from typing import Optional, Iterator, AsyncIterator
 from datetime import datetime
 
 from .provider_types import ProviderRegistry, LLMResponse
@@ -607,6 +607,107 @@ class AgentOrchestrator:
         if last_error:
             raise last_error
         raise AllProvidersRateLimitedError("Delegation failed after max attempts")
+
+    def stream_completion_with_fallback(
+        self,
+        messages: list[dict],
+        model: Optional[str] = None,
+        selection_type: Optional[ModelSelectionType] = None,
+        **kwargs
+    ) -> Iterator[StreamChunk]:
+        """
+        Stream completion with automatic model selection and fallback on rate limit.
+
+        This is the streaming equivalent of delegate() - it handles:
+        - Model selection via model_selector (if no model provided)
+        - Rate limit detection and automatic fallback to another model
+        - Session-sticky model preferences
+
+        Args:
+            messages: Chat messages in OpenAI format
+            model: Specific model ID (optional - will select if not provided)
+            selection_type: Model selection type (default: INSTRUCT)
+            **kwargs: Additional params (max_tokens, temperature, tools, etc.)
+
+        Yields:
+            StreamChunk objects as they arrive from the provider
+
+        Raises:
+            AllModelsRateLimitedError: If all models are rate limited
+            ValueError: If no models configured for selection type
+        """
+        if self.llm_service is None:
+            raise ValueError("LLM service not configured")
+
+        # Default to INSTRUCT for agent work
+        if selection_type is None:
+            selection_type = ModelSelectionType.INSTRUCT
+
+        # Select model if not provided
+        if model is None and self.model_selector is not None:
+            session_preferred = self._preferred_models.get(selection_type)
+            model = self.model_selector.select(
+                selection_type,
+                session_preferred=session_preferred
+            )
+            self._preferred_models[selection_type] = model
+
+        if model is None:
+            raise ValueError(f"No model available for {selection_type.value}")
+
+        # Fallback loop
+        max_attempts = 3
+        attempt = 0
+        last_error = None
+
+        while attempt < max_attempts:
+            attempt += 1
+            try:
+                # Stream from the selected model
+                for chunk in self.llm_service.stream_completion_direct(
+                    model=model,
+                    messages=messages,
+                    **kwargs
+                ):
+                    yield chunk
+
+                # If we get here, stream completed successfully
+                return
+
+            except (RateLimitError, AllProvidersRateLimitedError) as e:
+                last_error = e
+
+                # Mark current model as rate limited
+                if self.model_selector is not None:
+                    self.model_selector.mark_rate_limited(model)
+
+                # Try to select a different model
+                if self.model_selector is not None:
+                    try:
+                        # Clear session preference to allow different model
+                        self._preferred_models.pop(selection_type, None)
+
+                        # Select new model (will skip rate-limited ones)
+                        model = self.model_selector.select(
+                            selection_type,
+                            session_preferred=None
+                        )
+                        self._preferred_models[selection_type] = model
+                        continue  # Retry with new model
+
+                    except AllModelsRateLimitedError:
+                        raise AllModelsRateLimitedError(
+                            f"All {selection_type.value} models are rate limited. "
+                            f"Try again later."
+                        ) from e
+                else:
+                    # No model_selector - can't fallback
+                    raise
+
+        # Max attempts exhausted
+        if last_error:
+            raise last_error
+        raise AllProvidersRateLimitedError("Streaming failed after max attempts")
 
     def delegate_structured(
         self,

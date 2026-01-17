@@ -28,10 +28,9 @@ if TYPE_CHECKING:
     from langgraph.graph.state import CompiledStateGraph
     from textual.app import App
 
-    from scrappy.graph.agent import LLMServiceProtocol
+    from scrappy.graph.protocols import StreamingOrchestratorProtocol
     from scrappy.graph.state import AgentState
     from scrappy.graph.tools import ToolAdapterProtocol
-    from scrappy.orchestrator.model_selection import ModelSelectionServiceProtocol
 
     from .bridge import ThreadSafeAsyncBridge
     from .output_adapter import TextualOutputAdapter
@@ -90,7 +89,7 @@ class LangGraphBridge:
         app: The Textual app instance
         bridge: ThreadSafeAsyncBridge for confirmation dialogs
         output_adapter: TextualOutputAdapter for streaming output
-        llm_service: LLM service for agent completions
+        orchestrator: Orchestrator for streaming completions with fallback
         tool_adapter: Tool adapter for agent tool execution
     """
 
@@ -99,9 +98,8 @@ class LangGraphBridge:
         app: "App",
         bridge: "ThreadSafeAsyncBridge",
         output_adapter: "TextualOutputAdapter",
-        llm_service: "LLMServiceProtocol",
+        orchestrator: "StreamingOrchestratorProtocol",
         tool_adapter: "ToolAdapterProtocol",
-        model_selector: Optional["ModelSelectionServiceProtocol"] = None,
     ) -> None:
         """
         Initialize the LangGraph bridge.
@@ -110,16 +108,14 @@ class LangGraphBridge:
             app: Textual app instance (needed for @work decorator context)
             bridge: ThreadSafeAsyncBridge for blocking confirmations
             output_adapter: TextualOutputAdapter for thread-safe output
-            llm_service: LLM service for agent completions
+            orchestrator: Orchestrator for streaming completions with fallback
             tool_adapter: Tool adapter for agent tool execution (required)
-            model_selector: Model selection service for deterministic selection
         """
         self.app = app
         self._bridge = bridge
         self._output_adapter = output_adapter
-        self._llm_service = llm_service
+        self._orchestrator = orchestrator
         self._tool_adapter = tool_adapter
-        self._model_selector = model_selector
 
         # Track current worker for cancellation
         self._current_worker: Optional[Worker[AgentResult]] = None
@@ -659,17 +655,15 @@ class LangGraphBridge:
             self._run_context = AgentRunContext()
             self._run_context.set_status_callback(self._show_provider_status)
 
-            # Inject model selection service for deterministic model selection
-            self._run_context.model_selection = self._model_selector
-
             # Create fresh cancellation token for this run and wire to context
             self._cancellation_token = CancellationToken()
             self._run_context.cancellation_token = self._cancellation_token
 
             # Create agent runner with HITL support
             # Tools always available - LLM decides whether to use them
+            # Orchestrator handles model selection and fallback internally
             graph, checkpointer = create_agent_runner(
-                llm_service=self._llm_service,
+                orchestrator=self._orchestrator,
                 tool_adapter=self._tool_adapter,
             )
 

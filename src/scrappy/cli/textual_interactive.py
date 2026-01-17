@@ -133,9 +133,9 @@ class TextualInteractiveMode:
         # Phase 3.3: Create LangGraphBridge for new agent architecture
         # This bridges LangGraph async execution to Textual worker pattern
         langgraph_bridge = None
-        llm_service = getattr(self.orchestrator, 'llm_service', None)
-        model_selector = getattr(self.orchestrator, 'model_selector', None)
-        if self._cli is not None and llm_service is not None:
+        orchestrator = self.orchestrator
+        # Check if orchestrator has stream_completion_with_fallback (required for agent)
+        if self._cli is not None and hasattr(orchestrator, 'stream_completion_with_fallback'):
             from .textual.langgraph_bridge import LangGraphBridge
             from scrappy.graph.tools import ToolAdapter
 
@@ -147,14 +147,13 @@ class TextualInteractiveMode:
                 app=app,
                 bridge=app.bridge,
                 output_adapter=output_adapter,
-                llm_service=llm_service,
+                orchestrator=orchestrator,
                 tool_adapter=app._tool_adapter,
-                model_selector=model_selector,
             )
         # Temporary assertion to catch wiring issues
         assert langgraph_bridge is not None, (
             f"LangGraphBridge not created: _cli={self._cli is not None}, "
-            f"llm_service={llm_service is not None}"
+            f"orchestrator has stream_completion_with_fallback={hasattr(orchestrator, 'stream_completion_with_fallback')}"
         )
 
         # Phase 2: Reinitialize handlers with bridge for TUI-aware user interaction

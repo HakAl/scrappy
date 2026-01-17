@@ -341,28 +341,25 @@ class TestSequenceThinkDelegator:
 # =============================================================================
 
 
-class MockLLMService:
-    """Mock LLM service for testing LiteLLMThinkDelegator."""
+class MockOrchestrator:
+    """Mock orchestrator for testing LiteLLMThinkDelegator."""
 
     def __init__(self, chunks: list = None, error: Exception = None):
         self._chunks = chunks or []
         self._error = error
         self.call_count = 0
-        self.last_model = None
+        self.last_selection_type = None
         self.last_messages = None
 
-    def stream_completion_sync(self, model, messages, **kwargs):
+    def stream_completion_with_fallback(self, messages, model=None, selection_type=None, **kwargs):
         self.call_count += 1
-        self.last_model = model
+        self.last_selection_type = selection_type
         self.last_messages = messages
 
         if self._error:
             raise self._error
 
         return iter(self._chunks)
-
-    def stream_completion_direct(self, model, messages, **kwargs):
-        return self.stream_completion_sync(model, messages, **kwargs)
 
 
 def make_chunk(content="", model="", provider="", tool_call_fragments=None):
@@ -386,9 +383,9 @@ class TestLiteLLMThinkDelegator:
             make_chunk(content="Hello "),
             make_chunk(content="world", model="test-model", provider="test"),
         ]
-        llm_service = MockLLMService(chunks=chunks)
+        orchestrator = MockOrchestrator(chunks=chunks)
 
-        delegator = LiteLLMThinkDelegator(llm_service)
+        delegator = LiteLLMThinkDelegator(orchestrator)
         result = delegator.complete(
             messages=[{"role": "user", "content": "Hi"}],
             tools=None,
@@ -405,9 +402,9 @@ class TestLiteLLMThinkDelegator:
         from scrappy.graph.nodes.think_delegator import LiteLLMThinkDelegator
 
         error = RateLimitError("Rate limited", provider_name="test")
-        llm_service = MockLLMService(error=error)
+        orchestrator = MockOrchestrator(error=error)
 
-        delegator = LiteLLMThinkDelegator(llm_service)
+        delegator = LiteLLMThinkDelegator(orchestrator)
         result = delegator.complete(
             messages=[{"role": "user", "content": "Hi"}],
             tools=None,
@@ -415,9 +412,10 @@ class TestLiteLLMThinkDelegator:
             current_tier="instruct",
         )
 
-        # Should return error result (retries exhaust since same error every time)
+        # Orchestrator handles rate limits with fallback, so if we get here
+        # it means all models are exhausted - error handler returns fallback action
         assert not result.is_success
-        assert result.is_fatal  # Max retries exhausted
+        assert result.error_category == "rate_limit"
 
     def test_complete_empty_response_returns_error(self):
         """Empty response is treated as error."""
@@ -425,9 +423,9 @@ class TestLiteLLMThinkDelegator:
 
         # Empty chunks
         chunks = [make_chunk(content="", model="test", provider="test")]
-        llm_service = MockLLMService(chunks=chunks)
+        orchestrator = MockOrchestrator(chunks=chunks)
 
-        delegator = LiteLLMThinkDelegator(llm_service)
+        delegator = LiteLLMThinkDelegator(orchestrator)
         result = delegator.complete(
             messages=[{"role": "user", "content": "Hi"}],
             tools=None,
@@ -438,17 +436,18 @@ class TestLiteLLMThinkDelegator:
         assert not result.is_success
         assert "empty response" in result.error.lower()
 
-    def test_tier_passed_to_llm_service(self):
-        """Tier is passed through to LLM service."""
+    def test_tier_passed_as_selection_type(self):
+        """Tier is mapped to selection_type for orchestrator."""
         from scrappy.graph.nodes.think_delegator import LiteLLMThinkDelegator
+        from scrappy.orchestrator.model_selection import ModelSelectionType
 
         chunks = [make_chunk(content="OK", model="m", provider="p")]
-        llm_service = MockLLMService(chunks=chunks)
+        orchestrator = MockOrchestrator(chunks=chunks)
 
-        delegator = LiteLLMThinkDelegator(llm_service)
+        delegator = LiteLLMThinkDelegator(orchestrator)
         delegator.complete([], None, None, current_tier="chat")
 
-        assert llm_service.last_model == "chat"
+        assert orchestrator.last_selection_type == ModelSelectionType.CHAT
 
     def test_model_display_strips_provider_prefix(self):
         """Model display strips provider/ prefix from model name."""
@@ -461,9 +460,9 @@ class TestLiteLLMThinkDelegator:
                 provider="groq"
             )
         ]
-        llm_service = MockLLMService(chunks=chunks)
+        orchestrator = MockOrchestrator(chunks=chunks)
 
-        delegator = LiteLLMThinkDelegator(llm_service)
+        delegator = LiteLLMThinkDelegator(orchestrator)
         result = delegator.complete([], None, None, "instruct")
 
         assert result.model_display == "groq: llama-3.1-70b-versatile"

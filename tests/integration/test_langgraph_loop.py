@@ -191,6 +191,11 @@ class TracingLLMService:
             finish_reason="stop"
         )
 
+    def stream_completion_with_fallback(self, messages, model=None, selection_type=None, **kwargs):
+        """Orchestrator-compatible streaming method."""
+        # Use the existing stream_completion_sync with a default model
+        yield from self.stream_completion_sync(model=model or "mock-model", messages=messages, **kwargs)
+
 
 class MockToolAdapter:
     """Tool adapter that returns mock results."""
@@ -266,7 +271,7 @@ def test_simple_task_completes_with_mocks():
 
     # Build graph
     graph = build_graph(
-        llm_service=llm_service,
+        orchestrator=llm_service,
         tool_adapter=tool_adapter,
         checkpointer=MemorySaver(),
         run_mypy_check=False,  # Skip mypy for speed
@@ -324,7 +329,7 @@ def test_immediate_completion():
     tool_adapter = MockToolAdapter()
 
     graph = build_graph(
-        llm_service=llm_service,
+        orchestrator=llm_service,
         tool_adapter=tool_adapter,
         checkpointer=MemorySaver(),
         run_mypy_check=False,
@@ -370,7 +375,7 @@ def test_error_loop_terminates():
     tool_adapter = MockToolAdapter()
 
     graph = build_graph(
-        llm_service=llm_service,
+        orchestrator=llm_service,
         tool_adapter=tool_adapter,
         checkpointer=MemorySaver(),
         run_mypy_check=False,
@@ -444,11 +449,14 @@ def test_verify_failure_loop():
             response, _ = self.completion_sync(model, messages, **kwargs)
             yield from make_stream_from_response(response, model)
 
+        def stream_completion_with_fallback(self, messages, model=None, selection_type=None, **kwargs):
+            yield from self.stream_completion_sync(model or "mock", messages, **kwargs)
+
     llm_service = CountingLLMService()
     tool_adapter = MockToolAdapter()
 
     graph = build_graph(
-        llm_service=llm_service,
+        orchestrator=llm_service,
         tool_adapter=tool_adapter,
         checkpointer=MemorySaver(),
         run_mypy_check=False,  # Skip mypy, but ruff would still run if file exists
@@ -515,11 +523,14 @@ def test_infinite_tool_calls_hits_iteration_limit():
             response, _ = self.completion_sync(model, messages, **kwargs)
             yield from make_stream_from_response(response, model)
 
+        def stream_completion_with_fallback(self, messages, model=None, selection_type=None, **kwargs):
+            yield from self.stream_completion_sync(model or "mock", messages, **kwargs)
+
     llm_service = InfiniteToolCallsLLM()
     tool_adapter = MockToolAdapter()
 
     graph = build_graph(
-        llm_service=llm_service,
+        orchestrator=llm_service,
         tool_adapter=tool_adapter,
         checkpointer=MemorySaver(),
         run_mypy_check=False,
@@ -575,11 +586,14 @@ def test_empty_response_terminates():
             response, _ = self.completion_sync(model, messages, **kwargs)
             yield from make_stream_from_response(response, model)
 
+        def stream_completion_with_fallback(self, messages, model=None, selection_type=None, **kwargs):
+            yield from self.stream_completion_sync(model or "mock", messages, **kwargs)
+
     llm_service = EmptyResponseLLM()
     tool_adapter = MockToolAdapter()
 
     graph = build_graph(
-        llm_service=llm_service,
+        orchestrator=llm_service,
         tool_adapter=tool_adapter,
         checkpointer=MemorySaver(),
         run_mypy_check=False,

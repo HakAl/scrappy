@@ -45,7 +45,7 @@ from scrappy.graph.nodes import (
     verify_node,
 )
 from scrappy.graph.nodes.think_delegator import LiteLLMThinkDelegator
-from scrappy.graph.protocols import ContextFactoryProtocol, LLMServiceProtocol, WorkingMemoryProtocol
+from scrappy.graph.protocols import ContextFactoryProtocol, StreamingOrchestratorProtocol, WorkingMemoryProtocol
 from scrappy.graph.state import AgentState
 from scrappy.graph.tools import ToolAdapterProtocol
 from scrappy.graph.tracing import get_langfuse_callback
@@ -160,7 +160,7 @@ def validate_working_dir(working_dir: str) -> Path:
 
 
 def _wrap_think_node(
-    llm_service: LLMServiceProtocol,
+    orchestrator: StreamingOrchestratorProtocol,
     tool_adapter: Optional[ToolAdapterProtocol],
     working_memory: Optional[WorkingMemoryProtocol] = None,
     context_factory: Optional[ContextFactoryProtocol] = None,
@@ -172,7 +172,7 @@ def _wrap_think_node(
     the delegator and tool adapter.
 
     Args:
-        llm_service: LLM service for completions (wrapped in delegator)
+        orchestrator: Orchestrator for streaming completions with fallback
         tool_adapter: Tool adapter for schemas
         working_memory: Optional working memory for session context
         context_factory: Optional factory for RAG context augmentation
@@ -183,8 +183,8 @@ def _wrap_think_node(
     from langgraph.types import RunnableConfig
     from typing import Optional as Opt
 
-    # Create delegator that wraps the LLM service
-    delegator = LiteLLMThinkDelegator(llm_service)
+    # Create delegator that uses the orchestrator for streaming completions
+    delegator = LiteLLMThinkDelegator(orchestrator)
 
     def wrapped(state: AgentState, config: Opt[RunnableConfig] = None) -> AgentState:
         # Extract run_context from config if present (for cancellation support)
@@ -325,7 +325,7 @@ def _route_after_verify(state: AgentState) -> Route:
 
 
 def build_graph(
-    llm_service: LLMServiceProtocol,
+    orchestrator: StreamingOrchestratorProtocol,
     tool_adapter: ToolAdapterProtocol,
     checkpointer: Optional[MemorySaver] = None,
     run_mypy_check: bool = True,
@@ -352,7 +352,7 @@ def build_graph(
                           think
 
     Args:
-        llm_service: LLM service for think node
+        orchestrator: Orchestrator for streaming completions with fallback
         tool_adapter: Tool adapter for execute node (required)
         checkpointer: MemorySaver for checkpointing (default: create new)
         run_mypy_check: Whether to run mypy in verify node
@@ -373,7 +373,7 @@ def build_graph(
     builder: StateGraph[AgentState] = StateGraph(AgentState)
 
     # Add nodes with wrapped functions that have dependencies injected
-    builder.add_node("think", _wrap_think_node(llm_service, tool_adapter, working_memory, rag_context_factory))
+    builder.add_node("think", _wrap_think_node(orchestrator, tool_adapter, working_memory, rag_context_factory))
     builder.add_node("execute", _wrap_execute_node(tool_adapter, context_factory, working_memory))
     builder.add_node("verify", _wrap_verify_node(run_mypy_check))
     builder.add_node("confirm", confirm_node)
@@ -462,7 +462,7 @@ def build_graph(
 def run_agent(
     task: str,
     working_dir: str,
-    llm_service: LLMServiceProtocol,
+    orchestrator: StreamingOrchestratorProtocol,
     tool_adapter: Optional[ToolAdapterProtocol] = None,
     checkpointer: Optional[MemorySaver] = None,
     thread_id: Optional[str] = None,
@@ -481,7 +481,7 @@ def run_agent(
     Args:
         task: The user's task/query
         working_dir: Working directory for file operations
-        llm_service: LLM service for completions
+        orchestrator: Orchestrator for streaming completions with fallback
         tool_adapter: Tool adapter (default: create default)
         checkpointer: MemorySaver for checkpointing (default: create new)
         thread_id: Thread ID for checkpointing (default: generate UUID)
@@ -503,7 +503,7 @@ def run_agent(
     # Build and compile graph
     # Disable HITL - run_agent runs to completion without interrupts
     graph = build_graph(
-        llm_service=llm_service,
+        orchestrator=orchestrator,
         tool_adapter=tool_adapter,
         checkpointer=checkpointer,
         enable_hitl=False,
@@ -555,7 +555,7 @@ def run_agent(
 
 
 def create_agent_runner(
-    llm_service: LLMServiceProtocol,
+    orchestrator: StreamingOrchestratorProtocol,
     tool_adapter: ToolAdapterProtocol,
     run_mypy_check: bool = True,
     enable_hitl: bool = True,
@@ -577,7 +577,7 @@ def create_agent_runner(
     4. Resume via graph.invoke(None, config)
 
     Args:
-        llm_service: LLM service for completions
+        orchestrator: Orchestrator for streaming completions with fallback
         tool_adapter: Tool adapter (default: create default)
         run_mypy_check: Whether to run mypy in verify node
         enable_hitl: Whether to enable human-in-the-loop interrupts (default: True)
@@ -588,7 +588,7 @@ def create_agent_runner(
         Tuple of (compiled_graph, checkpointer)
 
     Example:
-        graph, checkpointer = create_agent_runner(llm_service)
+        graph, checkpointer = create_agent_runner(orchestrator)
         config = {"configurable": {"thread_id": "my-session"}}
 
         # Start execution
@@ -606,7 +606,7 @@ def create_agent_runner(
     checkpointer = MemorySaver()
 
     graph = build_graph(
-        llm_service=llm_service,
+        orchestrator=orchestrator,
         tool_adapter=tool_adapter,
         checkpointer=checkpointer,
         run_mypy_check=run_mypy_check,

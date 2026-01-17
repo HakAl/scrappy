@@ -292,6 +292,29 @@ class MockLLMService:
         # In mock mode, direct streaming behaves same as tier-based
         yield from self.stream_completion_sync(model, messages, **kwargs)
 
+    def stream_completion_with_fallback(
+        self,
+        messages: list[dict],
+        model: Optional[str] = None,
+        selection_type: Any = None,
+        **kwargs: Any
+    ) -> Iterator[StreamChunk]:
+        """
+        Orchestrator-compatible streaming method (mock implementation).
+
+        This allows MockLLMService to be used as an orchestrator in tests.
+
+        Args:
+            messages: Chat messages
+            model: Optional model name (defaults to "mock")
+            selection_type: Model selection type (ignored in mock)
+            **kwargs: Additional params (ignored in mock)
+
+        Yields:
+            StreamChunk with mock response
+        """
+        yield from self.stream_completion_sync(model or "mock", messages, **kwargs)
+
     # Test helper methods
 
     @property

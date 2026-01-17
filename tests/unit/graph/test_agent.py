@@ -17,7 +17,7 @@ from scrappy.graph.agent import (
 )
 from scrappy.graph.state import AgentState
 from scrappy.graph.edges import MAX_ITERATIONS, MAX_RETRIES
-from tests.helpers import MockLLMService, MockLLMResponse, MockToolAdapter
+from tests.helpers import MockLLMService, MockLLMResponse, MockToolAdapter, MockOrchestrator
 
 
 def create_test_state(
@@ -58,18 +58,18 @@ class TestBuildGraph:
         """build_graph should complete without errors."""
         from langgraph.graph.state import CompiledStateGraph
 
-        llm_service = MockLLMService()
+        orchestrator = MockOrchestrator()
         tool_adapter = MockToolAdapter()
-        graph = build_graph(llm_service, tool_adapter)
+        graph = build_graph(orchestrator, tool_adapter)
         assert isinstance(graph, CompiledStateGraph)
 
     def test_accepts_custom_tool_adapter(self) -> None:
         """build_graph should accept custom tool adapter."""
         from langgraph.graph.state import CompiledStateGraph
 
-        llm_service = MockLLMService()
+        orchestrator = MockOrchestrator()
         tool_adapter = MockToolAdapter(tool_names=["custom_tool"])
-        graph = build_graph(llm_service, tool_adapter)
+        graph = build_graph(orchestrator, tool_adapter)
         assert isinstance(graph, CompiledStateGraph)
 
     def test_accepts_custom_checkpointer(self) -> None:
@@ -77,26 +77,26 @@ class TestBuildGraph:
         from langgraph.graph.state import CompiledStateGraph
         from langgraph.checkpoint.memory import MemorySaver
 
-        llm_service = MockLLMService()
+        orchestrator = MockOrchestrator()
         tool_adapter = MockToolAdapter()
         checkpointer = MemorySaver()
-        graph = build_graph(llm_service, tool_adapter, checkpointer=checkpointer)
+        graph = build_graph(orchestrator, tool_adapter, checkpointer=checkpointer)
         assert isinstance(graph, CompiledStateGraph)
 
     def test_has_think_as_entry_point(self) -> None:
         """Graph entry point should be 'think' node."""
-        llm_service = MockLLMService()
+        orchestrator = MockOrchestrator()
         tool_adapter = MockToolAdapter()
-        graph = build_graph(llm_service, tool_adapter)
+        graph = build_graph(orchestrator, tool_adapter)
 
         # Verify think node exists in the graph
         assert "think" in graph.nodes
 
     def test_has_required_nodes(self) -> None:
         """Graph should have all required nodes."""
-        llm_service = MockLLMService()
+        orchestrator = MockOrchestrator()
         tool_adapter = MockToolAdapter()
-        graph = build_graph(llm_service, tool_adapter)
+        graph = build_graph(orchestrator, tool_adapter)
 
         # Get node names from the compiled graph
         node_names = set(graph.nodes.keys())
@@ -248,14 +248,12 @@ class TestRunAgent:
 
     def test_preserves_original_task(self) -> None:
         """run_agent should preserve the original task."""
-        llm_service = MockLLMService(
-            response=MockLLMResponse(content="Done.")
-        )
+        orchestrator = MockOrchestrator.with_response(content="Done.")
 
         result = run_agent(
             task="My specific task",
             working_dir=tempfile.gettempdir(),
-            llm_service=llm_service,
+            orchestrator=orchestrator,
         )
 
         assert result.original_task == "My specific task"
@@ -264,15 +262,13 @@ class TestRunAgent:
         """run_agent should preserve the working directory."""
         from pathlib import Path
 
-        llm_service = MockLLMService(
-            response=MockLLMResponse(content="Done.")
-        )
+        orchestrator = MockOrchestrator.with_response(content="Done.")
 
         temp_dir = tempfile.gettempdir()
         result = run_agent(
             task="Test",
             working_dir=temp_dir,
-            llm_service=llm_service,
+            orchestrator=orchestrator,
         )
 
         # Working dir should be resolved to absolute path matching temp_dir
@@ -280,14 +276,12 @@ class TestRunAgent:
 
     def test_increments_iteration(self) -> None:
         """run_agent should increment iteration count."""
-        llm_service = MockLLMService(
-            response=MockLLMResponse(content="Done.")
-        )
+        orchestrator = MockOrchestrator.with_response(content="Done.")
 
         result = run_agent(
             task="Test",
             working_dir=tempfile.gettempdir(),
-            llm_service=llm_service,
+            orchestrator=orchestrator,
         )
 
         # Should have at least one iteration
@@ -295,15 +289,13 @@ class TestRunAgent:
 
     def test_accepts_custom_thread_id(self) -> None:
         """run_agent should accept custom thread_id without raising."""
-        llm_service = MockLLMService(
-            response=MockLLMResponse(content="Done.")
-        )
+        orchestrator = MockOrchestrator.with_response(content="Done.")
 
         # Should not raise with custom thread_id
         result = run_agent(
             task="Test",
             working_dir=tempfile.gettempdir(),
-            llm_service=llm_service,
+            orchestrator=orchestrator,
             thread_id="custom-session-123",
         )
 
@@ -325,54 +317,30 @@ class TestGraphIntegration:
         # Second call: LLM returns final response
         call_count = [0]
 
-        class MultiStepLLMService:
-            def completion_sync(self, model, messages, **kwargs):
+        class MultiStepOrchestrator:
+            def stream_completion_with_fallback(self, messages, model=None, selection_type=None, **kwargs):
+                from scrappy.orchestrator.types import StreamChunk, ToolCallFragment
                 call_count[0] += 1
                 if call_count[0] == 1:
                     # First call - return tool call
-                    class ToolCallResponse:
-                        content = ""
-                        tool_calls = [
-                            type("TC", (), {
-                                "id": "call_1",
-                                "name": "mock_tool",
-                                "arguments": "{}",
-                            })()
-                        ]
-                        model = "mock-model"
-                        provider = "mock"
-                    return ToolCallResponse(), {}
+                    yield StreamChunk(
+                        tool_call_fragments=[ToolCallFragment(
+                            index=0, id="call_1", type="function", name="mock_tool", arguments="{}"
+                        )],
+                        model="mock-model", provider="mock"
+                    )
                 else:
                     # Subsequent calls - return final response
-                    class FinalResponse:
-                        content = "Task completed successfully."
-                        tool_calls = None
-                        model = "mock-model"
-                        provider = "mock"
-                    return FinalResponse(), {}
-
-            def stream_completion_sync(self, model, messages, cancellation_token=None, **kwargs):
-                from scrappy.orchestrator.types import StreamChunk, ToolCallFragment
-                response, _ = self.completion_sync(model, messages, **kwargs)
-                if response.content:
-                    yield StreamChunk(content=response.content, model="mock-model", provider="mock")
-                if response.tool_calls:
-                    for i, tc in enumerate(response.tool_calls):
-                        yield StreamChunk(
-                            tool_call_fragments=[ToolCallFragment(
-                                index=i, id=tc.id, type="function", name=tc.name, arguments=tc.arguments
-                            )],
-                            model="mock-model", provider="mock"
-                        )
+                    yield StreamChunk(content="Task completed successfully.", model="mock-model", provider="mock")
                 yield StreamChunk(finish_reason="stop", model="mock-model", provider="mock")
 
-        llm_service = MultiStepLLMService()
+        orchestrator = MultiStepOrchestrator()
         tool_adapter = MockToolAdapter()
 
         result = run_agent(
             task="Test multi-step",
             working_dir="/tmp",
-            llm_service=llm_service,
+            orchestrator=orchestrator,
             tool_adapter=tool_adapter,
         )
 
@@ -385,34 +353,24 @@ class TestGraphIntegration:
         """Graph should support error recovery."""
         call_count = [0]
 
-        class ErrorRecoveryLLMService:
-            def completion_sync(self, model, messages, **kwargs):
+        class ErrorRecoveryOrchestrator:
+            def stream_completion_with_fallback(self, messages, model=None, selection_type=None, **kwargs):
+                from scrappy.orchestrator.types import StreamChunk
                 call_count[0] += 1
                 if call_count[0] == 1:
                     # First call - raise error
                     raise ValueError("Simulated API error")
                 else:
                     # Recovery call - return success
-                    class SuccessResponse:
-                        content = "Recovered successfully."
-                        tool_calls = None
-                        model = "mock-model"
-                        provider = "mock"
-                    return SuccessResponse(), {}
+                    yield StreamChunk(content="Recovered successfully.", model="mock-model", provider="mock")
+                    yield StreamChunk(finish_reason="stop", model="mock-model", provider="mock")
 
-            def stream_completion_sync(self, model, messages, cancellation_token=None, **kwargs):
-                from scrappy.orchestrator.types import StreamChunk
-                response, _ = self.completion_sync(model, messages, **kwargs)
-                if response.content:
-                    yield StreamChunk(content=response.content, model="mock-model", provider="mock")
-                yield StreamChunk(finish_reason="stop", model="mock-model", provider="mock")
-
-        llm_service = ErrorRecoveryLLMService()
+        orchestrator = ErrorRecoveryOrchestrator()
 
         result = run_agent(
             task="Test error recovery",
             working_dir="/tmp",
-            llm_service=llm_service,
+            orchestrator=orchestrator,
         )
 
         # Should have recovered and completed
@@ -424,35 +382,18 @@ class TestGraphIntegration:
         from langgraph.errors import GraphRecursionError
 
         # LLM always returns tool call, never completing
-        class InfiniteLoopLLMService:
-            def completion_sync(self, model, messages, **kwargs):
-                class ToolCallResponse:
-                    content = ""
-                    tool_calls = [
-                        type("TC", (), {
-                            "id": "call_loop",
-                            "name": "mock_tool",
-                            "arguments": "{}",
-                        })()
-                    ]
-                    model = "mock-model"
-                    provider = "mock"
-                return ToolCallResponse(), {}
-
-            def stream_completion_sync(self, model, messages, cancellation_token=None, **kwargs):
+        class InfiniteLoopOrchestrator:
+            def stream_completion_with_fallback(self, messages, model=None, selection_type=None, **kwargs):
                 from scrappy.orchestrator.types import StreamChunk, ToolCallFragment
-                response, _ = self.completion_sync(model, messages, **kwargs)
-                if response.tool_calls:
-                    for i, tc in enumerate(response.tool_calls):
-                        yield StreamChunk(
-                            tool_call_fragments=[ToolCallFragment(
-                                index=i, id=tc.id, type="function", name=tc.name, arguments=tc.arguments
-                            )],
-                            model="mock-model", provider="mock"
-                        )
+                yield StreamChunk(
+                    tool_call_fragments=[ToolCallFragment(
+                        index=0, id="call_loop", type="function", name="mock_tool", arguments="{}"
+                    )],
+                    model="mock-model", provider="mock"
+                )
                 yield StreamChunk(finish_reason="stop", model="mock-model", provider="mock")
 
-        llm_service = InfiniteLoopLLMService()
+        orchestrator = InfiniteLoopOrchestrator()
         tool_adapter = MockToolAdapter()
 
         # LangGraph has its own recursion limit (default 25) which may trigger
@@ -461,7 +402,7 @@ class TestGraphIntegration:
             result = run_agent(
                 task="Test max iterations",
                 working_dir="/tmp",
-                llm_service=llm_service,
+                orchestrator=orchestrator,
                 tool_adapter=tool_adapter,
             )
             # If we get here, our iteration limit stopped it
@@ -483,22 +424,22 @@ class TestGraphConfiguration:
         """Graph requires tool_adapter parameter."""
         from langgraph.graph.state import CompiledStateGraph
 
-        llm_service = MockLLMService()
+        orchestrator = MockOrchestrator()
         tool_adapter = MockToolAdapter()
 
         # tool_adapter is required - graph should build successfully
-        graph = build_graph(llm_service, tool_adapter)
+        graph = build_graph(orchestrator, tool_adapter)
         assert isinstance(graph, CompiledStateGraph)
 
     def test_default_checkpointer_creation(self) -> None:
         """Graph should create default checkpointer if not provided."""
         from langgraph.graph.state import CompiledStateGraph
 
-        llm_service = MockLLMService()
+        orchestrator = MockOrchestrator()
         tool_adapter = MockToolAdapter()
 
         # Should build with all required nodes even without explicit checkpointer
-        graph = build_graph(llm_service, tool_adapter)
+        graph = build_graph(orchestrator, tool_adapter)
         assert isinstance(graph, CompiledStateGraph)
         assert "think" in graph.nodes
 
@@ -506,10 +447,10 @@ class TestGraphConfiguration:
         """Graph should accept run_mypy_check=False."""
         from langgraph.graph.state import CompiledStateGraph
 
-        llm_service = MockLLMService()
+        orchestrator = MockOrchestrator()
         tool_adapter = MockToolAdapter()
 
-        graph = build_graph(llm_service, tool_adapter, run_mypy_check=False)
+        graph = build_graph(orchestrator, tool_adapter, run_mypy_check=False)
         assert isinstance(graph, CompiledStateGraph)
 
 
@@ -525,15 +466,13 @@ class TestStateConversion:
         """run_agent should create proper initial state."""
         from pathlib import Path
 
-        llm_service = MockLLMService(
-            response=MockLLMResponse(content="Done.")
-        )
+        orchestrator = MockOrchestrator.with_response(content="Done.")
 
         temp_dir = tempfile.gettempdir()
         result = run_agent(
             task="Create initial state test",
             working_dir=temp_dir,
-            llm_service=llm_service,
+            orchestrator=orchestrator,
         )
 
         # Initial state values should be preserved

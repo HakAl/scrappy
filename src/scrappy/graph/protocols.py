@@ -197,6 +197,57 @@ ToolContextFactory = Callable[[str], ToolContextProtocol]
 
 
 @runtime_checkable
+class StreamingOrchestratorProtocol(Protocol):
+    """
+    Protocol for orchestrator's streaming completion with fallback.
+
+    This protocol captures the minimal interface needed by think_delegator
+    to stream completions with automatic model selection and rate limit handling.
+
+    The orchestrator owns:
+    - Model selection via model_selector
+    - Rate limit detection and marking
+    - Automatic fallback to alternative models
+    - Session-sticky model preferences
+
+    Implementations:
+    - AgentOrchestrator: Full production orchestrator
+    - MockStreamingOrchestrator: Test double for unit tests
+
+    Example:
+        def stream_with_fallback(orch: StreamingOrchestratorProtocol, messages: list[dict]):
+            for chunk in orch.stream_completion_with_fallback(messages):
+                if chunk.content:
+                    print(chunk.content, end="")
+    """
+
+    def stream_completion_with_fallback(
+        self,
+        messages: list[dict],
+        model: Optional[str] = None,
+        selection_type: Optional[Any] = None,  # ModelSelectionType
+        **kwargs: Any,
+    ) -> Iterator[StreamChunk]:
+        """
+        Stream completion with automatic model selection and fallback on rate limit.
+
+        Args:
+            messages: Chat messages in OpenAI format
+            model: Specific model ID (optional - will select if not provided)
+            selection_type: Model selection type (default: INSTRUCT)
+            **kwargs: Additional params (max_tokens, temperature, tools, etc.)
+
+        Yields:
+            StreamChunk objects as they arrive from the provider
+
+        Raises:
+            AllModelsRateLimitedError: If all models are rate limited
+            ValueError: If no models configured for selection type
+        """
+        ...
+
+
+@runtime_checkable
 class LLMServiceProtocol(Protocol):
     """
     Protocol for LLM service integration.

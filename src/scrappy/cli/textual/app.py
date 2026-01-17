@@ -330,9 +330,9 @@ class ScrappyApp(App):
         # Create LangGraphBridge for new agent architecture
         # This bridges LangGraph async execution to Textual worker pattern
         langgraph_bridge = None
-        llm_service = getattr(self._cli.orchestrator, 'llm_service', None)
-        model_selector = getattr(self._cli.orchestrator, 'model_selector', None)
-        if llm_service is not None:
+        orchestrator = self._cli.orchestrator
+        # Check if orchestrator has stream_completion_with_fallback (required for agent)
+        if hasattr(orchestrator, 'stream_completion_with_fallback'):
             from .langgraph_bridge import LangGraphBridge
             from scrappy.graph.tools import ToolAdapter
 
@@ -344,9 +344,8 @@ class ScrappyApp(App):
                 app=self,
                 bridge=self.bridge,
                 output_adapter=self.output_adapter,
-                llm_service=llm_service,
+                orchestrator=orchestrator,
                 tool_adapter=self._tool_adapter,
-                model_selector=model_selector,
             )
 
         # Reinitialize handlers with bridge for TUI-aware user interaction

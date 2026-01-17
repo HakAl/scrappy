@@ -97,14 +97,14 @@ class TestTruncateResult:
         app = Mock()
         thread_bridge = Mock()
         output_adapter = Mock()
-        llm_service = Mock()
+        orchestrator = Mock()
         tool_adapter = Mock()
 
         return LangGraphBridge(
             app=app,
             bridge=thread_bridge,
             output_adapter=output_adapter,
-            llm_service=llm_service,
+            orchestrator=orchestrator,
             tool_adapter=tool_adapter,
         )
 
@@ -168,7 +168,7 @@ class TestExtractKeyParam:
             app=Mock(),
             bridge=Mock(),
             output_adapter=Mock(),
-            llm_service=Mock(),
+            orchestrator=Mock(),
             tool_adapter=Mock(),
         )
 
@@ -232,7 +232,7 @@ class TestGetFilePathFromArgs:
             app=Mock(),
             bridge=Mock(),
             output_adapter=Mock(),
-            llm_service=Mock(),
+            orchestrator=Mock(),
             tool_adapter=Mock(),
         )
 
@@ -285,7 +285,7 @@ class TestStateManagement:
             app=Mock(),
             bridge=Mock(),
             output_adapter=Mock(),
-            llm_service=Mock(),
+            orchestrator=Mock(),
             tool_adapter=Mock(),
         )
 
@@ -335,7 +335,7 @@ class TestCancelMethod:
             app=Mock(),
             bridge=Mock(),
             output_adapter=Mock(),
-            llm_service=Mock(),
+            orchestrator=Mock(),
             tool_adapter=Mock(),
         )
 
@@ -382,7 +382,7 @@ class TestCheckCancellation:
             app=Mock(),
             bridge=Mock(),
             output_adapter=Mock(),
-            llm_service=Mock(),
+            orchestrator=Mock(),
             tool_adapter=Mock(),
         )
 
@@ -422,7 +422,7 @@ class TestToolConfirmCallback:
             app=Mock(),
             bridge=mock_bridge,
             output_adapter=Mock(),
-            llm_service=Mock(),
+            orchestrator=Mock(),
             tool_adapter=Mock(),
         )
         return bridge
@@ -486,7 +486,7 @@ class TestRunAgentConcurrencyGuard:
             app=Mock(),
             bridge=Mock(),
             output_adapter=Mock(),
-            llm_service=Mock(),
+            orchestrator=Mock(),
             tool_adapter=Mock(),
         )
 
@@ -512,7 +512,7 @@ class TestUpdateTaskProgress:
             app=Mock(),
             bridge=Mock(),
             output_adapter=mock_output,
-            llm_service=Mock(),
+            orchestrator=Mock(),
             tool_adapter=Mock(),
         )
         return bridge
@@ -560,7 +560,7 @@ class TestClearTaskProgress:
             app=Mock(),
             bridge=Mock(),
             output_adapter=mock_output,
-            llm_service=Mock(),
+            orchestrator=Mock(),
             tool_adapter=Mock(),
         )
         # Add some tasks
