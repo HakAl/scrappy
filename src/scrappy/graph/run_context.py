@@ -147,6 +147,13 @@ class AgentRunContextProtocol(Protocol):
         """Called when run completes - cleanup."""
         ...
 
+    # === Project Rules ===
+
+    @property
+    def project_rules(self) -> Optional[str]:
+        """Project-specific rules from AGENTS.md or similar."""
+        ...
+
 
 @dataclass
 class AgentRunContext:
@@ -185,6 +192,10 @@ class AgentRunContext:
     # === Semantic Search ===
     # Injected by langgraph_bridge from codebase context
     semantic_search: Optional["SemanticSearchProtocol"] = None
+
+    # === Project Rules ===
+    # Loaded from AGENTS.md or similar at run start
+    project_rules: Optional[str] = None
 
     # === Model Affinity Methods ===
 

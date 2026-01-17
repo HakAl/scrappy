@@ -35,6 +35,7 @@ class AgentPromptConfig:
         working_memory_context: Session context from working memory
         search_strategy: Search guidance based on available tools
         rag_context: Retrieved context from semantic search
+        project_rules: Project-specific rules from AGENTS.md or similar
     """
 
     # Required
@@ -49,6 +50,7 @@ class AgentPromptConfig:
     working_memory_context: Optional[str] = None
     search_strategy: Optional[str] = None
     rag_context: Optional[str] = None
+    project_rules: Optional[str] = None
 
 
 @dataclass(frozen=True)

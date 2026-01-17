@@ -80,7 +80,18 @@ Guidelines:
 - Focus on helping with coding tasks
 - Be natural and conversational
 - Do not use emojis
+"""
 
+        # Add project rules from AGENTS.md or similar if available
+        if config.project_rules:
+            prompt += f"""
+## Project Rules
+<project_rules>
+{config.project_rules}
+</project_rules>
+"""
+
+        prompt += f"""
 ## When to Use Tools
 - For simple questions, greetings, or conversation: respond directly WITHOUT tools
 - For code tasks (write, edit, fix, create): use the appropriate file tools
