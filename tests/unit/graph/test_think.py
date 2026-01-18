@@ -1031,6 +1031,8 @@ class MockRunContext:
         self.preferred_model = None
         self.preferred_provider = None
         self.model_selection = None
+        self.project_rules = None
+        self.reminder_manager = None
 
     def is_cancelled(self) -> bool:
         return self._cancelled
