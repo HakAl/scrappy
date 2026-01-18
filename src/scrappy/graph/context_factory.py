@@ -18,6 +18,56 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+# File extension to language mapping for code block syntax highlighting
+EXTENSION_LANGUAGE_MAP = {
+    ".py": "python",
+    ".js": "javascript",
+    ".ts": "typescript",
+    ".jsx": "jsx",
+    ".tsx": "tsx",
+    ".rb": "ruby",
+    ".go": "go",
+    ".rs": "rust",
+    ".java": "java",
+    ".kt": "kotlin",
+    ".c": "c",
+    ".cpp": "cpp",
+    ".h": "c",
+    ".hpp": "cpp",
+    ".cs": "csharp",
+    ".swift": "swift",
+    ".php": "php",
+    ".sql": "sql",
+    ".sh": "bash",
+    ".bash": "bash",
+    ".zsh": "bash",
+    ".yaml": "yaml",
+    ".yml": "yaml",
+    ".json": "json",
+    ".toml": "toml",
+    ".xml": "xml",
+    ".html": "html",
+    ".css": "css",
+    ".scss": "scss",
+    ".md": "markdown",
+}
+
+
+def _get_language_from_path(path: str) -> str:
+    """
+    Get language identifier for syntax highlighting from file path.
+
+    Args:
+        path: File path
+
+    Returns:
+        Language identifier (e.g., 'python', 'javascript'), empty string if unknown
+    """
+    for ext, lang in EXTENSION_LANGUAGE_MAP.items():
+        if path.endswith(ext):
+            return lang
+    return ""
+
 
 @dataclass
 class RAGConfig:
@@ -229,18 +279,25 @@ class GraphContextFactory:
             filtered.append(chunk)
             prev_score = score
 
-        # Format survivors
-        lines = ["## Relevant Codebase Context\n"]
+        # Format survivors with improved structure
+        lines = ["## Relevant Code from Your Project\n"]
 
         for chunk in filtered:
             path = chunk["path"]
             start_line, end_line = chunk["lines"]
             content = chunk["content"]
+            language = _get_language_from_path(path)
 
-            lines.append(f"\n### {path}:{start_line}-{end_line}")
-            lines.append("```")
+            lines.append(f"\n### {path}")
+            lines.append(f"Lines {start_line}-{end_line}:")
+            lines.append(f"```{language}")
             lines.append(content.rstrip())
             lines.append("```")
+
+        # Add helpful note about patterns
+        lines.append(
+            "\n*These are existing patterns in your codebase that may be relevant.*"
+        )
 
         return "\n".join(lines)
 
