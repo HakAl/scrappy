@@ -95,6 +95,7 @@ def build_system_prompt(
     tool_names: list[str],
     working_memory: Optional[WorkingMemoryProtocol] = None,
     context_factory: Optional[ContextFactoryProtocol] = None,
+    run_context: Optional[AgentRunContextProtocol] = None,
 ) -> str:
     """
     Build the system prompt for the agent using PromptFactory.
@@ -107,6 +108,7 @@ def build_system_prompt(
         tool_names: List of available tool names
         working_memory: Optional working memory for session context
         context_factory: Optional factory for RAG context augmentation
+        run_context: Optional run context for project rules
 
     Returns:
         System prompt string
@@ -122,6 +124,11 @@ def build_system_prompt(
         search_strategy = context_factory.build_search_strategy_section(tool_names)
         rag_context = context_factory.build_rag_context(state.original_task)
 
+    # Get project rules from run context (loaded from AGENTS.md or similar)
+    project_rules = None
+    if run_context:
+        project_rules = run_context.project_rules
+
     # Build config with all state
     config = AgentPromptConfig(
         tool_names=tuple(tool_names),
@@ -133,6 +140,7 @@ def build_system_prompt(
         working_memory_context=working_memory_context or None,
         search_strategy=search_strategy or None,
         rag_context=rag_context or None,
+        project_rules=project_rules or None,
     )
 
     # Delegate to factory
@@ -283,7 +291,7 @@ def think_node(
             tools = tool_schemas
 
     # Build system prompt and messages
-    system_prompt = build_system_prompt(state, tool_names, working_memory, context_factory)
+    system_prompt = build_system_prompt(state, tool_names, working_memory, context_factory, run_context)
     messages, user_message_exists = _build_messages_for_llm(state, system_prompt, max_tokens)
 
     # Call delegator - handles model selection, streaming, errors, fallback
@@ -336,7 +344,7 @@ async def think_node_streaming(
             tools = tool_schemas
 
     # Build system prompt and messages
-    system_prompt = build_system_prompt(state, tool_names, working_memory, context_factory)
+    system_prompt = build_system_prompt(state, tool_names, working_memory, context_factory, run_context)
     messages, user_message_exists = _build_messages_for_llm(state, system_prompt, max_tokens)
 
     # Call delegator with streaming - handles model selection, errors, fallback

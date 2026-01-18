@@ -20,6 +20,8 @@ from typing import TYPE_CHECKING, Any, Optional, Protocol, runtime_checkable
 from textual import work
 from textual.worker import Worker, WorkerCancelled, get_current_worker
 
+from scrappy.context.agent_rules_loader import AgentRulesLoader
+from scrappy.context.reminder_manager import ReminderManager
 from scrappy.graph.run_context import AgentRunContext
 from scrappy.infrastructure.threading import CancellationToken
 from ..protocols import ActivityState, Task, TaskStatus
@@ -652,6 +654,20 @@ class LangGraphBridge:
             # Create ephemeral run context for this agent run
             self._run_context = AgentRunContext()
             self._run_context.set_status_callback(self._show_provider_status)
+
+            # Load project rules from AGENTS.md or similar
+            from pathlib import Path
+            rules_loader = AgentRulesLoader()
+            rules = rules_loader.load(Path(working_dir))
+            if rules:
+                rules_content = rules.get_combined_content()
+                self._run_context.project_rules = rules_content
+                logger.info(f"Loaded project rules from {rules.source_file}")
+
+                # Create reminder manager for system reminders in tool results
+                reminder_manager = ReminderManager()
+                reminder_manager.set_project_rules(rules_content)
+                self._run_context.reminder_manager = reminder_manager
 
             # Inject semantic search from codebase context if available
             if hasattr(self.app, '_codebase_context') and self.app._codebase_context:

@@ -14,9 +14,11 @@ from typing import Any, Optional
 from unittest.mock import Mock
 
 from scrappy.graph.context_factory import (
+    EXTENSION_LANGUAGE_MAP,
     GraphContextFactory,
     NullContextFactory,
     RAGConfig,
+    _get_language_from_path,
 )
 from scrappy.graph.protocols import ContextFactoryProtocol
 
@@ -125,12 +127,15 @@ class TestRAGContext:
         # Act
         rag_context = factory.build_rag_context("How does foo work?")
 
-        # Assert
+        # Assert - new format with improved headers and patterns note
         assert rag_context is not None
-        assert "Relevant Codebase Context" in rag_context
-        assert "src/main.py:10-20" in rag_context
+        assert "Relevant Code from Your Project" in rag_context
+        assert "### src/main.py" in rag_context
+        assert "Lines 10-20:" in rag_context
+        assert "```python" in rag_context  # Language detection
         assert "def foo()" in rag_context
-        assert "src/helper.py:5-15" in rag_context
+        assert "### src/helper.py" in rag_context
+        assert "existing patterns in your codebase" in rag_context  # Patterns note
 
     def test_no_rag_context_when_not_ready(self):
         """Should return None when semantic search not ready."""
@@ -456,3 +461,165 @@ class TestNullContextFactory:
         """Should always return False for is_ready."""
         factory = NullContextFactory()
         assert factory.is_ready() is False
+
+
+# =============================================================================
+# Language Detection Tests
+# =============================================================================
+
+class TestLanguageDetection:
+    """Test language detection from file paths."""
+
+    def test_detects_python_files(self):
+        """Should detect Python files."""
+        assert _get_language_from_path("src/main.py") == "python"
+        assert _get_language_from_path("tests/test_foo.py") == "python"
+
+    def test_detects_javascript_files(self):
+        """Should detect JavaScript/TypeScript files."""
+        assert _get_language_from_path("src/index.js") == "javascript"
+        assert _get_language_from_path("src/app.ts") == "typescript"
+        assert _get_language_from_path("components/Button.tsx") == "tsx"
+        assert _get_language_from_path("components/Modal.jsx") == "jsx"
+
+    def test_detects_common_languages(self):
+        """Should detect common programming languages."""
+        assert _get_language_from_path("main.go") == "go"
+        assert _get_language_from_path("lib.rs") == "rust"
+        assert _get_language_from_path("App.java") == "java"
+        assert _get_language_from_path("script.rb") == "ruby"
+        assert _get_language_from_path("Program.cs") == "csharp"
+
+    def test_detects_config_files(self):
+        """Should detect config file languages."""
+        assert _get_language_from_path("config.yaml") == "yaml"
+        assert _get_language_from_path("settings.yml") == "yaml"
+        assert _get_language_from_path("package.json") == "json"
+        assert _get_language_from_path("pyproject.toml") == "toml"
+
+    def test_returns_empty_for_unknown_extensions(self):
+        """Should return empty string for unknown extensions."""
+        assert _get_language_from_path("data.unknown") == ""
+        assert _get_language_from_path("file.xyz") == ""
+        assert _get_language_from_path("noextension") == ""
+
+    def test_extension_language_map_has_common_languages(self):
+        """Extension map should include common languages."""
+        assert ".py" in EXTENSION_LANGUAGE_MAP
+        assert ".js" in EXTENSION_LANGUAGE_MAP
+        assert ".ts" in EXTENSION_LANGUAGE_MAP
+        assert ".go" in EXTENSION_LANGUAGE_MAP
+        assert ".rs" in EXTENSION_LANGUAGE_MAP
+
+
+# =============================================================================
+# RAG Formatting Tests
+# =============================================================================
+
+class TestRAGFormatting:
+    """Test RAG context formatting with new structure."""
+
+    def test_includes_language_hint_in_code_blocks(self):
+        """Should include language hint in code blocks."""
+        # Arrange
+        search_results = [
+            {
+                'path': 'src/utils/helper.py',
+                'lines': (1, 5),
+                'content': 'def helper(): pass',
+                'score': 0.9
+            }
+        ]
+        semantic_manager = MockSemanticManager(is_ready=True, search_results=search_results)
+        factory = GraphContextFactory(semantic_manager)
+
+        # Act
+        rag_context = factory.build_rag_context("test")
+
+        # Assert
+        assert "```python" in rag_context
+
+    def test_includes_language_hint_for_typescript(self):
+        """Should include typescript hint for .ts files."""
+        # Arrange
+        search_results = [
+            {
+                'path': 'src/components/App.tsx',
+                'lines': (1, 5),
+                'content': 'const App = () => <div />',
+                'score': 0.9
+            }
+        ]
+        semantic_manager = MockSemanticManager(is_ready=True, search_results=search_results)
+        factory = GraphContextFactory(semantic_manager)
+
+        # Act
+        rag_context = factory.build_rag_context("test")
+
+        # Assert
+        assert "```tsx" in rag_context
+
+    def test_handles_unknown_file_extension(self):
+        """Should handle files with unknown extensions gracefully."""
+        # Arrange
+        search_results = [
+            {
+                'path': 'data/config.unknown',
+                'lines': (1, 5),
+                'content': 'some content',
+                'score': 0.9
+            }
+        ]
+        semantic_manager = MockSemanticManager(is_ready=True, search_results=search_results)
+        factory = GraphContextFactory(semantic_manager)
+
+        # Act
+        rag_context = factory.build_rag_context("test")
+
+        # Assert - should have code block without language hint
+        assert "```\n" in rag_context or "```\r\n" in rag_context or rag_context.count("```") >= 2
+
+    def test_includes_patterns_note_at_end(self):
+        """Should include helpful note about patterns at the end."""
+        # Arrange
+        search_results = [
+            {
+                'path': 'src/main.py',
+                'lines': (1, 5),
+                'content': 'def main(): pass',
+                'score': 0.9
+            }
+        ]
+        semantic_manager = MockSemanticManager(is_ready=True, search_results=search_results)
+        factory = GraphContextFactory(semantic_manager)
+
+        # Act
+        rag_context = factory.build_rag_context("test")
+
+        # Assert
+        assert "existing patterns in your codebase" in rag_context
+        # Note should be at the end
+        note_pos = rag_context.find("existing patterns")
+        code_end = rag_context.rfind("```")
+        assert note_pos > code_end
+
+    def test_shows_lines_separately_from_path(self):
+        """Should show line numbers on separate line from path."""
+        # Arrange
+        search_results = [
+            {
+                'path': 'src/utils.py',
+                'lines': (42, 56),
+                'content': 'def util(): pass',
+                'score': 0.9
+            }
+        ]
+        semantic_manager = MockSemanticManager(is_ready=True, search_results=search_results)
+        factory = GraphContextFactory(semantic_manager)
+
+        # Act
+        rag_context = factory.build_rag_context("test")
+
+        # Assert
+        assert "### src/utils.py" in rag_context
+        assert "Lines 42-56:" in rag_context
