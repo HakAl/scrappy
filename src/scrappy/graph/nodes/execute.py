@@ -284,13 +284,18 @@ def track_file_changes(
     return files_changed
 
 
-def build_tool_message(tool_call: ToolCall, result: ToolResult) -> Message:
+def build_tool_message(
+    tool_call: ToolCall,
+    result: ToolResult,
+    system_reminder: Optional[str] = None,
+) -> Message:
     """
     Build a tool message for the conversation history.
 
     Args:
         tool_call: The original tool call
         result: The tool execution result
+        system_reminder: Optional system reminder to append (prevents context drift)
 
     Returns:
         Message dict in tool message format
@@ -303,6 +308,10 @@ def build_tool_message(tool_call: ToolCall, result: ToolResult) -> Message:
         content = result["error"] or "Tool execution failed"
     else:
         content = "Tool execution failed"
+
+    # Append system reminder to prevent context drift in long sessions
+    if system_reminder:
+        content = content + system_reminder
 
     message: Message = {
         "role": "tool",
@@ -468,8 +477,13 @@ def execute_node(
             files_changed = new_files
             files_modified = True
 
+        # Get system reminder to prevent context drift in long sessions
+        system_reminder = None
+        if run_context and hasattr(run_context, 'reminder_manager') and run_context.reminder_manager:
+            system_reminder = run_context.reminder_manager.get_reminder()
+
         # Build and append tool message
-        tool_message = build_tool_message(tool_call, processed_result)
+        tool_message = build_tool_message(tool_call, processed_result, system_reminder)
         new_messages.append(tool_message)
 
         # Log execution (extract name from OpenAI format)

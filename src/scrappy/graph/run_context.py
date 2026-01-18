@@ -154,6 +154,13 @@ class AgentRunContextProtocol(Protocol):
         """Project-specific rules from AGENTS.md or similar."""
         ...
 
+    # === System Reminders ===
+
+    @property
+    def reminder_manager(self) -> Optional[Any]:
+        """Reminder manager for system reminders in tool results."""
+        ...
+
 
 @dataclass
 class AgentRunContext:
@@ -196,6 +203,10 @@ class AgentRunContext:
     # === Project Rules ===
     # Loaded from AGENTS.md or similar at run start
     project_rules: Optional[str] = None
+
+    # === System Reminders ===
+    # Manages reminders to prevent context drift in long sessions
+    reminder_manager: Optional[Any] = None  # Type: ReminderManagerProtocol
 
     # === Model Affinity Methods ===
 
