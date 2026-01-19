@@ -91,6 +91,25 @@ class ActivityStateChange(Message):
         self.elapsed_ms = elapsed_ms
 
 
+class MetricsUpdate(Message):
+    """Message for updating metrics in the status bar."""
+
+    def __init__(
+        self,
+        provider_display: Optional[str],
+        input_tokens: Optional[int],
+        output_tokens: Optional[int],
+        session_total: Optional[int],
+        context_percent: Optional[int] = None,
+    ) -> None:
+        super().__init__()
+        self.provider_display = provider_display
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
+        self.session_total = session_total
+        self.context_percent = context_percent
+
+
 class TasksUpdated(Message):
     """Message for updating the task progress widget.
 

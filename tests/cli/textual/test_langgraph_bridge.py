@@ -16,6 +16,8 @@ from scrappy.cli.textual.langgraph_bridge import (
     AgentResult,
     LangGraphBridge,
 )
+from scrappy.cli.textual.messages import MetricsUpdate
+from scrappy.graph.state import AgentState
 from scrappy.infrastructure.threading import CancellationToken
 
 
@@ -183,6 +185,11 @@ class TestExtractKeyParam:
         result = bridge._extract_key_param("write_file", {"wrong_param": "value"})
         assert result == ""
 
+    def test_empty_args_returns_empty(self, bridge):
+        """Empty args dict returns empty string."""
+        result = bridge._extract_key_param("write_file", {})
+        assert result == ""
+
     def test_long_value_truncated(self, bridge):
         """Values longer than 50 chars are truncated with ellipsis."""
         long_path = "a" * 60
@@ -197,10 +204,88 @@ class TestExtractKeyParam:
         assert len(result) == 50
         assert not result.endswith("...")
 
-    def test_empty_args_returns_empty(self, bridge):
-        """Empty args dict returns empty string."""
-        result = bridge._extract_key_param("write_file", {})
-        assert result == ""
+
+class FakeSnapshot:
+    """Minimal snapshot object for graph.get_state()."""
+
+    def __init__(self, values: dict, next_nodes=None) -> None:
+        self.values = values
+        self.next = next_nodes
+
+
+class FakeGraph:
+    """Minimal graph stub for _run_with_streaming tests."""
+
+    def __init__(self, event, final_state: dict) -> None:
+        self._event = event
+        self._final_state = final_state
+        self.get_state_calls = 0
+
+    def stream(self, input_state, config):
+        yield self._event
+
+    def get_state(self, config):
+        self.get_state_calls += 1
+        return FakeSnapshot(values=self._final_state)
+
+    def update_state(self, config, values):
+        pass
+
+
+class TestRunWithStreaming:
+    """Tests for _run_with_streaming handling AgentState events."""
+
+    def test_posts_metrics_from_agent_state_event(self):
+        """AgentState events should trigger metrics updates."""
+        app = Mock()
+        bridge = LangGraphBridge(
+            app=app,
+            bridge=Mock(),
+            output_adapter=Mock(),
+            orchestrator=Mock(),
+            tool_adapter=Mock(),
+        )
+        state = AgentState(
+            input="Hello",
+            original_task="Hello",
+            last_input_tokens=10,
+            last_output_tokens=20,
+            last_model_display="gemini: gemma",
+        )
+        graph = FakeGraph({"think": state}, state.model_dump())
+
+        bridge._run_with_streaming(graph, state, config={}, state_class=AgentState)
+
+        assert app.post_message.called
+        message = app.post_message.call_args.args[0]
+        assert isinstance(message, MetricsUpdate)
+        assert message.provider_display == "gemini: gemma"
+        assert message.input_tokens == 10
+        assert message.output_tokens == 20
+
+    def test_posts_metrics_from_partial_state_dict(self):
+        """Partial dict events should fall back to snapshot state."""
+        app = Mock()
+        bridge = LangGraphBridge(
+            app=app,
+            bridge=Mock(),
+            output_adapter=Mock(),
+            orchestrator=Mock(),
+            tool_adapter=Mock(),
+        )
+        state = AgentState(
+            input="Hello",
+            original_task="Hello",
+            last_input_tokens=5,
+            last_output_tokens=6,
+            last_model_display="gemini: gemma",
+        )
+        graph = FakeGraph({"think": {"last_input_tokens": 1}}, state.model_dump())
+
+        bridge._run_with_streaming(graph, state, config={}, state_class=AgentState)
+
+        assert graph.get_state_calls >= 1
+        assert app.post_message.called
 
 
 class TestGetFilePathFromArgs:
@@ -514,6 +599,55 @@ class TestUpdateTaskProgress:
         # Should only have last 2 completed
         completed = [t for t in bridge._recent_tasks if t.status.value == "done"]
         assert len(completed) == 2
+
+
+class TestMetricsUpdates:
+    """Tests for metrics update tracking."""
+
+    @pytest.fixture
+    def bridge(self):
+        """Create a bridge with mocked dependencies."""
+        app = Mock()
+        app.post_message = Mock()
+        return LangGraphBridge(
+            app=app,
+            bridge=Mock(),
+            output_adapter=Mock(),
+            orchestrator=Mock(),
+            tool_adapter=Mock(),
+        )
+
+    def test_metrics_update_accumulates_session_total(self, bridge):
+        """Session total increments with each metrics update."""
+        bridge._post_metrics_update(
+            provider_display="gemini: gemma",
+            input_tokens=100,
+            output_tokens=200,
+        )
+
+        first_message = bridge.app.post_message.call_args_list[0][0][0]
+        assert isinstance(first_message, MetricsUpdate)
+        assert first_message.session_total == 300
+        assert first_message.provider_display == "gemini: gemma"
+        assert first_message.input_tokens == 100
+        assert first_message.output_tokens == 200
+
+        bridge._post_metrics_update(
+            provider_display="gemini: gemma",
+            input_tokens=50,
+            output_tokens=150,
+        )
+
+        second_message = bridge.app.post_message.call_args_list[1][0][0]
+        assert second_message.session_total == 500
+
+    def test_metrics_update_does_not_increment_without_tokens(self, bridge):
+        """Session total stays unset when tokens are not provided."""
+        bridge._post_metrics_update(provider_display="gemini: gemma")
+
+        message = bridge.app.post_message.call_args_list[0][0][0]
+        assert isinstance(message, MetricsUpdate)
+        assert message.session_total is None
 
 
 class TestClearTaskProgress:

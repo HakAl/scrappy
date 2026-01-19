@@ -76,6 +76,16 @@ class LLMRequest:
             raise ValueError(f"max_tokens must be positive, got {self.max_tokens}")
 
 
+@runtime_checkable
+class ProviderAttemptProtocol(Protocol):
+    """Protocol for provider attempt records."""
+
+    provider: str
+    model: str
+    success: bool
+    error: Optional[str]
+
+
 # =============================================================================
 # Delegation Protocols (from protocols/delegation.py)
 # =============================================================================

@@ -2,7 +2,7 @@
 Status bar components for the Textual TUI.
 
 These components are displayed in the status bar area of the TUI,
-providing real-time information like progress indicators, token counters,
+providing real-time information like progress indicators, metrics,
 activity states, and semantic search status.
 """
 
@@ -154,6 +154,75 @@ class ProviderStatus:
         self._display = ""
         self._visible = False
         self.update_widget()
+
+
+class MetricsStatus:
+    """Shows provider/model and token metrics in the status bar."""
+
+    def __init__(self) -> None:
+        self._provider_display: Optional[str] = None
+        self._input_tokens: Optional[int] = None
+        self._output_tokens: Optional[int] = None
+        self._session_total: Optional[int] = None
+        self._context_percent: Optional[int] = None
+        self._widget: Optional[Label] = None
+
+    @property
+    def component_id(self) -> str:
+        return "metrics_status"
+
+    @property
+    def is_visible(self) -> bool:
+        return True
+
+    @property
+    def widget(self) -> Label:
+        if self._widget is None:
+            self._widget = Label(self._format_metrics(), id=self.component_id)
+        return self._widget
+
+    def update_widget(self) -> None:
+        if self._widget is not None:
+            self._widget.update(self._format_metrics())
+
+    def update(
+        self,
+        provider_display: Optional[str],
+        input_tokens: Optional[int],
+        output_tokens: Optional[int],
+        session_total: Optional[int],
+        context_percent: Optional[int] = None,
+    ) -> None:
+        self._provider_display = provider_display
+        self._input_tokens = input_tokens
+        self._output_tokens = output_tokens
+        self._session_total = session_total
+        self._context_percent = context_percent
+        self.update_widget()
+
+    def _format_metrics(self) -> str:
+        provider = (self._provider_display or "").strip() or "provider: --"
+        input_tokens = self._format_tokens(self._input_tokens)
+        output_tokens = self._format_tokens(self._output_tokens)
+        total = self._format_tokens(self._session_total)
+        percent = self._format_percent(self._context_percent)
+        return f"{provider} | {input_tokens}/{output_tokens} | {total} total | {percent}"
+
+    @staticmethod
+    def _format_tokens(value: Optional[int]) -> str:
+        if value is None:
+            return "--"
+        return f"{value:,}"
+
+    @staticmethod
+    def _format_percent(value: Optional[int]) -> str:
+        if value is None:
+            return "--%"
+        if value >= 90:
+            return f"[red]{value}%[/red]"
+        if value >= 80:
+            return f"[yellow]{value}%[/yellow]"
+        return f"{value}%"
 
 
 class PromptDisplay:

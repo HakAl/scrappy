@@ -16,8 +16,7 @@ from ..input_capture import InputCaptureManager, InputRequest
 from ..command_history import CommandHistory, get_default_history_path
 from ..textual import (
     ProgressIndicator,
-    ProviderStatus,
-    TokenCounter,
+    MetricsStatus,
     PromptDisplay,
     SemanticStatusComponent,
     StatusBar,
@@ -34,6 +33,7 @@ if TYPE_CHECKING:
         TextualOutputAdapter,
         ThreadSafeAsyncBridge,
         ScrappyApp,
+        MetricsUpdate,
     )
 
 logger = logging.getLogger(__name__)
@@ -45,7 +45,7 @@ class MainAppScreen(Screen):
     Provides:
     - Scrollable output area for conversation history (RichLog)
     - Input field for user messages and commands
-    - Dynamic status bar for progress indicators and token counters
+    - Dynamic status bar for progress indicators and metrics
     - Command history navigation with up/down arrows
     - Inline capture mode for prompts/confirms
     """
@@ -82,8 +82,8 @@ class MainAppScreen(Screen):
 
         # Status bar components
         self.progress_indicator = ProgressIndicator()
-        self.token_counter = TokenCounter()
         self.prompt_display = PromptDisplay()
+        self.metrics_status = MetricsStatus()
 
         # Input capture manager for inline prompts/confirms
         self.capture_manager = InputCaptureManager(self.bridge)
@@ -112,13 +112,6 @@ class MainAppScreen(Screen):
             self._semantic_status = SemanticStatusComponent()
         return self._semantic_status
 
-    @property
-    def provider_status(self) -> ProviderStatus:
-        """Lazy-load provider status component."""
-        if not hasattr(self, '_provider_status'):
-            self._provider_status = ProviderStatus()
-        return self._provider_status
-
     def compose(self) -> ComposeResult:
         """Create child widgets using ChatLayout."""
         yield ChatLayout(
@@ -136,10 +129,9 @@ class MainAppScreen(Screen):
         # Register status components with the status bar
         status_bar = self.query_one(StatusBar)
         status_bar.register_component(self.progress_indicator)
-        status_bar.register_component(self.token_counter)
         status_bar.register_component(self.prompt_display)
+        status_bar.register_component(self.metrics_status)
         status_bar.register_component(self.semantic_status)
-        status_bar.register_component(self.provider_status)
 
         # NOTE: Banner is now displayed immediately in app._show_main_screen()
         # using display_banner_header_tui(). Status lines are shown when CLI is ready.
@@ -506,6 +498,18 @@ class MainAppScreen(Screen):
             widget.update_tasks(tasks)
         except Exception:
             pass  # Widget not mounted yet
+
+    def update_metrics(self, message: "MetricsUpdate") -> None:
+        """Update metrics status bar line."""
+        self.metrics_status.update(
+            provider_display=message.provider_display,
+            input_tokens=message.input_tokens,
+            output_tokens=message.output_tokens,
+            session_total=message.session_total,
+            context_percent=message.context_percent,
+        )
+        status_bar = self.query_one(StatusBar)
+        status_bar.refresh_display()
 
     def _start_elapsed_timer(self) -> None:
         """Start the elapsed time timer for activity indicator updates."""

@@ -15,7 +15,7 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Optional, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Optional, Protocol, runtime_checkable, cast
 
 from textual import work
 from textual.worker import Worker, WorkerCancelled, get_current_worker
@@ -26,6 +26,7 @@ from scrappy.graph.run_context import AgentRunContext
 from scrappy.infrastructure.threading import CancellationToken
 from ..protocols import ActivityState, Task, TaskStatus
 from .tool_confirmation import ToolConfirmationHandler
+from .messages import MetricsUpdate
 
 if TYPE_CHECKING:
     from langgraph.graph.state import CompiledStateGraph
@@ -74,6 +75,13 @@ class OutputCallbackProtocol(Protocol):
     def __call__(self, content: str) -> None:
         """Output content to the UI."""
         ...
+
+
+class _MetricsUnset:
+    """Sentinel for optional metrics updates."""
+
+
+_METRICS_UNSET = _MetricsUnset()
 
 
 class LangGraphBridge:
@@ -145,6 +153,15 @@ class LangGraphBridge:
         # Cancellation token for multi-press force cancel support (per-run)
         self._cancellation_token: Optional[CancellationToken] = None
 
+        # Metrics tracking for status bar
+        self._metrics_provider_display: Optional[str] = None
+        self._metrics_input_tokens: Optional[int] = None
+        self._metrics_output_tokens: Optional[int] = None
+        self._metrics_context_percent: Optional[int] = None
+        self._session_total_tokens: Optional[int] = None
+        self._metrics_updated_this_run: bool = False
+
+
     def _post_activity(
         self,
         state: ActivityState,
@@ -161,31 +178,54 @@ class LangGraphBridge:
         self._output_adapter.post_activity(state, message, elapsed_ms)
 
     def _show_provider_status(self, tier: str) -> None:
-        """Show the current tier in the status bar."""
+        """Update provider display in the metrics status line."""
         try:
-            from ..screens import MainAppScreen
-            screen = self.app.screen
-            if isinstance(screen, MainAppScreen):
-                screen.provider_status.show(tier)
-                # Trigger status bar refresh
-                from . import StatusBar
-                status_bar = screen.query_one(StatusBar)
-                status_bar.refresh_display()
+            self._post_metrics_update(provider_display=tier)
         except Exception:
             pass  # Screen might not be ready
 
     def _hide_provider_status(self) -> None:
-        """Hide the provider status from the status bar."""
+        """Clear provider display in the metrics status line."""
         try:
-            from ..screens import MainAppScreen
-            screen = self.app.screen
-            if isinstance(screen, MainAppScreen):
-                screen.provider_status.hide()
-                from . import StatusBar
-                status_bar = screen.query_one(StatusBar)
-                status_bar.refresh_display()
+            self._post_metrics_update(provider_display=None)
         except Exception:
             pass  # Screen might not be ready
+
+    def _post_metrics_update(
+        self,
+        provider_display: Any = _METRICS_UNSET,
+        input_tokens: Any = _METRICS_UNSET,
+        output_tokens: Any = _METRICS_UNSET,
+        context_percent: Any = _METRICS_UNSET,
+    ) -> None:
+        if provider_display is not _METRICS_UNSET:
+            self._metrics_provider_display = provider_display
+        if input_tokens is not _METRICS_UNSET:
+            self._metrics_input_tokens = input_tokens
+        if output_tokens is not _METRICS_UNSET:
+            self._metrics_output_tokens = output_tokens
+        if context_percent is not _METRICS_UNSET:
+            self._metrics_context_percent = context_percent
+
+        if input_tokens is not _METRICS_UNSET and output_tokens is not _METRICS_UNSET:
+            if input_tokens is not None and output_tokens is not None:
+                delta = input_tokens + output_tokens
+                if self._session_total_tokens is None:
+                    self._session_total_tokens = delta
+                else:
+                    self._session_total_tokens += delta
+                self._metrics_updated_this_run = True
+
+        try:
+            self.app.post_message(MetricsUpdate(
+                provider_display=self._metrics_provider_display,
+                input_tokens=self._metrics_input_tokens,
+                output_tokens=self._metrics_output_tokens,
+                session_total=self._session_total_tokens,
+                context_percent=self._metrics_context_percent,
+            ))
+        except Exception:
+            pass
 
     def _confirm_callback(self, question: str) -> bool:
         """
@@ -628,6 +668,7 @@ class LangGraphBridge:
 
         # Mark as running
         self._is_running = True
+        self._metrics_updated_this_run = False
 
         # Create confirmation handler for this run (needs working_dir)
         self._confirmation_handler = ToolConfirmationHandler(
@@ -712,7 +753,7 @@ class LangGraphBridge:
             self._start_time = time.time()
             self._working_dir = working_dir
             self._post_activity(ActivityState.THINKING)
-            # Provider status will be updated after first LLM call with actual model
+            # Metrics will be updated after first LLM call with actual model
 
             # Use stream() instead of invoke() to allow cancellation between nodes
             final_state = self._run_with_streaming(
@@ -746,6 +787,18 @@ class LangGraphBridge:
                 final_state.last_error,
             )
             logger.debug("run_agent: preparing AgentResult")
+
+            if not self._metrics_updated_this_run:
+                input_tokens = final_state.last_input_tokens
+                output_tokens = final_state.last_output_tokens
+                if input_tokens is not None and output_tokens is not None:
+                    provider_display = final_state.last_trace_chain or final_state.last_model_display
+                    self._post_metrics_update(
+                        provider_display=provider_display,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        context_percent=final_state.last_context_percent,
+                    )
 
             # Check if agent actually completed successfully
             # done=False means it hit iteration limit without completing
@@ -825,9 +878,8 @@ class LangGraphBridge:
             # Clear confirmation handler
             self._confirmation_handler = None
 
-            # Clear activity indicator and provider status
+            # Clear activity indicator
             self._post_activity(ActivityState.IDLE)
-            self._hide_provider_status()
             self._start_time = 0.0
             self._working_dir = ""
             # Clear task progress widget
@@ -888,17 +940,44 @@ class LangGraphBridge:
                 # Extract state from event
                 # Event format: {node_name: state_dict}
                 for node_name, node_output in event.items():
+                    node_data: Optional[dict[str, Any]] = None
                     if isinstance(node_output, dict):
-                        # Update current state from node output
+                        node_data = node_output
+                    elif isinstance(node_output, state_class):
+                        node_data = cast(Any, node_output).model_dump()
+                    else:
+                        model_dump = getattr(node_output, "model_dump", None)
+                        if callable(model_dump):
+                            try:
+                                node_data = model_dump()
+                            except Exception:
+                                node_data = None
+
+                    if node_data is not None:
                         try:
-                            current_state = state_class(**node_output)
+                            current_state = state_class(**node_data)
                         except Exception:
                             # Node output might be partial, get full state
-                            pass
+                            if node_name == "think":
+                                try:
+                                    snapshot = graph.get_state(config)  # type: ignore[arg-type]
+                                    if snapshot.values:
+                                        current_state = state_class(**snapshot.values)
+                                except Exception:
+                                    pass
 
                         # Output tool executions when execute node completes
                         if node_name == "execute":
-                            self._output_tool_executions(node_output)
+                            self._output_tool_executions(node_data)
+                    elif isinstance(node_output, state_class):
+                        current_state = node_output
+                    elif node_name == "think":
+                        try:
+                            snapshot = graph.get_state(config)  # type: ignore[arg-type]
+                            if snapshot.values:
+                                current_state = state_class(**snapshot.values)
+                        except Exception:
+                            pass
 
                     # Update activity indicator based on node
                     if node_name == "think":
@@ -916,11 +995,21 @@ class LangGraphBridge:
                                 error_msg = f"recovering ({category})"
                         self._post_activity(ActivityState.THINKING, error_msg)
 
-                    # Update provider status from state (shows actual model used)
-                    if current_state is not None:
-                        model_display = getattr(current_state, "last_model_display", None)
-                        if model_display:
-                            self._show_provider_status(model_display)
+                    # Update metrics from state after think node completes
+                    if node_name == "think" and current_state is not None:
+                        input_tokens = getattr(current_state, "last_input_tokens", None)
+                        output_tokens = getattr(current_state, "last_output_tokens", None)
+                        if input_tokens is not None and output_tokens is not None:
+                            trace_chain = getattr(current_state, "last_trace_chain", None)
+                            provider_display = trace_chain or getattr(
+                                current_state, "last_model_display", None
+                            )
+                            self._post_metrics_update(
+                                provider_display=provider_display,
+                                input_tokens=input_tokens,
+                                output_tokens=output_tokens,
+                                context_percent=getattr(current_state, "last_context_percent", None),
+                            )
 
                     logger.debug("Node %s completed", node_name)
 
@@ -998,7 +1087,7 @@ class LangGraphBridge:
             Worker[AgentResult]: Worker object that provides the AgentResult via
             worker.result after completion.
         """
-        return self.run_agent(task, working_dir, thread_id, tier)
+        return cast(Worker[AgentResult], self.run_agent(task, working_dir, thread_id, tier))
 
     async def run_agent_async(
         self,

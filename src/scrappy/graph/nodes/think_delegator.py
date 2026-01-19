@@ -194,6 +194,7 @@ class LiteLLMThinkDelegator:
         all_fragments: list[ToolCallFragment] = []
         response_model = ""
         response_provider = ""
+        trace_chain: Optional[str] = None
 
         # Pass cancellation token to orchestrator via kwargs
         if cancellation_token is not None:
@@ -216,6 +217,8 @@ class LiteLLMThinkDelegator:
                     response_model = chunk.model
                 if chunk.provider:
                     response_provider = chunk.provider
+                if chunk.metadata and chunk.metadata.get("trace_chain"):
+                    trace_chain = str(chunk.metadata["trace_chain"])
 
         # Assemble result
         content = "".join(content_parts)
@@ -230,6 +233,7 @@ class LiteLLMThinkDelegator:
             content=content,
             tool_calls=tuple(tool_calls),
             model_display=model_display,
+            trace_chain=trace_chain,
         )
 
     def _process_tool_calls(self, fragments: list[ToolCallFragment]) -> list[ToolCall]:

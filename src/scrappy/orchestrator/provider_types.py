@@ -180,6 +180,15 @@ class LLMResponse:
     tool_calls: Optional[List[ToolCall]] = None  # Native tool calling support
 
 
+@dataclass(frozen=True)
+class ProviderAttempt:
+    """Record of a single provider/model attempt."""
+    provider: str
+    model: str
+    success: bool
+    error: Optional[str] = None  # "429", "timeout", etc.
+
+
 @dataclass
 class ProviderLimits:
     """Rate limit information for a provider."""

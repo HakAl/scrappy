@@ -27,6 +27,7 @@ from .messages import (
     RequestInlineInput,
     IndexingProgress,
     ActivityStateChange,
+    MetricsUpdate,
     TasksUpdated,
     CLIReady,
 )
@@ -747,6 +748,14 @@ class ScrappyApp(App):
         screen = self.screen
         if isinstance(screen, MainAppScreen):
             screen.update_tasks(message.tasks)
+
+    def on_metricsupdate(self, message: MetricsUpdate) -> None:
+        """Route metrics updates to active screen."""
+        from ..screens import MainAppScreen
+
+        screen = self.screen
+        if isinstance(screen, MainAppScreen):
+            screen.update_metrics(message)
 
     # =========================================================================
     # Global Key Handlers
