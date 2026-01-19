@@ -55,6 +55,17 @@ dev = [
     "mypy>=1.0.0",
     "towncrier>=23.0.0",
 ]
+# Optional embedding backends (base install uses BGE-small via fastembed)
+nomic = [
+    "gpt4all>=2.0.0",
+]
+jina = [
+    "sentence-transformers>=2.2.0",
+]
+all-embeddings = [
+    "gpt4all>=2.0.0",
+    "sentence-transformers>=2.2.0",
+]
 
 [project.scripts]
 scrappy = "scrappy.cli:main"

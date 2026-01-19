@@ -151,7 +151,7 @@ class TestProviderConfigIntegration:
         assert provider._config.super_batch_size == 512
 
     def test_provider_db_path_from_config(self):
-        """Provider should use db_dir_name from config."""
+        """Provider should use db_dir_name from config (lazily resolved with model)."""
         chunker = MockChunker()
         config = SemanticIndexConfig(db_dir_name=".custom_db")
         provider = LanceDBSearchProvider(
@@ -159,7 +159,11 @@ class TestProviderConfigIntegration:
             chunker=chunker,
             config=config,
         )
-        assert provider._db_path.name == ".custom_db"
+        # DB path is now lazy - force resolution
+        provider._resolve_model_and_paths()
+        # Path is now: .custom_db/{model_id} (e.g., .custom_db/bge-small)
+        assert provider._db_path is not None
+        assert ".custom_db" in str(provider._db_path)
 
     def test_provider_lock_timeout_from_config(self):
         """Provider should use lock_timeout from config."""
