@@ -7,6 +7,8 @@ following dependency injection principles for testability.
 
 from dataclasses import dataclass
 import logging
+import os
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -20,12 +22,14 @@ class SemanticIndexConfig:
     Defaults are optimized for BGE-small-en-v1.5 model.
 
     Attributes:
+        embedding_model: Explicit embedding model selection (bge-small, nomic, jina)
+                        None for auto-detection (highest quality available)
         batch_size: Chunks per embedding batch (256 optimal for BGE-small)
         max_text_length: Maximum text length per chunk (512 optimal for BGE-small context)
         min_chunk_size: Minimum chunk size to index (skip noise)
         super_batch_size: Max chunks before DB flush (memory safety)
         fts_rebuild_threshold: Min chunks added before FTS rebuild
-        db_dir_name: Database directory name
+        db_dir_name: Base database directory name
         lock_timeout: Lock acquisition timeout in seconds
         avg_chunk_bytes: Average bytes per chunk (for chunk count estimation)
         show_progress_chunks: Show progress bar if estimated chunks exceed this
@@ -34,6 +38,11 @@ class SemanticIndexConfig:
         debounce_ms: Minimum milliseconds between staleness checks
         fingerprint_file: Path to fingerprint storage file
     """
+
+    # Embedding model selection (None = auto-detect best available)
+    # Valid values: "bge-small", "nomic", "jina", or None
+    # Can be overridden by SEMANTIC_INDEX_EMBEDDING_MODEL env var
+    embedding_model: Optional[str] = None
 
     # Embedding settings
     batch_size: int = 256
@@ -46,7 +55,7 @@ class SemanticIndexConfig:
     # FTS settings
     fts_rebuild_threshold: int = 100
 
-    # Database settings
+    # Database settings (base path, model-specific suffix added automatically)
     db_dir_name: str = ".scrappy/lancedb"
     lock_timeout: int = 300
 
@@ -61,6 +70,34 @@ class SemanticIndexConfig:
     # Staleness detection
     debounce_ms: int = 300  # Minimum milliseconds between staleness checks
     fingerprint_file: str = ".scrappy/fingerprints.json"  # Path to fingerprint storage
+
+    def get_embedding_model(self) -> Optional[str]:
+        """
+        Get the configured embedding model, checking env var override.
+
+        Priority: env var > instance attribute
+
+        Returns:
+            Model id string (bge-small, nomic, jina) or None for auto-detect
+        """
+        env_model = os.environ.get("SEMANTIC_INDEX_EMBEDDING_MODEL")
+        if env_model:
+            return env_model.strip().lower()
+        return self.embedding_model
+
+    def get_db_dir_for_model(self, model_id: str) -> str:
+        """
+        Get the database directory path for a specific model.
+
+        Each model gets its own subdirectory to avoid dimension conflicts.
+
+        Args:
+            model_id: Embedding model identifier (e.g., "bge-small")
+
+        Returns:
+            Database directory path (e.g., ".scrappy/lancedb/bge-small")
+        """
+        return f"{self.db_dir_name}/{model_id}"
 
     @classmethod
     def from_memory_adaptive(cls) -> "SemanticIndexConfig":

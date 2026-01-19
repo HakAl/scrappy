@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Optional, Any, TYPE_CHECKING
 
 from ..protocols import SemanticSearchProtocol
-from ...infrastructure.protocols import BackgroundInitializerProtocol
 from ...infrastructure.threading.managed_thread import ManagedThread
 from .config import SemanticIndexConfig
 
@@ -175,7 +174,7 @@ class SemanticSearchInitializer:
         if self._managed_thread is None:
             return True
 
-        logger.debug(f"Requesting shutdown of semantic search initializer")
+        logger.debug("Requesting shutdown of semantic search initializer")
         stopped = self._managed_thread.stop(timeout)
 
         if stopped:
@@ -232,8 +231,8 @@ class SemanticSearchInitializer:
                 fallback_overlap=15,
             )
 
-            # Create LanceDB provider (triggers FastEmbed model download if needed)
-            # Store database in .scrappy/lancedb/ instead of .lancedb/ at project root
+            # Create LanceDB provider (triggers model download if needed)
+            # Model is auto-detected or configured via env var / config
             with self._lock:
                 self._status = "Initializing vector database..."
 
@@ -242,6 +241,7 @@ class SemanticSearchInitializer:
                 logger.debug("Shutdown requested before database init")
                 return
 
+            # Note: db_dir_name is the base path; actual path includes model subdirectory
             config = SemanticIndexConfig(db_dir_name=".scrappy/lancedb")
             search_provider = LanceDBSearchProvider(
                 self._project_path,
@@ -250,10 +250,10 @@ class SemanticSearchInitializer:
             )
 
             # Trigger model loading in background by ensuring schema is ready
-            # This downloads/loads the FastEmbed model NOW (in background)
+            # This downloads/loads the embedding model NOW (in background)
             # instead of blocking later during index_files()
             with self._lock:
-                self._status = "Loading embedding model (this may take 10-30s)..."
+                self._status = "Detecting embedding model..."
 
             # Check for shutdown before expensive model loading
             if thread.shutdown_requested:
@@ -269,7 +269,12 @@ class SemanticSearchInitializer:
 
             # Now load the embedding model by accessing the embedding function
             # This is the critical step that loads the heavy model in the background
-            search_provider._ensure_schema()  # This will call _create_embedding_func()
+            search_provider._ensure_schema()  # This resolves model and creates embedding func
+
+            # Update status with selected model
+            model_id = search_provider._model_id or "unknown"
+            with self._lock:
+                self._status = f"Loading {model_id} embedding model..."
 
             # Check for shutdown before test embedding
             if thread.shutdown_requested:

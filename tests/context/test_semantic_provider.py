@@ -151,7 +151,7 @@ class TestProviderConfigIntegration:
         assert provider._config.super_batch_size == 512
 
     def test_provider_db_path_from_config(self):
-        """Provider should use db_dir_name from config."""
+        """Provider should use db_dir_name from config (lazily resolved with model)."""
         chunker = MockChunker()
         config = SemanticIndexConfig(db_dir_name=".custom_db")
         provider = LanceDBSearchProvider(
@@ -159,7 +159,11 @@ class TestProviderConfigIntegration:
             chunker=chunker,
             config=config,
         )
-        assert provider._db_path.name == ".custom_db"
+        # DB path is now lazy - force resolution
+        provider._resolve_model_and_paths()
+        # Path is now: .custom_db/{model_id} (e.g., .custom_db/bge-small)
+        assert provider._db_path is not None
+        assert ".custom_db" in str(provider._db_path)
 
     def test_provider_lock_timeout_from_config(self):
         """Provider should use lock_timeout from config."""
@@ -989,6 +993,97 @@ class TestEnsureSchema:
         assert provider._embedding_func is mock_embed
         # Schema should be initialized
         assert provider._code_schema is not None
+
+
+class TestCheckTableDimensions:
+    """Test _check_table_dimensions method."""
+
+    def setup_method(self):
+        """Create provider with mock dependencies."""
+        self.chunker = MockChunker()
+        self.config = SemanticIndexConfig.for_testing()
+
+    def test_dimensions_match_returns_true(self):
+        """Should return True when table dimensions match embedding dimensions."""
+        mock_embed = MockEmbeddingFunction(dims=384)
+        provider = LanceDBSearchProvider(
+            project_path=Path("."),
+            chunker=self.chunker,
+            config=self.config,
+            embedding_func=mock_embed,
+        )
+        provider._ensure_schema()
+
+        # Mock table with matching dimensions
+        mock_field = Mock()
+        mock_field.name = "vector"
+        mock_field.type = Mock()
+        mock_field.type.list_size = 384
+
+        mock_table = Mock()
+        mock_table.schema = [mock_field]
+
+        assert provider._check_table_dimensions(mock_table) is True
+
+    def test_dimensions_mismatch_returns_false(self):
+        """Should return False when table dimensions don't match embedding dimensions."""
+        mock_embed = MockEmbeddingFunction(dims=768)  # Nomic-like
+        provider = LanceDBSearchProvider(
+            project_path=Path("."),
+            chunker=self.chunker,
+            config=self.config,
+            embedding_func=mock_embed,
+        )
+        provider._ensure_schema()
+
+        # Mock table with old BGE-small dimensions (384)
+        mock_field = Mock()
+        mock_field.name = "vector"
+        mock_field.type = Mock()
+        mock_field.type.list_size = 384
+
+        mock_table = Mock()
+        mock_table.schema = [mock_field]
+
+        assert provider._check_table_dimensions(mock_table) is False
+
+    def test_missing_vector_field_returns_true(self):
+        """Should return True when vector field not found (assume OK)."""
+        mock_embed = MockEmbeddingFunction(dims=384)
+        provider = LanceDBSearchProvider(
+            project_path=Path("."),
+            chunker=self.chunker,
+            config=self.config,
+            embedding_func=mock_embed,
+        )
+        provider._ensure_schema()
+
+        # Mock table without vector field
+        mock_field = Mock()
+        mock_field.name = "content"
+
+        mock_table = Mock()
+        mock_table.schema = [mock_field]
+
+        assert provider._check_table_dimensions(mock_table) is True
+
+    def test_schema_error_returns_true(self):
+        """Should return True when schema can't be read (assume OK)."""
+        mock_embed = MockEmbeddingFunction(dims=384)
+        provider = LanceDBSearchProvider(
+            project_path=Path("."),
+            chunker=self.chunker,
+            config=self.config,
+            embedding_func=mock_embed,
+        )
+        provider._ensure_schema()
+
+        # Mock table that raises on schema access
+        mock_table = Mock()
+        mock_table.schema = property(lambda self: (_ for _ in ()).throw(Exception("Error")))
+
+        # This should not raise, just return True
+        assert provider._check_table_dimensions(mock_table) is True
 
 
 class TestSafeDbContext:

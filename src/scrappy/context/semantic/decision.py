@@ -11,7 +11,6 @@ from ..protocols import (
     IndexState,
     ChangeMetrics,
     IndexingDecision,
-    IndexingDecisionProtocol,
 )
 from .config import SemanticIndexConfig
 
