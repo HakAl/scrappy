@@ -9,7 +9,7 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
-from ...protocols import CodeChunk, CodeChunkerProtocol, ChunkingStrategyProtocol
+from ...protocols import CodeChunk, ChunkingStrategyProtocol
 from ...code_chunker import SemanticCodeChunker
 from .python_chunker import PythonASTChunker
 

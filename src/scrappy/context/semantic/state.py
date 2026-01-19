@@ -16,9 +16,11 @@ try:
 except ImportError:
     lancedb = None
     LanceModel = object
-    Field = lambda **kwargs: None
 
-from ..protocols import IndexState, IndexStateProtocol
+    def Field(**kwargs):  # noqa: N802 - matching pydantic's Field API
+        return None
+
+from ..protocols import IndexState
 
 logger = logging.getLogger(__name__)
 

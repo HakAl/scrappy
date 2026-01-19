@@ -8,7 +8,9 @@ st.set_page_config(layout="wide")
 st.title("LanceDB Viewer")
 
 # 1. Connect to Database
-db_path = st.text_input("Path to LanceDB folder", value=r"C:\Users\anyth\MINE\dev\scrappy\.scrappy\lancedb")
+db_path = st.text_input("Path to LanceDB folder", value=r"C:\Users\anyth\MINE\dev\scrappy\.scrappy\lancedb\jina")
+# db_path = st.text_input("Path to LanceDB folder", value=r"C:\Users\anyth\MINE\dev\scrappy\.scrappy\lancedb\nomic")
+# db_path = st.text_input("Path to LanceDB folder", value=r"C:\Users\anyth\MINE\dev\scrappy\.scrappy\lancedb")
 
 if os.path.exists(db_path):
     db = lancedb.connect(db_path)

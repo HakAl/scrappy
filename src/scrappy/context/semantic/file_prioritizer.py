@@ -9,7 +9,7 @@ Assigns priority to files to ensure most important files are indexed first:
 - Other files (lowest - config, data, etc.)
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import FrozenSet, List, Optional
 

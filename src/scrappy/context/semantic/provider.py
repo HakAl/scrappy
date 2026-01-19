@@ -176,8 +176,9 @@ class LanceDBSearchProvider:
         self._config = config or SemanticIndexConfig()
         self._lock_timeout = self._config.lock_timeout
 
-        # Model ID is resolved lazily when embedding function is created
+        # Model ID and info are resolved lazily when embedding function is created
         self._model_id: Optional[str] = None
+        self._model_info = None  # EmbeddingModelInfo with indexing profile
 
         # DB path is determined lazily based on model selection
         # (each model gets its own subdirectory to avoid dimension conflicts)
@@ -213,10 +214,13 @@ class LanceDBSearchProvider:
         """
         Resolve embedding model and set up paths based on selection.
 
-        Called lazily on first use. Sets _model_id, _db_path, _lock_path.
+        Called lazily on first use. Sets _model_id, _model_info, _db_path, _lock_path.
         """
         if self._model_id is not None:
             return  # Already resolved
+
+        from .registry import get_embedding_registry, EmbeddingModelId
+        registry = get_embedding_registry()
 
         # Get configured model (may be None for auto-detect)
         configured_model = self._config.get_embedding_model()
@@ -224,17 +228,23 @@ class LanceDBSearchProvider:
         if configured_model:
             self._model_id = configured_model
             logger.info(f"Using configured embedding model: {self._model_id}")
+            # Try to get model info for configured model
+            try:
+                model_enum = EmbeddingModelId(configured_model)
+                self._model_info = registry.get_info(model_enum)
+            except ValueError:
+                self._model_info = None
         else:
             # Auto-detect: get best available model
-            from .registry import get_embedding_registry
-            registry = get_embedding_registry()
             best = registry.get_best_available()
             if best:
                 self._model_id = best.id.value
+                self._model_info = best
                 logger.info(f"Auto-detected embedding model: {self._model_id}")
             else:
                 # Fallback (should not happen in practice)
                 self._model_id = "bge-small"
+                self._model_info = registry.get_info(EmbeddingModelId.BGE_SMALL)
                 logger.warning("No embedding models available, defaulting to bge-small")
 
         # Set per-model database path
@@ -295,6 +305,47 @@ class LanceDBSearchProvider:
                     f"pip install fastembed lancedb. "
                     f"Error: {e}"
                 ) from e
+
+    def _check_table_dimensions(self, table) -> bool:
+        """
+        Check if existing table's vector dimensions match expected dimensions.
+
+        This detects when a user switches embedding models (e.g., from BGE-small
+        to Nomic) and the existing index has incompatible dimensions.
+
+        Args:
+            table: LanceDB table to check
+
+        Returns:
+            True if dimensions match (or can't be determined), False if mismatch
+        """
+        expected_dims = self._embedding_func.ndims()
+
+        try:
+            # Get the schema from the table
+            schema = table.schema
+            # Find the vector field
+            for field in schema:
+                if field.name == "vector":
+                    # LanceDB stores vectors as FixedSizeList
+                    # The list_size is the dimension
+                    if hasattr(field.type, "list_size"):
+                        actual_dims = field.type.list_size
+                        if actual_dims != expected_dims:
+                            logger.warning(
+                                f"Index dimension mismatch: table has {actual_dims} dims, "
+                                f"but model expects {expected_dims} dims. Will rebuild index."
+                            )
+                            return False
+                        logger.debug(f"Index dimensions match: {actual_dims}")
+                        return True
+            # Couldn't find vector field - assume OK (will fail later if not)
+            logger.debug("Could not find vector field in schema, assuming OK")
+            return True
+        except Exception as e:
+            # Can't read schema - assume OK (will fail later if corrupt)
+            logger.debug(f"Could not check table dimensions: {e}")
+            return True
 
     # --- Helper: Path Normalization & Security ---
 
@@ -424,6 +475,12 @@ class LanceDBSearchProvider:
 
             table = self._db.open_table(TABLE_NAME)
 
+            # Check for dimension mismatch (e.g., user switched embedding models)
+            if not self._check_table_dimensions(table):
+                logger.info("Dimension mismatch detected, rebuilding index from scratch")
+                self._create_and_populate(valid_files)
+                return
+
             # 1. Snapshot current DB state (Path -> Hash)
             db_state = {}
             try:
@@ -533,11 +590,21 @@ class LanceDBSearchProvider:
         start_time = time.time()
         config = self._config
 
+        # Use model-specific profile if available, otherwise fall back to config
+        if self._model_info:
+            batch_size = self._model_info.batch_size
+            super_batch_size = self._model_info.super_batch_size
+            max_text_length = self._model_info.max_text_length
+        else:
+            batch_size = config.batch_size
+            super_batch_size = config.super_batch_size
+            max_text_length = config.max_text_length
+
         all_chunks: List[Dict] = []
         total_files = len(files)
 
-        logger.debug(f"Processing {total_files} files (batch={config.batch_size}, "
-                     f"super_batch={config.super_batch_size}, max_text={config.max_text_length})")
+        logger.debug(f"Processing {total_files} files (batch={batch_size}, "
+                     f"super_batch={super_batch_size}, max_text={max_text_length})")
 
         for norm_path, content in files.items():
             try:
@@ -562,11 +629,11 @@ class LanceDBSearchProvider:
                         "start_line": chunk.start_line,
                         "end_line": chunk.end_line,
                         "content_hash": file_hash,
-                        "content": chunk_text[:config.max_text_length],
+                        "content": chunk_text[:max_text_length],
                     })
 
                     # Memory safety: flush when super-batch is full
-                    if len(all_chunks) >= config.super_batch_size:
+                    if len(all_chunks) >= super_batch_size:
                         batch_metrics = self._process_super_batch(table, all_chunks)
                         metrics.chunks_added += batch_metrics["added"]
                         metrics.embedding_time_seconds += batch_metrics["embed_time"]

@@ -25,7 +25,7 @@ class EmbeddingModelId(str, Enum):
 @dataclass(frozen=True)
 class EmbeddingModelInfo:
     """
-    Metadata for an embedding model backend.
+    Metadata and indexing profile for an embedding model backend.
 
     Attributes:
         id: Unique identifier for the model
@@ -35,6 +35,11 @@ class EmbeddingModelInfo:
         priority: Lower = higher quality (used for auto-selection)
         package_name: Package to check for availability
         install_extra: pip extra name (e.g., 'nomic' for pip install scrappy[nomic])
+
+        Indexing profile settings:
+        batch_size: Number of texts to embed in one call (lower = more progress updates)
+        super_batch_size: Chunks to accumulate before DB write
+        max_text_length: Maximum characters per text chunk
     """
     id: EmbeddingModelId
     display_name: str
@@ -43,9 +48,13 @@ class EmbeddingModelInfo:
     priority: int  # Lower = better quality, used for auto-selection
     package_name: str  # Package to check for availability
     install_extra: Optional[str] = None  # pip extra name
+    # Indexing profile - tuned per model for performance
+    batch_size: int = 256  # Texts per embedding call
+    super_batch_size: int = 2048  # Chunks before DB write
+    max_text_length: int = 512  # Max chars per chunk
 
 
-# Model specifications from the plan
+# Model specifications with tuned indexing profiles
 MODEL_INFO: Dict[EmbeddingModelId, EmbeddingModelInfo] = {
     EmbeddingModelId.NOMIC: EmbeddingModelInfo(
         id=EmbeddingModelId.NOMIC,
@@ -55,6 +64,10 @@ MODEL_INFO: Dict[EmbeddingModelId, EmbeddingModelInfo] = {
         priority=1,  # Highest quality
         package_name="gpt4all",
         install_extra="nomic",
+        # Smaller batches with larger text - better for heavy models
+        batch_size=32,
+        super_batch_size=128,
+        max_text_length=1024,
     ),
     EmbeddingModelId.JINA: EmbeddingModelInfo(
         id=EmbeddingModelId.JINA,
@@ -64,6 +77,10 @@ MODEL_INFO: Dict[EmbeddingModelId, EmbeddingModelInfo] = {
         priority=2,
         package_name="sentence_transformers",
         install_extra="jina",
+        # Smaller batches with larger text - better for heavy models
+        batch_size=32,
+        super_batch_size=128,
+        max_text_length=2048,
     ),
     EmbeddingModelId.BGE_SMALL: EmbeddingModelInfo(
         id=EmbeddingModelId.BGE_SMALL,
@@ -73,6 +90,10 @@ MODEL_INFO: Dict[EmbeddingModelId, EmbeddingModelInfo] = {
         priority=3,  # Lowest quality, but always available
         package_name="fastembed",
         install_extra=None,  # Included in base install
+        # BGE-small via fastembed is fast - large batches OK
+        batch_size=256,
+        super_batch_size=2048,
+        max_text_length=512,
     ),
 }
 
