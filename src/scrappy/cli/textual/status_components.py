@@ -206,7 +206,11 @@ class MetricsStatus:
         output_tokens = self._format_tokens(self._output_tokens)
         total = self._format_tokens(self._session_total)
         percent = self._format_percent(self._context_percent)
-        return f"{provider} | {input_tokens}/{output_tokens} | {total} total | {percent}"
+        # Format: provider | in:X out:Y | session:Z | ctx:N%
+        # - in/out: tokens for last request
+        # - session: cumulative tokens this session
+        # - ctx: context window utilization %
+        return f"{provider} | in:{input_tokens} out:{output_tokens} | session:{total} | ctx:{percent}"
 
     @staticmethod
     def _format_tokens(value: Optional[int]) -> str:

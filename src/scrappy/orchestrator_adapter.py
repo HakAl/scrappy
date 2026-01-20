@@ -211,6 +211,47 @@ class AgentOrchestratorAdapter:
             **kwargs
         )
 
+    async def stream_delegate(
+        self,
+        provider_name: Optional[str] = None,
+        prompt: str = "",
+        system_prompt: Optional[str] = None,
+        max_tokens: int = 1500,
+        temperature: float = 0.3,
+        use_context: bool = False,
+        **kwargs
+    ):
+        """
+        Stream delegate to the orchestrator for real-time token output.
+
+        Yields StreamChunk objects as tokens arrive from the LLM.
+
+        Args:
+            provider_name: Provider name (can be None for auto-selection)
+            prompt: The prompt to send
+            system_prompt: Optional system prompt
+            max_tokens: Maximum tokens in response
+            temperature: Sampling temperature
+            use_context: Whether to use context augmentation
+            **kwargs: Additional arguments passed to orchestrator
+
+        Yields:
+            StreamChunk objects with content tokens
+        """
+        if not hasattr(self._orch, 'stream_delegate'):
+            raise NotImplementedError("Orchestrator does not support streaming")
+
+        async for chunk in self._orch.stream_delegate(
+            provider_name=provider_name,
+            prompt=prompt,
+            system_prompt=system_prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            use_context=use_context,
+            **kwargs
+        ):
+            yield chunk
+
     # Proxy methods for working memory
     def remember_file_read(self, path: str, content: str, lines: int = 0):
         """Proxy to orchestrator's working memory."""

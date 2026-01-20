@@ -36,6 +36,8 @@ class ThinkResult:
         ThinkResult(
             content="The answer is 42.",
             model_display="cerebras: llama-3.3-70b",
+            input_tokens=100,
+            output_tokens=10,
         )
 
         # Successful tool call response (agent continues)
@@ -72,6 +74,10 @@ class ThinkResult:
     tool_calls: tuple[ToolCall, ...] = field(default_factory=tuple)
     model_display: Optional[str] = None  # e.g., "cerebras: llama-3.3-70b"
     trace_chain: Optional[str] = None  # e.g., "cerebras(429)->groq: llama-3.3-70b"
+
+    # Token usage from API (None if not available, e.g., provider doesn't report)
+    input_tokens: Optional[int] = None  # Actual prompt tokens from API
+    output_tokens: Optional[int] = None  # Actual completion tokens from API
 
     # Error fields (mutually exclusive with success)
     error: Optional[str] = None

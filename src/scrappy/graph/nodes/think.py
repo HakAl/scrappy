@@ -166,6 +166,8 @@ def _apply_think_result(
         state: Current agent state
         result: ThinkResult from delegator
         user_message_exists: Whether user message is already in state.messages
+        input_tokens: Estimated input tokens (fallback if API doesn't provide)
+        output_tokens: Estimated output tokens (fallback if API doesn't provide)
 
     Returns:
         Updated AgentState
@@ -203,6 +205,18 @@ def _apply_think_result(
         user_msg: Message = {"role": "user", "content": state.input}
         new_messages = [user_msg] + list(state.messages) + [new_message]
 
+    # Prefer actual token counts from API over estimates
+    # ThinkResult.input_tokens/output_tokens come from API when available
+    final_input_tokens = result.input_tokens if result.input_tokens is not None else input_tokens
+    final_output_tokens = result.output_tokens if result.output_tokens is not None else output_tokens
+
+    logger.debug(
+        "Token metrics: actual=(%s, %s), estimates=(%s, %s), final=(%s, %s)",
+        result.input_tokens, result.output_tokens,
+        input_tokens, output_tokens,
+        final_input_tokens, final_output_tokens,
+    )
+
     # Success - clear fallback mode and error state
     return state.model_copy(
         update={
@@ -213,10 +227,10 @@ def _apply_think_result(
             "last_error": None,
             "current_model": None,  # Clear fallback mode
             "last_model_display": result.model_display,
-            "last_input_tokens": input_tokens,
-            "last_output_tokens": output_tokens,
+            "last_input_tokens": final_input_tokens,
+            "last_output_tokens": final_output_tokens,
             "last_context_percent": _estimate_context_percent(
-                result.model_display, input_tokens
+                result.model_display, final_input_tokens
             ),
             "last_trace_chain": result.trace_chain,
         }

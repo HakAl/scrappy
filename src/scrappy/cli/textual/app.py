@@ -749,7 +749,7 @@ class ScrappyApp(App):
         if isinstance(screen, MainAppScreen):
             screen.update_tasks(message.tasks)
 
-    def on_metricsupdate(self, message: MetricsUpdate) -> None:
+    def on_metrics_update(self, message: MetricsUpdate) -> None:
         """Route metrics updates to active screen."""
         from ..screens import MainAppScreen
 

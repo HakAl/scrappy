@@ -96,6 +96,8 @@ class StreamChunk:
         model: Model identifier (may be empty until final chunk)
         provider: Provider name (may be empty until final chunk)
         metadata: Additional chunk-specific metadata
+        input_tokens: Actual input token count from API (final chunk only, None otherwise)
+        output_tokens: Actual output token count from API (final chunk only, None otherwise)
     """
     content: str = ""
     tool_call_fragments: List[ToolCallFragment] = field(default_factory=list)
@@ -103,6 +105,8 @@ class StreamChunk:
     model: str = ""
     provider: str = ""
     metadata: Dict[str, Any] = field(default_factory=dict)
+    input_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None
 
 
 @dataclass

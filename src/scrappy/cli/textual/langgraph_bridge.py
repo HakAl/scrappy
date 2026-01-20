@@ -217,6 +217,12 @@ class LangGraphBridge:
                 self._metrics_updated_this_run = True
 
         try:
+            logger.debug(
+                "Posting MetricsUpdate: provider=%s, in=%s, out=%s, total=%s, ctx=%s",
+                self._metrics_provider_display, self._metrics_input_tokens,
+                self._metrics_output_tokens, self._session_total_tokens,
+                self._metrics_context_percent
+            )
             self.app.post_message(MetricsUpdate(
                 provider_display=self._metrics_provider_display,
                 input_tokens=self._metrics_input_tokens,
@@ -224,8 +230,8 @@ class LangGraphBridge:
                 session_total=self._session_total_tokens,
                 context_percent=self._metrics_context_percent,
             ))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Failed to post MetricsUpdate: %s", e)
 
     def _confirm_callback(self, question: str) -> bool:
         """
@@ -791,14 +797,21 @@ class LangGraphBridge:
             if not self._metrics_updated_this_run:
                 input_tokens = final_state.last_input_tokens
                 output_tokens = final_state.last_output_tokens
-                if input_tokens is not None and output_tokens is not None:
-                    provider_display = final_state.last_trace_chain or final_state.last_model_display
-                    self._post_metrics_update(
-                        provider_display=provider_display,
-                        input_tokens=input_tokens,
-                        output_tokens=output_tokens,
-                        context_percent=final_state.last_context_percent,
-                    )
+                model_display = final_state.last_model_display
+                trace_chain = final_state.last_trace_chain
+                logger.debug(
+                    "Final state metrics: input=%s, output=%s, model=%s, trace=%s",
+                    input_tokens, output_tokens, model_display, trace_chain
+                )
+                # Always post final metrics - even if tokens are None,
+                # we want to show the provider name. The UI shows "--" for None values.
+                provider_display = trace_chain or model_display
+                self._post_metrics_update(
+                    provider_display=provider_display,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    context_percent=final_state.last_context_percent,
+                )
 
             # Check if agent actually completed successfully
             # done=False means it hit iteration limit without completing
@@ -932,6 +945,9 @@ class LangGraphBridge:
             # Stream through graph nodes
             # input_state is the initial state for first run, None for resume
             for event in graph.stream(input_state, config):  # type: ignore[arg-type]
+                # Log every event received
+                logger.debug("Stream event received: %s", list(event.keys()) if event else "empty")
+
                 # Check for cancellation after each node
                 if self._check_cancellation():
                     logger.info("Agent run cancelled by user (during stream)")
@@ -940,6 +956,7 @@ class LangGraphBridge:
                 # Extract state from event
                 # Event format: {node_name: state_dict}
                 for node_name, node_output in event.items():
+                    logger.debug("Processing node: %s, output_type: %s", node_name, type(node_output).__name__)
                     node_data: Optional[dict[str, Any]] = None
                     if isinstance(node_output, dict):
                         node_data = node_output
@@ -956,15 +973,24 @@ class LangGraphBridge:
                     if node_data is not None:
                         try:
                             current_state = state_class(**node_data)
-                        except Exception:
+                            logger.debug("State constructed from node_data: model=%s, in=%s, out=%s",
+                                getattr(current_state, 'last_model_display', 'MISSING'),
+                                getattr(current_state, 'last_input_tokens', 'MISSING'),
+                                getattr(current_state, 'last_output_tokens', 'MISSING'))
+                        except Exception as e:
+                            logger.debug("State construction failed: %s, trying get_state", e)
                             # Node output might be partial, get full state
                             if node_name == "think":
                                 try:
                                     snapshot = graph.get_state(config)  # type: ignore[arg-type]
                                     if snapshot.values:
                                         current_state = state_class(**snapshot.values)
-                                except Exception:
-                                    pass
+                                        logger.debug("State from get_state: model=%s, in=%s, out=%s",
+                                            getattr(current_state, 'last_model_display', 'MISSING'),
+                                            getattr(current_state, 'last_input_tokens', 'MISSING'),
+                                            getattr(current_state, 'last_output_tokens', 'MISSING'))
+                                except Exception as e2:
+                                    logger.debug("get_state also failed: %s", e2)
 
                         # Output tool executions when execute node completes
                         if node_name == "execute":
@@ -999,16 +1025,20 @@ class LangGraphBridge:
                     if node_name == "think" and current_state is not None:
                         input_tokens = getattr(current_state, "last_input_tokens", None)
                         output_tokens = getattr(current_state, "last_output_tokens", None)
-                        if input_tokens is not None and output_tokens is not None:
-                            trace_chain = getattr(current_state, "last_trace_chain", None)
-                            provider_display = trace_chain or getattr(
-                                current_state, "last_model_display", None
-                            )
-                            self._post_metrics_update(
-                                provider_display=provider_display,
-                                input_tokens=input_tokens,
-                                output_tokens=output_tokens,
-                                context_percent=getattr(current_state, "last_context_percent", None),
+                        model_display = getattr(current_state, "last_model_display", None)
+                        trace_chain = getattr(current_state, "last_trace_chain", None)
+                        logger.debug(
+                            "Think node metrics: input=%s, output=%s, model=%s, trace=%s",
+                            input_tokens, output_tokens, model_display, trace_chain
+                        )
+                        # Always post metrics after think node - even if tokens are None,
+                        # we want to show the provider name. The UI shows "--" for None values.
+                        provider_display = trace_chain or model_display
+                        self._post_metrics_update(
+                            provider_display=provider_display,
+                            input_tokens=input_tokens,
+                            output_tokens=output_tokens,
+                            context_percent=getattr(current_state, "last_context_percent", None),
                             )
 
                     logger.debug("Node %s completed", node_name)
