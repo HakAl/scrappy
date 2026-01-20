@@ -58,14 +58,16 @@ class TestMetricsStatusPilot:
             status_bar_found = False
             for _ in range(50):
                 try:
-                    app.query_one(ChatLayout)
-                    app.query_one("#status_bar")
+                    # Query from screen which is more direct
+                    screen = app.screen
+                    screen.query_one(ChatLayout)
+                    screen.query_one("#status_bar")
                     status_bar_found = True
                     break
                 except NoMatches:
                     await pilot.pause(delay=0.1)
 
-            assert status_bar_found is True
+            assert status_bar_found is True, f"Screen type: {type(app.screen).__name__}"
 
             await pilot.press("h", "i")
             await pilot.press("enter")
@@ -74,12 +76,18 @@ class TestMetricsStatusPilot:
             for _ in range(50):
                 await pilot.pause(delay=0.1)
                 try:
-                    label = app.query_one("#metrics_status", Label)
+                    label = app.screen.query_one("#metrics_status", Label)
                 except NoMatches:
                     continue
-                metrics_text = str(label.renderable)
-                if "mock:" in metrics_text and "--/--" not in metrics_text:
+                # Get label content - use render() and convert to plain text
+                from rich.console import Console
+                from io import StringIO
+                console = Console(file=StringIO(), force_terminal=False, width=200)
+                console.print(label.render())
+                metrics_text = console.file.getvalue().strip()
+                # New format uses "in:-- out:--" instead of "--/--"
+                if "mock:" in metrics_text and "in:--" not in metrics_text:
                     break
 
-            assert "mock:" in metrics_text
-            assert "--/--" not in metrics_text
+            assert "mock:" in metrics_text, f"Expected 'mock:' in metrics, got: {metrics_text}"
+            assert "in:--" not in metrics_text, f"Expected no 'in:--' placeholder, got: {metrics_text}"

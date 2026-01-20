@@ -377,4 +377,4 @@ Potential improvements:
 
 ## References
 
-- [CLAUDE.md](../CLAUDE.md) - Architectural guidelines
+- [CLAUDE.md](../../CLAUDE.md) - Architectural guidelines

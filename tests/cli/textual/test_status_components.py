@@ -11,7 +11,7 @@ class TestMetricsStatus:
     def test_empty_state_format(self):
         """Empty state uses placeholder values."""
         metrics = MetricsStatus()
-        assert metrics._format_metrics() == "provider: -- | --/-- | -- total | --%"
+        assert metrics._format_metrics() == "provider: -- | in:-- out:-- | session:-- | ctx:--%"
 
     def test_format_with_values(self):
         """Formats provider and token values with separators."""
@@ -23,7 +23,7 @@ class TestMetricsStatus:
             session_total=579,
             context_percent=42,
         )
-        assert metrics._format_metrics() == "gemini: gemma | 123/456 | 579 total | 42%"
+        assert metrics._format_metrics() == "gemini: gemma | in:123 out:456 | session:579 | ctx:42%"
 
     def test_format_with_empty_provider_string(self):
         """Formats empty provider string as placeholder."""
@@ -47,7 +47,7 @@ class TestMetricsStatus:
             session_total=300,
             context_percent=85,
         )
-        assert metrics._format_metrics().endswith("| [yellow]85%[/yellow]")
+        assert metrics._format_metrics().endswith("| ctx:[yellow]85%[/yellow]")
 
     def test_format_with_error_threshold(self):
         """Formats error threshold with red percent."""
@@ -59,4 +59,4 @@ class TestMetricsStatus:
             session_total=300,
             context_percent=95,
         )
-        assert metrics._format_metrics().endswith("| [red]95%[/red]")
+        assert metrics._format_metrics().endswith("| ctx:[red]95%[/red]")
