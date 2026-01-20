@@ -158,8 +158,8 @@ For the full architecture, see [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Requirements
 
-- Python 3.10+
-- Git (for checkpoints)
+- Python 3.11+
+- Git (for undo)
 - Windows, macOS, or Linux
 
 ---

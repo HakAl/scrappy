@@ -26,6 +26,7 @@ from scrappy.graph.nodes.think import (
     mask_old_tool_results,
     convert_tool_calls,
     FULL_CONTEXT_WINDOW,
+    _estimate_context_percent,
 )
 from scrappy.graph.nodes.mock_think_delegator import MockThinkDelegator
 from scrappy.infrastructure.exceptions import RecoveryAction
@@ -769,6 +770,127 @@ class TestThinkNode:
         # last_error is cleared (no current error)
         assert result.last_error is None
 
+    def test_sets_last_token_estimates_on_success(self):
+        """Think node should store input/output token estimates on success."""
+        state = create_test_state()
+        delegator = MockThinkDelegator(
+            default_response=ThinkResult(
+                content="Hello there.",
+                model_display="gemini: gemma",
+            )
+        )
+
+        result = think_node(state, delegator)
+
+        assert result.last_input_tokens is not None
+        assert result.last_input_tokens > 0
+        assert result.last_output_tokens is not None
+        assert result.last_output_tokens > 0
+
+    def test_sets_output_tokens_from_tool_calls(self):
+        """Think node should count tool calls in output tokens."""
+        state = create_test_state()
+        tool_call = {
+            "id": "call_1",
+            "type": "function",
+            "function": {
+                "name": "search",
+                "arguments": "{\"q\":\"hello\"}",
+            },
+        }
+        delegator = MockThinkDelegator(
+            default_response=ThinkResult(
+                content="",
+                tool_calls=(tool_call,),
+            )
+        )
+
+        result = think_node(state, delegator)
+
+        assert result.last_output_tokens is not None
+        assert result.last_output_tokens > 0
+
+    def test_clears_last_token_estimates_on_error(self):
+        """Think node should clear token estimates on error."""
+        state = create_test_state()
+        delegator = MockThinkDelegator(
+            default_response=ThinkResult(
+                error="Rate limit",
+                recovery_action=RecoveryAction.RETRY.value,
+            )
+        )
+
+        result = think_node(state, delegator)
+
+        assert result.last_input_tokens is None
+        assert result.last_output_tokens is None
+
+    def test_sets_context_percent_for_known_model(self):
+        """Think node should set context percent when model is known."""
+        state = create_test_state()
+        delegator = MockThinkDelegator(
+            default_response=ThinkResult(
+                content="Hello there.",
+                model_display="cerebras: llama-3.3-70b",
+            )
+        )
+
+        result = think_node(state, delegator)
+
+        assert result.last_context_percent is not None
+        assert result.last_context_percent >= 0
+
+    def test_leaves_context_percent_none_for_unknown_model(self):
+        """Think node should leave context percent unset for unknown models."""
+        state = create_test_state()
+        delegator = MockThinkDelegator(
+            default_response=ThinkResult(
+                content="Hello there.",
+                model_display="unknown: model",
+            )
+        )
+
+        result = think_node(state, delegator)
+
+        assert result.last_context_percent is None
+
+    def test_sets_trace_chain_when_provided(self):
+        """Think node should store trace chain when provided."""
+        state = create_test_state()
+        delegator = MockThinkDelegator(
+            default_response=ThinkResult(
+                content="Hello there.",
+                model_display="groq: llama-3.3-70b",
+                trace_chain="cerebras(429)->groq: llama-3.3-70b",
+            )
+        )
+
+        result = think_node(state, delegator)
+
+        assert result.last_trace_chain == "cerebras(429)->groq: llama-3.3-70b"
+
+
+# =============================================================================
+# Context Percent Estimation Tests
+# =============================================================================
+
+
+class TestContextPercentEstimation:
+    """Tests for context percent boundary conditions."""
+
+    def test_zero_input_tokens_returns_zero(self):
+        """Zero tokens should yield zero percent."""
+        assert _estimate_context_percent("cerebras: llama-3.3-70b", 0) == 0
+
+    def test_overfull_context_can_exceed_100(self):
+        """Overfull context should return percent above 100."""
+        percent = _estimate_context_percent("cerebras: llama-3.3-70b", 16384)
+        assert percent is not None
+        assert percent > 100
+
+    def test_percent_is_capped_at_999(self):
+        """Very large inputs should clamp to 999 percent."""
+        assert _estimate_context_percent("cerebras: llama-3.3-70b", 10_000_000) == 999
 
 # =============================================================================
 # Streaming Think Node Tests

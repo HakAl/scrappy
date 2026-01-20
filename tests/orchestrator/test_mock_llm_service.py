@@ -55,8 +55,11 @@ class TestMockLLMService:
         service = MockLLMService()
         assert service.configure() is True
 
-    def test_completion_sync_returns_response(self):
+    def test_completion_sync_returns_response(self, monkeypatch):
         """completion_sync returns mock response."""
+        # Clear env vars to ensure test isolation (pilot tests may set SCRAPPY_MOCK_TOKENS)
+        monkeypatch.delenv("SCRAPPY_MOCK_TOKENS", raising=False)
+
         service = MockLLMService(default_response="Test response")
         response, task_record = service.completion_sync(
             model="fast",

@@ -40,6 +40,28 @@ from .protocols import (
     LLMServiceProtocol,
     ProviderStatusTrackerProtocol,
 )
+from .provider_types import ProviderAttempt
+
+
+def _format_trace_chain(attempts_list: list[ProviderAttempt]) -> Optional[str]:
+    """Format provider attempts into a human-friendly fallback chain."""
+    if len(attempts_list) <= 1:
+        return None
+
+    parts: list[str] = []
+    for entry in attempts_list:
+        if entry.success:
+            model_name = entry.model
+            if "/" in model_name:
+                model_name = model_name.split("/", 1)[1]
+            parts.append(f"{entry.provider}: {model_name}")
+        else:
+            if entry.error:
+                parts.append(f"{entry.provider}({entry.error})")
+            else:
+                parts.append(entry.provider)
+
+    return "->".join(parts)
 
 
 class AgentOrchestrator:
@@ -659,11 +681,20 @@ class AgentOrchestrator:
         max_attempts = 3
         attempt = 0
         last_error = None
+        attempts: list[ProviderAttempt] = []
+
+        def get_provider_name(model_name: Optional[str]) -> str:
+            if not model_name:
+                return ""
+            if "/" in model_name:
+                return model_name.split("/", 1)[0]
+            return model_name
 
         while attempt < max_attempts:
             attempt += 1
             try:
                 # Stream from the selected model
+                provider = get_provider_name(model)
                 for chunk in self.llm_service.stream_completion_direct(
                     model=model,
                     messages=messages,
@@ -672,10 +703,31 @@ class AgentOrchestrator:
                     yield chunk
 
                 # If we get here, stream completed successfully
+                attempts.append(ProviderAttempt(
+                    provider=provider,
+                    model=model,
+                    success=True,
+                ))
+
+                trace_chain = _format_trace_chain(attempts)
+                if trace_chain:
+                    yield StreamChunk(
+                        content="",
+                        model=model,
+                        provider=provider,
+                        metadata={"trace_chain": trace_chain},
+                    )
                 return
 
             except (RateLimitError, AllProvidersRateLimitedError) as e:
                 last_error = e
+                provider = get_provider_name(model)
+                attempts.append(ProviderAttempt(
+                    provider=provider,
+                    model=model,
+                    success=False,
+                    error="429",
+                ))
 
                 # Mark current model as rate limited
                 if self.model_selector is not None:

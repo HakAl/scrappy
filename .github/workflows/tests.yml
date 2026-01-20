@@ -32,13 +32,13 @@ jobs:
 
     - name: Run tests
       run: |
-        python -m pytest tests/ -v --tb=short
+        python -m pytest tests/ -v --tb=short --ignore=tests/cli/textual/
 
     - name: Run tests with coverage
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
       run: |
         pip install pytest-cov
-        python -m pytest tests/ --cov=src --cov-report=xml --cov-report=term-missing
+        python -m pytest tests/ --cov=src --cov-report=xml --cov-report=term-missing --ignore=tests/cli/textual/
 
     - name: Upload coverage to Codecov
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'

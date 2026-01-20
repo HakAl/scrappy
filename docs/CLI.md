@@ -11,43 +11,47 @@
 
 
 ```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Configure API keys
-export CEREBRAS_API_KEY=your_key
-export GROQ_API_KEY=your_key
-
-# Start interactive mode
-python main.py
-
-# Start with auto-exploration (recommended for new projects)
-python main.py --auto-explore
-
 # One-time setup (from project directory)
 cd scrappy
 pip install -e .
 
 # Now use from anywhere!
 cd ~/any-project
-scrappy  # Learns about current directory
+scrappy  # Interactive mode with TUI
 ```
 
 ## Global Options
 
 ```bash
-python main.py [OPTIONS] [COMMAND]
+scrappy [OPTIONS]
 ```
 
 | Option | Short | Description |
 |--------|-------|-------------|
-| `--no-context` | | Disable context-aware prompts |
 | `--resume` | `-r` | Resume from last saved session |
+| `--no-save` | | Disable auto-save on exit |
+| `--help` | | Show help |
+| `--version` | | Show version |
 
 **Example:**
 ```bash
-# Disable context awareness
-python main.py --no-context
+# Resume previous session
+scrappy --resume
+
+# Disable session auto-save
+scrappy --no-save
+```
+
+## One-Shot Commands
+
+Run a single command and exit:
+
+```bash
+scrappy version              # Show scrappy version
+scrappy undo [n]             # Undo the last N agent runs
+scrappy undo --force         # Bypass worktree path check
+scrappy undo-list            # List all available undo points
+scrappy undo-gc --keep N     # Clean up old undo points, keep N most recent
 ```
 
 ## Interactive Mode Commands
@@ -58,34 +62,51 @@ When in interactive mode, use slash commands:
 
 | Command | Description |
 |---------|-------------|
-| `(text)` | Send message to current brain |
+| `(text)` | Send message to agent (LangGraph routes to tools as needed) |
+| `/ml` | Toggle multiline input mode |
 | `/clear` | Clear conversation history |
+| `/history [n]` | Show last n messages (default: 10) |
 
 ### Task Operations
 
 | Command | Description |
 |---------|-------------|
-| `/plan <task>` | Create a task plan |
+| `/plan <task>` | Break down a task into actionable steps |
+| `/tasks` | View current plan progress |
 | `/agent <task>` | Run code agent with human approval |
+| `/reason <question>` | Analyze with step-by-step reasoning |
+| `/smart <query>` | Research-first query (prioritizes research) |
 | `/explore [path]` | Explore a codebase |
+
+**Agent Options:**
+- `--dry-run` - Simulate actions without making changes
+- `--verbose, -v` - Show full output (thinking, params, results)
+- `--clear` - Clear previous task list before starting
 
 ### Provider Management
 
 | Command | Description |
 |---------|-------------|
-| `/models [filter]` | List available models (filter: fast, quality, or provider name) |
-| `/model [mode]` | Show or switch mode (fast/quality) |
+| `/setup` | Configure API keys via interactive wizard |
+| `/models [filter]` | List available models (filter: fast, chat, instruct, or provider name) |
+| `/model [mode]` | Show or switch mode (fast/chat/instruct) |
 | `/status` | Show system status and configured providers |
 | `/usage` | Show usage statistics |
-| `/limits [provider]` | Show rate limit usage (or filter by provider) |
-| `/limits reset` | Reset rate limit tracking |
+| `/limits` | Show rate limit usage |
+
+### Model Tiers
+
+| Tier | Description |
+|------|-------------|
+| `fast` | 8B models, high throughput |
+| `chat` | 70B models, conversation |
+| `instruct` | Instruction-tuned models for agent/tools |
 
 ### Context Management
 
 | Command | Description |
 |---------|-------------|
 | `/context` | Show context status and summary |
-| `/context explore` | Explore current project (uses cache) |
 | `/context refresh` | Force re-exploration |
 | `/context clear` | Clear cached context |
 | `/context toggle` | Enable/disable context awareness |
@@ -98,6 +119,15 @@ When in interactive mode, use slash commands:
 | `/cache clear` | Clear all cached responses |
 | `/cache toggle` | Enable/disable response caching |
 
+### Session Management
+
+| Command | Description |
+|---------|-------------|
+| `/session` | Show session info |
+| `/session save` | Save current session |
+| `/session load` | Load previous session |
+| `/session clear` | Delete saved session |
+
 ### System Commands
 
 | Command | Description |
@@ -105,6 +135,7 @@ When in interactive mode, use slash commands:
 | `/help` | Show all commands |
 | `/quit`, `/exit`, `/q` | Exit CLI (auto-saves session by default) |
 | `/verbose`, `/v` | Toggle verbose output mode |
+| `/autoexec` | Toggle automatic task execution in plans |
 
 
 ## Context Awareness System
@@ -132,18 +163,15 @@ Contains:
 
 ```bash
 # Manual exploration in interactive mode
-You: /context explore
+You: /context refresh
 
-# One-shot with context
-python main.py query "Fix bug" --with-context
+# Check context status
+You: /context
 ```
 
 ### Disabling Context
 
 ```bash
-# Disable for entire session
-python main.py --no-context
-
 # Toggle in interactive mode
 You: /context toggle
 ```
@@ -159,9 +187,8 @@ You: How should I implement the provider fallback?
 ```
 [Codebase Context]
 Project Context:
-Multi-provider LLM orchestrator with Cerebras (14,400 RPD), Groq (7,000 RPD),
-and Gemini (auto-fallback). Uses swappable brain architecture for planning
-and reasoning tasks.
+Multi-provider LLM orchestrator with Cerebras, Groq, Gemini, and SambaNova.
+Uses swappable brain architecture for planning and reasoning tasks.
 
 Structure:
 Project: scrappy
@@ -224,37 +251,16 @@ Response caching disabled.
 - **Automatic expiration**: Old entries cleaned up automatically
 - **Per-request control**: Override caching for specific calls
 
-### Programmatic Control
-
-```python
-# Disable caching for non-deterministic tasks
-result = orch.delegate('groq', 'Generate random story', use_cache=False)
-
-# Check cache stats
-stats = orch.get_cache_stats()
-print(f"Hit rate: {stats['hit_rate']}")
-
-# Clear cache
-orch.clear_cache()
-
-# Toggle caching
-orch.toggle_cache()
-```
-
 ## Provider Information
 
 ### Available Providers
 
-| Provider | Daily Quota | Best For |
-|----------|------------|----------|
-| **Cerebras** | 14,400 RPD | Fast tier, highest quota |
-| **Groq** | 7,000 RPD | Fast and quality tiers |
-| **Gemini** | varies | Quality tier, large context |
-| **SambaNova** | varies | Fast tier alternative |
-
-### Model Groups
-
-Models are organized into two tiers with automatic fallback:
+| Provider | Best For |
+|----------|----------|
+| **Cerebras** | Fast tier, high throughput |
+| **Groq** | Fast and chat tiers |
+| **Gemini** | Chat and instruct tiers, large context |
+| **SambaNova** | Fast tier alternative |
 
 ### Code Agent Workflow
 
@@ -267,12 +273,11 @@ The agent uses a graph-based architecture with distinct phases:
 - **Error**: Handles failures with automatic retry
 
 **Safety features:**
-- Undo points before each run (rollback with `/undo`)
+- Undo points before each run (rollback with `scrappy undo`)
 - Human approval for file writes and commands
-- Docker sandbox for command execution (when available)
 - Automatic linting verification after changes
 
-**Models:** Requires tool-capable models (Gemini, Qwen, Kimi K2). Llama models cannot call tools.
+**Models:** Requires tool-capable models (Gemini, Qwen). Llama models cannot call tools.
 
 **Usage:**
 ```
@@ -290,19 +295,19 @@ The agent will show its thinking, request approval before making changes, and ve
 ```
 No models configured.
 ```
-→ Check API key configuration in `.env` and run `/setup`
+- Check API key configuration in `.env` and run `/setup`
 
 **Context Not Explored:**
 ```
 Context: Not explored (use /context to explore)
 ```
-→ Run `/context explore` or start with `--auto-explore`
+- Run `/context refresh` to explore the codebase
 
 **Rate Limit Hit:**
 ```
 Error: Rate limit exceeded
 ```
-→ Switch to fast mode with `/model fast` or wait for quota reset
+- Switch to fast mode with `/model fast` or wait for quota reset
 
 ### Debug Mode
 

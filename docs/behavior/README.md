@@ -89,5 +89,5 @@ From `CLAUDE.md`:
 
 - [Main README](../../README.md)
 - [Architecture Overview](../ARCHITECTURE.md)
-- [Configuration Guide](../CONFIGURATION.md)
+- [Configuration Guide](CONFIGURATION.md)
 - [Quick Start](../QUICKSTART.md)

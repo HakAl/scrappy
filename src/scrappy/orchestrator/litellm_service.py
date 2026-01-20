@@ -1069,11 +1069,13 @@ class LiteLLMService:
 
         try:
             # Call LiteLLM directly (not via Router)
+            # Enable stream_options to get usage data in final chunk
             stream = litellm.completion(
                 model=model,
                 messages=messages,
                 api_key=api_key,
                 stream=True,
+                stream_options={"include_usage": True},
                 **kwargs
             )
 
@@ -1165,10 +1167,12 @@ class LiteLLMService:
 
         try:
             # Call LiteLLM Router's sync streaming method
+            # Enable stream_options to get usage data in final chunk
             stream = self._router.completion(
                 model=model,
                 messages=messages,
                 stream=True,
+                stream_options={"include_usage": True},
                 num_retries=0,  # Don't retry - let Orchestrator handle model fallback
                 **kwargs
             )
@@ -1292,10 +1296,12 @@ class LiteLLMService:
 
         try:
             # Call LiteLLM Router's async streaming method
+            # Enable stream_options to get usage data in final chunk
             stream = await self._router.acompletion(
                 model=model,
                 messages=messages,
                 stream=True,
+                stream_options={"include_usage": True},
                 num_retries=0,  # Don't retry - let Orchestrator handle model fallback
                 **kwargs
             )
@@ -1419,10 +1425,31 @@ class LiteLLMService:
         model_str = getattr(chunk, 'model', "") or ""
         provider = model_str.split("/")[0] if "/" in model_str else ""
 
+        # Debug: Log raw chunk attributes to understand structure
+        chunk_attrs = {k: v for k, v in vars(chunk).items() if not k.startswith('_')} if hasattr(chunk, '__dict__') else str(chunk)
+        logger.debug("Raw chunk: %s", chunk_attrs)
+        logger.debug(
+            "Chunk conversion: model=%r, provider=%r, has_usage=%s, finish=%s",
+            model_str, provider, hasattr(chunk, 'usage') and chunk.usage is not None, finish_reason
+        )
+
         # Extract tool call fragments using helper method
         tool_call_fragments = []
         if choice and hasattr(choice, 'delta') and choice.delta:
             tool_call_fragments = self._extract_tool_fragments(choice.delta)
+
+        # Extract usage data from final chunk (when stream_options.include_usage=true)
+        # This is typically only present in the final chunk with finish_reason
+        input_tokens: Optional[int] = None
+        output_tokens: Optional[int] = None
+        usage = getattr(chunk, 'usage', None)
+        if usage:
+            input_tokens = getattr(usage, 'prompt_tokens', None)
+            output_tokens = getattr(usage, 'completion_tokens', None)
+            logger.debug(
+                "Chunk has usage data: input=%s, output=%s",
+                input_tokens, output_tokens
+            )
 
         return StreamChunk(
             content=content,
@@ -1430,7 +1457,9 @@ class LiteLLMService:
             finish_reason=finish_reason,
             model=model_str,
             provider=provider,
-            metadata={}
+            metadata={},
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
         )
 
     def _convert_response(

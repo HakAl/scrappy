@@ -92,6 +92,10 @@ class AgentState(BaseModel):
         checkpoint: Optional checkpoint identifier for resumption
         pending_confirmation: Data for human-in-the-loop confirmation
         tool_results: Recent tool execution results (separate from messages)
+        last_input_tokens: Estimated input tokens for last LLM call
+        last_output_tokens: Estimated output tokens for last LLM call
+        last_context_percent: Estimated context utilization percentage
+        last_trace_chain: Fallback trace chain display string
     """
 
     # Core - what we're working on
@@ -144,6 +148,22 @@ class AgentState(BaseModel):
     last_model_display: Optional[str] = Field(
         default=None,
         description="Last model used for display (e.g., 'cerebras: llama-3.3-70b')"
+    )
+    last_input_tokens: Optional[int] = Field(
+        default=None,
+        description="Estimated input tokens for last LLM call"
+    )
+    last_output_tokens: Optional[int] = Field(
+        default=None,
+        description="Estimated output tokens for last LLM call"
+    )
+    last_context_percent: Optional[int] = Field(
+        default=None,
+        description="Estimated context utilization percentage"
+    )
+    last_trace_chain: Optional[str] = Field(
+        default=None,
+        description="Fallback trace chain display string"
     )
 
     # File tracking

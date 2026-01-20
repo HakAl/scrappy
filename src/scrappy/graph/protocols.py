@@ -33,13 +33,24 @@ class ThinkResult:
 
     Examples:
         # Successful text response (agent is done)
-        ThinkResult(content="The answer is 42.", model_display="cerebras: llama-3.3-70b")
+        ThinkResult(
+            content="The answer is 42.",
+            model_display="cerebras: llama-3.3-70b",
+            input_tokens=100,
+            output_tokens=10,
+        )
 
         # Successful tool call response (agent continues)
         ThinkResult(
             content="I'll search for that.",
             tool_calls=[ToolCall(...)],
             model_display="groq: llama-3.1-70b",
+        )
+
+        ThinkResult(
+            content="Done.",
+            model_display="groq: llama-3.3-70b",
+            trace_chain="cerebras(429)->groq: llama-3.3-70b",
         )
 
         # Retriable error
@@ -62,6 +73,11 @@ class ThinkResult:
     content: str = ""
     tool_calls: tuple[ToolCall, ...] = field(default_factory=tuple)
     model_display: Optional[str] = None  # e.g., "cerebras: llama-3.3-70b"
+    trace_chain: Optional[str] = None  # e.g., "cerebras(429)->groq: llama-3.3-70b"
+
+    # Token usage from API (None if not available, e.g., provider doesn't report)
+    input_tokens: Optional[int] = None  # Actual prompt tokens from API
+    output_tokens: Optional[int] = None  # Actual completion tokens from API
 
     # Error fields (mutually exclusive with success)
     error: Optional[str] = None

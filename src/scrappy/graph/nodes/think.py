@@ -27,6 +27,7 @@ from scrappy.graph.run_context import AgentRunContextProtocol
 from scrappy.graph.state import AgentState, Message, ToolCall
 from scrappy.graph.tools import ToolAdapterProtocol
 from scrappy.infrastructure.logging import get_logger
+from scrappy.orchestrator.litellm_config import MODEL_METADATA
 from scrappy.orchestrator.types import ToolCallFragment
 from scrappy.prompts.factory import PromptFactory
 from scrappy.prompts.protocols import AgentPromptConfig
@@ -152,6 +153,8 @@ def _apply_think_result(
     state: AgentState,
     result: ThinkResult,
     user_message_exists: bool,
+    input_tokens: int,
+    output_tokens: Optional[int],
 ) -> AgentState:
     """
     Apply ThinkResult to state, returning updated AgentState.
@@ -163,6 +166,8 @@ def _apply_think_result(
         state: Current agent state
         result: ThinkResult from delegator
         user_message_exists: Whether user message is already in state.messages
+        input_tokens: Estimated input tokens (fallback if API doesn't provide)
+        output_tokens: Estimated output tokens (fallback if API doesn't provide)
 
     Returns:
         Updated AgentState
@@ -177,6 +182,10 @@ def _apply_think_result(
                 "recovery_action": result.recovery_action,
                 "error_category": result.error_category,
                 "done": result.is_fatal,
+                "last_input_tokens": None,
+                "last_output_tokens": None,
+                "last_context_percent": None,
+                "last_trace_chain": None,
             }
         )
 
@@ -196,6 +205,18 @@ def _apply_think_result(
         user_msg: Message = {"role": "user", "content": state.input}
         new_messages = [user_msg] + list(state.messages) + [new_message]
 
+    # Prefer actual token counts from API over estimates
+    # ThinkResult.input_tokens/output_tokens come from API when available
+    final_input_tokens = result.input_tokens if result.input_tokens is not None else input_tokens
+    final_output_tokens = result.output_tokens if result.output_tokens is not None else output_tokens
+
+    logger.debug(
+        "Token metrics: actual=(%s, %s), estimates=(%s, %s), final=(%s, %s)",
+        result.input_tokens, result.output_tokens,
+        input_tokens, output_tokens,
+        final_input_tokens, final_output_tokens,
+    )
+
     # Success - clear fallback mode and error state
     return state.model_copy(
         update={
@@ -206,6 +227,12 @@ def _apply_think_result(
             "last_error": None,
             "current_model": None,  # Clear fallback mode
             "last_model_display": result.model_display,
+            "last_input_tokens": final_input_tokens,
+            "last_output_tokens": final_output_tokens,
+            "last_context_percent": _estimate_context_percent(
+                result.model_display, final_input_tokens
+            ),
+            "last_trace_chain": result.trace_chain,
         }
     )
 
@@ -214,7 +241,7 @@ def _build_messages_for_llm(
     state: AgentState,
     system_prompt: str,
     max_tokens: int = DEFAULT_MAX_TOKENS,
-) -> tuple[list[dict], bool]:
+) -> tuple[list[dict], bool, int]:
     """
     Build messages list for LLM call.
 
@@ -224,7 +251,7 @@ def _build_messages_for_llm(
         max_tokens: Max context tokens for sanitization
 
     Returns:
-        Tuple of (messages list, user_message_exists flag)
+        Tuple of (messages list, user_message_exists flag, input token estimate)
     """
     messages: list[dict] = [{"role": "system", "content": system_prompt}]
 
@@ -245,7 +272,19 @@ def _build_messages_for_llm(
     # Sanitize context if too long
     messages = sanitize_context(messages, max_tokens)
 
-    return messages, user_message_exists
+    input_tokens = _estimate_input_tokens(messages)
+    return messages, user_message_exists, input_tokens
+
+
+def _estimate_input_tokens(messages: list[dict]) -> int:
+    """Estimate input tokens for a list of messages."""
+    tokens = 0
+    for message in messages:
+        tokens += _token_estimator.MESSAGE_OVERHEAD
+        content = message.get("content") or ""
+        if content:
+            tokens += _token_estimator.estimate_text(content)
+    return tokens
 
 
 def think_node(
@@ -292,7 +331,9 @@ def think_node(
 
     # Build system prompt and messages
     system_prompt = build_system_prompt(state, tool_names, working_memory, context_factory, run_context)
-    messages, user_message_exists = _build_messages_for_llm(state, system_prompt, max_tokens)
+    messages, user_message_exists, input_tokens = _build_messages_for_llm(
+        state, system_prompt, max_tokens
+    )
 
     # Call delegator - handles model selection, streaming, errors, fallback
     result = delegator.complete(
@@ -302,7 +343,8 @@ def think_node(
         current_tier=state.current_tier,
     )
 
-    return _apply_think_result(state, result, user_message_exists)
+    output_tokens = _estimate_output_tokens(result)
+    return _apply_think_result(state, result, user_message_exists, input_tokens, output_tokens)
 
 
 async def think_node_streaming(
@@ -345,7 +387,9 @@ async def think_node_streaming(
 
     # Build system prompt and messages
     system_prompt = build_system_prompt(state, tool_names, working_memory, context_factory, run_context)
-    messages, user_message_exists = _build_messages_for_llm(state, system_prompt, max_tokens)
+    messages, user_message_exists, input_tokens = _build_messages_for_llm(
+        state, system_prompt, max_tokens
+    )
 
     # Call delegator with streaming - handles model selection, errors, fallback
     result = await delegator.complete_streaming(
@@ -356,4 +400,65 @@ async def think_node_streaming(
         on_chunk=stream_callback,
     )
 
-    return _apply_think_result(state, result, user_message_exists)
+    output_tokens = _estimate_output_tokens(result)
+    return _apply_think_result(state, result, user_message_exists, input_tokens, output_tokens)
+
+
+def _estimate_output_tokens(result: ThinkResult) -> Optional[int]:
+    """Estimate output tokens from a ThinkResult."""
+    if not result.is_success:
+        return None
+    content = result.content or ""
+    tokens = _token_estimator.estimate_text(content)
+    tool_calls = result.tool_calls or ()
+    if tool_calls:
+        for call in tool_calls:
+            func = call.get("function", {})
+            name = func.get("name", "")
+            arguments = func.get("arguments", "")
+            if not isinstance(arguments, str):
+                arguments = str(arguments)
+            tokens += _token_estimator.estimate_text(name)
+            tokens += _token_estimator.estimate_text(arguments)
+            tokens += _token_estimator.TOOL_CALL_OVERHEAD
+    return tokens
+
+
+def _estimate_context_percent(
+    model_display: Optional[str],
+    input_tokens: int,
+) -> Optional[int]:
+    """Estimate context utilization percent for the current model."""
+    context_length = _get_context_length(model_display)
+    if context_length is None or context_length <= 0:
+        return None
+    if input_tokens <= 0:
+        return 0
+    percent = int(round((input_tokens / context_length) * 100))
+    return max(0, min(percent, 999))
+
+
+def _get_context_length(model_display: Optional[str]) -> Optional[int]:
+    """Get context length from model display string."""
+    if not model_display:
+        return None
+
+    provider, model_name = _split_model_display(model_display)
+    if not provider or not model_name:
+        return None
+
+    model_id = f"{provider}/{model_name}"
+    metadata = MODEL_METADATA.get(model_id)
+    if metadata:
+        return metadata.context_length
+    return None
+
+
+def _split_model_display(model_display: str) -> tuple[Optional[str], Optional[str]]:
+    """Split a model display string into provider and model name."""
+    if ":" not in model_display:
+        return None, None
+    provider, model_name = model_display.split(":", 1)
+    provider = provider.strip().lower()
+    model_name = model_name.strip()
+    return provider, model_name

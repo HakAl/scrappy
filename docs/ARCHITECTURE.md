@@ -294,7 +294,7 @@ Cross-cutting concerns and abstractions:
 - Protocol-based configuration framework
 - Environment-specific config (dev/test/prod)
 - Validation with clear error messages
-- See [CONFIGURATION.md](CONFIGURATION.md)
+- See [CONFIGURATION.md](behavior/CONFIGURATION.md)
 
 **Persistence (`persistence/`):**
 - `protocols.py` - Storage abstraction protocol

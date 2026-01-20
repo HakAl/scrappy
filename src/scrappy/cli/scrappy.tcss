@@ -181,6 +181,15 @@ TextArea > .text-area--cursor {
     color: $text-muted;
 }
 
+/* Metrics status styling */
+#metrics_status {
+    width: 100%;
+    height: auto;
+    padding: 0 1;
+    content-align: left middle;
+    color: $text-muted;
+}
+
 /* Semantic status styling - horizontal layout with left/right labels */
 #semantic_status {
     width: 100%;

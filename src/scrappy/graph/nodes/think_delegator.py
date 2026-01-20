@@ -194,6 +194,10 @@ class LiteLLMThinkDelegator:
         all_fragments: list[ToolCallFragment] = []
         response_model = ""
         response_provider = ""
+        trace_chain: Optional[str] = None
+        # Token counts from API (typically in final chunk with usage data)
+        input_tokens: Optional[int] = None
+        output_tokens: Optional[int] = None
 
         # Pass cancellation token to orchestrator via kwargs
         if cancellation_token is not None:
@@ -216,11 +220,23 @@ class LiteLLMThinkDelegator:
                     response_model = chunk.model
                 if chunk.provider:
                     response_provider = chunk.provider
+                if chunk.metadata and chunk.metadata.get("trace_chain"):
+                    trace_chain = str(chunk.metadata["trace_chain"])
+                # Capture token usage from final chunk (when stream_options.include_usage=true)
+                if chunk.input_tokens is not None:
+                    input_tokens = chunk.input_tokens
+                if chunk.output_tokens is not None:
+                    output_tokens = chunk.output_tokens
 
         # Assemble result
         content = "".join(content_parts)
         tool_calls = self._process_tool_calls(all_fragments)
         model_display = self._format_model_display(response_provider, response_model)
+
+        logger.debug(
+            "Delegator result: model=%r, provider=%r, display=%r, in_tok=%s, out_tok=%s",
+            response_model, response_provider, model_display, input_tokens, output_tokens
+        )
 
         # Record success for affinity
         if run_context and response_provider:
@@ -230,6 +246,9 @@ class LiteLLMThinkDelegator:
             content=content,
             tool_calls=tuple(tool_calls),
             model_display=model_display,
+            trace_chain=trace_chain,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
         )
 
     def _process_tool_calls(self, fragments: list[ToolCallFragment]) -> list[ToolCall]:
