@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- towncrier release notes start -->
 
+## [1.2.0] - 2026-01-20
+
+### Features
+
+- **Pluggable embedding models**: Embedding model is now configurable via `EmbeddingModelProtocol`. Supports swapping between different embedding providers without code changes.
+- **Real-time token metrics**: Status bar now displays live token usage (input/output tokens, session total, context utilization percentage) during agent runs.
+- **AGENTS.md project rules**: Agent now loads project-specific rules from `AGENTS.md` file, allowing per-project customization of agent behavior.
+- **System reminders**: Added reminder injection to prevent context drift during long conversations. Reminders are automatically inserted based on conversation state.
+- **Improved RAG context**: RAG results now include language hints and pattern notes for better code understanding.
+
+### Bug Fixes
+
+- Fixed token metrics not updating in TUI status bar after LLM responses
+- Fixed test isolation issue where mock token env vars bled between test files
+
+### Miscellaneous
+
+- Excluded flaky TUI pilot tests from CI (still run locally)
+- Updated CLI documentation to reflect current commands and architecture
+
 ## [1.1.0] - 2026-01-17
 
 ### Features
