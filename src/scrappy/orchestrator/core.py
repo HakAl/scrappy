@@ -12,6 +12,8 @@ from ..infrastructure.exceptions import (
     ProviderNotFoundError,
     RateLimitError,
     AllProvidersRateLimitedError,
+    AuthenticationError,
+    ProviderExecutionError,
 )
 
 from .output import BaseOutputProtocol
@@ -62,6 +64,26 @@ def _format_trace_chain(attempts_list: list[ProviderAttempt]) -> Optional[str]:
                 parts.append(entry.provider)
 
     return "->".join(parts)
+
+
+def _is_model_unavailable_error(error: Exception) -> bool:
+    """Return True when a failure should trigger model fallback."""
+    if isinstance(error, AuthenticationError):
+        return True
+
+    if isinstance(error, ProviderExecutionError):
+        message = str(error).lower()
+        return (
+            "not available from" in message
+            or ("model" in message and (
+                "not found" in message
+                or "not available" in message
+                or "unknown" in message
+                or "invalid" in message
+            ))
+        )
+
+    return False
 
 
 class AgentOrchestrator:
@@ -181,6 +203,25 @@ class AgentOrchestrator:
             self.llm_service = llm_service or components.llm_service
             self.provider_status_tracker = provider_status_tracker or components.provider_status_tracker
             self.model_selector = model_selector or components.model_selector
+
+    def _select_fallback_model(
+        self,
+        selection_type: ModelSelectionType,
+        failed_model: Optional[str],
+    ) -> Optional[str]:
+        """Mark the current model unavailable and select the next candidate."""
+        if failed_model is None or self.model_selector is None:
+            return None
+
+        self.model_selector.mark_rate_limited(failed_model)
+        self._preferred_models.pop(selection_type, None)
+
+        next_model = self.model_selector.select(
+            selection_type,
+            session_preferred=None,
+        )
+        self._preferred_models[selection_type] = next_model
+        return next_model
 
     def initialize(
         self,
@@ -600,19 +641,10 @@ class AgentOrchestrator:
 
             except RateLimitError as e:
                 last_error = e
-                # Mark current model as rate limited
-                if model and self.model_selector is not None:
-                    self.model_selector.mark_rate_limited(model)
-
                 # Try to select a different model
-                if self.model_selector is not None and auto_fallback:
+                if auto_fallback:
                     try:
-                        # Clear session preference to allow different model
-                        self._preferred_models.pop(selection_type, None)
-
-                        # Try to get a new model (will skip rate-limited ones)
-                        model = self.model_selector.select(selection_type, session_preferred=None)
-                        self._preferred_models[selection_type] = model
+                        model = self._select_fallback_model(selection_type, model)
                         continue  # Retry with new model
 
                     except AllModelsRateLimitedError:
@@ -624,6 +656,21 @@ class AgentOrchestrator:
                 else:
                     # No fallback available
                     raise
+
+            except (AuthenticationError, ProviderExecutionError) as e:
+                if not auto_fallback or not _is_model_unavailable_error(e):
+                    raise
+
+                last_error = e
+
+                try:
+                    model = self._select_fallback_model(selection_type, model)
+                    if model is not None:
+                        continue
+                except AllModelsRateLimitedError:
+                    pass
+
+                raise
 
         # Should not reach here, but handle edge case
         if last_error:
@@ -730,21 +777,10 @@ class AgentOrchestrator:
                 ))
 
                 # Mark current model as rate limited
-                if self.model_selector is not None:
-                    self.model_selector.mark_rate_limited(model)
-
                 # Try to select a different model
                 if self.model_selector is not None:
                     try:
-                        # Clear session preference to allow different model
-                        self._preferred_models.pop(selection_type, None)
-
-                        # Select new model (will skip rate-limited ones)
-                        model = self.model_selector.select(
-                            selection_type,
-                            session_preferred=None
-                        )
-                        self._preferred_models[selection_type] = model
+                        model = self._select_fallback_model(selection_type, model)
                         continue  # Retry with new model
 
                     except AllModelsRateLimitedError:
@@ -755,6 +791,28 @@ class AgentOrchestrator:
                 else:
                     # No model_selector - can't fallback
                     raise
+
+            except (AuthenticationError, ProviderExecutionError) as e:
+                if not _is_model_unavailable_error(e):
+                    raise
+
+                last_error = e
+                provider = get_provider_name(model)
+                attempts.append(ProviderAttempt(
+                    provider=provider,
+                    model=model,
+                    success=False,
+                    error="unavailable",
+                ))
+
+                if self.model_selector is None:
+                    raise
+
+                try:
+                    model = self._select_fallback_model(selection_type, model)
+                    continue
+                except AllModelsRateLimitedError:
+                    raise e
 
         # Max attempts exhausted
         if last_error:

@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from enum import Enum, auto
 from typing import Optional, Tuple, Callable, TYPE_CHECKING
 
-from scrappy.orchestrator.provider_definitions import PROVIDERS
+from scrappy.orchestrator.provider_definitions import PROVIDERS, SETUP_PROVIDER_GUIDANCE
 from scrappy.infrastructure.config.api_keys import (
     ApiKeyConfigServiceProtocol,
     ApiKeyValidationError,
@@ -20,8 +20,8 @@ if TYPE_CHECKING:
 # Map provider names to LiteLLM model IDs for validation
 PROVIDER_TO_MODEL = {
     "groq": "groq/llama-3.1-8b-instant",
-    "cerebras": "cerebras/llama-3.3-70b",
-    "gemini": "gemini/gemini-2.0-flash-lite",
+    "cerebras": "cerebras/gpt-oss-120b",
+    "gemini": "gemini/gemini-2.5-flash",
     "sambanova": "sambanova/Meta-Llama-3.1-8B-Instruct",
     "openrouter": "openrouter/meta-llama/llama-3.1-8b-instruct:free",
     "github_models": "azure/gpt-4o-mini",  # GitHub models uses Azure
@@ -446,13 +446,21 @@ Current key: [dim]{masked}[/dim]
             table.add_row(
                 status,
                 f"{i}.",
-                f"[bold]{name.replace('_', ' ').title()}[/] ({info.quota})\n[dim]{info.console_url}[/]"
+                f"[bold]{name.replace('_', ' ').title()}[/] ({info.quota})\n"
+                f"[dim]{info.description}[/]\n"
+                f"[dim]{info.console_url}[/]"
             )
 
         table.add_row("", "", "")
         table.add_row("", "", "[bold]q - Done / Exit Setup[/]")
 
-        panel = Panel(table, title="Provider Setup", border_style="blue", expand=False)
+        panel = Panel(
+            table,
+            title="Provider Setup",
+            subtitle=SETUP_PROVIDER_GUIDANCE,
+            border_style="blue",
+            expand=False,
+        )
         self.io.echo("")
 
         # Post panel to RichLog via OutputSink

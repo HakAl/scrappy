@@ -122,15 +122,27 @@ class TestModelSelectionService:
     def test_instruct_models_selection(self):
         """Instruct selection type uses correct priority list."""
         configured = {
-            "cerebras/qwen-3-235b-a22b-instruct-2507",
+            "cerebras/gpt-oss-120b",
             "groq/moonshotai/kimi-k2-instruct",
         }
         service = ModelSelectionService(configured_models=configured)
 
         result = service.select(ModelSelectionType.INSTRUCT)
 
-        # Cerebras qwen is first in INSTRUCT priorities
-        assert result == "cerebras/qwen-3-235b-a22b-instruct-2507"
+        # GPT-OSS is first in INSTRUCT priorities
+        assert result == "cerebras/gpt-oss-120b"
+
+    def test_instruct_selection_prefers_zai_before_gemini(self):
+        """ZAI should be preferred over Gemini when GPT-OSS/Groq are unavailable."""
+        configured = {
+            "cerebras/zai-glm-4.7",
+            "gemini/gemini-2.5-flash",
+        }
+        service = ModelSelectionService(configured_models=configured)
+
+        result = service.select(ModelSelectionType.INSTRUCT)
+
+        assert result == "cerebras/zai-glm-4.7"
 
     def test_session_preference_ignored_for_wrong_type(self):
         """Session preference for INSTRUCT doesn't affect FAST selection."""

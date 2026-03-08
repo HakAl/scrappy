@@ -10,10 +10,13 @@ Test Coverage:
 """
 
 import pytest
+from io import StringIO
 from typing import List
 from unittest.mock import Mock, patch, MagicMock
 
-from scrappy.cli.setup_wizard import SetupWizard
+from rich.console import Console
+
+from scrappy.cli.setup_wizard import PROVIDER_TO_MODEL, SetupWizard
 from scrappy.orchestrator.provider_definitions import PROVIDERS
 from .helpers import MockApiKeyConfigService, MockLLMService
 
@@ -61,6 +64,24 @@ class MockIO:
         """Clear captured output."""
         self.output.clear()
         self.prompts.clear()
+
+
+class CapturingOutputSink:
+    """Capture Rich renderables posted by the wizard."""
+
+    def __init__(self):
+        self.renderables = []
+
+    def post_renderable(self, obj) -> None:
+        self.renderables.append(obj)
+
+
+def render_to_text(renderable) -> str:
+    """Render a Rich object to plain text for assertions."""
+    buffer = StringIO()
+    console = Console(file=buffer, force_terminal=False, width=120)
+    console.print(renderable)
+    return buffer.getvalue()
 
 
 class TestSetupWizardNonBlocking:
@@ -236,12 +257,22 @@ class TestSetupWizardSaveLoad:
 class TestSetupWizardMenuGeneration:
     """Test menu generation."""
 
+    def test_show_menu_surfaces_provider_guidance_and_descriptions(self):
+        """The setup menu should explain the recommended provider order."""
+        io = MockIO()
+        io.output_sink = CapturingOutputSink()
+        mock_llm = MockLLMService()
+        wizard = SetupWizard(io, key_validator=mock_llm)
 
-        # Check that output_sink was used or fallback was used
-        # In test mode without output_sink, it should use direct console
-        # We can't easily test Rich Panel output, but we can verify no errors
+        wizard._show_menu()
 
-        # Verification would require parsing Rich output, skip for now
+        panel = io.output_sink.renderables[-1]
+        rendered = render_to_text(panel)
+
+        assert "Best results: start with Cerebras, add Groq next." in rendered
+        assert "best default for agent work" in rendered
+        assert "fast fallback for agent work" in rendered
+        assert "overflow option when free-tier capacity matters" in rendered
 
 
 class TestSetupWizardFlow:
@@ -424,6 +455,11 @@ class TestSetupWizardActionMenu:
 
 class TestSetupWizardProviderTesting:
     """Test provider API key testing using key_validator.validate_key."""
+
+    def test_provider_validation_models_match_current_defaults(self):
+        """Provider validation should use current, accessible model IDs."""
+        assert PROVIDER_TO_MODEL["cerebras"] == "cerebras/gpt-oss-120b"
+        assert PROVIDER_TO_MODEL["gemini"] == "gemini/gemini-2.5-flash"
 
     def test_test_provider_key_success(self):
         """Valid API key returns True when key_validator.validate_key succeeds."""
