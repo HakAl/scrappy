@@ -1,19 +1,50 @@
 """
 Pytest configuration and shared fixtures.
 """
+import os
 import pytest
 import sys
 import tempfile
+import uuid
 from pathlib import Path
 from unittest.mock import Mock
 from dataclasses import dataclass
 
 
+_DEFAULT_TEST_SESSION_ID = f"run-{uuid.uuid4().hex[:8]}"
+
+
+def _get_session_temp_root(root_path: Path) -> Path:
+    """Resolve the root temp directory for the test session."""
+    override = os.environ.get("SCRAPPY_TEST_TEMP")
+    session_id = os.environ.get("SCRAPPY_TEST_SESSION_ID", _DEFAULT_TEST_SESSION_ID)
+    base_root = Path(override).expanduser() if override else root_path / ".pytest_tmp"
+    return base_root / session_id
+
+
+def _configure_test_temp_dirs(root_path: Path) -> tuple[Path, Path]:
+    """Configure repo-local temp directories for pytest and tempfile users."""
+    session_root = _get_session_temp_root(root_path).resolve()
+    pytest_temp = session_root / "pytest"
+    system_temp = session_root / "system"
+
+    pytest_temp.mkdir(parents=True, exist_ok=True)
+    system_temp.mkdir(parents=True, exist_ok=True)
+
+    os.environ["TMPDIR"] = str(system_temp)
+    os.environ["TEMP"] = str(system_temp)
+    os.environ["TMP"] = str(system_temp)
+    tempfile.tempdir = str(system_temp)
+
+    return pytest_temp, system_temp
+
+
 def pytest_configure(config):
-    """Configure pytest to use system temp directory instead of project root."""
-    # Use system temp directory to avoid permission issues and keep project clean
+    """Configure pytest and tempfile to use repo-local temp directories."""
+    pytest_temp, _ = _configure_test_temp_dirs(Path(config.rootpath))
+
     if not config.option.basetemp:
-        config.option.basetemp = Path(tempfile.gettempdir()) / "pytest-scrappy"
+        config.option.basetemp = pytest_temp
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))

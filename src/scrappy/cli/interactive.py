@@ -101,14 +101,17 @@ class InteractiveMode:
         import logging
         logger = logging.getLogger(__name__)
 
-        assert self._langgraph_bridge is not None
+        bridge = self._langgraph_bridge
+        if bridge is None:
+            logger.warning("LangGraph bridge missing while processing chat input")
+            return "Error: Agent not initialized"
 
         try:
             # Run through LangGraph - bridge handles streaming output
             # Chat mode uses "chat" tier (70B models)
             # Agent mode (/agent command) uses "instruct" tier
             logger.info("Chat mode: calling run_agent with tier=chat")
-            result = self._langgraph_bridge.run_agent(
+            result = bridge.run_agent(
                 task=user_input,
                 working_dir=os.getcwd(),
                 tier="chat",

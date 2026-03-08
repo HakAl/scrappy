@@ -146,10 +146,6 @@ class CLI:
 
     # Factory methods for default dependencies
 
-    # todo wrong type
-    # todo wrong type
-    # todo wrong type
-    # todo wrong type
     def _create_default_io(self) -> CLIIOProtocol:
         """Create default IO interface for CLI (Textual).
 

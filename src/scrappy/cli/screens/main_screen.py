@@ -303,14 +303,21 @@ class MainAppScreen(Screen):
     @work(exclusive=True, thread=True)
     def process_command(self, user_input: str) -> None:
         """Process command in worker thread."""
-        # This is called after action_submit_input validates interactive_mode exists
-        assert self.interactive_mode is not None, "process_command called before ready"
-
         logger.debug("process_command: starting for input: %s", user_input[:50])
         try:
             self.app.post_message(ActivityStateChange(ActivityState.THINKING))
+            interactive_mode = self.interactive_mode
+            if interactive_mode is None:
+                interactive_mode = self.scrappy_app.interactive_mode
+                if interactive_mode is not None:
+                    self.interactive_mode = interactive_mode
+            if interactive_mode is None:
+                logger.warning("process_command called before interactive mode was ready")
+                self.write_output("Still initializing...\n")
+                return
+
             logger.debug("process_command: posted THINKING, calling _process_input")
-            should_continue = self.interactive_mode._process_input(user_input)
+            should_continue = interactive_mode._process_input(user_input)
             logger.debug("process_command: _process_input returned %s", should_continue)
             if not should_continue:
                 self.app.exit()

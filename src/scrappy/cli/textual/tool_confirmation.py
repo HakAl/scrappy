@@ -9,6 +9,8 @@ import difflib
 from pathlib import Path
 from typing import Any, Callable, Optional, Protocol
 
+from scrappy.tool_display import extract_file_path, extract_tool_key_param
+
 # Callback types matching the existing bridge interface
 OutputCallback = Callable[[str], None]
 ConfirmYNACallback = Callable[[str], str]  # Returns "y", "n", or "a"
@@ -97,6 +99,8 @@ class ToolConfirmationHandler:
             diff_lines = self._generate_diff_preview(args)
             path = self._get_file_path(args)
             self._show_diff_preview(path or "", diff_lines)
+        elif tool_name == "write_files":
+            self._show_batch_diff_previews(args)
 
         # Prompt for confirmation
         response = self._confirm(f"{description}?")
@@ -132,8 +136,12 @@ class ToolConfirmationHandler:
         Returns:
             List of diff lines (empty for new files)
         """
-        path = self._get_file_path(args)
-        new_content = args.get("content", "")
+        return self._generate_diff_preview_for_spec(args)
+
+    def _generate_diff_preview_for_spec(self, file_spec: dict[str, Any]) -> list[str]:
+        """Generate unified diff for a single file specification."""
+        path = self._get_file_path(file_spec)
+        new_content = file_spec.get("content", "")
 
         if not path:
             return []
@@ -168,6 +176,27 @@ class ToolConfirmationHandler:
 
         return list(diff)
 
+    def _show_batch_diff_previews(self, args: dict[str, Any], max_files: int = 3) -> None:
+        """Show previews for a batch write, capped to a few files for readability."""
+        files = args.get("files", [])
+        if not isinstance(files, list) or not files:
+            return
+
+        shown = 0
+        for file_spec in files:
+            if not isinstance(file_spec, dict):
+                continue
+            if shown >= max_files:
+                remaining = len(files) - shown
+                self._output(f"  [dim]... ({remaining} more files)[/dim]\n")
+                break
+
+            path = self._get_file_path(file_spec) or "(unknown path)"
+            self._output(f"  [bold]{path}[/bold]\n")
+            diff_lines = self._generate_diff_preview_for_spec(file_spec)
+            self._show_diff_preview(path, diff_lines)
+            shown += 1
+
     def _show_diff_preview(
         self,
         path: str,
@@ -189,7 +218,7 @@ class ToolConfirmationHandler:
             max_lines: Maximum lines to show before truncating
         """
         if not diff_lines:
-            self._output(f"  [green](new file)[/green]\n")
+            self._output("  [green](new file)[/green]\n")
             return
 
         # Build diff output as single string to avoid extra spacing
@@ -227,34 +256,8 @@ class ToolConfirmationHandler:
 
     def _get_file_path(self, args: dict[str, Any]) -> Optional[str]:
         """Extract file path from tool arguments."""
-        file_path = (
-            args.get("file_path")
-            or args.get("path")
-            or args.get("filepath")
-            or args.get("file")
-        )
-        return str(file_path) if file_path else None
+        return extract_file_path(args)
 
     def _extract_key_param(self, tool_name: str, args: dict[str, Any]) -> str:
         """Extract the key parameter for display."""
-        key_param_map = {
-            "write_file": "path",
-            "read_file": "path",
-            "edit_file": "path",
-            "create_file": "path",
-            "patch_file": "path",
-            "delete_file": "path",
-            "run_command": "command",
-        }
-
-        param_name = key_param_map.get(tool_name)
-        if not param_name or param_name not in args:
-            return ""
-
-        value = str(args[param_name])
-
-        # Truncate long values
-        if len(value) > 50:
-            return value[:47] + "..."
-
-        return value
+        return extract_tool_key_param(tool_name, args)

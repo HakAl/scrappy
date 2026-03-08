@@ -210,44 +210,18 @@ When task is complete:
         return schemas
 
     @classmethod
-    def create_default(cls) -> "ToolRegistry":
+    def create_default(cls, profile: str = "optimized") -> "ToolRegistry":
         """
         Create a registry with all standard tools registered.
+
+        Uses the shared registry factory so tests and runtime stay aligned.
+
+        Args:
+            profile: Tool profile ("full", "optimized", "minimal")
 
         Returns:
             ToolRegistry with default tools
         """
-        from .file_tools import (
-            ReadFileTool,
-            WriteFileTool,
-            ListFilesTool,
-            ListDirectoryTool
-        )
-        from .git_tools import (
-            GitLogTool,
-            GitDiffTool,
-            GitBlameTool,
-            GitShowTool,
-            GitRecentChangesTool
-        )
-        from .search_tools import FindExactTextTool
+        from ..registry_factory import create_default_registry
 
-        registry = cls()
-
-        # Register file tools
-        registry.register(ReadFileTool())
-        registry.register(WriteFileTool())
-        registry.register(ListFilesTool())
-        registry.register(ListDirectoryTool())
-
-        # Register git tools
-        registry.register(GitLogTool())
-        registry.register(GitDiffTool())
-        registry.register(GitBlameTool())
-        registry.register(GitShowTool())
-        registry.register(GitRecentChangesTool())
-
-        # Register search tools
-        registry.register(FindExactTextTool())
-
-        return registry
+        return create_default_registry(profile=profile)

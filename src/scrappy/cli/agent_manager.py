@@ -128,6 +128,17 @@ class CLIAgentManager:
             dashboard.set_state("executing", "Running LangGraph agent...")
             dashboard.update_thought_process(f"Executing task: {task}\n\nLangGraph agent processing...")
 
+        bridge = self._langgraph_bridge
+        if bridge is None:
+            io.secho("Error: Agent not initialized", fg=io.theme.error)
+            if dashboard:
+                dashboard.set_state("idle", "Agent unavailable")
+            self.orchestrator.working_memory.add_discovery(
+                f"Agent task '{task[:50]}...' could not start: agent not initialized",
+                "agent_task"
+            )
+            return
+
         try:
             import logging
             lgr = logging.getLogger(__name__)
@@ -135,8 +146,7 @@ class CLIAgentManager:
 
             # Run agent via bridge (synchronous call that runs in current thread)
             # The bridge handles all HITL confirmations via ThreadSafeAsyncBridge
-            assert self._langgraph_bridge is not None  # Type guard for mypy
-            result = self._langgraph_bridge.run_agent(
+            result = bridge.run_agent(
                 task=task,
                 working_dir=os.getcwd(),
             )

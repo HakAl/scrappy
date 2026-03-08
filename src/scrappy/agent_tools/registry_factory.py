@@ -18,6 +18,7 @@ from .tools.file_tools import (
     WriteFileTool,
     WriteFilesTool,
     ListFilesTool,
+    ListDirectoryTool,
 )
 from .tools.git_tools import (
     GitLogTool,
@@ -44,8 +45,8 @@ if TYPE_CHECKING:
 # Tools not in profile are still in codebase but not registered
 TOOL_PROFILES: Dict[str, List[str]] = {
     "full": [
-        # All 18 tools - backward compatible
-        "read_file", "read_files", "write_file", "write_files", "list_files",
+        # All 19 tools - backward compatible
+        "read_file", "read_files", "write_file", "write_files", "list_files", "list_directory",
         "git_log", "git_status", "git_diff", "git_blame", "git_show", "git_recent_changes",
         "find_exact_text", "codebase_search",
         "web_fetch",
@@ -74,6 +75,16 @@ TOOL_PROFILES: Dict[str, List[str]] = {
         "complete",
     ],
 }
+
+GIT_TOOL_NAMES = frozenset({
+    "git_log",
+    "git_status",
+    "git_diff",
+    "git_blame",
+    "git_show",
+    "git_recent_changes",
+})
+WEB_TOOL_NAMES = frozenset({"web_fetch"})
 
 
 def get_available_profiles() -> List[str]:
@@ -114,6 +125,24 @@ def create_registry_with_profile(
     if profile not in TOOL_PROFILES:
         raise ValueError(f"Unknown profile '{profile}'. Available: {get_available_profiles()}")
 
+    return _build_registry(
+        tool_names=TOOL_PROFILES[profile],
+        command_timeout=command_timeout,
+        max_command_output=max_command_output,
+        dangerous_commands=dangerous_commands,
+        semantic_search=semantic_search,
+    )
+
+
+def _build_registry(
+    tool_names: List[str],
+    command_timeout: int,
+    max_command_output: int,
+    dangerous_commands: Optional[List[str]],
+    semantic_search: Optional['SemanticSearchProtocol'],
+) -> ToolRegistry:
+    """Build a registry from an explicit tool list."""
+
     # Tool factories - create tool instances on demand
     tool_factories: Dict[str, Callable[[], ToolBase]] = {
         # File tools
@@ -122,6 +151,7 @@ def create_registry_with_profile(
         "write_file": lambda: WriteFileTool(),
         "write_files": lambda: WriteFilesTool(),
         "list_files": lambda: ListFilesTool(),
+        "list_directory": lambda: ListDirectoryTool(),
         # Git tools
         "git_log": lambda: GitLogTool(),
         "git_status": lambda: GitStatusTool(),
@@ -149,9 +179,8 @@ def create_registry_with_profile(
     }
 
     registry = ToolRegistry()
-    profile_tools = TOOL_PROFILES[profile]
 
-    for tool_name in profile_tools:
+    for tool_name in tool_names:
         if tool_name in tool_factories:
             registry.register(tool_factories[tool_name]())
 
@@ -182,9 +211,14 @@ def create_default_registry(
     Returns:
         Configured ToolRegistry instance
     """
-    # Use profile-based creation
-    return create_registry_with_profile(
-        profile=profile,
+    tool_names = get_profile_tools(profile)
+    if not include_git:
+        tool_names = [tool_name for tool_name in tool_names if tool_name not in GIT_TOOL_NAMES]
+    if not include_web:
+        tool_names = [tool_name for tool_name in tool_names if tool_name not in WEB_TOOL_NAMES]
+
+    return _build_registry(
+        tool_names=tool_names,
         command_timeout=command_timeout,
         max_command_output=max_command_output,
         dangerous_commands=dangerous_commands,

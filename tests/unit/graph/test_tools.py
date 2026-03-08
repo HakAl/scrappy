@@ -5,6 +5,7 @@ Tests the LangGraph tool adapter that wraps ToolRegistry.
 """
 
 from pathlib import Path
+from unittest.mock import Mock
 
 from scrappy.agent_tools.tools.base import (
     ToolBase,
@@ -317,6 +318,42 @@ class TestToolAdapterFactory:
         assert len(names) > 0
         # Should have common tools like read_file
         assert "read_file" in names
+        assert "complete" in names
+
+
+class TestToolAdapterConfirmation:
+    """Tests for confirmation gating of destructive tools."""
+
+    def test_write_files_requires_confirmation(self):
+        """write_files should be blocked when the user denies confirmation."""
+        registry = ToolRegistry()
+        registry.register(MockTool(name="write_files", return_value="wrote files"))
+        adapter = ToolAdapter(registry)
+        adapter.confirm_callback = Mock(return_value=False)
+        context = create_test_context()
+
+        tool_calls: list[ToolCall] = [
+            make_tool_call(
+                "call_1",
+                "write_files",
+                '{"files": [{"path": "a.py", "content": "a"}, {"path": "b.py", "content": "b"}]}',
+            )
+        ]
+
+        results = adapter.execute(tool_calls, context)
+
+        adapter.confirm_callback.assert_called_once_with(  # type: ignore[union-attr]
+            "write_files",
+            "Write 2 files (a.py +1 more)",
+            {
+                "files": [
+                    {"path": "a.py", "content": "a"},
+                    {"path": "b.py", "content": "b"},
+                ]
+            },
+        )
+        assert results[0]["name"] == "write_files"
+        assert results[0]["error"] == "User denied write_files execution"
 
 
 class TestToolResultFormat:
