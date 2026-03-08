@@ -69,6 +69,16 @@ class TestRunGit:
         # Not a git repo, so status fails
         assert result.returncode != 0
 
+    def test_does_not_fall_back_to_parent_repo(self, tmp_path):
+        """Scopes git commands to the requested directory."""
+        subprocess.run(["git", "init"], cwd=str(tmp_path), capture_output=True)
+        nested = tmp_path / "nested"
+        nested.mkdir()
+
+        result = _run_git(["status"], nested, check=False)
+
+        assert result.returncode != 0
+
 
 class TestGitIsolation:
     """Tests for GitIsolation class."""
