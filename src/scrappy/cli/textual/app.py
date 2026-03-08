@@ -21,7 +21,7 @@ from textual import work
 from scrappy.infrastructure.output_mode import OutputModeContext
 from scrappy.infrastructure.theme import DEFAULT_THEME, ThemeProtocol
 
-from .runtime_wiring import wire_textual_runtime
+from .runtime_wiring import create_textual_runtime_session, wire_textual_runtime
 from .messages import (
     WriteOutput,
     WriteRenderable,
@@ -298,17 +298,7 @@ class ScrappyApp(App):
         if self._cli is None:
             return
 
-        # Create InteractiveMode from CLI
-        # This mirrors what TextualInteractiveMode.run() does
-        from ..interactive import InteractiveMode
-        from ..output_bridge import OutputBridge
-
-        # Inject output bridge to route orchestrator output through Textual
-        orchestrator_output = OutputBridge(self.output_adapter)
-        self._cli.orchestrator.output = orchestrator_output
-
-        # Create InteractiveMode with CLI's dependencies
-        self.interactive_mode = InteractiveMode(
+        self.interactive_mode = create_textual_runtime_session(
             io=self._cli.io,
             orchestrator=self._cli.orchestrator,
             session_context=self._cli.session_context,
@@ -317,7 +307,8 @@ class ScrappyApp(App):
             command_router=self._cli._create_command_router(),
             display=self._cli.display,
             tasks=self._cli.tasks,
-            logger=self._cli.logger
+            logger=self._cli.logger,
+            output_adapter=self.output_adapter,
         )
 
         wire_textual_runtime(

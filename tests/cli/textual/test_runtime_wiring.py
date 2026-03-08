@@ -3,7 +3,10 @@
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from scrappy.cli.textual.runtime_wiring import wire_textual_runtime
+from scrappy.cli.textual.runtime_wiring import (
+    create_textual_runtime_session,
+    wire_textual_runtime,
+)
 
 
 def create_runtime(orchestrator):
@@ -17,6 +20,57 @@ def create_runtime(orchestrator):
     cli = Mock()
     cli.agent_mgr = Mock()
     return app, interactive_mode, io, output_adapter, cli
+
+
+@patch("scrappy.cli.output_bridge.OutputBridge")
+@patch("scrappy.cli.interactive.InteractiveMode")
+def test_create_textual_runtime_session_builds_interactive_mode(
+    mock_interactive_cls,
+    mock_output_bridge_cls,
+):
+    """Session factory should consistently build InteractiveMode for Textual."""
+    orchestrator = Mock()
+    io = Mock()
+    session_context = Mock()
+    state_manager = Mock()
+    input_handler = Mock()
+    command_router = Mock()
+    display = Mock()
+    tasks = Mock()
+    logger = Mock()
+    output_adapter = Mock()
+    interactive_mode = Mock()
+    mock_interactive_cls.return_value = interactive_mode
+    output_bridge = Mock()
+    mock_output_bridge_cls.return_value = output_bridge
+
+    result = create_textual_runtime_session(
+        io=io,
+        orchestrator=orchestrator,
+        session_context=session_context,
+        state_manager=state_manager,
+        input_handler=input_handler,
+        command_router=command_router,
+        display=display,
+        tasks=tasks,
+        logger=logger,
+        output_adapter=output_adapter,
+    )
+
+    assert result is interactive_mode
+    assert orchestrator.output is output_bridge
+    mock_output_bridge_cls.assert_called_once_with(output_adapter)
+    mock_interactive_cls.assert_called_once_with(
+        io=io,
+        orchestrator=orchestrator,
+        session_context=session_context,
+        state_manager=state_manager,
+        input_handler=input_handler,
+        command_router=command_router,
+        display=display,
+        tasks=tasks,
+        logger=logger,
+    )
 
 
 def test_wire_textual_runtime_skips_langgraph_when_streaming_unavailable():

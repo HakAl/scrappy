@@ -5,12 +5,49 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Optional, Callable
 
 if TYPE_CHECKING:
+    from scrappy.cli.command_router import CommandRouter
     from scrappy.cli.core import CLI
-    from scrappy.cli.interactive import InteractiveMode
+    from scrappy.cli.display import CLIDisplay
+    from scrappy.cli.input_handler import InputHandler
+    from scrappy.cli.logging import CLILogger
+    from scrappy.cli.session_context import SessionContextProtocol
+    from scrappy.cli.state_manager import PlanStateManager
+    from scrappy.cli.tasks import CLITaskExecution
     from scrappy.cli.unified_io import UnifiedIO
     from scrappy.cli.textual.output_adapter import TextualOutputAdapter
     from scrappy.cli.textual.app import ScrappyApp
     from scrappy.orchestrator.protocols import Orchestrator
+
+
+def create_textual_runtime_session(
+    *,
+    io: "UnifiedIO",
+    orchestrator: "Orchestrator",
+    session_context: "SessionContextProtocol",
+    state_manager: "PlanStateManager",
+    input_handler: "InputHandler",
+    command_router: "CommandRouter",
+    display: "CLIDisplay",
+    tasks: "CLITaskExecution",
+    logger: "CLILogger",
+    output_adapter: "TextualOutputAdapter",
+) -> "InteractiveMode":
+    """Create InteractiveMode and route orchestrator output through Textual."""
+    from ..interactive import InteractiveMode
+    from ..output_bridge import OutputBridge
+
+    orchestrator.output = OutputBridge(output_adapter)
+    return InteractiveMode(
+        io=io,
+        orchestrator=orchestrator,
+        session_context=session_context,
+        state_manager=state_manager,
+        input_handler=input_handler,
+        command_router=command_router,
+        display=display,
+        tasks=tasks,
+        logger=logger,
+    )
 
 
 def wire_textual_runtime(

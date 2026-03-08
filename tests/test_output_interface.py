@@ -7,6 +7,16 @@ Implementation library (click, rich, or anything else) should be completely hidd
 
 import pytest
 
+from scrappy.infrastructure.output_mode import OutputModeContext
+
+
+@pytest.fixture(autouse=True)
+def reset_output_mode_context():
+    """Keep output mode state isolated between tests."""
+    OutputModeContext.reset()
+    yield
+    OutputModeContext.reset()
+
 
 class TestOutputForTesting:
     """Tests for test-mode output that captures instead of printing."""
@@ -239,3 +249,31 @@ class TestEdgeCases:
         result = output.confirm("Continue?", default=True)
 
         assert result == True
+
+
+class TestTuiModeGuards:
+    """Tests for rejecting CLI-only output adapters in Textual mode."""
+
+    @pytest.mark.unit
+    def test_click_output_rejects_tui_mode(self):
+        """Click output should fail fast instead of using blocking console I/O in TUI."""
+        from scrappy.cli.output import ClickOutput
+
+        OutputModeContext.set_tui_mode(True)
+
+        with pytest.raises(RuntimeError, match="ClickOutput cannot be used in TUI mode"):
+            ClickOutput()
+
+    @pytest.mark.unit
+    def test_output_factory_rejects_tui_mode_even_on_click_fallback(self):
+        """Output should reject TUI mode before trying CLI-only fallback adapters."""
+        from scrappy.cli.output import Output, configure_output
+
+        OutputModeContext.set_tui_mode(True)
+        configure_output(use_rich=False)
+
+        try:
+            with pytest.raises(RuntimeError, match="Output cannot be used in TUI mode"):
+                Output()
+        finally:
+            configure_output(use_rich=True)

@@ -18,7 +18,7 @@ Architecture (per CLAUDE.md):
 
 from typing import Optional
 from .io_interface import CLIIOProtocol
-from .textual import ThreadSafeAsyncBridge
+from .textual.bridge import ThreadSafeAsyncBridge
 
 
 class CLIUserInteraction:

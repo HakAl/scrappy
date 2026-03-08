@@ -32,6 +32,15 @@ _config = {
 }
 
 
+def _raise_if_tui_mode(api_name: str) -> None:
+    """Reject CLI-only output adapters when Textual owns the terminal."""
+    if OutputModeContext.is_tui_mode():
+        raise RuntimeError(
+            f"{api_name} cannot be used in TUI mode. "
+            "Use UnifiedIO with output_sink instead."
+        )
+
+
 def configure_output(use_rich: bool = True) -> None:
     """Configure which output library to use.
 
@@ -315,11 +324,7 @@ class RichOutput(FormattedOutputInterface):
         Raises:
             RuntimeError: If called in TUI mode (must use UnifiedIO)
         """
-        if OutputModeContext.is_tui_mode():
-            raise RuntimeError(
-                "RichOutput cannot be used in TUI mode. "
-                "Use UnifiedIO with output_sink instead."
-            )
+        _raise_if_tui_mode("RichOutput")
         try:
             from rich.console import Console
             from rich.text import Text
@@ -414,7 +419,12 @@ class ClickOutput(FormattedOutputInterface):
     """Output implementation using Click library."""
 
     def __init__(self):
-        """Initialize Click output."""
+        """Initialize Click output.
+
+        Raises:
+            RuntimeError: If called in TUI mode (must use UnifiedIO)
+        """
+        _raise_if_tui_mode("ClickOutput")
         try:
             import click
             self._click = click
@@ -469,6 +479,8 @@ def create_output() -> FormattedOutputInterface:
     Returns:
         Output implementation instance
     """
+    _raise_if_tui_mode("Output")
+
     if _config['use_rich']:
         try:
             return RichOutput()

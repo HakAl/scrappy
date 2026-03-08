@@ -6,12 +6,11 @@ Provides a clean TUI interface using Textual framework.
 
 from typing import TYPE_CHECKING
 
-from .textual import ScrappyApp
+from .textual.app import ScrappyApp
 from .unified_io import UnifiedIO
-from .interactive import InteractiveMode
 from .output_bridge import OutputBridge
 from .config_factory import get_config
-from .textual.runtime_wiring import wire_textual_runtime
+from .textual.runtime_wiring import create_textual_runtime_session, wire_textual_runtime
 from ..orchestrator.protocols import Orchestrator
 
 # Re-export for backward compatibility
@@ -98,15 +97,8 @@ class TextualInteractiveMode:
                 "This is a programming error - CLI should always use Textual."
             )
 
-        # Inject output bridge to route orchestrator output through Textual
-        # OutputBridge implements BaseOutputProtocol (info/warn/error/success)
-        # and routes all messages through the Textual OutputSink
-        orchestrator_output = OutputBridge(output_adapter)
-        self.orchestrator.output = orchestrator_output
-
-        # Create InteractiveMode with existing Textual IO
-        interactive_mode = InteractiveMode(
-            io=self.io,  # Use existing Textual IO, not creating new one
+        interactive_mode = create_textual_runtime_session(
+            io=self.io,
             orchestrator=self.orchestrator,
             session_context=self.session_context,
             state_manager=self.state_manager,
@@ -114,7 +106,8 @@ class TextualInteractiveMode:
             command_router=self.command_router,
             display=self.display,
             tasks=self.tasks,
-            logger=self.logger
+            logger=self.logger,
+            output_adapter=output_adapter,
         )
 
         # Create ScrappyApp with InteractiveMode, output adapter, and user theme

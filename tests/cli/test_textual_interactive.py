@@ -28,15 +28,13 @@ def create_mode(orchestrator, cli=None):
     )
 
 
-@patch("scrappy.cli.textual_interactive.OutputBridge")
-@patch("scrappy.cli.textual_interactive.InteractiveMode")
 @patch("scrappy.cli.textual_interactive.ScrappyApp")
+@patch("scrappy.cli.textual_interactive.create_textual_runtime_session")
 @patch("scrappy.cli.textual_interactive.wire_textual_runtime")
 def test_run_skips_langgraph_when_orchestrator_lacks_streaming(
     mock_wire_runtime,
+    mock_create_session,
     mock_app_cls,
-    mock_interactive_cls,
-    mock_output_bridge_cls,
 ):
     """Textual mode should still run when LangGraph bridge cannot be created."""
     orchestrator = SimpleNamespace()
@@ -47,12 +45,23 @@ def test_run_skips_langgraph_when_orchestrator_lacks_streaming(
     app.bridge = Mock()
     mock_app_cls.return_value = app
     interactive_mode = Mock()
-    mock_interactive_cls.return_value = interactive_mode
-    mock_output_bridge_cls.return_value = Mock()
+    mock_create_session.return_value = interactive_mode
     mock_wire_runtime.return_value = None
 
     mode.run()
 
+    mock_create_session.assert_called_once_with(
+        io=mode.io,
+        orchestrator=orchestrator,
+        session_context=mode.session_context,
+        state_manager=mode.state_manager,
+        input_handler=mode.input_handler,
+        command_router=mode.command_router,
+        display=mode.display,
+        tasks=mode.tasks,
+        logger=mode.logger,
+        output_adapter=mode.io.output_sink,
+    )
     mock_wire_runtime.assert_called_once_with(
         app=app,
         interactive_mode=interactive_mode,
@@ -65,15 +74,13 @@ def test_run_skips_langgraph_when_orchestrator_lacks_streaming(
     app.run.assert_called_once()
 
 
-@patch("scrappy.cli.textual_interactive.OutputBridge")
-@patch("scrappy.cli.textual_interactive.InteractiveMode")
 @patch("scrappy.cli.textual_interactive.ScrappyApp")
+@patch("scrappy.cli.textual_interactive.create_textual_runtime_session")
 @patch("scrappy.cli.textual_interactive.wire_textual_runtime")
 def test_run_wires_langgraph_when_streaming_is_available(
     mock_wire_runtime,
+    mock_create_session,
     mock_app_cls,
-    mock_interactive_cls,
-    mock_output_bridge_cls,
 ):
     """Textual mode should still wire LangGraph in the happy path."""
     orchestrator = SimpleNamespace(stream_completion_with_fallback=Mock())
@@ -84,13 +91,13 @@ def test_run_wires_langgraph_when_streaming_is_available(
     app.bridge = Mock()
     mock_app_cls.return_value = app
     interactive_mode = Mock()
-    mock_interactive_cls.return_value = interactive_mode
-    mock_output_bridge_cls.return_value = Mock()
+    mock_create_session.return_value = interactive_mode
     langgraph_bridge = Mock()
     mock_wire_runtime.return_value = langgraph_bridge
 
     mode.run()
 
+    mock_create_session.assert_called_once()
     mock_wire_runtime.assert_called_once_with(
         app=app,
         interactive_mode=interactive_mode,
