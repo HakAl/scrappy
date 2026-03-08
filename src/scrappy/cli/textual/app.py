@@ -17,6 +17,7 @@ from textual.app import App
 from textual.theme import Theme
 from textual.reactive import reactive
 from textual import work
+from textual.widgets import TextArea
 
 from scrappy.infrastructure.output_mode import OutputModeContext
 from scrappy.infrastructure.theme import DEFAULT_THEME, ThemeProtocol
@@ -123,6 +124,17 @@ class ScrappyApp(App):
 
         # Consumer thread (daemon so it won't block exit)
         self._consumer_thread: Optional[threading.Thread] = None
+        self._runtime_cleanup_done = False
+
+    def copy_to_clipboard(self, text: str) -> None:
+        """Copy text to both Textual's local clipboard and the system clipboard."""
+        try:
+            import pyperclip
+            pyperclip.copy(text)
+        except Exception as e:
+            logger.debug("Failed to copy to system clipboard: %s", e)
+
+        super().copy_to_clipboard(text)
 
     def set_codebase_context(self, context: "CodebaseContext") -> None:
         """Set codebase context for semantic search indexing.
@@ -360,12 +372,12 @@ class ScrappyApp(App):
             # Give workers a moment to actually cancel
             import asyncio
             try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    # Can't use run_until_complete, just sleep
-                    time.sleep(0.1)
-            except Exception:
+                asyncio.get_running_loop()
+            except RuntimeError:
                 pass
+            else:
+                # Can't use run_until_complete here, just sleep briefly.
+                time.sleep(0.1)
             for w in list(self.workers._workers):
                 self._file_log(f"exit(): after cancel - worker name={w.name}, state={w.state}, is_finished={w.is_finished}")
         except Exception as e:
@@ -373,18 +385,29 @@ class ScrappyApp(App):
             self._file_log(f"exit(): error cancelling workers: {e}")
             self._file_log(f"exit(): traceback: {traceback.format_exc()}")
 
+        self._cleanup_runtime_resources()
         self._file_log("exit(): calling super().exit()")
         super().exit(result, return_code, str(message) if message else None)
         self._file_log("exit(): super().exit() returned")
 
-    def on_unmount(self) -> None:
-        """Called when app is about to close."""
+    def _cleanup_runtime_resources(self) -> None:
+        """Release app-owned runtime resources once during shutdown."""
+        if self._runtime_cleanup_done:
+            return
+
+        self._runtime_cleanup_done = True
         self._should_stop_consumer = True
         self.output_adapter.request_shutdown()  # Wake consumer immediately
         OutputModeContext.set_tui_mode(False)
 
         # Signal bridge to release any blocked worker threads (redundant but safe)
         self.bridge.shutdown()
+
+        if hasattr(self, 'interactive_mode') and self.interactive_mode:
+            try:
+                self.interactive_mode.session_context.close()
+            except Exception as e:
+                logger.debug("Error closing session context: %s", e)
 
         if self._codebase_context is not None:
             # Short timeout since daemon threads will be killed on process exit anyway
@@ -419,6 +442,10 @@ class ScrappyApp(App):
                 self.interactive_mode.orchestrator.llm_service.close()
             except Exception as e:
                 logger.debug("Error closing LLM service: %s", e)
+
+    def on_unmount(self) -> None:
+        """Called when app is about to close."""
+        self._cleanup_runtime_resources()
 
     async def _shutdown(self) -> None:  # type: ignore[override]
         """Run Textual shutdown.
@@ -723,10 +750,24 @@ class ScrappyApp(App):
         Handles keys that should work consistently across all screens:
         - ctrl+q: Hard exit (immediate, no cleanup - emergency only)
         - ctrl+c: Copy selection, cancel operations, or double-tap for clean exit
+        - ctrl+shift+c: Copy selection without triggering exit/cancel behavior
+        - ctrl+v / ctrl+shift+v / shift+insert: Paste from OS clipboard
         - escape: Cancel running operations (agent, capture mode)
         """
         if event.key == "ctrl+q":
             os._exit(0)
+
+        if event.key == "ctrl+shift+c":
+            if self._handle_copy_shortcut():
+                event.stop()
+                event.prevent_default()
+            return
+
+        if event.key in {"ctrl+v", "ctrl+shift+v", "shift+insert"}:
+            if self._handle_paste_shortcut():
+                event.stop()
+                event.prevent_default()
+            return
 
         # Handle Ctrl+C
         if event.key == "ctrl+c":
@@ -792,38 +833,86 @@ class ScrappyApp(App):
         """Handle ESC key: cancel whatever is running."""
         self._cancel_operation()
 
+    def _get_paste_target(self) -> Optional[TextArea]:
+        """Return the focused TextArea, or the main input as a fallback."""
+        focused = self.focused
+        if isinstance(focused, TextArea):
+            return focused
+
+        from ..screens import MainAppScreen
+
+        screen = self.screen
+        if isinstance(screen, MainAppScreen) and screen._layout is not None:
+            return screen._layout.input
+
+        try:
+            return self.screen.query_one(TextArea)
+        except Exception:
+            return None
+
+    def _handle_copy_shortcut(self) -> bool:
+        """Copy selected text from the focused input or output log."""
+        from ..screens import MainAppScreen
+        from ..widgets.selectable_log import SelectableLog
+
+        focused = self.focused
+        if isinstance(focused, TextArea) and focused.selected_text:
+            focused.action_copy()
+            return True
+
+        screen = self.screen
+        if isinstance(screen, MainAppScreen) and screen._layout is not None:
+            output = screen._layout.output
+            if isinstance(output, SelectableLog) and output._has_selection():
+                output.action_copy_selection()
+                return True
+
+        return False
+
+    def _handle_paste_shortcut(self) -> bool:
+        """Paste the OS clipboard into the active TextArea."""
+        target = self._get_paste_target()
+        if target is None or target.read_only:
+            return False
+
+        try:
+            import pyperclip
+            clipboard_text = pyperclip.paste()
+        except Exception as e:
+            logger.debug("Failed to read system clipboard: %s", e)
+            return False
+
+        self._clipboard = clipboard_text or ""
+        target.focus()
+        target.action_paste()
+        return True
+
     def _handle_ctrl_c(self) -> bool:
         """Handle Ctrl+C with context-aware behavior.
 
         Priority:
-        1. Double-tap always exits (escape hatch when stuck)
-        2. Copy selection if text is selected
+        1. Copy selected text from input/output
+        2. Double-tap exits (escape hatch when stuck)
         3. Cancel operations and clean up UI
         4. Single tap shows hint
 
         Returns:
             True to stop event propagation, False to let it bubble.
         """
-        from ..screens import MainAppScreen
-        from ..widgets.selectable_log import SelectableLog
-
-        screen = self.screen
         now = time.time()
 
-        # 1. Double-tap ALWAYS exits (escape hatch when agent is stuck)
+        # 1. Copy selection if available. Do this before exit-tap tracking so
+        # normal clipboard use doesn't look like an exit request.
+        if self._handle_copy_shortcut():
+            return True
+
+        # 2. Double-tap exits (escape hatch when agent is stuck)
         if now - self._last_ctrl_c_time < self._CTRL_C_DOUBLE_TAP_THRESHOLD:
             self.exit()
             return True
 
         # Update timestamp for double-tap detection
         self._last_ctrl_c_time = now
-
-        # 2. Copy selection if available (only action that doesn't show hint)
-        if isinstance(screen, MainAppScreen) and screen._layout is not None:
-            output = screen._layout.output
-            if isinstance(output, SelectableLog) and output._has_selection():
-                output.action_copy_selection()
-                return True
 
         # 3. Cancel any running operations
         did_cancel = self._cancel_operation()
