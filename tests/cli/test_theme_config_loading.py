@@ -245,7 +245,7 @@ dashboard_enabled: false
         # Other options loaded correctly
         assert config.temperature_default == 0.9
         assert config.max_tokens_query == 2000
-        assert config.dashboard_enabled is False
+        assert hasattr(config, "dashboard_enabled") is False
 
 
 class TestThemeConfigFactoryCreate:

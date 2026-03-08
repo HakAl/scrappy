@@ -155,14 +155,12 @@ theme:
 
 ## Display Settings
 
-### Dashboard
-
 ```yaml
-dashboard_enabled: true      # Enable/disable live dashboard
-dashboard_refresh_rate: 4    # Updates per second (1-10)
-max_display_messages: 4      # Messages shown in dashboard
+max_display_messages: 4      # Messages shown in compact status displays
 progress_bar_width: 20       # Width of progress indicators
 ```
+
+Legacy `dashboard_enabled` and `dashboard_refresh_rate` settings are ignored.
 
 ### Separators
 
@@ -268,9 +266,6 @@ Any setting can be overridden via environment variables using the `CLI_` prefix:
 # Override temperature
 export CLI_TEMPERATURE_DEFAULT=0.8
 
-# Override dashboard
-export CLI_DASHBOARD_ENABLED=false
-
 # Override token limit
 export CLI_MAX_TOKENS_QUERY=2000
 ```
@@ -305,8 +300,6 @@ truncate_error_message: 500
 truncate_file_content: 2000
 
 # Display
-dashboard_enabled: true
-dashboard_refresh_rate: 4
 max_display_messages: 4
 progress_bar_width: 20
 
@@ -344,8 +337,6 @@ theme:
   "temperature_default": 0.7,
   "max_tokens_query": 1000,
   "max_tokens_summary": 2000,
-  "dashboard_enabled": true,
-  "dashboard_refresh_rate": 4,
   "max_iterations": 10,
   "clarification": {
     "confidence_threshold": 0.7,
