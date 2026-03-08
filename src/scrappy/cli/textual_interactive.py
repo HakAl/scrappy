@@ -11,6 +11,7 @@ from .unified_io import UnifiedIO
 from .interactive import InteractiveMode
 from .output_bridge import OutputBridge
 from .config_factory import get_config
+from .textual.runtime_wiring import wire_textual_runtime
 from ..orchestrator.protocols import Orchestrator
 
 # Re-export for backward compatibility
@@ -119,53 +120,15 @@ class TextualInteractiveMode:
         # Create ScrappyApp with InteractiveMode, output adapter, and user theme
         app = ScrappyApp(interactive_mode, output_adapter, theme=self._config.theme)
 
-        # Pass codebase context for semantic search indexing
-        # The orchestrator's context_manager holds the CodebaseContext
-        if hasattr(self.orchestrator, 'context_manager'):
-            context_manager = self.orchestrator.context_manager
-            if hasattr(context_manager, 'context'):
-                app.set_codebase_context(context_manager.context)
-
-        # Phase 3: Inject bridge into UnifiedIO for modal dialogs
-        # This enables prompt() and confirm() to show modals instead of auto-approving
-        self.io.set_bridge(app.bridge)
-
-        # Phase 3.3: Create LangGraphBridge for new agent architecture
-        # This bridges LangGraph async execution to Textual worker pattern
-        langgraph_bridge = None
-        orchestrator = self.orchestrator
-        # Check if orchestrator has stream_completion_with_fallback (required for agent)
-        if self._cli is not None and hasattr(orchestrator, 'stream_completion_with_fallback'):
-            from .textual.langgraph_bridge import LangGraphBridge
-            from scrappy.graph.tools import ToolAdapter
-
-            # Create tool adapter - owned by app, passed to bridge
-            # This ensures proper cleanup and reuse across agent runs
-            app._tool_adapter = ToolAdapter.create_default()
-
-            langgraph_bridge = LangGraphBridge(
-                app=app,
-                bridge=app.bridge,
-                output_adapter=output_adapter,
-                orchestrator=orchestrator,
-                tool_adapter=app._tool_adapter,
-            )
-        # Temporary assertion to catch wiring issues
-        assert langgraph_bridge is not None, (
-            f"LangGraphBridge not created: _cli={self._cli is not None}, "
-            f"orchestrator has stream_completion_with_fallback={hasattr(orchestrator, 'stream_completion_with_fallback')}"
+        wire_textual_runtime(
+            app=app,
+            interactive_mode=interactive_mode,
+            io=self.io,
+            orchestrator=self.orchestrator,
+            output_adapter=output_adapter,
+            cli=self._cli,
+            setup_wizard_callback=app.launch_setup_wizard,
         )
-
-        # Phase 2: Reinitialize handlers with bridge for TUI-aware user interaction
-        # This allows CLIAgentManager to use modal dialogs and LangGraph agent
-        if self._cli is not None:
-            self._cli.reinitialize_handlers_with_bridge(app.bridge, langgraph_bridge)
-            # Update command router's references to the new handlers
-            self.command_router.agent_mgr = self._cli.agent_mgr
-
-        # Phase 3.5: Wire LangGraph for ALL chat (not just agent tasks)
-        # This enables unified chat where LLM decides tool usage
-        interactive_mode.set_langgraph_bridge(langgraph_bridge)
 
         # Launch the TUI
         app.run()

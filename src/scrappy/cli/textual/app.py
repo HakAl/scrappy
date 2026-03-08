@@ -21,6 +21,7 @@ from textual import work
 from scrappy.infrastructure.output_mode import OutputModeContext
 from scrappy.infrastructure.theme import DEFAULT_THEME, ThemeProtocol
 
+from .runtime_wiring import wire_textual_runtime
 from .messages import (
     WriteOutput,
     WriteRenderable,
@@ -319,50 +320,14 @@ class ScrappyApp(App):
             logger=self._cli.logger
         )
 
-        # Set up codebase context for semantic search
-        if hasattr(self._cli.orchestrator, 'context_manager'):
-            context_manager = self._cli.orchestrator.context_manager
-            if hasattr(context_manager, 'context'):
-                self.set_codebase_context(context_manager.context)
-
-        # Inject bridge into UnifiedIO for modal dialogs
-        self._cli.io.set_bridge(self.bridge)
-
-        # Create LangGraphBridge for new agent architecture
-        # This bridges LangGraph async execution to Textual worker pattern
-        langgraph_bridge = None
-        orchestrator = self._cli.orchestrator
-        # Check if orchestrator has stream_completion_with_fallback (required for agent)
-        if hasattr(orchestrator, 'stream_completion_with_fallback'):
-            from .langgraph_bridge import LangGraphBridge
-            from scrappy.graph.tools import ToolAdapter
-
-            # Create tool adapter - owned by app, passed to bridge
-            # This ensures proper cleanup and reuse across agent runs
-            self._tool_adapter = ToolAdapter.create_default()
-
-            langgraph_bridge = LangGraphBridge(
-                app=self,
-                bridge=self.bridge,
-                output_adapter=self.output_adapter,
-                orchestrator=orchestrator,
-                tool_adapter=self._tool_adapter,
-            )
-
-        # Reinitialize handlers with bridge for TUI-aware user interaction
-        self._cli.reinitialize_handlers_with_bridge(self.bridge, langgraph_bridge)
-
-        # Wire LangGraph for ALL chat (not just agent tasks)
-        # This enables unified chat where LLM decides tool usage
-        if langgraph_bridge is not None:
-            self.interactive_mode.set_langgraph_bridge(langgraph_bridge)
-
-        # Update command router's references to the new handlers
-        self.interactive_mode.command_router.agent_mgr = self._cli.agent_mgr
-
-        # Set up callback for /setup command
-        self.interactive_mode.command_router.set_setup_wizard_callback(
-            self.launch_setup_wizard
+        wire_textual_runtime(
+            app=self,
+            interactive_mode=self.interactive_mode,
+            io=self._cli.io,
+            orchestrator=self._cli.orchestrator,
+            output_adapter=self.output_adapter,
+            cli=self._cli,
+            setup_wizard_callback=self.launch_setup_wizard,
         )
 
     def exit(  # type: ignore[override]
