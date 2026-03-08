@@ -4,7 +4,6 @@ Handles planning and reasoning operations.
 """
 
 from .io_interface import CLIIOProtocol
-from .display_manager import DisplayManager
 from .utils.error_handler import task_execution_error
 
 
@@ -19,7 +18,7 @@ class CLITaskExecution:
             io: I/O interface for output
         """
         self.orchestrator = orchestrator
-        self.display = DisplayManager(io=io, dashboard_enabled=False)
+        self.io = io
 
     def plan_task(self, task: str):
         """
@@ -40,11 +39,9 @@ class CLITaskExecution:
 
         Side Effects:
             - Displays "Planning: {task}" header to console
-            - Shows progress bar during plan generation
             - Displays formatted plan with numbered steps to console
             - Displays recommended provider for each step if available
             - Adds discovery to orchestrator's working memory
-            - Updates dashboard if dashboard mode is enabled
 
         State Changes:
             - Updates orchestrator.discoveries with plan summary
@@ -52,29 +49,15 @@ class CLITaskExecution:
         Raises:
             Does not raise; catches exceptions internally and displays error.
         """
-        io = self.display.get_io()
-        dashboard = self.display.get_dashboard()
+        io = self.io
 
         io.secho(f"\nPlanning: {task}", bold=True)
         io.echo("-" * 50)
 
-        # Update dashboard if enabled
-        if dashboard:
-            dashboard.set_state("thinking", "Generating plan...")
-            dashboard.update_thought_process(f"Planning task: {task}")
-
         try:
             steps = self.orchestrator.plan(task)
-
-            if dashboard:
-                dashboard.set_state("idle", "Plan generated")
         except Exception as e:
             task_execution_error(io, e, "planning")
-
-            if dashboard:
-                dashboard.set_state("idle", "Planning failed")
-                dashboard.append_terminal(f"Error: {e}")
-
             return []
 
         io.echo()
@@ -118,7 +101,6 @@ class CLITaskExecution:
 
         Side Effects:
             - Displays "Reasoning about: {question}" header to console
-            - Shows progress bar during analysis
             - Displays structured response with:
               - Question
               - Analysis
@@ -126,7 +108,6 @@ class CLITaskExecution:
               - Confidence level
             - Adds discovery to orchestrator's working memory with
               truncated question and conclusion
-            - Updates dashboard if dashboard mode is enabled
 
         State Changes:
             - Updates orchestrator.discoveries with reasoning result
@@ -134,29 +115,15 @@ class CLITaskExecution:
         Raises:
             Does not raise; catches exceptions internally and displays error.
         """
-        io = self.display.get_io()
-        dashboard = self.display.get_dashboard()
+        io = self.io
 
         io.secho(f"\nReasoning about: {question}", bold=True)
         io.echo("-" * 50)
 
-        # Update dashboard if enabled
-        if dashboard:
-            dashboard.set_state("thinking", "Analyzing question...")
-            dashboard.update_thought_process(f"Reasoning about: {question}")
-
         try:
             response = self.orchestrator.reason(question)
-
-            if dashboard:
-                dashboard.set_state("idle", "Analysis complete")
         except Exception as e:
             task_execution_error(io, e, "reasoning")
-
-            if dashboard:
-                dashboard.set_state("idle", "Reasoning failed")
-                dashboard.append_terminal(f"Error: {e}")
-
             return
 
         io.echo()

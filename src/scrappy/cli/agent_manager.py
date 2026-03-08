@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Optional
 
 from scrappy.undo import create_undo_point, UndoError
 from .io_interface import CLIIOProtocol
-from .display_manager import DisplayManager
 from .user_interaction import CLIUserInteraction
 from .utils.error_handler import handle_error
 
@@ -38,7 +37,6 @@ class CLIAgentManager:
         """
         self.orchestrator = orchestrator
         self.io = io  # Store directly per CLAUDE.md DI principles
-        self.display = DisplayManager(io=io, dashboard_enabled=False)
         # Inject user interaction - defaults to CLI mode
         self._interaction = user_interaction or CLIUserInteraction(io)
         # LangGraph bridge for TUI mode
@@ -65,16 +63,11 @@ class CLIAgentManager:
             verbose: If True, show full output (thinking, params, results).
         """
         io = self.io
-        dashboard = self.display.get_dashboard()
+        dashboard = None
 
         if self._langgraph_bridge is None:
             io.secho("Error: Agent not initialized", fg=io.theme.error)
             return
-
-        # Update dashboard if enabled
-        if dashboard:
-            dashboard.set_state("idle", "Awaiting user input")
-            dashboard.update_thought_process(f"Task: {task}")
 
         # Safety options - use injected interaction handler for mode-aware prompts
         create_undo = self._interaction.confirm(
