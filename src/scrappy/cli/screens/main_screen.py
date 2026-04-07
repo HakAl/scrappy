@@ -337,6 +337,13 @@ class MainAppScreen(Screen):
         finally:
             logger.debug("process_command: finally block, posting IDLE")
             self.app.post_message(ActivityStateChange(ActivityState.IDLE))
+            restore_mouse_support = getattr(self.app, "restore_mouse_support", None)
+            if callable(restore_mouse_support):
+                call_from_thread = getattr(self.app, "call_from_thread", None)
+                if callable(call_from_thread):
+                    call_from_thread(restore_mouse_support)
+                else:
+                    restore_mouse_support()
             logger.debug("process_command: IDLE posted, exiting")
 
     def write_output(self, content: str) -> None:

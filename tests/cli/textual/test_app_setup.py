@@ -2,7 +2,7 @@
 
 from unittest.mock import Mock, patch
 
-from scrappy.cli.textual.app import ScrappyApp
+from scrappy.cli.textual.app import CLIReady, ScrappyApp
 
 
 def test_setup_interactive_mode_uses_shared_helpers():
@@ -135,3 +135,31 @@ def test_handle_ctrl_c_prefers_copy_over_exit_and_cancel():
     mock_cancel.assert_not_called()
     mock_notify.assert_not_called()
     mock_exit.assert_not_called()
+
+
+def test_restore_mouse_support_uses_driver_hook_when_available():
+    """Mouse restore should call the driver's enable hook when present."""
+    app = ScrappyApp(cli_factory=lambda: Mock())
+    driver = Mock()
+    app._driver = driver
+
+    app.restore_mouse_support()
+
+    driver._enable_mouse_support.assert_called_once_with()
+
+
+def test_on_cliready_reasserts_mouse_support_after_banner_status():
+    """Completing deferred startup should schedule mouse support restoration."""
+    app = ScrappyApp(cli_factory=lambda: Mock())
+    cli = Mock()
+    cli.io = Mock()
+
+    with (
+        patch.object(app, "_setup_interactive_mode"),
+        patch.object(app, "call_after_refresh") as mock_call_after_refresh,
+        patch("scrappy.cli.interactive_banner.display_banner_status") as mock_banner_status,
+    ):
+        app.on_cliready(CLIReady(cli=cli))
+
+    mock_banner_status.assert_called_once_with(cli.io)
+    mock_call_after_refresh.assert_called_once_with(app.restore_mouse_support)

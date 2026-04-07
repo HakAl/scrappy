@@ -136,6 +136,23 @@ class ScrappyApp(App):
 
         super().copy_to_clipboard(text)
 
+    def restore_mouse_support(self) -> None:
+        """Re-enable terminal mouse reporting when the driver supports it.
+
+        Real Windows terminals can lose Textual mouse mode after subprocess-heavy
+        flows or noisy startup output. Reasserting mouse support is safe and helps
+        keep text selection working in the chat log.
+        """
+        driver = getattr(self, "_driver", None)
+        enable_mouse = getattr(driver, "_enable_mouse_support", None)
+        if not callable(enable_mouse):
+            return
+
+        try:
+            enable_mouse()
+        except Exception as e:
+            logger.debug("Failed to restore mouse support: %s", e)
+
     def set_codebase_context(self, context: "CodebaseContext") -> None:
         """Set codebase context for semantic search indexing.
 
@@ -300,6 +317,7 @@ class ScrappyApp(App):
         # Display status lines now that CLI is ready (header already shown on mount)
         from scrappy.cli.interactive_banner import display_banner_status
         display_banner_status(self._cli.io)
+        self.call_after_refresh(self.restore_mouse_support)
 
     def _setup_interactive_mode(self) -> None:
         """Wire up InteractiveMode from CLI.
@@ -574,6 +592,7 @@ class ScrappyApp(App):
         from scrappy.cli.interactive_banner import display_banner_header_tui
 
         display_banner_header_tui(self.output_adapter)
+        self.call_after_refresh(self.restore_mouse_support)
 
         # Show welcome message if keys were found in environment
         if env_key_count > 0:

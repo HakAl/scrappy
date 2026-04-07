@@ -62,3 +62,4 @@ def test_process_command_recovers_interactive_mode_from_app():
     interactive_mode._process_input.assert_called_once_with("hello")
     assert screen.interactive_mode is interactive_mode
     screen._layout.write.assert_not_called()
+    app.call_from_thread.assert_called_once_with(app.restore_mouse_support)
