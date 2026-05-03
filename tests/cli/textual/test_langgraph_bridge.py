@@ -170,6 +170,14 @@ class TestExtractKeyParam:
         result = bridge._extract_key_param("run_command", {"command": "ls -la"})
         assert result == "ls -la"
 
+    def test_write_files_extracts_summary(self, bridge):
+        """write_files summarizes the batch using the first path and count."""
+        result = bridge._extract_key_param(
+            "write_files",
+            {"files": [{"path": "a.py"}, {"path": "b.py"}]},
+        )
+        assert result == "a.py (+1 more)"
+
     def test_codebase_search_extracts_query(self, bridge):
         """codebase_search tool extracts query parameter."""
         result = bridge._extract_key_param("codebase_search", {"query": "def main"})

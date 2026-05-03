@@ -146,17 +146,13 @@ class CLI:
 
     # Factory methods for default dependencies
 
-    # todo wrong type
-    # todo wrong type
-    # todo wrong type
-    # todo wrong type
     def _create_default_io(self) -> CLIIOProtocol:
         """Create default IO interface for CLI (Textual).
 
         CLI always uses Textual, so this creates UnifiedIO with OutputSink.
         Uses the configured theme for styling.
         """
-        from .textual import TextualOutputAdapter
+        from .textual.output_adapter import TextualOutputAdapter
         output_adapter = TextualOutputAdapter()
         return UnifiedIO(output_sink=output_adapter, theme=self._theme)
 

@@ -1,7 +1,6 @@
 """Tests for ToolConfirmationHandler."""
 
 import pytest
-from pathlib import Path
 from unittest.mock import Mock
 
 from scrappy.cli.textual.tool_confirmation import ToolConfirmationHandler
@@ -87,6 +86,29 @@ class TestConfirmTool:
         # Should have called output at least once for tool info
         assert handler._output.call_count >= 1
 
+    def test_write_files_outputs_batch_preview(self, handler, tmp_path):
+        """write_files should show file entries before confirmation."""
+        existing = tmp_path / "existing.py"
+        existing.write_text("old\n")
+        handler._confirm.return_value = "y"
+
+        handler.confirm_tool(
+            "write_files",
+            "Write multiple files",
+            {
+                "files": [
+                    {"path": "existing.py", "content": "new\n"},
+                    {"path": "new.py", "content": "created\n"},
+                ]
+            },
+        )
+
+        calls = [call[0][0] for call in handler._output.call_args_list]
+        combined = "".join(calls)
+        assert "existing.py" in combined
+        assert "new.py" in combined
+        assert "(new file)" in combined
+
 
 class TestReset:
     """Tests for reset method."""
@@ -149,6 +171,20 @@ class TestGenerateDiffPreview:
         assert "-old content" in diff_text or "old content" in diff_text
         assert "+new content" in diff_text or "new content" in diff_text
 
+    def test_generates_diff_for_spec(self, handler, tmp_path):
+        """Single file specs should use the same diff generation path."""
+        existing = tmp_path / "existing.py"
+        existing.write_text("old content\n")
+
+        diff_lines = handler._generate_diff_preview_for_spec(
+            {"path": "existing.py", "content": "new content\n"}
+        )
+
+        assert len(diff_lines) > 0
+        diff_text = "\n".join(diff_lines)
+        assert "-old content" in diff_text or "old content" in diff_text
+        assert "+new content" in diff_text or "new content" in diff_text
+
 
 class TestShowDiffPreview:
     """Tests for _show_diff_preview method."""
@@ -203,6 +239,22 @@ class TestShowDiffPreview:
         truncation_calls = [c for c in calls if "more lines" in c]
         assert len(truncation_calls) > 0
 
+    def test_show_batch_diff_previews_limits_files(self, handler, tmp_path):
+        """Batch previews should cap the number of expanded files."""
+        files = []
+        for idx in range(4):
+            path = tmp_path / f"file{idx}.py"
+            path.write_text("old\n")
+            files.append({"path": path.name, "content": f"new {idx}\n"})
+
+        handler._show_batch_diff_previews({"files": files}, max_files=2)
+
+        calls = [call[0][0] for call in handler._output.call_args_list]
+        combined = "".join(calls)
+        assert "file0.py" in combined
+        assert "file1.py" in combined
+        assert "more files" in combined
+
 
 class TestExtractKeyParam:
     """Tests for _extract_key_param method."""
@@ -225,6 +277,14 @@ class TestExtractKeyParam:
         """Extracts command for run_command tool."""
         result = handler._extract_key_param("run_command", {"command": "ls -la"})
         assert result == "ls -la"
+
+    def test_extracts_summary_for_write_files(self, handler):
+        """Summarizes batch writes using the first path and count."""
+        result = handler._extract_key_param(
+            "write_files",
+            {"files": [{"path": "a.py"}, {"path": "b.py"}]},
+        )
+        assert result == "a.py (+1 more)"
 
     def test_truncates_long_values(self, handler):
         """Truncates values longer than 50 chars."""

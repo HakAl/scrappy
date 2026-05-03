@@ -22,7 +22,7 @@ import os
 import subprocess
 import pytest
 from textual.geometry import Offset
-from unittest.mock import MagicMock, patch, AsyncMock
+from textual.events import MouseDown, MouseMove, MouseUp
 
 from scrappy.cli.widgets.selectable_log import SelectableLog
 from scrappy.cli.textual.messages import ActivityStateChange
@@ -65,6 +65,91 @@ class TestSelectableLogBasicMouse:
             assert log._is_selecting is False
             # But selection_start should have been set during mouse_down
             assert log._selection_start is not None, "Selection start should be set after click"
+
+    @pytest.mark.asyncio
+    async def test_drag_selects_single_line_text(self):
+        """Dragging across a line should create a selection with the expected text."""
+        from textual.app import App, ComposeResult
+
+        class TestApp(App):
+            CSS = """
+            SelectableLog { height: 100%; width: 100%; }
+            """
+
+            def compose(self) -> ComposeResult:
+                yield SelectableLog(id="log")
+
+        app = TestApp()
+        async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.pause()
+
+            log = app.query_one("#log", SelectableLog)
+            log.write("Hello selection world")
+            await pilot.pause()
+
+            log.on_mouse_down(MouseDown(log, 0, 0, 0, 0, 1, False, False, False))
+            log.on_mouse_move(MouseMove(log, 5, 0, 5, 0, 0, False, False, False))
+            log.on_mouse_up(MouseUp(log, 5, 0, 0, 0, 1, False, False, False))
+
+            assert log._has_selection(), "Drag should create an active selection"
+            assert log._get_selected_text() == "Hello"
+
+    @pytest.mark.asyncio
+    async def test_drag_selects_multiple_lines(self):
+        """Dragging across lines should produce newline-separated selected text."""
+        from textual.app import App, ComposeResult
+
+        class TestApp(App):
+            CSS = """
+            SelectableLog { height: 100%; width: 100%; }
+            """
+
+            def compose(self) -> ComposeResult:
+                yield SelectableLog(id="log")
+
+        app = TestApp()
+        async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.pause()
+
+            log = app.query_one("#log", SelectableLog)
+            log.write("Alpha line")
+            log.write("Beta line")
+            await pilot.pause()
+
+            log.on_mouse_down(MouseDown(log, 0, 0, 0, 0, 1, False, False, False))
+            log.on_mouse_move(MouseMove(log, 4, 1, 4, 1, 0, False, False, False))
+            log.on_mouse_up(MouseUp(log, 4, 1, 0, 0, 1, False, False, False))
+
+            assert log._has_selection(), "Multi-line drag should create a selection"
+            assert log._get_selected_text() == "Alpha line\nBeta"
+
+    @pytest.mark.asyncio
+    async def test_drag_selection_does_not_depend_on_mousemove_button(self):
+        """Selection should expand while dragging even if MouseMove reports button zero."""
+        from textual.app import App, ComposeResult
+
+        class TestApp(App):
+            CSS = """
+            SelectableLog { height: 100%; width: 100%; }
+            """
+
+            def compose(self) -> ComposeResult:
+                yield SelectableLog(id="log")
+
+        app = TestApp()
+        async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.pause()
+
+            log = app.query_one("#log", SelectableLog)
+            log.write("Button-zero drag selection")
+            await pilot.pause()
+
+            log.on_mouse_down(MouseDown(log, 0, 0, 0, 0, 1, False, False, False))
+            log.on_mouse_move(MouseMove(log, 6, 0, 6, 0, 0, False, False, False))
+            log.on_mouse_up(MouseUp(log, 6, 0, 0, 0, 1, False, False, False))
+
+            assert log._has_selection(), "Selection should survive MouseMove(button=0)"
+            assert log._get_selected_text() == "Button"
 
 
 class TestSelectableLogAfterAgentSimulation:

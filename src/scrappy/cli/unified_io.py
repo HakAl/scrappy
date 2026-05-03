@@ -836,7 +836,7 @@ class OutputSinkAdapter:
 
         Uses ThreadSafeAsyncBridge to show modal in main thread
         while blocking worker thread. Falls back to auto-approve
-        if bridge not available.
+        or auto-deny based on the provided default when bridge is not available.
         """
         if self._bridge is not None:
             # Flush pending output so it renders before confirmation prompt
@@ -845,30 +845,32 @@ class OutputSinkAdapter:
             # Phase 3: Use modal dialog via bridge
             return self._bridge.blocking_confirm(text)
 
-        # Fallback: Auto-approve with warning (bridge not set)
-        # Non-destructive operations (session restore, etc.) - simple message
+        # Fallback: respect the provided default when bridge is unavailable.
+        # Non-destructive operations (session restore, checkpoint creation, etc.)
+        # should continue to behave according to their default preference.
         is_routine = (
             "restore" in text.lower() and "session" in text.lower()
         ) or default is True
 
         if is_routine:
             # Simple dim message for routine operations
-            message = Text.from_markup(f"{text} [dim](auto-confirmed)[/dim]")
+            outcome = "auto-confirmed" if default else "auto-denied"
+            message = Text.from_markup(f"{text} [dim]({outcome})[/dim]")
             self._sink.post_renderable(message)
-            return True
+            return default
 
-        # Destructive operations - big red warning
+        # Destructive operations - block safely and make it obvious why.
         warning_panel = Panel(
-            f"[bold white on red] AUTO-CONFIRMED [/]\n\n"
+            f"[bold white on red] CONFIRMATION UNAVAILABLE [/]\n\n"
             f"[white]{text}[/]\n\n"
-            f"[bold yellow]Bridge not initialized:[/] [white]Auto-approved.[/]\n\n"
-            f"[bold red]Review destructive operations carefully![/]",
-            title="[blink bold white on red]SECURITY WARNING: Auto-Confirm[/]",
+            f"[bold yellow]Bridge not initialized:[/] [white]Using default response.[/]\n\n"
+            f"[bold red]Returned:[/] [white]{default}[/]",
+            title="[bold white on red]SECURITY BLOCK: Missing Confirmation[/]",
             border_style="red",
             expand=False
         )
         self._sink.post_renderable(warning_panel)
-        return True
+        return default
 
     def input_checkpoint(self, message: str, default: str = "c") -> str:
         """Get checkpoint choice via activity bar only (no log output).

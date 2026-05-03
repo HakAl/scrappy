@@ -8,9 +8,12 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 
 from .chat_layout import ChatLayout
+from scrappy.cli.protocols import ClipboardProtocol
 from scrappy.orchestrator.protocols import KeyValidatorProtocol
 
 if TYPE_CHECKING:
+    from ..protocols import RichRenderableProtocol
+    from ..setup_wizard import SetupWizard
     from ..unified_io import UnifiedIO
 
 logger = logging.getLogger(__name__)
@@ -55,6 +58,7 @@ class SetupWizardScreen(Screen):
         self,
         io: "UnifiedIO",
         key_validator: KeyValidatorProtocol,
+        clipboard: ClipboardProtocol,
         allow_cancel: bool = True,
         on_complete: Optional[Callable[[bool], None]] = None,
     ):
@@ -63,23 +67,25 @@ class SetupWizardScreen(Screen):
         Args:
             io: UnifiedIO for output routing
             key_validator: Lightweight key validator for testing API keys
+            clipboard: Clipboard service for OS clipboard integration
             allow_cancel: If False, user must configure at least one provider
             on_complete: Callback when wizard completes (receives has_provider bool)
         """
         super().__init__()
         self._io = io
         self._key_validator = key_validator
+        self._clipboard = clipboard
         self._allow_cancel = allow_cancel
         self._on_complete = on_complete
 
         # Wizard business logic (created on mount)
-        self._wizard = None
+        self._wizard: Optional["SetupWizard"] = None
 
         # Layout component
         self._layout: Optional[ChatLayout] = None
 
         # Store original output sink to restore on unmount
-        self._original_output_sink = None
+        self._original_output_sink: Optional["RichRenderableProtocol"] = None
 
     def compose(self) -> ComposeResult:
         """Create wizard UI using ChatLayout."""
@@ -130,8 +136,7 @@ class SetupWizardScreen(Screen):
         # Right-click (button=3) pastes from clipboard
         if hasattr(event, 'button') and event.button == 3:
             try:
-                import pyperclip
-                text = pyperclip.paste()
+                text = self._clipboard.paste_text()
                 if text:
                     self._layout.input.replace(
                         text,

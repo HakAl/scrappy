@@ -9,7 +9,6 @@ Test Matrix:
 5. Edge cases - Empty strings, None values, special characters
 """
 
-import pytest
 from typing import List, Any
 from rich.console import Console
 from rich.panel import Panel
@@ -17,7 +16,7 @@ from rich.table import Table
 from rich.text import Text
 
 from scrappy.cli.unified_io import UnifiedIO, ProgressTracker, StreamWriter, SimplifiedProgressTracker
-from scrappy.cli.protocols import OutputSink, UnifiedIOProtocol
+from scrappy.cli.protocols import UnifiedIOProtocol
 from scrappy.cli.mode_utils import is_tui_mode, get_output_sink
 
 
@@ -262,17 +261,28 @@ class TestUnifiedIOTUIMode:
         panels = [r for r in sink.renderables if isinstance(r, Panel)]
         assert len(panels) > 0
 
-    def test_confirm_auto_approves_with_warning(self):
-        """TUI mode confirm() auto-approves with security warning."""
+    def test_confirm_auto_denies_destructive_prompt_without_bridge(self):
+        """TUI mode confirm() should block destructive prompts without a bridge."""
         sink = MockOutputSink()
         io = UnifiedIO(output_sink=sink)
 
         result = io.confirm("Delete file?")
 
-        assert result is True
+        assert result is False
         assert "Panel" in sink.get_renderable_types()
         panels = [r for r in sink.renderables if isinstance(r, Panel)]
         assert len(panels) > 0
+
+    def test_confirm_respects_true_default_without_bridge(self):
+        """Routine confirmations should still honor their default when bridge is absent."""
+        sink = MockOutputSink()
+        io = UnifiedIO(output_sink=sink)
+
+        result = io.confirm("Create undo point before running?", default=True)
+
+        assert result is True
+        texts = [r for r in sink.renderables if isinstance(r, Text)]
+        assert len(texts) > 0
 
 
     def test_spinner_simplified(self):

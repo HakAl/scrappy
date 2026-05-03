@@ -91,8 +91,6 @@ class CLIConfig(BaseConfig):
     # Display defaults
     max_display_messages: int = 4
     progress_bar_width: int = 20
-    dashboard_enabled: bool = True
-    dashboard_refresh_rate: int = 4
 
     # Separator widths for console output
     separator_width_narrow: int = 40
@@ -226,11 +224,6 @@ class CLIConfig(BaseConfig):
         if self.max_display_messages <= 0:
             raise ValueError(
                 f"max_display_messages must be positive, got {self.max_display_messages}"
-            )
-
-        if self.dashboard_refresh_rate <= 0:
-            raise ValueError(
-                f"dashboard_refresh_rate must be positive, got {self.dashboard_refresh_rate}"
             )
 
     def get_extensions_by_category(self) -> Dict[str, List[str]]:

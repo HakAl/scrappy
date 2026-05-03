@@ -76,6 +76,15 @@ def _run_git(
         GitError: If command fails and check=True
     """
     cmd = ["git"] + args
+    cwd = cwd.resolve()
+
+    # This helper is intentionally scoped to a repo root, not any ancestor repo.
+    if args[:1] != ["init"] and not (cwd / ".git").exists():
+        stderr = f"fatal: not a git repository: {cwd}"
+        if check:
+            raise GitError(f"Git command failed: {' '.join(cmd)}\n{stderr}")
+        return subprocess.CompletedProcess(cmd, 128, "", stderr)
+
     try:
         result = subprocess.run(
             cmd,

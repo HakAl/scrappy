@@ -7,10 +7,6 @@ Tests that when a destructive tool is about to execute:
 """
 
 import pytest
-from unittest.mock import Mock, patch
-from pathlib import Path
-
-from textual.pilot import Pilot
 
 from scrappy.cli.textual.tool_confirmation import ToolConfirmationHandler
 
@@ -131,6 +127,38 @@ class TestConfirmationUXFlow:
         all_output = "".join(outputs)
         assert "npm install" in all_output, \
             f"Command not shown. Output: {all_output}"
+
+    def test_write_files_shows_multiple_file_previews(self, tmp_path):
+        """Batch writes should show per-file previews before confirmation."""
+        outputs = []
+        existing = tmp_path / "existing.py"
+        existing.write_text("old content\n")
+
+        def capture_output(content):
+            outputs.append(content)
+
+        handler = ToolConfirmationHandler(
+            output_callback=capture_output,
+            confirm_callback=lambda q: "y",
+            working_dir=str(tmp_path),
+        )
+
+        handler.confirm_tool(
+            "write_files",
+            "Write multiple files",
+            {
+                "files": [
+                    {"path": "existing.py", "content": "new content\n"},
+                    {"path": "new.py", "content": "brand new\n"},
+                ]
+            },
+        )
+
+        all_output = "".join(outputs)
+        assert "existing.py" in all_output, f"Existing file path not shown. Output: {all_output}"
+        assert "new.py" in all_output, f"New file path not shown. Output: {all_output}"
+        assert "(new file)" in all_output, f"New file indicator not shown. Output: {all_output}"
+        assert "[green]" in all_output or "[red]" in all_output, f"Diff preview not shown. Output: {all_output}"
 
     def test_allow_all_skips_subsequent_prompts(self, tmp_path):
         """Pressing 'a' skips prompts for subsequent tools."""

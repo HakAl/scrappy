@@ -16,6 +16,7 @@ from scrappy.infrastructure.config.api_keys import (
 )
 from scrappy.infrastructure.paths import ScrappyPathProvider
 from scrappy.orchestrator.litellm_config import get_configured_models
+from scrappy.orchestrator.provider_definitions import AGENT_PROVIDER_GUIDANCE
 from scrappy.sandbox.docker_executor import DockerExecutor
 
 if TYPE_CHECKING:
@@ -173,6 +174,7 @@ def display_banner_status(
         _print_rich(io, f"[green]●[/] Providers: {provider_list}")
     else:
         _print_rich(io, "[yellow]●[/] No providers configured. Run [cyan]/setup[/] to add API keys.")
+    _print_rich(io, f"[green]●[/] {AGENT_PROVIDER_GUIDANCE}")
 
     # Show workspace
     workspace = path_provider.workspace_display()

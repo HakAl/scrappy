@@ -53,7 +53,8 @@ def start_tui_deferred(ctx, theme, resume: bool = False) -> None:
 
     Shows the TUI skeleton instantly while CLI/orchestrator loads in background.
     """
-    from .textual import ScrappyApp, TextualOutputAdapter
+    from .textual.app import ScrappyApp
+    from .textual.output_adapter import TextualOutputAdapter
     from .unified_io import UnifiedIO
 
     output_adapter = TextualOutputAdapter()

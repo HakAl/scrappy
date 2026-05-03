@@ -6,6 +6,7 @@ enabling consistent behavior, testability, and type checking across the CLI laye
 
 This is the canonical location for all CLI-related protocols including:
 - Activity indicators (ActivityState, ActivityIndicatorProtocol)
+- Clipboard integration (ClipboardProtocol)
 - CLI I/O operations (CLIIOProtocol)
 - Output formatting (BaseOutputProtocol, FormattedOutputProtocol, RichRenderableProtocol)
 - Task management (Task, TaskStatus, TaskPriority, TaskStorageProtocol)
@@ -20,8 +21,8 @@ from ..orchestrator.protocols import Orchestrator
 
 if TYPE_CHECKING:
     from rich.console import Console, RenderableType
-    from rich.layout import Layout
     from textual.widget import Widget
+    from .unified_io import ProgressTracker, StreamWriter
 
 
 # =============================================================================
@@ -60,6 +61,23 @@ class ActivityIndicatorProtocol(Protocol):
     @property
     def is_visible(self) -> bool:
         """Whether indicator is currently visible."""
+        ...
+
+
+# =============================================================================
+# Clipboard Protocol
+# =============================================================================
+
+@runtime_checkable
+class ClipboardProtocol(Protocol):
+    """Protocol defining text clipboard operations."""
+
+    def copy_text(self, text: str) -> None:
+        """Write text to the system clipboard."""
+        ...
+
+    def paste_text(self) -> str:
+        """Read text from the system clipboard."""
         ...
 
 
@@ -674,300 +692,6 @@ class InputValidatorProtocol(Protocol):
             Dictionary mapping indices to error lists
             Empty dict if all valid
         """
-        ...
-
-
-@runtime_checkable
-class DashboardProtocol(Protocol):
-    """
-    Protocol for live dashboard display.
-
-    Defines the contract for dashboard implementations that provide
-    real-time visualization of agent activity across multiple panels.
-
-    Dashboard implementations should support:
-    - State management (idle, thinking, executing, scanning)
-    - Multi-panel layout (agent state, thought process, terminal, context)
-    - Content updates and accumulation
-    - Terminal output capture with line limits
-    - Context tracking (active files and token usage)
-    - Rich Live display integration
-
-    Implementations:
-    - RichDashboard: Full Rich-based dashboard with 4 panels
-    - MockDashboard: Test double for testing without actual display
-
-    Example:
-        def run_agent_with_dashboard(dashboard: DashboardProtocol):
-            dashboard.set_state("thinking", "Planning next step...")
-            dashboard.update_thought_process("Analyzing requirements...")
-            dashboard.append_terminal("$ ls -la")
-            dashboard.update_context(["main.py", "test.py"], 1500)
-
-            # Get renderable for Rich.Live
-            with Live(dashboard.get_renderable()):
-                # Long-running operation
-                ...
-    """
-
-    console: "Console"
-
-    def get_layout(self) -> "Layout":
-        """
-        Get the dashboard layout structure.
-
-        Returns:
-            Rich Layout object containing all panels
-        """
-        ...
-
-    def get_panel_names(self) -> List[str]:
-        """
-        Get list of all panel names in the dashboard.
-
-        Returns:
-            List of panel name strings (e.g., ['agent_state', 'thought_process', 'terminal', 'context'])
-        """
-        ...
-
-    def get_state(self) -> str:
-        """
-        Get current agent state.
-
-        Returns:
-            Current state string (one of: idle, thinking, executing, scanning)
-        """
-        ...
-
-    def set_state(self, state: str, message: str = "") -> None:
-        """
-        Set agent state with optional custom message.
-
-        Args:
-            state: Agent state (must be one of: idle, thinking, executing, scanning)
-            message: Optional custom message to display in agent state panel
-
-        Raises:
-            ValueError: If state is not valid
-        """
-        ...
-
-    def get_panel_title(self, panel_name: str) -> str:
-        """
-        Get title for a specific panel.
-
-        Args:
-            panel_name: Name of the panel
-
-        Returns:
-            Panel title string
-        """
-        ...
-
-    def get_panel_content(self, panel_name: str) -> str:
-        """
-        Get current content of a panel.
-
-        Args:
-            panel_name: Name of the panel
-
-        Returns:
-            Current panel content as string
-        """
-        ...
-
-    def get_panel_style(self, panel_name: str) -> str:
-        """
-        Get current style for a panel based on state.
-
-        Args:
-            panel_name: Name of the panel
-
-        Returns:
-            Rich style string (e.g., 'green', 'yellow', 'dim')
-        """
-        ...
-
-    def update_agent_state(self, content: str) -> None:
-        """
-        Update agent state panel content directly.
-
-        Args:
-            content: New content for agent state panel
-        """
-        ...
-
-    def update_thought_process(self, content: str) -> None:
-        """
-        Replace thought process panel content.
-
-        Args:
-            content: New content (replaces existing)
-        """
-        ...
-
-    def append_thought(self, content: str) -> None:
-        """
-        Append content to thought process panel.
-
-        Args:
-            content: Content to append
-        """
-        ...
-
-    def update_terminal(self, content: str) -> None:
-        """
-        Replace terminal panel content.
-
-        Args:
-            content: New content (replaces existing)
-        """
-        ...
-
-    def append_terminal(self, content: str) -> None:
-        """
-        Append content to terminal panel, preserving history.
-
-        Args:
-            content: Content to append
-        """
-        ...
-
-    def update_context(self, active_files: List[str], tokens_used: int) -> None:
-        """
-        Update context panel with files and token count.
-
-        Args:
-            active_files: List of active file paths
-            tokens_used: Total tokens consumed
-        """
-        ...
-
-    def update_active_files(self, files: List[str]) -> None:
-        """
-        Update only the active files list, preserving token count.
-
-        Args:
-            files: List of active file paths
-        """
-        ...
-
-    def update_tokens(self, tokens: int) -> None:
-        """
-        Update only the token count, preserving files.
-
-        Args:
-            tokens: Total tokens consumed
-        """
-        ...
-
-    def capture_output(self, content: str, stream: str = "stdout") -> None:
-        """
-        Capture output from stdout or stderr to terminal panel.
-
-        Args:
-            content: Output content to capture
-            stream: 'stdout' or 'stderr'
-        """
-        ...
-
-    def capture_command(self, command: str, output: str) -> None:
-        """
-        Capture a command and its output to terminal panel.
-
-        Args:
-            command: The command that was run
-            output: The command's output
-        """
-        ...
-
-    def clear_terminal(self) -> None:
-        """Clear terminal output panel."""
-        ...
-
-    def clear_thought_process(self) -> None:
-        """Clear thought process panel."""
-        ...
-
-    def get_renderable(self) -> "Layout":
-        """
-        Get renderable layout for use with Rich Live display.
-
-        Returns:
-            Rich Layout ready for Live display
-        """
-        ...
-
-    def reset(self) -> None:
-        """Reset dashboard to initial state."""
-        ...
-
-
-@runtime_checkable
-class DisplayManagerProtocol(Protocol):
-    """
-    Protocol for managing display output coordination.
-
-    Coordinates between simple RichIO output and full RichDashboard display,
-    allowing seamless switching between modes based on configuration or context.
-
-    The DisplayManager provides:
-    - Access to RichIO for standard output
-    - Optional RichDashboard for live visualizations
-    - Mode detection and switching
-    - Context managers for dashboard lifecycle
-
-    Implementations:
-    - DisplayManager: Production implementation with mode switching
-    - MockDisplayManager: Test double for testing
-
-    Example:
-        def run_operation(display: DisplayManagerProtocol):
-            io = display.get_io()
-            io.echo("Starting...")
-
-            if display.is_dashboard_enabled():
-                dashboard = display.get_dashboard()
-                dashboard.set_state("executing")
-
-                with display.live_dashboard():
-                    # Long-running operation with live updates
-                    dashboard.append_terminal("$ command")
-    """
-
-    def get_io(self) -> "CLIIOProtocol":
-        """
-        Get the IO interface for output.
-
-        Returns:
-            CLIIOProtocol implementation (typically RichIO)
-        """
-        ...
-
-    def get_dashboard(self) -> Optional["DashboardProtocol"]:
-        """
-        Get the dashboard interface if enabled.
-
-        Returns:
-            DashboardProtocol implementation or None if dashboard disabled
-        """
-        ...
-
-    def is_dashboard_enabled(self) -> bool:
-        """
-        Check if dashboard mode is enabled.
-
-        Returns:
-            True if dashboard is available and enabled
-        """
-        ...
-
-    def enable_dashboard(self) -> None:
-        """Enable dashboard mode for this display manager."""
-        ...
-
-    def disable_dashboard(self) -> None:
-        """Disable dashboard mode for this display manager."""
         ...
 
 

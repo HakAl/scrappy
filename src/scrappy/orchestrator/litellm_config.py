@@ -14,7 +14,7 @@ Architecture:
 Model Groups:
 - "fast": 8B models, speed priority
 - "chat": 70B models, conversation
-- "instruct": Instruction-tuned models for agent/tools (Qwen 235B, Gemini)
+- "instruct": Tool-capable models for agent work, with Gemini as last resort
 """
 
 from dataclasses import dataclass
@@ -325,22 +325,14 @@ def build_model_list(api_key_service: ApiKeyConfigServiceProtocol) -> list[dict]
 
     # --- Instruct Models (tool-use + instruction-following priority) ---
     # Priority:
-    # 1. Cerebras Qwen 235B - instruction-tuned, massive model
-    # 2. Cerebras GPT-OSS 120B - large model, same high RPD
-    # 3. Groq Kimi K2 - fast, 128k context
-    # 4. Gemini - fallback (JSON issues but huge context)
+    # 1. Cerebras GPT-OSS 120B - stable default for agent work
+    # 2. Groq Kimi K2 - fast fallback
+    # 3. Cerebras ZAI GLM 4.7 - preview fallback if account exposes it
+    # 4. Gemini - last resort (tool-weaker but generous free tier)
+    # 5. Cerebras Qwen 235B - keep only as a final preview fallback
 
-    # Cerebras - high RPD (14,400/day), use as primary
+    # Cerebras - high RPD (14,400/day), use stable model first
     if cerebras_key:
-        model_list.append({
-            "model_name": "instruct",
-            "litellm_params": {
-                "model": "cerebras/qwen-3-235b-a22b-instruct-2507",
-                "api_key": cerebras_key,
-            },
-            "tpm": 60000,
-            "rpm": 30,
-        })
         model_list.append({
             "model_name": "instruct",
             "litellm_params": {
@@ -353,7 +345,6 @@ def build_model_list(api_key_service: ApiKeyConfigServiceProtocol) -> list[dict]
 
     # Groq - fast inference, good tool use
     if groq_key:
-        # Kimi K2 - fast, 128k context
         model_list.append({
             "model_name": "instruct",
             "litellm_params": {
@@ -364,7 +355,19 @@ def build_model_list(api_key_service: ApiKeyConfigServiceProtocol) -> list[dict]
             "rpm": 30,
         })
 
-    # Gemini - deprioritized (JSON issues) but useful for huge context
+    # Cerebras preview fallback that appears on some accounts
+    if cerebras_key:
+        model_list.append({
+            "model_name": "instruct",
+            "litellm_params": {
+                "model": "cerebras/zai-glm-4.7",
+                "api_key": cerebras_key,
+            },
+            "tpm": 60000,
+            "rpm": 10,
+        })
+
+    # Gemini - deprioritized but useful for huge context and overflow
     if gemini_key:
         model_list.append({
             "model_name": "instruct",
@@ -374,6 +377,18 @@ def build_model_list(api_key_service: ApiKeyConfigServiceProtocol) -> list[dict]
             },
             "tpm": 250000,
             "rpm": 10,
+        })
+
+    # Keep preview Qwen only as a final fallback for accounts that still expose it
+    if cerebras_key:
+        model_list.append({
+            "model_name": "instruct",
+            "litellm_params": {
+                "model": "cerebras/qwen-3-235b-a22b-instruct-2507",
+                "api_key": cerebras_key,
+            },
+            "tpm": 60000,
+            "rpm": 30,
         })
 
     return model_list
@@ -435,8 +450,9 @@ def create_litellm_router(callbacks: Optional[list] = None):
     # Context window fallbacks: when a model hits context limit, try larger models
     # Order: small context -> medium -> large (Gemini has 1M context)
     context_fallbacks = [
-        {"cerebras/qwen-3-235b-a22b-instruct-2507": ["cerebras/gpt-oss-120b", "groq/moonshotai/kimi-k2-instruct", "gemini/gemini-2.5-flash"]},
+        {"cerebras/qwen-3-235b-a22b-instruct-2507": ["cerebras/gpt-oss-120b", "groq/moonshotai/kimi-k2-instruct", "cerebras/zai-glm-4.7", "gemini/gemini-2.5-flash"]},
         {"cerebras/gpt-oss-120b": ["gemini/gemini-2.5-flash"]},
+        {"cerebras/zai-glm-4.7": ["gemini/gemini-2.5-flash"]},
         {"cerebras/llama-3.3-70b": ["groq/moonshotai/kimi-k2-instruct", "gemini/gemini-2.5-flash"]},
         {"cerebras/llama3.1-8b": ["groq/llama-3.1-8b-instant", "gemini/gemini-2.5-flash"]},
         {"groq/moonshotai/kimi-k2-instruct": ["gemini/gemini-2.5-flash"]},

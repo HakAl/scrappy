@@ -13,6 +13,17 @@ from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 
 
+AGENT_PROVIDER_GUIDANCE = (
+    "Recommended for agent work: Cerebras first, Groq second. "
+    "Gemini is overflow when you need extra free-tier capacity."
+)
+
+SETUP_PROVIDER_GUIDANCE = (
+    "Best results: start with Cerebras, add Groq next. "
+    "Gemini is useful overflow when free-tier capacity matters."
+)
+
+
 @dataclass
 class ProviderDefinition:
     """Provider definition for display and configuration purposes."""
@@ -30,7 +41,7 @@ class ProviderDefinition:
 PROVIDERS: Dict[str, ProviderDefinition] = {
     'cerebras': ProviderDefinition(
         quota='14,400 RPD',
-        description='highest daily quota',
+        description='best default for agent work',
         env_var='CEREBRAS_API_KEY',
         console_url='cloud.cerebras.ai',
         priority=1,
@@ -39,7 +50,7 @@ PROVIDERS: Dict[str, ProviderDefinition] = {
     ),
     'groq': ProviderDefinition(
         quota='7,000 RPD',
-        description='fast and reliable',
+        description='fast fallback for agent work',
         env_var='GROQ_API_KEY',
         console_url='console.groq.com/keys',
         priority=2,
@@ -48,7 +59,7 @@ PROVIDERS: Dict[str, ProviderDefinition] = {
     ),
     'gemini': ProviderDefinition(
         quota='varies',
-        description='auto-fallback enabled',
+        description='overflow option when free-tier capacity matters',
         env_var='GEMINI_API_KEY',
         console_url='aistudio.google.com/apikey',
         priority=3,
@@ -57,7 +68,7 @@ PROVIDERS: Dict[str, ProviderDefinition] = {
     ),
     'sambanova': ProviderDefinition(
         quota='varies',
-        description='high-speed inference',
+        description='optional extra capacity',
         env_var='SAMBANOVA_API_KEY',
         console_url='cloud.sambanova.ai',
         priority=4,

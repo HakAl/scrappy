@@ -24,6 +24,7 @@ from scrappy.context.agent_rules_loader import AgentRulesLoader
 from scrappy.context.reminder_manager import ReminderManager
 from scrappy.graph.run_context import AgentRunContext
 from scrappy.infrastructure.threading import CancellationToken
+from scrappy.tool_display import extract_tool_key_param
 from ..protocols import ActivityState, Task, TaskStatus
 from .tool_confirmation import ToolConfirmationHandler
 from .messages import MetricsUpdate
@@ -562,32 +563,7 @@ class LangGraphBridge:
         Returns:
             Key parameter value, truncated if >50 chars
         """
-        # Map tool names to their key parameter
-        key_param_map = {
-            "write_file": "path",
-            "read_file": "path",
-            "read_files": "paths",
-            "edit_file": "path",
-            "run_command": "command",
-            "list_files": "path",
-            "list_directory": "path",
-            "find_exact_text": "pattern",
-            "codebase_search": "query",
-            "search_files": "pattern",
-            "complete": "result",
-        }
-
-        param_name = key_param_map.get(tool_name)
-        if not param_name or param_name not in args:
-            return ""
-
-        value = str(args[param_name])
-
-        # Truncate long values with ellipsis
-        if len(value) > 50:
-            return value[:47] + "..."
-
-        return value
+        return extract_tool_key_param(tool_name, args)
 
     def _get_file_path_from_args(self, args: dict[str, Any]) -> Optional[str]:
         """

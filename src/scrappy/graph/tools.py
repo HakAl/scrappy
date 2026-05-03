@@ -17,6 +17,7 @@ from scrappy.agent_tools.tools.base import ToolContext
 from scrappy.agent_tools.tools.registry import ToolRegistry
 from scrappy.graph.state import ToolCall, ToolResult
 from scrappy.infrastructure.logging import get_logger
+from scrappy.tool_display import format_confirmation_prompt
 
 logger = get_logger(__name__)
 
@@ -26,6 +27,7 @@ ConfirmCallback = Callable[[str, str, dict[str, Any]], bool]
 # Tools that require confirmation when confirm_mode is enabled
 DESTRUCTIVE_TOOLS = frozenset({
     "write_file",
+    "write_files",
     "edit_file",
     "create_file",
     "patch_file",
@@ -302,21 +304,7 @@ class ToolAdapter:
         else:
             args = raw_args if raw_args else {}
 
-        # Format based on tool type
-        if tool_name in {"write_file", "edit_file", "create_file", "patch_file"}:
-            path = args.get("path", args.get("file_path", "<unknown>"))
-            return f"Write to {path}"
-        elif tool_name == "delete_file":
-            path = args.get("path", args.get("file_path", "<unknown>"))
-            return f"Delete {path}"
-        elif tool_name == "run_command":
-            cmd = args.get("command", "<unknown>")
-            # Truncate long commands
-            if len(cmd) > 60:
-                cmd = cmd[:57] + "..."
-            return f"Run: {cmd}"
-        else:
-            return f"Execute {tool_name}"
+        return format_confirmation_prompt(tool_name, args)
 
     def get_tool_names(self) -> list[str]:
         """

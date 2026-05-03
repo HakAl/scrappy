@@ -115,6 +115,8 @@ class TestPrintStatus:
 
         assert 'Selection Priority:' in output_text
         assert 'cerebras' in output_text
+        assert 'Recommended for agent work: Cerebras first, Groq second.' in output_text
+        assert 'Gemini is overflow' in output_text
 
     def test_shows_override_hint(self):
         """print_status() should show how to override selection."""

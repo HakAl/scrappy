@@ -37,7 +37,7 @@ dependencies = [
     "fasteners>=0.19",
     "tantivy>=0.21.0; sys_platform != 'win32'",
     "pyperclip>=1.11.0",
-    "textual>=0.47.0",
+    "textual>=7.3.0",
     "langgraph>=0.2.0",
     "langfuse>=2.0.0,<3.0.0",  # Pin to v2 to match docker server
     "docker>=7.0.0",

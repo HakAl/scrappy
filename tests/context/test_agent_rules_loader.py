@@ -89,7 +89,7 @@ class TestAgentRulesLoader:
 
     def test_no_rules_file(self, tmp_path: Path):
         """Returns None when no rules file found."""
-        loader = AgentRulesLoader()
+        loader = AgentRulesLoader(max_depth=1)
         rules = loader.load(tmp_path)
 
         assert rules is None
@@ -184,7 +184,7 @@ class TestAgentRulesLoader:
 
     def test_discover_file_none_when_not_found(self, tmp_path: Path):
         """discover_file returns None when no file found."""
-        loader = AgentRulesLoader()
+        loader = AgentRulesLoader(max_depth=1)
         discovered = loader.discover_file(tmp_path)
 
         assert discovered is None
@@ -211,7 +211,7 @@ class TestAgentRulesLoader:
         agents_file = tmp_path / "AGENTS.md"
         agents_file.mkdir()  # Create directory instead of file (will cause read error)
 
-        loader = AgentRulesLoader()
+        loader = AgentRulesLoader(max_depth=1)
         rules = loader.load(tmp_path)
 
         # Should return None, not raise

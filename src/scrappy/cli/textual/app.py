@@ -5,8 +5,9 @@ Provides an interactive terminal UI using the Textual framework,
 wrapping the existing InteractiveMode with a modern UI.
 """
 
-from typing import TYPE_CHECKING, Optional, Callable
+from typing import TYPE_CHECKING, Optional, Callable, Any, cast
 import asyncio
+import json
 import logging
 import os
 import threading
@@ -17,10 +18,13 @@ from textual.app import App
 from textual.theme import Theme
 from textual.reactive import reactive
 from textual import work
+from textual.widgets import TextArea
 
+from scrappy.cli.protocols import ActivityState, ClipboardProtocol
 from scrappy.infrastructure.output_mode import OutputModeContext
 from scrappy.infrastructure.theme import DEFAULT_THEME, ThemeProtocol
 
+from .runtime_wiring import create_textual_runtime_session, wire_textual_runtime
 from .messages import (
     WriteOutput,
     WriteRenderable,
@@ -37,6 +41,7 @@ from .output_adapter import TextualOutputAdapter
 if TYPE_CHECKING:
     from ..interactive import InteractiveMode
     from ..core import CLI
+    from ..unified_io import UnifiedIO
     from ...context.codebase_context import CodebaseContext
 
 logger = logging.getLogger(__name__)
@@ -77,6 +82,7 @@ class ScrappyApp(App):
         output_adapter: Optional[TextualOutputAdapter] = None,
         theme: Optional[ThemeProtocol] = None,
         cli_factory: Optional[Callable[[], "CLI"]] = None,
+        clipboard: Optional[ClipboardProtocol] = None,
     ):
         """Initialize the Textual app controller.
 
@@ -89,10 +95,12 @@ class ScrappyApp(App):
             output_adapter: The TextualOutputAdapter to consume messages from
             theme: Optional theme for consistent styling
             cli_factory: Factory function to create CLI (deferred mode)
+            clipboard: Clipboard service for OS clipboard integration
         """
         super().__init__()
         self._theme = theme or DEFAULT_THEME
         self._should_stop_consumer = False
+        self._clipboard_service = clipboard or self._create_default_clipboard()
 
         # Deferred initialization mode
         self._cli_factory = cli_factory
@@ -122,6 +130,100 @@ class ScrappyApp(App):
 
         # Consumer thread (daemon so it won't block exit)
         self._consumer_thread: Optional[threading.Thread] = None
+        self._runtime_cleanup_done = False
+        self._integration_log_path = os.getenv("SCRAPPY_INTEGRATION_LOG_PATH")
+        self._integration_ready_file = os.getenv("SCRAPPY_READY_FILE")
+        self._integration_ready_signaled = False
+
+    def _create_default_clipboard(self) -> ClipboardProtocol:
+        """Create the default clipboard service."""
+        from .clipboard import PyperclipClipboard
+
+        return PyperclipClipboard()
+
+    def copy_to_clipboard(self, text: str) -> None:
+        """Copy text to both Textual's local clipboard and the system clipboard."""
+        try:
+            self._clipboard_service.copy_text(text)
+        except Exception as e:
+            logger.debug("Failed to copy to system clipboard: %s", e)
+
+        super().copy_to_clipboard(text)
+
+    def restore_mouse_support(self) -> None:
+        """Re-enable terminal mouse reporting when the driver supports it.
+
+        Real Windows terminals can lose Textual mouse mode after subprocess-heavy
+        flows or noisy startup output. Reasserting mouse support is safe and helps
+        keep text selection working in the chat log.
+        """
+        driver = getattr(self, "_driver", None)
+        enable_mouse = getattr(driver, "_enable_mouse_support", None)
+        if not callable(enable_mouse):
+            return
+
+        try:
+            enable_mouse()
+        except Exception as e:
+            logger.debug("Failed to restore mouse support: %s", e)
+
+    def _write_integration_event(self, event: str, **fields: object) -> None:
+        """Append a structured integration event when the harness enables it."""
+        if not self._integration_log_path:
+            return
+
+        payload: dict[str, object] = {
+            "ts": round(time.time(), 3),
+            "source": "app",
+            "event": event,
+        }
+        payload.update(fields)
+
+        try:
+            log_path = Path(self._integration_log_path)
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            with log_path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(payload, sort_keys=True) + "\n")
+        except Exception as e:
+            logger.debug("Failed to write integration event: %s", e)
+
+    def _signal_integration_ready(self) -> None:
+        """Emit a ready marker after the app has refreshed into an interactive state."""
+        if self._integration_ready_signaled:
+            return
+
+        self._integration_ready_signaled = True
+        try:
+            screen_name = type(self.screen).__name__
+        except Exception:
+            screen_name = None
+
+        try:
+            focused = type(self.focused).__name__ if self.focused is not None else None
+        except Exception:
+            focused = None
+
+        self._write_integration_event(
+            "ui_ready",
+            ready=self.ready,
+            screen=screen_name,
+            focused=focused,
+            interactive_mode=self.interactive_mode is not None,
+        )
+
+        if not self._integration_ready_file:
+            return
+
+        try:
+            ready_path = Path(self._integration_ready_file)
+            ready_path.parent.mkdir(parents=True, exist_ok=True)
+            ready_path.write_text("ready\n", encoding="utf-8")
+        except Exception as e:
+            logger.debug("Failed to write integration ready file: %s", e)
+
+    def _signal_command_idle(self) -> None:
+        """Emit an integration event after a command completes and the frame is painted."""
+        self._write_integration_event("command_idle", rendered=True)
 
     def set_codebase_context(self, context: "CodebaseContext") -> None:
         """Set codebase context for semantic search indexing.
@@ -176,6 +278,11 @@ class ScrappyApp(App):
         """Called when app starts."""
         self._register_user_theme()
         OutputModeContext.set_tui_mode(True, self.output_adapter)
+        self._write_integration_event(
+            "app_mount",
+            deferred=self._cli_factory is not None,
+            ready=self.ready,
+        )
 
         # Start daemon thread to consume output queue.
         # This avoids keeping a long-running Textual worker alive during exit.
@@ -273,6 +380,7 @@ class ScrappyApp(App):
             self.output_adapter.post_output(
                 f"Startup error: {message.error}\nUse /setup to configure providers.\n"
             )
+            self._write_integration_event("cli_ready_error", error=message.error)
             # Still mark as ready so user can interact
             self.ready = True
             return
@@ -283,10 +391,13 @@ class ScrappyApp(App):
         self._cli = message.cli
         self._setup_interactive_mode()
         self.ready = True
+        self._write_integration_event("cli_ready", ready=self.ready)
 
         # Display status lines now that CLI is ready (header already shown on mount)
         from scrappy.cli.interactive_banner import display_banner_status
         display_banner_status(self._cli.io)
+        self.call_after_refresh(self.restore_mouse_support)
+        self.call_after_refresh(self._signal_integration_ready)
 
     def _setup_interactive_mode(self) -> None:
         """Wire up InteractiveMode from CLI.
@@ -297,17 +408,7 @@ class ScrappyApp(App):
         if self._cli is None:
             return
 
-        # Create InteractiveMode from CLI
-        # This mirrors what TextualInteractiveMode.run() does
-        from ..interactive import InteractiveMode
-        from ..output_bridge import OutputBridge
-
-        # Inject output bridge to route orchestrator output through Textual
-        orchestrator_output = OutputBridge(self.output_adapter)
-        self._cli.orchestrator.output = orchestrator_output
-
-        # Create InteractiveMode with CLI's dependencies
-        self.interactive_mode = InteractiveMode(
+        self.interactive_mode = create_textual_runtime_session(
             io=self._cli.io,
             orchestrator=self._cli.orchestrator,
             session_context=self._cli.session_context,
@@ -316,53 +417,18 @@ class ScrappyApp(App):
             command_router=self._cli._create_command_router(),
             display=self._cli.display,
             tasks=self._cli.tasks,
-            logger=self._cli.logger
+            logger=self._cli.logger,
+            output_adapter=self.output_adapter,
         )
 
-        # Set up codebase context for semantic search
-        if hasattr(self._cli.orchestrator, 'context_manager'):
-            context_manager = self._cli.orchestrator.context_manager
-            if hasattr(context_manager, 'context'):
-                self.set_codebase_context(context_manager.context)
-
-        # Inject bridge into UnifiedIO for modal dialogs
-        self._cli.io.set_bridge(self.bridge)
-
-        # Create LangGraphBridge for new agent architecture
-        # This bridges LangGraph async execution to Textual worker pattern
-        langgraph_bridge = None
-        orchestrator = self._cli.orchestrator
-        # Check if orchestrator has stream_completion_with_fallback (required for agent)
-        if hasattr(orchestrator, 'stream_completion_with_fallback'):
-            from .langgraph_bridge import LangGraphBridge
-            from scrappy.graph.tools import ToolAdapter
-
-            # Create tool adapter - owned by app, passed to bridge
-            # This ensures proper cleanup and reuse across agent runs
-            self._tool_adapter = ToolAdapter.create_default()
-
-            langgraph_bridge = LangGraphBridge(
-                app=self,
-                bridge=self.bridge,
-                output_adapter=self.output_adapter,
-                orchestrator=orchestrator,
-                tool_adapter=self._tool_adapter,
-            )
-
-        # Reinitialize handlers with bridge for TUI-aware user interaction
-        self._cli.reinitialize_handlers_with_bridge(self.bridge, langgraph_bridge)
-
-        # Wire LangGraph for ALL chat (not just agent tasks)
-        # This enables unified chat where LLM decides tool usage
-        if langgraph_bridge is not None:
-            self.interactive_mode.set_langgraph_bridge(langgraph_bridge)
-
-        # Update command router's references to the new handlers
-        self.interactive_mode.command_router.agent_mgr = self._cli.agent_mgr
-
-        # Set up callback for /setup command
-        self.interactive_mode.command_router.set_setup_wizard_callback(
-            self.launch_setup_wizard
+        wire_textual_runtime(
+            app=self,
+            interactive_mode=self.interactive_mode,
+            io=self._cli.io,
+            orchestrator=self._cli.orchestrator,
+            output_adapter=self.output_adapter,
+            cli=self._cli,
+            setup_wizard_callback=self.launch_setup_wizard,
         )
 
     def exit(  # type: ignore[override]
@@ -404,12 +470,12 @@ class ScrappyApp(App):
             # Give workers a moment to actually cancel
             import asyncio
             try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    # Can't use run_until_complete, just sleep
-                    time.sleep(0.1)
-            except Exception:
+                asyncio.get_running_loop()
+            except RuntimeError:
                 pass
+            else:
+                # Can't use run_until_complete here, just sleep briefly.
+                time.sleep(0.1)
             for w in list(self.workers._workers):
                 self._file_log(f"exit(): after cancel - worker name={w.name}, state={w.state}, is_finished={w.is_finished}")
         except Exception as e:
@@ -417,18 +483,29 @@ class ScrappyApp(App):
             self._file_log(f"exit(): error cancelling workers: {e}")
             self._file_log(f"exit(): traceback: {traceback.format_exc()}")
 
+        self._cleanup_runtime_resources()
         self._file_log("exit(): calling super().exit()")
         super().exit(result, return_code, str(message) if message else None)
         self._file_log("exit(): super().exit() returned")
 
-    def on_unmount(self) -> None:
-        """Called when app is about to close."""
+    def _cleanup_runtime_resources(self) -> None:
+        """Release app-owned runtime resources once during shutdown."""
+        if self._runtime_cleanup_done:
+            return
+
+        self._runtime_cleanup_done = True
         self._should_stop_consumer = True
         self.output_adapter.request_shutdown()  # Wake consumer immediately
         OutputModeContext.set_tui_mode(False)
 
         # Signal bridge to release any blocked worker threads (redundant but safe)
         self.bridge.shutdown()
+
+        if hasattr(self, 'interactive_mode') and self.interactive_mode:
+            try:
+                self.interactive_mode.session_context.close()
+            except Exception as e:
+                logger.debug("Error closing session context: %s", e)
 
         if self._codebase_context is not None:
             # Short timeout since daemon threads will be killed on process exit anyway
@@ -443,9 +520,10 @@ class ScrappyApp(App):
 
         # Cancel background tasks and close LLM service
         if hasattr(self, 'interactive_mode') and self.interactive_mode:
+            orchestrator = cast(Any, self.interactive_mode.orchestrator)
             # Cancel any pending background tasks first
             try:
-                cancelled = self.interactive_mode.orchestrator.cancel_all_background_tasks()
+                cancelled = orchestrator.cancel_all_background_tasks()
                 if cancelled > 0:
                     logger.debug("Cancelled %d background tasks on shutdown", cancelled)
             except Exception as e:
@@ -460,9 +538,13 @@ class ScrappyApp(App):
 
             # Close LLM service HTTP sessions
             try:
-                self.interactive_mode.orchestrator.llm_service.close()
+                orchestrator.llm_service.close()
             except Exception as e:
                 logger.debug("Error closing LLM service: %s", e)
+
+    def on_unmount(self) -> None:
+        """Called when app is about to close."""
+        self._cleanup_runtime_resources()
 
     async def _shutdown(self) -> None:  # type: ignore[override]
         """Run Textual shutdown.
@@ -584,6 +666,7 @@ class ScrappyApp(App):
             output_adapter=self.output_adapter,
             bridge=self.bridge,
             theme=self._theme,
+            clipboard=self._clipboard_service,
         )
         self.push_screen(screen)
 
@@ -591,6 +674,12 @@ class ScrappyApp(App):
         from scrappy.cli.interactive_banner import display_banner_header_tui
 
         display_banner_header_tui(self.output_adapter)
+        self.call_after_refresh(self.restore_mouse_support)
+        self._write_integration_event(
+            "main_screen_shown",
+            ready=self.ready,
+            interactive_mode=self.interactive_mode is not None,
+        )
 
         # Show welcome message if keys were found in environment
         if env_key_count > 0:
@@ -598,6 +687,9 @@ class ScrappyApp(App):
             self.output_adapter.post_output(
                 f"Found {env_key_count} API {key_word} in environment. Use /setup to add more.\n"
             )
+
+        if self.ready and self.interactive_mode is not None:
+            self.call_after_refresh(self._signal_integration_ready)
 
     def _show_wizard_screen(self, allow_cancel: bool = True) -> None:
         """Push wizard screen.
@@ -613,8 +705,9 @@ class ScrappyApp(App):
             return
 
         screen = SetupWizardScreen(
-            io=self.interactive_mode.io,
+            io=cast("UnifiedIO", self.interactive_mode.io),
             key_validator=create_key_validator(),
+            clipboard=self._clipboard_service,
             allow_cancel=allow_cancel,
             on_complete=self._on_wizard_complete,
         )
@@ -628,9 +721,10 @@ class ScrappyApp(App):
         """
         if has_provider:
             if self.interactive_mode is not None:
-                self.interactive_mode.orchestrator._auto_register_providers()
+                orchestrator = cast(Any, self.interactive_mode.orchestrator)
+                orchestrator._auto_register_providers()
                 # Configure LLM service now that API keys are saved
-                self.interactive_mode.orchestrator.llm_service.configure()
+                orchestrator.llm_service.configure()
             # Show main screen after wizard
             self.call_later(self._show_main_screen)
         else:
@@ -741,6 +835,9 @@ class ScrappyApp(App):
         else:
             logger.warning("on_activity_state_change: screen is not MainAppScreen, ignoring")
 
+        if message.state == ActivityState.IDLE:
+            self.call_after_refresh(self._signal_command_idle)
+
     def on_tasks_updated(self, message: TasksUpdated) -> None:
         """Route task updates to active screen."""
         from ..screens import MainAppScreen
@@ -767,10 +864,24 @@ class ScrappyApp(App):
         Handles keys that should work consistently across all screens:
         - ctrl+q: Hard exit (immediate, no cleanup - emergency only)
         - ctrl+c: Copy selection, cancel operations, or double-tap for clean exit
+        - ctrl+shift+c: Copy selection without triggering exit/cancel behavior
+        - ctrl+v / ctrl+shift+v / shift+insert: Paste from OS clipboard
         - escape: Cancel running operations (agent, capture mode)
         """
         if event.key == "ctrl+q":
             os._exit(0)
+
+        if event.key == "ctrl+shift+c":
+            if self._handle_copy_shortcut():
+                event.stop()
+                event.prevent_default()
+            return
+
+        if event.key in {"ctrl+v", "ctrl+shift+v", "shift+insert"}:
+            if self._handle_paste_shortcut():
+                event.stop()
+                event.prevent_default()
+            return
 
         # Handle Ctrl+C
         if event.key == "ctrl+c":
@@ -836,38 +947,85 @@ class ScrappyApp(App):
         """Handle ESC key: cancel whatever is running."""
         self._cancel_operation()
 
+    def _get_paste_target(self) -> Optional[TextArea]:
+        """Return the focused TextArea, or the main input as a fallback."""
+        focused = self.focused
+        if isinstance(focused, TextArea):
+            return focused
+
+        from ..screens import MainAppScreen
+
+        screen = self.screen
+        if isinstance(screen, MainAppScreen) and screen._layout is not None:
+            return screen._layout.input
+
+        try:
+            return self.screen.query_one(TextArea)
+        except Exception:
+            return None
+
+    def _handle_copy_shortcut(self) -> bool:
+        """Copy selected text from the focused input or output log."""
+        from ..screens import MainAppScreen
+        from ..widgets.selectable_log import SelectableLog
+
+        focused = self.focused
+        if isinstance(focused, TextArea) and focused.selected_text:
+            focused.action_copy()
+            return True
+
+        screen = self.screen
+        if isinstance(screen, MainAppScreen) and screen._layout is not None:
+            output = screen._layout.output
+            if isinstance(output, SelectableLog) and output._has_selection():
+                output.action_copy_selection()
+                return True
+
+        return False
+
+    def _handle_paste_shortcut(self) -> bool:
+        """Paste the OS clipboard into the active TextArea."""
+        target = self._get_paste_target()
+        if target is None or target.read_only:
+            return False
+
+        try:
+            clipboard_text = self._clipboard_service.paste_text()
+        except Exception as e:
+            logger.debug("Failed to read system clipboard: %s", e)
+            return False
+
+        self._clipboard = clipboard_text or ""
+        target.focus()
+        target.action_paste()
+        return True
+
     def _handle_ctrl_c(self) -> bool:
         """Handle Ctrl+C with context-aware behavior.
 
         Priority:
-        1. Double-tap always exits (escape hatch when stuck)
-        2. Copy selection if text is selected
+        1. Copy selected text from input/output
+        2. Double-tap exits (escape hatch when stuck)
         3. Cancel operations and clean up UI
         4. Single tap shows hint
 
         Returns:
             True to stop event propagation, False to let it bubble.
         """
-        from ..screens import MainAppScreen
-        from ..widgets.selectable_log import SelectableLog
-
-        screen = self.screen
         now = time.time()
 
-        # 1. Double-tap ALWAYS exits (escape hatch when agent is stuck)
+        # 1. Copy selection if available. Do this before exit-tap tracking so
+        # normal clipboard use doesn't look like an exit request.
+        if self._handle_copy_shortcut():
+            return True
+
+        # 2. Double-tap exits (escape hatch when agent is stuck)
         if now - self._last_ctrl_c_time < self._CTRL_C_DOUBLE_TAP_THRESHOLD:
             self.exit()
             return True
 
         # Update timestamp for double-tap detection
         self._last_ctrl_c_time = now
-
-        # 2. Copy selection if available (only action that doesn't show hint)
-        if isinstance(screen, MainAppScreen) and screen._layout is not None:
-            output = screen._layout.output
-            if isinstance(output, SelectableLog) and output._has_selection():
-                output.action_copy_selection()
-                return True
 
         # 3. Cancel any running operations
         did_cancel = self._cancel_operation()

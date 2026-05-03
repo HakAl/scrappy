@@ -133,21 +133,26 @@ class TestBuildModelList:
         )
         assert groq_idx < cerebras_idx
 
-    def test_instruct_tier_includes_cerebras_qwen(self):
-        """Verify cerebras qwen-235b IS in instruct tier (instruction-tuned)."""
+    def test_instruct_tier_prioritizes_stable_and_free_tier_models(self):
+        """Verify instruct tier starts with stable/default agent models."""
         api_key_service = MockApiKeyService(keys={
             "CEREBRAS_API_KEY": "test-cerebras-key",
             "GROQ_API_KEY": "test-groq-key",
+            "GEMINI_API_KEY": "test-gemini-key",
         })
 
         model_list = build_model_list(api_key_service)
 
         instruct_models = [m for m in model_list if m["model_name"] == "instruct"]
-        # Cerebras qwen-235b is in instruct tier
-        assert any(
-            "qwen-3-235b" in m["litellm_params"]["model"]
-            for m in instruct_models
-        )
+        instruct_ids = [m["litellm_params"]["model"] for m in instruct_models]
+
+        assert instruct_ids[:4] == [
+            "cerebras/gpt-oss-120b",
+            "groq/moonshotai/kimi-k2-instruct",
+            "cerebras/zai-glm-4.7",
+            "gemini/gemini-2.5-flash",
+        ]
+        assert "cerebras/qwen-3-235b-a22b-instruct-2507" in instruct_ids
 
 
 class TestCreateLiteLLMRouter:
@@ -316,8 +321,9 @@ class TestModelMetadata:
         """
         # Models actually used for agent instruct tier (from build_model_list)
         agent_instruct_models = [
-            "cerebras/qwen-3-235b-a22b-instruct-2507",
+            "cerebras/gpt-oss-120b",
             "groq/moonshotai/kimi-k2-instruct",
+            "cerebras/zai-glm-4.7",
             "gemini/gemini-2.5-flash",
         ]
 

@@ -3,16 +3,16 @@
 import logging
 from typing import Optional
 
-from textual.scroll_view import ScrollView
-
-logger = logging.getLogger(__name__)
 from textual.strip import Strip
 from textual.geometry import Size
 from textual.events import MouseDown, MouseMove, MouseUp
+from textual.scroll_view import ScrollView
 from textual._cells import cell_len
 from rich.console import RenderableType
 from rich.segment import Segment
 from rich.style import Style
+
+logger = logging.getLogger(__name__)
 
 
 class SelectableLog(ScrollView, can_focus=True):
@@ -256,8 +256,9 @@ class SelectableLog(ScrollView, can_focus=True):
 
     def on_mouse_move(self, event: MouseMove) -> None:
         """Update selection on mouse drag."""
-        # Only update selection while actively dragging (button held)
-        if self._is_selecting and event.button != 0:
+        # Track drag state locally. Real terminals may deliver MouseMove with
+        # button=0 even while the left button remains held during a drag.
+        if self._is_selecting:
             new_end = self._mouse_to_scroll_coords(event)
             if new_end != self._selection_end:
                 self._selection_end = new_end

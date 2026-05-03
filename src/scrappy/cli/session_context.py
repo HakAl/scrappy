@@ -5,10 +5,14 @@ Centralizes shared session state to eliminate fragile synchronization
 between CLI, CommandRouter, and InteractiveMode components.
 """
 
+import logging
 from typing import Any, Dict, List, Optional, Protocol, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from scrappy.infrastructure.persistence import ConversationStoreProtocol
+
+
+logger = logging.getLogger(__name__)
 
 
 class SessionContextProtocol(Protocol):
@@ -80,6 +84,10 @@ class SessionContextProtocol(Protocol):
             message: Full message dict with 'role', 'content', and optionally
                     'tool_calls' or 'tool_call_id'
         """
+        ...
+
+    def close(self) -> None:
+        """Release any session-scoped resources."""
         ...
 
 
@@ -192,3 +200,16 @@ class SessionContext:
         """
         if self._conversation_store is not None:
             self._conversation_store.add_message(message)
+
+    def close(self) -> None:
+        """Close the conversation store and release session resources."""
+        store = self._conversation_store
+        self._conversation_store = None
+
+        if store is None:
+            return
+
+        try:
+            store.close()
+        except Exception as e:
+            logger.debug("Error closing conversation store: %s", e)

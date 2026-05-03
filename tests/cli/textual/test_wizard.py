@@ -28,8 +28,9 @@ class TestSetupWizardScreen:
         mock_io = MagicMock()
         mock_io.theme = MagicMock()
         mock_validator = MagicMock()
+        mock_clipboard = MagicMock()
 
-        screen = SetupWizardScreen(io=mock_io, key_validator=mock_validator)
+        screen = SetupWizardScreen(io=mock_io, key_validator=mock_validator, clipboard=mock_clipboard)
         assert screen is not None
 
     def test_wizard_screen_stores_dependencies(self):
@@ -37,10 +38,36 @@ class TestSetupWizardScreen:
         mock_io = MagicMock()
         mock_io.theme = MagicMock()
         mock_validator = MagicMock()
+        mock_clipboard = MagicMock()
 
-        screen = SetupWizardScreen(io=mock_io, key_validator=mock_validator)
+        screen = SetupWizardScreen(io=mock_io, key_validator=mock_validator, clipboard=mock_clipboard)
         assert screen._io is mock_io
         assert screen._key_validator is mock_validator
+        assert screen._clipboard is mock_clipboard
+
+    def test_right_click_pastes_clipboard_text(self):
+        """Right-click should paste clipboard text into the wizard input."""
+        mock_io = MagicMock()
+        mock_io.theme = MagicMock()
+        mock_validator = MagicMock()
+        mock_clipboard = MagicMock()
+        mock_clipboard.paste_text.return_value = "clipboard text"
+        screen = SetupWizardScreen(io=mock_io, key_validator=mock_validator, clipboard=mock_clipboard)
+        screen._layout = MagicMock()
+        screen._layout.input.selection.start = (0, 0)
+        screen._layout.input.selection.end = (0, 0)
+        event = MagicMock()
+        event.button = 3
+
+        screen.on_click(event)
+
+        mock_clipboard.paste_text.assert_called_once_with()
+        screen._layout.input.replace.assert_called_once_with(
+            "clipboard text",
+            (0, 0),
+            (0, 0),
+            maintain_selection_offset=True,
+        )
 
 
 class TestSetupWizard:
@@ -189,10 +216,11 @@ class TestWizardScreenIntegration:
         mock_io.theme = MagicMock()
         mock_io.output_sink = MagicMock()
         mock_validator = MagicMock()
+        mock_clipboard = MagicMock()
 
         class TestApp(App):
             def compose(self):
-                yield SetupWizardScreen(io=mock_io, key_validator=mock_validator)
+                yield SetupWizardScreen(io=mock_io, key_validator=mock_validator, clipboard=mock_clipboard)
 
         app = TestApp()
         async with app.run_test() as pilot:
@@ -208,10 +236,11 @@ class TestWizardScreenIntegration:
         mock_io.theme = MagicMock()
         mock_io.output_sink = MagicMock()
         mock_validator = MagicMock()
+        mock_clipboard = MagicMock()
 
         class TestApp(App):
             def compose(self):
-                yield SetupWizardScreen(io=mock_io, key_validator=mock_validator)
+                yield SetupWizardScreen(io=mock_io, key_validator=mock_validator, clipboard=mock_clipboard)
 
         app = TestApp()
         async with app.run_test() as pilot:

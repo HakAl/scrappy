@@ -175,6 +175,8 @@ class TestDisplayBanner:
         all_output = io.get_all_output()
         assert "No providers configured" in all_output
         assert "/setup" in all_output
+        assert "Recommended for agent work" in all_output
+        assert "Gemini is overflow" in all_output
 
     def test_displays_provider_list_when_configured(self, tmp_path: Path):
         """Banner should show provider names when keys are configured."""
@@ -187,6 +189,7 @@ class TestDisplayBanner:
         all_output = io.get_all_output()
         assert "Providers" in all_output
         assert "Groq" in all_output
+        assert "Recommended for agent work" in all_output
 
     def test_displays_help_hint(self, tmp_path: Path):
         """Banner should show /help hint."""

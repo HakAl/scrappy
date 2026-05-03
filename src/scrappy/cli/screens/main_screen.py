@@ -25,7 +25,7 @@ from ..textual import (
 )
 
 from scrappy.infrastructure.theme import ThemeProtocol
-from ..protocols import ActivityState
+from ..protocols import ActivityState, ClipboardProtocol
 
 if TYPE_CHECKING:
     from ..interactive import InteractiveMode
@@ -63,6 +63,7 @@ class MainAppScreen(Screen):
         output_adapter: "TextualOutputAdapter",
         bridge: "ThreadSafeAsyncBridge",
         theme: ThemeProtocol,
+        clipboard: ClipboardProtocol,
     ):
         """Initialize main screen with dependencies.
 
@@ -73,12 +74,14 @@ class MainAppScreen(Screen):
             output_adapter: Adapter for thread-safe output routing
             bridge: Bridge for blocking prompts/confirms from worker threads
             theme: Theme for consistent styling
+            clipboard: Clipboard service for OS clipboard integration
         """
         super().__init__()
         self.interactive_mode = interactive_mode
         self.output_adapter = output_adapter
         self.bridge = bridge
         self._theme = theme
+        self._clipboard = clipboard
 
         # Status bar components
         self.progress_indicator = ProgressIndicator()
@@ -143,15 +146,13 @@ class MainAppScreen(Screen):
 
     def on_click(self, event) -> None:
         """Refocus input when clicking anywhere except input field."""
-        import pyperclip
-
         if self._layout is None:
             return
 
         # Right-click (button=3) pastes from clipboard
         if hasattr(event, 'button') and event.button == 3:
             try:
-                text = pyperclip.paste()
+                text = self._clipboard.paste_text()
                 if text:
                     self._layout.input.replace(
                         text,
@@ -303,14 +304,21 @@ class MainAppScreen(Screen):
     @work(exclusive=True, thread=True)
     def process_command(self, user_input: str) -> None:
         """Process command in worker thread."""
-        # This is called after action_submit_input validates interactive_mode exists
-        assert self.interactive_mode is not None, "process_command called before ready"
-
         logger.debug("process_command: starting for input: %s", user_input[:50])
         try:
             self.app.post_message(ActivityStateChange(ActivityState.THINKING))
+            interactive_mode = self.interactive_mode
+            if interactive_mode is None:
+                interactive_mode = self.scrappy_app.interactive_mode
+                if interactive_mode is not None:
+                    self.interactive_mode = interactive_mode
+            if interactive_mode is None:
+                logger.warning("process_command called before interactive mode was ready")
+                self.write_output("Still initializing...\n")
+                return
+
             logger.debug("process_command: posted THINKING, calling _process_input")
-            should_continue = self.interactive_mode._process_input(user_input)
+            should_continue = interactive_mode._process_input(user_input)
             logger.debug("process_command: _process_input returned %s", should_continue)
             if not should_continue:
                 self.app.exit()
@@ -328,8 +336,17 @@ class MainAppScreen(Screen):
             self.output_adapter.post_renderable(error_text)
             logger.exception("Error processing command")
         finally:
-            logger.debug("process_command: finally block, posting IDLE")
+            logger.debug("process_command: finally block, flushing output adapter")
+            self.output_adapter.flush(timeout=5.0)
+            logger.debug("process_command: flush complete, posting IDLE")
             self.app.post_message(ActivityStateChange(ActivityState.IDLE))
+            restore_mouse_support = getattr(self.app, "restore_mouse_support", None)
+            if callable(restore_mouse_support):
+                call_from_thread = getattr(self.app, "call_from_thread", None)
+                if callable(call_from_thread):
+                    call_from_thread(restore_mouse_support)
+                else:
+                    restore_mouse_support()
             logger.debug("process_command: IDLE posted, exiting")
 
     def write_output(self, content: str) -> None:
