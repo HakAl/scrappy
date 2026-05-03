@@ -1,8 +1,13 @@
 """Tests for deferred Textual app setup wiring."""
 
-from unittest.mock import Mock, patch
+import json
+from pathlib import Path
+from unittest.mock import Mock, call, patch
+import uuid
 
+from scrappy.cli.protocols import ActivityState
 from scrappy.cli.textual.app import CLIReady, ScrappyApp
+from scrappy.cli.textual.messages import ActivityStateChange
 
 
 def test_setup_interactive_mode_uses_shared_helpers():
@@ -87,34 +92,33 @@ def test_exit_runs_runtime_cleanup_once():
 
 def test_copy_to_clipboard_uses_system_clipboard_when_available():
     """Clipboard copy should sync Textual's clipboard to the OS clipboard too."""
-    app = ScrappyApp(cli_factory=lambda: Mock())
-    pyperclip = Mock()
+    clipboard = Mock()
+    app = ScrappyApp(cli_factory=lambda: Mock(), clipboard=clipboard)
 
     with (
-        patch.dict("sys.modules", {"pyperclip": pyperclip}),
         patch("textual.app.App.copy_to_clipboard", autospec=True) as mock_super_copy,
     ):
         app.copy_to_clipboard("copied text")
 
-    pyperclip.copy.assert_called_once_with("copied text")
+    clipboard.copy_text.assert_called_once_with("copied text")
     mock_super_copy.assert_called_once_with(app, "copied text")
 
 
 def test_handle_paste_shortcut_reads_system_clipboard():
     """Paste shortcut should populate the target TextArea from the OS clipboard."""
-    app = ScrappyApp(cli_factory=lambda: Mock())
+    clipboard = Mock()
+    clipboard.paste_text.return_value = "clipboard text"
+    app = ScrappyApp(cli_factory=lambda: Mock(), clipboard=clipboard)
     target = Mock()
     target.read_only = False
-    pyperclip = Mock()
-    pyperclip.paste.return_value = "clipboard text"
 
     with (
         patch.object(app, "_get_paste_target", return_value=target),
-        patch.dict("sys.modules", {"pyperclip": pyperclip}),
     ):
         assert app._handle_paste_shortcut() is True
 
     assert app._clipboard == "clipboard text"
+    clipboard.paste_text.assert_called_once_with()
     target.focus.assert_called_once_with()
     target.action_paste.assert_called_once_with()
 
@@ -162,4 +166,74 @@ def test_on_cliready_reasserts_mouse_support_after_banner_status():
         app.on_cliready(CLIReady(cli=cli))
 
     mock_banner_status.assert_called_once_with(cli.io)
-    mock_call_after_refresh.assert_called_once_with(app.restore_mouse_support)
+    assert mock_call_after_refresh.call_args_list == [
+        call(app.restore_mouse_support),
+        call(app._signal_integration_ready),
+    ]
+
+
+def test_on_cliready_writes_ready_signal_when_integration_env_enabled(monkeypatch):
+    """Deferred startup should emit a file-based readiness signal for live harnesses."""
+    base_dir = Path(".tmp_test_app_setup_signals") / str(uuid.uuid4())
+    base_dir.mkdir(parents=True, exist_ok=True)
+    ready_path = base_dir / "ready.signal"
+    log_path = base_dir / "integration.jsonl"
+    monkeypatch.setenv("SCRAPPY_READY_FILE", str(ready_path))
+    monkeypatch.setenv("SCRAPPY_INTEGRATION_LOG_PATH", str(log_path))
+
+    app = ScrappyApp(cli_factory=lambda: Mock())
+    cli = Mock()
+    cli.io = Mock()
+
+    with (
+        patch.object(app, "_setup_interactive_mode"),
+        patch.object(app, "call_after_refresh", side_effect=lambda callback: callback()),
+        patch("scrappy.cli.interactive_banner.display_banner_status"),
+    ):
+        app.on_cliready(CLIReady(cli=cli))
+
+    assert ready_path.read_text(encoding="utf-8") == "ready\n"
+    events = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+    assert any(event["event"] == "cli_ready" for event in events)
+    assert any(
+        event["event"] == "ui_ready" and event["ready"] is True for event in events
+    )
+
+
+def test_activity_idle_emits_command_idle_integration_event(monkeypatch, tmp_path):
+    """Transitioning to IDLE should emit a command_idle integration event after refresh."""
+    log_path = tmp_path / "integration.jsonl"
+    monkeypatch.setenv("SCRAPPY_INTEGRATION_LOG_PATH", str(log_path))
+
+    app = ScrappyApp(cli_factory=lambda: Mock())
+    mock_screen = Mock()
+
+    with (
+        patch.object(app, "call_after_refresh", side_effect=lambda callback: callback()),
+        patch.object(type(app), "screen", new_callable=lambda: property(lambda self: mock_screen)),
+    ):
+        app.on_activity_state_change(ActivityStateChange(ActivityState.IDLE))
+
+    events = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+    assert any(
+        event["event"] == "command_idle" and event["rendered"] is True for event in events
+    )
+
+
+def test_activity_thinking_does_not_emit_command_idle(monkeypatch, tmp_path):
+    """Transitioning to THINKING should not emit a command_idle event."""
+    log_path = tmp_path / "integration.jsonl"
+    monkeypatch.setenv("SCRAPPY_INTEGRATION_LOG_PATH", str(log_path))
+
+    app = ScrappyApp(cli_factory=lambda: Mock())
+    mock_screen = Mock()
+
+    with (
+        patch.object(app, "call_after_refresh", side_effect=lambda callback: callback()),
+        patch.object(type(app), "screen", new_callable=lambda: property(lambda self: mock_screen)),
+    ):
+        app.on_activity_state_change(ActivityStateChange(ActivityState.THINKING))
+
+    if log_path.exists():
+        events = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+        assert not any(event["event"] == "command_idle" for event in events)

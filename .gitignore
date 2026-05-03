@@ -52,6 +52,9 @@ Thumbs.db
 # Testing
 .pytest_cache/
 .pytest_tmp/
+/.tmp/
+/.tmp_*/
+/.tools/
 .coverage
 htmlcov/
 coverage.json

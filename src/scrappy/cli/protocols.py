@@ -6,6 +6,7 @@ enabling consistent behavior, testability, and type checking across the CLI laye
 
 This is the canonical location for all CLI-related protocols including:
 - Activity indicators (ActivityState, ActivityIndicatorProtocol)
+- Clipboard integration (ClipboardProtocol)
 - CLI I/O operations (CLIIOProtocol)
 - Output formatting (BaseOutputProtocol, FormattedOutputProtocol, RichRenderableProtocol)
 - Task management (Task, TaskStatus, TaskPriority, TaskStorageProtocol)
@@ -21,6 +22,7 @@ from ..orchestrator.protocols import Orchestrator
 if TYPE_CHECKING:
     from rich.console import Console, RenderableType
     from textual.widget import Widget
+    from .unified_io import ProgressTracker, StreamWriter
 
 
 # =============================================================================
@@ -59,6 +61,23 @@ class ActivityIndicatorProtocol(Protocol):
     @property
     def is_visible(self) -> bool:
         """Whether indicator is currently visible."""
+        ...
+
+
+# =============================================================================
+# Clipboard Protocol
+# =============================================================================
+
+@runtime_checkable
+class ClipboardProtocol(Protocol):
+    """Protocol defining text clipboard operations."""
+
+    def copy_text(self, text: str) -> None:
+        """Write text to the system clipboard."""
+        ...
+
+    def paste_text(self) -> str:
+        """Read text from the system clipboard."""
         ...
 
 
