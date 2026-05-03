@@ -149,6 +149,16 @@ MODEL_METADATA: dict[str, ModelMetadata] = {
         rpd=14400,
         tpm=60000,
     ),
+    "cerebras/zai-glm-4.7": ModelMetadata(
+        model_id="cerebras/zai-glm-4.7",
+        provider="cerebras",
+        group="instruct",
+        context_length=131072,  # 128k context
+        speed=SpeedRank.FAST,
+        quality=QualityRank.VERY_GOOD,
+        rpd=14400,
+        tpm=60000,
+    ),
 
     # Groq
     "groq/moonshotai/kimi-k2-instruct": ModelMetadata(
