@@ -41,6 +41,57 @@ NEVER commit anything under `.docs/`. The directory is gitignored on purpose.
 
 ---
 
+## STAY IN SCOPE
+
+When the user asks for X, deliver X. Do not build X plus adjacent infrastructure that might be useful later.
+
+- Asked to plan an epic? Write the plan. Do not start building it.
+- Asked to fix bug Y? Fix bug Y. Do not refactor surrounding code unless the fix requires it.
+- Found untracked artifacts in the worktree? Treat them as suspicious. Do not ship them unless they are clearly part of the task.
+- When in doubt about whether something is in scope, ask before building.
+
+---
+
+## PLAN BEFORE BUILDING
+
+For any work bigger than a focused bug fix, write a plan first in `.docs/plans/`. The plan describes what exists, what is missing, the design decisions, and the proposed PR sequence.
+
+Plans should be reviewed before implementation begins. A second reviewer, whether the user or another coding agent, catches structural issues that feel right to the original author.
+
+If a plan keeps making the same wrong-layer mistake across revisions, name the rule explicitly and pin it at the top of the plan.
+
+---
+
+## CROSS-AGENT REVIEW
+
+Use independent review for architectural decisions, plan revisions, and choices with multiple defensible answers. The author of an artifact has confirmation bias on their own work.
+
+When another agent or reviewer gives findings, address the root issue in the artifact. Do not just patch the wording that was criticized.
+
+---
+
+## QUALITY GATE (BEFORE CLAIMING DONE)
+
+A change is not done until:
+
+- `ruff check` passes on the changed surface. Prefer the focused path first; run broader checks when the change touches shared behavior.
+- `mypy` passes on touched source files or packages when source code changed.
+- The relevant test surface passes, including edge cases for the behavior changed.
+- Any skipped or impossible checks are called out explicitly with the reason.
+- For user-facing or environment-dependent behavior, do not claim it works in the user's environment until the user confirms. If the user has not confirmed yet, say exactly what was verified locally and what remains unconfirmed.
+
+---
+
+## ENGINEERING OPERATING RULES
+
+- Delete more than you add when cleanup is safe and in scope.
+- Leave touched code better than you found it without expanding the task.
+- Fix root causes. Do not defend a workaround when the underlying design is wrong.
+- Prefer the smallest change that proves the behavior and preserves existing contracts.
+- If pre-existing debt blocks the right fix, document it with `br create` instead of silently working around it.
+
+---
+
 ## ISSUE DISCOVERY (MANDATORY)
 
 While coding, you MUST document any issues you encounter using `br create`. This includes:
@@ -376,15 +427,15 @@ def test_end_to_end_flow():
 
 ---
 
-## COMMANDS
+## COMMAND REFERENCE
 
-**MANDATORY: After making code changes, ALWAYS run linting and type checking:**
+Use the narrowest command that proves the changed behavior first, then broaden when the change touches shared contracts.
 
 ```bash
-# Lint with ruff (REQUIRED after changes)
+# Lint source and tests with ruff
 ruff check src/ tests/
 
-# Type check with mypy (REQUIRED after changes)
+# Type check source with mypy
 mypy src/
 
 # Run default test suite (excludes integration, slow, and benchmark tests by pytest config)
@@ -403,7 +454,7 @@ python -m pytest tests/integration/ -v --tb=short --strict-markers -o addopts=""
 python -m pytest tests/ --cov=src --cov-report=term-missing
 ```
 
-**Quality Gate:** Do not consider a task complete until ruff and mypy pass without errors.
+The quality gate above defines when a change can be claimed done. If a command cannot run or is blocked by known pre-existing debt, say so explicitly.
 
 ---
 
