@@ -4,11 +4,12 @@
 
 ---
 
-This project uses **br** (beads) for issue tracking. Run `br onboard` to get started.
+This project uses **br** (beads rust) for issue tracking. Run `br info` or `br --help` to get started.
 
 ## Quick Reference
 
 ```bash
+br info               # Show active .beads workspace and issue count
 br ready              # Find available work
 br show <id>          # View issue details
 br update <id> --status in_progress  # Claim work
