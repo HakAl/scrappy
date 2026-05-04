@@ -14,7 +14,42 @@ Tests:
 
 import pytest
 
-from scrappy.orchestrator.provider_selector import ProviderSelector
+from scrappy.orchestrator.model_selection import ModelSelectionType
+from scrappy.orchestrator.provider_selector import (
+    ProviderSelector,
+    selection_type_for_provider_hint,
+)
+
+
+class TestSelectionTypeForProviderHint:
+    """Tests for legacy provider/group hint mapping."""
+
+    @pytest.mark.parametrize(
+        ("hint", "expected"),
+        [
+            (None, ModelSelectionType.FAST),
+            ("fast", ModelSelectionType.FAST),
+            ("groq", ModelSelectionType.FAST),
+            ("cerebras", ModelSelectionType.FAST),
+            ("auto", ModelSelectionType.FAST),
+            ("mock", ModelSelectionType.FAST),
+            ("chat", ModelSelectionType.CHAT),
+            ("quality", ModelSelectionType.CHAT),
+            ("instruct", ModelSelectionType.INSTRUCT),
+            ("gemini", ModelSelectionType.INSTRUCT),
+        ],
+    )
+    def test_known_hints(self, hint, expected):
+        """Known hints map to their single selection type."""
+        assert selection_type_for_provider_hint(hint) == expected
+
+    def test_unknown_hint_defaults_to_chat_and_logs_debug(self, caplog):
+        """Unknown hints use CHAT while preserving a debug breadcrumb."""
+        with caplog.at_level("DEBUG"):
+            result = selection_type_for_provider_hint("unknown-provider")
+
+        assert result == ModelSelectionType.CHAT
+        assert "unknown-provider" in caplog.text
 
 
 class TestSetupBrainModelGroup:

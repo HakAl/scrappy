@@ -31,6 +31,7 @@ def create_test_state(
     messages: Optional[list[Message]] = None,
     error_count: int = 0,
     last_error: Optional[str] = None,
+    error_suggestion: Optional[str] = None,
     current_tier: Literal["fast", "chat", "instruct"] = "fast",
 ) -> AgentState:
     """Create a test AgentState."""
@@ -41,6 +42,7 @@ def create_test_state(
         messages=messages or [],
         error_count=error_count,
         last_error=last_error,
+        error_suggestion=error_suggestion,
         current_tier=current_tier,
     )
 
@@ -80,6 +82,17 @@ class TestFormatErrorContext:
         result = format_error_context("error", error_count=1)
 
         assert "error #" not in result
+
+    def test_includes_error_suggestion(self):
+        """Should include actionable suggestion when provided."""
+        result = format_error_context(
+            "No healthy models remain",
+            error_count=1,
+            error_suggestion="Run /setup or update API keys.",
+        )
+
+        assert "Provider Guidance" in result
+        assert "Run /setup or update API keys." in result
 
 
 # =============================================================================
@@ -143,17 +156,20 @@ class TestErrorNode:
         """Should clear last_error after processing."""
         state = create_test_state(
             last_error="File not found",
+            error_suggestion="Check the path.",
             error_count=1,
         )
 
         result = error_node(state)
 
         assert result.last_error is None
+        assert result.error_suggestion is None
 
     def test_appends_error_context_to_messages(self):
         """Should append error context as system message."""
         state = create_test_state(
             last_error="Tool execution failed",
+            error_suggestion="Use a different tool.",
             error_count=1,
             messages=[{"role": "user", "content": "hello"}],
         )
@@ -163,6 +179,7 @@ class TestErrorNode:
         assert len(result.messages) == 2
         assert result.messages[1]["role"] == "system"
         assert "Tool execution failed" in result.messages[1]["content"]
+        assert "Use a different tool." in result.messages[1]["content"]
         assert "[Error Recovery]" in result.messages[1]["content"]
 
     def test_preserves_error_count(self):

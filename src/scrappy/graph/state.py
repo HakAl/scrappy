@@ -135,6 +135,10 @@ class AgentState(BaseModel):
         default=None,
         description="Error category for classification (network, rate_limit, api, auth, parse, system)"
     )
+    error_suggestion: Optional[str] = Field(
+        default=None,
+        description="Actionable suggestion from exception handling, if available"
+    )
 
     # Model selection
     current_tier: Literal["fast", "chat", "instruct"] = Field(

@@ -10,12 +10,33 @@ Selection logic is now handled by:
 - LiteLLM Router -> handles fallback within group, retry, rate limits
 """
 
+import logging
 from typing import Optional, Tuple
 
 from .model_selection import ModelSelectionType, SELECTION_TYPE_TO_GROUP
 from .output import BaseOutputProtocol, ConsoleOutput
 from .config import OrchestratorConfig
 from .protocols import ProviderRegistryProtocol
+
+
+logger = logging.getLogger(__name__)
+
+
+def selection_type_for_provider_hint(hint: str | None) -> ModelSelectionType:
+    """Map legacy provider or group hints to a model selection type."""
+    normalized = (hint or "").strip().lower()
+    if normalized in {"", "fast", "groq", "cerebras", "auto", "mock"}:
+        return ModelSelectionType.FAST
+    if normalized in {"chat", "quality"}:
+        return ModelSelectionType.CHAT
+    if normalized in {"instruct", "gemini"}:
+        return ModelSelectionType.INSTRUCT
+
+    logger.debug(
+        "Unknown provider hint %r; defaulting to chat model selection",
+        hint,
+    )
+    return ModelSelectionType.CHAT
 
 
 class ProviderSelector:
@@ -36,7 +57,7 @@ class ProviderSelector:
 
     def __init__(
         self,
-        registry: ProviderRegistryProtocol = None,
+        registry: Optional[ProviderRegistryProtocol] = None,
         verbose: bool = False,
         output: Optional[BaseOutputProtocol] = None,
         config: Optional[OrchestratorConfig] = None
@@ -54,7 +75,7 @@ class ProviderSelector:
         self.verbose = verbose
         self.output = output or ConsoleOutput()
         self.config = config or OrchestratorConfig()
-        self._selection_log = []
+        self._selection_log: list[str] = []
 
     def _log(self, message: str, level: str = "INFO"):
         """Log selection decision with optional verbose output."""
@@ -133,7 +154,7 @@ class ProviderSelector:
 
     def get_provider_for_fallback(
         self,
-        exclude: list[str] = None,
+        exclude: Optional[list[str]] = None,
         selection_type: Optional[ModelSelectionType] = None,
         min_context: int = 0
     ) -> Optional[str]:

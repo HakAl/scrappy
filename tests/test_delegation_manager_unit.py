@@ -329,6 +329,34 @@ class TestDelegationFlow:
         assert len(llm_service.completion_calls) == 1
         assert llm_service.completion_calls[0]['model'] == 'fast'
 
+    @pytest.mark.asyncio
+    async def test_concrete_model_below_min_context_fails_before_llm_call(self):
+        """Direct concrete async delegation rejects insufficient context."""
+        cache = MockCache()
+        augmenter = MockPromptAugmenter()
+        llm_service = MockLLMService()
+        output = MockOutput()
+        scheduler = MockBatchScheduler()
+
+        manager = DelegationManager(
+            llm_service=llm_service,
+            cache=cache,
+            output=output,
+            prompt_augmenter=augmenter,
+            batch_scheduler=scheduler,
+        )
+
+        with pytest.raises(ValueError, match="below required 32768"):
+            await manager.delegate_async(
+                "chat",
+                "test prompt",
+                model="cerebras/llama-3.3-70b",
+                min_context=32768,
+                use_cache=False,
+            )
+
+        assert len(llm_service.completion_calls) == 0
+
 
 class TestEdgeCases:
     """Test boundary conditions and edge cases."""

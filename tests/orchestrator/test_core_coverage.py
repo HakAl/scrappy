@@ -5,8 +5,7 @@ Focuses on methods not covered by existing test files.
 """
 
 import pytest
-from unittest.mock import Mock, MagicMock, AsyncMock, patch
-from datetime import datetime
+from unittest.mock import Mock, patch
 
 from scrappy.orchestrator.core import AgentOrchestrator
 from scrappy.orchestrator.output import NullOutput
@@ -14,9 +13,7 @@ from scrappy.orchestrator.memory import WorkingMemory
 from scrappy.orchestrator.provider_types import LLMResponse
 from scrappy.orchestrator.model_selection import ModelSelectionType
 from scrappy.infrastructure.exceptions import (
-    ProviderNotFoundError,
     RateLimitError,
-    AllProvidersRateLimitedError,
 )
 
 
@@ -100,14 +97,26 @@ class MockModelSelector:
 
     def __init__(self):
         self.rate_limited_models = set()
+        self.models = ["mock/model-id", "mock/fallback-model"]
 
-    def select(self, selection_type, session_preferred=None):
+    def select(self, selection_type, min_context=0, session_preferred=None, exclude=None):
+        excluded = exclude or set()
         if session_preferred and session_preferred not in self.rate_limited_models:
             return session_preferred
-        return "mock/model-id"
+        for model in self.models:
+            if model not in self.rate_limited_models and model not in excluded:
+                return model
+        from scrappy.orchestrator.model_selection import AllModelsRateLimitedError
+        raise AllModelsRateLimitedError("all models unavailable")
 
-    def mark_rate_limited(self, model_id):
+    def get_models_for_type(self, selection_type):
+        return list(self.models)
+
+    def mark_unhealthy(self, model_id, kind, retry_after=None):
         self.rate_limited_models.add(model_id)
+
+    def is_available(self, model_id):
+        return model_id not in self.rate_limited_models
 
 
 class MockUsageReporter:

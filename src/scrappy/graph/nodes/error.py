@@ -54,6 +54,7 @@ def format_error_context(
     error_count: int,
     error_category: Optional[str] = None,
     recovery_action: Optional[str] = None,
+    error_suggestion: Optional[str] = None,
     retry_config: Optional[RetryConfig] = None,
 ) -> str:
     """
@@ -68,6 +69,7 @@ def format_error_context(
         error_count: Number of consecutive errors
         error_category: Category of error (network, rate_limit, api, etc.)
         recovery_action: Recommended recovery action
+        error_suggestion: Actionable suggestion from exception handling
         retry_config: Retry configuration for backoff calculation
 
     Returns:
@@ -77,6 +79,12 @@ def format_error_context(
 The previous action failed with the following error:
 
 {error}
+"""
+
+    if error_suggestion:
+        context += f"""
+Provider Guidance:
+{error_suggestion}
 """
 
     # Add category-specific guidance
@@ -227,6 +235,7 @@ def error_node(state: AgentState) -> AgentState:
         state.error_count,
         error_category=state.error_category,
         recovery_action=state.recovery_action,
+        error_suggestion=state.error_suggestion,
         retry_config=retry_config,
     )
 
@@ -270,6 +279,7 @@ def error_node(state: AgentState) -> AgentState:
             "last_error": error if should_preserve_error else None,
             "recovery_action": state.recovery_action if should_preserve_error else None,
             "error_category": state.error_category if should_preserve_error else None,
+            "error_suggestion": state.error_suggestion if should_preserve_error else None,
             "current_tier": new_tier,
         }
     )

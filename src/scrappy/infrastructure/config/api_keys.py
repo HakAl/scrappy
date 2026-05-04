@@ -121,6 +121,15 @@ class ApiKeyConfigServiceProtocol(Protocol):
         """
         ...
 
+    def reload(self) -> ApiKeyConfig:
+        """
+        Reload API key config from storage.
+
+        Returns:
+            ApiKeyConfig instance
+        """
+        ...
+
     def save(self, config: ApiKeyConfig) -> None:
         """
         Save API key config to storage.

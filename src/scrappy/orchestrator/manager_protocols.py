@@ -5,9 +5,10 @@ Defines abstract interfaces for orchestrator manager components that handle
 specific concerns like delegation, task execution, background tasks, and reporting.
 """
 
-from typing import Protocol, Dict, Any, List, Optional, Coroutine, runtime_checkable
+from typing import AsyncIterator, Protocol, Dict, Any, List, Optional, Coroutine, runtime_checkable
 
 from .provider_types import LLMResponse
+from .types import StreamChunk
 from ..context import CodebaseContextProtocol
 
 
@@ -39,7 +40,7 @@ class DelegationManagerProtocol(Protocol):
         temperature: float = 0.7,
         messages: Optional[list[dict]] = None,
         **kwargs: Any,
-    ) -> LLMResponse:
+    ) -> tuple[LLMResponse, dict[str, Any]]:
         """
         Delegate task to LLM provider with retry/fallback.
 
@@ -54,7 +55,7 @@ class DelegationManagerProtocol(Protocol):
             **kwargs: Additional provider-specific parameters
 
         Returns:
-            LLMResponse with provider's response
+            Tuple of LLMResponse and task metadata
 
         Raises:
             AllProvidersRateLimitedError: If all providers are rate limited
@@ -70,7 +71,7 @@ class DelegationManagerProtocol(Protocol):
         max_tokens: int = 1000,
         temperature: float = 0.7,
         **kwargs: Any,
-    ) -> LLMResponse:
+    ) -> tuple[LLMResponse, dict[str, Any]]:
         """
         Asynchronously delegate task to LLM provider.
 
@@ -84,7 +85,34 @@ class DelegationManagerProtocol(Protocol):
             **kwargs: Additional provider-specific parameters
 
         Returns:
-            LLMResponse with provider's response
+            Tuple of LLMResponse and task metadata
+        """
+        ...
+
+    def stream_delegate(
+        self,
+        provider_name: Optional[str] = None,
+        prompt: str = "",
+        model: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        max_tokens: int = 1000,
+        temperature: float = 0.7,
+        **kwargs: Any,
+    ) -> AsyncIterator[StreamChunk]:
+        """
+        Stream a delegated task through an async iterator.
+
+        Args:
+            provider_name: Target provider or group hint
+            prompt: The prompt to send
+            model: Specific model to use
+            system_prompt: System prompt for context
+            max_tokens: Maximum tokens in response
+            temperature: Sampling temperature
+            **kwargs: Additional provider-specific parameters
+
+        Yields:
+            StreamChunk objects as they arrive
         """
         ...
 
@@ -107,6 +135,33 @@ class DelegationManagerProtocol(Protocol):
 
         Raises:
             Exception: If all retries exhausted
+        """
+        ...
+
+    def delegate_structured_sync(
+        self,
+        provider_name: str,
+        prompt: str,
+        response_model: type[Any],
+        system_prompt: Optional[str] = None,
+        model: Optional[str] = None,
+        min_context: int = 0,
+        **kwargs: Any,
+    ) -> Any:
+        """
+        Delegate with structured output validation using a synchronous call path.
+
+        Args:
+            provider_name: Target provider or model group
+            prompt: The prompt to send
+            response_model: Pydantic-compatible response model
+            system_prompt: Optional system prompt
+            model: Specific concrete model to use
+            min_context: Minimum required context window
+            **kwargs: Additional delegation parameters
+
+        Returns:
+            Validated response model instance
         """
         ...
 

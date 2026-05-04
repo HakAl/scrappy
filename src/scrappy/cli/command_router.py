@@ -474,8 +474,8 @@ class CommandRouter:
         io.echo("Launching provider setup wizard...")
         wizard = SetupWizard(io, create_key_validator())
         wizard.run(allow_cancel=True)
-        # Reconfigure llm_service after wizard saves new keys
-        self.orchestrator.llm_service.configure()
+        # Refresh orchestrator provider state after wizard saves new keys.
+        self.orchestrator.refresh_provider_configuration()
         return True
 
     def route(self, cmd: str, args: str) -> bool:

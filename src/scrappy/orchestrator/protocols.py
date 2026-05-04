@@ -55,7 +55,7 @@ class LLMRequest:
     auto_fallback: bool = True
     selection_type: Optional[str] = None
     min_context: int = 0
-    kwargs: dict = None
+    kwargs: Optional[dict[str, Any]] = None
 
     def __post_init__(self):
         """Validate request parameters and filter internal kwargs."""
@@ -154,6 +154,10 @@ class Orchestrator(Protocol):
     - ConfigurableTestOrchestrator: Test mock in tests/helpers.py
     """
 
+    def refresh_provider_configuration(self) -> bool:
+        """Reload provider configuration after setup changes."""
+        ...
+
     def delegate(
         self,
         provider_name: Optional[str] = None,
@@ -246,7 +250,9 @@ class CacheProtocol(Protocol):
         provider: str,
         prompt: str,
         model: Optional[str] = None,
-        temperature: Optional[float] = None,
+        system_prompt: Optional[str] = None,
+        max_tokens: int = 1000,
+        temperature: float = 0.7,
     ) -> Optional[LLMResponse]:
         """
         Get cached response.
@@ -255,6 +261,8 @@ class CacheProtocol(Protocol):
             provider: Provider name
             prompt: Prompt text
             model: Model name (optional)
+            system_prompt: System prompt (optional)
+            max_tokens: Maximum tokens (optional)
             temperature: Temperature value (optional)
 
         Returns:
@@ -265,22 +273,47 @@ class CacheProtocol(Protocol):
     def put(
         self,
         response: LLMResponse,
-        provider: str,
         prompt: str,
         model: Optional[str] = None,
-        temperature: Optional[float] = None,
-        ttl_hours: Optional[int] = None,
+        system_prompt: Optional[str] = None,
+        max_tokens: int = 1000,
+        temperature: float = 0.7,
     ) -> None:
         """
         Store response in cache.
 
         Args:
             response: LLMResponse to cache
-            provider: Provider name
             prompt: Prompt text
             model: Model name (optional)
+            system_prompt: System prompt (optional)
+            max_tokens: Maximum tokens (optional)
             temperature: Temperature value (optional)
-            ttl_hours: Time-to-live in hours (None for default)
+        """
+        ...
+
+    def get_by_intent(
+        self,
+        intent: str,
+        entities: dict,
+        keywords: list,
+        provider: str,
+        model: Optional[str] = None,
+    ) -> Optional[LLMResponse]:
+        """
+        Get cached response by classified intent and extracted entities.
+        """
+        ...
+
+    def put_by_intent(
+        self,
+        response: LLMResponse,
+        intent: str,
+        entities: dict,
+        keywords: list,
+    ) -> None:
+        """
+        Store response in the intent-based cache.
         """
         ...
 
@@ -919,6 +952,10 @@ class LLMServiceProtocol(Protocol):
         )
     """
 
+    def configure(self) -> bool:
+        """Reload provider configuration and return whether any model is available."""
+        ...
+
     async def completion(
         self,
         model: str,
@@ -1076,7 +1113,7 @@ class StreamingCompletionProtocol(Protocol):
             print(chunk.content, end="", flush=True)
     """
 
-    async def stream_completion(
+    def stream_completion(
         self,
         model: str,
         messages: list[dict],

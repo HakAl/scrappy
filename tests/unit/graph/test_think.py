@@ -46,6 +46,7 @@ def create_test_state(
     iteration: int = 0,
     current_tier: str = "fast",
     last_error: Optional[str] = None,
+    error_suggestion: Optional[str] = None,
     error_count: int = 0,
     files_changed: Optional[list[str]] = None,
 ) -> AgentState:
@@ -58,6 +59,7 @@ def create_test_state(
         iteration=iteration,
         current_tier=current_tier,  # type: ignore[arg-type]
         last_error=last_error,
+        error_suggestion=error_suggestion,
         error_count=error_count,
         files_changed=files_changed or [],
     )
@@ -717,6 +719,7 @@ class TestThinkNode:
         delegator = MockThinkDelegator(
             default_response=ThinkResult(
                 error="API rate limit exceeded",
+                suggestion="Try another configured provider.",
                 recovery_action=RecoveryAction.RETRY.value,
                 error_category="rate_limit",
             )
@@ -730,6 +733,7 @@ class TestThinkNode:
         # Error should be tracked
         assert result.error_count == 1
         assert "rate limit" in result.last_error
+        assert result.error_suggestion == "Try another configured provider."
 
         # Iteration should still increment
         assert result.iteration == 1
@@ -769,6 +773,7 @@ class TestThinkNode:
         assert result.error_count == 0
         # last_error is cleared (no current error)
         assert result.last_error is None
+        assert result.error_suggestion is None
 
     def test_sets_last_token_estimates_on_success(self):
         """Think node should store input/output token estimates on success."""

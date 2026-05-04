@@ -5,12 +5,11 @@ Tests command routing, handler dispatch, and individual command handlers.
 """
 
 import pytest
-from unittest.mock import Mock, MagicMock, patch, PropertyMock
+from unittest.mock import Mock, patch
 from pathlib import Path
 
 from scrappy.cli.command_router import CommandRouter
 from scrappy.cli.io_interface import TestIO
-from scrappy.cli.state_manager import PlanStateManager
 from scrappy.cli.validators.command import CommandValidationResult
 
 

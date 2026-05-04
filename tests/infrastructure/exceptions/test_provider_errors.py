@@ -6,9 +6,12 @@ Following CLAUDE.md: Test BEHAVIOR, not structure. Cover edge cases.
 
 import pytest
 from scrappy.infrastructure.exceptions import (
+    FailureKind,
     ProviderError,
     RateLimitError,
+    RouterGroupExhaustedError,
     AllProvidersRateLimitedError,
+    AllProvidersExhaustedError,
     ProviderNotFoundError,
     AuthenticationError,
     TimeoutError,
@@ -63,6 +66,19 @@ class TestRateLimitError:
 
         assert error.context['provider_name'] == 'openai'
         assert error.context['wait_seconds'] == 30.0
+
+    def test_failure_kind_and_retry_after_are_classified(self):
+        """Rate limit errors expose semantic failure metadata."""
+        error = RateLimitError(
+            "Rate limit",
+            provider_name="groq",
+            retry_after=42.0,
+        )
+
+        assert isinstance(error, ProviderError)
+        assert error.failure_kind == FailureKind.RATE_LIMIT
+        assert error.retry_after == 42.0
+        assert error.wait_seconds == 42.0
 
 
 class TestAllProvidersRateLimitedError:
@@ -173,6 +189,16 @@ class TestAllProvidersRateLimitedError:
         friendly = error.user_friendly_message()
         assert 'groq' in friendly
         assert 'Suggestion' in friendly
+
+    def test_compatibility_aliases_use_router_group_exhaustion(self):
+        """Old public names remain aliases for router-group exhaustion."""
+        assert AllProvidersRateLimitedError is RouterGroupExhaustedError
+        assert AllProvidersExhaustedError is RouterGroupExhaustedError
+
+        error = AllProvidersRateLimitedError("", attempted_providers=["groq"])
+
+        assert isinstance(error, ProviderError)
+        assert error.failure_kind == FailureKind.EXHAUSTED
 
 
 class TestProviderNotFoundError:
@@ -333,6 +359,66 @@ class TestProviderExecutionError:
         data = error.to_dict()
         assert data['original_error']['type'] == 'ValueError'
 
+
+class TestClassifiedProviderExceptionContract:
+    """Construction behavior for cooperative provider exception metadata."""
+
+    @pytest.mark.parametrize(
+        ("factory", "kind"),
+        [
+            (RateLimitError, FailureKind.RATE_LIMIT),
+            (AuthenticationError, FailureKind.AUTH),
+            (NetworkError, FailureKind.NETWORK),
+            (TimeoutError, FailureKind.TIMEOUT),
+            (ProviderExecutionError, FailureKind.SERVER_ERROR),
+        ],
+    )
+    def test_concrete_exceptions_accept_common_provider_kwargs(self, factory, kind):
+        """Provider exceptions accept shared metadata without losing context."""
+        original = RuntimeError("provider blew up")
+
+        error = factory(
+            "classified failure",
+            provider_name="groq",
+            failure_kind=kind,
+            retry_after=12.5,
+            context={"request_id": "req-1"},
+            suggestion="try a fallback",
+            original_error=original,
+        )
+
+        assert isinstance(error, ProviderError)
+        assert error.provider_name == "groq"
+        assert error.failure_kind == kind
+        assert error.retry_after == 12.5
+        assert error.context["request_id"] == "req-1"
+        assert error.context["provider_name"] == "groq"
+        assert error.suggestion == "try a fallback"
+        assert error.original_error is original
+
+    def test_router_group_exhausted_accepts_common_provider_kwargs(self):
+        """Router exhaustion preserves shared metadata and summary details."""
+        original = RuntimeError("router exhausted")
+
+        error = RouterGroupExhaustedError(
+            "",
+            attempted_providers=["groq"],
+            provider_name="router",
+            retry_after=30.0,
+            context={"request_id": "req-2"},
+            suggestion="wait",
+            original_error=original,
+        )
+
+        assert isinstance(error, ProviderError)
+        assert error.provider_name == "router"
+        assert error.failure_kind == FailureKind.EXHAUSTED
+        assert error.retry_after == 30.0
+        assert error.context["request_id"] == "req-2"
+        assert error.context["attempted_providers"] == ["groq"]
+        assert error.suggestion == "wait"
+        assert error.original_error is original
+
     def test_context_includes_provider(self):
         """Test provider name is in context."""
         error = ProviderExecutionError(
@@ -368,4 +454,4 @@ class TestProviderErrorBase:
 
         assert error.provider_name is None
         # Should not crash when accessing context
-        context = error.context
+        assert isinstance(error.context, dict)

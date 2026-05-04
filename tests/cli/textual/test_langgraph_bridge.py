@@ -271,6 +271,80 @@ class TestRunWithStreaming:
         assert message.input_tokens == 10
         assert message.output_tokens == 20
 
+    def test_posts_trace_chain_as_provider_display(self):
+        """Fallback trace chain is visible through the TUI metrics status path."""
+        app = Mock()
+        bridge = LangGraphBridge(
+            app=app,
+            bridge=Mock(),
+            output_adapter=Mock(),
+            orchestrator=Mock(),
+            tool_adapter=Mock(),
+        )
+        state = AgentState(
+            input="Hello",
+            original_task="Hello",
+            last_input_tokens=10,
+            last_output_tokens=20,
+            last_model_display="groq: kimi-k2-instruct",
+            last_trace_chain="cerebras(deprecated)->groq: moonshotai/kimi-k2-instruct",
+        )
+        graph = FakeGraph({"think": state}, state.model_dump())
+
+        bridge._run_with_streaming(graph, state, config={}, state_class=AgentState)
+
+        metrics_messages = [
+            call.args[0]
+            for call in app.post_message.call_args_list
+            if isinstance(call.args[0], MetricsUpdate)
+        ]
+        assert metrics_messages[-1].provider_display == (
+            "cerebras(deprecated)->groq: moonshotai/kimi-k2-instruct"
+        )
+
+    def test_clean_run_replaces_previous_trace_chain_display(self):
+        """A later clean model display replaces an earlier fallback breadcrumb."""
+        app = Mock()
+        bridge = LangGraphBridge(
+            app=app,
+            bridge=Mock(),
+            output_adapter=Mock(),
+            orchestrator=Mock(),
+            tool_adapter=Mock(),
+        )
+        fallback_state = AgentState(
+            input="Hello",
+            original_task="Hello",
+            last_model_display="groq: kimi-k2-instruct",
+            last_trace_chain="cerebras(deprecated)->groq: moonshotai/kimi-k2-instruct",
+        )
+        clean_state = AgentState(
+            input="Hello again",
+            original_task="Hello again",
+            last_model_display="gemini: gemma",
+            last_trace_chain=None,
+        )
+
+        bridge._run_with_streaming(
+            FakeGraph({"think": fallback_state}, fallback_state.model_dump()),
+            fallback_state,
+            config={},
+            state_class=AgentState,
+        )
+        bridge._run_with_streaming(
+            FakeGraph({"think": clean_state}, clean_state.model_dump()),
+            clean_state,
+            config={},
+            state_class=AgentState,
+        )
+
+        metrics_messages = [
+            call.args[0]
+            for call in app.post_message.call_args_list
+            if isinstance(call.args[0], MetricsUpdate)
+        ]
+        assert metrics_messages[-1].provider_display == "gemini: gemma"
+
     def test_posts_metrics_from_partial_state_dict(self):
         """Partial dict events should fall back to snapshot state."""
         app = Mock()

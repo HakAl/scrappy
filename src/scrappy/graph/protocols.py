@@ -56,6 +56,7 @@ class ThinkResult:
         # Retriable error
         ThinkResult(
             error="Rate limit exceeded",
+            suggestion="Try another provider or wait before retrying.",
             recovery_action="fallback",
             error_category="rate_limit",
         )
@@ -81,6 +82,7 @@ class ThinkResult:
 
     # Error fields (mutually exclusive with success)
     error: Optional[str] = None
+    suggestion: Optional[str] = None
     recovery_action: Optional[str] = None  # "retry", "fallback", "abort"
     error_category: Optional[str] = None  # "rate_limit", "auth", "network", etc.
     is_fatal: bool = False  # Should graph stop immediately?

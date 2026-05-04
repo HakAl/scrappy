@@ -17,11 +17,14 @@ from scrappy.graph.nodes.mock_think_delegator import (
 )
 from scrappy.infrastructure.exceptions import (
     AuthenticationError,
+    FailureKind,
     NetworkError,
     RateLimitError,
     RecoveryAction,
 )
+from scrappy.orchestrator.failure_policy import FailureRecord
 from scrappy.orchestrator.litellm_service import NotConfiguredError
+from scrappy.orchestrator.model_selection import SelectionExhaustedError
 from scrappy.orchestrator.types import StreamChunk
 
 
@@ -151,6 +154,30 @@ class TestDefaultThinkErrorHandler:
         # RateLimitError inherits from RetryableError, so recovery_action is RETRY
         # The delegator's fallback logic handles getting alternate models
         assert result.recovery_action == RecoveryAction.RETRY.value
+        assert result.error_category == "rate_limit"
+
+    def test_selection_exhausted_surfaces_suggestion(self, handler):
+        """SelectionExhaustedError keeps rich model selection guidance."""
+        error = SelectionExhaustedError(
+            "No healthy models remain",
+            failure_summary={
+                "cerebras/model-a": FailureRecord(
+                    kind=FailureKind.RATE_LIMIT,
+                    provider="cerebras",
+                    retry_after=90.0,
+                    message="rate limited",
+                )
+            },
+        )
+
+        result = handler.handle(error)
+
+        assert not result.is_success
+        assert not result.is_fatal
+        assert result.error == "No healthy models remain"
+        assert result.suggestion == error.suggestion
+        assert "cerebras/model-a" in result.suggestion
+        assert result.recovery_action == RecoveryAction.FALLBACK.value
         assert result.error_category == "rate_limit"
 
     def test_network_error(self, handler):

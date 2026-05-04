@@ -4,16 +4,17 @@ Core AgentOrchestrator implementation.
 Central coordinator for multi-provider LLM agent team using composition.
 """
 
-from typing import Optional, Iterator, AsyncIterator
+import threading
+import time
+from typing import Awaitable, Callable, Optional, Iterator, AsyncIterator, TypeVar
 from datetime import datetime
+from uuid import uuid4
 
 from .provider_types import ProviderRegistry, LLMResponse
 from ..infrastructure.exceptions import (
     ProviderNotFoundError,
-    RateLimitError,
-    AllProvidersRateLimitedError,
-    AuthenticationError,
-    ProviderExecutionError,
+    FailureKind,
+    ProviderError,
 )
 
 from .output import BaseOutputProtocol
@@ -29,6 +30,9 @@ from .manager_protocols import (
 )
 from .factory import OrchestratorFactory
 from .model_selection import ModelSelectionServiceProtocol
+from .failure_policy import FailureRecord, SHOULD_RETRY_KINDS, get_failure_policy
+from .fallback_metrics import provider_fallback_metrics
+from .provider_selector import selection_type_for_provider_hint
 
 # Import protocols for type hints (Dependency Inversion Principle)
 from .protocols import (
@@ -43,6 +47,13 @@ from .protocols import (
     ProviderStatusTrackerProtocol,
 )
 from .provider_types import ProviderAttempt
+from .litellm_config import get_configured_models
+from ..infrastructure.config.api_keys import create_api_key_service
+from ..infrastructure.logging import get_logger
+
+
+T = TypeVar("T")
+logger = get_logger(__name__)
 
 
 def _format_trace_chain(attempts_list: list[ProviderAttempt]) -> Optional[str]:
@@ -64,26 +75,6 @@ def _format_trace_chain(attempts_list: list[ProviderAttempt]) -> Optional[str]:
                 parts.append(entry.provider)
 
     return "->".join(parts)
-
-
-def _is_model_unavailable_error(error: Exception) -> bool:
-    """Return True when a failure should trigger model fallback."""
-    if isinstance(error, AuthenticationError):
-        return True
-
-    if isinstance(error, ProviderExecutionError):
-        message = str(error).lower()
-        return (
-            "not available from" in message
-            or ("model" in message and (
-                "not found" in message
-                or "not available" in message
-                or "unknown" in message
-                or "invalid" in message
-            ))
-        )
-
-    return False
 
 
 class AgentOrchestrator:
@@ -144,9 +135,13 @@ class AgentOrchestrator:
         self.enable_semantic_search = enable_semantic_search
         self.quality_mode = quality_mode
 
-        # Session-sticky model preferences (per selection type)
-        # Maps ModelSelectionType -> preferred model ID
-        self._preferred_models: dict[ModelSelectionType, str] = {}
+        # Per-selection-type model preferences. User preferences are reserved
+        # for an explicit user-choice writer; see scrappy-1n7g.
+        # Fallback preferences are soft and recover when priority selection
+        # becomes available again.
+        self._user_preferred_models: dict[ModelSelectionType, str] = {}
+        self._fallback_preferred_models: dict[ModelSelectionType, str] = {}
+        self._preferred_models_lock = threading.Lock()
 
         # Use injected components or create defaults via factory
         if all([
@@ -208,20 +203,571 @@ class AgentOrchestrator:
         self,
         selection_type: ModelSelectionType,
         failed_model: Optional[str],
+        failure_kind: FailureKind,
+        retry_after: Optional[float] = None,
+        exclude: Optional[set[str]] = None,
+        min_context: int = 0,
+        failure_summary: Optional[dict[str, FailureRecord]] = None,
     ) -> Optional[str]:
         """Mark the current model unavailable and select the next candidate."""
         if failed_model is None or self.model_selector is None:
             return None
 
-        self.model_selector.mark_rate_limited(failed_model)
-        self._preferred_models.pop(selection_type, None)
-
-        next_model = self.model_selector.select(
-            selection_type,
-            session_preferred=None,
+        self.model_selector.mark_unhealthy(
+            failed_model,
+            failure_kind,
+            retry_after=retry_after,
         )
-        self._preferred_models[selection_type] = next_model
+
+        try:
+            next_model = self.model_selector.select(
+                selection_type,
+                min_context=min_context,
+                session_preferred=None,
+                exclude=exclude,
+            )
+        except AllModelsRateLimitedError as error:
+            # Fallback exhaustion and initial-selection exhaustion are mutually
+            # exclusive for one request, but both count selection exhaustion.
+            provider_fallback_metrics.record_selection_exhausted(
+                selection_type=selection_type.value,
+            )
+            combined_summary = dict(getattr(error, "failure_summary", {}) or {})
+            if failure_summary:
+                combined_summary.update(failure_summary)
+            raise AllModelsRateLimitedError(
+                str(error),
+                failure_summary=combined_summary,
+            ) from error
+
+        with self._preferred_models_lock:
+            self._fallback_preferred_models[selection_type] = next_model
         return next_model
+
+    def _min_context_for(self, selection_type: ModelSelectionType) -> int:
+        """Return minimum context window for a selection type."""
+        return 32768 if selection_type == ModelSelectionType.CHAT else 0
+
+    def _select_initial_model(
+        self,
+        selection_type: ModelSelectionType,
+        explicit_model: Optional[str],
+        min_context: int,
+    ) -> Optional[str]:
+        """
+        Select the first model for a request.
+
+        Explicit concrete models are validated by DelegationManager downstream.
+        """
+        if explicit_model is not None:
+            return explicit_model
+        if self.model_selector is None:
+            return None
+
+        self._recover_fallback_preference(selection_type, min_context)
+        preferred = self._preferred_model_for(selection_type, min_context)
+
+        try:
+            return self.model_selector.select(
+                selection_type,
+                min_context=min_context,
+                session_preferred=preferred,
+            )
+        except AllModelsRateLimitedError:
+            # Initial selection failed before any attempt, so this does not
+            # double-count the fallback exhaustion path.
+            provider_fallback_metrics.record_selection_exhausted(
+                selection_type=selection_type.value,
+            )
+            raise
+        except ValueError:
+            return None
+
+    def _recover_fallback_preference(
+        self,
+        selection_type: ModelSelectionType,
+        min_context: int,
+    ) -> None:
+        """Clear fallback stickiness once priority selection has recovered."""
+        if self.model_selector is None:
+            return
+
+        with self._preferred_models_lock:
+            fallback_preferred = self._fallback_preferred_models.get(selection_type)
+
+        if not fallback_preferred:
+            return
+
+        priority_models = self.model_selector.get_models_for_type(selection_type)
+        priority_one = next(
+            (
+                model
+                for model in priority_models
+                if self._model_satisfies_min_context(model, min_context)
+            ),
+            None,
+        )
+        if (
+            priority_one is None
+            or priority_one == fallback_preferred
+            or not self.model_selector.is_available(priority_one)
+        ):
+            return
+
+        with self._preferred_models_lock:
+            if self._fallback_preferred_models.get(selection_type) == fallback_preferred:
+                self._fallback_preferred_models.pop(selection_type, None)
+
+    def _preferred_model_for(
+        self,
+        selection_type: ModelSelectionType,
+        min_context: int,
+    ) -> Optional[str]:
+        """Return the valid preferred model for a selection type, if any."""
+        if self.model_selector is None:
+            return None
+
+        with self._preferred_models_lock:
+            user_preferred = self._user_preferred_models.get(selection_type)
+            fallback_preferred = self._fallback_preferred_models.get(selection_type)
+
+        for candidate in (user_preferred, fallback_preferred):
+            if (
+                candidate
+                and self.model_selector.is_available(candidate)
+                and self._model_satisfies_min_context(candidate, min_context)
+            ):
+                return candidate
+
+        return None
+
+    def _model_satisfies_min_context(self, model: str, min_context: int) -> bool:
+        """Return whether a model satisfies the request context requirement."""
+        if min_context <= 0:
+            return True
+
+        from .litellm_config import MODEL_METADATA
+
+        metadata = MODEL_METADATA.get(model)
+        return bool(metadata and metadata.context_length >= min_context)
+
+    def _dispatch_sync_with_fallback(
+        self,
+        *,
+        selection_type: ModelSelectionType,
+        initial_model: Optional[str],
+        min_context: int,
+        auto_fallback: bool,
+        run_attempt: Callable[[Optional[str]], T],
+    ) -> tuple[T, Optional[str]]:
+        """Run a concrete-model sync dispatch loop with policy-based fallback."""
+        # Keep behavior mirrored with _dispatch_async_with_fallback except for
+        # the async helper awaiting run_attempt.
+        model = initial_model
+        tried_models: set[str] = set()
+        failure_summary: dict[str, FailureRecord] = {}
+        attempts: list[ProviderAttempt] = []
+        request_id = uuid4().hex
+        started_at = time.perf_counter()
+
+        while True:
+            try:
+                result = run_attempt(model)
+                if model is not None:
+                    attempts.append(ProviderAttempt(
+                        provider=self._provider_from_model(model),
+                        model=model,
+                        success=True,
+                    ))
+                self._emit_fallback_event(
+                    request_id=request_id,
+                    attempts=attempts,
+                    elapsed_ms=(time.perf_counter() - started_at) * 1000,
+                )
+                return result, _format_trace_chain(attempts)
+            except ProviderError as error:
+                if model is None:
+                    raise
+
+                kind = error.failure_kind
+                failure_summary[model] = FailureRecord.from_error(model, error)
+                attempts.append(ProviderAttempt(
+                    provider=error.provider_name or self._provider_from_model(model),
+                    model=model,
+                    success=False,
+                    error=kind.value,
+                    retry_after=error.retry_after,
+                ))
+
+                if kind == FailureKind.EXHAUSTED:
+                    raise
+                if not auto_fallback:
+                    raise
+                if kind not in SHOULD_RETRY_KINDS:
+                    raise
+
+                tried_models.add(model)
+                next_model = self._select_fallback_model(
+                    selection_type=selection_type,
+                    failed_model=model,
+                    failure_kind=kind,
+                    retry_after=error.retry_after,
+                    exclude=tried_models,
+                    min_context=min_context,
+                    failure_summary=failure_summary,
+                )
+                if next_model is None:
+                    raise
+                model = next_model
+
+    def _stream_with_fallback_sync(
+        self,
+        *,
+        selection_type: ModelSelectionType,
+        initial_model: str,
+        min_context: int,
+        auto_fallback: bool,
+        stream_attempt: Callable[[str], Iterator[StreamChunk]],
+    ) -> Iterator[StreamChunk]:
+        """Run a sync streaming dispatch loop with pre-output fallback."""
+        # Keep behavior mirrored with _stream_with_fallback_async except for
+        # async iteration over stream_attempt.
+        model = initial_model
+        tried_models: set[str] = set()
+        failure_summary: dict[str, FailureRecord] = {}
+        attempts: list[ProviderAttempt] = []
+        request_id = uuid4().hex
+        started_at = time.perf_counter()
+        # Request-lifetime output state: once any attempt reaches the user,
+        # later failures must surface instead of switching models mid-stream.
+        partial_content_chars = 0
+        emitted_semantic_output = False
+
+        while True:
+            try:
+                for chunk in stream_attempt(model):
+                    content_chars = len(chunk.content or "")
+                    semantic_output = self._stream_chunk_has_semantic_output(chunk)
+                    yield chunk
+                    partial_content_chars += content_chars
+                    emitted_semantic_output = (
+                        emitted_semantic_output or semantic_output
+                    )
+
+                attempts.append(ProviderAttempt(
+                    provider=self._provider_from_model(model),
+                    model=model,
+                    success=True,
+                ))
+
+                trace_chain = _format_trace_chain(attempts)
+                self._emit_fallback_event(
+                    request_id=request_id,
+                    attempts=attempts,
+                    elapsed_ms=(time.perf_counter() - started_at) * 1000,
+                )
+                if trace_chain:
+                    # Consumer trace metadata complements the structured
+                    # provider_fallback telemetry event above.
+                    yield StreamChunk(
+                        content="",
+                        model=model,
+                        provider=self._provider_from_model(model),
+                        metadata={"trace_chain": trace_chain},
+                    )
+                return
+
+            except ProviderError as error:
+                kind = error.failure_kind
+                failure_summary[model] = FailureRecord.from_error(model, error)
+                attempts.append(ProviderAttempt(
+                    provider=error.provider_name or self._provider_from_model(model),
+                    model=model,
+                    success=False,
+                    error=kind.value,
+                    retry_after=error.retry_after,
+                ))
+
+                if partial_content_chars > 0 or emitted_semantic_output:
+                    error.context = {
+                        **error.context,
+                        "partial_content_chars": partial_content_chars,
+                        "emitted_semantic_output": emitted_semantic_output,
+                    }
+                    raise
+                if kind == FailureKind.EXHAUSTED:
+                    raise
+                if not auto_fallback:
+                    raise
+                if kind not in SHOULD_RETRY_KINDS:
+                    raise
+                if self.model_selector is None:
+                    raise
+
+                tried_models.add(model)
+                next_model = self._select_fallback_model(
+                    selection_type=selection_type,
+                    failed_model=model,
+                    failure_kind=kind,
+                    retry_after=error.retry_after,
+                    exclude=tried_models,
+                    min_context=min_context,
+                    failure_summary=failure_summary,
+                )
+                if next_model is None:
+                    raise
+                model = next_model
+
+    async def _dispatch_async_with_fallback(
+        self,
+        *,
+        selection_type: ModelSelectionType,
+        initial_model: Optional[str],
+        min_context: int,
+        auto_fallback: bool,
+        run_attempt: Callable[[Optional[str]], Awaitable[T]],
+    ) -> tuple[T, Optional[str]]:
+        """Run a concrete-model async dispatch loop with policy-based fallback."""
+        # Keep behavior mirrored with _dispatch_sync_with_fallback except for
+        # awaiting run_attempt.
+        model = initial_model
+        tried_models: set[str] = set()
+        failure_summary: dict[str, FailureRecord] = {}
+        attempts: list[ProviderAttempt] = []
+        request_id = uuid4().hex
+        started_at = time.perf_counter()
+
+        while True:
+            try:
+                result = await run_attempt(model)
+                if model is not None:
+                    attempts.append(ProviderAttempt(
+                        provider=self._provider_from_model(model),
+                        model=model,
+                        success=True,
+                    ))
+                self._emit_fallback_event(
+                    request_id=request_id,
+                    attempts=attempts,
+                    elapsed_ms=(time.perf_counter() - started_at) * 1000,
+                )
+                return result, _format_trace_chain(attempts)
+            except ProviderError as error:
+                if model is None:
+                    raise
+
+                kind = error.failure_kind
+                failure_summary[model] = FailureRecord.from_error(model, error)
+                attempts.append(ProviderAttempt(
+                    provider=error.provider_name or self._provider_from_model(model),
+                    model=model,
+                    success=False,
+                    error=kind.value,
+                    retry_after=error.retry_after,
+                ))
+
+                if kind == FailureKind.EXHAUSTED:
+                    raise
+                if not auto_fallback:
+                    raise
+                if kind not in SHOULD_RETRY_KINDS:
+                    raise
+
+                tried_models.add(model)
+                next_model = self._select_fallback_model(
+                    selection_type=selection_type,
+                    failed_model=model,
+                    failure_kind=kind,
+                    retry_after=error.retry_after,
+                    exclude=tried_models,
+                    min_context=min_context,
+                    failure_summary=failure_summary,
+                )
+                if next_model is None:
+                    raise
+                model = next_model
+
+    async def _stream_with_fallback_async(
+        self,
+        *,
+        selection_type: ModelSelectionType,
+        initial_model: str,
+        min_context: int,
+        auto_fallback: bool,
+        stream_attempt: Callable[[str], AsyncIterator[StreamChunk]],
+    ) -> AsyncIterator[StreamChunk]:
+        """Run an async streaming dispatch loop with pre-output fallback."""
+        # Keep behavior mirrored with _stream_with_fallback_sync except for
+        # async iteration over stream_attempt.
+        model = initial_model
+        tried_models: set[str] = set()
+        failure_summary: dict[str, FailureRecord] = {}
+        attempts: list[ProviderAttempt] = []
+        request_id = uuid4().hex
+        started_at = time.perf_counter()
+        # Request-lifetime output state: once any attempt reaches the user,
+        # later failures must surface instead of switching models mid-stream.
+        partial_content_chars = 0
+        emitted_semantic_output = False
+
+        while True:
+            try:
+                async for chunk in stream_attempt(model):
+                    content_chars = len(chunk.content or "")
+                    semantic_output = self._stream_chunk_has_semantic_output(chunk)
+                    yield chunk
+                    partial_content_chars += content_chars
+                    emitted_semantic_output = (
+                        emitted_semantic_output or semantic_output
+                    )
+
+                attempts.append(ProviderAttempt(
+                    provider=self._provider_from_model(model),
+                    model=model,
+                    success=True,
+                ))
+
+                trace_chain = _format_trace_chain(attempts)
+                self._emit_fallback_event(
+                    request_id=request_id,
+                    attempts=attempts,
+                    elapsed_ms=(time.perf_counter() - started_at) * 1000,
+                )
+                if trace_chain:
+                    # Consumer trace metadata complements the structured
+                    # provider_fallback telemetry event above.
+                    yield StreamChunk(
+                        content="",
+                        model=model,
+                        provider=self._provider_from_model(model),
+                        metadata={"trace_chain": trace_chain},
+                    )
+                return
+
+            except ProviderError as error:
+                kind = error.failure_kind
+                failure_summary[model] = FailureRecord.from_error(model, error)
+                attempts.append(ProviderAttempt(
+                    provider=error.provider_name or self._provider_from_model(model),
+                    model=model,
+                    success=False,
+                    error=kind.value,
+                    retry_after=error.retry_after,
+                ))
+
+                if partial_content_chars > 0 or emitted_semantic_output:
+                    error.context = {
+                        **error.context,
+                        "partial_content_chars": partial_content_chars,
+                        "emitted_semantic_output": emitted_semantic_output,
+                    }
+                    raise
+                if kind == FailureKind.EXHAUSTED:
+                    raise
+                if not auto_fallback:
+                    raise
+                if kind not in SHOULD_RETRY_KINDS:
+                    raise
+                if self.model_selector is None:
+                    raise
+
+                tried_models.add(model)
+                next_model = self._select_fallback_model(
+                    selection_type=selection_type,
+                    failed_model=model,
+                    failure_kind=kind,
+                    retry_after=error.retry_after,
+                    exclude=tried_models,
+                    min_context=min_context,
+                    failure_summary=failure_summary,
+                )
+                if next_model is None:
+                    raise
+                model = next_model
+
+    @staticmethod
+    def _stream_chunk_has_semantic_output(chunk: StreamChunk) -> bool:
+        """Return whether a chunk exposed non-text semantic output."""
+        return bool(chunk.tool_call_fragments)
+
+    @staticmethod
+    def _provider_from_model(model: str) -> str:
+        """Extract provider prefix from a provider/model string."""
+        if "/" in model:
+            return model.split("/", 1)[0]
+        return model
+
+    def _emit_fallback_event(
+        self,
+        *,
+        request_id: str,
+        attempts: list[ProviderAttempt],
+        elapsed_ms: float,
+    ) -> None:
+        """Emit a structured event after a successful fallback."""
+        if len(attempts) <= 1 or not attempts[-1].success:
+            return
+
+        failed = next(
+            (attempt for attempt in reversed(attempts[:-1]) if not attempt.success),
+            None,
+        )
+        if failed is None:
+            return
+
+        failure_kind_value = failed.error or FailureKind.UNKNOWN.value
+        try:
+            scope = get_failure_policy(FailureKind(failure_kind_value)).scope.value
+        except ValueError:
+            scope = None
+
+        successful = attempts[-1]
+        provider_fallback_metrics.record_fallback(
+            from_provider=failed.provider,
+            to_provider=successful.provider,
+            failure_kind=failure_kind_value,
+        )
+        logger.info(
+            "provider_fallback",
+            extra={
+                "event": "provider_fallback",
+                "request_id": request_id,
+                "attempt_n": len(attempts),
+                "from_model": failed.model,
+                "from_provider": failed.provider,
+                "to_model": successful.model,
+                "to_provider": successful.provider,
+                "failure_kind": failure_kind_value,
+                "retry_after": failed.retry_after,
+                "scope": scope,
+                "elapsed_ms": elapsed_ms,
+            },
+        )
+
+    def refresh_provider_configuration(self) -> bool:
+        """
+        Reload provider configuration after setup changes.
+
+        The orchestrator owns this path so LiteLLM router refresh, model
+        selection refresh, and credential-related health clearing stay in sync.
+        """
+        configured = False
+        if self.llm_service is not None:
+            configured = self.llm_service.configure()
+
+        if self.model_selector is not None:
+            api_key_service = create_api_key_service()
+            configured_models = {
+                metadata.model_id
+                for metadata in get_configured_models(api_key_service)
+            }
+            self.model_selector.update_configured(configured_models)
+            self.model_selector.clear_failure_kinds({
+                FailureKind.AUTH,
+                FailureKind.PAYMENT_REQUIRED,
+            })
+
+        return configured
 
     def initialize(
         self,
@@ -295,6 +841,8 @@ class AgentOrchestrator:
             'fallback': task_record.get('fallback', False),
             'attempts': task_record.get('attempts', 1),
         }
+        if "trace_chain" in task_record:
+            metadata["trace_chain"] = task_record["trace_chain"]
 
         if is_async:
             metadata['async'] = task_record.get('async', True)
@@ -572,25 +1120,19 @@ class AgentOrchestrator:
             ProviderNotFoundError: If no providers are available
             ValueError: If no models configured for selection type
         """
-        # Determine selection type based on quality_mode if not explicitly provided
+        # Determine selection type based on quality_mode if not explicitly provided.
         if selection_type is None:
-            selection_type = ModelSelectionType.CHAT if self.quality_mode else ModelSelectionType.FAST
+            # Explicit provider or group hints take precedence over quality_mode.
+            selection_type = (
+                selection_type_for_provider_hint(provider_name)
+                if provider_name is not None
+                else ModelSelectionType.CHAT if self.quality_mode else ModelSelectionType.FAST
+            )
 
-        # Use ModelSelectionService for deterministic model selection
-        # Only if model not explicitly provided
-        if model is None and self.model_selector is not None:
-            try:
-                # Get session-preferred model for this selection type
-                session_preferred = self._preferred_models.get(selection_type)
+        min_context = self._min_context_for(selection_type)
 
-                # Select specific model (deterministic, priority-based)
-                model = self.model_selector.select(selection_type, session_preferred=session_preferred)
-
-                # Update session preference (sticky for this session)
-                self._preferred_models[selection_type] = model
-            except ValueError:
-                # No models configured for this type - fall through to legacy system
-                pass
+        # Use ModelSelectionService for deterministic model selection.
+        model = self._select_initial_model(selection_type, model, min_context)
 
         # Fallback: if no model_selector or model still None, use legacy provider selection
         if model is None:
@@ -607,81 +1149,46 @@ class AgentOrchestrator:
         # Determine cache setting
         should_use_cache = use_cache if use_cache is not None else self.caching_enabled
 
-        # Determine min_context based on selection type (32k for CHAT mode)
-        min_context = 32768 if selection_type == ModelSelectionType.CHAT else 0
+        provider_hint = provider_name or selection_type.value
 
-        # Delegate with rate limit handling and fallback
-        max_attempts = 3  # Limit fallback attempts
-        attempt = 0
-        last_error = None
+        def run_attempt(attempt_model: Optional[str]) -> tuple[LLMResponse, dict]:
+            return self.delegation_manager.delegate(
+                provider_name=provider_hint,
+                prompt=prompt,
+                model=attempt_model,
+                system_prompt=system_prompt,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                use_context=use_context,
+                use_cache=should_use_cache,
+                intent_classification=intent_classification,
+                max_retries=max_retries,
+                selection_type=selection_type.value,
+                min_context=min_context,
+                **kwargs
+            )
 
-        while attempt < max_attempts:
-            attempt += 1
-            try:
-                response, task_record = self.delegation_manager.delegate(
-                    provider_name=provider_name,
-                    prompt=prompt,
-                    model=model,
-                    system_prompt=system_prompt,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                    use_context=use_context,
-                    use_cache=should_use_cache,
-                    intent_classification=intent_classification,
-                    auto_fallback=auto_fallback,
-                    max_retries=max_retries,
-                    selection_type=selection_type.value if selection_type else None,
-                    min_context=min_context,
-                    **kwargs
-                )
+        (response, task_record), trace_chain = self._dispatch_sync_with_fallback(
+            selection_type=selection_type,
+            initial_model=model,
+            min_context=min_context,
+            auto_fallback=auto_fallback,
+            run_attempt=run_attempt,
+        )
 
-                # Record task completion
-                self._record_task_completion(task_record, is_async=False)
-                return response
+        if trace_chain:
+            task_record["trace_chain"] = trace_chain
+            task_record["fallback"] = True
 
-            except RateLimitError as e:
-                last_error = e
-                # Try to select a different model
-                if auto_fallback:
-                    try:
-                        model = self._select_fallback_model(selection_type, model)
-                        continue  # Retry with new model
-
-                    except AllModelsRateLimitedError:
-                        # All models exhausted - re-raise with clear message
-                        raise AllModelsRateLimitedError(
-                            f"All {selection_type.value} models are rate limited. "
-                            f"Try again later."
-                        ) from e
-                else:
-                    # No fallback available
-                    raise
-
-            except (AuthenticationError, ProviderExecutionError) as e:
-                if not auto_fallback or not _is_model_unavailable_error(e):
-                    raise
-
-                last_error = e
-
-                try:
-                    model = self._select_fallback_model(selection_type, model)
-                    if model is not None:
-                        continue
-                except AllModelsRateLimitedError:
-                    pass
-
-                raise
-
-        # Should not reach here, but handle edge case
-        if last_error:
-            raise last_error
-        raise AllProvidersRateLimitedError("Delegation failed after max attempts")
+        self._record_task_completion(task_record, is_async=False)
+        return response
 
     def stream_completion_with_fallback(
         self,
         messages: list[dict],
         model: Optional[str] = None,
         selection_type: Optional[ModelSelectionType] = None,
+        auto_fallback: bool = True,
         **kwargs
     ) -> Iterator[StreamChunk]:
         """
@@ -696,6 +1203,7 @@ class AgentOrchestrator:
             messages: Chat messages in OpenAI format
             model: Specific model ID (optional - will select if not provided)
             selection_type: Model selection type (default: INSTRUCT)
+            auto_fallback: Automatically try another model before output is emitted.
             **kwargs: Additional params (max_tokens, temperature, tools, etc.)
 
         Yields:
@@ -707,117 +1215,34 @@ class AgentOrchestrator:
         """
         if self.llm_service is None:
             raise ValueError("LLM service not configured")
+        llm_service = self.llm_service
 
         # Default to INSTRUCT for agent work
         if selection_type is None:
             selection_type = ModelSelectionType.INSTRUCT
 
-        # Select model if not provided
-        if model is None and self.model_selector is not None:
-            session_preferred = self._preferred_models.get(selection_type)
-            model = self.model_selector.select(
-                selection_type,
-                session_preferred=session_preferred
-            )
-            self._preferred_models[selection_type] = model
+        min_context = self._min_context_for(selection_type)
+
+        # Select model if not provided.
+        model = self._select_initial_model(selection_type, model, min_context)
 
         if model is None:
             raise ValueError(f"No model available for {selection_type.value}")
 
-        # Fallback loop
-        max_attempts = 3
-        attempt = 0
-        last_error = None
-        attempts: list[ProviderAttempt] = []
+        def stream_attempt(attempt_model: str) -> Iterator[StreamChunk]:
+            yield from llm_service.stream_completion_direct(
+                model=attempt_model,
+                messages=messages,
+                **kwargs,
+            )
 
-        def get_provider_name(model_name: Optional[str]) -> str:
-            if not model_name:
-                return ""
-            if "/" in model_name:
-                return model_name.split("/", 1)[0]
-            return model_name
-
-        while attempt < max_attempts:
-            attempt += 1
-            try:
-                # Stream from the selected model
-                provider = get_provider_name(model)
-                for chunk in self.llm_service.stream_completion_direct(
-                    model=model,
-                    messages=messages,
-                    **kwargs
-                ):
-                    yield chunk
-
-                # If we get here, stream completed successfully
-                attempts.append(ProviderAttempt(
-                    provider=provider,
-                    model=model,
-                    success=True,
-                ))
-
-                trace_chain = _format_trace_chain(attempts)
-                if trace_chain:
-                    yield StreamChunk(
-                        content="",
-                        model=model,
-                        provider=provider,
-                        metadata={"trace_chain": trace_chain},
-                    )
-                return
-
-            except (RateLimitError, AllProvidersRateLimitedError) as e:
-                last_error = e
-                provider = get_provider_name(model)
-                attempts.append(ProviderAttempt(
-                    provider=provider,
-                    model=model,
-                    success=False,
-                    error="429",
-                ))
-
-                # Mark current model as rate limited
-                # Try to select a different model
-                if self.model_selector is not None:
-                    try:
-                        model = self._select_fallback_model(selection_type, model)
-                        continue  # Retry with new model
-
-                    except AllModelsRateLimitedError:
-                        raise AllModelsRateLimitedError(
-                            f"All {selection_type.value} models are rate limited. "
-                            f"Try again later."
-                        ) from e
-                else:
-                    # No model_selector - can't fallback
-                    raise
-
-            except (AuthenticationError, ProviderExecutionError) as e:
-                if not _is_model_unavailable_error(e):
-                    raise
-
-                last_error = e
-                provider = get_provider_name(model)
-                attempts.append(ProviderAttempt(
-                    provider=provider,
-                    model=model,
-                    success=False,
-                    error="unavailable",
-                ))
-
-                if self.model_selector is None:
-                    raise
-
-                try:
-                    model = self._select_fallback_model(selection_type, model)
-                    continue
-                except AllModelsRateLimitedError:
-                    raise e
-
-        # Max attempts exhausted
-        if last_error:
-            raise last_error
-        raise AllProvidersRateLimitedError("Streaming failed after max attempts")
+        yield from self._stream_with_fallback_sync(
+            selection_type=selection_type,
+            initial_model=model,
+            min_context=min_context,
+            auto_fallback=auto_fallback,
+            stream_attempt=stream_attempt,
+        )
 
     def delegate_structured(
         self,
@@ -825,6 +1250,10 @@ class AgentOrchestrator:
         prompt: str,
         response_model: type,
         system_prompt: Optional[str] = None,
+        model: Optional[str] = None,
+        auto_fallback: bool = True,
+        selection_type: Optional[ModelSelectionType | str] = None,
+        min_context: Optional[int] = None,
         **kwargs
     ):
         """
@@ -838,6 +1267,10 @@ class AgentOrchestrator:
             prompt: The user prompt to send
             response_model: Pydantic model class to validate response against
             system_prompt: Optional system prompt for behavioral instructions
+            model: Specific model ID. If provided, bypasses initial selection.
+            auto_fallback: Automatically try other models on retryable failures.
+            selection_type: Selection type or value used for fallback candidates.
+            min_context: Minimum required context window.
             **kwargs: Additional params (max_retries, mode_override, etc.)
 
         Returns:
@@ -847,13 +1280,44 @@ class AgentOrchestrator:
             pydantic.ValidationError: If response cannot be validated after retries
             AllProvidersRateLimitedError: When all providers exhausted
         """
-        return self.delegation_manager.delegate_structured_sync(
-            provider_name=provider_name,
-            prompt=prompt,
-            response_model=response_model,
-            system_prompt=system_prompt,
-            **kwargs,
+        if isinstance(selection_type, ModelSelectionType):
+            resolved_selection_type = selection_type
+        elif selection_type:
+            resolved_selection_type = ModelSelectionType(selection_type)
+        else:
+            resolved_selection_type = selection_type_for_provider_hint(provider_name)
+
+        resolved_min_context = (
+            self._min_context_for(resolved_selection_type)
+            if min_context is None
+            else min_context
         )
+        selected_model = self._select_initial_model(
+            resolved_selection_type,
+            model,
+            resolved_min_context,
+        )
+
+        def run_attempt(attempt_model: Optional[str]):
+            return self.delegation_manager.delegate_structured_sync(
+                provider_name=provider_name,
+                prompt=prompt,
+                response_model=response_model,
+                system_prompt=system_prompt,
+                model=attempt_model,
+                selection_type=resolved_selection_type.value,
+                min_context=resolved_min_context,
+                **kwargs,
+            )
+
+        result, _trace_chain = self._dispatch_sync_with_fallback(
+            selection_type=resolved_selection_type,
+            initial_model=selected_model,
+            min_context=resolved_min_context,
+            auto_fallback=auto_fallback,
+            run_attempt=run_attempt,
+        )
+        return result
 
     async def stream_delegate(
         self,
@@ -865,6 +1329,7 @@ class AgentOrchestrator:
         temperature: float = 0.7,
         use_context: Optional[bool] = None,
         use_cache: Optional[bool] = None,
+        auto_fallback: bool = True,
         selection_type: Optional[ModelSelectionType] = None,
         **kwargs
     ) -> AsyncIterator[StreamChunk]:
@@ -884,6 +1349,7 @@ class AgentOrchestrator:
             temperature: Sampling temperature
             use_context: Override context augmentation setting
             use_cache: Override cache setting
+            auto_fallback: Automatically try another model before output is emitted.
             selection_type: What kind of model to use (FAST, CHAT, INSTRUCT, etc.)
             **kwargs: Additional provider-specific arguments
 
@@ -891,7 +1357,7 @@ class AgentOrchestrator:
             StreamChunk objects as they arrive from the provider
 
         Raises:
-            AllProvidersRateLimitedError: If all providers are rate limited
+            AllModelsRateLimitedError: If all selected models are unhealthy
             ProviderNotFoundError: If no providers are available
             ValueError: If no models configured for selection type
 
@@ -902,25 +1368,23 @@ class AgentOrchestrator:
             ):
                 print(chunk.content, end="", flush=True)
         """
-        # Determine selection type based on quality_mode if not explicitly provided
+        # Determine selection type based on quality_mode if not explicitly provided.
         if selection_type is None:
-            selection_type = ModelSelectionType.CHAT if self.quality_mode else ModelSelectionType.FAST
+            # Explicit provider or group hints take precedence over quality_mode.
+            selection_type = (
+                selection_type_for_provider_hint(provider_name)
+                if provider_name is not None
+                else ModelSelectionType.CHAT if self.quality_mode else ModelSelectionType.FAST
+            )
 
-        # Use ModelSelectionService for deterministic model selection
-        # Only if model not explicitly provided
-        if model is None and self.model_selector is not None:
-            try:
-                # Get session-preferred model for this selection type
-                session_preferred = self._preferred_models.get(selection_type)
+        min_context = self._min_context_for(selection_type)
 
-                # Select specific model (deterministic, priority-based)
-                model = self.model_selector.select(selection_type, session_preferred=session_preferred)
+        # Use ModelSelectionService for deterministic model selection.
+        model = self._select_initial_model(selection_type, model, min_context)
 
-                # Update session preference (sticky for this session)
-                self._preferred_models[selection_type] = model
-            except ValueError:
-                # No models configured for this type - fall through to legacy system
-                pass
+        if self.delegation_manager is None:
+            raise ValueError("Delegation manager not configured")
+        delegation_manager = self.delegation_manager
 
         # Fallback: if no model_selector or model still None, use legacy provider selection
         if model is None:
@@ -936,18 +1400,47 @@ class AgentOrchestrator:
 
         # Determine cache setting
         should_use_cache = use_cache if use_cache is not None else self.caching_enabled
+        provider_hint = provider_name or selection_type.value
 
-        # Delegate to DelegationManager's stream_delegate
-        async for chunk in self.delegation_manager.stream_delegate(
-            provider_name=provider_name,
-            prompt=prompt,
-            model=model,
-            system_prompt=system_prompt,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            use_context=use_context,
-            use_cache=should_use_cache,
-            **kwargs
+        async def stream_attempt(attempt_model: str) -> AsyncIterator[StreamChunk]:
+            async for chunk in delegation_manager.stream_delegate(
+                provider_name=provider_hint,
+                prompt=prompt,
+                model=attempt_model,
+                system_prompt=system_prompt,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                use_context=use_context,
+                use_cache=should_use_cache,
+                min_context=min_context,
+                **kwargs
+            ):
+                yield chunk
+
+        if model is None:
+            # Legacy no-model-selector streaming uses provider hints directly
+            # and does not participate in orchestrator self-healing telemetry.
+            async for chunk in delegation_manager.stream_delegate(
+                provider_name=provider_hint,
+                prompt=prompt,
+                model=None,
+                system_prompt=system_prompt,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                use_context=use_context,
+                use_cache=should_use_cache,
+                min_context=min_context,
+                **kwargs
+            ):
+                yield chunk
+            return
+
+        async for chunk in self._stream_with_fallback_async(
+            selection_type=selection_type,
+            initial_model=model,
+            min_context=min_context,
+            auto_fallback=auto_fallback,
+            stream_attempt=stream_attempt,
         ):
             yield chunk
 
@@ -990,6 +1483,7 @@ class AgentOrchestrator:
         intent_classification: Optional[dict] = None,
         auto_fallback: bool = True,
         max_retries: int = 3,
+        selection_type: Optional[ModelSelectionType] = None,
         **kwargs
     ) -> LLMResponse:
         """
@@ -1009,33 +1503,63 @@ class AgentOrchestrator:
             intent_classification: Intent data for semantic caching
             auto_fallback: Automatically try other providers on rate limit (default True)
             max_retries: Maximum retry attempts per provider (default 3)
+            selection_type: What kind of model to use (FAST, CHAT, INSTRUCT, etc.)
             **kwargs: Additional provider-specific arguments
 
         Returns:
             LLMResponse from successful provider
 
         Raises:
-            AllProvidersRateLimitedError: If all providers are rate limited
+            AllModelsRateLimitedError: If all selected models are unhealthy
             Exception: Other non-rate-limit errors
         """
+        if selection_type is None:
+            # Explicit provider or group hints take precedence over quality_mode.
+            selection_type = (
+                selection_type_for_provider_hint(provider_name)
+                if provider_name is not None
+                else ModelSelectionType.CHAT if self.quality_mode else ModelSelectionType.FAST
+            )
+
+        min_context = self._min_context_for(selection_type)
+        model = self._select_initial_model(selection_type, model, min_context)
+
+        if self.delegation_manager is None:
+            raise ValueError("Delegation manager not configured")
+        delegation_manager = self.delegation_manager
+
         # Determine cache setting
         should_use_cache = use_cache if use_cache is not None else self.caching_enabled
+        provider_hint = provider_name or selection_type.value
 
-        # Delegate to DelegationManager
-        response, task_record = await self.delegation_manager.delegate_async(
-            provider_name=provider_name,
-            prompt=prompt,
-            model=model,
-            system_prompt=system_prompt,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            use_context=use_context,
-            use_cache=should_use_cache,
-            intent_classification=intent_classification,
+        async def run_attempt(attempt_model: Optional[str]) -> tuple[LLMResponse, dict]:
+            return await delegation_manager.delegate_async(
+                provider_name=provider_hint,
+                prompt=prompt,
+                model=attempt_model,
+                system_prompt=system_prompt,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                use_context=use_context,
+                use_cache=should_use_cache,
+                intent_classification=intent_classification,
+                max_retries=max_retries,
+                selection_type=selection_type.value,
+                min_context=min_context,
+                **kwargs
+            )
+
+        (response, task_record), trace_chain = await self._dispatch_async_with_fallback(
+            selection_type=selection_type,
+            initial_model=model,
+            min_context=min_context,
             auto_fallback=auto_fallback,
-            max_retries=max_retries,
-            **kwargs
+            run_attempt=run_attempt,
         )
+
+        if trace_chain:
+            task_record["trace_chain"] = trace_chain
+            task_record["fallback"] = True
 
         # Record task completion
         self._record_task_completion(task_record, is_async=True)
@@ -1050,6 +1574,9 @@ class AgentOrchestrator:
     ) -> list[LLMResponse]:
         """
         Process multiple tasks in parallel using async.
+
+        This intentionally bypasses orchestrator-level model fallback so each
+        batch item keeps the provider/model routing supplied by the caller.
 
         Args:
             tasks: List of task dicts with 'prompt' and optional 'system_prompt', 'kwargs'
@@ -1079,6 +1606,9 @@ class AgentOrchestrator:
     ) -> dict[str, tuple]:
         """
         Query multiple providers in parallel for the same prompt.
+
+        This intentionally bypasses orchestrator-level model fallback because
+        each provider is queried as an independent comparison target.
 
         Useful for getting different perspectives or comparing outputs.
 

@@ -723,8 +723,8 @@ class ScrappyApp(App):
             if self.interactive_mode is not None:
                 orchestrator = cast(Any, self.interactive_mode.orchestrator)
                 orchestrator._auto_register_providers()
-                # Configure LLM service now that API keys are saved
-                orchestrator.llm_service.configure()
+                # Refresh provider state now that API keys are saved.
+                orchestrator.refresh_provider_configuration()
             # Show main screen after wizard
             self.call_later(self._show_main_screen)
         else:
